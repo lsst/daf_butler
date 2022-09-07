@@ -23,10 +23,14 @@ from __future__ import annotations
 __all__ = ("QueryBackend",)
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from collections.abc import Set
+from typing import TYPE_CHECKING, Any
+
+from .._collectionType import CollectionType
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
+    from ..interfaces import CollectionRecord
     from ..managers import RegistryManagerInstances
 
 
@@ -56,5 +60,43 @@ class QueryBackend(ABC):
     def universe(self) -> DimensionUniverse:
         """Definition of all dimensions and dimension elements for this
         registry.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def resolve_collection_wildcard(
+        self,
+        expression: Any,
+        *,
+        collection_types: Set[CollectionType] = CollectionType.all(),
+        done: set[str] | None = None,
+        flatten_chains: bool = True,
+        include_chains: bool | None = None,
+    ) -> list[CollectionRecord]:
+        """Return the collection records that match a wildcard expression.
+
+        Parameters
+        ----------
+        expression
+            Names and/or patterns for collections; will be passed to
+            `CollectionWildcard.from_expression`.
+        collection_types : `collections.abc.Set` [ `CollectionType` ], optional
+            If provided, only yield collections of these types.
+        done : `set` [ `str` ], optional
+            A set of collection names that should be skipped, updated to
+            include all processed collection names on return.
+        flatten_chains : `bool`, optional
+            If `True` (default) recursively yield the child collections of
+            `~CollectionType.CHAINED` collections.
+        include_chains : `bool`, optional
+            If `False`, return records for `~CollectionType.CHAINED`
+            collections themselves.  The default is the opposite of
+            ``flattenChains``: either return records for CHAINED collections or
+            their children, but not both.
+
+        Returns
+        ------
+        records : `list` [ `CollectionRecord` ]
+            Matching collection records.
         """
         raise NotImplementedError()

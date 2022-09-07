@@ -191,7 +191,7 @@ class QueryBuilder:
             return False
         collectionRecords: list[CollectionRecord] = []
         rejections: list[str] = []
-        for collectionRecord in self._backend.managers.collections.resolve_wildcard(
+        for collectionRecord in self._backend.resolve_collection_wildcard(
             collections, collection_types=collectionTypes
         ):
             # Only include collections that (according to collection summaries)

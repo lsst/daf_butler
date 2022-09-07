@@ -22,13 +22,15 @@ from __future__ import annotations
 
 __all__ = ("SqlQueryBackend",)
 
-from typing import TYPE_CHECKING
+from collections.abc import Set
+from typing import TYPE_CHECKING, Any
 
+from .._collectionType import CollectionType
 from ._query_backend import QueryBackend
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
-    from ..interfaces import Database
+    from ..interfaces import CollectionRecord, Database
     from ..managers import RegistryManagerInstances
 
 
@@ -60,3 +62,21 @@ class SqlQueryBackend(QueryBackend):
     def universe(self) -> DimensionUniverse:
         # Docstring inherited.
         return self._managers.dimensions.universe
+
+    def resolve_collection_wildcard(
+        self,
+        expression: Any,
+        *,
+        collection_types: Set[CollectionType] = CollectionType.all(),
+        done: set[str] | None = None,
+        flatten_chains: bool = True,
+        include_chains: bool | None = None,
+    ) -> list[CollectionRecord]:
+        # Docstring inherited.
+        return self._managers.collections.resolve_wildcard(
+            expression,
+            collection_types=collection_types,
+            done=done,
+            flatten_chains=flatten_chains,
+            include_chains=include_chains,
+        )
