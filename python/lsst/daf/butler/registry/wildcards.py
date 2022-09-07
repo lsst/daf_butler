@@ -27,20 +27,9 @@ __all__ = (
 )
 
 import re
+from collections.abc import Callable, Iterator, Sequence, Set
 from dataclasses import dataclass
-from typing import (
-    TYPE_CHECKING,
-    AbstractSet,
-    Any,
-    Callable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 from lsst.utils.ellipsis import Ellipsis, EllipsisType
@@ -72,10 +61,10 @@ class CategorizedWildcard:
         *,
         allowAny: bool = True,
         allowPatterns: bool = True,
-        coerceUnrecognized: Optional[Callable[[Any], Union[Tuple[str, Any], str]]] = None,
-        coerceItemValue: Optional[Callable[[Any], Any]] = None,
-        defaultItemValue: Optional[Any] = None,
-    ) -> Union[CategorizedWildcard, EllipsisType]:
+        coerceUnrecognized: Callable[[Any], tuple[str, Any] | str] | None = None,
+        coerceItemValue: Callable[[Any], Any] | None = None,
+        defaultItemValue: Any | None = None,
+    ) -> CategorizedWildcard | EllipsisType:
         """Categorize a wildcard expression.
 
         Parameters
@@ -190,7 +179,7 @@ class CategorizedWildcard:
         # process scalars or an iterable.  We put the body of the loop inside
         # a local function so we can recurse after coercion.
 
-        def process(element: Any, alreadyCoerced: bool = False) -> Union[EllipsisType, None]:
+        def process(element: Any, alreadyCoerced: bool = False) -> EllipsisType | None:
             if isinstance(element, str):
                 if defaultItemValue is not None:
                     self.items.append((element, defaultItemValue))
@@ -254,7 +243,7 @@ class CategorizedWildcard:
 
     def makeWhereExpression(
         self, column: sqlalchemy.sql.ColumnElement
-    ) -> Optional[sqlalchemy.sql.ColumnElement]:
+    ) -> sqlalchemy.sql.ColumnElement | None:
         """Transform the wildcard into a SQLAlchemy boolean expression suitable
         for use in a WHERE clause.
 
@@ -289,16 +278,16 @@ class CategorizedWildcard:
             return None
         return sqlalchemy.sql.or_(*terms)
 
-    strings: List[str]
+    strings: list[str]
     """Explicit string values found in the wildcard (`list` [ `str` ]).
     """
 
-    patterns: List[re.Pattern]
+    patterns: list[re.Pattern]
     """Regular expression patterns found in the wildcard
     (`list` [ `re.Pattern` ]).
     """
 
-    items: List[Tuple[str, Any]]
+    items: list[tuple[str, Any]]
     """Two-item tuples that relate string values to other objects
     (`list` [ `tuple` [ `str`, `Any` ] ]).
     """
@@ -307,10 +296,10 @@ class CategorizedWildcard:
 def _yieldCollectionRecords(
     manager: CollectionManager,
     record: CollectionRecord,
-    collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
-    done: Optional[Set[str]] = None,
+    collectionTypes: Set[CollectionType] = CollectionType.all(),
+    done: set[str] | None = None,
     flattenChains: bool = True,
-    includeChains: Optional[bool] = None,
+    includeChains: bool | None = None,
 ) -> Iterator[CollectionRecord]:
     """A helper function containing common logic for `CollectionSearch.iter`
     and `CollectionQuery.iter`: recursively yield `CollectionRecord` only if
@@ -391,7 +380,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
     how different the original expressions appear.
     """
 
-    __root__: Tuple[str, ...]
+    __root__: tuple[str, ...]
 
     @classmethod
     def fromExpression(cls, expression: Any) -> CollectionSearch:
@@ -438,11 +427,11 @@ class CollectionSearch(BaseModel, Sequence[str]):
         self,
         manager: CollectionManager,
         *,
-        datasetType: Optional[DatasetType] = None,
-        collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
-        done: Optional[Set[str]] = None,
+        datasetType: DatasetType | None = None,
+        collectionTypes: Set[CollectionType] = CollectionType.all(),
+        done: set[str] | None = None,
         flattenChains: bool = True,
-        includeChains: Optional[bool] = None,
+        includeChains: bool | None = None,
     ) -> Iterator[CollectionRecord]:
         """Iterate over collection records that match this instance and the
         given criteria, in order.
@@ -550,8 +539,8 @@ class CollectionQuery:
 
     def __init__(
         self,
-        search: Union[CollectionSearch, EllipsisType] = Ellipsis,
-        patterns: Tuple[re.Pattern, ...] = (),
+        search: CollectionSearch | EllipsisType = Ellipsis,
+        patterns: tuple[re.Pattern, ...] = (),
     ):
         self._search = search
         self._patterns = patterns
@@ -607,9 +596,9 @@ class CollectionQuery:
         self,
         manager: CollectionManager,
         *,
-        collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
+        collectionTypes: Set[CollectionType] = CollectionType.all(),
         flattenChains: bool = True,
-        includeChains: Optional[bool] = None,
+        includeChains: bool | None = None,
     ) -> Iterator[CollectionRecord]:
         """Iterate over collection records that match this instance and the
         given criteria, in an arbitrary order.
@@ -649,7 +638,7 @@ class CollectionQuery:
                     includeChains=includeChains,
                 )
         else:
-            done: Set[str] = set()
+            done: set[str] = set()
             yield from self._search.iter(
                 manager,
                 collectionTypes=collectionTypes,
