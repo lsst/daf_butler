@@ -80,18 +80,26 @@ class RecordFactory:
         self.visit = universe["visit"]
         self.physical_filter = cast(Dimension, universe["physical_filter"])
 
-    def __call__(self, ref: DatasetRef) -> Optional[Dict[str, str | int | float | UUID | None]]:
+    def __call__(
+        self, ref: DatasetRef, collection: Optional[str] = None
+    ) -> Optional[Dict[str, str | int | float | UUID | None]]:
         """Make an ObsCore record from a dataset.
 
         Parameters
         ----------
         ref : `DatasetRef`
             Dataset ref, its DataId must be in expanded form.
+        collection : `str`, optional
+            Name of a collection. If specified then this collection name is
+            used to filter datasets. Original run name of the dataset is always
+            used in obscore record (if configuration uses run name in the
+            templates of any column).
 
         Returns
         -------
         record : `dict` [ `str`, `Any` ]
-            ObsCore record represented a dictionary.
+            ObsCore record represented a dictionary. `None` is returned if
+            dataset does not need to be stored in the obscore table.
         """
         # Quick check for dataset type.
         dataset_type_name = ref.datasetType.name
@@ -101,8 +109,10 @@ class RecordFactory:
 
         # Check collection name.
         if self.connection_names:
-            assert ref.run is not None, "Run cannot be None"
-            if not self._check_collections(ref.run):
+            if collection is None:
+                assert ref.run is not None, "Run cannot be None"
+                collection = ref.run
+            if not self._check_collections(collection):
                 return None
 
         dataId = ref.dataId

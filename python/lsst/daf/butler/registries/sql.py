@@ -626,6 +626,11 @@ class SqlRegistry(Registry):
             storage = self._managers.datasets[datasetType.name]
             try:
                 storage.associate(collectionRecord, refsForType)
+                if self._managers.obscore:
+                    # If a TAGGED collection is being monitored by ObsCore
+                    # manager then we may need to save the dataset (if its run
+                    # collection is not monitored).
+                    self._managers.obscore.add_datasets(refsForType, collection)
             except sqlalchemy.exc.IntegrityError as err:
                 raise ConflictingDefinitionError(
                     f"Constraint violation while associating dataset of type {datasetType.name} with "
@@ -659,6 +664,12 @@ class SqlRegistry(Registry):
         ):
             storage = self._managers.datasets[datasetType.name]
             storage.certify(collectionRecord, refsForType, timespan)
+            if self._managers.obscore:
+                # If a CALIBRATION collection is being monitored by ObsCore
+                # manager then we may need to save the dataset (if its run
+                # collection is not monitored). Note that timespan is ignored,
+                # and we can only have one copy of dataset in obscore.
+                self._managers.obscore.add_datasets(refsForType, collection)
 
     @transactional
     def decertify(

@@ -108,9 +108,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         # Docstring inherited from base class.
         return None
 
-    def add_datasets(self, refs: Iterable[DatasetRef]) -> None:
+    def add_datasets(self, refs: Iterable[DatasetRef], collection: Optional[str] = None) -> None:
         # Docstring inherited from base class.
-        records = [self.record_factory(ref) for ref in refs]
+        records = [self.record_factory(ref, collection) for ref in refs]
         actual_records = [record for record in records if record is not None]
         if records:
             # Ignore potential conflicts with existing datasets.

@@ -27,7 +27,7 @@ __all__ = ["ObsCoreTableManager"]
 
 from abc import abstractmethod
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Iterable, Type
+from typing import TYPE_CHECKING, Iterable, Optional, Type
 
 from ._versioning import VersionedExtension
 
@@ -90,5 +90,29 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def add_datasets(self, refs: Iterable[DatasetRef]) -> None:
+    def add_datasets(self, refs: Iterable[DatasetRef], collection: Optional[str] = None) -> None:
+        """Possibly add datasets to the obscore table.
+
+        Parameters
+        ----------
+        refs : `iterable` [ `DatasetRef` ]
+            Dataset refs to add. Dataset refs have to be completely expanded.
+            If a record with the same dataset ID is already in obscore table,
+            the dataset is ignored.
+        collection : `str`, optional
+            Name of a collection. This should be set to `None` when datasets
+            are added to their run collection, in which case datasets' own run
+            collection name is used. When existing dataset are being associated
+            with TAGGED or CALIBRATION collections, this parameter should be
+            set to the name of the associated collection.
+
+        Notes
+        -----
+        Dataset data types and collection names are checked against configured
+        list of collections and dataset types, non-matching datasets are
+        ignored and not added to the obscore table. When ``collection`` is
+        specified it is used instead of dataset run name for filtering
+        purposes, but obscore record will still store original dataset run
+        name (when configuration defines the column for it).
+        """
         raise NotImplementedError()

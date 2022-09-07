@@ -22,6 +22,14 @@ dataset_types:
     o_ucd: phot.count
     access_format: image/fits
     datalink_url_fmt: "https://data.lsst.cloud/api/datalink/links?ID=butler%3A//dp02/{id}"
+  calib:
+    dataproduct_type: image
+    dataproduct_subtype: lsst.calib
+    calib_level: 0
+    obs_id_fmt: "{records[detector].full_name}"
+    o_ucd: phot.count
+    access_format: image/fits
+    datalink_url_fmt: "https://data.lsst.cloud/api/datalink/links?ID=butler%3A//dp02/{id}"
 extra_columns:
   lsst_visit:
     template: "{visit}"
