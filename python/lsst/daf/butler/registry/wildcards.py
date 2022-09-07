@@ -31,7 +31,6 @@ from collections.abc import Callable, Iterator, Sequence, Set
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import sqlalchemy
 from lsst.utils.ellipsis import Ellipsis, EllipsisType
 from lsst.utils.iteration import ensure_iterable
 from pydantic import BaseModel
@@ -240,43 +239,6 @@ class CategorizedWildcard:
                 return Ellipsis
         del process
         return self
-
-    def makeWhereExpression(
-        self, column: sqlalchemy.sql.ColumnElement
-    ) -> sqlalchemy.sql.ColumnElement | None:
-        """Transform the wildcard into a SQLAlchemy boolean expression suitable
-        for use in a WHERE clause.
-
-        Parameters
-        ----------
-        column : `sqlalchemy.sql.ColumnElement`
-            A string column in a table or query that should be compared to the
-            wildcard expression.
-
-        Returns
-        -------
-        where : `sqlalchemy.sql.ColumnElement` or `None`
-            A boolean SQL expression that evaluates to true if and only if
-            the value of ``column`` matches the wildcard.  `None` is returned
-            if both `strings` and `patterns` are empty, and hence no match is
-            possible.
-        """
-        if self.items:
-            raise NotImplementedError(
-                "Expressions that are processed into items cannot be transformed "
-                "automatically into queries."
-            )
-        if self.patterns:
-            raise NotImplementedError("Regular expression patterns are not yet supported here.")
-        terms = []
-        if len(self.strings) == 1:
-            terms.append(column == self.strings[0])
-        elif len(self.strings) > 1:
-            terms.append(column.in_(self.strings))
-        # TODO: append terms for regular expressions
-        if not terms:
-            return None
-        return sqlalchemy.sql.or_(*terms)
 
     strings: list[str]
     """Explicit string values found in the wildcard (`list` [ `str` ]).
