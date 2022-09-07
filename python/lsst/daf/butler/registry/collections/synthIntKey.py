@@ -22,7 +22,8 @@ from __future__ import annotations
 
 __all__ = ["SynthIntKeyCollectionManager"]
 
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Type
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
@@ -48,7 +49,7 @@ _KEY_FIELD_SPEC = ddl.FieldSpec(
 _VERSION = VersionTuple(2, 0, 0)
 
 
-def _makeTableSpecs(TimespanReprClass: Type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
+def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
     return CollectionTablesTuple(
         collection=ddl.TableSpec(
             fields=[
@@ -92,7 +93,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         dimensions: DimensionRecordStorageManager,
     ):
         super().__init__(db=db, tables=tables, collectionIdName=collectionIdName, dimensions=dimensions)
-        self._nameCache: Dict[str, CollectionRecord] = {}  # indexed by collection name
+        self._nameCache: dict[str, CollectionRecord] = {}  # indexed by collection name
 
     @classmethod
     def initialize(
@@ -126,7 +127,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         tableSpec: ddl.TableSpec,
         *,
         prefix: str = "collection",
-        onDelete: Optional[str] = None,
+        onDelete: str | None = None,
         constraint: bool = True,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
@@ -150,7 +151,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         tableSpec: ddl.TableSpec,
         *,
         prefix: str = "run",
-        onDelete: Optional[str] = None,
+        onDelete: str | None = None,
         constraint: bool = True,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
@@ -186,15 +187,15 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         del self._records[record.key]
         del self._nameCache[record.name]
 
-    def _getByName(self, name: str) -> Optional[CollectionRecord]:
+    def _getByName(self, name: str) -> CollectionRecord | None:
         # Docstring inherited from DefaultCollectionManager.
         return self._nameCache.get(name)
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersion(cls) -> VersionTuple | None:
         # Docstring inherited from VersionedExtension.
         return _VERSION
 
-    def schemaDigest(self) -> Optional[str]:
+    def schemaDigest(self) -> str | None:
         # Docstring inherited from VersionedExtension.
         return self._defaultSchemaDigest(self._tables, self._db.dialect)
