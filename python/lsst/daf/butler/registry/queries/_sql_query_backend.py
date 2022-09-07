@@ -29,7 +29,7 @@ from .._collectionType import CollectionType
 from ._query_backend import QueryBackend
 
 if TYPE_CHECKING:
-    from ...core import DimensionUniverse
+    from ...core import DatasetType, DimensionUniverse
     from ..interfaces import CollectionRecord, Database
     from ..managers import RegistryManagerInstances
 
@@ -80,3 +80,13 @@ class SqlQueryBackend(QueryBackend):
             flatten_chains=flatten_chains,
             include_chains=include_chains,
         )
+
+    def resolve_dataset_type_wildcard(
+        self,
+        expression: Any,
+        components: bool | None = None,
+        missing: list[str] | None = None,
+        explicit_only: bool = False,
+    ) -> dict[DatasetType, list[str | None]]:
+        # Docstring inherited.
+        return self._managers.datasets.resolve_wildcard(expression, components, missing, explicit_only)

@@ -27,9 +27,10 @@ from collections.abc import Set
 from typing import TYPE_CHECKING, Any
 
 from .._collectionType import CollectionType
+from .._exceptions import DatasetTypeError, MissingDatasetTypeError
 
 if TYPE_CHECKING:
-    from ...core import DimensionUniverse
+    from ...core import DatasetType, DimensionUniverse
     from ..interfaces import CollectionRecord
     from ..managers import RegistryManagerInstances
 
@@ -100,3 +101,111 @@ class QueryBackend(ABC):
             Matching collection records.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def resolve_dataset_type_wildcard(
+        self,
+        expression: Any,
+        components: bool | None = None,
+        missing: list[str] | None = None,
+        explicit_only: bool = False,
+    ) -> dict[DatasetType, list[str | None]]:
+        """Return the dataset types that match a wildcard expression.
+
+        Parameters
+        ----------
+        expression
+            Names and/or patterns for dataset types; will be passed to
+            `DatasetTypeWildcard.from_expression`.
+        components : `bool`, optional
+            If `True`, apply all expression patterns to component dataset type
+            names as well.  If `False`, never apply patterns to components.  If
+            `None` (default), apply patterns to components only if their parent
+            datasets were not matched by the expression.  Fully-specified
+            component datasets (`str` or `DatasetType` instances) are always
+            included.
+        missing : `list` of `str`, optional
+            String dataset type names that were explicitly given (i.e. not
+            regular expression patterns) but not found will be appended to this
+            list, if it is provided.
+        explicit_only : `bool`, optional
+            If `True`, require explicit `DatasetType` instances or `str` names,
+            with `re.Pattern` instances deprecated and ``...`` prohibited.
+
+        Returns
+        -------
+        dataset_types : `dict` [ `DatasetType`, `list` [ `None`, `str` ] ]
+            A mapping with resolved dataset types as keys and lists of
+            matched component names as values, where `None` indicates the
+            parent composite dataset type was matched.
+        """
+        raise NotImplementedError()
+
+    def resolve_single_dataset_type_wildcard(
+        self,
+        expression: Any,
+        components: bool | None = None,
+        explicit_only: bool = False,
+    ) -> tuple[DatasetType, list[str | None]]:
+        """Return a single dataset type that matches a wildcard expression.
+
+        Parameters
+        ----------
+        expression
+            Names and/or patterns for the dataset type; will be passed to
+            `DatasetTypeWildcard.from_expression`.
+        components : `bool`, optional
+            If `True`, apply all expression patterns to component dataset type
+            names as well.  If `False`, never apply patterns to components.  If
+            `None` (default), apply patterns to components only if their parent
+            datasets were not matched by the expression.  Fully-specified
+            component datasets (`str` or `DatasetType` instances) are always
+            included.
+        explicit_only : `bool`, optional
+            If `True`, require explicit `DatasetType` instances or `str` names,
+            with `re.Pattern` instances deprecated and ``...`` prohibited.
+
+        Returns
+        -------
+        single_parent : `DatasetType`
+            The matched parent dataset type.
+        single_components : `list` [ `str` | `None` ]
+            The matched components that correspond to this parent, or `None` if
+            the parent dataset type itself was matched.
+
+        Notes
+        -----
+        This method really finds a single parent dataset type and any number of
+        components, because it's only the parent dataset type that's known to
+        registry at all; many callers are expected to discard the
+        ``single_components`` return value.
+        """
+        missing: list[str] = []
+        matching = self.resolve_dataset_type_wildcard(
+            expression, components=components, missing=missing, explicit_only=explicit_only
+        )
+        if not matching:
+            if missing:
+                raise MissingDatasetTypeError(
+                    "\n".join(
+                        f"Dataset type {t!r} is not registered, so no instances of it can exist."
+                        for t in missing
+                    )
+                )
+            else:
+                raise MissingDatasetTypeError(
+                    f"No registered dataset types matched expression {expression!r}, "
+                    "so no datasets will be found."
+                )
+        if len(matching) > 1:
+            raise DatasetTypeError(
+                f"Expression {expression!r} matched multiple parent dataset types: "
+                f"{[t.name for t in matching]}, but only one is allowed."
+            )
+        ((single_parent, single_components),) = matching.items()
+        if missing:
+            raise DatasetTypeError(
+                f"Expression {expression!r} appears to involve multiple dataset types, even though only "
+                f"one ({single_parent.name}) is registered, and only one is allowed here."
+            )
+        return single_parent, single_components
