@@ -21,25 +21,18 @@
 
 from __future__ import annotations
 
-__all__ = ["RecordFactory"]
+__all__ = ["ExposureRegionFactory", "RecordFactory"]
 
 import logging
+from abc import abstractmethod
 from collections.abc import Mapping
-from typing import Any, Callable, Dict, Iterator, Optional, cast
+from typing import Any, Callable, Dict, Optional, cast
 from uuid import UUID
 
 import astropy.time
-from lsst.daf.butler import (
-    DataCoordinate,
-    DataCoordinateIterable,
-    DatasetRef,
-    Dimension,
-    DimensionRecord,
-    DimensionUniverse,
-)
+from lsst.daf.butler import DataCoordinate, DatasetRef, Dimension, DimensionRecord, DimensionUniverse
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
 
-from ..interfaces import CollectionManager, CollectionRecord, DimensionRecordStorageManager
 from ._config import ObsCoreConfig
 from ._schema import ObsCoreSchema
 
@@ -54,6 +47,26 @@ _TYPE_CONVERSION: Mapping[str, Callable[[str], Any]] = {
 }
 
 
+class ExposureRegionFactory:
+    """Abstract interface for a class that returns a Region for an exposure."""
+
+    @abstractmethod
+    def exposure_region(self, dataId: DataCoordinate) -> Optional[Region]:
+        """Return a region for a given DataId that corresponds to an exposure.
+
+        Parameters
+        ----------
+        dataId : `DataCoordinate`
+            Data ID for an exposure dataset.
+
+        Returns
+        -------
+        region : `Region`
+            `None` is returned if region cannot be determined.
+        """
+        raise NotImplementedError()
+
+
 class RecordFactory:
     """Class that implements conversion of dataset information to ObsCore.
 
@@ -65,9 +78,7 @@ class RecordFactory:
         Description of obscore schema.
     universe : `DimensionUniverse`
         Registry dimensions universe.
-    collections : `CollectionManager`
-        Manager of Registry collections.
-    dimensions: `DimensionRecordStorageManager`
+    exposure_region_factory: `ExposureRegionFactory`, optional
         Manager for Registry dimensions.
     """
 
@@ -76,15 +87,12 @@ class RecordFactory:
         config: ObsCoreConfig,
         schema: ObsCoreSchema,
         universe: DimensionUniverse,
-        collections: CollectionManager,
-        dimensions: DimensionRecordStorageManager,
+        exposure_region_factory: Optional[ExposureRegionFactory] = None,
     ):
         self.config = config
         self.schema = schema
         self.universe = universe
-        self.collections = collections
-        self.dimensions = dimensions
-        self.connection_names = frozenset(self.config.collections or [])
+        self.exposure_region_factory = exposure_region_factory
 
         # All dimension elements used below.
         self.band = cast(Dimension, universe["band"])
@@ -92,40 +100,26 @@ class RecordFactory:
         self.visit = universe["visit"]
         self.physical_filter = cast(Dimension, universe["physical_filter"])
 
-    def __call__(
-        self, ref: DatasetRef, collection: Optional[str] = None
-    ) -> Optional[Dict[str, str | int | float | UUID | None]]:
+    def __call__(self, ref: DatasetRef) -> Optional[Dict[str, str | int | float | UUID | None]]:
         """Make an ObsCore record from a dataset.
 
         Parameters
         ----------
         ref : `DatasetRef`
             Dataset ref, its DataId must be in expanded form.
-        collection : `str`, optional
-            Name of a collection. If specified then this collection name is
-            used to filter datasets. Original run name of the dataset is always
-            used in obscore record (if configuration uses run name in the
-            templates of any column).
 
         Returns
         -------
         record : `dict` [ `str`, `Any` ]
             ObsCore record represented a dictionary. `None` is returned if
-            dataset does not need to be stored in the obscore table.
+            dataset does not need to be stored in the obscore table, e.g.
+            when dataset type is not in obscore configuration.
         """
         # Quick check for dataset type.
         dataset_type_name = ref.datasetType.name
         dataset_config = self.config.dataset_types.get(dataset_type_name)
         if dataset_config is None:
             return None
-
-        # Check collection name.
-        if self.connection_names:
-            if collection is None:
-                assert ref.run is not None, "Run cannot be None"
-                collection = ref.run
-            if not self._check_collections(collection):
-                return None
 
         dataId = ref.dataId
         # _LOG.debug("New record, dataId=%s", dataId.full)
@@ -161,7 +155,8 @@ class RecordFactory:
         if self.exposure in dataId:
             if (dimension_record := dataId.records[self.exposure]) is not None:
                 self._exposure_records(dimension_record, record)
-                region = self._exposure_region(dataId)
+                if self.exposure_region_factory is not None:
+                    region = self.exposure_region_factory.exposure_region(dataId)
         elif self.visit in dataId:
             if (dimension_record := dataId.records[self.visit]) is not None:
                 self._visit_records(dimension_record, record)
@@ -268,75 +263,3 @@ class RecordFactory:
         """Extract all needed info from an exposure dimension record."""
         record["t_exptime"] = dimension_record.exposure_time
         record["target_name"] = dimension_record.target_name
-
-    def _check_collections(self, collection_name: str) -> bool:
-        """Check that specified collection (usually RUN or TAGGED) or any
-        parent CHAINED collection is in the configured collection list.
-        """
-
-        def _all_collections(key: Any) -> Iterator[CollectionRecord]:
-            """Return records of all chained collections."""
-            for collection_record in self.collections.getParentChains(key):
-                yield collection_record
-                yield from _all_collections(collection_record.key)
-
-        if collection_name in self.connection_names:
-            return True
-
-        collection_record = self.collections.find(collection_name)
-        return any(record.name in self.connection_names for record in _all_collections(collection_record.key))
-
-    def _exposure_region(self, dataId: DataCoordinate) -> Optional[Region]:
-        """Return a Region for an exposure.
-
-        This code tries to find a matching visit for an exposure and use the
-        region from that visit.
-        """
-        visit_definition_storage = self.dimensions.get(self.universe["visit_definition"])
-        if visit_definition_storage is None:
-            return None
-        exposureDataId = dataId.subset(self.exposure.graph)
-        records = visit_definition_storage.fetch(DataCoordinateIterable.fromScalar(exposureDataId))
-        # There may be more than one visit per exposure, they should nave the
-        # same  region, so we use arbitrary one.
-        record = next(iter(records), None)
-        if record is None:
-            return None
-        visit: int = record.visit
-
-        detector = cast(Dimension, self.universe["detector"])
-        if detector in dataId:
-            visit_detector_region_storage = self.dimensions.get(self.universe["visit_detector_region"])
-            if visit_detector_region_storage is None:
-                return None
-            visitDataId = DataCoordinate.standardize(
-                {
-                    "instrument": dataId["instrument"],
-                    "visit": visit,
-                    "detector": dataId["detector"],
-                },
-                universe=self.universe,
-            )
-            records = visit_detector_region_storage.fetch(DataCoordinateIterable.fromScalar(visitDataId))
-            record = next(iter(records), None)
-            if record is not None:
-                return record.region
-
-        else:
-
-            visit_storage = self.dimensions.get(self.visit)
-            if visit_storage is None:
-                return None
-            visitDataId = DataCoordinate.standardize(
-                {
-                    "instrument": dataId["instrument"],
-                    "visit": visit,
-                },
-                universe=self.universe,
-            )
-            records = visit_storage.fetch(DataCoordinateIterable.fromScalar(visitDataId))
-            record = next(iter(records), None)
-            if record is not None:
-                return record.region
-
-        return None

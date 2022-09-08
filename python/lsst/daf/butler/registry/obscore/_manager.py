@@ -25,19 +25,28 @@ __all__ = ["ObsCoreLiveTableManager"]
 
 import json
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Iterable, Optional, Type
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, Type, cast
 
 import sqlalchemy
-from lsst.daf.butler import Config, DatasetRef, DimensionUniverse
+from lsst.daf.butler import (
+    Config,
+    DataCoordinate,
+    DataCoordinateIterable,
+    DatasetRef,
+    Dimension,
+    DimensionUniverse,
+)
+from lsst.sphgeom import Region
 
 from ..interfaces import ObsCoreTableManager, VersionTuple
 from ._config import ObsCoreConfig
-from ._records import RecordFactory
+from ._records import ExposureRegionFactory, RecordFactory
 from ._schema import ObsCoreSchema
 
 if TYPE_CHECKING:
     from ..interfaces import (
         CollectionManager,
+        CollectionRecord,
         Database,
         DatasetRecordStorageManager,
         DimensionRecordStorageManager,
@@ -45,6 +54,67 @@ if TYPE_CHECKING:
     )
 
 _VERSION = VersionTuple(0, 0, 1)
+
+
+class _ExposureRegionFactory(ExposureRegionFactory):
+    """Find exposure region from a matching visit dimensions records."""
+
+    def __init__(self, dimensions: DimensionRecordStorageManager):
+        self.dimensions = dimensions
+        self.universe = dimensions.universe
+        self.exposure = self.universe["exposure"]
+        self.visit = self.universe["visit"]
+
+    def exposure_region(self, dataId: DataCoordinate) -> Optional[Region]:
+        # Docstring is inherited from a base class.
+        visit_definition_storage = self.dimensions.get(self.universe["visit_definition"])
+        if visit_definition_storage is None:
+            return None
+        exposureDataId = dataId.subset(self.exposure.graph)
+        records = visit_definition_storage.fetch(DataCoordinateIterable.fromScalar(exposureDataId))
+        # There may be more than one visit per exposure, they should nave the
+        # same  region, so we use arbitrary one.
+        record = next(iter(records), None)
+        if record is None:
+            return None
+        visit: int = record.visit
+
+        detector = cast(Dimension, self.universe["detector"])
+        if detector in dataId:
+            visit_detector_region_storage = self.dimensions.get(self.universe["visit_detector_region"])
+            if visit_detector_region_storage is None:
+                return None
+            visitDataId = DataCoordinate.standardize(
+                {
+                    "instrument": dataId["instrument"],
+                    "visit": visit,
+                    "detector": dataId["detector"],
+                },
+                universe=self.universe,
+            )
+            records = visit_detector_region_storage.fetch(DataCoordinateIterable.fromScalar(visitDataId))
+            record = next(iter(records), None)
+            if record is not None:
+                return record.region
+
+        else:
+
+            visit_storage = self.dimensions.get(self.visit)
+            if visit_storage is None:
+                return None
+            visitDataId = DataCoordinate.standardize(
+                {
+                    "instrument": dataId["instrument"],
+                    "visit": visit,
+                },
+                universe=self.universe,
+            )
+            records = visit_storage.fetch(DataCoordinateIterable.fromScalar(visitDataId))
+            record = next(iter(records), None)
+            if record is not None:
+                return record.region
+
+        return None
 
 
 class ObsCoreLiveTableManager(ObsCoreTableManager):
@@ -68,7 +138,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         self.universe = universe
         self.config = config
         self.collections = collections
-        self.record_factory = RecordFactory(config, schema, universe, collections, dimensions)
+        self.connection_names = frozenset(self.config.collections or [])
+        exposure_region_factory = _ExposureRegionFactory(dimensions)
+        self.record_factory = RecordFactory(config, schema, universe, exposure_region_factory)
 
     @classmethod
     def initialize(
@@ -119,8 +191,38 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
     def add_datasets(self, refs: Iterable[DatasetRef], collection: Optional[str] = None) -> None:
         # Docstring inherited from base class.
-        records = [self.record_factory(ref, collection) for ref in refs]
-        actual_records = [record for record in records if record is not None]
+        records: List[dict] = []
+        for ref in refs:
+
+            # Check dataset run against configured collection list
+            if self.connection_names:
+                dataset_collection = collection
+                if dataset_collection is None:
+                    assert ref.run is not None, "Run cannot be None"
+                    dataset_collection = ref.run
+                if not self._check_dataset_run(dataset_collection):
+                    continue
+
+            if (record := self.record_factory(ref)) is not None:
+                records.append(record)
+
         if records:
             # Ignore potential conflicts with existing datasets.
-            self.db.ensure(self.table, *actual_records, primary_key_only=True)
+            self.db.ensure(self.table, *records, primary_key_only=True)
+
+    def _check_dataset_run(self, collection_name: str) -> bool:
+        """Check that specified collection (usually RUN or TAGGED) or any
+        parent CHAINED collection is in the configured collection list.
+        """
+
+        def _all_collections(key: Any) -> Iterator[CollectionRecord]:
+            """Return records of all chained collections."""
+            for collection_record in self.collections.getParentChains(key):
+                yield collection_record
+                yield from _all_collections(collection_record.key)
+
+        if collection_name in self.connection_names:
+            return True
+
+        collection_record = self.collections.find(collection_name)
+        return any(record.name in self.connection_names for record in _all_collections(collection_record.key))

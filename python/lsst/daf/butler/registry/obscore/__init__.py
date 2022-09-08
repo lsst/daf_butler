@@ -21,3 +21,5 @@
 
 from ._config import *
 from ._manager import *
+from ._records import *
+from ._schema import *
