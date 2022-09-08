@@ -368,6 +368,7 @@ class RegistryManagerInstances(
                 config=types.manager_configs["obscore"],
                 datasets=types.datasets,
                 collections=kwargs["collections"],
+                dimensions=kwargs["dimensions"],
             )
         else:
             kwargs["obscore"] = None

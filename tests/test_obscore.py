@@ -39,6 +39,7 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.registry import Registry, RegistryConfig
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+from lsst.sphgeom import ConvexPolygon, LonLat, UnitVector3d
 
 try:
     import testing.postgresql
@@ -94,6 +95,37 @@ class ObsCoreTests:
                     "datetime_end": visit_end,
                 },
             )
+
+        # Only couple of exposures are linked to visits.
+        for visit in (1, 2):
+            registry.insertDimensionData(
+                "visit_definition",
+                {
+                    "instrument": "DummyCam",
+                    "exposure": visit,
+                    "visit": visit,
+                },
+            )
+
+        region = ConvexPolygon(
+            [
+                UnitVector3d(LonLat.fromDegrees(0.0, 1.0)),
+                UnitVector3d(LonLat.fromDegrees(2.0, 1.0)),
+                UnitVector3d(LonLat.fromDegrees(2.0, -1.0)),
+                UnitVector3d(LonLat.fromDegrees(0.0, -1.0)),
+            ]
+        )
+        for visit in (1, 2, 3, 4):
+            for detector in (1, 2, 3, 4):
+                registry.insertDimensionData(
+                    "visit_detector_region",
+                    {
+                        "instrument": "DummyCam",
+                        "visit": visit,
+                        "detector": detector,
+                        "region": region,
+                    },
+                )
 
         # Add few dataset types
         storage_class_factory = StorageClassFactory()
@@ -296,7 +328,6 @@ class SQLiteObsCoreTest(ObsCoreTests, unittest.TestCase):
 
 @unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresObsCoreTest(ObsCoreTests, unittest.TestCase):
-
     @staticmethod
     def _handler(postgresql):
         engine = sqlalchemy.engine.create_engine(postgresql.url())

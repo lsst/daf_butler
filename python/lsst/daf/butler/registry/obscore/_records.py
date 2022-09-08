@@ -29,10 +29,17 @@ from typing import Any, Callable, Dict, Iterator, Optional, cast
 from uuid import UUID
 
 import astropy.time
-from lsst.daf.butler import DatasetRef, Dimension, DimensionRecord, DimensionUniverse
+from lsst.daf.butler import (
+    DataCoordinate,
+    DataCoordinateIterable,
+    DatasetRef,
+    Dimension,
+    DimensionRecord,
+    DimensionUniverse,
+)
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
 
-from ..interfaces import CollectionManager, CollectionRecord
+from ..interfaces import CollectionManager, CollectionRecord, DimensionRecordStorageManager
 from ._config import ObsCoreConfig
 from ._schema import ObsCoreSchema
 
@@ -60,6 +67,8 @@ class RecordFactory:
         Registry dimensions universe.
     collections : `CollectionManager`
         Manager of Registry collections.
+    dimensions: `DimensionRecordStorageManager`
+        Manager for Registry dimensions.
     """
 
     def __init__(
@@ -68,13 +77,16 @@ class RecordFactory:
         schema: ObsCoreSchema,
         universe: DimensionUniverse,
         collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
     ):
         self.config = config
         self.schema = schema
         self.universe = universe
         self.collections = collections
+        self.dimensions = dimensions
         self.connection_names = frozenset(self.config.collections or [])
 
+        # All dimension elements used below.
         self.band = cast(Dimension, universe["band"])
         self.exposure = universe["exposure"]
         self.visit = universe["visit"]
@@ -149,7 +161,7 @@ class RecordFactory:
         if self.exposure in dataId:
             if (dimension_record := dataId.records[self.exposure]) is not None:
                 self._exposure_records(dimension_record, record)
-                # region = self._exposure_region(dataId)
+                region = self._exposure_region(dataId)
         elif self.visit in dataId:
             if (dimension_record := dataId.records[self.visit]) is not None:
                 self._visit_records(dimension_record, record)
@@ -273,3 +285,58 @@ class RecordFactory:
 
         collection_record = self.collections.find(collection_name)
         return any(record.name in self.connection_names for record in _all_collections(collection_record.key))
+
+    def _exposure_region(self, dataId: DataCoordinate) -> Optional[Region]:
+        """Return a Region for an exposure.
+
+        This code tries to find a matching visit for an exposure and use the
+        region from that visit.
+        """
+        visit_definition_storage = self.dimensions.get(self.universe["visit_definition"])
+        if visit_definition_storage is None:
+            return None
+        exposureDataId = dataId.subset(self.exposure.graph)
+        records = visit_definition_storage.fetch(DataCoordinateIterable.fromScalar(exposureDataId))
+        # There may be more than one visit per exposure, they should nave the
+        # same  region, so we use arbitrary one.
+        record = next(iter(records), None)
+        if record is None:
+            return None
+        visit: int = record.visit
+
+        detector = cast(Dimension, self.universe["detector"])
+        if detector in dataId:
+            visit_detector_region_storage = self.dimensions.get(self.universe["visit_detector_region"])
+            if visit_detector_region_storage is None:
+                return None
+            visitDataId = DataCoordinate.standardize(
+                {
+                    "instrument": dataId["instrument"],
+                    "visit": visit,
+                    "detector": dataId["detector"],
+                },
+                universe=self.universe,
+            )
+            records = visit_detector_region_storage.fetch(DataCoordinateIterable.fromScalar(visitDataId))
+            record = next(iter(records), None)
+            if record is not None:
+                return record.region
+
+        else:
+
+            visit_storage = self.dimensions.get(self.visit)
+            if visit_storage is None:
+                return None
+            visitDataId = DataCoordinate.standardize(
+                {
+                    "instrument": dataId["instrument"],
+                    "visit": visit,
+                },
+                universe=self.universe,
+            )
+            records = visit_storage.fetch(DataCoordinateIterable.fromScalar(visitDataId))
+            record = next(iter(records), None)
+            if record is not None:
+                return record.region
+
+        return None

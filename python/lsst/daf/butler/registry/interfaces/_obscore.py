@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from ._collections import CollectionManager
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
+    from ._dimensions import DimensionRecordStorageManager
 
 
 class ObsCoreTableManager(VersionedExtension):
@@ -52,6 +53,7 @@ class ObsCoreTableManager(VersionedExtension):
         config: Mapping,
         datasets: Type[DatasetRecordStorageManager],
         collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
     ) -> ObsCoreTableManager:
         """Construct an instance of the manager.
 
@@ -71,6 +73,8 @@ class ObsCoreTableManager(VersionedExtension):
             Type of dataset manager.
         collections : `CollectionManager`
             Manager of Registry collections.
+        dimensions: `DimensionRecordStorageManager`
+            Manager for Registry dimensions.
 
         Returns
         -------

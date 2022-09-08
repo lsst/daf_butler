@@ -36,7 +36,13 @@ from ._records import RecordFactory
 from ._schema import ObsCoreSchema
 
 if TYPE_CHECKING:
-    from ..interfaces import CollectionManager, Database, DatasetRecordStorageManager, StaticTablesContext
+    from ..interfaces import (
+        CollectionManager,
+        Database,
+        DatasetRecordStorageManager,
+        DimensionRecordStorageManager,
+        StaticTablesContext,
+    )
 
 _VERSION = VersionTuple(0, 0, 1)
 
@@ -54,6 +60,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         universe: DimensionUniverse,
         config: ObsCoreConfig,
         collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
     ):
         self.db = db
         self.table = table
@@ -61,7 +68,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         self.universe = universe
         self.config = config
         self.collections = collections
-        self.record_factory = RecordFactory(config, schema, universe, collections)
+        self.record_factory = RecordFactory(config, schema, universe, collections, dimensions)
 
     @classmethod
     def initialize(
@@ -73,6 +80,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         config: Mapping,
         datasets: Type[DatasetRecordStorageManager],
         collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
     ) -> ObsCoreTableManager:
         # Docstring inherited from base class.
         config_data = Config(config)
@@ -87,6 +95,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             universe=universe,
             config=obscore_config,
             collections=collections,
+            dimensions=dimensions,
         )
 
     def config_json(self) -> str:
