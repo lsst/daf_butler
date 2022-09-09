@@ -64,6 +64,7 @@ from .._exceptions import (
     CollectionTypeError,
     ConflictingDefinitionError,
     DataIdValueError,
+    DatasetTypeError,
     InconsistentDataIdError,
     MissingCollectionError,
     OrphanedRecordError,
@@ -1467,13 +1468,12 @@ class RegistryTests(ABC):
             (unknown_component_type, unknown_type.name),
             (unknown_component_type.name, unknown_component_type.name),
         ):
-            result = subsetDataIds.findDatasets(
-                test_type, collections=["imported_r", "imported_g"], findFirst=True
-            )
-            self.assertEqual(result.count(), 0)
-            self.assertIn(
-                f"Dataset type '{test_type_name}' is not registered", "\n".join(result.explain_no_results())
-            )
+            with self.assertRaisesRegex(DatasetTypeError, expected_regex=test_type_name):
+                list(
+                    subsetDataIds.findDatasets(
+                        test_type, collections=["imported_r", "imported_g"], findFirst=True
+                    )
+                )
 
         # Materialize the bias dataset queries (only) by putting the results
         # into temporary tables, then repeat those tests.
@@ -2500,11 +2500,6 @@ class RegistryTests(ABC):
                 ["nonexistent"],
             ),
             (
-                # Dataset type name doesn't match any existing dataset types.
-                base_query.findDatasets("nonexistent", collections=["biases"]),
-                ["nonexistent"],
-            ),
-            (
                 # Dataset type object isn't registered.
                 registry.queryDatasets(
                     DatasetType(
@@ -2514,19 +2509,6 @@ class RegistryTests(ABC):
                         storageClass="Image",
                     ),
                     collections=...,
-                ),
-                ["nonexistent"],
-            ),
-            (
-                # Dataset type object isn't registered.
-                base_query.findDatasets(
-                    DatasetType(
-                        "nonexistent",
-                        dimensions=["instrument"],
-                        universe=registry.dimensions,
-                        storageClass="Image",
-                    ),
-                    collections=["biases"],
                 ),
                 ["nonexistent"],
             ),

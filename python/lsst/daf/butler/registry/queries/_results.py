@@ -361,7 +361,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def findDatasets(
         self, datasetType: DatasetType | str, collections: Any, *, findFirst: bool = True
-    ) -> DatasetQueryResults:
+    ) -> ParentDatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
         Parameters
@@ -383,7 +383,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
         Returns
         -------
-        datasets : `DatasetQueryResults`
+        datasets : `ParentDatasetQueryResults`
             A lazy-evaluation object representing dataset query results,
             iterable over `DatasetRef` objects.  If ``self.hasRecords()``, all
             nested data IDs in those dataset references will have records as
@@ -393,38 +393,31 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         ------
         ValueError
             Raised if ``datasetType.dimensions.issubset(self.graph) is False``.
+        MissingDatasetTypeError
+            Raised if the given dataset type is not registered.
         """
-        if not isinstance(datasetType, DatasetType):
-            storage = self._query.backend.managers.datasets.find(datasetType)
-            if storage is None:
-                return ChainedDatasetQueryResults(
-                    [],
-                    doomed_by=[
-                        f"Dataset type {datasetType!r} is not registered, so no instances of it can exist in "
-                        "any collection."
-                    ],
-                )
-            else:
-                datasetType = storage.datasetType
-        if not datasetType.dimensions.issubset(self.graph):
+        parent_dataset_type, components = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, explicit_only=True
+        )
+        if not parent_dataset_type.dimensions.issubset(self.graph):
             raise ValueError(
                 f"findDatasets requires that the dataset type have only dimensions in "
                 f"the DataCoordinateQueryResult used as input to the search, but "
-                f"{datasetType.name} has dimensions {datasetType.dimensions}, while the input "
-                f"dimensions are {self.graph}."
+                f"{parent_dataset_type.name} has dimensions {parent_dataset_type.dimensions}, "
+                f"while the input dimensions are {self.graph}."
             )
-        if datasetType.isComponent():
-            # We were given a true DatasetType instance, but it's a component.
-            components = [datasetType.component()]
-            datasetType = datasetType.makeCompositeDatasetType()
-        else:
-            components = [None]
-        summary = QuerySummary(self.graph, whereRegion=self._query.whereRegion, datasets=[datasetType])
+        summary = QuerySummary(
+            self.graph, whereRegion=self._query.whereRegion, datasets=[parent_dataset_type]
+        )
         builder = self._query.makeBuilder(summary)
-        builder.joinDataset(datasetType, collections=collections, findFirst=findFirst)
+        builder.joinDataset(parent_dataset_type, collections=collections, findFirst=findFirst)
         query = builder.finish(joinMissing=False)
         return ParentDatasetQueryResults(
-            db=self._db, query=query, components=components, records=self._records, datasetType=datasetType
+            db=self._db,
+            query=query,
+            components=components,
+            records=self._records,
+            datasetType=parent_dataset_type,
         )
 
     def count(self, *, exact: bool = True) -> int:
