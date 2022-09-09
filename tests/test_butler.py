@@ -799,10 +799,10 @@ class ButlerTests(ButlerPutGetTests):
         # Try to delete RUN collections, which should fail with complete
         # rollback because they're still referenced by the CHAINED
         # collection.
-        with self.assertRaises(Exception):
-            butler.pruneCollection(run1, pruge=True, unstore=True)
-        with self.assertRaises(Exception):
-            butler.pruneCollection(run2, pruge=True, unstore=True)
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+            butler.pruneCollection(run1, purge=True, unstore=True)
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+            butler.pruneCollection(run2, purge=True, unstore=True)
         self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
         existence = butler.datastore.mexists([ref1, ref2, ref3])
         self.assertTrue(existence[ref1])
