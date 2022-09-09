@@ -1388,7 +1388,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Check that in normal mode, deleting the record will lead to
         # trash not touching the file.
         uri1 = butler.datastore.getURI(ref1)
-        butler.datastore.bridge.moveToTrash([ref1])  # Update the dataset_location table
+        butler.datastore.bridge.moveToTrash([ref1], transaction=None)  # Update the dataset_location table
         butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref1.id})
         butler.datastore.trash(ref1)
         butler.datastore.emptyTrash()
@@ -1404,7 +1404,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         self.assertTrue(uri3.exists())
 
         # Remove the datastore record.
-        butler.datastore.bridge.moveToTrash([ref2])  # Update the dataset_location table
+        butler.datastore.bridge.moveToTrash([ref2], transaction=None)  # Update the dataset_location table
         butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref2.id})
         self.assertTrue(uri2.exists())
         butler.datastore.trash([ref2, ref3])

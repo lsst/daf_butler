@@ -43,6 +43,7 @@ from .ephemeral import EphemeralDatastoreRegistryBridge
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
+    from ...core.datastore import DatastoreTransaction
     from ..interfaces import (
         Database,
         DatasetRecordStorageManager,
@@ -157,7 +158,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         rows = self._refsToRows(self.check(refs))
         self._db.delete(self._tables.dataset_location, ["datastore_name", "dataset_id"], *rows)
 
-    def moveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
+    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: Optional[DatastoreTransaction]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         # TODO: avoid self.check() call via queries like
         #     INSERT INTO dataset_location_trash

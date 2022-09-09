@@ -39,6 +39,7 @@ from lsst.daf.butler import (
     StorageClass,
     StoredDatastoreItemInfo,
 )
+from lsst.daf.butler.core.utils import transactional
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from lsst.resources import ResourcePath
 
@@ -512,6 +513,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         for ref in refs:
             self.removeStoredItemInfo(ref)
 
+    @transactional
     def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = False) -> None:
         """Indicate to the Datastore that a dataset can be removed.
 
@@ -536,7 +538,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         if not isinstance(ref, DatasetRef):
             log.debug("Bulk trashing of datasets in datastore %s", self.name)
-            self.bridge.moveToTrash(ref)
+            self.bridge.moveToTrash(ref, transaction=self._transaction)
             return
 
         log.debug("Trash %s in datastore %s", ref, self.name)
@@ -546,7 +548,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             self._get_dataset_info(ref)
 
             # Move datasets to trash table
-            self.bridge.moveToTrash([ref])
+            self.bridge.moveToTrash([ref], transaction=self._transaction)
         except Exception as e:
             if ignore_errors:
                 log.warning(
