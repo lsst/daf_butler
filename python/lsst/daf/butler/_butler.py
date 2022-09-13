@@ -1636,13 +1636,14 @@ class Butler(LimitedButler):
             if collectionType is not CollectionType.RUN:
                 raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
             refs.extend(self.registry.queryDatasets(..., collections=name, findFirst=True))
-        with self.registry.transaction():
-            if unstore:
-                self.datastore.trash(refs)
-            else:
-                self.datastore.forget(refs)
-            for name in names:
-                self.registry.removeCollection(name)
+        with self.datastore.transaction():
+            with self.registry.transaction():
+                if unstore:
+                    self.datastore.trash(refs)
+                else:
+                    self.datastore.forget(refs)
+                for name in names:
+                    self.registry.removeCollection(name)
         if unstore:
             # Point of no return for removing artifacts
             self.datastore.emptyTrash()
@@ -1703,14 +1704,15 @@ class Butler(LimitedButler):
                 raise RuntimeError(f"{name} is not a child of {parent}") from e
             self.registry.setCollectionChain(parent, chain)
 
-        with self.registry.transaction():
-            if unlink:
-                for parent in unlink:
-                    remove(name, parent)
-            if unstore:
-                refs = self.registry.queryDatasets(..., collections=name, findFirst=True)
-                self.datastore.trash(refs)
-            self.registry.removeCollection(name)
+        with self.datastore.transaction():
+            with self.registry.transaction():
+                if unlink:
+                    for parent in unlink:
+                        remove(name, parent)
+                if unstore:
+                    refs = self.registry.queryDatasets(..., collections=name, findFirst=True)
+                    self.datastore.trash(refs)
+                self.registry.removeCollection(name)
 
         if unstore:
             # Point of no return for removing artifacts
@@ -1765,15 +1767,16 @@ class Butler(LimitedButler):
         # mutating the Registry (it can _look_ at Datastore-specific things,
         # but shouldn't change them), and hence all operations here are
         # Registry operations.
-        with self.registry.transaction():
-            if unstore:
-                self.datastore.trash(refs)
-            if purge:
-                self.registry.removeDatasets(refs)
-            elif disassociate:
-                assert tags, "Guaranteed by earlier logic in this function."
-                for tag in tags:
-                    self.registry.disassociate(tag, refs)
+        with self.datastore.transaction():
+            with self.registry.transaction():
+                if unstore:
+                    self.datastore.trash(refs)
+                if purge:
+                    self.registry.removeDatasets(refs)
+                elif disassociate:
+                    assert tags, "Guaranteed by earlier logic in this function."
+                    for tag in tags:
+                        self.registry.disassociate(tag, refs)
         # We've exited the Registry transaction, and apparently committed.
         # (if there was an exception, everything rolled back, and it's as if
         # nothing happened - and we never get here).

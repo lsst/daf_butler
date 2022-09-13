@@ -32,6 +32,7 @@ from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import DatasetType, DimensionUniverse, StoredDatastoreItemInfo
+    from ...core.datastore import DatastoreTransaction
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
     from ._opaque import OpaqueTableStorage, OpaqueTableStorageManager
@@ -150,13 +151,16 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def moveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
+    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: Optional[DatastoreTransaction]) -> None:
         """Move dataset location information to trash.
 
         Parameters
         ----------
         refs : `Iterable` of `DatasetIdRef`
             References to the datasets.
+        transaction : `DatastoreTransaction` or `None`
+            Transaction object. Can be `None` in some bridges or if no rollback
+            is required.
 
         Raises
         ------

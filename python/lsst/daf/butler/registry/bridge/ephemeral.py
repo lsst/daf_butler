@@ -30,6 +30,7 @@ from ..interfaces import DatasetIdRef, DatastoreRegistryBridge, FakeDatasetRef, 
 
 if TYPE_CHECKING:
     from ...core import StoredDatastoreItemInfo
+    from ...core.datastore import DatastoreTransaction
 
 
 class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
@@ -62,9 +63,18 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
     def forget(self, refs: Iterable[DatasetIdRef]) -> None:
         self._datasetIds.difference_update(ref.id for ref in refs)
 
-    def moveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
+    def _rollbackMoveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
+        """Rollback a moveToTrash call."""
+        for ref in refs:
+            self._trashedIds.remove(ref.getCheckedId())
+
+    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: Optional[DatastoreTransaction]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        self._trashedIds.update(ref.getCheckedId() for ref in refs)
+        if transaction is None:
+            raise RuntimeError("Must be called with a defined transaction.")
+        ref_list = list(refs)
+        with transaction.undoWith(f"Trash {len(ref_list)} datasets", self._rollbackMoveToTrash, ref_list):
+            self._trashedIds.update(ref.getCheckedId() for ref in ref_list)
 
     def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
