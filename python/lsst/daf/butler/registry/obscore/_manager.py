@@ -24,8 +24,9 @@ from __future__ import annotations
 __all__ = ["ObsCoreLiveTableManager"]
 
 import json
+from collections import defaultdict
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, Type, cast
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Type, cast
 
 import sqlalchemy
 from lsst.daf.butler import (
@@ -191,18 +192,46 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
     def add_datasets(self, refs: Iterable[DatasetRef], collection: Optional[str] = None) -> None:
         # Docstring inherited from base class.
-        records: List[dict] = []
-        for ref in refs:
 
-            # Check dataset run against configured collection list
-            if self.connection_names:
-                dataset_collection = collection
-                if dataset_collection is None:
-                    assert ref.run is not None, "Run cannot be None"
-                    dataset_collection = ref.run
-                if not self._check_dataset_run(dataset_collection):
+        obscore_refs: Iterable[DatasetRef]
+        if self.connection_names and collection is None:
+            # Check each dataset run against configured collection list. We
+            # want to reduce number of calls to _check_dataset_run, which is
+            # expensive. Normally references are grouped by run, if there are
+            # multiple input references, they should have the same run.
+            # Instead of just checking that, we group them by run again.
+            refs_by_run: Dict[str, List[DatasetRef]] = defaultdict(list)
+            for ref in refs:
+
+                # Record factory will filter dataset types, but to reduce
+                # collection checks we also pre-filter it here.
+                if ref.datasetType.name not in self.config.dataset_types:
                     continue
 
+                assert ref.run is not None, "Run cannot be None"
+                refs_by_run[ref.run].append(ref)
+
+            good_refs: List[DatasetRef] = []
+            for run, run_refs in refs_by_run.items():
+                if not self._check_dataset_run(run):
+                    continue
+                good_refs.extend(run_refs)
+            obscore_refs = good_refs
+
+        elif self.connection_names and collection is not None:
+
+            # Only check single collection, take all refs if it passes.
+            if self._check_dataset_run(collection):
+                obscore_refs = refs
+
+        else:
+
+            # Take all refs, no collection check.
+            obscore_refs = refs
+
+        # Convert them all to records.
+        records: List[dict] = []
+        for ref in obscore_refs:
             if (record := self.record_factory(ref)) is not None:
                 records.append(record)
 

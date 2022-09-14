@@ -110,10 +110,17 @@ class RecordFactory:
 
         Returns
         -------
-        record : `dict` [ `str`, `Any` ]
-            ObsCore record represented a dictionary. `None` is returned if
-            dataset does not need to be stored in the obscore table, e.g.
-            when dataset type is not in obscore configuration.
+        record : `dict` [ `str`, `Any` ] or `None`
+            ObsCore record represented as a dictionary. `None` is returned if
+            dataset does not need to be stored in the obscore table, e.g. when
+            dataset type is not in obscore configuration.
+
+        Notes
+        -----
+        This method filters records by dataset type and returns `None` if
+        reference dataset type is not configured. It does not check reference
+        run name against configured collections, all runs are acceptable by
+        this method.
         """
         # Quick check for dataset type.
         dataset_type_name = ref.datasetType.name
