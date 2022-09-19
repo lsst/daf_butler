@@ -472,13 +472,13 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         """
         return self._query.any(self._db, execute=execute, exact=exact)
 
-    def explain_no_results(self) -> Iterator[str]:
+    def explain_no_results(self) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
 
         Returns
         -------
-        messages : `Iterator` [ `str` ]
+        messages : `Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
 
@@ -651,13 +651,13 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         raise NotImplementedError()
 
     @abstractmethod
-    def explain_no_results(self) -> Iterator[str]:
+    def explain_no_results(self) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
 
         Returns
         -------
-        messages : `Iterator` [ `str` ]
+        messages : `Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
 
@@ -814,7 +814,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         # Docstring inherited.
         return self._query.any(self._db, execute=execute, exact=exact)
 
-    def explain_no_results(self) -> Iterator[str]:
+    def explain_no_results(self) -> Iterable[str]:
         # Docstring inherited.
         return self._query.explain_no_results(self._db)
 
@@ -873,7 +873,7 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
         # Docstring inherited.
         return any(r.any(execute=execute, exact=exact) for r in self._chain)
 
-    def explain_no_results(self) -> Iterator[str]:
+    def explain_no_results(self) -> Iterable[str]:
         # Docstring inherited.
         for r in self._chain:
             yield from r.explain_no_results()
@@ -984,13 +984,13 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
         raise NotImplementedError()
 
     @abstractmethod
-    def explain_no_results(self) -> Iterator[str]:
+    def explain_no_results(self) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
 
         Returns
         -------
-        messages : `Iterator` [ `str` ]
+        messages : `Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
 
@@ -1135,6 +1135,6 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
         self._dataIds = self._dataIds.limit(limit, offset)
         return self
 
-    def explain_no_results(self) -> Iterator[str]:
+    def explain_no_results(self) -> Iterable[str]:
         # Docstring inherited.
         return self._dataIds.explain_no_results()
