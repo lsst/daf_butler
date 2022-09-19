@@ -183,8 +183,8 @@ Test utilities
    :no-main-docstr:
    :no-inheritance-diagram:
 
-Command Line Inteface API
--------------------------
+Command Line Interface API
+--------------------------
 
 .. warning::
    The command line interface API (everything in ``lsst.daf.butler.cli``) is for only for developer use to write command line interfaces, and is not intended for general use.
