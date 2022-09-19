@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ["RepoExportContext"]
 
 from collections import defaultdict
-from typing import Callable, Dict, Iterable, List, Optional, Set, Union
+from typing import AbstractSet, Callable, Dict, Iterable, List, Optional, Set, Union
 
 from ..core import (
     DataCoordinate,
@@ -159,19 +159,20 @@ class RepoExportContext:
             Dimension elements whose records should be exported.  If `None`,
             records for all dimensions will be exported.
         """
+        standardized_elements: AbstractSet[DimensionElement]
         if elements is None:
-            elements = frozenset(
+            standardized_elements = frozenset(
                 element
                 for element in self._registry.dimensions.getStaticElements()
                 if element.hasTable() and element.viewOf is None
             )
         else:
-            elements = set()
+            standardized_elements = set()
             for element in elements:
                 if not isinstance(element, DimensionElement):
                     element = self._registry.dimensions[element]
                 if element.hasTable() and element.viewOf is None:
-                    elements.add(element)
+                    standardized_elements.add(element)
         for dataId in dataIds:
             # This is potentially quite slow, because it's approximately
             # len(dataId.graph.elements) queries per data ID.  But it's a no-op
@@ -180,7 +181,7 @@ class RepoExportContext:
             # let us speed this up internally as well.
             dataId = self._registry.expandDataId(dataId)
             for record in dataId.records.values():
-                if record is not None and record.definition in elements:
+                if record is not None and record.definition in standardized_elements:
                     self._records[record.definition].setdefault(record.dataId, record)
 
     def saveDatasets(
