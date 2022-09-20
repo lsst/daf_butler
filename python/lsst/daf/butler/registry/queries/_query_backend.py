@@ -161,6 +161,10 @@ class QueryBackend(ABC):
             datasets were not matched by the expression.  Fully-specified
             component datasets (`str` or `DatasetType` instances) are always
             included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         explicit_only : `bool`, optional
             If `True`, require explicit `DatasetType` instances or `str` names,
             with `re.Pattern` instances deprecated and ``...`` prohibited.

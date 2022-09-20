@@ -1213,6 +1213,10 @@ class Registry(ABC):
             parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -1348,6 +1352,10 @@ class Registry(ABC):
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         bind : `Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -1459,6 +1467,10 @@ class Registry(ABC):
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         bind : `Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -1547,6 +1559,10 @@ class Registry(ABC):
         components : `bool`, optional
             Whether to apply dataset expressions to components as well.
             See `queryDataIds` for more information.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         bind : `Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.

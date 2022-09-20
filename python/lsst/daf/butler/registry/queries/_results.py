@@ -360,7 +360,12 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             )
 
     def findDatasets(
-        self, datasetType: DatasetType | str, collections: Any, *, findFirst: bool = True
+        self,
+        datasetType: DatasetType | str,
+        collections: Any,
+        *,
+        findFirst: bool = True,
+        components: bool | None = None,
     ) -> ParentDatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
@@ -380,6 +385,17 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             dataset type appears (according to the order of ``collections``
             passed in).  If `True`, ``collections`` must not contain regular
             expressions and may not be ``...``.
+        components : `bool`, optional
+            If `True`, apply all expression patterns to component dataset type
+            names as well.  If `False`, never apply patterns to components.  If
+            `None` (default), apply patterns to components only if their parent
+            datasets were not matched by the expression.  Fully-specified
+            component datasets (`str` or `DatasetType` instances) are always
+            included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
 
         Returns
         -------
@@ -396,8 +412,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         MissingDatasetTypeError
             Raised if the given dataset type is not registered.
         """
-        parent_dataset_type, components = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, explicit_only=True
+        parent_dataset_type, components_found = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, components=components, explicit_only=True
         )
         if not parent_dataset_type.dimensions.issubset(self.graph):
             raise ValueError(
@@ -415,7 +431,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         return ParentDatasetQueryResults(
             db=self._db,
             query=query,
-            components=components,
+            components=components_found,
             records=self._records,
             datasetType=parent_dataset_type,
         )

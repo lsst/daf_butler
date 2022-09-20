@@ -929,6 +929,10 @@ class SqlRegistry(Registry):
             parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         mode : `str`, optional
             The way in which datasets are being used in this query; one of:
 
