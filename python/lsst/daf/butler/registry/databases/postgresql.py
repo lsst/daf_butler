@@ -263,62 +263,6 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
         end_nsec = converter.max_nsec if value.upper is None else value.upper
         return Timespan(begin=None, end=None, _nsec=(begin_nsec, end_nsec))
 
-    class comparator_factory(sqlalchemy.types.Concatenable.Comparator):  # noqa: N801
-        """Comparison operators for TimespanColumnRanges.
-
-        Notes
-        -----
-        The existence of this nested class is a workaround for a bug
-        submitted upstream as
-        https://github.com/sqlalchemy/sqlalchemy/issues/5476 (now fixed on
-        main, but not in the releases we currently use).  The code is
-        a limited copy of the operators in
-        ``sqlalchemy.dialects.postgresql.ranges.RangeOperators``, but with
-        ``is_comparison=True`` added to all calls.
-        """
-
-        def __ne__(self, other: Any) -> Any:
-            "Boolean expression. Returns true if two ranges are not equal"
-            if other is None:
-                return super().__ne__(other)
-            else:
-                return self.expr.op("<>", is_comparison=True)(other)
-
-        def contains(self, other: Any, **kw: Any) -> Any:
-            """Boolean expression. Returns true if the right hand operand,
-            which can be an element or a range, is contained within the
-            column.
-            """
-            return self.expr.op("@>", is_comparison=True)(other)
-
-        def contained_by(self, other: Any) -> Any:
-            """Boolean expression. Returns true if the column is contained
-            within the right hand operand.
-            """
-            return self.expr.op("<@", is_comparison=True)(other)
-
-        def overlaps(self, other: Any) -> Any:
-            """Boolean expression. Returns true if the column overlaps
-            (has points in common with) the right hand operand.
-            """
-            return self.expr.op("&&", is_comparison=True)(other)
-
-        def strictly_left_of(self, other: Any) -> Any:
-            """Boolean expression. Returns true if the column is strictly
-            left of the right hand operand.
-            """
-            return self.expr.op("<<", is_comparison=True)(other)
-
-        __lshift__ = strictly_left_of
-
-        def strictly_right_of(self, other: Any) -> Any:
-            """Boolean expression. Returns true if the column is strictly
-            right of the right hand operand.
-            """
-            return self.expr.op(">>", is_comparison=True)(other)
-
-        __rshift__ = strictly_right_of
-
 
 class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
     """An implementation of `TimespanDatabaseRepresentation` that uses
