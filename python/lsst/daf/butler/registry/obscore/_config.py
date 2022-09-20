@@ -21,8 +21,10 @@
 
 from __future__ import annotations
 
-__all__ = ["DatasetTypeConfig", "ObsCoreConfig"]
+__all__ = ["ConfigCollectionType", "DatasetTypeConfig", "ObsCoreConfig", "ObsCoreManagerConfig"]
 
+import enum
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Tuple
 
 from lsst.daf.butler import Config
@@ -101,25 +103,18 @@ class DatasetTypeConfig(BaseModel):
 
 
 class ObsCoreConfig(BaseModel):
-    """Complete configuration for ObsCore manager."""
+    """Configuration which controls conversion of Registry datasets into
+    obscore records.
 
-    namespace: str = "daf_butler_obscore"
-    """Unique namespace to distinguish different instances, used for schema
-    migration purposes.
+    This configuration is a base class for ObsCore manager configuration class.
+    It can also be used by other tools that use `RecordFactory` to convert
+    datasets into obscore records.
     """
-
-    version: int
-    """Version of configuration, used for schema migration purposes. It needs
-    to be incremented on every change of configuration that causes a schema or
-    data migration.
-    """
-
-    table_name: str = "obscore"
-    """Name of the table for ObsCore records."""
 
     collections: Optional[List[str]] = None
-    """Names of registry collections to search, if missing then all collections
-    are used. Names should be complete, wildcards are not supported.
+    """Registry collections to include, if missing then all collections are
+    used. Depending on implementation the name in the list can be either a
+    full collection name or a regular expression.
     """
 
     dataset_types: Dict[str, DatasetTypeConfig]
@@ -149,3 +144,50 @@ class ObsCoreConfig(BaseModel):
     def validate_extra_columns(cls, value: Any) -> Any:  # noqa: N805
         """If the value is a dict then check the keys and values"""
         return _validate_extra_columns(value)
+
+
+class ConfigCollectionType(str, enum.Enum):
+    """Enum class defining possible values for configuration attributes."""
+
+    RUN = "RUN"
+    TAGGED = "TAGGED"
+
+
+class ObsCoreManagerConfig(ObsCoreConfig):
+    """Complete configuration for ObsCore manager."""
+
+    namespace: str = "daf_butler_obscore"
+    """Unique namespace to distinguish different instances, used for schema
+    migration purposes.
+    """
+
+    version: int
+    """Version of configuration, used for schema migration purposes. It needs
+    to be incremented on every change of configuration that causes a schema or
+    data migration.
+    """
+
+    table_name: str = "obscore"
+    """Name of the table for ObsCore records."""
+
+    collection_type: ConfigCollectionType
+    """Type of the collections that can appear in ``collections`` attribute.
+
+    When ``collection_type`` is ``RUN`` then ``collections`` contains regular
+    expressions that will be used to match RUN collections only. When
+    ``collection_type`` is ``TAGGED`` then ``collections`` must contain
+    exactly one collection name which must be TAGGED collection.
+    """
+
+    @validator("collection_type")
+    def validate_collection_type(
+        cls, value: ConfigCollectionType, values: Mapping[str, Any]  # noqa: N805
+    ) -> Any:
+        """Check that contents of ``collections`` is consistent with
+        ``collection_type``.
+        """
+        if value is ConfigCollectionType.TAGGED:
+            collections: Optional[List[str]] = values["collections"]
+            if collections is None or len(collections) != 1:
+                raise ValueError("'collections' must have one element when 'collection_type' is TAGGED")
+        return value

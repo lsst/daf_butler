@@ -35,7 +35,6 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     StorageClassFactory,
-    Timespan,
 )
 from lsst.daf.butler.registry import Registry, RegistryConfig
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
@@ -51,7 +50,9 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class ObsCoreTests:
     @abstractmethod
-    def make_registry(self, collections: Optional[List[str]] = None) -> Registry:
+    def make_registry(
+        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+    ) -> Registry:
         """Create new empty Registry."""
         raise NotImplementedError()
 
@@ -151,8 +152,6 @@ class ObsCoreTests:
         # Add few run collections.
         for run in (1, 2, 3, 4, 5, 6):
             registry.registerRun(f"run{run}")
-        registry.registerRun("run-calib1")
-        registry.registerRun("run-calib2")
 
         # Add few chained collections, run6 is not in any chained collections.
         registry.registerCollection("chain12", CollectionType.CHAINED)
@@ -162,15 +161,18 @@ class ObsCoreTests:
         registry.registerCollection("chain-all", CollectionType.CHAINED)
         registry.setCollectionChain("chain-all", ("chain12", "chain34", "run5"))
 
-        # And a tagged and calibration collection
+        # And a tagged collection
         registry.registerCollection("tagged", CollectionType.TAGGED)
-        registry.registerCollection("calib", CollectionType.CALIBRATION)
 
-    def make_obscore_config(self, collections: Optional[List[str]] = None) -> Config:
+    def make_obscore_config(
+        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+    ) -> Config:
         """Make configuration for obscore manager."""
         obscore_config = Config(os.path.join(TESTDIR, "config", "basic", "obscore.yaml"))
         if collections is not None:
             obscore_config["collections"] = collections
+        if collection_type is not None:
+            obscore_config["collection_type"] = collection_type
         return obscore_config
 
     def _insert_dataset(
@@ -201,8 +203,6 @@ class ObsCoreTests:
             # This dataset type is not configured, will not be in obscore.
             self._insert_dataset(registry, "run5", "no_obscore", detector=1, visit=1, do_import=do_import),
             self._insert_dataset(registry, "run6", "raw", detector=1, exposure=4, do_import=do_import),
-            self._insert_dataset(registry, "run-calib1", "calib", detector=1, do_import=do_import),
-            self._insert_dataset(registry, "run-calib2", "calib", detector=1, do_import=do_import),
         ]
 
     def _obscore_select(self, registry: Registry) -> list:
@@ -212,6 +212,24 @@ class ObsCoreTests:
         results = db.query(table.select())
         return list(results)
 
+    def test_config_errors(self):
+        """Test for handling various configuration problems."""
+
+        # This raises pydantic ValidationError, which wraps ValueError
+        exception_re = "'collections' must have one element"
+        with self.assertRaisesRegex(ValueError, exception_re):
+            self.make_registry(None, "TAGGED")
+
+        with self.assertRaisesRegex(ValueError, exception_re):
+            self.make_registry([], "TAGGED")
+
+        with self.assertRaisesRegex(ValueError, exception_re):
+            self.make_registry(["run1", "run2"], "TAGGED")
+
+        # Invalid regex.
+        with self.assertRaisesRegex(ValueError, "Failed to compile regex"):
+            self.make_registry(["+run"], "RUN")
+
     def test_insert_existing_collection(self):
         """Test insert and import registry methods, with various restrictions
         on collection names.
@@ -219,10 +237,10 @@ class ObsCoreTests:
 
         # First item is collections, second item is expected record count.
         test_data = (
-            (None, 8),
+            (None, 6),
             (["run1", "run2"], 2),
-            (["chain34"], 2),
-            (["chain-all"], 5),
+            (["run[34]"], 2),
+            (["[rR]un[^6]"], 5),
         )
 
         for collections, count in test_data:
@@ -242,67 +260,51 @@ class ObsCoreTests:
         refs = self._insert_datasets(registry)
 
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 8)
+        self.assertEqual(len(rows), 6)
 
         # drop single dataset
         registry.removeDatasets(ref for ref in refs if ref.run == "run1")
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 7)
+        self.assertEqual(len(rows), 5)
 
         # drop whole run collection
         registry.removeCollection("run6")
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 6)
+        self.assertEqual(len(rows), 4)
 
     def test_associate(self):
         """Test for associating datasets to TAGGED collection."""
 
-        collections = ["chain12", "tagged"]
-        registry = self.make_registry(collections)
+        collections = ["tagged"]
+        registry = self.make_registry(collections, "TAGGED")
         refs = self._insert_datasets(registry)
 
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 0)
 
         # Associate datasets that are already in obscore, changes nothing.
         registry.associate("tagged", (ref for ref in refs if ref.run == "run1"))
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)
 
         # Associate datasets that are not in obscore
         registry.associate("tagged", (ref for ref in refs if ref.run == "run3"))
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 3)
+        self.assertEqual(len(rows), 2)
 
-    def test_certify(self):
-        """Test for certifying datasets to a monitored collection."""
-
-        collections = ["chain12", "run-calib1", "calib"]
-        registry = self.make_registry(collections)
-        refs = self._insert_datasets(registry)
-
+        # Disassociate them
+        registry.disassociate("tagged", (ref for ref in refs if ref.run == "run3"))
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 3)
+        self.assertEqual(len(rows), 1)
 
-        t0 = astropy.time.Time("2020-01-01 08:00:00", scale="tai")
-        t1 = astropy.time.Time("2020-01-01 09:00:00", scale="tai")
-        t2 = astropy.time.Time("2020-01-01 10:00:00", scale="tai")
-        t3 = astropy.time.Time("2020-01-01 11:00:00", scale="tai")
-
-        # Certify datasets that are already in obscore, changes nothing.
-        registry.certify("calib", (ref for ref in refs if ref.run == "run-calib1"), Timespan(t0, t1))
+        # Non-associated dataset, should be OK and not throw.
+        registry.disassociate("tagged", (ref for ref in refs if ref.run == "run2"))
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 3)
+        self.assertEqual(len(rows), 1)
 
-        # Certify datasets that are not in obscore.
-        registry.certify("calib", (ref for ref in refs if ref.run == "run-calib2"), Timespan(t1, t2))
+        registry.disassociate("tagged", (ref for ref in refs if ref.run == "run1"))
         rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 4)
-
-        # Certifying again with different timespan does not add it to obscore
-        registry.certify("calib", (ref for ref in refs if ref.run == "run-calib2"), Timespan(t2, t3))
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 4)
+        self.assertEqual(len(rows), 0)
 
 
 class SQLiteObsCoreTest(ObsCoreTests, unittest.TestCase):
@@ -312,14 +314,16 @@ class SQLiteObsCoreTest(ObsCoreTests, unittest.TestCase):
     def tearDown(self):
         removeTestTempDir(self.root)
 
-    def make_registry(self, collections: Optional[List[str]] = None) -> Registry:
+    def make_registry(
+        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+    ) -> Registry:
         # docstring inherited from a base class
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         config = RegistryConfig()
         config["db"] = f"sqlite:///{filename}"
         config["managers", "obscore"] = {
             "cls": "lsst.daf.butler.registry.obscore.ObsCoreLiveTableManager",
-            "config": self.make_obscore_config(collections),
+            "config": self.make_obscore_config(collections, collection_type),
         }
         registry = Registry.createFromConfig(config, butlerRoot=self.root)
         self.initialize_registry(registry)
@@ -359,7 +363,9 @@ class PostgresObsCoreTest(ObsCoreTests, unittest.TestCase):
         removeTestTempDir(self.root)
         self.server = self.postgresql()
 
-    def make_registry(self, collections: Optional[List[str]] = None) -> Registry:
+    def make_registry(
+        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+    ) -> Registry:
         # docstring inherited from a base class
         self.count += 1
         config = RegistryConfig()
@@ -368,7 +374,7 @@ class PostgresObsCoreTest(ObsCoreTests, unittest.TestCase):
         config["namespace"] = f"namespace{self.count}"
         config["managers", "obscore"] = {
             "cls": "lsst.daf.butler.registry.obscore.ObsCoreLiveTableManager",
-            "config": self.make_obscore_config(collections),
+            "config": self.make_obscore_config(collections, collection_type),
         }
         registry = Registry.createFromConfig(config, butlerRoot=self.root)
         self.initialize_registry(registry)

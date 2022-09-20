@@ -27,13 +27,13 @@ __all__ = ["ObsCoreTableManager"]
 
 from abc import abstractmethod
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Iterable, Optional, Type
+from typing import TYPE_CHECKING, Iterable, Type
 
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import DatasetRef, DimensionUniverse
-    from ._collections import CollectionManager
+    from ._collections import CollectionRecord
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
     from ._dimensions import DimensionRecordStorageManager
@@ -52,7 +52,6 @@ class ObsCoreTableManager(VersionedExtension):
         universe: DimensionUniverse,
         config: Mapping,
         datasets: Type[DatasetRecordStorageManager],
-        collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
     ) -> ObsCoreTableManager:
         """Construct an instance of the manager.
@@ -71,8 +70,6 @@ class ObsCoreTableManager(VersionedExtension):
             Configuration of the obscore manager.
         datasets : `type`
             Type of dataset manager.
-        collections : `CollectionManager`
-            Manager of Registry collections.
         dimensions: `DimensionRecordStorageManager`
             Manager for Registry dimensions.
 
@@ -94,8 +91,11 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def add_datasets(self, refs: Iterable[DatasetRef], collection: Optional[str] = None) -> None:
+    def add_datasets(self, refs: Iterable[DatasetRef]) -> None:
         """Possibly add datasets to the obscore table.
+
+        This method should be called when new datasets are added to a RUN
+        collection.
 
         Parameters
         ----------
@@ -103,20 +103,68 @@ class ObsCoreTableManager(VersionedExtension):
             Dataset refs to add. Dataset refs have to be completely expanded.
             If a record with the same dataset ID is already in obscore table,
             the dataset is ignored.
-        collection : `str`, optional
-            Name of a collection. This should be set to `None` when datasets
-            are added to their run collection, in which case datasets' own run
-            collection name is used. When existing dataset are being associated
-            with TAGGED or CALIBRATION collections, this parameter should be
-            set to the name of the associated collection.
 
         Notes
         -----
         Dataset data types and collection names are checked against configured
         list of collections and dataset types, non-matching datasets are
-        ignored and not added to the obscore table. When ``collection`` is
-        specified it is used instead of dataset run name for filtering
-        purposes, but obscore record will still store original dataset run
-        name (when configuration defines the column for it).
+        ignored and not added to the obscore table.
+
+        When configuration parameter ``collection_type`` is not "RUN", this
+        method should return immediately.
+
+        Note that there is no matching method to remove datasets from obscore
+        table, we assume that removal happens via foreign key constraint to
+        dataset table with "ON DELETE CASCADE" option.
+        """
+        raise NotImplementedError()
+
+    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+        """Possibly add datasets to the obscore table.
+
+        This method should be called when existing datasets are associated with
+        a TAGGED collection.
+
+        Parameters
+        ----------
+        refs : `iterable` [ `DatasetRef` ]
+            Dataset refs to add. Dataset refs have to be completely expanded.
+            If a record with the same dataset ID is already in obscore table,
+            the dataset is ignored.
+        collection : `CollectionRecord`
+            Collection record for a TAGGED collection.
+
+        Notes
+        -----
+        Dataset data types and collection names are checked against configured
+        list of collections and dataset types, non-matching datasets are
+        ignored and not added to the obscore table.
+
+        When configuration parameter ``collection_type`` is not "TAGGED", this
+        method should return immediately.
+        """
+        raise NotImplementedError()
+
+    def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+        """Possibly remove datasets from the obscore table.
+
+        This method should be called when datasets are disassociated from a
+        TAGGED collection.
+
+        Parameters
+        ----------
+        refs : `iterable` [ `DatasetRef` ]
+            Dataset refs to remove. Dataset refs have to be resolved.
+        collection : `CollectionRecord`
+            Collection record for a TAGGED collection.
+
+        Notes
+        -----
+        Dataset data types and collection names are checked against configured
+        list of collections and dataset types, non-matching datasets are
+        ignored and not added to the obscore table.
+
+        When configuration parameter ``collection_type`` is not "TAGGED", this
+        method should return immediately.
         """
         raise NotImplementedError()

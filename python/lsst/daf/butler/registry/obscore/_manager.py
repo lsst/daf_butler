@@ -24,9 +24,11 @@ from __future__ import annotations
 __all__ = ["ObsCoreLiveTableManager"]
 
 import json
+import re
+import uuid
 from collections import defaultdict
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Type, cast
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Type, cast
 
 import sqlalchemy
 from lsst.daf.butler import (
@@ -38,15 +40,15 @@ from lsst.daf.butler import (
     DimensionUniverse,
 )
 from lsst.sphgeom import Region
+from lsst.utils.iteration import chunk_iterable
 
 from ..interfaces import ObsCoreTableManager, VersionTuple
-from ._config import ObsCoreConfig
+from ._config import ConfigCollectionType, ObsCoreManagerConfig
 from ._records import ExposureRegionFactory, RecordFactory
 from ._schema import ObsCoreSchema
 
 if TYPE_CHECKING:
     from ..interfaces import (
-        CollectionManager,
         CollectionRecord,
         Database,
         DatasetRecordStorageManager,
@@ -125,12 +127,12 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
     def __init__(
         self,
+        *,
         db: Database,
         table: sqlalchemy.schema.Table,
         schema: ObsCoreSchema,
         universe: DimensionUniverse,
-        config: ObsCoreConfig,
-        collections: CollectionManager,
+        config: ObsCoreManagerConfig,
         dimensions: DimensionRecordStorageManager,
     ):
         self.db = db
@@ -138,8 +140,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         self.schema = schema
         self.universe = universe
         self.config = config
-        self.collections = collections
-        self.connection_names = frozenset(self.config.collections or [])
         exposure_region_factory = _ExposureRegionFactory(dimensions)
         self.record_factory = RecordFactory(config, schema, universe, exposure_region_factory)
 
@@ -152,24 +152,38 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         universe: DimensionUniverse,
         config: Mapping,
         datasets: Type[DatasetRecordStorageManager],
-        collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
     ) -> ObsCoreTableManager:
         # Docstring inherited from base class.
         config_data = Config(config)
-        obscore_config = ObsCoreConfig.parse_obj(config_data)
+        obscore_config = ObsCoreManagerConfig.parse_obj(config_data)
 
         schema = ObsCoreSchema(config=obscore_config, datasets=datasets)
         table = context.addTable(obscore_config.table_name, schema.table_spec)
-        return ObsCoreLiveTableManager(
-            db=db,
-            table=table,
-            schema=schema,
-            universe=universe,
-            config=obscore_config,
-            collections=collections,
-            dimensions=dimensions,
-        )
+        if obscore_config.collection_type is ConfigCollectionType.TAGGED:
+            # Configuration validation guarantees that there is exactly one
+            # collection for TAGGED type.
+            assert obscore_config.collections is not None, "Collections must be defined"
+            return _TaggedObsCoreTableManager(
+                db=db,
+                table=table,
+                schema=schema,
+                universe=universe,
+                config=obscore_config,
+                tagged_collection=obscore_config.collections[0],
+                dimensions=dimensions,
+            )
+        elif obscore_config.collection_type is ConfigCollectionType.RUN:
+            return _RunObsCoreTableManager(
+                db=db,
+                table=table,
+                schema=schema,
+                universe=universe,
+                config=obscore_config,
+                dimensions=dimensions,
+            )
+        else:
+            raise ValueError(f"Unexpected value of collection_type: {obscore_config.collection_type}")
 
     def config_json(self) -> str:
         """Dump configuration in JSON format.
@@ -190,13 +204,106 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         # Docstring inherited from base class.
         return None
 
-    def add_datasets(self, refs: Iterable[DatasetRef], collection: Optional[str] = None) -> None:
+
+class _TaggedObsCoreTableManager(ObsCoreLiveTableManager):
+    """Implementation of ObsCoreTableManager which is used for
+    ``collection_type=TAGGED``.
+    """
+
+    def __init__(
+        self,
+        *,
+        db: Database,
+        table: sqlalchemy.schema.Table,
+        schema: ObsCoreSchema,
+        universe: DimensionUniverse,
+        config: ObsCoreManagerConfig,
+        tagged_collection: str,
+        dimensions: DimensionRecordStorageManager,
+    ):
+        super().__init__(
+            db=db,
+            table=table,
+            schema=schema,
+            universe=universe,
+            config=config,
+            dimensions=dimensions,
+        )
+        self.tagged_collection = tagged_collection
+
+    def add_datasets(self, refs: Iterable[DatasetRef]) -> None:
+        # Docstring inherited from base class.
+        return
+
+    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+        # Docstring inherited from base class.
+
+        if collection.name == self.tagged_collection:
+
+            records: List[dict] = []
+            for ref in refs:
+                if (record := self.record_factory(ref)) is not None:
+                    records.append(record)
+
+            if records:
+                # Ignore potential conflicts with existing datasets.
+                self.db.ensure(self.table, *records, primary_key_only=True)
+
+    def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+        # Docstring inherited from base class.
+
+        if collection.name == self.tagged_collection:
+
+            # Sorting may improve performance
+            dataset_ids = sorted(cast(uuid.UUID, ref.id) for ref in refs)
+            if dataset_ids:
+                fk_field = self.schema.dataset_fk
+                assert fk_field is not None, "Cannot be None by construction"
+                # There may be too many of them, do it in chunks.
+                for ids in chunk_iterable(dataset_ids):
+                    where = self.table.columns[fk_field.name].in_(ids)
+                    self.db.deleteWhere(self.table, where)
+
+
+class _RunObsCoreTableManager(ObsCoreLiveTableManager):
+    """Implementation of ObsCoreTableManager which is used for
+    ``collection_type=TAGGED``.
+    """
+
+    def __init__(
+        self,
+        *,
+        db: Database,
+        table: sqlalchemy.schema.Table,
+        schema: ObsCoreSchema,
+        universe: DimensionUniverse,
+        config: ObsCoreManagerConfig,
+        dimensions: DimensionRecordStorageManager,
+    ):
+        super().__init__(
+            db=db,
+            table=table,
+            schema=schema,
+            universe=universe,
+            config=config,
+            dimensions=dimensions,
+        )
+
+        self.run_patterns: List[re.Pattern] = []
+        if config.collections:
+            for coll in config.collections:
+                try:
+                    self.run_patterns.append(re.compile(coll))
+                except re.error as exc:
+                    raise ValueError(f"Failed to compile regex: {coll!r}") from exc
+
+    def add_datasets(self, refs: Iterable[DatasetRef]) -> None:
         # Docstring inherited from base class.
 
         obscore_refs: Iterable[DatasetRef]
-        if self.connection_names and collection is None:
-            # Check each dataset run against configured collection list. We
-            # want to reduce number of calls to _check_dataset_run, which is
+        if self.run_patterns:
+            # Check each dataset run against configured run list. We want to
+            # reduce number of calls to _check_dataset_run, which may be
             # expensive. Normally references are grouped by run, if there are
             # multiple input references, they should have the same run.
             # Instead of just checking that, we group them by run again.
@@ -218,12 +325,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
                 good_refs.extend(run_refs)
             obscore_refs = good_refs
 
-        elif self.connection_names and collection is not None:
-
-            # Only check single collection, take all refs if it passes.
-            if self._check_dataset_run(collection):
-                obscore_refs = refs
-
         else:
 
             # Take all refs, no collection check.
@@ -239,19 +340,20 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # Ignore potential conflicts with existing datasets.
             self.db.ensure(self.table, *records, primary_key_only=True)
 
-    def _check_dataset_run(self, collection_name: str) -> bool:
-        """Check that specified collection (usually RUN or TAGGED) or any
-        parent CHAINED collection is in the configured collection list.
-        """
+    def _check_dataset_run(self, run: str) -> bool:
+        """Check that specified run collection matches know patterns."""
 
-        def _all_collections(key: Any) -> Iterator[CollectionRecord]:
-            """Return records of all chained collections."""
-            for collection_record in self.collections.getParentChains(key):
-                yield collection_record
-                yield from _all_collections(collection_record.key)
-
-        if collection_name in self.connection_names:
+        if not self.run_patterns:
+            # Empty list means take anything.
             return True
 
-        collection_record = self.collections.find(collection_name)
-        return any(record.name in self.connection_names for record in _all_collections(collection_record.key))
+        # Try each pattern in turn.
+        return any(pattern.fullmatch(run) for pattern in self.run_patterns)
+
+    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+        # Docstring inherited from base class.
+        return
+
+    def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+        # Docstring inherited from base class.
+        return

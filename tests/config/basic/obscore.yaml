@@ -1,6 +1,7 @@
 namespace: "daf_butler_obscore"
 version: 0
 table_name: obscore
+collection_type: RUN
 facility_name: daf_butler_test
 obs_collection: daf_butler_obs_collection
 collections: []
