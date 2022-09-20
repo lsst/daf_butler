@@ -558,6 +558,10 @@ class DatasetRecordStorageManager(VersionedExtension):
             datasets were not matched by the expression.  Fully-specified
             component datasets (`str` or `DatasetType` instances) are always
             included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this

@@ -632,8 +632,7 @@ class RegistryTests(ABC):
         # that component dataset type if components=None.
         with self.assertWarns(FutureWarning):
             self.assertEqual(
-                {"bias.wcs"},
-                NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=None)).names,
+                {"bias.wcs"}, NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"))).names
             )
         self.assertEqual(
             set(),

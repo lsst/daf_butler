@@ -229,12 +229,12 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def findDatasets(
         self,
-        datasetType: Any,
+        datasetType: DatasetType | str,
         collections: Any,
         *,
         findFirst: bool = True,
         components: bool | None = None,
-    ) -> DatasetQueryResults:
+    ) -> ParentDatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
         Parameters
