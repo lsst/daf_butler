@@ -386,7 +386,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         if timespan is None:
             return cls(column=sqlalchemy.sql.null(), name=cls.NAME)
         return cls(
-            column=sqlalchemy.sql.literal(timespan, type_=_RangeTimespanType),
+            column=sqlalchemy.sql.cast(
+                sqlalchemy.sql.literal(timespan, type_=_RangeTimespanType), type_=_RangeTimespanType
+            ),
             name=cls.NAME,
         )
 
