@@ -37,6 +37,8 @@ from lsst.daf.butler import (
     StorageClassFactory,
 )
 from lsst.daf.butler.registry import Registry, RegistryConfig
+from lsst.daf.butler.registry.obscore import DatasetTypeConfig, ObsCoreConfig, ObsCoreSchema
+from lsst.daf.butler.registry.obscore._schema import _STATIC_COLUMNS
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 from lsst.sphgeom import ConvexPolygon, LonLat, UnitVector3d
 
@@ -229,6 +231,87 @@ class ObsCoreTests:
         # Invalid regex.
         with self.assertRaisesRegex(ValueError, "Failed to compile regex"):
             self.make_registry(["+run"], "RUN")
+
+    def test_schema(self):
+        """Check how obscore schema is constructed"""
+
+        config = ObsCoreConfig(obs_collection="", dataset_types=[], facility_name="FACILITY")
+        schema = ObsCoreSchema(config)
+        table_spec = schema.table_spec
+        self.assertEqual(list(table_spec.fields.names), [col.name for col in _STATIC_COLUMNS])
+
+        # extra columns from top-level config
+        config = ObsCoreConfig(
+            obs_collection="",
+            extra_columns={"c1": 1, "c2": "string", "c3": {"template": "{calib_level}", "type": "float"}},
+            dataset_types=[],
+            facility_name="FACILITY",
+        )
+        schema = ObsCoreSchema(config)
+        table_spec = schema.table_spec
+        self.assertEqual(
+            list(table_spec.fields.names),
+            [col.name for col in _STATIC_COLUMNS] + ["c1", "c2", "c3"],
+        )
+        self.assertEqual(table_spec.fields["c1"].dtype, sqlalchemy.BigInteger)
+        self.assertEqual(table_spec.fields["c2"].dtype, sqlalchemy.String)
+        self.assertEqual(table_spec.fields["c3"].dtype, sqlalchemy.Float)
+
+        # extra columns from per-dataset type configs
+        config = ObsCoreConfig(
+            obs_collection="",
+            extra_columns={"c1": 1},
+            dataset_types={
+                "raw": DatasetTypeConfig(
+                    name="raw",
+                    dataproduct_type="image",
+                    calib_level=1,
+                    extra_columns={"c2": "string"},
+                ),
+                "calexp": DatasetTypeConfig(
+                    dataproduct_type="image",
+                    calib_level=2,
+                    extra_columns={"c3": 1e10},
+                ),
+            },
+            facility_name="FACILITY",
+        )
+        schema = ObsCoreSchema(config)
+        table_spec = schema.table_spec
+        self.assertEqual(
+            list(table_spec.fields.names),
+            [col.name for col in _STATIC_COLUMNS] + ["c1", "c2", "c3"],
+        )
+        self.assertEqual(table_spec.fields["c1"].dtype, sqlalchemy.BigInteger)
+        self.assertEqual(table_spec.fields["c2"].dtype, sqlalchemy.String)
+        self.assertEqual(table_spec.fields["c3"].dtype, sqlalchemy.Float)
+
+        # Columns with the same names as in static list in configs, types
+        # are not overriden.
+        config = ObsCoreConfig(
+            version=0,
+            obs_collection="",
+            extra_columns={"t_xel": 1e10},
+            dataset_types={
+                "raw": DatasetTypeConfig(
+                    dataproduct_type="image",
+                    calib_level=1,
+                    extra_columns={"target_name": 1},
+                ),
+                "calexp": DatasetTypeConfig(
+                    dataproduct_type="image",
+                    calib_level=2,
+                    extra_columns={"em_xel": "string"},
+                ),
+            },
+            facility_name="FACILITY",
+        )
+        schema = ObsCoreSchema(config)
+        table_spec = schema.table_spec
+        self.assertEqual(list(table_spec.fields.names), [col.name for col in _STATIC_COLUMNS])
+        self.assertEqual(table_spec.fields["t_xel"].dtype, sqlalchemy.Integer)
+        self.assertEqual(table_spec.fields["target_name"].dtype, sqlalchemy.String)
+        self.assertEqual(table_spec.fields["em_xel"].dtype, sqlalchemy.Integer)
 
     def test_insert_existing_collection(self):
         """Test insert and import registry methods, with various restrictions

@@ -23,13 +23,13 @@ from __future__ import annotations
 
 __all__ = ["ObsCoreSchema"]
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, List, Optional, Type
+from typing import TYPE_CHECKING, List, Optional, Tuple, Type
 
 import sqlalchemy
 from lsst.daf.butler import ddl
+from lsst.utils.iteration import ensure_iterable
 
-from ._config import DatasetTypeConfig, ObsCoreConfig
+from ._config import DatasetTypeConfig, ExtraColumnConfig, ObsCoreConfig
 
 if TYPE_CHECKING:
     from ..interfaces import DatasetRecordStorageManager
@@ -159,9 +159,9 @@ class ObsCoreSchema:
                 for col_name, col_value in cfg.extra_columns.items():
                     if col_name in column_names:
                         continue
-                    if isinstance(col_value, Mapping):
-                        col_type = ddl.VALID_CONFIG_COLUMN_TYPES.get(col_value["type"])
-                        col_length = col_value.get("length")
+                    if isinstance(col_value, ExtraColumnConfig):
+                        col_type = ddl.VALID_CONFIG_COLUMN_TYPES.get(col_value.type.name)
+                        col_length = col_value.length
                     else:
                         # Only value is provided, guess type from Python, and
                         # use a fixed length of 255 for strings.
@@ -174,7 +174,12 @@ class ObsCoreSchema:
                     fields.append(ddl.FieldSpec(name=col_name, dtype=col_type, length=col_length, doc=""))
                     column_names.add(col_name)
 
-        self._table_spec = ddl.TableSpec(fields=fields)
+        indices: List[Tuple[str, ...]] = []
+        if config.indices:
+            for columns in config.indices.values():
+                indices.append(tuple(ensure_iterable(columns)))
+
+        self._table_spec = ddl.TableSpec(fields=fields, indexes=indices)
 
         self._dataset_fk: Optional[ddl.FieldSpec] = None
         if datasets is not None:

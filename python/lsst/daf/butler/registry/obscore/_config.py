@@ -21,46 +21,44 @@
 
 from __future__ import annotations
 
-__all__ = ["ConfigCollectionType", "DatasetTypeConfig", "ObsCoreConfig", "ObsCoreManagerConfig"]
+__all__ = [
+    "ConfigCollectionType",
+    "DatasetTypeConfig",
+    "ExtraColumnConfig",
+    "ExtraColumnType",
+    "ObsCoreConfig",
+    "ObsCoreManagerConfig",
+]
 
 import enum
 from collections.abc import Mapping
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from lsst.daf.butler import Config
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator
 
 
-def _validate_extra_columns(extra_columns: Any) -> Any:
-    """Validate ``extra_columns`` contents."""
-    if extra_columns is None:
-        return extra_columns
-    result: Dict[str, Any] = {}
-    for key, value in extra_columns.items():
-        if isinstance(value, Config):
-            value = value.toDict()
-        if isinstance(value, dict):
-            if "template" not in value:
-                raise ValueError(
-                    f"required 'template' attribute is missing from extra_columns {key}: {value}"
-                )
-            unknown_keys = set(value) - {"template", "type", "length"}
-            if unknown_keys:
-                raise ValueError(f"Unexpected attributes in extra_columns: {unknown_keys}; value: {value}")
-            if not isinstance(value["template"], str):
-                raise ValueError(f"'{key}.template' attribute must be a string")
-            # set or check column type
-            if "type" not in value:
-                value["type"] = "str"
-            else:
-                column_type = value["type"]
-                types = {"bool", "int", "float", "string"}
-                if column_type not in types:
-                    raise ValueError(
-                        f"Unexpected '{key}.type' attribute: {column_type}; must be one of {types}"
-                    )
-        result[key] = value
-    return result
+class ExtraColumnType(str, enum.Enum):
+    """Enum class defining possible values for types of extra columns."""
+
+    bool = "bool"
+    int = "int"
+    float = "float"
+    string = "string"
+
+
+class ExtraColumnConfig(BaseModel):
+    """Configuration class describing specification of additional column in
+    obscore table.
+    """
+
+    template: str
+    """Template string for formatting the column value."""
+
+    type: ExtraColumnType = ExtraColumnType.string
+    """Column type, formatted string will be converted to this actual type."""
+
+    length: Optional[int] = None
+    """Optional length qualifier for a column, only used for strings."""
 
 
 class DatasetTypeConfig(BaseModel):
@@ -93,13 +91,13 @@ class DatasetTypeConfig(BaseModel):
     """Value for the ``obs_collection`` column, if specified it overrides
     global value in `ObsCoreConfig`."""
 
-    extra_columns: Optional[Dict[str, Any]] = None
-    """Values for additional columns, optional."""
+    extra_columns: Optional[
+        Dict[str, Union[StrictFloat, StrictInt, StrictBool, StrictStr, ExtraColumnConfig]]
+    ] = None
+    """Description for additional columns, optional.
 
-    @validator("extra_columns")
-    def validate_extra_columns(cls, value: Any) -> Any:  # noqa: N805
-        """If the value is a dict then check the keys and values"""
-        return _validate_extra_columns(value)
+    Keys are the names of the columns, values can be literal constants with the
+    values, or ExtraColumnConfig mappings."""
 
 
 class ObsCoreConfig(BaseModel):
@@ -128,8 +126,19 @@ class ObsCoreConfig(BaseModel):
     facility_name: str
     """Value for the ``facility_name`` column."""
 
-    extra_columns: Optional[Dict[str, Any]] = None
-    """Values for additional columns, optional."""
+    extra_columns: Optional[
+        Dict[str, Union[StrictFloat, StrictInt, StrictBool, StrictStr, ExtraColumnConfig]]
+    ] = None
+    """Description for additional columns, optional.
+
+    Keys are the names of the columns, values can be literal constants with the
+    values, or ExtraColumnConfig mappings."""
+
+    indices: Optional[Dict[str, Union[str, List[str]]]] = None
+    """Description of indices, key is the index name, value is the list of
+    column names or a single column name. The index name may not be used for
+    an actual index.
+    """
 
     spectral_ranges: Dict[str, Tuple[float, float]] = {}
     """Maps band name or filter name to a min/max of spectral range."""
@@ -139,11 +148,6 @@ class ObsCoreConfig(BaseModel):
     columns and indices (e.g. "pgsphere"). By default there is no spatial
     indexing support, but a standard ``s_region`` column is always included.
     """
-
-    @validator("extra_columns")
-    def validate_extra_columns(cls, value: Any) -> Any:  # noqa: N805
-        """If the value is a dict then check the keys and values"""
-        return _validate_extra_columns(value)
 
 
 class ConfigCollectionType(str, enum.Enum):

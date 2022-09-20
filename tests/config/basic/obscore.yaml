@@ -60,6 +60,9 @@ extra_columns:
     template: "{run}"
     type: "string"
     length: 255
+indices:
+  lsst_visit_idx: lsst_visit
+  dataproduct_idx: [dataproduct_type, dataproduct_subtype]
 spectral_ranges:
   "u": [330.0e-9, 400.0e-9]
   "g": [402.0e-9, 552.0e-9]

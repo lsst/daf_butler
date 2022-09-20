@@ -33,17 +33,17 @@ import astropy.time
 from lsst.daf.butler import DataCoordinate, DatasetRef, Dimension, DimensionRecord, DimensionUniverse
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
 
-from ._config import ObsCoreConfig
+from ._config import ExtraColumnConfig, ExtraColumnType, ObsCoreConfig
 from ._schema import ObsCoreSchema
 
 _LOG = logging.getLogger(__name__)
 
-# Map type name to a conversion method that takes string.
+# Map extra column type to a conversion method that takes string.
 _TYPE_CONVERSION: Mapping[str, Callable[[str], Any]] = {
-    "bool": lambda x: bool(int(x)),  # expect integer number/string as input.
-    "int": int,
-    "float": float,
-    "string": str,
+    ExtraColumnType.bool: lambda x: bool(int(x)),  # expect integer number/string as input.
+    ExtraColumnType.int: int,
+    ExtraColumnType.float: float,
+    ExtraColumnType.string: str,
 }
 
 
@@ -208,10 +208,10 @@ class RecordFactory:
         for key, column_value in extra_columns.items():
             # Try to expand the template with known keys, if expansion
             # fails due to a missing key name then store None.
-            if isinstance(column_value, Mapping):
+            if isinstance(column_value, ExtraColumnConfig):
                 try:
-                    value = column_value["template"].format(**fmt_kws)
-                    record[key] = _TYPE_CONVERSION[column_value["type"]](value)
+                    value = column_value.template.format(**fmt_kws)
+                    record[key] = _TYPE_CONVERSION[column_value.type](value)
                 except KeyError:
                     pass
             else:
