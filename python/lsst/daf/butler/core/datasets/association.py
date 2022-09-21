@@ -28,7 +28,7 @@ from ..timespan import Timespan
 from .ref import DatasetRef
 
 
-@dataclass
+@dataclass(frozen=True, eq=True)
 class DatasetAssociation:
     """Class representing the membership of a dataset in a single collection.
 

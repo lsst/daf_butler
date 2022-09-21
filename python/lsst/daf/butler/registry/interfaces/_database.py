@@ -25,6 +25,7 @@ __all__ = [
     "ReadOnlyDatabaseError",
     "DatabaseConflictError",
     "SchemaAlreadyDefinedError",
+    "Session",
     "StaticTablesContext",
 ]
 
@@ -38,7 +39,8 @@ from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequ
 import astropy.time
 import sqlalchemy
 
-from ...core import SpatialRegionDatabaseRepresentation, TimespanDatabaseRepresentation, ddl, time_utils
+from ...core import TimespanDatabaseRepresentation, ddl, time_utils
+from ...core.named import NamedValueAbstractSet
 from .._exceptions import ConflictingDefinitionError
 
 _IN_SAVEPOINT_TRANSACTION = "IN_SAVEPOINT_TRANSACTION"
@@ -262,6 +264,33 @@ class Session:
             self._db._tempTables.remove(table.key)
         else:
             raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
+
+    @contextmanager
+    def temporary_table(
+        self, spec: ddl.TableSpec, name: Optional[str] = None
+    ) -> Iterator[sqlalchemy.schema.Table]:
+        """Return a context manager that creates and then drops a context
+        manager.
+
+        Parameters
+        ----------
+        spec : `ddl.TableSpec`
+            Specification for the columns.  Unique and foreign key constraints
+            may be ignored.
+        name : `str`, optional
+            If provided, the name of the SQL construct.  If not provided, an
+            opaque but unique identifier is generated.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy representation of the table.
+        """
+        table = self.makeTemporaryTable(spec=spec, name=name)
+        try:
+            yield table
+        finally:
+            self.dropTemporaryTable(table)
 
 
 class Database(ABC):
@@ -1122,28 +1151,6 @@ class Database(ABC):
         """
         return TimespanDatabaseRepresentation.Compound
 
-    @classmethod
-    def getSpatialRegionRepresentation(cls) -> Type[SpatialRegionDatabaseRepresentation]:
-        """Return a `type` that encapsulates the way `lsst.sphgeom.Region`
-        objects are stored in this database.
-
-        `Database` does not automatically use the return type of this method
-        anywhere else; calling code is responsible for making sure that DDL
-        and queries are consistent with it.
-
-        Returns
-        -------
-        RegionReprClass : `type` (`SpatialRegionDatabaseRepresention` subclass)
-            A type that encapsulates the way `lsst.sphgeom.Region` objects
-            should be stored in this database.
-
-        Notes
-        -----
-        See `getTimespanRepresentation` for comments on why this method is not
-        more tightly integrated with the rest of the `Database` interface.
-        """
-        return SpatialRegionDatabaseRepresentation
-
     def sync(
         self,
         table: sqlalchemy.schema.Table,
@@ -1353,7 +1360,7 @@ class Database(ABC):
         table: sqlalchemy.schema.Table,
         *rows: dict,
         returnIds: bool = False,
-        select: Optional[sqlalchemy.sql.Select] = None,
+        select: Optional[sqlalchemy.sql.expression.SelectBase] = None,
         names: Optional[Iterable[str]] = None,
     ) -> Optional[List[int]]:
         """Insert one or more rows into a table, optionally returning
@@ -1366,7 +1373,7 @@ class Database(ABC):
         returnIds: `bool`
             If `True` (`False` is default), return the values of the table's
             autoincrement primary key field (which much exist).
-        select : `sqlalchemy.sql.Select`, optional
+        select : `sqlalchemy.sql.SelectBase`, optional
             A SELECT query expression to insert rows from.  Cannot be provided
             with either ``rows`` or ``returnIds=True``.
         names : `Iterable` [ `str` ], optional
@@ -1723,6 +1730,65 @@ class Database(ABC):
             connection = self._engine.connect(close_with_result=True)
         # TODO: should we guard against non-SELECT queries here?
         return connection.execute(sql, *args, **kwargs)
+
+    @abstractmethod
+    def constant_rows(
+        self,
+        fields: NamedValueAbstractSet[ddl.FieldSpec],
+        *rows: dict,
+        name: Optional[str] = None,
+    ) -> sqlalchemy.sql.FromClause:
+        """Return a SQLAlchemy object that represents a small number of
+        constant-valued rows.
+
+        Parameters
+        ----------
+        fields : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
+            The columns of the rows.  Unique and foreign key constraints are
+            ignored.
+        *rows : `dict`
+            Values for the rows.
+        name : `str`, optional
+            If provided, the name of the SQL construct.  If not provided, an
+            opaque but unique identifier is generated.
+
+        Returns
+        -------
+        from_clause : `sqlalchemy.sql.FromClause`
+            SQLAlchemy object representing the given rows.  This is guaranteed
+            to be something that can be directly joined into a ``SELECT``
+            query's ``FROM`` clause, and will not involve a temporary table
+            that needs to be cleaned up later.
+
+        Notes
+        -----
+        The default implementation uses the SQL-standard ``VALUES`` construct,
+        but support for that construct is varied enough across popular RDBMSs
+        that the method is still marked abstract to force explicit opt-in via
+        delegation to `super`.
+        """
+        if name is None:
+            name = f"tmp_{uuid.uuid4().hex}"
+        return sqlalchemy.sql.values(
+            *[sqlalchemy.Column(field.name, field.getSizedColumnType()) for field in fields],
+            name=name,
+        ).data([tuple(row[name] for name in fields.names) for row in rows])
+
+    def get_constant_rows_max(self) -> int:
+        """Return the maximum number of rows that should be passed to
+        `constant_rows` for this backend.
+
+        Returns
+        -------
+        max : `int`
+            Maximum number of rows.
+
+        Notes
+        -----
+        This should reflect typical performance profiles (or a guess at these),
+        not just hard database engine limits.
+        """
+        return 100
 
     origin: int
     """An integer ID that should be used as the default for any datasets,

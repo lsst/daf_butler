@@ -62,12 +62,12 @@ from ..core import (
     StorageClassFactory,
     Timespan,
 )
+from ._collection_summary import CollectionSummary
 from ._collectionType import CollectionType
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from .interfaces import DatasetIdFactory, DatasetIdGenEnum
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
-from .summaries import CollectionSummary
 from .wildcards import CollectionSearch
 
 if TYPE_CHECKING:
@@ -1475,7 +1475,7 @@ class Registry(ABC):
 
         Returns
         -------
-        dataIds : `DataCoordinateQueryResults`
+        dataIds : `queries.DataCoordinateQueryResults`
             Data IDs matching the given query parameters.  These are guaranteed
             to identify all dimensions (`DataCoordinate.hasFull` returns
             `True`), but will not contain `DimensionRecord` objects
@@ -1563,7 +1563,7 @@ class Registry(ABC):
 
         Returns
         -------
-        dataIds : `DimensionRecordQueryResults`
+        dataIds : `queries.DimensionRecordQueryResults`
             Data IDs matching the given query parameters.
 
         Raises
@@ -1623,7 +1623,7 @@ class Registry(ABC):
 
         Yields
         ------
-        association : `DatasetAssociation`
+        association : `.DatasetAssociation`
             Object representing the relationship between a single dataset and
             a single collection.
 

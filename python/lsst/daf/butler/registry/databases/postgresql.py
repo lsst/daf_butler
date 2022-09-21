@@ -30,6 +30,7 @@ import sqlalchemy
 import sqlalchemy.dialects.postgresql
 
 from ...core import Timespan, TimespanDatabaseRepresentation, ddl, time_utils
+from ...core.named import NamedValueAbstractSet
 from ..interfaces import Database
 from ..nameShrinker import NameShrinker
 
@@ -210,6 +211,15 @@ class PostgresqlDatabase(Database):
         with self._connection() as connection:
             return connection.execute(query, rows).rowcount
 
+    def constant_rows(
+        self,
+        fields: NamedValueAbstractSet[ddl.FieldSpec],
+        *rows: dict,
+        name: Optional[str] = None,
+    ) -> sqlalchemy.sql.FromClause:
+        # Docstring inherited.
+        return super().constant_rows(fields, *rows, name=name)
+
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
     """A single-column `Timespan` representation usable only with
@@ -252,62 +262,6 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
         begin_nsec = converter.min_nsec if value.lower is None else value.lower
         end_nsec = converter.max_nsec if value.upper is None else value.upper
         return Timespan(begin=None, end=None, _nsec=(begin_nsec, end_nsec))
-
-    class comparator_factory(sqlalchemy.types.Concatenable.Comparator):  # noqa: N801
-        """Comparison operators for TimespanColumnRanges.
-
-        Notes
-        -----
-        The existence of this nested class is a workaround for a bug
-        submitted upstream as
-        https://github.com/sqlalchemy/sqlalchemy/issues/5476 (now fixed on
-        main, but not in the releases we currently use).  The code is
-        a limited copy of the operators in
-        ``sqlalchemy.dialects.postgresql.ranges.RangeOperators``, but with
-        ``is_comparison=True`` added to all calls.
-        """
-
-        def __ne__(self, other: Any) -> Any:
-            "Boolean expression. Returns true if two ranges are not equal"
-            if other is None:
-                return super().__ne__(other)
-            else:
-                return self.expr.op("<>", is_comparison=True)(other)
-
-        def contains(self, other: Any, **kw: Any) -> Any:
-            """Boolean expression. Returns true if the right hand operand,
-            which can be an element or a range, is contained within the
-            column.
-            """
-            return self.expr.op("@>", is_comparison=True)(other)
-
-        def contained_by(self, other: Any) -> Any:
-            """Boolean expression. Returns true if the column is contained
-            within the right hand operand.
-            """
-            return self.expr.op("<@", is_comparison=True)(other)
-
-        def overlaps(self, other: Any) -> Any:
-            """Boolean expression. Returns true if the column overlaps
-            (has points in common with) the right hand operand.
-            """
-            return self.expr.op("&&", is_comparison=True)(other)
-
-        def strictly_left_of(self, other: Any) -> Any:
-            """Boolean expression. Returns true if the column is strictly
-            left of the right hand operand.
-            """
-            return self.expr.op("<<", is_comparison=True)(other)
-
-        __lshift__ = strictly_left_of
-
-        def strictly_right_of(self, other: Any) -> Any:
-            """Boolean expression. Returns true if the column is strictly
-            right of the right hand operand.
-            """
-            return self.expr.op(">>", is_comparison=True)(other)
-
-        __rshift__ = strictly_right_of
 
 
 class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
@@ -371,21 +325,25 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return mapping[name]
 
     @classmethod
-    def fromLiteral(cls, timespan: Timespan) -> _RangeTimespanRepresentation:
+    def fromLiteral(cls, timespan: Optional[Timespan]) -> _RangeTimespanRepresentation:
         # Docstring inherited.
+        if timespan is None:
+            return cls(column=sqlalchemy.sql.null(), name=cls.NAME)
         return cls(
-            column=sqlalchemy.sql.literal(timespan, type_=_RangeTimespanType),
+            column=sqlalchemy.sql.cast(
+                sqlalchemy.sql.literal(timespan, type_=_RangeTimespanType), type_=_RangeTimespanType
+            ),
             name=cls.NAME,
         )
 
     @classmethod
-    def fromSelectable(
-        cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+    def from_columns(
+        cls, columns: sqlalchemy.sql.ColumnCollection, name: Optional[str] = None
     ) -> _RangeTimespanRepresentation:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
-        return cls(selectable.columns[name], name)
+        return cls(columns[name], name)
 
     @property
     def name(self) -> str:
@@ -426,8 +384,12 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         else:
             return self.column >> other.column
 
-    def overlaps(self, other: _RangeTimespanRepresentation) -> sqlalchemy.sql.ColumnElement:
+    def overlaps(
+        self, other: _RangeTimespanRepresentation | sqlalchemy.sql.ColumnElement
+    ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
+        if not isinstance(other, _RangeTimespanRepresentation):
+            return self.contains(other)
         return self.column.overlaps(other.column)
 
     def contains(
@@ -451,9 +413,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             sqlalchemy.sql.func.upper(self.column), sqlalchemy.sql.literal(0)
         )
 
-    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: Optional[str] = None) -> tuple[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.
         if name is None:
-            yield self.column
+            return (self.column,)
         else:
-            yield self.column.label(name)
+            return (self.column.label(name),)

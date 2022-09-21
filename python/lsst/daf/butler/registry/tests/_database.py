@@ -33,7 +33,7 @@ from typing import ContextManager, Iterable, Optional, Set, Tuple
 
 import astropy.time
 import sqlalchemy
-from lsst.sphgeom import ConvexPolygon, UnitVector3d
+from lsst.sphgeom import Circle, ConvexPolygon, UnitVector3d
 
 from ...core import Timespan, ddl
 from ..interfaces import Database, DatabaseConflictError, ReadOnlyDatabaseError, SchemaAlreadyDefinedError
@@ -261,8 +261,8 @@ class DatabaseTests(ABC):
 
     def testTemporaryTables(self):
         """Tests for `Database.makeTemporaryTable`,
-        `Database.dropTemporaryTable`, and `Database.insert` with
-        the ``select`` argument.
+        `Database.dropTemporaryTable`, `Session.temporary_table`, and
+        `Database.insert` with the ``select`` argument.
         """
         # Need to start with the static schema; also insert some test data.
         newDatabase = self.makeEmptyDatabase()
@@ -306,37 +306,37 @@ class DatabaseTests(ABC):
                 with existingReadOnlyDatabase.declareStaticTables(create=False) as context:
                     context.addTableTuple(STATIC_TABLE_SPECS)
                 with existingReadOnlyDatabase.session() as session2:
-                    table2 = session2.makeTemporaryTable(TEMPORARY_TABLE_SPEC)
-                    self.checkTable(TEMPORARY_TABLE_SPEC, table2)
-                    # Those tables should not be the same, despite having the
-                    # same ddl.
-                    self.assertIsNot(table1, table2)
-                    # Do a slightly different insert into this table, to check
-                    # that it works in a read-only database.  This time we
-                    # pass column names as a kwarg to insert instead of by
-                    # labeling the columns in the select.
-                    existingReadOnlyDatabase.insert(
-                        table2,
-                        select=sqlalchemy.sql.select(static.a.columns.name, static.b.columns.id)
-                        .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
-                        .where(
-                            sqlalchemy.sql.and_(
-                                static.a.columns.name == "a2",
-                                static.b.columns.value >= 12,
-                            )
-                        ),
-                        names=["a_name", "b_id"],
-                    )
-                    # Check that the inserted rows are present.
-                    self.assertCountEqual(
-                        [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
-                        [row._asdict() for row in existingReadOnlyDatabase.query(table2.select())],
-                    )
-                    # Drop the temporary table from the read-only DB.  It's
-                    # unspecified whether attempting to use it after this
-                    # point is an error or just never returns any results, so
-                    # we can't test what it does, only that it's not an error.
-                    session2.dropTemporaryTable(table2)
+                    with session2.temporary_table(TEMPORARY_TABLE_SPEC) as table2:
+                        self.checkTable(TEMPORARY_TABLE_SPEC, table2)
+                        # Those tables should not be the same, despite having
+                        # the same ddl.
+                        self.assertIsNot(table1, table2)
+                        # Do a slightly different insert into this table, to
+                        # check that it works in a read-only database.  This
+                        # time we pass column names as a kwarg to insert
+                        # instead of by labeling the columns in the select.
+                        existingReadOnlyDatabase.insert(
+                            table2,
+                            select=sqlalchemy.sql.select(static.a.columns.name, static.b.columns.id)
+                            .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
+                            .where(
+                                sqlalchemy.sql.and_(
+                                    static.a.columns.name == "a2",
+                                    static.b.columns.value >= 12,
+                                )
+                            ),
+                            names=["a_name", "b_id"],
+                        )
+                        # Check that the inserted rows are present.
+                        self.assertCountEqual(
+                            [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
+                            [row._asdict() for row in existingReadOnlyDatabase.query(table2.select())],
+                        )
+                        # Exiting the context manager will drop the temporary
+                        # table from the read-only DB.  It's unspecified
+                        # whether attempting to use it after this point is an
+                        # error or just never returns any results, so we can't
+                        # test what it does, only that it's not an error.
             # Drop the original temporary table.
             session.dropTemporaryTable(table1)
 
@@ -970,7 +970,7 @@ class DatabaseTests(ABC):
                     ),
                 )
         # Test NULL checks in SELECT queries, on both tables.
-        aRepr = TimespanReprClass.fromSelectable(aTable)
+        aRepr = TimespanReprClass.from_columns(aTable.columns)
         self.assertEqual(
             [row[TimespanReprClass.NAME] is None for row in aRows],
             [
@@ -980,7 +980,7 @@ class DatabaseTests(ABC):
                 )
             ],
         )
-        bRepr = TimespanReprClass.fromSelectable(bTable)
+        bRepr = TimespanReprClass.from_columns(bTable.columns)
         self.assertEqual(
             [False for row in bRows],
             [
@@ -1039,8 +1039,8 @@ class DatabaseTests(ABC):
                 expected[lhs["id"], rhs["id"]] = (None, None, None, None)
         lhsSubquery = aTable.alias("lhs")
         rhsSubquery = aTable.alias("rhs")
-        lhsRepr = TimespanReprClass.fromSelectable(lhsSubquery)
-        rhsRepr = TimespanReprClass.fromSelectable(rhsSubquery)
+        lhsRepr = TimespanReprClass.from_columns(lhsSubquery.columns)
+        rhsRepr = TimespanReprClass.from_columns(rhsSubquery.columns)
         sql = sqlalchemy.sql.select(
             lhsSubquery.columns.id.label("lhs"),
             rhsSubquery.columns.id.label("rhs"),
@@ -1061,10 +1061,11 @@ class DatabaseTests(ABC):
                 expected = {}
                 for lhsRow in aRows:
                     if lhsRow[TimespanReprClass.NAME] is None:
-                        expected[lhsRow["id"]] = (None, None, None)
+                        expected[lhsRow["id"]] = (None, None, None, None)
                     else:
                         expected[lhsRow["id"]] = (
                             lhsRow[TimespanReprClass.NAME].contains(t),
+                            lhsRow[TimespanReprClass.NAME].overlaps(t),
                             lhsRow[TimespanReprClass.NAME] < t,
                             lhsRow[TimespanReprClass.NAME] > t,
                         )
@@ -1072,8 +1073,51 @@ class DatabaseTests(ABC):
                 sql = sqlalchemy.sql.select(
                     aTable.columns.id.label("lhs"),
                     aRepr.contains(rhs).label("contains"),
+                    aRepr.overlaps(rhs).label("overlaps_point"),
                     (aRepr < rhs).label("less_than"),
                     (aRepr > rhs).label("greater_than"),
                 ).select_from(aTable)
-                queried = {row.lhs: (row.contains, row.less_than, row.greater_than) for row in db.query(sql)}
+                queried = {
+                    row.lhs: (row.contains, row.overlaps_point, row.less_than, row.greater_than)
+                    for row in db.query(sql)
+                }
                 self.assertEqual(expected, queried)
+
+    def testConstantRows(self):
+        """Test Database.constant_rows."""
+        new_db = self.makeEmptyDatabase()
+        with new_db.declareStaticTables(create=True) as context:
+            static = context.addTableTuple(STATIC_TABLE_SPECS)
+        b_ids = new_db.insert(
+            static.b,
+            {"name": "b1", "value": 11},
+            {"name": "b2", "value": 12},
+            {"name": "b3", "value": 13},
+            returnIds=True,
+        )
+        values_spec = ddl.TableSpec(
+            [
+                ddl.FieldSpec(name="b", dtype=sqlalchemy.BigInteger),
+                ddl.FieldSpec(name="s", dtype=sqlalchemy.String(8)),
+                ddl.FieldSpec(name="r", dtype=ddl.Base64Region()),
+            ],
+        )
+        values_data = [
+            {"b": b_ids[0], "s": "b1", "r": None},
+            {"b": b_ids[2], "s": "b3", "r": Circle.empty()},
+        ]
+        values = new_db.constant_rows(values_spec.fields, *values_data)
+        select_values_alone = sqlalchemy.sql.select(
+            values.columns["b"], values.columns["s"], values.columns["r"]
+        )
+        self.assertCountEqual(
+            [dict(row) for row in new_db.query(select_values_alone)],
+            values_data,
+        )
+        select_values_joined = sqlalchemy.sql.select(
+            values.columns["s"].label("name"), static.b.columns["value"].label("value")
+        ).select_from(values.join(static.b, onclause=static.b.columns["id"] == values.columns["b"]))
+        self.assertCountEqual(
+            [dict(row) for row in new_db.query(select_values_joined)],
+            [{"value": 11, "name": "b1"}, {"value": 13, "name": "b3"}],
+        )

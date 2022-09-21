@@ -23,13 +23,13 @@ from __future__ import annotations
 
 __all__ = ("RegistryDefaults",)
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Optional
 
 from lsst.utils.classes import immutable
 
 from ..core import DataCoordinate
+from ._collection_summary import CollectionSummary
 from ._exceptions import MissingCollectionError
-from .summaries import CollectionSummary
 from .wildcards import CollectionSearch
 
 if TYPE_CHECKING:
@@ -120,7 +120,7 @@ class RegistryDefaults:
             if summaries:
                 summary = CollectionSummary.union(*summaries)
                 for dimensionName in allGovernorDimensions.names - self._kwargs.keys():
-                    values = summary.dimensions[dimensionName]
+                    values: AbstractSet[str] = summary.governors.get(dimensionName, frozenset())
                     if len(values) == 1:
                         (value,) = values
                         self._kwargs[dimensionName] = value

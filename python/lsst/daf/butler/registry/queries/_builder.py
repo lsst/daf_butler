@@ -73,19 +73,17 @@ class QueryBuilder:
 
         Raises
         ------
-        LookupError
+        DataIdValueError
             Raised when governor dimension values are not found.
         """
-        for governor, values in self.summary.where.restriction.items():
-            storage = self._managers.dimensions[governor]
-            assert isinstance(
-                storage, GovernorDimensionRecordStorage
-            ), f"Unexpected type of the governor dimension record storage {type(storage)}"
-            if not values <= storage.values:
-                unknown = values - storage.values
-                raise DataIdValueError(
-                    f"Unknown values specified for governor dimension {governor}: {unknown}"
-                )
+        for dimension, bounds in self.summary.where.governor_constraints.items():
+            storage = self._managers.dimensions[self.summary.requested.universe[dimension]]
+            if isinstance(storage, GovernorDimensionRecordStorage):
+                if not (storage.values >= bounds):
+                    raise DataIdValueError(
+                        f"Unknown values specified for governor dimension {dimension}: "
+                        f"{set(bounds - storage.values)}."
+                    )
 
     def hasDimensionKey(self, dimension: Dimension) -> bool:
         """Return `True` if the given dimension's primary key column has
@@ -196,7 +194,7 @@ class QueryBuilder:
             collection_summary = self._managers.datasets.getCollectionSummary(collectionRecord)
             if not collection_summary.is_compatible_with(
                 datasetType,
-                self.summary.where.restriction,
+                self.summary.where.governor_constraints,
                 rejections=rejections,
                 name=collectionRecord.name,
             ):
@@ -408,27 +406,18 @@ class QueryBuilder:
         #     {dst}_window.rownum = 1;
         #
         # We'll start with the Common Table Expression (CTE) at the top.
-        subqueries = []
-        for rank, collection_record in enumerate(collections):
-            ssq = storage.select(
-                collection_record,
-                dataId=SimpleQuery.Select,
-                id=SimpleQuery.Select,
-                run=SimpleQuery.Select,
-                ingestDate=SimpleQuery.Select,
-                timespan=None,
-            )
-            subqueries.append(ssq.add_columns(sqlalchemy.sql.literal(rank).label("rank")))
-        # Although one would expect that these subqueries can be UNION ALL
-        # instead of UNION because each subquery is already distinct, it turns
-        # out that with many subqueries this causes catastrophic performance
-        # problems with both sqlite and postgres.  Using UNION may require more
-        # table scans, but a much simpler query plan given our table
-        # structures.  See DM-31429.
-        search = sqlalchemy.sql.union(*subqueries).cte(f"{storage.datasetType.name}_search")
-        # Now we fill out the SELECT the CTE, and the subquery it contains (at
-        # the same time, since they have the same columns, aside from the OVER
-        # clause).
+        search = storage.select(
+            *collections,
+            dataId=SimpleQuery.Select,
+            id=SimpleQuery.Select,
+            run=SimpleQuery.Select,
+            ingestDate=SimpleQuery.Select,
+            timespan=None,
+            rank=SimpleQuery.Select,
+        ).cte(f"{storage.datasetType.name}_search")
+        # Now we fill out the SELECT from the CTE, and the subquery it contains
+        # (at the same time, since they have the same columns, aside from the
+        # OVER clause).
         run_key_name = self._managers.collections.getRunForeignKeyName()
         window_data_id_cols = [
             search.columns[name].label(name) for name in storage.datasetType.dimensions.required.names
@@ -660,7 +649,7 @@ class QueryBuilder:
         return DirectQuery(
             graph=self.summary.requested,
             uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
-            whereRegion=self.summary.where.dataId.region,
+            whereRegion=self.summary.where.region,
             simpleQuery=self._simpleQuery,
             columns=self._columns,
             order_by_columns=self._order_by_columns(),
@@ -694,7 +683,7 @@ class QueryBuilder:
 
                 if order_by_column.column in ("timespan.begin", "timespan.end"):
                     TimespanReprClass = self._managers.TimespanReprClass
-                    timespan_repr = TimespanReprClass.fromSelectable(table)
+                    timespan_repr = TimespanReprClass.from_columns(table.columns)
                     if order_by_column.column == "timespan.begin":
                         column = timespan_repr.lower()
                         label = f"{order_by_column.element.name}_timespan_begin"

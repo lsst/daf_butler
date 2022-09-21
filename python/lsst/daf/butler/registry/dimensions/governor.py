@@ -71,7 +71,6 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     ) -> GovernorDimensionRecordStorage:
         # Docstring inherited from GovernorDimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(
-            RegionReprClass=db.getSpatialRegionRepresentation(),
             TimespanReprClass=db.getTimespanRepresentation(),
         )
         if context is not None:

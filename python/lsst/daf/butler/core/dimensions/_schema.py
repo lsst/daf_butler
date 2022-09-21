@@ -23,10 +23,9 @@ from __future__ import annotations
 __all__ = ("addDimensionForeignKey",)
 
 import copy
-from typing import TYPE_CHECKING, Tuple, Type
+from typing import TYPE_CHECKING, Tuple
 
 from .. import ddl
-from .._topology import SpatialRegionDatabaseRepresentation
 from ..named import NamedValueSet
 from ..timespan import TimespanDatabaseRepresentation
 
@@ -188,15 +187,14 @@ class DimensionElementFields:
         names = list(self.standard.names)
         # Add fields for regions and/or timespans.
         if element.spatial is not None:
-            names.append(SpatialRegionDatabaseRepresentation.NAME)
+            names.append("region")
         if element.temporal is not None:
             names.append(TimespanDatabaseRepresentation.NAME)
         self.names = tuple(names)
 
     def makeTableSpec(
         self,
-        RegionReprClass: Type[SpatialRegionDatabaseRepresentation],
-        TimespanReprClass: Type[TimespanDatabaseRepresentation],
+        TimespanReprClass: type[TimespanDatabaseRepresentation],
     ) -> ddl.TableSpec:
         """Construct a complete specification for a table.
 
@@ -204,9 +202,6 @@ class DimensionElementFields:
 
         Parameters
         ----------
-        RegionReprClass : `type` [ `SpatialRegionDatabaseRepresentation` ]
-            Class object that specifies how spatial regions are represented in
-            the database.
         TimespanReprClass : `type` [ `TimespanDatabaseRepresentation` ]
             Class object that specifies how timespans are represented in the
             database.
@@ -224,7 +219,7 @@ class DimensionElementFields:
                 foreignKeys=self._tableSpec.foreignKeys,
             )
             if self.element.spatial is not None:
-                spec.fields.update(RegionReprClass.makeFieldSpecs(nullable=True))
+                spec.fields.add(ddl.FieldSpec.for_region())
             if self.element.temporal is not None:
                 spec.fields.update(TimespanReprClass.makeFieldSpecs(nullable=True))
         else:

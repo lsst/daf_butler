@@ -34,7 +34,7 @@ from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQu
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
-    from ..summaries import CollectionSummary
+    from .._collection_summary import CollectionSummary
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
@@ -388,6 +388,7 @@ class DatasetRecordStorage(ABC):
         run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
         timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
         ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
+        rank: SimpleQuery.Select.Or[None] = None,
     ) -> sqlalchemy.sql.Selectable:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
@@ -420,16 +421,22 @@ class DatasetRecordStorage(ABC):
         timespan : `None`, `Select`, or `Timespan`
             If `Select` (default), include the validity range timespan in the
             result columns.  If a `Timespan` instance, constrain the results to
-            those whose validity ranges overlap that given timespan.  Ignored
-            for collection types other than `~CollectionType.CALIBRATION``,
-            but `None` should be passed explicitly if a mix of
-            `~CollectionType.CALIBRATION` and other types are passed in.
+            those whose validity ranges overlap that given timespan.  For
+            collections whose type is not `~CollectionType.CALIBRATION`, if
+            `Select` is passed a column with a literal ``NULL`` value will be
+            added, and ``sqlalchemy.sql.expressions.Null` may be passed to
+            force a constraint that the value be null (since `None` is
+            interpreted as meaning "do not select or constrain this column").
         ingestDate : `None`, `Select`, or `Timespan`
             If `Select` include the ingest timestamp in the result columns.
             If a `Timespan` instance, constrain the results to those whose
             ingest times which are inside given timespan and also include
             timestamp in the result columns. If `None` (default) then there is
             no constraint and timestamp is not returned.
+        rank : `Select` or `None`
+            If `Select`, include a calculated column that is the integer rank
+            of the row's collection in the given list of collections, starting
+            from zero.
 
         Returns
         -------

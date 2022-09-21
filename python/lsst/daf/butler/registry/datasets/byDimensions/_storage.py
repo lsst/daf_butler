@@ -1,3 +1,25 @@
+# This file is part of daf_butler.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (http://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
 from __future__ import annotations
 
 __all__ = ("ByDimensionsDatasetRecordStorage",)
@@ -18,13 +40,13 @@ from lsst.daf.butler import (
     ddl,
 )
 from lsst.daf.butler.registry import (
+    CollectionSummary,
     CollectionTypeError,
     ConflictingDefinitionError,
     UnsupportedIdGeneratorError,
 )
 from lsst.daf.butler.registry.interfaces import DatasetIdFactory, DatasetIdGenEnum, DatasetRecordStorage
 
-from ...summaries import GovernorDimensionRestriction
 from .tables import makeTagTableSpec
 
 if TYPE_CHECKING:
@@ -126,17 +148,16 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             "dataset_type_id": self._dataset_type_id,
         }
         rows = []
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-        for dataset in datasets:
+        summary = CollectionSummary()
+        for dataset in summary.add_datasets_generator(datasets):
             row = dict(protoRow, dataset_id=dataset.getCheckedId())
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
-            governorValues.update_extract(dataset.dataId)
             rows.append(row)
         # Update the summary tables for this collection in case this is the
         # first time this dataset type or these governor values will be
         # inserted there.
-        self._summaries.update(collection, self.datasetType, self._dataset_type_id, governorValues)
+        self._summaries.update(collection, [self._dataset_type_id], summary)
         # Update the tag table itself.
         self._db.replace(self._tags, *rows)
 
@@ -178,7 +199,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Add WHERE clause for timespan overlaps.
         TimespanReprClass = self._db.getTimespanRepresentation()
         query.where.append(
-            TimespanReprClass.fromSelectable(self._calibs).overlaps(TimespanReprClass.fromLiteral(timespan))
+            TimespanReprClass.from_columns(self._calibs.columns).overlaps(
+                TimespanReprClass.fromLiteral(timespan)
+            )
         )
         return query
 
@@ -202,23 +225,22 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             "dataset_type_id": self._dataset_type_id,
         }
         rows = []
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
         dataIds: Optional[Set[DataCoordinate]] = (
             set() if not TimespanReprClass.hasExclusionConstraint() else None
         )
-        for dataset in datasets:
+        summary = CollectionSummary()
+        for dataset in summary.add_datasets_generator(datasets):
             row = dict(protoRow, dataset_id=dataset.getCheckedId())
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
             TimespanReprClass.update(timespan, result=row)
-            governorValues.update_extract(dataset.dataId)
             rows.append(row)
             if dataIds is not None:
                 dataIds.add(dataset.dataId)
         # Update the summary tables for this collection in case this is the
         # first time this dataset type or these governor values will be
         # inserted there.
-        self._summaries.update(collection, self.datasetType, self._dataset_type_id, governorValues)
+        self._summaries.update(collection, [self._dataset_type_id], summary)
         # Update the association table itself.
         if TimespanReprClass.hasExclusionConstraint():
             # Rely on database constraint to enforce invariants; we just
@@ -323,10 +345,12 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
         timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
         ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
+        rank: SimpleQuery.Select.Or[None] = None,
     ) -> sqlalchemy.sql.Selectable:
         # Docstring inherited from DatasetRecordStorage.
         collection_types = {collection.type for collection in collections}
         assert CollectionType.CHAINED not in collection_types, "CHAINED collections must be flattened."
+        TimespanReprClass = self._db.getTimespanRepresentation()
         #
         # There are two kinds of table in play here:
         #
@@ -374,8 +398,21 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # create a dummy subquery that we know will fail.
             tags_query = SimpleQuery()
             tags_query.join(self._tags, **kwargs)
+            # If the timespan is requested, simulate a potentially compound
+            # column whose values are the maximum and minimum timespan
+            # bounds.
+            # If the timespan is constrained, ignore the constraint, since
+            # it'd be guaranteed to evaluate to True.
+            if timespan is SimpleQuery.Select:
+                tags_query.columns.extend(TimespanReprClass.fromLiteral(Timespan(None, None)).flatten())
             self._finish_single_select(
-                tags_query, self._tags, collections, id=id, run=run, ingestDate=ingestDate
+                tags_query,
+                self._tags,
+                collections,
+                id=id,
+                run=run,
+                ingestDate=ingestDate,
+                rank=rank,
             )
         else:
             tags_query = None
@@ -387,30 +424,30 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             assert (
                 self._calibs is not None
             ), "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
-            TimespanReprClass = self._db.getTimespanRepresentation()
+            calibs_query.join(self._calibs, **kwargs)
             # Add the timespan column(s) to the result columns, or constrain
             # the timespan via an overlap condition.
             if timespan is SimpleQuery.Select:
-                kwargs.update({k: SimpleQuery.Select for k in TimespanReprClass.getFieldNames()})
+                calibs_query.columns.extend(TimespanReprClass.from_columns(self._calibs.columns).flatten())
             elif timespan is not None:
                 calibs_query.where.append(
-                    TimespanReprClass.fromSelectable(self._calibs).overlaps(
+                    TimespanReprClass.from_columns(self._calibs.columns).overlaps(
                         TimespanReprClass.fromLiteral(timespan)
                     )
                 )
-            calibs_query.join(self._calibs, **kwargs)
             self._finish_single_select(
-                calibs_query, self._calibs, collections, id=id, run=run, ingestDate=ingestDate
+                calibs_query,
+                self._calibs,
+                collections,
+                id=id,
+                run=run,
+                ingestDate=ingestDate,
+                rank=rank,
             )
         else:
             calibs_query = None
         if calibs_query is not None:
             if tags_query is not None:
-                if timespan is not None:
-                    raise TypeError(
-                        "Cannot query for timespan when the collections include both calibration and "
-                        "non-calibration collections."
-                    )
                 return tags_query.combine().union(calibs_query.combine())
             else:
                 return calibs_query.combine()
@@ -426,6 +463,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         id: SimpleQuery.Select.Or[Optional[int]],
         run: SimpleQuery.Select.Or[None],
         ingestDate: SimpleQuery.Select.Or[Optional[Timespan]],
+        rank: SimpleQuery.Select.Or[None],
     ) -> None:
         dataset_id_col = table.columns.dataset_id
         collection_col = table.columns[self._collections.getCollectionForeignKeyName()]
@@ -443,6 +481,16 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             query.where.append(sqlalchemy.sql.literal(False))
         else:
             query.where.append(collection_col.in_([collection.key for collection in collections]))
+        # Add rank if requested as a CASE-based calculation the collection
+        # column.
+        if rank is not None:
+            assert rank is SimpleQuery.Select, "Cannot constraint rank, only select it."
+            query.columns.append(
+                sqlalchemy.sql.case(
+                    {record.key: n for n, record in enumerate(collections)},
+                    value=collection_col,
+                ).label("rank")
+            )
         # We can always get the dataset_id from the tags/calibs table or
         # constrain it there.  Can't use kwargs for that because we need to
         # alias it to 'id'.
@@ -592,9 +640,8 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
         """Common part of implementation of `insert` and `import_` methods."""
 
         # Remember any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-        for dataId in dataIdList:
-            governorValues.update_extract(dataId)
+        summary = CollectionSummary()
+        summary.add_data_ids(self.datasetType, dataIdList)
 
         staticRow = {
             "dataset_type_id": self._dataset_type_id,
@@ -616,7 +663,7 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
             # inserted there.
-            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+            self._summaries.update(run, [self._dataset_type_id], summary)
             # Combine the generated dataset_id values and data ID fields to
             # form rows to be inserted into the tags table.
             protoTagsRow = {
@@ -657,14 +704,12 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
-        # Remember any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
         dataIdList = []
         rows = []
-        for dataId in dataIds:
+        summary = CollectionSummary()
+        for dataId in summary.add_data_ids_generator(self.datasetType, dataIds):
             dataIdList.append(dataId)
             rows.append(
                 {
@@ -673,7 +718,6 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     self._runKeyColumn: run.key,
                 }
             )
-            governorValues.update_extract(dataId)
 
         with self._db.transaction():
             # Insert into the static dataset table.
@@ -681,7 +725,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
             # inserted there.
-            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+            self._summaries.update(run, [self._dataset_type_id], summary)
             # Combine the generated dataset_id values and data ID fields to
             # form rows to be inserted into the tags table.
             protoTagsRow = {
@@ -712,13 +756,11 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
-        # Remember any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
         dataIds = {}
-        for dataset in datasets:
+        summary = CollectionSummary()
+        for dataset in summary.add_datasets_generator(datasets):
             # Ignore unknown ID types, normally all IDs have the same type but
             # this code supports mixed types or missing IDs.
             datasetId = dataset.id if isinstance(dataset.id, uuid.UUID) else None
@@ -727,7 +769,6 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     run.name, self.datasetType, dataset.dataId, idGenerationMode
                 )
             dataIds[datasetId] = dataset.dataId
-            governorValues.update_extract(dataset.dataId)
 
         with self._db.session() as session:
 
@@ -776,7 +817,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 # Update the summary tables for this collection in case this
                 # is the first time this dataset type or these governor values
                 # will be inserted there.
-                self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+                self._summaries.update(run, [self._dataset_type_id], summary)
 
                 # Copy it into tags table.
                 self._db.insert(self._tags, select=tmp_tags.select())

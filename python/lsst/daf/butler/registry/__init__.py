@@ -19,7 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from . import interfaces, managers, queries, summaries, wildcards
+from . import interfaces, managers, queries, wildcards
+from ._collection_summary import *
 from ._collectionType import *
 from ._config import *
 from ._dbAuth import *
