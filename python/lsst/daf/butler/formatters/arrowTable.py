@@ -55,6 +55,19 @@ class ArrowTableFormatter(Formatter):
 
         if component == "columns":
             return columns
+        elif component == "rowcount":
+            # Get the rowcount from the metadata if possible, otherwise count.
+            if b"lsst::arrow::rowcount" in schema.metadata:
+                return int(schema.metadata[b"lsst::arrow::rowcount"])
+
+            temp_table = pq.read_table(
+                self.fileDescriptor.location.path,
+                columns=[schema.names[0]],
+                use_threads=False,
+                use_pandas_metadata=False,
+            )
+
+            return len(temp_table[schema.names[0]])
 
         par_columns = None
         if self.fileDescriptor.parameters:
@@ -188,7 +201,11 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, Any]:
         col = arrow_table[name].to_numpy()
 
         if schema.field(name).type in (pa.string(), pa.binary()):
-            strlen = max(len(row) for row in col)
+            md_name = f"lsst::arrow::len::{name}".encode("UTF-8")
+            if md_name in schema.metadata:
+                strlen = int(schema.metadata["md_name"])
+            else:
+                strlen = max(len(row) for row in col)
             col = col.astype(f"|U{strlen}")
 
         numpy_dict[name] = col
@@ -208,8 +225,20 @@ def numpy_dict_to_arrow(numpy_dict: Dict[str, Any]) -> pa.Table:
     -------
     arrow_table : `pyarrow.Table`
     """
+    import numpy as np
+
     type_list = [(name, pa.from_numpy_dtype(col.dtype.type)) for name, col in numpy_dict.items()]
-    schema = pa.schema(type_list)
+
+    md = {}
+    md[b"lsst::arrow::rowcount"] = str(len(numpy_dict[list(numpy_dict.keys())[0]]))
+
+    for name, col in numpy_dict.items():
+        if col.dtype.type is np.str_:
+            md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(col.dtype.itemsize // 4)
+        elif col.dtype.type is np.bytes_:
+            md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(col.dtype.itemsize)
+
+    schema = pa.schema(type_list, metadata=md)
 
     arrays = [pa.array(col) for col in numpy_dict.values()]
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
@@ -228,8 +257,20 @@ def numpy_to_arrow(np_array: Any) -> pa.Table:
     -------
     arrow_table : `pyarrow.Table`
     """
+    import numpy as np
+
     type_list = [(name, pa.from_numpy_dtype(np_array.dtype[name].type)) for name in np_array.dtype.names]
-    schema = pa.schema(type_list)
+
+    md = {}
+    md[b"lsst::arrow::rowcount"] = str(len(np_array))
+
+    for name in np_array.dtype.names:
+        if np_array.dtype[name].type is np.str_:
+            md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(np_array.dtype[name].itemsize // 4)
+        elif np_array.dtype[name].type is np.bytes_:
+            md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(np_array.dtype[name].itemsize)
+
+    schema = pa.schema(type_list, metadata=md)
 
     arrays = [pa.array(np_array[col]) for col in np_array.dtype.names]
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
@@ -248,11 +289,23 @@ def astropy_to_arrow(astropy_table: Any) -> pa.Table:
     -------
     arrow_table : `pyarrow.Table`
     """
+    import numpy as np
+
     # Will want to support units in the metadata.
     type_list = [
         (name, pa.from_numpy_dtype(astropy_table.dtype[name].type)) for name in astropy_table.dtype.names
     ]
-    schema = pa.schema(type_list)
+
+    md = {}
+    md[b"lsst:arrow::rowcount"] = str(len(astropy_table))
+
+    for name, col in astropy_table.columns.items():
+        if col.dtype.type is np.str_:
+            md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(col.dtype.itemsize // 4)
+        elif col.dtype.type is np.bytes_:
+            md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(col.dtype.itemsize)
+
+    schema = pa.schema(type_list, metadata=md)
 
     arrays = [pa.array(col) for col in astropy_table.itercols()]
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
@@ -271,4 +324,19 @@ def pandas_to_arrow(dataframe: Any) -> pa.Table:
     -------
     arrow_table : `pyarrow.Table`
     """
-    return pa.Table.from_pandas(dataframe)
+    import numpy as np
+
+    # Create the schema first so we can add our metadata
+    schema = pa.Schema.from_pandas(dataframe)
+    md = {}
+    md[b"pandas"] = schema.metadata[b"pandas"]
+    md[b"lsst::arrow::rowcount"] = str(len(dataframe))
+
+    for name in dataframe.columns:
+        if dataframe[name].dtype.type is np.object_:
+            strlen = max(len(row) for row in dataframe[name].values)
+            md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(strlen)
+
+    schema = schema.with_metadata(md)
+
+    return pa.Table.from_pandas(dataframe, schema=schema)
