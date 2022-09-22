@@ -22,19 +22,16 @@ from __future__ import annotations
 
 __all__ = ["TableDimensionRecordStorage"]
 
-import itertools
+import dataclasses
 import logging
 import warnings
-from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import sqlalchemy
-from lsst.utils.ellipsis import Ellipsis, EllipsisType
 
 from ...core import (
     DatabaseDimensionElement,
-    DataCoordinate,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
@@ -43,8 +40,6 @@ from ...core import (
     NamedKeyMapping,
     NamedValueSet,
     SimpleQuery,
-    SkyPixDimension,
-    SkyPixSystem,
     TimespanDatabaseRepresentation,
     addDimensionForeignKey,
     ddl,
@@ -83,7 +78,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         The element whose records this storage will manage.
     table : `sqlalchemy.schema.Table`
         The logical table for the element.
-    skyPixOverlap : `_SkyPixOverlapStorage`, optional
+    skypix_overlap_tables : `_SkyPixOverlapTables`, optional
         Object that manages the tables that hold materialized spatial overlap
         joins to skypix dimensions.  Should be `None` if (and only if)
         ``element.spatial is None``.
@@ -95,7 +90,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         element: DatabaseDimensionElement,
         *,
         table: sqlalchemy.schema.Table,
-        skyPixOverlap: _SkyPixOverlapStorage | None = None,
+        skypix_overlap_tables: _SkyPixOverlapTables | None = None,
     ):
         self._db = db
         self._table = table
@@ -106,7 +101,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 self._element.dimensions, self._element.RecordClass.fields.dimensions.names
             )
         }
-        self._skyPixOverlap = skyPixOverlap
+        self._skypix_overlap_tables = skypix_overlap_tables
         self._otherOverlaps: list[DatabaseDimensionOverlapStorage] = []
 
     @classmethod
@@ -125,28 +120,11 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             table = context.addTable(element.name, spec)
         else:
             table = db.ensureTableExists(element.name, spec)
-        skyPixOverlap: _SkyPixOverlapStorage | None
         if element.spatial is not None:
             governor = governors[element.spatial.governor]
-            skyPixOverlap = _SkyPixOverlapStorage.initialize(
-                db,
-                element,
-                context=context,
-                governor=governor,
-            )
-            result = cls(db, element, table=table, skyPixOverlap=skyPixOverlap)
-
-            # Whenever anyone inserts a new governor dimension value, we want
-            # to enable overlaps for that value between this element and
-            # commonSkyPix.
-            def callback(record: DimensionRecord) -> None:
-                skyPixOverlap.enable(  # type: ignore
-                    result,
-                    element.universe.commonSkyPix,
-                    getattr(record, element.spatial.governor.primaryKey.name),  # type: ignore
-                )
-
-            governor.registerInsertionListener(callback)
+            skypix_overlap_tables = _SkyPixOverlapTables.initialize(db, element, context=context)
+            result = cls(db, element, table=table, skypix_overlap_tables=skypix_overlap_tables)
+            governor.registerInsertionListener(result._on_governor_insert)
             return result
         else:
             return cls(db, element, table=table)
@@ -171,11 +149,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         if regions is not None:
             dimensions = NamedValueSet(self.element.required)
             dimensions.add(self.element.universe.commonSkyPix)
-            assert self._skyPixOverlap is not None
-            builder.joinTable(
-                self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis),
-                dimensions,
-            )
+            assert self._skypix_overlap_tables is not None
+            builder.joinTable(self._select_skypix_overlaps(), dimensions)
             regionsInTable = self._table.columns["region"]
             regions[self.element] = regionsInTable
         joinOn = builder.startJoin(
@@ -231,8 +206,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 self._db.ensure(self._table, *elementRows, primary_key_only=True)
             else:
                 self._db.insert(self._table, *elementRows)
-            if self._skyPixOverlap is not None:
-                self._skyPixOverlap.insert(records, replace=replace, skip_existing=skip_existing)
+            if self._skypix_overlap_tables is not None:
+                self._insert_skypix_overlaps(records, replace=replace, skip_existing=skip_existing)
 
     def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         # Docstring inherited from DimensionRecordStorage.sync.
@@ -251,61 +226,205 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 compared=compared,
                 update=update,
             )
-            if inserted_or_updated and self._skyPixOverlap is not None:
+            if inserted_or_updated and self._skypix_overlap_tables is not None:
                 if inserted_or_updated is True:
                     # Inserted a new row, so we just need to insert new overlap
                     # rows.
-                    self._skyPixOverlap.insert([record])
+                    self._insert_skypix_overlaps([record])
                 elif "region" in inserted_or_updated:
                     # Updated the region, so we need to delete old overlap rows
                     # and insert new ones.
-                    # (mypy should be able to tell that inserted_or_updated
-                    # must be a dict if we get to this clause, but it can't)
-                    self._skyPixOverlap.insert([record], replace=True)
+                    self._insert_skypix_overlaps([record], replace=True)
                 # We updated something other than a region.
         return inserted_or_updated
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         result = [self._table]
-        if self._skyPixOverlap is not None:
-            result.extend(self._skyPixOverlap.digestTables())
+        if self._skypix_overlap_tables is not None:
+            result.append(self._skypix_overlap_tables.summary)
+            result.append(self._skypix_overlap_tables.overlaps)
         return result
 
     def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         self._otherOverlaps.append(overlaps)
 
+    def _on_governor_insert(self, record: DimensionRecord) -> None:
+        """A `GovernorDimensionRecordStorage.registerInsertionListener`
+        callback for this element.
 
-class _SkyPixOverlapStorage:
-    """A helper object for `TableDimensionRecordStorage` that manages its
-    materialized overlaps with skypix dimensions.
+        Parameters
+        ----------
+        record : `DimensionRecord`
+            Record for this element's governor dimension.
+        """
+        # We need to enable overlaps between this new governor dimension value
+        # and the common skypix dimension to record that we materialize
+        # overlaps for that combination.  Foreign keys guarantee that there
+        # can't be any rows of this storage object's own element with that
+        # governor value yet, so we know there's nothing to insert into the
+        # overlaps table yet.
+        skypix = self.element.universe.commonSkyPix
+        assert self._element.spatial is not None, "Only called for spatial dimension elements."
+        assert (
+            self._skypix_overlap_tables is not None
+        ), "Spatial dimension elements always have skypix overlap tables."
+        governor = self._element.spatial.governor
+        self._db.sync(
+            self._skypix_overlap_tables.summary,
+            keys={
+                "skypix_system": skypix.system.name,
+                "skypix_level": skypix.level,
+                governor.name: record.dataId[governor.name],
+            },
+        )
+
+    def _insert_skypix_overlaps(
+        self, records: Sequence[DimensionRecord], replace: bool = False, skip_existing: bool = False
+    ) -> None:
+        """Compute and insert overlap rows between this dimesion element and
+        the common skypix system.
+
+        Parameters
+        ----------
+        records : `Sequence` [ `DimensionRecord` ]
+            Records for ``self.element`` that are being inserted.
+        replace : `bool`, optional
+            If `True`, the given records are being inserted in a mode that may
+            replace existing records, and hence overlap rows may need to be
+            replaced as well.
+        skip_existing : `bool`, optional
+            If `True`, the given records are being inserted in a mode that
+            ignored existing records with the same data ID, and hence overlap
+            rows need to be inserted this way as well.
+        """
+        assert self._element.spatial is not None, "Only called for spatial dimension elements."
+        assert (
+            self._skypix_overlap_tables is not None
+        ), "Spatial dimension elements always have skypix overlap tables."
+        # At present, only overlaps with the "commonSkyPix" system can be
+        # materialized, so we just compute and insert overlaps with those.
+        #
+        # To guard against this code being used with a data repository in which
+        # newer code has enabled other overlaps, we check afterwards that the
+        # summary table only contains commonSkyPix for all of these governor
+        # dimensions.  In the future, we'll have to think about whether we need
+        # some table locking to guarantee consistency for those other overlaps
+        # if the summary table is updated at the same time as records are
+        # being inserted.  This should happen within the same transaction
+        # (handled by the caller) so that previous inserts get rolled back.
+        skypix = self._element.universe.commonSkyPix
+        if replace:
+            # Since any of the new records might have replaced existing ones
+            # that already have overlap records, and we don't know which, we
+            # have no choice but to delete all overlaps for these records and
+            # recompute them.
+            # We include the skypix_system and skypix_level column values
+            # explicitly instead of just letting the query search for all
+            # of those related to the given records, because they are the
+            # first columns in the primary key, and hence searching with
+            # them will be way faster (and we don't want to add a new index
+            # just for this operation).
+            to_delete: list[dict[str, Any]] = [
+                {"skypix_system": skypix.system.name, "skypix_level": skypix.level, **record.dataId.byName()}
+                for record in records
+            ]
+            _LOG.debug("Deleting old common skypix overlaps for %s.", self.element.name)
+            self._db.delete(
+                self._skypix_overlap_tables.overlaps,
+                ["skypix_system", "skypix_level"] + list(self.element.graph.required.names),
+                *to_delete,
+            )
+        _LOG.debug("Precomputing common skypix overlaps for %s.", self.element.name)
+        overlap_records: list[dict[str, Any]] = []
+        for record in records:
+            if record.region is None:
+                continue
+            base_overlap_record = record.dataId.byName()
+            base_overlap_record["skypix_system"] = skypix.system.name
+            base_overlap_record["skypix_level"] = skypix.level
+            for begin, end in skypix.pixelization.envelope(record.region):
+                for index in range(begin, end):
+                    overlap_records.append({"skypix_index": index, **base_overlap_record})
+        _LOG.debug("Inserting %d new skypix overlap rows for %s.", len(overlap_records), self.element.name)
+        if skip_existing:
+            self._db.ensure(self._skypix_overlap_tables.overlaps, *overlap_records, primary_key_only=True)
+        else:
+            self._db.insert(self._skypix_overlap_tables.overlaps, *overlap_records)
+        # Finally we check for non-commonSkyPix values in the summary table, as
+        # noted above.
+        summary = self._skypix_overlap_tables.summary
+        check_sql = (
+            sqlalchemy.sql.select([summary.columns.skypix_system, summary.columns.skypix_level])
+            .select_from(summary)
+            .where(
+                sqlalchemy.sql.not_(
+                    sqlalchemy.sql.and_(
+                        summary.columns.skypix_system == skypix.system.name,
+                        summary.columns.skypix_level == skypix.level,
+                    )
+                )
+            )
+        )
+        bad_summary_rows = self._db.query(check_sql).fetchall()
+        if bad_summary_rows:
+            bad_skypix_names = [f"{row.skypix_system}{row.skypix.level}" for row in bad_summary_rows]
+            raise RuntimeError(
+                f"Data repository has overlaps between {self._element} and {bad_skypix_names} that "
+                "are not supported by this version of daf_butler.  Please use a newer version."
+            )
+
+    def _select_skypix_overlaps(self) -> sqlalchemy.sql.FromClause:
+        """Construct a subquery expression containing overlaps between common
+        skypix dimension and this dimension element.
+
+        Returns
+        -------
+        subquery : `sqlalchemy.sql.FromClause`
+            A SELECT query with an alias, intended for use as a subquery, with
+            columns equal to::
+
+                list(self.element.required.names)
+                    + [self.element.universe.commonSkyPix.name]
+        """
+        assert self._element.spatial is not None, "Only called for spatial dimension elements."
+        assert (
+            self._skypix_overlap_tables is not None
+        ), "Spatial dimension elements always have skypix overlap tables."
+        skypix = self._element.universe.commonSkyPix
+        table = self._skypix_overlap_tables.overlaps
+        columns = [table.columns.skypix_index.label(skypix.name)]
+        columns.extend(table.columns[name] for name in self.element.graph.required.names)
+        query = (
+            sqlalchemy.sql.select(*columns)
+            .select_from(table)
+            .where(
+                sqlalchemy.sql.and_(
+                    table.columns.skypix_system == skypix.system.name,
+                    table.columns.skypix_level == skypix.level,
+                )
+            )
+        )
+        return query.alias(f"{self.element.name}_{skypix.name}_overlap")
+
+
+@dataclasses.dataclass
+class _SkyPixOverlapTables:
+    """A helper object for `TableDimensionRecordStorage` that manages the
+    tables for materialized overlaps with skypix dimensions.
 
     New instances should be constructed by calling `initialize`, not by calling
-    the constructor directly.
-
-    Parameters
-    ----------
-    db : `Database`
-        Interface to the underlying database engine and namespace.
-    element : `DatabaseDimensionElement`
-        Dimension element whose overlaps are to be managed.
-    summaryTable : `sqlalchemy.schema.Table`
-        Table that records which combinations of skypix dimensions and
-        governor dimension values have materialized overlap rows.
-    overlapTable : `sqlalchemy.schema.Table`
-        Table containing the actual materialized overlap rows.
-    governor : `GovernorDimensionRecordStorage`
-        Record storage backend for this element's governor dimension.
+    the dataclass-provided constructor directly.
 
     Notes
     -----
-    This class (and most importantly, the tables it relies on) can in principle
-    manage overlaps between with any skypix dimension, but at present it is
-    only being used to manage relationships with the special ``commonSkyPix``
-    dimension, because that's all the query system uses.  Eventually, we expect
-    to require users to explicitly materialize all relationships they will
-    want to use in queries.
+    This class (and the related methods in TableDimensionRecordStorage) can in
+    principle manage overlaps between a database dimension element and any
+    skypix dimension, but at present it is only being used to manage
+    relationships with the special ``commonSkyPix`` dimension, because that's
+    all the query system uses.  Eventually, we expect to require users to
+    explicitly materialize more relationships.
 
     Other possible future improvements include:
 
@@ -314,29 +433,22 @@ class _SkyPixOverlapStorage:
        ``SELECT DISTINCT`` in the subquery to remove duplicates);
 
      - allowing finer-grained database elements (e.g. patch) to provide overlap
-       rows for coarser ones (e.g. tract), by ignoring irrelevant columns
-       (e.g. the patch IDs) in the subquery (again, possible with
-       ``SELECT DISTINCT``).
+       rows for coarser ones (e.g. tract), by ignoring irrelevant columns (e.g.
+       the patch IDs) in the subquery (again, possible with ``SELECT
+       DISTINCT``).
 
-    But there's no point to doing any of that until the query system can
-    figure out how best to ask for overlap rows when an exact match isn't
-    available.
+    But there's no point to doing any of that until the query system can figure
+    out how best to ask for overlap rows when an exact match isn't available.
     """
 
-    def __init__(
-        self,
-        db: Database,
-        element: DatabaseDimensionElement,
-        summaryTable: sqlalchemy.schema.Table,
-        overlapTable: sqlalchemy.schema.Table,
-        governor: GovernorDimensionRecordStorage,
-    ):
-        self._db = db
-        self.element = element
-        assert element.spatial is not None
-        self._summaryTable = summaryTable
-        self._overlapTable = overlapTable
-        self._governor = governor
+    summary: sqlalchemy.schema.Table
+    """Table that records which governor value / skypix combinations have
+    materialized overlaps.
+    """
+
+    overlaps: sqlalchemy.schema.Table
+    """Table that actually holds overlap rows.
+    """
 
     @classmethod
     def initialize(
@@ -345,8 +457,7 @@ class _SkyPixOverlapStorage:
         element: DatabaseDimensionElement,
         *,
         context: StaticTablesContext | None,
-        governor: GovernorDimensionRecordStorage,
-    ) -> _SkyPixOverlapStorage:
+    ) -> _SkyPixOverlapTables:
         """Construct a new instance, creating tables as needed.
 
         Parameters
@@ -358,24 +469,20 @@ class _SkyPixOverlapStorage:
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
-        governor : `GovernorDimensionRecordStorage`
-            Record storage backend for this element's governor dimension.
         """
         if context is not None:
             op = context.addTable
         else:
             op = db.ensureTableExists
-        summaryTable = op(
+        summary = op(
             cls._SUMMARY_TABLE_NAME_SPEC.format(element=element),
             cls._makeSummaryTableSpec(element),
         )
-        overlapTable = op(
+        overlaps = op(
             cls._OVERLAP_TABLE_NAME_SPEC.format(element=element),
             cls._makeOverlapTableSpec(element),
         )
-        return _SkyPixOverlapStorage(
-            db, element, summaryTable=summaryTable, overlapTable=overlapTable, governor=governor
-        )
+        return cls(summary=summary, overlaps=overlaps)
 
     _SUMMARY_TABLE_NAME_SPEC = "{element.name}_skypix_overlap_summary"
 
@@ -499,369 +606,3 @@ class _SkyPixOverlapStorage:
             )
         )
         return tableSpec
-
-    def enable(
-        self,
-        storage: TableDimensionRecordStorage,
-        skypix: SkyPixDimension,
-        governorValue: str,
-    ) -> None:
-        """Enable materialization of overlaps between a skypix dimension
-        and the records of ``self.element`` with a particular governor value.
-
-        Parameters
-        ----------
-        storage : `TableDimensionRecordStorage`
-            Storage object for the records of ``self.element``.
-        skypix : `SkyPixDimension`
-            The skypix dimension (system and level) for which overlaps should
-            be materialized.
-        governorValue : `str`
-            Value of this element's governor dimension for which overlaps
-            should be materialized.  For example, if ``self.element`` is
-            ``visit``, this is an instrument name; if ``self.element`` is
-            ``patch``, this is a skymap name.
-
-        Notes
-        -----
-        If there are existing rows for the given ``governorValue``, overlap
-        rows for them will be immediately computed and inserted.  At present,
-        that never happens, because we only enable overlaps with
-        `DimensionUniverse.commonSkyPix`, and that happens immediately after
-        each governor row is inserted (and there can't be any patch rows,
-        for example, until after the corresponding skymap row is inserted).
-
-        After calling `enable` for a particular combination, any new records
-        for ``self.element`` that are inserted will automatically be
-        accompanied by overlap records (via calls to `insert` made
-        by `TableDimensionRecordStorage` methods).
-        """
-        # Because we're essentially materializing a view in Python, we
-        # aggressively lock all tables we're reading and writing in order to be
-        # sure nothing gets out of sync.  This may not be the most efficient
-        # approach possible, but we'll focus on correct before we focus on
-        # fast, and enabling a new overlap combination should be a very rare
-        # operation anyway, and never one we do in parallel.
-        with self._db.transaction(
-            lock=[self._governor.table, storage._table, self._summaryTable, self._overlapTable]
-        ):
-            result, inserted = self._db.sync(
-                self._summaryTable,
-                keys={
-                    "skypix_system": skypix.system.name,
-                    "skypix_level": skypix.level,
-                    self._governor.element.name: governorValue,
-                },
-            )
-            if inserted:
-                _LOG.debug(
-                    "Precomputing initial overlaps for %s vs %s for %s=%s",
-                    skypix.name,
-                    self.element.name,
-                    self._governor.element.name,
-                    governorValue,
-                )
-                self._fill(storage=storage, skypix=skypix, governorValue=governorValue)
-            else:
-                _LOG.debug(
-                    "Overlaps already precomputed for %s vs %s for %s=%s",
-                    skypix.name,
-                    self.element.name,
-                    self._governor.element.name,
-                    governorValue,
-                )
-
-    def _fill(
-        self,
-        *,
-        storage: TableDimensionRecordStorage,
-        skypix: SkyPixDimension,
-        governorValue: str,
-    ) -> None:
-        """Insert overlap records for a newly-enabled combination of skypix
-        dimension and governor value.
-
-        This method should only be called by `enable`.
-
-        Parameters
-        ----------
-        storage : `TableDimensionRecordStorage`
-            Storage object for the records of ``self.element``.
-        skypix : `SkyPixDimension`
-            The skypix dimension (system and level) for which overlaps should
-            be materialized.
-        governorValue : `str`
-            Value of this element's governor dimension for which overlaps
-            should be materialized.  For example, if ``self.element`` is
-            ``visit``, this is an instrument name; if ``self.element`` is
-            ``patch``, this is a skymap name.
-        """
-        overlapRecords: list[dict] = []
-        # `DimensionRecordStorage.fetch` as defined by the ABC expects to be
-        # given iterables of data IDs that correspond to that element's graph
-        # (e.g. {instrument, visit, detector}), not just some subset of it
-        # (e.g. {instrument}).  But we know the implementation of `fetch` for
-        # `TableDimensionRecordStorage will use this iterable to do exactly
-        # what we want.
-        governorDataId = DataCoordinate.standardize(
-            {self._governor.element.name: governorValue}, graph=self._governor.element.graph
-        )
-        for record in storage.fetch(DataCoordinateIterable.fromScalar(governorDataId)):
-            if record.region is None:
-                continue
-            baseOverlapRecord = record.dataId.byName()
-            baseOverlapRecord["skypix_system"] = skypix.system.name
-            baseOverlapRecord["skypix_level"] = skypix.level
-            for begin, end in skypix.pixelization.envelope(record.region):
-                overlapRecords.extend(
-                    dict(baseOverlapRecord, skypix_index=index) for index in range(begin, end)
-                )
-        _LOG.debug(
-            "Inserting %d initial overlap rows for %s vs %s for %s=%r",
-            len(overlapRecords),
-            skypix.name,
-            self.element.name,
-            self._governor.element.name,
-            governorValue,
-        )
-        self._db.insert(self._overlapTable, *overlapRecords)
-
-    def insert(
-        self, records: Sequence[DimensionRecord], replace: bool = False, skip_existing: bool = False
-    ) -> None:
-        """Insert overlaps for a sequence of ``self.element`` records that
-        have just been inserted.
-
-        This must be called by any method that inserts records for that
-        element (i.e. `TableDimensionRecordStorage.insert` and
-        `TableDimensionRecordStorage.sync`), within the same transaction.
-
-        Parameters
-        ----------
-        records : `Sequence` [ `DimensionRecord` ]
-            Records for ``self.element``.  Records with `None` regions are
-            ignored.
-        replace : `bool`, optional
-            If `True` (`False` is default) one or more of the given records may
-            already exist and is being updated, so we need to delete any
-            existing overlap records first.
-        skip_existing : `bool`, optional
-            If `True` (`False` is default), skip insertion if a record with
-            the same primary key values already exists.
-        """
-        # Group records by family.governor value.
-        grouped: dict[str, list[DimensionRecord]] = defaultdict(list)
-        for record in records:
-            grouped[getattr(record, self._governor.element.name)].append(record)
-        _LOG.debug(
-            "Precomputing new skypix overlaps for %s where %s in %s.",
-            self.element.name,
-            self._governor.element.name,
-            grouped.keys(),
-        )
-        # Make sure the set of combinations to materialize does not change
-        # while we are materializing the ones we have, by locking the summary
-        # table.  Because we aren't planning to write to the summary table,
-        # this could just be a SHARED lock instead of an EXCLUSIVE one, but
-        # there's no API for that right now.
-        with self._db.transaction(lock=[self._summaryTable]):
-            # Query for the skypix dimensions to be associated with each
-            # governor value.
-            gvCol = self._summaryTable.columns[self._governor.element.name]
-            sysCol = self._summaryTable.columns.skypix_system
-            lvlCol = self._summaryTable.columns.skypix_level
-            query = (
-                sqlalchemy.sql.select(
-                    gvCol,
-                    sysCol,
-                    lvlCol,
-                )
-                .select_from(self._summaryTable)
-                .where(gvCol.in_(list(grouped.keys())))
-            )
-            # Group results by governor value, then skypix system.
-            skypix: dict[str, NamedKeyDict[SkyPixSystem, list[int]]] = {
-                gv: NamedKeyDict() for gv in grouped.keys()
-            }
-            for summaryRow in self._db.query(query).mappings():
-                system = self.element.universe.skypix[summaryRow[sysCol]]
-                skypix[summaryRow[gvCol]].setdefault(system, []).append(summaryRow[lvlCol])
-            if replace:
-                # Construct constraints for a DELETE query as a list of dicts.
-                # We include the skypix_system and skypix_level column values
-                # explicitly instead of just letting the query search for all
-                # of those related to the given records, because they are the
-                # first columns in the primary key, and hence searching with
-                # them will be way faster (and we don't want to add a new index
-                # just for this operation).
-                to_delete: list[dict[str, Any]] = []
-                for gv, skypix_systems in skypix.items():
-                    for system, skypix_levels in skypix_systems.items():
-                        to_delete.extend(
-                            {"skypix_system": system.name, "skypix_level": level, **record.dataId.byName()}
-                            for record, level in itertools.product(grouped[gv], skypix_levels)
-                        )
-                self._db.delete(
-                    self._overlapTable,
-                    ["skypix_system", "skypix_level"] + list(self.element.graph.required.names),
-                    *to_delete,
-                )
-            overlapRecords: list[dict] = []
-            # Compute overlaps for one governor value at a time, but gather
-            # them all up for one insert.
-            for gv, group in grouped.items():
-                overlapRecords.extend(self._compute(group, skypix[gv], gv))
-            _LOG.debug(
-                "Inserting %d new skypix overlap rows for %s where %s in %s.",
-                len(overlapRecords),
-                self.element.name,
-                self._governor.element.name,
-                grouped.keys(),
-            )
-            if skip_existing:
-                self._db.ensure(self._overlapTable, *overlapRecords, primary_key_only=True)
-            else:
-                self._db.insert(self._overlapTable, *overlapRecords)
-
-    def _compute(
-        self,
-        records: Sequence[DimensionRecord],
-        skypix: NamedKeyDict[SkyPixSystem, list[int]],
-        governorValue: str,
-    ) -> Iterator[dict]:
-        """Compute all overlap rows for a particular governor dimension value
-        and all of the skypix dimensions for which its overlaps are enabled.
-
-        This method should only be called by `insert`.
-
-        Parameters
-        ----------
-        records : `Sequence` [ `DimensionRecord` ]
-            Records for ``self.element``.  Records with `None` regions are
-            ignored.  All must have the governor value given.
-        skypix : `NamedKeyDict` [ `SkyPixSystem`, `list` [ `int` ] ]
-            Mapping containing all skypix systems and levels for which overlaps
-            should be computed, grouped by `SkyPixSystem`.
-        governorValue : `str`
-            Value of this element's governor dimension for which overlaps
-            should be computed.  For example, if ``self.element`` is ``visit``,
-            this is an instrument name; if ``self.element`` is ``patch``, this
-            is a skymap name.
-
-        Yields
-        ------
-        row : `dict`
-            Dictionary representing an overlap row.
-        """
-        # Process input records one at time, computing all skypix indices for
-        # each.
-        for record in records:
-            if record.region is None:
-                continue
-            assert getattr(record, self._governor.element.name) == governorValue
-            for system, levels in skypix.items():
-                if not levels:
-                    continue
-                baseOverlapRecord = record.dataId.byName()
-                baseOverlapRecord["skypix_system"] = system.name
-                levels.sort(reverse=True)
-                # Start with the first level, which is the finest-grained one.
-                # Compute skypix envelope indices directly for that.
-                indices: dict[int, set[int]] = {levels[0]: set()}
-                for begin, end in system[levels[0]].pixelization.envelope(record.region):
-                    indices[levels[0]].update(range(begin, end))
-                # Divide those indices by powers of 4 (and remove duplicates)
-                # work our way up to the last (coarsest) level.
-                for lastLevel, nextLevel in zip(levels[:-1], levels[1:]):
-                    factor = 4 ** (lastLevel - nextLevel)
-                    indices[nextLevel] = {index // factor for index in indices[lastLevel]}
-                for level in levels:
-                    yield from (
-                        {
-                            "skypix_level": level,
-                            "skypix_index": index,
-                            **baseOverlapRecord,  # type: ignore
-                        }
-                        for index in indices[level]
-                    )
-
-    def select(
-        self,
-        skypix: SkyPixDimension,
-        governorValues: Set[str] | EllipsisType,
-    ) -> sqlalchemy.sql.FromClause:
-        """Construct a subquery expression containing overlaps between the
-        given skypix dimension and governor values.
-
-        Parameters
-        ----------
-        skypix : `SkyPixDimension`
-            The skypix dimension (system and level) for which overlaps should
-            be materialized.
-        governorValues : `~collections.abc.Set` [ `str` ]
-            Values of this element's governor dimension for which overlaps
-            should be returned.  For example, if ``self.element`` is ``visit``,
-            this is a set of instrument names; if ``self.element`` is
-            ``patch``, this is a set of skymap names.  If ``...`` all values
-            in the database are used (`GovernorDimensionRecordStorage.values`).
-
-        Returns
-        -------
-        subquery : `sqlalchemy.sql.FromClause`
-            A SELECT query with an alias, intended for use as a subquery, with
-            columns equal to ``self.element.required.names`` + ``skypix.name``.
-        """
-        if skypix != self.element.universe.commonSkyPix:
-            # We guarantee elsewhere that we always materialize all overlaps
-            # vs. commonSkyPix, but for everything else, we need to check that
-            # we have materialized this combination of governor values and
-            # skypix.
-            summaryWhere = [
-                self._summaryTable.columns.skypix_system == skypix.system.name,
-                self._summaryTable.columns.skypix_level == skypix.level,
-            ]
-            gvCol = self._summaryTable.columns[self._governor.element.name]
-            if governorValues is not Ellipsis:
-                summaryWhere.append(gvCol.in_(list(governorValues)))
-            summaryQuery = (
-                sqlalchemy.sql.select(gvCol)
-                .select_from(self._summaryTable)
-                .where(sqlalchemy.sql.and_(*summaryWhere))
-            )
-            materializedGovernorValues = {row._mapping[gvCol] for row in self._db.query(summaryQuery)}
-            if governorValues is Ellipsis:
-                missingGovernorValues = self._governor.values - materializedGovernorValues
-            else:
-                missingGovernorValues = governorValues - materializedGovernorValues
-            if missingGovernorValues:
-                raise RuntimeError(
-                    f"Query requires an overlap join between {skypix.name} and {self.element.name} "
-                    f"(for {self._governor.element.name} in {missingGovernorValues}), but these "
-                    f"have not been materialized."
-                )
-        columns = [self._overlapTable.columns.skypix_index.label(skypix.name)]
-        columns.extend(self._overlapTable.columns[name] for name in self.element.graph.required.names)
-        overlapWhere = [
-            self._overlapTable.columns.skypix_system == skypix.system.name,
-            self._overlapTable.columns.skypix_level == skypix.level,
-        ]
-        if governorValues is not Ellipsis:
-            overlapWhere.append(
-                self._overlapTable.columns[self._governor.element.name].in_(list(governorValues))
-            )
-        overlapQuery = (
-            sqlalchemy.sql.select(*columns)
-            .select_from(self._overlapTable)
-            .where(sqlalchemy.sql.and_(*overlapWhere))
-        )
-        return overlapQuery.alias(f"{self.element.name}_{skypix.name}_overlap")
-
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
-        """Return tables used for schema digest.
-
-        Returns
-        -------
-        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
-            Possibly empty set of tables for schema digest calculations.
-        """
-        return [self._summaryTable, self._overlapTable]
