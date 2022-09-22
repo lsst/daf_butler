@@ -32,7 +32,6 @@ from ...core import (
     DatabaseDimension,
     DatabaseDimensionElement,
     DataCoordinate,
-    DataCoordinateIterable,
     DimensionKeyColumnTag,
     DimensionRecord,
     GovernorDimension,
@@ -138,16 +137,6 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         raise TypeError(
             f"Cannot sync {self.element.name} records, define as part of {self._target.element} instead."
         )
-
-    def fetch(
-        self, dataIds: DataCoordinateIterable, context: queries.SqlQueryContext
-    ) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        RecordClass = self.element.RecordClass
-        for dataId in dataIds:
-            # Given the restrictions imposed at construction, we know there's
-            # nothing to actually fetch: everything we need is in the data ID.
-            yield RecordClass(**dataId.byName())
 
     def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
         # Docstring inherited from DimensionRecordStorage.

@@ -29,7 +29,6 @@ from lsst.daf.relation import Calculation, ColumnExpression, Join, Relation
 
 from ...core import (
     DataCoordinate,
-    DataCoordinateIterable,
     DimensionKeyColumnTag,
     DimensionRecord,
     DimensionRecordColumnTag,
@@ -96,15 +95,6 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
     def sync(self, record: DimensionRecord, update: bool = False) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
         raise TypeError(f"Cannot sync SkyPixdimension {self._dimension.name}.")
-
-    def fetch(
-        self, dataIds: DataCoordinateIterable, context: queries.SqlQueryContext
-    ) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        RecordClass = self._dimension.RecordClass
-        for dataId in dataIds:
-            index = dataId[self._dimension.name]
-            yield RecordClass(id=index, region=self._dimension.pixelization.pixel(index))
 
     def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord:
         # Docstring inherited from DimensionRecordStorage.

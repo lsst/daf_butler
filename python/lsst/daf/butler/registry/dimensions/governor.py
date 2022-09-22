@@ -28,7 +28,7 @@ from typing import Any, cast
 import sqlalchemy
 from lsst.daf.relation import Relation
 
-from ...core import DataCoordinate, DataCoordinateIterable, DimensionRecord, GovernorDimension
+from ...core import DataCoordinate, DimensionRecord, GovernorDimension
 from .. import queries
 from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
 
@@ -159,13 +159,6 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             for callback in self._callbacks:
                 callback(record)
         return inserted_or_updated
-
-    def fetch(
-        self, dataIds: DataCoordinateIterable, context: queries.SqlQueryContext
-    ) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        cache = self.get_record_cache(context)
-        return [record for dataId in dataIds if (record := cache.get(dataId)) is not None]
 
     def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
         # Docstring inherited.

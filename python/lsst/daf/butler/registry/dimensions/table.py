@@ -24,7 +24,6 @@ __all__ = ["TableDimensionRecordStorage"]
 
 import dataclasses
 import logging
-import warnings
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import Any
 
@@ -34,14 +33,12 @@ from lsst.daf.relation import Join, Relation, sql
 from ...core import (
     DatabaseDimensionElement,
     DataCoordinate,
-    DataCoordinateIterable,
     DimensionElement,
     DimensionKeyColumnTag,
     DimensionRecord,
     GovernorDimension,
     LogicalColumn,
     NamedKeyMapping,
-    SimpleQuery,
     SkyPixDimension,
     TimespanDatabaseRepresentation,
     addDimensionForeignKey,
@@ -151,36 +148,6 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             name=self.element.name,
             payload=payload,
         )
-
-    def fetch(
-        self, dataIds: DataCoordinateIterable, context: queries.SqlQueryContext
-    ) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        RecordClass = self.element.RecordClass
-        query = SimpleQuery()
-        query.columns.extend(self._table.columns[name] for name in RecordClass.fields.standard.names)
-        if self.element.spatial is not None:
-            query.columns.append(self._table.columns["region"])
-        if self.element.temporal is not None:
-            TimespanReprClass = self._db.getTimespanRepresentation()
-            query.columns.extend(self._table.columns[name] for name in TimespanReprClass.getFieldNames())
-        query.join(self._table)
-        dataIds.constrain(query, lambda name: self._fetchColumns[name])
-        with warnings.catch_warnings():
-            # Some of our generated queries may contain cartesian joins, this
-            # is not a serious issue as it is properly constrained, so we want
-            # to suppress sqlalchemy warnings.
-            warnings.filterwarnings(
-                "ignore",
-                message="SELECT statement has a cartesian product",
-                category=sqlalchemy.exc.SAWarning,
-            )
-            with self._db.query(query.combine()) as sql_result:
-                for row in sql_result.fetchall():
-                    values = row._asdict()
-                    if self.element.temporal is not None:
-                        values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
-                    yield RecordClass(**values)
 
     def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
         # Docstring inherited from DimensionRecordStorage.

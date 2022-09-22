@@ -40,7 +40,6 @@ from ...core import (
     ColumnTypeInfo,
     DatabaseDimensionElement,
     DataCoordinate,
-    DataCoordinateIterable,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
@@ -194,29 +193,6 @@ class DimensionRecordStorage(ABC):
         sqlalchemy.exc.IntegrityError
             Raised if one or more records violate database integrity
             constraints.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def fetch(
-        self, dataIds: DataCoordinateIterable, context: queries.SqlQueryContext
-    ) -> Iterable[DimensionRecord]:
-        """Retrieve records from storage.
-
-        Parameters
-        ----------
-        dataIds : `DataCoordinateIterable`
-            Data IDs that identify the records to be retrieved.
-        context : `.queries.SqlQueryContext`
-            Context to be used to execute queries when no cached result is
-            available.
-
-        Returns
-        -------
-        records : `Iterable` [ `DimensionRecord` ]
-            Record retrieved from storage.  Not all data IDs may have
-            corresponding records (if there are no records that match a data
-            ID), and even if they are, the order of inputs is not preserved.
         """
         raise NotImplementedError()
 

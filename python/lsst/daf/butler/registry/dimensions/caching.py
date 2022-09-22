@@ -32,7 +32,6 @@ from lsst.utils import doImportType
 from ...core import (
     DatabaseDimensionElement,
     DataCoordinate,
-    DataCoordinateIterable,
     DimensionRecord,
     GovernorDimension,
     NamedKeyMapping,
@@ -116,13 +115,6 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         if self._cache is not None and inserted_or_updated:
             self._cache[record.dataId] = record
         return inserted_or_updated
-
-    def fetch(
-        self, dataIds: DataCoordinateIterable, context: queries.SqlQueryContext
-    ) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        cache = self.get_record_cache(context)
-        return [record for data_id in dataIds if (record := cache.get(data_id)) is not None]
 
     def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
         # Docstring inherited from DimensionRecordStorage.
