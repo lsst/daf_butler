@@ -32,7 +32,6 @@ from .mappingFactory import *
 from .named import *
 from .progress import Progress
 from .quantum import *
-from .simpleQuery import *
 from .storageClass import *
 from .storageClassDelegate import *
 from .storedFileInfo import *
