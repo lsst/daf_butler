@@ -291,7 +291,11 @@ class DatasetRecordStorage(ABC):
 
     @abstractmethod
     def certify(
-        self, collection: CollectionRecord, datasets: Iterable[DatasetRef], timespan: Timespan
+        self,
+        collection: CollectionRecord,
+        datasets: Iterable[DatasetRef],
+        timespan: Timespan,
+        context: SqlQueryContext,
     ) -> None:
         """Associate one or more datasets with a calibration collection and a
         validity range within it.
@@ -329,6 +333,7 @@ class DatasetRecordStorage(ABC):
         timespan: Timespan,
         *,
         dataIds: Iterable[DataCoordinate] | None = None,
+        context: SqlQueryContext,
     ) -> None:
         """Remove or adjust datasets to clear a validity range within a
         calibration collection.

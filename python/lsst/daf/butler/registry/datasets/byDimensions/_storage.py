@@ -34,14 +34,12 @@ from lsst.daf.relation import Relation, sql
 
 from ....core import (
     DataCoordinate,
-    DataCoordinateSet,
     DatasetColumnTag,
     DatasetId,
     DatasetRef,
     DatasetType,
     DimensionKeyColumnTag,
     LogicalColumn,
-    SimpleQuery,
     Timespan,
     ddl,
 )
@@ -141,35 +139,33 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._db.delete(self._tags, ["dataset_id", self._collections.getCollectionForeignKeyName()], *rows)
 
     def _buildCalibOverlapQuery(
-        self, collection: CollectionRecord, dataIds: DataCoordinateSet | None, timespan: Timespan
-    ) -> SimpleQuery:
-        assert self._calibs is not None
-        # Start by building a SELECT query for any rows that would overlap
-        # this one.
-        query = SimpleQuery()
-        query.join(self._calibs)
-        # Add a WHERE clause matching the dataset type and collection.
-        query.where.append(self._calibs.columns.dataset_type_id == self._dataset_type_id)
-        query.where.append(
-            self._calibs.columns[self._collections.getCollectionForeignKeyName()] == collection.key
+        self,
+        collection: CollectionRecord,
+        data_ids: set[DataCoordinate] | None,
+        timespan: Timespan,
+        context: SqlQueryContext,
+    ) -> Relation:
+        relation = self.make_relation(
+            collection, columns={"timespan", "dataset_id", "calib_pkey"}, context=context
+        ).with_rows_satisfying(
+            context.make_timespan_overlap_predicate(
+                DatasetColumnTag(self.datasetType.name, "timespan"), timespan
+            ),
         )
-        # Add a WHERE clause matching any of the given data IDs.
-        if dataIds is not None:
-            dataIds.constrain(
-                query,
-                lambda name: self._calibs.columns[name],  # type: ignore
+        if data_ids is not None:
+            relation = relation.join(
+                context.make_data_id_relation(
+                    data_ids, self.datasetType.dimensions.required.names
+                ).transferred_to(context.sql_engine),
             )
-        # Add WHERE clause for timespan overlaps.
-        TimespanReprClass = self._db.getTimespanRepresentation()
-        query.where.append(
-            TimespanReprClass.from_columns(self._calibs.columns).overlaps(
-                TimespanReprClass.fromLiteral(timespan)
-            )
-        )
-        return query
+        return relation
 
     def certify(
-        self, collection: CollectionRecord, datasets: Iterable[DatasetRef], timespan: Timespan
+        self,
+        collection: CollectionRecord,
+        datasets: Iterable[DatasetRef],
+        timespan: Timespan,
+        context: SqlQueryContext,
     ) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if self._calibs is None:
@@ -219,27 +215,27 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # Have to implement exclusion constraint ourselves.
             # Start by building a SELECT query for any rows that would overlap
             # this one.
-            query = self._buildCalibOverlapQuery(
-                collection,
-                DataCoordinateSet(dataIds, graph=self.datasetType.dimensions),  # type: ignore
-                timespan,
-            )
-            query.columns.append(sqlalchemy.sql.func.count())
-            sql = query.combine()
+            relation = self._buildCalibOverlapQuery(collection, dataIds, timespan, context)
             # Acquire a table lock to ensure there are no concurrent writes
             # could invalidate our checking before we finish the inserts.  We
             # use a SAVEPOINT in case there is an outer transaction that a
             # failure here should not roll back.
             with self._db.transaction(lock=[self._calibs], savepoint=True):
-                # Run the check SELECT query.
-                with self._db.query(sql) as sql_result:
-                    conflicting = sql_result.scalar()
-                if conflicting > 0:
-                    raise ConflictingDefinitionError(
-                        f"{conflicting} validity range conflicts certifying datasets of type "
-                        f"{self.datasetType.name} into {collection.name} for range "
-                        f"[{timespan.begin}, {timespan.end})."
-                    )
+                # Enter SqlQueryContext in case we need to use a temporary
+                # table to include the give data IDs in the query.  Note that
+                # by doing this inside the transaction, we make sure it doesn't
+                # attempt to close the session when its done, since it just
+                # sees an already-open session that it knows it shouldn't
+                # manage.
+                with context:
+                    # Run the check SELECT query.
+                    conflicting = context.count(context.process(relation))
+                    if conflicting > 0:
+                        raise ConflictingDefinitionError(
+                            f"{conflicting} validity range conflicts certifying datasets of type "
+                            f"{self.datasetType.name} into {collection.name} for range "
+                            f"[{timespan.begin}, {timespan.end})."
+                        )
                 # Proceed with the insert.
                 self._db.insert(self._calibs, *rows)
 
@@ -249,6 +245,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         timespan: Timespan,
         *,
         dataIds: Iterable[DataCoordinate] | None = None,
+        context: SqlQueryContext,
     ) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if self._calibs is None:
@@ -263,14 +260,18 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
         TimespanReprClass = self._db.getTimespanRepresentation()
         # Construct a SELECT query to find all rows that overlap our inputs.
-        dataIdSet: DataCoordinateSet | None
+        dataIdSet: set[DataCoordinate] | None
         if dataIds is not None:
-            dataIdSet = DataCoordinateSet(set(dataIds), graph=self.datasetType.dimensions)
+            dataIdSet = set(dataIds)
         else:
             dataIdSet = None
-        query = self._buildCalibOverlapQuery(collection, dataIdSet, timespan)
-        query.columns.extend(self._calibs.columns)
-        sql = query.combine()
+        relation = self._buildCalibOverlapQuery(collection, dataIdSet, timespan, context)
+        calib_pkey_tag = DatasetColumnTag(self.datasetType.name, "calib_pkey")
+        dataset_id_tag = DatasetColumnTag(self.datasetType.name, "dataset_id")
+        timespan_tag = DatasetColumnTag(self.datasetType.name, "timespan")
+        data_id_tags = [
+            (name, DimensionKeyColumnTag(name)) for name in self.datasetType.dimensions.required.names
+        ]
         # Set up collections to populate with the rows we'll want to modify.
         # The insert rows will have the same values for collection and
         # dataset type.
@@ -283,22 +284,26 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Acquire a table lock to ensure there are no concurrent writes
         # between the SELECT and the DELETE and INSERT queries based on it.
         with self._db.transaction(lock=[self._calibs], savepoint=True):
-            with self._db.query(sql) as sql_result:
-                sql_rows = sql_result.mappings().fetchall()
-            for row in sql_rows:
-                rowsToDelete.append({"id": row["id"]})
-                # Construct the insert row(s) by copying the prototype row,
-                # then adding the dimension column values, then adding what's
-                # left of the timespan from that row after we subtract the
-                # given timespan.
-                newInsertRow = protoInsertRow.copy()
-                newInsertRow["dataset_id"] = row["dataset_id"]
-                for name in self.datasetType.dimensions.required.names:
-                    newInsertRow[name] = row[name]
-                rowTimespan = TimespanReprClass.extract(row)
-                assert rowTimespan is not None, "Field should have a NOT NULL constraint."
-                for diffTimespan in rowTimespan.difference(timespan):
-                    rowsToInsert.append(TimespanReprClass.update(diffTimespan, result=newInsertRow.copy()))
+            # Enter SqlQueryContext in case we need to use a temporary table to
+            # include the give data IDs in the query (see similar block in
+            # certify for details).
+            with context:
+                for row in context.fetch_iterable(relation):
+                    rowsToDelete.append({"id": row[calib_pkey_tag]})
+                    # Construct the insert row(s) by copying the prototype row,
+                    # then adding the dimension column values, then adding
+                    # what's left of the timespan from that row after we
+                    # subtract the given timespan.
+                    newInsertRow = protoInsertRow.copy()
+                    newInsertRow["dataset_id"] = row[dataset_id_tag]
+                    for name, tag in data_id_tags:
+                        newInsertRow[name] = row[tag]
+                    rowTimespan = row[timespan_tag]
+                    assert rowTimespan is not None, "Field should have a NOT NULL constraint."
+                    for diffTimespan in rowTimespan.difference(timespan):
+                        rowsToInsert.append(
+                            TimespanReprClass.update(diffTimespan, result=newInsertRow.copy())
+                        )
             # Run the DELETE and INSERT queries.
             self._db.delete(self._calibs, ["id"], *rowsToDelete)
             self._db.insert(self._calibs, *rowsToInsert)
@@ -359,6 +364,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 ],
                 context,
             )
+            assert "calib_pkey" not in columns, "For internal use only, and only for pure-calib queries."
         if CollectionType.CALIBRATION in collection_types:
             # If at least one collection is a CALIBRATION collection, we'll
             # need a subquery for the calibs table, and could include the
@@ -371,6 +377,14 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 calibs_parts.columns_available[
                     DatasetColumnTag(self.datasetType.name, "timespan")
                 ] = TimespanReprClass.from_columns(calibs_parts.from_clause.columns)
+            if "calib_pkey" in columns:
+                # This is a private extension not included in the base class
+                # interface, for internal use only in _buildCalibOverlapQuery,
+                # which needs access to the autoincrement primary key for the
+                # calib association table.
+                calibs_parts.columns_available[
+                    DatasetColumnTag(self.datasetType.name, "calib_pkey")
+                ] = calibs_parts.from_clause.columns.id
             calib_relation = self._finish_single_relation(
                 calibs_parts,
                 columns,

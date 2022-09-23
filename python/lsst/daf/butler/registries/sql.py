@@ -742,7 +742,12 @@ class SqlRegistry(Registry):
             DatasetRef.groupByType(refs).items(), desc="Certifying datasets by type"
         ):
             storage = self._managers.datasets[datasetType.name]
-            storage.certify(collectionRecord, refsForType, timespan)
+            storage.certify(
+                collectionRecord,
+                refsForType,
+                timespan,
+                context=queries.SqlQueryContext(self._db, self._managers.column_types),
+            )
 
     @transactional
     def decertify(
@@ -764,7 +769,12 @@ class SqlRegistry(Registry):
             standardizedDataIds = [
                 DataCoordinate.standardize(d, graph=storage.datasetType.dimensions) for d in dataIds
             ]
-        storage.decertify(collectionRecord, timespan, dataIds=standardizedDataIds)
+        storage.decertify(
+            collectionRecord,
+            timespan,
+            dataIds=standardizedDataIds,
+            context=queries.SqlQueryContext(self._db, self._managers.column_types),
+        )
 
     def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
         """Return an object that allows a new `Datastore` instance to
