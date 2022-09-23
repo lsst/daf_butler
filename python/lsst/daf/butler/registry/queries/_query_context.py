@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("QueryContext",)
 
 from abc import abstractmethod
-from collections.abc import Set
+from collections.abc import Iterable, Set
 from contextlib import AbstractContextManager
 from typing import Any
 
@@ -419,6 +419,30 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         return ColumnExpression.reference(tag, dtype=Timespan).predicate_method(
             "overlaps", ColumnExpression.literal(timespan)
         )
+
+    def make_data_id_relation(
+        self, data_ids: Set[DataCoordinate], dimension_names: Iterable[str]
+    ) -> Relation:
+        """Transform a set of data IDs into a relation.
+
+        Parameters
+        ---------
+        data_ids : `~collections.abc.Set` [ `DataCoordinate` ]
+            Data IDs to upload.  All must have at least the dimensions given,
+            but may have more.
+        dimension_names : `Iterable` [ `str` ]
+            Names of dimensions that will be the columns of the relation.
+
+        Returns
+        -------
+        relation : `Relation`
+            Relation in the iteration engine.
+        """
+        tags = DimensionKeyColumnTag.generate(dimension_names)
+        payload = iteration.RowSequence(
+            [{tag: data_id[tag.dimension] for tag in tags} for data_id in data_ids]
+        ).to_mapping(tags)
+        return self.iteration_engine.make_leaf(frozenset(tags), payload, name_prefix="upload")
 
 
 def regions_overlap(a: lsst.sphgeom.Region, b: lsst.sphgeom.Region) -> bool:
