@@ -22,7 +22,8 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Any, Dict, Iterable, Mapping, Optional, Set, Union
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 import sqlalchemy
 from lsst.utils import doImportType
@@ -61,7 +62,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def __init__(self, nested: DatabaseDimensionRecordStorage):
         self._nested = nested
-        self._cache: Dict[DataCoordinate, Optional[DimensionRecord]] = {}
+        self._cache: dict[DataCoordinate, DimensionRecord | None] = {}
 
     @classmethod
     def initialize(
@@ -69,7 +70,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         db: Database,
         element: DatabaseDimensionElement,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
@@ -95,8 +96,8 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self,
         builder: QueryBuilder,
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
+        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
+        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         return self._nested.join(builder, regions=regions, timespans=timespans)
@@ -114,7 +115,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
             else:
                 self._cache[record.dataId] = record
 
-    def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
+    def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         # Docstring inherited from DimensionRecordStorage.sync.
         inserted_or_updated = self._nested.sync(record, update=update)
         if inserted_or_updated:
@@ -123,7 +124,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
-        missing: Set[DataCoordinate] = set()
+        missing: set[DataCoordinate] = set()
         for dataId in dataIds:
             # Use ... as sentinal value so we can also cache None == "no such
             # record exists".

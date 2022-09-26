@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import itertools
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple
 
 import sqlalchemy
 
@@ -82,8 +81,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         db: Database,
         *,
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage],
-        overlaps: Dict[
-            Tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
+        overlaps: dict[
+            tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
         ],
         dimensionGraphStorage: _DimensionGraphStorage,
         universe: DimensionUniverse,
@@ -111,7 +110,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Next we initialize storage for DatabaseDimensionElements.
         # We remember the spatial ones (grouped by family) so we can go back
         # and initialize overlap storage for them later.
-        spatial = NamedKeyDict[DatabaseTopologicalFamily, List[DatabaseDimensionRecordStorage]]()
+        spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DatabaseDimensionRecordStorage]]()
         for element in universe.getDatabaseElements():
             elementStorage = element.makeStorage(db, context=context, governors=governors)
             records[element] = elementStorage
@@ -124,8 +123,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # and hence is not included here.
         from ..dimensions.overlaps import CrossFamilyDimensionOverlapStorage
 
-        overlaps: Dict[
-            Tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
+        overlaps: dict[
+            tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
         ] = {}
         for (family1, storages1), (family2, storages2) in itertools.combinations(spatial.items(), 2):
             for elementStoragePair in itertools.product(storages1, storages2):
@@ -159,7 +158,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             assert isinstance(storage, GovernorDimensionRecordStorage)
             storage.refresh()
 
-    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
+    def get(self, element: DimensionElement) -> DimensionRecordStorage | None:
         # Docstring inherited from DimensionRecordStorageManager.
         r = self._records.get(element)
         if r is None and isinstance(element, SkyPixDimension):
@@ -186,13 +185,13 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             storage.clearCaches()
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersion(cls) -> VersionTuple | None:
         # Docstring inherited from VersionedExtension.
         return _VERSION
 
-    def schemaDigest(self) -> Optional[str]:
+    def schemaDigest(self) -> str | None:
         # Docstring inherited from VersionedExtension.
-        tables: List[sqlalchemy.schema.Table] = []
+        tables: list[sqlalchemy.schema.Table] = []
         for recStorage in self._records.values():
             tables += recStorage.digestTables()
         for overlapStorage in self._overlaps.values():
@@ -230,8 +229,8 @@ class _DimensionGraphStorage:
         self._idTable = idTable
         self._definitionTable = definitionTable
         self._universe = universe
-        self._keysByGraph: Dict[DimensionGraph, int] = {universe.empty: 0}
-        self._graphsByKey: Dict[int, DimensionGraph] = {0: universe.empty}
+        self._keysByGraph: dict[DimensionGraph, int] = {universe.empty: 0}
+        self._graphsByKey: dict[int, DimensionGraph] = {0: universe.empty}
 
     @classmethod
     def initialize(
@@ -299,12 +298,12 @@ class _DimensionGraphStorage:
         This should be done automatically whenever needed, but it can also
         be called explicitly.
         """
-        dimensionNamesByKey: Dict[int, Set[str]] = defaultdict(set)
+        dimensionNamesByKey: dict[int, set[str]] = defaultdict(set)
         for row in self._db.query(self._definitionTable.select()).mappings():
             key = row[self._definitionTable.columns.dimension_graph_id]
             dimensionNamesByKey[key].add(row[self._definitionTable.columns.dimension_name])
-        keysByGraph: Dict[DimensionGraph, int] = {self._universe.empty: 0}
-        graphsByKey: Dict[int, DimensionGraph] = {0: self._universe.empty}
+        keysByGraph: dict[DimensionGraph, int] = {self._universe.empty: 0}
+        graphsByKey: dict[int, DimensionGraph] = {0: self._universe.empty}
         for key, dimensionNames in dimensionNamesByKey.items():
             graph = DimensionGraph(self._universe, names=dimensionNames)
             keysByGraph[graph] = key

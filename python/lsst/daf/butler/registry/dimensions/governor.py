@@ -22,7 +22,8 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
+from collections.abc import Callable, Iterable, Mapping, Set
+from typing import Any
 
 import sqlalchemy
 
@@ -57,8 +58,8 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         self._db = db
         self._dimension = dimension
         self._table = table
-        self._cache: Dict[str, DimensionRecord] = {}
-        self._callbacks: List[Callable[[DimensionRecord], None]] = []
+        self._cache: dict[str, DimensionRecord] = {}
+        self._callbacks: list[Callable[[DimensionRecord], None]] = []
 
     @classmethod
     def initialize(
@@ -66,7 +67,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         db: Database,
         element: GovernorDimension,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
     ) -> GovernorDimensionRecordStorage:
         # Docstring inherited from GovernorDimensionRecordStorage.
@@ -90,14 +91,14 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         sql = sqlalchemy.sql.select(
             *[self._table.columns[name] for name in RecordClass.fields.standard.names]
         ).select_from(self._table)
-        cache: Dict[str, DimensionRecord] = {}
+        cache: dict[str, DimensionRecord] = {}
         for row in self._db.query(sql):
             record = RecordClass(**row._asdict())
             cache[getattr(record, self._dimension.primaryKey.name)] = record
         self._cache = cache
 
     @property
-    def values(self) -> AbstractSet[str]:
+    def values(self) -> Set[str]:
         # Docstring inherited from GovernorDimensionRecordStorage.
         return self._cache.keys()
 
@@ -117,8 +118,8 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         self,
         builder: QueryBuilder,
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
+        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
+        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         joinOn = builder.startJoin(
@@ -149,7 +150,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             for callback in self._callbacks:
                 callback(record)
 
-    def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
+    def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         # Docstring inherited from DimensionRecordStorage.sync.
         compared = record.toDict()
         keys = {}

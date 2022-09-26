@@ -25,7 +25,8 @@ __all__ = ()
 import itertools
 from abc import abstractmethod
 from collections import namedtuple
-from typing import TYPE_CHECKING, Any, Dict, Generic, Iterable, Iterator, Optional, Tuple, Type, TypeVar
+from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 import sqlalchemy
 
@@ -71,7 +72,7 @@ CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run"
 
 
 def makeRunTableSpec(
-    collectionIdName: str, collectionIdType: type, TimespanReprClass: Type[TimespanDatabaseRepresentation]
+    collectionIdName: str, collectionIdType: type, TimespanReprClass: type[TimespanDatabaseRepresentation]
 ) -> ddl.TableSpec:
     """Define specification for "run" table.
 
@@ -182,8 +183,8 @@ class DefaultRunRecord(RunRecord):
         *,
         table: sqlalchemy.schema.Table,
         idColumnName: str,
-        host: Optional[str] = None,
-        timespan: Optional[Timespan] = None,
+        host: str | None = None,
+        timespan: Timespan | None = None,
     ):
         super().__init__(key=key, name=name, type=CollectionType.RUN)
         self._db = db
@@ -194,7 +195,7 @@ class DefaultRunRecord(RunRecord):
         self._timespan = timespan
         self._idName = idColumnName
 
-    def update(self, host: Optional[str] = None, timespan: Optional[Timespan] = None) -> None:
+    def update(self, host: str | None = None, timespan: Timespan | None = None) -> None:
         # Docstring inherited from RunRecord.
         if timespan is None:
             timespan = Timespan(begin=None, end=None)
@@ -210,7 +211,7 @@ class DefaultRunRecord(RunRecord):
         self._timespan = timespan
 
     @property
-    def host(self) -> Optional[str]:
+    def host(self) -> str | None:
         # Docstring inherited from RunRecord.
         return self._host
 
@@ -327,7 +328,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         self._db = db
         self._tables = tables
         self._collectionIdName = collectionIdName
-        self._records: Dict[K, CollectionRecord] = {}  # indexed by record ID
+        self._records: dict[K, CollectionRecord] = {}  # indexed by record ID
         self._dimensions = dimensions
 
     def refresh(self) -> None:
@@ -383,8 +384,8 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                 self._removeCachedRecord(chain)
 
     def register(
-        self, name: str, type: CollectionType, doc: Optional[str] = None
-    ) -> Tuple[CollectionRecord, bool]:
+        self, name: str, type: CollectionType, doc: str | None = None
+    ) -> tuple[CollectionRecord, bool]:
         # Docstring inherited from CollectionManager.
         registered = False
         record = self._getByName(name)
@@ -458,7 +459,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
     def __iter__(self) -> Iterator[CollectionRecord]:
         yield from self._records.values()
 
-    def getDocumentation(self, key: Any) -> Optional[str]:
+    def getDocumentation(self, key: Any) -> str | None:
         # Docstring inherited from CollectionManager.
         sql = (
             sqlalchemy.sql.select(self._tables.collection.columns.doc)
@@ -467,7 +468,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         )
         return self._db.query(sql).scalar()
 
-    def setDocumentation(self, key: Any, doc: Optional[str]) -> None:
+    def setDocumentation(self, key: Any, doc: str | None) -> None:
         # Docstring inherited from CollectionManager.
         self._db.update(self._tables.collection, {self._collectionIdName: "key"}, {"key": key, "doc": doc})
 
@@ -488,6 +489,6 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         del self._records[record.key]
 
     @abstractmethod
-    def _getByName(self, name: str) -> Optional[CollectionRecord]:
+    def _getByName(self, name: str) -> CollectionRecord | None:
         """Find collection record given collection name."""
         raise NotImplementedError()

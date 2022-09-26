@@ -29,7 +29,8 @@ __all__ = [
 
 from abc import abstractmethod
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, DefaultDict, Iterator, Optional, Set, Tuple
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 from ...core import DimensionUniverse, Timespan, ddl
 from .._collectionType import CollectionType
@@ -107,7 +108,7 @@ class RunRecord(CollectionRecord):
     """
 
     @abstractmethod
-    def update(self, host: Optional[str] = None, timespan: Optional[Timespan] = None) -> None:
+    def update(self, host: str | None = None, timespan: Timespan | None = None) -> None:
         """Update the database record for this run with new execution
         information.
 
@@ -128,7 +129,7 @@ class RunRecord(CollectionRecord):
 
     @property
     @abstractmethod
-    def host(self) -> Optional[str]:
+    def host(self) -> str | None:
         """Return the name of the host or system on which this run was
         produced (`str` or `None`).
         """
@@ -300,7 +301,7 @@ class CollectionManager(VersionedExtension):
     """
 
     def __init__(self) -> None:
-        self._parents_by_child: DefaultDict[Any, Set[Any]] = defaultdict(set)
+        self._parents_by_child: defaultdict[Any, set[Any]] = defaultdict(set)
 
     @classmethod
     @abstractmethod
@@ -334,7 +335,7 @@ class CollectionManager(VersionedExtension):
         tableSpec: ddl.TableSpec,
         *,
         prefix: str = "collection",
-        onDelete: Optional[str] = None,
+        onDelete: str | None = None,
         constraint: bool = True,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
@@ -376,7 +377,7 @@ class CollectionManager(VersionedExtension):
         tableSpec: ddl.TableSpec,
         *,
         prefix: str = "run",
-        onDelete: Optional[str] = None,
+        onDelete: str | None = None,
         constraint: bool = True,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
@@ -458,8 +459,8 @@ class CollectionManager(VersionedExtension):
 
     @abstractmethod
     def register(
-        self, name: str, type: CollectionType, doc: Optional[str] = None
-    ) -> Tuple[CollectionRecord, bool]:
+        self, name: str, type: CollectionType, doc: str | None = None
+    ) -> tuple[CollectionRecord, bool]:
         """Ensure that a collection of the given name and type are present
         in the layer this manager is associated with.
 
@@ -595,7 +596,7 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDocumentation(self, key: Any) -> Optional[str]:
+    def getDocumentation(self, key: Any) -> str | None:
         """Retrieve the documentation string for a collection.
 
         Parameters
@@ -611,7 +612,7 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def setDocumentation(self, key: Any, doc: Optional[str]) -> None:
+    def setDocumentation(self, key: Any, doc: str | None) -> None:
         """Set the documentation string for a collection.
 
         Parameters

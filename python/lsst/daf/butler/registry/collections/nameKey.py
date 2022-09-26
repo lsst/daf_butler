@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["NameKeyCollectionManager"]
 
-from typing import TYPE_CHECKING, Any, Optional, Type
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
@@ -46,7 +46,7 @@ _KEY_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, prim
 _VERSION = VersionTuple(2, 0, 0)
 
 
-def _makeTableSpecs(TimespanReprClass: Type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
+def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
     return CollectionTablesTuple(
         collection=ddl.TableSpec(
             fields=[
@@ -102,7 +102,7 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         tableSpec: ddl.TableSpec,
         *,
         prefix: str = "collection",
-        onDelete: Optional[str] = None,
+        onDelete: str | None = None,
         constraint: bool = True,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
@@ -126,7 +126,7 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         tableSpec: ddl.TableSpec,
         *,
         prefix: str = "run",
-        onDelete: Optional[str] = None,
+        onDelete: str | None = None,
         constraint: bool = True,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
@@ -142,15 +142,15 @@ class NameKeyCollectionManager(DefaultCollectionManager):
             )
         return copy
 
-    def _getByName(self, name: str) -> Optional[CollectionRecord]:
+    def _getByName(self, name: str) -> CollectionRecord | None:
         # Docstring inherited from DefaultCollectionManager.
         return self._records.get(name)
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersion(cls) -> VersionTuple | None:
         # Docstring inherited from VersionedExtension.
         return _VERSION
 
-    def schemaDigest(self) -> Optional[str]:
+    def schemaDigest(self) -> str | None:
         # Docstring inherited from VersionedExtension.
         return self._defaultSchemaDigest(self._tables, self._db.dialect)

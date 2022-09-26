@@ -22,7 +22,8 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import AbstractSet, Any, Iterable, List, Optional
+from collections.abc import Iterable, Set
+from typing import Any
 
 import sqlalchemy.sql
 
@@ -33,7 +34,8 @@ from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, DatasetRecordStorage, GovernorDimensionRecordStorage
 from ..wildcards import CollectionQuery, CollectionSearch
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
-from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
+from ._query_backend import QueryBackend
+from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
 from .expressions import convertExpressionToSql
 
 
@@ -45,21 +47,25 @@ class QueryBuilder:
     ----------
     summary : `QuerySummary`
         Struct organizing the dimensions involved in the query.
-    managers : `RegistryManagers`
-        A struct containing the registry manager instances used by the query
-        system.
+    backend : `QueryBackend`
+        Backend object that represents the `Registry` implementation.
     doomed_by : `Iterable` [ `str` ], optional
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
         executed.  Queries with a non-empty list will never be executed.
     """
 
-    def __init__(self, summary: QuerySummary, managers: RegistryManagers, doomed_by: Iterable[str] = ()):
+    def __init__(
+        self,
+        summary: QuerySummary,
+        backend: QueryBackend,
+        doomed_by: Iterable[str] = (),
+    ):
         self.summary = summary
+        self._backend = backend
         self._simpleQuery = SimpleQuery()
         self._elements: NamedKeyDict[DimensionElement, sqlalchemy.sql.FromClause] = NamedKeyDict()
         self._columns = QueryColumns()
-        self._managers = managers
         self._doomed_by = list(doomed_by)
 
         self._validateGovernors()
@@ -77,7 +83,7 @@ class QueryBuilder:
             Raised when governor dimension values are not found.
         """
         for dimension, bounds in self.summary.where.governor_constraints.items():
-            storage = self._managers.dimensions[self.summary.requested.universe[dimension]]
+            storage = self._backend.managers.dimensions[self._backend.universe[dimension]]
             if isinstance(storage, GovernorDimensionRecordStorage):
                 if not (storage.values >= bounds):
                     raise DataIdValueError(
@@ -110,7 +116,7 @@ class QueryBuilder:
             associated with a database table (see `DimensionElement.hasTable`).
         """
         assert element not in self._elements, "Element already included in query."
-        storage = self._managers.dimensions[element]
+        storage = self._backend.managers.dimensions[element]
         fromClause = storage.join(
             self,
             regions=self._columns.regions if element in self.summary.spatial else None,
@@ -170,12 +176,12 @@ class QueryBuilder:
         explicitCollections = frozenset(collections.explicitNames())
         # If we are searching all collections with no constraints, loop over
         # RUN collections only, because that will include all datasets.
-        collectionTypes: AbstractSet[CollectionType]
+        collectionTypes: Set[CollectionType]
         if collections == CollectionQuery():
             collectionTypes = {CollectionType.RUN}
         else:
             collectionTypes = CollectionType.all()
-        datasetRecordStorage = self._managers.datasets.find(datasetType.name)
+        datasetRecordStorage = self._backend.managers.datasets.find(datasetType.name)
         if datasetRecordStorage is None:
             # Unrecognized dataset type means no results.  It might be better
             # to raise here, but this is consistent with previous behavior,
@@ -185,13 +191,15 @@ class QueryBuilder:
                 "any collection."
             )
             return False
-        collectionRecords: List[CollectionRecord] = []
-        rejections: List[str] = []
-        for collectionRecord in collections.iter(self._managers.collections, collectionTypes=collectionTypes):
+        collectionRecords: list[CollectionRecord] = []
+        rejections: list[str] = []
+        for collectionRecord in collections.iter(
+            self._backend.managers.collections, collectionTypes=collectionTypes
+        ):
             # Only include collections that (according to collection summaries)
             # might have datasets of this type and governor dimensions
             # consistent with the query's WHERE clause.
-            collection_summary = self._managers.datasets.getCollectionSummary(collectionRecord)
+            collection_summary = self._backend.managers.datasets.getCollectionSummary(collectionRecord)
             if not collection_summary.is_compatible_with(
                 datasetType,
                 self.summary.where.governor_constraints,
@@ -260,7 +268,7 @@ class QueryBuilder:
             columns = DatasetQueryColumns(
                 datasetType=datasetType,
                 id=subquery.columns["id"],
-                runKey=subquery.columns[self._managers.collections.getRunForeignKeyName()],
+                runKey=subquery.columns[self._backend.managers.collections.getRunForeignKeyName()],
                 ingestDate=subquery.columns["ingest_date"],
             )
         else:
@@ -276,7 +284,7 @@ class QueryBuilder:
         return not self._doomed_by
 
     def _build_dataset_constraint_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+        self, storage: DatasetRecordStorage, collections: list[CollectionRecord]
     ) -> sqlalchemy.sql.FromClause:
         """Internal helper method to build a dataset subquery for a parent
         query that does not return dataset results.
@@ -313,7 +321,7 @@ class QueryBuilder:
         ).alias(storage.datasetType.name)
 
     def _build_dataset_query_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+        self, storage: DatasetRecordStorage, collections: list[CollectionRecord]
     ) -> sqlalchemy.sql.FromClause:
         """Internal helper method to build a dataset subquery for a parent
         query that returns all matching dataset results.
@@ -347,7 +355,7 @@ class QueryBuilder:
         return sql
 
     def _build_dataset_search_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+        self, storage: DatasetRecordStorage, collections: list[CollectionRecord]
     ) -> sqlalchemy.sql.FromClause:
         """Internal helper method to build a dataset subquery for a parent
         query that returns the first matching dataset for each data ID and
@@ -418,7 +426,7 @@ class QueryBuilder:
         # Now we fill out the SELECT from the CTE, and the subquery it contains
         # (at the same time, since they have the same columns, aside from the
         # OVER clause).
-        run_key_name = self._managers.collections.getRunForeignKeyName()
+        run_key_name = self._backend.managers.collections.getRunForeignKeyName()
         window_data_id_cols = [
             search.columns[name].label(name) for name in storage.datasetType.dimensions.required.names
         ]
@@ -451,7 +459,7 @@ class QueryBuilder:
         table: sqlalchemy.sql.FromClause,
         dimensions: NamedValueAbstractSet[Dimension],
         *,
-        datasets: Optional[DatasetQueryColumns] = None,
+        datasets: DatasetQueryColumns | None = None,
     ) -> None:
         """Join an arbitrary table to the query via dimension relationships.
 
@@ -471,7 +479,7 @@ class QueryBuilder:
             Columns that identify a dataset that is part of the query results.
         """
         unexpectedDimensions = NamedValueSet(dimensions - self.summary.mustHaveKeysJoined.dimensions)
-        unexpectedDimensions.discard(self.summary.universe.commonSkyPix)
+        unexpectedDimensions.discard(self._backend.universe.commonSkyPix)
         if unexpectedDimensions:
             raise NotImplementedError(
                 f"QueryBuilder does not yet support joining in dimensions {unexpectedDimensions} that "
@@ -487,7 +495,7 @@ class QueryBuilder:
 
     def startJoin(
         self, table: sqlalchemy.sql.FromClause, dimensions: Iterable[Dimension], columnNames: Iterable[str]
-    ) -> List[sqlalchemy.sql.ColumnElement]:
+    ) -> list[sqlalchemy.sql.ColumnElement]:
         """Begin a join on dimensions.
 
         Must be followed by call to `finishJoin`.
@@ -521,7 +529,7 @@ class QueryBuilder:
         return joinOn
 
     def finishJoin(
-        self, table: sqlalchemy.sql.FromClause, joinOn: List[sqlalchemy.sql.ColumnElement]
+        self, table: sqlalchemy.sql.FromClause, joinOn: list[sqlalchemy.sql.ColumnElement]
     ) -> None:
         """Complete a join on dimensions.
 
@@ -538,7 +546,7 @@ class QueryBuilder:
             to form (part of) the ON expression for this JOIN.  Should include
             at least the elements of the list returned by `startJoin`.
         """
-        onclause: Optional[sqlalchemy.sql.ColumnElement]
+        onclause: sqlalchemy.sql.ColumnElement | None
         if len(joinOn) == 0:
             onclause = None
         elif len(joinOn) == 1:
@@ -561,11 +569,11 @@ class QueryBuilder:
         # the primary key value for the "instrument" table it depends on, so we
         # don't need to join "instrument" as well unless we had a nontrivial
         # expression on it (and hence included it already above).
-        for element in self.summary.universe.sorted(self.summary.mustHaveTableJoined, reverse=True):
+        for element in self._backend.universe.sorted(self.summary.mustHaveTableJoined, reverse=True):
             self.joinDimensionElement(element)
         # Join in any requested Dimension tables that don't already have their
         # primary keys identified by the query.
-        for dimension in self.summary.universe.sorted(self.summary.mustHaveKeysJoined, reverse=True):
+        for dimension in self._backend.universe.sorted(self.summary.mustHaveKeysJoined, reverse=True):
             if dimension not in self._columns.keys:
                 self.joinDimensionElement(dimension)
 
@@ -581,11 +589,11 @@ class QueryBuilder:
             self._simpleQuery.where.append(
                 convertExpressionToSql(
                     self.summary.where.tree,
-                    self.summary.universe,
+                    self._backend.universe,
                     columns=self._columns,
                     elements=self._elements,
                     bind=self.summary.where.bind,
-                    TimespanReprClass=self._managers.TimespanReprClass,
+                    TimespanReprClass=self._backend.managers.column_types.timespan_cls,
                 )
             )
         for dimension, columnsInQuery in self._columns.keys.items():
@@ -602,7 +610,7 @@ class QueryBuilder:
                 # dimension that's constrained by a given region.
                 if self.summary.where.region is not None and isinstance(dimension, SkyPixDimension):
                     # We know the region now.
-                    givenSkyPixIds: List[int] = []
+                    givenSkyPixIds: list[int] = []
                     for begin, end in dimension.pixelization.envelope(self.summary.where.region):
                         givenSkyPixIds.extend(range(begin, end))
                     for columnInQuery in columnsInQuery:
@@ -617,7 +625,9 @@ class QueryBuilder:
             for element, intervalInQuery in self._columns.timespans.items():
                 assert element not in self.summary.where.dataId.graph.elements
                 self._simpleQuery.where.append(
-                    intervalInQuery.overlaps(self._managers.TimespanReprClass.fromLiteral(givenInterval))
+                    intervalInQuery.overlaps(
+                        self._backend.managers.column_types.timespan_cls.fromLiteral(givenInterval)
+                    )
                 )
 
     def finish(self, joinMissing: bool = True) -> Query:
@@ -644,7 +654,9 @@ class QueryBuilder:
         self._addWhereClause()
         if self._columns.isEmpty():
             return EmptyQuery(
-                self.summary.requested.universe, managers=self._managers, doomed_by=self._doomed_by
+                self._backend.universe,
+                backend=self._backend,
+                doomed_by=self._doomed_by,
             )
         return DirectQuery(
             graph=self.summary.requested,
@@ -654,7 +666,7 @@ class QueryBuilder:
             columns=self._columns,
             order_by_columns=self._order_by_columns(),
             limit=self.summary.limit,
-            managers=self._managers,
+            backend=self._backend,
             doomed_by=self._doomed_by,
         )
 
@@ -666,7 +678,7 @@ class QueryBuilder:
         order_by_columns : `Iterable` [ `ColumnIterable` ]
             Sequence of columns to appear in ORDER BY clause.
         """
-        order_by_columns: List[OrderByColumn] = []
+        order_by_columns: list[OrderByColumn] = []
         if not self.summary.order_by:
             return order_by_columns
 
@@ -682,7 +694,7 @@ class QueryBuilder:
                 table = self._elements[order_by_column.element]
 
                 if order_by_column.column in ("timespan.begin", "timespan.end"):
-                    TimespanReprClass = self._managers.TimespanReprClass
+                    TimespanReprClass = self._backend.managers.column_types.timespan_cls
                     timespan_repr = TimespanReprClass.from_columns(table.columns)
                     if order_by_column.column == "timespan.begin":
                         column = timespan_repr.lower()

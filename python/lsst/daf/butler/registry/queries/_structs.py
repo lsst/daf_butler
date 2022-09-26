@@ -20,10 +20,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
+__all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
+from collections.abc import Iterable, Iterator, Mapping, Set
 from dataclasses import dataclass
-from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union, cast
+from typing import Any, cast
 
 from lsst.sphgeom import Region
 from lsst.utils.classes import cached_getter, immutable
@@ -44,7 +45,6 @@ from ...core import (
     TimespanDatabaseRepresentation,
 )
 from .._exceptions import UserExpressionSyntaxError
-from ..interfaces import CollectionManager, DatasetRecordStorageManager, DimensionRecordStorageManager
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
@@ -66,7 +66,7 @@ class QueryWhereExpression:
         query expression, keyed by the identifiers they replace.
     """
 
-    def __init__(self, expression: Optional[str] = None, bind: Optional[Mapping[str, Any]] = None):
+    def __init__(self, expression: str | None = None, bind: Mapping[str, Any] | None = None):
         if expression:
             try:
                 parser = ParserYacc()
@@ -83,9 +83,9 @@ class QueryWhereExpression:
     def attach(
         self,
         graph: DimensionGraph,
-        dataId: Optional[DataCoordinate] = None,
-        region: Optional[Region] = None,
-        defaults: Optional[DataCoordinate] = None,
+        dataId: DataCoordinate | None = None,
+        region: Region | None = None,
+        defaults: DataCoordinate | None = None,
         check: bool = True,
     ) -> QueryWhereClause:
         """Allow this expression to be attached to a `QuerySummary` by
@@ -100,10 +100,10 @@ class QueryWhereExpression:
         dataId : `DataCoordinate`, optional
             A fully-expanded data ID identifying dimensions known in advance.
             If not provided, will be set to an empty data ID.
-            ``dataId.hasRecords()`` must return `True`.
         region : `lsst.sphgeom.Region`, optional
-            A spatial region that all rows must overlap.  If `None` and
-            ``dataId`` is not `None`, ``dataId.region`` will be used.
+            A spatial constraint that all rows must overlap.  If `None` and
+            ``dataId`` is an expanded data ID, ``dataId.region`` will be used
+            to construct one.
         defaults : `DataCoordinate`, optional
             A data ID containing default for governor dimensions.  Ignored
             unless ``check=True``.
@@ -113,8 +113,9 @@ class QueryWhereExpression:
             reject some valid queries that resemble common mistakes (e.g.
             queries for visits without specifying an instrument).
         """
-        if region is None and dataId is not None:
-            region = dataId.region
+        if dataId is not None and dataId.hasRecords():
+            if region is None and dataId.region is not None:
+                region = dataId.region
         if dataId is None:
             dataId = DataCoordinate.makeEmpty(graph.universe)
         if defaults is None:
@@ -128,7 +129,7 @@ class QueryWhereExpression:
                 table, sep, column = identifier.partition(".")
                 if column and table in graph.universe.getStaticElements().names:
                     raise RuntimeError(f"Bind parameter key {identifier!r} looks like a dimension column.")
-        governor_constraints: dict[str, AbstractSet[str]] = {}
+        governor_constraints: dict[str, Set[str]] = {}
         summary: InspectionSummary
         if self._tree is not None:
             if check:
@@ -160,7 +161,7 @@ class QueryWhereExpression:
                     raise RuntimeError(msg) from None
                 for dimension_name, values in summary.dimension_constraints.items():
                     if dimension_name in graph.universe.getGovernorDimensions().names:
-                        governor_constraints[dimension_name] = cast(AbstractSet[str], values)
+                        governor_constraints[dimension_name] = cast(Set[str], values)
                 dataId = visitor.dataId
             else:
                 from .expressions import InspectionVisitor
@@ -190,7 +191,7 @@ class QueryWhereClause:
     attributes.
     """
 
-    tree: Optional[Node]
+    tree: Node | None
     """A parsed string expression tree., or `None` if there was no string
     expression.
     """
@@ -207,7 +208,7 @@ class QueryWhereClause:
     in the string expression (`NamedValueAbstractSet` [ `Dimension` ]).
     """
 
-    columns: NamedKeyMapping[DimensionElement, AbstractSet[str]]
+    columns: NamedKeyMapping[DimensionElement, Set[str]]
     """Dimension element tables whose non-key columns were referenced anywhere
     in the string expression
     (`NamedKeyMapping` [ `DimensionElement`, `Set` [ `str` ] ]).
@@ -218,12 +219,12 @@ class QueryWhereClause:
     query expression, keyed by the identifiers they replace (`Mapping`).
     """
 
-    region: Optional[Region]
+    region: Region | None
     """A spatial region that all result rows must overlap
     (`lsst.sphgeom.Region` or `None`).
     """
 
-    governor_constraints: Mapping[str, AbstractSet[str]]
+    governor_constraints: Mapping[str, Set[str]]
     """Restrictions on the values governor dimensions can take in this query,
     imposed by the string expression and/or data ID
     (`Mapping` [ `set`,  `~collections.abc.Set` [ `str` ] ]).
@@ -249,7 +250,7 @@ class OrderByClauseColumn:
     element: DimensionElement
     """Dimension element for data in this column (`DimensionElement`)."""
 
-    column: Optional[str]
+    column: str | None
     """Name of the column or `None` for primary key (`str` or `None`)"""
 
     ordering: bool
@@ -346,13 +347,12 @@ class QuerySummary:
         of the query.
     dataId : `DataCoordinate`, optional
         A fully-expanded data ID identifying dimensions known in advance.  If
-        not provided, will be set to an empty data ID.  ``dataId.hasRecords()``
-        must return `True`.
+        not provided, will be set to an empty data ID.
     expression : `str` or `QueryWhereExpression`, optional
         A user-provided string WHERE expression.
     whereRegion : `lsst.sphgeom.Region`, optional
-        A spatial region that all rows must overlap.  If `None` and ``dataId``
-        is not `None`, ``dataId.region`` will be used.
+        If `None` and ``dataId`` is an expanded data ID, ``dataId.region`` will
+        be used to construct one.
     bind : `Mapping` [ `str`, `object` ], optional
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
@@ -378,14 +378,14 @@ class QuerySummary:
         self,
         requested: DimensionGraph,
         *,
-        dataId: Optional[DataCoordinate] = None,
-        expression: Optional[Union[str, QueryWhereExpression]] = None,
-        whereRegion: Optional[Region] = None,
-        bind: Optional[Mapping[str, Any]] = None,
-        defaults: Optional[DataCoordinate] = None,
+        dataId: DataCoordinate | None = None,
+        expression: str | QueryWhereExpression | None = None,
+        whereRegion: Region | None = None,
+        bind: Mapping[str, Any] | None = None,
+        defaults: DataCoordinate | None = None,
         datasets: Iterable[DatasetType] = (),
-        order_by: Optional[Iterable[str]] = None,
-        limit: Optional[Tuple[int, Optional[int]]] = None,
+        order_by: Iterable[str] | None = None,
+        limit: tuple[int, int | None] | None = None,
         check: bool = True,
     ):
         self.requested = requested
@@ -523,7 +523,7 @@ class DatasetQueryColumns:
     this dataset.
     """
 
-    ingestDate: Optional[ColumnElement]
+    ingestDate: ColumnElement | None
     """Column containing the ingest timestamp, this is not a part of
     `DatasetRef` but it comes from the same table.
     """
@@ -548,7 +548,7 @@ class QueryColumns:
         self.regions = NamedKeyDict()
         self.datasets = None
 
-    keys: NamedKeyDict[Dimension, List[ColumnElement]]
+    keys: NamedKeyDict[Dimension, list[ColumnElement]]
     """Columns that correspond to the primary key values of dimensions
     (`NamedKeyDict` mapping `Dimension` to a `list` of `ColumnElement`).
 
@@ -578,7 +578,7 @@ class QueryColumns:
     in `QuerySummary.spatial`.
     """
 
-    datasets: Optional[DatasetQueryColumns]
+    datasets: DatasetQueryColumns | None
     """Columns that can be used to construct `DatasetRef` instances from query
     results.
     (`DatasetQueryColumns` or `None`).
@@ -588,7 +588,7 @@ class QueryColumns:
         """Return `True` if this query has no columns at all."""
         return not (self.keys or self.timespans or self.regions or self.datasets is not None)
 
-    def getKeyColumn(self, dimension: Union[Dimension, str]) -> ColumnElement:
+    def getKeyColumn(self, dimension: Dimension | str) -> ColumnElement:
         """Return one of the columns in self.keys for the given dimension.
 
         The column selected is an implentation detail but is guaranteed to
@@ -612,27 +612,3 @@ class QueryColumns:
         # database's perspective this is entirely arbitrary, because the query
         # guarantees they all have equal values.
         return self.keys[dimension][-1]
-
-
-@dataclass
-class RegistryManagers:
-    """Struct used to pass around the manager objects that back a `Registry`
-    and are used internally by the query system.
-    """
-
-    collections: CollectionManager
-    """Manager for collections (`CollectionManager`).
-    """
-
-    datasets: DatasetRecordStorageManager
-    """Manager for datasets and dataset types (`DatasetRecordStorageManager`).
-    """
-
-    dimensions: DimensionRecordStorageManager
-    """Manager for dimensions (`DimensionRecordStorageManager`).
-    """
-
-    TimespanReprClass: Type[TimespanDatabaseRepresentation]
-    """Type that encapsulates how timespans are represented in this database
-    (`type`; subclass of `TimespanDatabaseRepresentation`).
-    """

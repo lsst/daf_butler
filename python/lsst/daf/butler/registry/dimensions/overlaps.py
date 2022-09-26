@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("CrossFamilyDimensionOverlapStorage",)
 
 import logging
-from typing import Iterable, Optional, Tuple
+from collections.abc import Iterable
 
 import sqlalchemy
 
@@ -71,8 +71,8 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
     def __init__(
         self,
         db: Database,
-        elementStorage: Tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
-        governorStorage: Tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
+        elementStorage: tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
+        governorStorage: tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
         summaryTable: sqlalchemy.schema.Table,
         overlapTable: sqlalchemy.schema.Table,
     ):
@@ -86,9 +86,9 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
     def initialize(
         cls,
         db: Database,
-        elementStorage: Tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
-        governorStorage: Tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
-        context: Optional[StaticTablesContext] = None,
+        elementStorage: tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
+        governorStorage: tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
+        context: StaticTablesContext | None = None,
     ) -> DatabaseDimensionOverlapStorage:
         # Docstring inherited from DatabaseDimensionOverlapStorage.
         if context is not None:
@@ -113,7 +113,7 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
         )
 
     @property
-    def elements(self) -> Tuple[DatabaseDimensionElement, DatabaseDimensionElement]:
+    def elements(self) -> tuple[DatabaseDimensionElement, DatabaseDimensionElement]:
         # Docstring inherited from DatabaseDimensionOverlapStorage.
         return (self._elementStorage[0].element, self._elementStorage[1].element)
 
@@ -125,7 +125,7 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
 
     @classmethod
     def _makeSummaryTableSpec(
-        cls, elements: Tuple[DatabaseDimensionElement, DatabaseDimensionElement]
+        cls, elements: tuple[DatabaseDimensionElement, DatabaseDimensionElement]
     ) -> ddl.TableSpec:
         """Create a specification for the table that records which combinations
         of skypix dimension and governor value have materialized overlaps.
@@ -151,7 +151,7 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
 
     @classmethod
     def _makeOverlapTableSpec(
-        cls, elements: Tuple[DatabaseDimensionElement, DatabaseDimensionElement]
+        cls, elements: tuple[DatabaseDimensionElement, DatabaseDimensionElement]
     ) -> ddl.TableSpec:
         """Create a specification for the table that holds materialized
         overlap rows.

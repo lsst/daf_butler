@@ -398,7 +398,7 @@ class SimpleButlerTestCase(unittest.TestCase):
             ({"x": "y"}, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}),
         )
         for dataId, kwds in variants:
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, LookupError)):
                 butler.get("flat", dataId=dataId, collections=coll, **kwds)
 
     def testGetCalibration(self):

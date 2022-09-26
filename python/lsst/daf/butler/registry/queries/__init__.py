@@ -21,7 +21,9 @@
 
 from ._builder import *
 from ._query import *
+from ._query_backend import *
 from ._results import *
+from ._sql_query_backend import *
 from ._structs import *
 
 # Symbols from other modules intentionally not lifted to package scope,
