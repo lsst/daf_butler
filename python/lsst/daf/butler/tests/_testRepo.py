@@ -44,6 +44,7 @@ from lsst.daf.butler import (
     Dimension,
     DimensionUniverse,
     FileDataset,
+    StorageClass,
 )
 
 
@@ -556,7 +557,9 @@ class DatastoreMock:
 
     @staticmethod
     def _mock_get(
-        ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
+        ref: DatasetRef,
+        parameters: Optional[Mapping[str, Any]] = None,
+        readStorageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Tuple[int, Optional[Mapping[str, Any]]]:
         """A mock of `Datastore.get` that just returns the integer dataset ID
         value and parameters it was given.

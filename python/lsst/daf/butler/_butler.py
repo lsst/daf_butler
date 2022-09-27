@@ -84,6 +84,7 @@ from .core import (
     DimensionUniverse,
     FileDataset,
     Progress,
+    StorageClass,
     StorageClassFactory,
     Timespan,
     ValidationError,
@@ -1229,7 +1230,13 @@ class Butler(LimitedButler):
 
         return ref
 
-    def getDirect(self, ref: DatasetRef, *, parameters: Optional[Dict[str, Any]] = None) -> Any:
+    def getDirect(
+        self,
+        ref: DatasetRef,
+        *,
+        parameters: Optional[Dict[str, Any]] = None,
+        readStorageClass: Optional[Union[StorageClass, str]] = None,
+    ) -> Any:
         """Retrieve a stored dataset.
 
         Unlike `Butler.get`, this method allows datasets outside the Butler's
@@ -1249,7 +1256,7 @@ class Butler(LimitedButler):
         obj : `object`
             The dataset.
         """
-        return self.datastore.get(ref, parameters=parameters)
+        return self.datastore.get(ref, parameters=parameters, readStorageClass=readStorageClass)
 
     def getDirectDeferred(
         self, ref: DatasetRef, *, parameters: Union[dict, None] = None
@@ -1339,6 +1346,7 @@ class Butler(LimitedButler):
         *,
         parameters: Optional[Dict[str, Any]] = None,
         collections: Any = None,
+        readStorageClass: Optional[Union[StorageClass, str]] = None,
         **kwargs: Any,
     ) -> Any:
         """Retrieve a stored dataset.
@@ -1359,6 +1367,12 @@ class Butler(LimitedButler):
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
             to butler construction.
+        readStorageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -1391,7 +1405,7 @@ class Butler(LimitedButler):
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self.getDirect(ref, parameters=parameters)
+        return self.getDirect(ref, parameters=parameters, readStorageClass=readStorageClass)
 
     def getURIs(
         self,

@@ -1921,7 +1921,12 @@ class FileDatastore(GenericBaseDatastore):
 
         return list(to_transfer.values())
 
-    def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
+    def get(
+        self,
+        ref: DatasetRef,
+        parameters: Optional[Mapping[str, Any]] = None,
+        readStorageClass: Optional[Union[StorageClass, str]] = None,
+    ) -> Any:
         """Load an InMemoryDataset from the store.
 
         Parameters
@@ -1931,6 +1936,12 @@ class FileDatastore(GenericBaseDatastore):
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
             a slice of the dataset to be loaded.
+        readStorageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------
@@ -1946,11 +1957,15 @@ class FileDatastore(GenericBaseDatastore):
         ValueError
             Formatter failed to process the dataset.
         """
+        # Supplied storage class for the component being read is either
+        # from the ref itself or some an override if we want to force
+        # type conversion.
+        if readStorageClass is not None:
+            ref = ref.overrideStorageClass(readStorageClass)
+        refStorageClass = ref.datasetType.storageClass
+
         allGetInfo = self._prepare_for_get(ref, parameters)
         refComponent = ref.datasetType.component()
-
-        # Supplied storage class for the component being read
-        refStorageClass = ref.datasetType.storageClass
 
         # Create mapping from component name to related info
         allComponents = {i.component: i for i in allGetInfo}

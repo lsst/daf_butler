@@ -280,7 +280,12 @@ class InMemoryDatastore(GenericBaseDatastore):
             return False
         return True
 
-    def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
+    def get(
+        self,
+        ref: DatasetRef,
+        parameters: Optional[Mapping[str, Any]] = None,
+        readStorageClass: Optional[Union[StorageClass, str]] = None,
+    ) -> Any:
         """Load an InMemoryDataset from the store.
 
         Parameters
@@ -290,6 +295,12 @@ class InMemoryDatastore(GenericBaseDatastore):
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
             a slice of the dataset to be loaded.
+        readStorageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------
@@ -311,8 +322,10 @@ class InMemoryDatastore(GenericBaseDatastore):
         realID, storedItemInfo = self._get_dataset_info(ref)
 
         # We have a write storage class and a read storage class and they
-        # can be different for concrete composites.
-        readStorageClass = ref.datasetType.storageClass
+        # can be different for concrete composites or if overridden.
+        if readStorageClass is not None:
+            ref = ref.overrideStorageClass(readStorageClass)
+        refStorageClass = ref.datasetType.storageClass
         writeStorageClass = storedItemInfo.storageClass
 
         component = ref.datasetType.component()
@@ -324,7 +337,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             writeStorageClass.validateParameters(parameters)
             isDerivedComponent = True
         else:
-            readStorageClass.validateParameters(parameters)
+            refStorageClass.validateParameters(parameters)
 
         inMemoryDataset = self.datasets[realID]
 
@@ -346,9 +359,12 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         # Since there is no formatter to process parameters, they all must be
         # passed to the assembler.
-        return self._post_process_get(
-            inMemoryDataset, readStorageClass, parameters, isComponent=component is not None
+        inMemoryDataset = self._post_process_get(
+            inMemoryDataset, refStorageClass, parameters, isComponent=component is not None
         )
+
+        # Last minute type conversion.
+        return refStorageClass.coerce_type(inMemoryDataset)
 
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
