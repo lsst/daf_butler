@@ -102,6 +102,8 @@ storageClasses:
     pytype: lsst.afw.table.ExposureCatalog
   DataFrame:
     pytype: pandas.core.frame.DataFrame
+    converters:
+      pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_pandas
     delegate: lsst.daf.butler.delegates.dataframe.DataFrameDelegate
     derivedComponents:
       columns: DataFrameIndex
@@ -109,6 +111,8 @@ storageClasses:
       - columns
   DataFrameIndex:
     pytype: pandas.Index
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.arrow_schema_to_pandas_index
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
   PropertySet:
