@@ -109,6 +109,7 @@ storageClasses:
       columns: DataFrameIndex
     parameters:
       - columns
+      - filters
   DataFrameIndex:
     pytype: pandas.Index
     converters:
