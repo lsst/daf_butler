@@ -337,16 +337,11 @@ class InMemoryDatastore(GenericBaseDatastore):
             # Then disable parameters for later
             parameters = {}
 
-        # Different storage classes implies a component request
-        if readStorageClass != writeStorageClass:
-
-            if component is None:
-                raise ValueError(
-                    "Storage class inconsistency ({} vs {}) but no"
-                    " component requested".format(readStorageClass.name, writeStorageClass.name)
-                )
-
-            # Concrete composite written as a single object (we hope)
+        # Check if we have a component.
+        if component:
+            # In-memory datastore must have stored the dataset as a single
+            # object in the write storage class. We therefore use that
+            # storage class delegate to obtain the component.
             inMemoryDataset = writeStorageClass.delegate().getComponent(inMemoryDataset, component)
 
         # Since there is no formatter to process parameters, they all must be

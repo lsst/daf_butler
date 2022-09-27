@@ -654,6 +654,47 @@ class ButlerTests(ButlerPutGetTests):
                 self.assertIn("424", str(compuri), f"Checking visit is in URI {compuri}")
                 self.assertEqual(compuri.fragment, "predicted", f"Checking for fragment in {compuri}")
 
+    def testPytypePutCoercion(self):
+        """Test python type coercion on Butler.get and put."""
+
+        # Store some data with the normal example storage class.
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        datasetTypeName = "test_metric"
+        butler, _ = self.create_butler(self.default_run, storageClass, datasetTypeName)
+
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+
+        # Put a dict and this should coerce to a MetricsExample
+        test_dict = {"summary": {"a": 1}, "output": {"b": 2}}
+        metric_ref = butler.put(test_dict, datasetTypeName, dataId=dataId, visit=424)
+        test_metric = butler.getDirect(metric_ref)
+        self.assertEqual(get_full_type_name(test_metric), "lsst.daf.butler.tests.MetricsExample")
+        self.assertEqual(test_metric.summary, test_dict["summary"])
+        self.assertEqual(test_metric.output, test_dict["output"])
+
+        # Check that the put still works if a DatasetType is given with
+        # a definition matching this python type.
+        registry_type = butler.registry.getDatasetType(datasetTypeName)
+        this_type = DatasetType(datasetTypeName, registry_type.dimensions, "StructuredDataDictJson")
+        metric2_ref = butler.put(test_dict, this_type, dataId=dataId, visit=425)
+        self.assertEqual(metric2_ref.datasetType, registry_type)
+
+        # The get will return the type expected by registry.
+        test_metric2 = butler.getDirect(metric2_ref)
+        self.assertEqual(get_full_type_name(test_metric2), "lsst.daf.butler.tests.MetricsExample")
+
+        # Make a new DatasetRef with the compatible but different DatasetType.
+        # This should now return a dict.
+        new_ref = DatasetRef(this_type, metric2_ref.dataId, id=metric2_ref.id, run=metric2_ref.run)
+        test_dict2 = butler.getDirect(new_ref)
+        self.assertEqual(get_full_type_name(test_dict2), "dict")
+
+        # Get it again with the wrong dataset type definition using get()
+        # rather than getDirect(). This should be consistent with getDirect()
+        # behavior and return the type of the DatasetType.
+        test_dict3 = butler.get(this_type, dataId=dataId, visit=425)
+        self.assertEqual(get_full_type_name(test_dict3), "dict")
+
     def testIngest(self):
         butler = Butler(self.tmpConfigFile, run=self.default_run)
 
@@ -1416,47 +1457,6 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Clear out the datasets from registry.
         butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
-
-    def testPytypePutCoercion(self):
-        """Test python type coercion on Butler.get and put."""
-
-        # Store some data with the normal example storage class.
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        datasetTypeName = "test_metric"
-        butler, _ = self.create_butler(self.default_run, storageClass, datasetTypeName)
-
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-
-        # Put a dict and this should coerce to a MetricsExample
-        test_dict = {"summary": {"a": 1}, "output": {"b": 2}}
-        metric_ref = butler.put(test_dict, datasetTypeName, dataId=dataId, visit=424)
-        test_metric = butler.getDirect(metric_ref)
-        self.assertEqual(get_full_type_name(test_metric), "lsst.daf.butler.tests.MetricsExample")
-        self.assertEqual(test_metric.summary, test_dict["summary"])
-        self.assertEqual(test_metric.output, test_dict["output"])
-
-        # Check that the put still works if a DatasetType is given with
-        # a definition matching this python type.
-        registry_type = butler.registry.getDatasetType(datasetTypeName)
-        this_type = DatasetType(datasetTypeName, registry_type.dimensions, "StructuredDataDictJson")
-        metric2_ref = butler.put(test_dict, this_type, dataId=dataId, visit=425)
-        self.assertEqual(metric2_ref.datasetType, registry_type)
-
-        # The get will return the type expected by registry.
-        test_metric2 = butler.getDirect(metric2_ref)
-        self.assertEqual(get_full_type_name(test_metric2), "lsst.daf.butler.tests.MetricsExample")
-
-        # Make a new DatasetRef with the compatible but different DatasetType.
-        # This should now return a dict.
-        new_ref = DatasetRef(this_type, metric2_ref.dataId, id=metric2_ref.id, run=metric2_ref.run)
-        test_dict2 = butler.getDirect(new_ref)
-        self.assertEqual(get_full_type_name(test_dict2), "dict")
-
-        # Get it again with the wrong dataset type definition using get()
-        # rather than getDirect(). This should be consistent with getDirect()
-        # behavior and return the type of the DatasetType.
-        test_dict3 = butler.get(this_type, dataId=dataId, visit=425)
-        self.assertEqual(get_full_type_name(test_dict3), "dict")
 
     def testPytypeCoercion(self):
         """Test python type coercion on Butler.get and put."""
