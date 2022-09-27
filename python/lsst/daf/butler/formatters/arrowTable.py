@@ -83,8 +83,6 @@ class ArrowTableFormatter(Formatter):
                     f"Unsupported parameters {self.fileDescriptor.parameters} in ArrowTable read."
                 )
 
-        # Check what happens if you specify use_pandas_metadata on a
-        # parquet file that doesn't have any.
         arrow_table = pq.read_table(
             self.fileDescriptor.location.path,
             columns=par_columns,
