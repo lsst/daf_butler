@@ -76,6 +76,7 @@ class ParquetFormatter(Formatter):
             return len(temp_table[schema.names[0]])
 
         par_columns = None
+        filters = None
         if self.fileDescriptor.parameters:
             par_columns = self.fileDescriptor.parameters.pop("columns", None)
             if par_columns:
@@ -97,6 +98,8 @@ class ParquetFormatter(Formatter):
                 else:
                     par_columns = _standardize_multi_index_columns(schema, par_columns)
 
+            filters = self.fileDescriptor.parameters.pop("filters", None)
+
             if len(self.fileDescriptor.parameters):
                 raise ValueError(
                     f"Unsupported parameters {self.fileDescriptor.parameters} in ArrowTable read."
@@ -107,6 +110,7 @@ class ParquetFormatter(Formatter):
             columns=par_columns,
             use_threads=False,
             use_pandas_metadata=(b"pandas" in schema.metadata),
+            filters=filters,
         )
 
         return arrow_table
