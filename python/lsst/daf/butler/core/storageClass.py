@@ -565,7 +565,7 @@ class StorageClass:
                     raise
         raise TypeError(
             "Type does not match and no valid converter found to convert"
-            f" '{type(incorrect)}' to '{self.pytype}'"
+            f" '{get_full_type_name(incorrect)}' to '{get_full_type_name(self.pytype)}'"
         )
 
     def __eq__(self, other: Any) -> bool:
