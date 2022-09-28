@@ -29,6 +29,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Optional, Type
 
 from lsst.daf.butler import Formatter
+from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
     from lsst.daf.butler import StorageClass
@@ -115,7 +116,8 @@ class FileFormatter(Formatter):
                         f"Storage class inconsistency ({readStorageClass.name} vs"
                         f" {fileDescriptor.storageClass.name}) but no"
                         " component requested or converter registered for"
-                        f" python type {type(data)}"
+                        f" converting type {get_full_type_name(fileDescriptor.storageClass.pytype)}"
+                        f" to {get_full_type_name(readStorageClass.pytype)}."
                     )
             else:
                 # Concrete composite written as a single file (we hope)
