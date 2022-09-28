@@ -654,6 +654,56 @@ class ButlerTests(ButlerPutGetTests):
                 self.assertIn("424", str(compuri), f"Checking visit is in URI {compuri}")
                 self.assertEqual(compuri.fragment, "predicted", f"Checking for fragment in {compuri}")
 
+    def testStorageClassOverrideGet(self):
+        """Test storage class conversion on get with override."""
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        datasetTypeName = "anything"
+        run = self.default_run
+
+        butler, datasetType = self.create_butler(run, storageClass, datasetTypeName)
+
+        # Create and store a dataset.
+        metric = makeExampleMetrics()
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+
+        ref = butler.put(metric, datasetType, dataId)
+
+        # Return native type.
+        retrieved = butler.get(ref)
+        self.assertEqual(retrieved, metric)
+
+        # Specify an override.
+        new_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
+        model = butler.getDirect(ref, readStorageClass=new_sc)
+        self.assertNotEqual(type(model), type(retrieved))
+        self.assertIs(type(model), new_sc.pytype)
+        self.assertEqual(retrieved, model)
+
+        # Retrieve a component. Should be a tuple.
+        data = butler.get("anything.data", dataId, readStorageClass="StructuredDataDataTestTuple")
+        self.assertIs(type(data), tuple)
+        self.assertEqual(data, tuple(retrieved.data))
+
+        # Parameter on the write storage class should work regardless
+        # of read storage class.
+        data = butler.get(
+            "anything.data",
+            dataId,
+            readStorageClass="StructuredDataDataTestTuple",
+            parameters={"slice": slice(2, 4)},
+        )
+        self.assertEqual(len(data), 2)
+
+        # Try a parameter that is known to the read storage class but not
+        # the write storage class.
+        with self.assertRaises(KeyError):
+            butler.get(
+                "anything.data",
+                dataId,
+                readStorageClass="StructuredDataDataTestTuple",
+                parameters={"xslice": slice(2, 4)},
+            )
+
     def testPytypePutCoercion(self):
         """Test python type coercion on Butler.get and put."""
 
