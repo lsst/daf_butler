@@ -32,6 +32,7 @@ __all__ = (
     "numpy_to_arrow",
     "numpy_dict_to_arrow",
     "arrow_schema_to_pandas_index",
+    "DataFrameSchema",
 )
 
 import collections.abc
@@ -384,6 +385,50 @@ def arrow_schema_to_pandas_index(schema: pa.Schema) -> Any:
     else:
         raw_columns = _split_multi_index_column_names(len(indexes), schema.names)
         return pd.MultiIndex.from_tuples(raw_columns, names=[f["name"] for f in indexes])
+
+
+class DataFrameSchema:
+    """Wrapper class for a schema for a pandas DataFrame.
+
+    Parameters
+    ----------
+    dataframe : `pandas.DataFrame`
+        Dataframe to turn into a schema.
+    """
+
+    def __init__(self, dataframe: Any) -> DataFrameSchema:
+        self._dtypes = dataframe.dtypes
+
+    @classmethod
+    def from_arrow(cls, schema: pa.Schema) -> DataFrameSchema:
+        """Convert an arrow schema into a DataFrameSchema.
+
+        Parameters
+        ----------
+        schema : `pyarrow.Schema`
+
+        Returns
+        -------
+        dataframe_schema : `DataFrameSchema`
+        """
+        empty_table = pa.Table.from_pylist([] * len(schema.names), schema=schema)
+
+        return DataFrameSchema(empty_table.to_pandas())
+
+    @property
+    def dtypes(self) -> Any:
+        return self._dtypes
+
+    def __repr__(self):
+        return repr(self._dtypes)
+
+    def __eq__(self, other: DataFrameSchema) -> bool:
+        import numpy as np
+
+        if not isinstance(other, DataFrameSchema):
+            return False
+
+        return np.all(self._dtypes == other._dtypes)
 
 
 def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequence[str]]:

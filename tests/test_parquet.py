@@ -41,6 +41,7 @@ except ImportError:
 from lsst.daf.butler import Butler, Config, DatasetType, StorageClassConfig, StorageClassFactory
 from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.formatters.parquet import DataFrameSchema
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -125,6 +126,12 @@ class ParquetFormatterTestCase(unittest.TestCase):
         # Read just the column descriptions.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertTrue(allColumns.equals(columns2))
+        # Read the rowcount.
+        rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
+        self.assertEqual(rowcount, len(df1))
+        # Read the schema
+        schema = self.butler.get(self.datasetType.componentTypeName("schema"), dataId={})
+        self.assertEqual(schema, DataFrameSchema(df1))
         # Read just some columns a few different ways.
         df3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
         self.assertTrue(df1.loc[:, ["a", "c"]].equals(df3))
@@ -148,6 +155,12 @@ class ParquetFormatterTestCase(unittest.TestCase):
         # Read just the column descriptions.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertTrue(df1.columns.equals(columns2))
+        # Read the rowcount.
+        rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
+        self.assertEqual(rowcount, len(df1))
+        # Read the schema.
+        schema = self.butler.get(self.datasetType.componentTypeName("schema"), dataId={})
+        self.assertEqual(schema, DataFrameSchema(df1))
         # Read just some columns a few different ways.
         df3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": {"filter": "g"}})
         self.assertTrue(df1.loc[:, ["g"]].equals(df3))

@@ -104,9 +104,12 @@ storageClasses:
     pytype: pandas.core.frame.DataFrame
     converters:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_pandas
+      pandas.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_arrow
     delegate: lsst.daf.butler.delegates.dataframe.DataFrameDelegate
     derivedComponents:
       columns: DataFrameIndex
+      rowcount: int
+      schema: DataFrameSchema
     parameters:
       - columns
       - filters
@@ -114,6 +117,10 @@ storageClasses:
     pytype: pandas.Index
     converters:
       pyarrow.Schema: lsst.daf.butler.formatters.parquet.arrow_schema_to_pandas_index
+  DataFrameSchema:
+    pytype: lsst.daf.butler.formatters.parquet.DataFrameSchema
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.DataFrameSchema.from_arrow
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
   PropertySet:
