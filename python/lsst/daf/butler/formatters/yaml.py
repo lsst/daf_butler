@@ -187,11 +187,12 @@ class YamlFormatter(FileFormatter):
             Object of expected type ``readStorageClass.pytype``.
         """
         if inMemoryDataset is not None and not hasattr(builtins, readStorageClass.pytype.__name__):
-            if readStorageClass.isComposite():
-                inMemoryDataset = readStorageClass.delegate().assemble(
-                    inMemoryDataset, pytype=readStorageClass.pytype
+            if writeStorageClass.isComposite():
+                # We know that the write storage class should work,
+                # then we convert to read storage class.
+                inMemoryDataset = writeStorageClass.delegate().assemble(
+                    inMemoryDataset, pytype=writeStorageClass.pytype
                 )
-                return readStorageClass.coerce_type(inMemoryDataset)
             elif not isinstance(inMemoryDataset, readStorageClass.pytype):
                 if not isinstance(inMemoryDataset, writeStorageClass.pytype):
                     # This does not look like the written type or the required
@@ -203,6 +204,5 @@ class YamlFormatter(FileFormatter):
                     else:
                         # Hope that we can pass the arguments in directly.
                         inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
-                # Coerce to the read storage class if necessary.
-                inMemoryDataset = readStorageClass.coerce_type(inMemoryDataset)
-        return inMemoryDataset
+        # Coerce to the read storage class if necessary.
+        return readStorageClass.coerce_type(inMemoryDataset)
