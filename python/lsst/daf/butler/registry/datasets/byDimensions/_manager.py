@@ -6,18 +6,20 @@ __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 
 import dataclasses
 import logging
-import warnings
-from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
-from lsst.utils.introspection import find_outside_stacklevel
 
 from ...._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType
 from ....dimensions import DimensionUniverse
 from ..._collection_summary import CollectionSummary
-from ..._exceptions import ConflictingDefinitionError, DatasetTypeError, OrphanedRecordError
+from ..._exceptions import (
+    ConflictingDefinitionError,
+    DatasetTypeError,
+    DatasetTypeExpressionError,
+    OrphanedRecordError,
+)
 from ...interfaces import DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple
 from ...wildcards import DatasetTypeWildcard
 from ._storage import ByDimensionsDatasetRecordStorage, ByDimensionsDatasetRecordStorageUUID
@@ -382,115 +384,49 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def resolve_wildcard(
         self,
         expression: Any,
-        components: bool | None = False,
         missing: list[str] | None = None,
         explicit_only: bool = False,
-        components_deprecated: bool = True,
-    ) -> dict[DatasetType, list[str | None]]:
+    ) -> list[DatasetType]:
         wildcard = DatasetTypeWildcard.from_expression(expression)
-        result: defaultdict[DatasetType, set[str | None]] = defaultdict(set)
-        # This message can be transformed into an error on DM-36303 after v26,
-        # and the components and components_deprecated arguments can be merged
-        # into one on DM-36457 after v27.
-        deprecation_message = (
-            "Querying for component datasets via Registry query methods is deprecated in favor of using "
-            "DatasetRef and DatasetType methods on parent datasets. Only components=False will be supported "
-            "after v26, and the components argument will be removed after v27."
-        )
+        result: list[DatasetType] = []
         for name, dataset_type in wildcard.values.items():
             parent_name, component_name = DatasetType.splitDatasetTypeName(name)
-            if component_name is not None and components_deprecated:
-                warnings.warn(
-                    deprecation_message, FutureWarning, stacklevel=find_outside_stacklevel("lsst.daf.butler")
+            if component_name is not None:
+                raise DatasetTypeError(
+                    "Component dataset types are not supported in Registry methods; use DatasetRef or "
+                    "DatasetType methods to obtain components from parents instead."
                 )
             if (found_storage := self.find(parent_name)) is not None:
-                found_parent = found_storage.datasetType
-                if component_name is not None:
-                    found = found_parent.makeComponentDatasetType(component_name)
-                else:
-                    found = found_parent
+                resolved_dataset_type = found_storage.datasetType
                 if dataset_type is not None:
-                    if dataset_type.is_compatible_with(found):
+                    if dataset_type.is_compatible_with(resolved_dataset_type):
                         # Prefer the given dataset type to enable storage class
                         # conversions.
-                        if component_name is not None:
-                            found_parent = dataset_type.makeCompositeDatasetType()
-                        else:
-                            found_parent = dataset_type
+                        resolved_dataset_type = dataset_type
                     else:
                         raise DatasetTypeError(
                             f"Dataset type definition in query expression {dataset_type} is "
-                            f"not compatible with the registered type {found}."
+                            f"not compatible with the registered type {resolved_dataset_type}."
                         )
-                result[found_parent].add(component_name)
+                result.append(resolved_dataset_type)
             elif missing is not None:
                 missing.append(name)
-        already_warned = False
         if wildcard.patterns is ...:
             if explicit_only:
                 raise TypeError(
                     "Universal wildcard '...' is not permitted for dataset types in this context."
                 )
             for datasetType in self._fetch_dataset_types():
-                result[datasetType].add(None)
-                if components:
-                    try:
-                        result[datasetType].update(datasetType.storageClass.allComponents().keys())
-                        if (
-                            datasetType.storageClass.allComponents()
-                            and not already_warned
-                            and components_deprecated
-                        ):
-                            warnings.warn(
-                                deprecation_message,
-                                FutureWarning,
-                                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                            )
-                            already_warned = True
-                    except KeyError as err:
-                        _LOG.warning(
-                            f"Could not load storage class {err} for {datasetType.name}; "
-                            "if it has components they will not be included in query results.",
-                        )
+                result.append(datasetType)
         elif wildcard.patterns:
             if explicit_only:
-                # After v26 this should raise DatasetTypeExpressionError, to
-                # be implemented on DM-36303.
-                warnings.warn(
-                    "Passing wildcard patterns here is deprecated and will be prohibited after v26.",
-                    FutureWarning,
-                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                )
+                raise DatasetTypeExpressionError("Wildcard patterns are not supported when explicit only.")
             dataset_types = self._fetch_dataset_types()
             for datasetType in dataset_types:
                 if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
-                    result[datasetType].add(None)
-            if components is not False:
-                for datasetType in dataset_types:
-                    if components is None and datasetType in result:
-                        continue
-                    try:
-                        components_for_parent = datasetType.storageClass.allComponents().keys()
-                    except KeyError as err:
-                        _LOG.warning(
-                            f"Could not load storage class {err} for {datasetType.name}; "
-                            "if it has components they will not be included in query results."
-                        )
-                        continue
-                    for component_name in components_for_parent:
-                        if any(
-                            p.fullmatch(DatasetType.nameWithComponent(datasetType.name, component_name))
-                            for p in wildcard.patterns
-                        ):
-                            result[datasetType].add(component_name)
-                            if not already_warned and components_deprecated:
-                                warnings.warn(
-                                    deprecation_message,
-                                    FutureWarning,
-                                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                                )
-                                already_warned = True
-        return {k: list(v) for k, v in result.items()}
+                    result.append(datasetType)
+
+        return result
 
     def getDatasetRef(self, id: DatasetId) -> DatasetRef | None:
         # Docstring inherited from DatasetRecordStorageManager.

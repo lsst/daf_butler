@@ -53,6 +53,7 @@ from ...dimensions import (
     DimensionGroup,
     DimensionRecord,
 )
+from .._exceptions import DatasetTypeError
 from ._query import Query
 from ._structs import OrderByClause
 
@@ -233,7 +234,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         collections: Any,
         *,
         findFirst: bool = True,
-        components: bool | None = None,
+        components: bool = False,
     ) -> ParentDatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
@@ -254,16 +255,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             passed in).  If `True`, ``collections`` must not contain regular
             expressions and may not be ``...``.
         components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.  If
-            `None` (default), apply patterns to components only if their parent
-            datasets were not matched by the expression.  Fully-specified
-            component datasets (`str` or `DatasetType` instances) are always
-            included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
 
         Returns
         -------
@@ -278,13 +271,18 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         MissingDatasetTypeError
             Raised if the given dataset type is not registered.
         """
-        parent_dataset_type, components_found = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, components=components, explicit_only=True
+        if components is not False:
+            raise DatasetTypeError(
+                "Dataset component queries are no longer supported by Registry.  Use "
+                "DatasetType methods to obtain components from parent dataset types instead."
+            )
+        resolved_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, explicit_only=True
         )
         return ParentDatasetQueryResults(
-            self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True),
-            parent_dataset_type,
-            components_found,
+            self._query.find_datasets(resolved_dataset_type, collections, find_first=findFirst, defer=True),
+            resolved_dataset_type,
+            [None],
         )
 
     def findRelatedDatasets(

@@ -158,11 +158,9 @@ class QueryBackend(Generic[_C]):
     def resolve_dataset_type_wildcard(
         self,
         expression: Any,
-        components: bool | None = None,
         missing: list[str] | None = None,
         explicit_only: bool = False,
-        components_deprecated: bool = True,
-    ) -> dict[DatasetType, list[str | None]]:
+    ) -> list[DatasetType]:
         """Return the dataset types that match a wildcard expression.
 
         Parameters
@@ -170,13 +168,6 @@ class QueryBackend(Generic[_C]):
         expression : `~typing.Any`
             Names and/or patterns for dataset types; will be passed to
             `DatasetTypeWildcard.from_expression`.
-        components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.  If
-            `None` (default), apply patterns to components only if their parent
-            datasets were not matched by the expression.  Fully-specified
-            component datasets (`str` or `DatasetType` instances) are always
-            included.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -184,28 +175,19 @@ class QueryBackend(Generic[_C]):
         explicit_only : `bool`, optional
             If `True`, require explicit `DatasetType` instances or `str` names,
             with `re.Pattern` instances deprecated and ``...`` prohibited.
-        components_deprecated : `bool`, optional
-            If `True`, this is a context in which component dataset support is
-            deprecated.  This will result in a deprecation warning when
-            ``components=True`` or ``components=None`` and a component dataset
-            is matched.  In the future this will become an error.
 
         Returns
         -------
-        dataset_types : `dict` [ `DatasetType`, `list` [ `None`, `str` ] ]
-            A mapping with resolved dataset types as keys and lists of
-            matched component names as values, where `None` indicates the
-            parent composite dataset type was matched.
+        dataset_types : `list` [ `DatasetType` ]
+            A list of resolved dataset types.
         """
         raise NotImplementedError()
 
     def resolve_single_dataset_type_wildcard(
         self,
         expression: Any,
-        components: bool | None = None,
         explicit_only: bool = False,
-        components_deprecated: bool = True,
-    ) -> tuple[DatasetType, list[str | None]]:
+    ) -> DatasetType:
         """Return a single dataset type that matches a wildcard expression.
 
         Parameters
@@ -213,48 +195,18 @@ class QueryBackend(Generic[_C]):
         expression : `~typing.Any`
             Names and/or patterns for the dataset type; will be passed to
             `DatasetTypeWildcard.from_expression`.
-        components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.  If
-            `None` (default), apply patterns to components only if their parent
-            datasets were not matched by the expression.  Fully-specified
-            component datasets (`str` or `DatasetType` instances) are always
-            included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
         explicit_only : `bool`, optional
             If `True`, require explicit `DatasetType` instances or `str` names,
             with `re.Pattern` instances deprecated and ``...`` prohibited.
-        components_deprecated : `bool`, optional
-            If `True`, this is a context in which component dataset support is
-            deprecated.  This will result in a deprecation warning when
-            ``components=True`` or ``components=None`` and a component dataset
-            is matched.  In the future this will become an error.
 
         Returns
         -------
-        single_parent : `DatasetType`
-            The matched parent dataset type.
-        single_components : `list` [ `str` | `None` ]
-            The matched components that correspond to this parent, or `None` if
-            the parent dataset type itself was matched.
-
-        Notes
-        -----
-        This method really finds a single parent dataset type and any number of
-        components, because it's only the parent dataset type that's known to
-        registry at all; many callers are expected to discard the
-        ``single_components`` return value.
+        single : `DatasetType`
+            The matched dataset type.
         """
         missing: list[str] = []
         matching = self.resolve_dataset_type_wildcard(
-            expression,
-            components=components,
-            missing=missing,
-            explicit_only=explicit_only,
-            components_deprecated=components_deprecated,
+            expression, missing=missing, explicit_only=explicit_only
         )
         if not matching:
             if missing:
@@ -274,13 +226,13 @@ class QueryBackend(Generic[_C]):
                 f"Expression {expression!r} matched multiple parent dataset types: "
                 f"{[t.name for t in matching]}, but only one is allowed."
             )
-        ((single_parent, single_components),) = matching.items()
+        (single_parent,) = matching
         if missing:
             raise DatasetTypeError(
                 f"Expression {expression!r} appears to involve multiple dataset types, even though only "
                 f"one ({single_parent.name}) is registered, and only one is allowed here."
             )
-        return single_parent, single_components
+        return single_parent
 
     @abstractmethod
     def filter_dataset_collections(

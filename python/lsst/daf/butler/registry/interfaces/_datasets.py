@@ -539,11 +539,9 @@ class DatasetRecordStorageManager(VersionedExtension):
     def resolve_wildcard(
         self,
         expression: Any,
-        components: bool | None = False,
         missing: list[str] | None = None,
         explicit_only: bool = False,
-        components_deprecated: bool = True,
-    ) -> dict[DatasetType, list[str | None]]:
+    ) -> list[DatasetType]:
         """Resolve a dataset type wildcard expression.
 
         Parameters
@@ -551,17 +549,6 @@ class DatasetRecordStorageManager(VersionedExtension):
         expression : `~typing.Any`
             Expression to resolve.  Will be passed to
             `DatasetTypeWildcard.from_expression`.
-        components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.  If
-            `None`, apply patterns to components only if their parent
-            datasets were not matched by the expression.  Fully-specified
-            component datasets (`str` or `DatasetType` instances) are always
-            included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -569,18 +556,11 @@ class DatasetRecordStorageManager(VersionedExtension):
         explicit_only : `bool`, optional
             If `True`, require explicit `DatasetType` instances or `str` names,
             with `re.Pattern` instances deprecated and ``...`` prohibited.
-        components_deprecated : `bool`, optional
-            If `True`, this is a context in which component dataset support is
-            deprecated.  This will result in a deprecation warning when
-            ``components=True`` or ``components=None`` and a component dataset
-            is matched.  In the future this will become an error.
 
         Returns
         -------
-        dataset_types : `dict` [ `DatasetType`, `list` [ `None`, `str` ] ]
-            A mapping with resolved dataset types as keys and lists of
-            matched component names as values, where `None` indicates the
-            parent composite dataset type was matched.
+        dataset_types : `list` [ `DatasetType` ]
+            A list of resolved dataset types.
         """
         raise NotImplementedError()
 
