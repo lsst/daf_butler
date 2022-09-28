@@ -268,6 +268,28 @@ class DatasetTypeTestCase(unittest.TestCase):
         dA3 = DatasetType("a", dimensionsA, storageC)
         self.assertFalse(dA.is_compatible_with(dA3))
 
+    def testOverrideStorageClass(self):
+        storageA = StorageClass("test_a", pytype=list)
+        storageB = StorageClass("test_b", pytype=dict)
+        dimensions = self.universe.extract(["instrument"])
+
+        dA = DatasetType("a", dimensions, storageA)
+        dB = dA.overrideStorageClass(storageB)
+        self.assertNotEqual(dA, dB)
+        self.assertEqual(dB.storageClass, storageB)
+
+        round_trip = dB.overrideStorageClass(storageA)
+        self.assertEqual(round_trip, dA)
+
+        # Check that parents move over.
+        parent = StorageClass("composite", components={"a": storageA, "c": storageA})
+        dP = DatasetType("comp", dimensions, parent)
+        dP_A = dP.makeComponentDatasetType("a")
+        print(dP_A)
+        dp_B = dP_A.overrideStorageClass(storageB)
+        self.assertEqual(dp_B.storageClass, storageB)
+        self.assertEqual(dp_B.parentStorageClass, parent)
+
     def testJson(self):
         storageA = StorageClass("test_a")
         dimensionsA = self.universe.extract(["instrument"])
@@ -565,6 +587,16 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref, reresolvedRef)
         self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
         self.assertIsNotNone(reresolvedRef.run)
+
+    def testOverrideStorageClass(self):
+        storageA = StorageClass("test_a", pytype=list)
+
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
+
+        ref_new = ref.overrideStorageClass(storageA)
+        self.assertNotEqual(ref, ref_new)
+        self.assertEqual(ref_new.datasetType.storageClass, storageA)
+        self.assertEqual(ref_new.overrideStorageClass(ref.datasetType.storageClass), ref)
 
     def testPickle(self):
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")

@@ -532,6 +532,35 @@ class DatasetType:
             for componentName in self.storageClass.allComponents()
         ]
 
+    def overrideStorageClass(self, storageClass: str | StorageClass) -> DatasetType:
+        """Create a new `DatasetType` from this one but with an updated
+        `StorageClass`.
+
+        Parameters
+        ----------
+        storageClass : `str` or `StorageClass`
+            The new storage class.
+
+        Returns
+        -------
+        modified : `DatasetType`
+            A new dataset type that is the same as the current one but with
+            a different storage class.
+
+        Notes
+        -----
+        If this is a component dataset type, the parent storage class
+        will be retained.
+        """
+        parent = self._parentStorageClass if self._parentStorageClass else self._parentStorageClassName
+        return DatasetType(
+            self.name,
+            dimensions=self.dimensions,
+            storageClass=storageClass,
+            parentStorageClass=parent,
+            isCalibration=self.isCalibration(),
+        )
+
     def isComponent(self) -> bool:
         """Return whether this `DatasetType` refers to a component.
 
