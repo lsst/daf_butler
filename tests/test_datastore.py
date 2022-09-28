@@ -499,58 +499,6 @@ class DatastoreTests(DatastoreTestsBase):
 
                 datastore.remove(ref)
 
-    def testRegistryCompositePutGet(self):
-        """Tests the case where registry disassembles and puts to datastore."""
-        metrics = makeExampleMetrics()
-        datastore = self.makeDatastore()
-
-        # Create multiple storage classes for testing different formulations
-        # of composites
-        storageClasses = [
-            self.storageClassFactory.getStorageClass(sc)
-            for sc in (
-                "StructuredComposite",
-                "StructuredCompositeTestA",
-                "StructuredCompositeTestB",
-            )
-        ]
-
-        dimensions = self.universe.extract(("visit", "physical_filter"))
-        dataId = {"instrument": "dummy", "visit": 428, "physical_filter": "R"}
-
-        for sc in storageClasses:
-            print("Using storageClass: {}".format(sc.name))
-            ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
-
-            components = sc.delegate().disassemble(metrics)
-            self.assertTrue(components)
-
-            compsRead = {}
-            for compName, compInfo in components.items():
-                compRef = self.makeDatasetRef(
-                    ref.datasetType.componentTypeName(compName),
-                    dimensions,
-                    components[compName].storageClass,
-                    dataId,
-                    conform=False,
-                )
-
-                print("Writing component {} with {}".format(compName, compRef.datasetType.storageClass.name))
-                datastore.put(compInfo.component, compRef)
-
-                uri = datastore.getURI(compRef)
-                self.assertEqual(uri.scheme, self.uriScheme)
-
-                compsRead[compName] = datastore.get(compRef)
-
-                # We can generate identical files for each storage class
-                # so remove the component here
-                datastore.remove(compRef)
-
-            # combine all the components we read back into a new composite
-            metricsOut = sc.delegate().assemble(compsRead)
-            self.assertEqual(metrics, metricsOut)
-
     def prepDeleteTest(self, n_refs=1):
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
