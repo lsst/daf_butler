@@ -27,21 +27,12 @@ Tests in this module are disabled unless pandas and pyarrow are importable.
 import os
 import unittest
 
-try:
-    import numpy as np
-    import pandas as pd
-    from astropy.table import Table
-except ImportError:
-    pd = None
-
-try:
-    import pyarrow.parquet
-except ImportError:
-    pyarrow = None
-
+import numpy as np
+import pandas as pd
+from astropy.table import Table
 from lsst.daf.butler import Butler, Config, DatasetType, StorageClassConfig, StorageClassFactory
 from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
-from lsst.daf.butler.formatters.parquet import ArrowAstropySchema, DataFrameSchema
+from lsst.daf.butler.formatters.parquet import ArrowAstropySchema, DataFrameSchema, numpy_to_arrow
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -122,8 +113,18 @@ def _makeSimpleAstropyTable():
     return Table(data)
 
 
-@unittest.skipUnless(pd is not None, "Cannot test ParquetFormatter without pandas.")
-@unittest.skipUnless(pyarrow is not None, "Cannot test ParquetFormatter without pyarrow.")
+def _makeSimpleArrowTable():
+    """Make an arrow table for testing.
+
+    Returns
+    -------
+    arrowTable : `pyarrow.Table`
+        The test table.
+    """
+    data = _makeSimpleNumpyTable()
+    return numpy_to_arrow(data)
+
+
 class ParquetFormatterDataFrameTestCase(unittest.TestCase):
     """Tests for ParquetFormatter, DataFrame, using local file datastore."""
 
@@ -204,7 +205,6 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
 
 
-@unittest.skipUnless(pd is not None, "Cannot test parquet InMemoryDatastore without pandas.")
 class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
     """Tests for InMemoryDatastore, using DataFrameDelegate"""
 
@@ -316,6 +316,58 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         """
         self.assertEqual(table1.dtype, table2.dtype)
         self.assertTrue(np.all(table1 == table2))
+
+
+class ParquetFormatterArrowTableTestCase(unittest.TestCase):
+    """Tests for ParquetFormatter, ArrowTable, using local file datastore."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        """Create a new butler root for each test."""
+        self.root = makeTestTempDir(TESTDIR)
+        config = Config(self.configFile)
+        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        # No dimensions in dataset type so we don't have to worry about
+        # inserting dimension data or defining data IDs.
+        self.datasetType = DatasetType(
+            "data", dimensions=(), storageClass="ArrowTable", universe=self.butler.registry.dimensions
+        )
+        self.butler.registry.registerDatasetType(self.datasetType)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def testArrowTable(self):
+        tab1 = _makeSimpleArrowTable()
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+        # Read the whole Table
+        tab2 = self.butler.get(self.datasetType, dataId={})
+        self.assertEqual(tab2, tab1)
+        # Read the columns.
+        columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
+        self.assertEqual(len(columns2), len(tab1.schema.names))
+        for i, name in enumerate(tab1.schema.names):
+            self.assertEqual(columns2[i], name)
+        # Read the rowcount.
+        rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
+        self.assertEqual(rowcount, len(tab1))
+        # Read the schema
+        schema = self.butler.get(self.datasetType.componentTypeName("schema"), dataId={})
+        self.assertEqual(schema, tab1.schema)
+        # Read just some columns a few different ways.
+        tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
+        self.assertEqual(tab3, tab1.select(("a", "c")))
+        tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
+        self.assertEqual(tab4, tab1.select(("a",)))
+        tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
+        self.assertEqual(tab5, tab1.select(("index", "a")))
+        tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
+        self.assertEqual(tab6, tab1.select(("ddd",)))
+        # Passing an unrecognized column should be a ValueError.
+        with self.assertRaises(ValueError):
+            self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
 
 
 if __name__ == "__main__":

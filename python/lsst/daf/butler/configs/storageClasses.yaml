@@ -120,21 +120,32 @@ storageClasses:
     pytype: lsst.daf.butler.formatters.parquet.DataFrameSchema
     converters:
       pyarrow.Schema: lsst.daf.butler.formatters.parquet.DataFrameSchema.from_arrow
+  ArrowTable:
+    pytype: pyarrow.Table
+    derivedComponents:
+      columns: ArrowColumnList
+      rowcount: int
+      schema: ArrowSchema
+    parameters:
+      - columns
+      - filters
+  ArrowColumnList:
+    pytype: list
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.arrow_schema_to_column_list
+  ArrowSchema:
+    pytype: pyarrow.Schema
   ArrowAstropy:
     pytype: astropy.table.Table
     converters:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_astropy
     derivedComponents:
-      columns: ArrowAstropyColumnList
+      columns: ArrowColumnList
       rowcount: int
       schema: ArrowAstropySchema
     parameters:
       - columns
       - filters
-  ArrowAstropyColumnList:
-    pytype: list
-    converters:
-      pyarrow.Schema: lsst.daf.butler.formatters.parquet.arrow_schema_to_column_list
   ArrowAstropySchema:
     pytype: lsst.daf.butler.formatters.parquet.ArrowAstropySchema
     converters:
