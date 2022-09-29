@@ -90,9 +90,8 @@ class CategorizedWildcard:
             A callback that takes a single argument of arbitrary type and
             returns either a `str` - appended to `strings` - or a `tuple` of
             (`str`, `Any`) to be appended to `items`.  This will be called on
-            objects of unrecognized type, with the return value added to
-            `strings`. Exceptions will be reraised as `TypeError` (and
-            chained).
+            objects of unrecognized type. Exceptions will be reraised as
+            `TypeError` (and chained).
         coerceItemValue: `Callable`, optional
             If provided, ``expression`` may be a mapping from `str` to any
             type that can be passed to this function; the result of that call
@@ -194,25 +193,30 @@ class CategorizedWildcard:
             if allowPatterns and isinstance(element, re.Pattern):
                 self.patterns.append(element)
                 return None
+            if alreadyCoerced:
+                try:
+                    k, v = element
+                except TypeError:
+                    raise TypeError(
+                        f"Object '{element!r}' returned by coercion function must be `str` or `tuple`."
+                    ) from None
+                else:
+                    self.items.append((k, v))
+                    return None
             if coerceItemValue is not None:
                 try:
                     k, v = element
                 except TypeError:
                     pass
                 else:
-                    if not alreadyCoerced:
-                        if not isinstance(k, str):
-                            raise TypeError(f"Item key '{k}' is not a string.")
-                        try:
-                            v = coerceItemValue(v)
-                        except Exception as err:
-                            raise TypeError(
-                                f"Could not coerce tuple item value '{v}' for key '{k}'."
-                            ) from err
+                    if not isinstance(k, str):
+                        raise TypeError(f"Item key '{k}' is not a string.")
+                    try:
+                        v = coerceItemValue(v)
+                    except Exception as err:
+                        raise TypeError(f"Could not coerce tuple item value '{v}' for key '{k}'.") from err
                     self.items.append((k, v))
                     return None
-            if alreadyCoerced:
-                raise TypeError(f"Object '{element!r}' returned by coercion function is still unrecognized.")
             if coerceUnrecognized is not None:
                 try:
                     # This should be safe but flake8 cant tell that the
