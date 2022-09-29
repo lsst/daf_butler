@@ -151,7 +151,7 @@ class SqlRegistry(Registry):
         config.replaceRoot(butlerRoot)
 
         if isinstance(dimensionConfig, str):
-            dimensionConfig = DimensionConfig(config)
+            dimensionConfig = DimensionConfig(dimensionConfig)
         elif dimensionConfig is None:
             dimensionConfig = DimensionConfig()
         elif not isinstance(dimensionConfig, DimensionConfig):
