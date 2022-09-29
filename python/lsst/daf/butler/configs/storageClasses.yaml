@@ -257,6 +257,8 @@ storageClasses:
       - bbox
   AstropyTable:
     pytype: astropy.table.Table
+    converters:
+      lsst.afw.table.Catalog: lsst.afw.table.Catalog.asAstropy
   AstropyQTable:
     pytype: astropy.table.QTable
   ExtendedPsf:
