@@ -218,7 +218,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, Any]:
         if schema.field(name).type in (pa.string(), pa.binary()):
             md_name = f"lsst::arrow::len::{name}".encode("UTF-8")
             if md_name in schema.metadata:
-                strlen = int(schema.metadata["md_name"])
+                strlen = int(schema.metadata[md_name])
             else:
                 strlen = max(len(row) for row in col)
             col = col.astype(f"|U{strlen}")
@@ -312,7 +312,7 @@ def astropy_to_arrow(astropy_table: Any) -> pa.Table:
     ]
 
     md = {}
-    md[b"lsst:arrow::rowcount"] = str(len(astropy_table))
+    md[b"lsst::arrow::rowcount"] = str(len(astropy_table))
 
     for name, col in astropy_table.columns.items():
         if col.dtype.type is np.str_:
@@ -387,6 +387,20 @@ def arrow_schema_to_pandas_index(schema: pa.Schema) -> Any:
         return pd.MultiIndex.from_tuples(raw_columns, names=[f["name"] for f in indexes])
 
 
+def arrow_schema_to_column_list(schema: pa.Schema) -> list[str]:
+    """Convert an arrow schema to a list of string column names.
+
+    Parameters
+    ----------
+    schema : `pyarrow.Schema`
+
+    Returns
+    -------
+    column_list : `list` [`str`]
+    """
+    return [name for name in schema.names]
+
+
 class DataFrameSchema:
     """Wrapper class for a schema for a pandas DataFrame.
 
@@ -413,10 +427,10 @@ class DataFrameSchema:
         """
         empty_table = pa.Table.from_pylist([] * len(schema.names), schema=schema)
 
-        return DataFrameSchema(empty_table.to_pandas())
+        return cls(empty_table.to_pandas())
 
     @property
-    def dtypes(self) -> Any:
+    def schema(self) -> Any:
         return self._dtypes
 
     def __repr__(self):
@@ -429,6 +443,68 @@ class DataFrameSchema:
             return False
 
         return np.all(self._dtypes == other._dtypes)
+
+
+class ArrowAstropySchema:
+    """Wrapper class for a schema for an astropy table.
+
+    Parameters
+    ----------
+    astropy_table : `astropy.table.Table`
+    """
+
+    def __init__(self, astropy_table: Any) -> ArrowAstropySchema:
+        self._schema = astropy_table[:0]
+
+    @classmethod
+    def from_arrow(cls, schema: pa.Schema) -> DataFrameSchema:
+        """Convert an arrow schema into a DataFrameSchema.
+
+        Parameters
+        ----------
+        schema : `pyarrow.Schema`
+
+        Returns
+        -------
+        astropy_schema : `ArrowAstropySchema`
+        """
+        import numpy as np
+        from astropy.table import Table
+
+        dtype = []
+        for name in schema.names:
+            if schema.field(name).type not in (pa.string(), pa.binary()):
+                dtype.append(schema.field(name).type.to_pandas_dtype())
+                continue
+
+            # Special-case for string and binary columns
+            md_name = f"lsst::arrow::len::{name}"
+            if md_name.encode("UTF-8") in schema.metadata:
+                # String/bytes length from header.
+                strlen = int(schema.metadata[md_name.encode("UTF-8")])
+            else:
+                strlen = 10
+
+            dtype.append(f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}")
+
+        data = np.zeros(0, dtype=list(zip(schema.names, dtype)))
+
+        return cls(Table(data=data))
+
+    @property
+    def schema(self) -> Any:
+        return self._schema
+
+    def __repr__(self):
+        return repr(self._schema)
+
+    def __eq__(self, other: ArrowAstropySchema) -> bool:
+        import numpy as np
+
+        if not isinstance(other, ArrowAstropySchema):
+            return False
+
+        return np.all(self._schema.dtype == other._schema.dtype)
 
 
 def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequence[str]]:

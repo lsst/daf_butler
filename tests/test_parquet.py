@@ -30,6 +30,7 @@ import unittest
 try:
     import numpy as np
     import pandas as pd
+    from astropy.table import Table
 except ImportError:
     pd = None
 
@@ -40,10 +41,31 @@ except ImportError:
 
 from lsst.daf.butler import Butler, Config, DatasetType, StorageClassConfig, StorageClassFactory
 from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
+from lsst.daf.butler.formatters.parquet import ArrowAstropySchema, DataFrameSchema
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
-from lsst.daf.butler.formatters.parquet import DataFrameSchema
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
+
+
+def _makeSimpleNumpyTable():
+    """Make a simple numpy table with random data.
+
+    Returns
+    -------
+    numpyTable : `numpy.ndarray`
+    """
+    nrow = 5
+    data = np.zeros(
+        nrow, dtype=[("index", "i4"), ("a", "f8"), ("b", "f8"), ("c", "f8"), ("ddd", "f8"), ("strcol", "U10")]
+    )
+    data["index"][:] = np.arange(nrow)
+    data["a"] = np.random.randn(nrow)
+    data["b"] = np.random.randn(nrow)
+    data["c"] = np.random.randn(nrow)
+    data["ddd"] = np.random.randn(nrow)
+    data["strcol"][:] = "test"
+
+    return data
 
 
 def _makeSingleIndexDataFrame():
@@ -56,13 +78,7 @@ def _makeSingleIndexDataFrame():
     allColumns : `list` [`str`]
         List of all the columns (including index columns).
     """
-    nrow = 5
-    data = np.zeros(nrow, dtype=[("index", "i4"), ("a", "f8"), ("b", "f8"), ("c", "f8"), ("ddd", "f8")])
-    data["index"][:] = np.arange(nrow)
-    data["a"] = np.random.randn(nrow)
-    data["b"] = np.random.randn(nrow)
-    data["c"] = np.random.randn(nrow)
-    data["ddd"] = np.random.randn(nrow)
+    data = _makeSimpleNumpyTable()
     df = pd.DataFrame(data)
     df = df.set_index("index")
     allColumns = df.columns.append(pd.Index(df.index.names))
@@ -94,10 +110,22 @@ def _makeMultiIndexDataFrame():
     return df
 
 
+def _makeSimpleAstropyTable():
+    """Make an astropy table for testing.
+
+    Returns
+    -------
+    astropyTable : `astropy.table.Table`
+        The test table.
+    """
+    data = _makeSimpleNumpyTable()
+    return Table(data)
+
+
 @unittest.skipUnless(pd is not None, "Cannot test ParquetFormatter without pandas.")
 @unittest.skipUnless(pyarrow is not None, "Cannot test ParquetFormatter without pyarrow.")
-class ParquetFormatterTestCase(unittest.TestCase):
-    """Tests for ParquetFormatter, using local file datastore."""
+class ParquetFormatterDataFrameTestCase(unittest.TestCase):
+    """Tests for ParquetFormatter, DataFrame, using local file datastore."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
@@ -177,7 +205,7 @@ class ParquetFormatterTestCase(unittest.TestCase):
 
 
 @unittest.skipUnless(pd is not None, "Cannot test parquet InMemoryDatastore without pandas.")
-class InMemoryParquetFormatterTestCase(ParquetFormatterTestCase):
+class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
     """Tests for InMemoryDatastore, using DataFrameDelegate"""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
@@ -225,6 +253,69 @@ class InMemoryParquetFormatterTestCase(ParquetFormatterTestCase):
         # Force the name lookup to do name matching
         storageClass._pytype = None
         self.assertEqual(storageClass.name, "DataFrame")
+
+
+class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
+    """Tests for ParquetFormatter, ArrowAstropy, using local file datastore."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        """Create a new butler root for each test."""
+        self.root = makeTestTempDir(TESTDIR)
+        config = Config(self.configFile)
+        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        # No dimensions in dataset type so we don't have to worry about
+        # inserting dimension data or defining data IDs.
+        self.datasetType = DatasetType(
+            "data", dimensions=(), storageClass="ArrowAstropy", universe=self.butler.registry.dimensions
+        )
+        self.butler.registry.registerDatasetType(self.datasetType)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def testAstropyTable(self):
+        tab1 = _makeSimpleAstropyTable()
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+        # Read the whole Table.
+        tab2 = self.butler.get(self.datasetType, dataId={})
+        self._checkAstropyTableEquality(tab1, tab2)
+        # Read the columns.
+        columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
+        self.assertEqual(len(columns2), len(tab1.dtype.names))
+        for i, name in enumerate(tab1.dtype.names):
+            self.assertEqual(columns2[i], name)
+        # Read the rowcount.
+        rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
+        self.assertEqual(rowcount, len(tab1))
+        # Read the schema
+        schema = self.butler.get(self.datasetType.componentTypeName("schema"), dataId={})
+        self.assertEqual(schema, ArrowAstropySchema(tab1))
+        # Read just some columns a few different ways.
+        tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
+        self._checkAstropyTableEquality(tab1[("a", "c")], tab3)
+        tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
+        self._checkAstropyTableEquality(tab1[("a",)], tab4)
+        tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
+        self._checkAstropyTableEquality(tab1[("index", "a")], tab5)
+        tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
+        self._checkAstropyTableEquality(tab1[("ddd",)], tab6)
+        # Passing an unrecognized column should be a ValueError.
+        with self.assertRaises(ValueError):
+            self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
+
+    def _checkAstropyTableEquality(self, table1, table2):
+        """Check if two astropy tables have the same columns/values
+
+        Parameters
+        ----------
+        table1 : `astropy.table.Table`
+        table2 : `astropy.table.Table`
+        """
+        self.assertEqual(table1.dtype, table2.dtype)
+        self.assertTrue(np.all(table1 == table2))
 
 
 if __name__ == "__main__":
