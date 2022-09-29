@@ -69,6 +69,7 @@ from .._exceptions import (
     ConflictingDefinitionError,
     DataIdValueError,
     DatasetTypeError,
+    DatasetTypeExpressionError,
     InconsistentDataIdError,
     MissingCollectionError,
     MissingDatasetTypeError,
@@ -2634,26 +2635,12 @@ class RegistryTests(ABC):
                 ["potato"],
             ),
         ]
-        # The behavior of these additional queries is slated to change in the
-        # future, so we also check for deprecation warnings.
-        with self.assertWarns(FutureWarning):
-            queries_and_snippets.append(
-                (
-                    # Dataset type name doesn't match any existing dataset
-                    # types.
-                    registry.queryDataIds(["detector"], datasets=["nonexistent"], collections=...),
-                    ["nonexistent"],
-                )
-            )
-        with self.assertWarns(FutureWarning):
-            queries_and_snippets.append(
-                (
-                    # Dataset type name doesn't match any existing dataset
-                    # types.
-                    registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...),
-                    ["nonexistent"],
-                )
-            )
+        with self.assertRaises(MissingDatasetTypeError):
+            # Dataset type name doesn't match any existing dataset types.
+            registry.queryDataIds(["detector"], datasets=["nonexistent"], collections=...)
+        with self.assertRaises(MissingDatasetTypeError):
+            # Dataset type name doesn't match any existing dataset types.
+            registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...)
         for query, snippets in queries_and_snippets:
             self.assertFalse(query.any(execute=False, exact=False))
             self.assertFalse(query.any(execute=True, exact=False))
@@ -2670,10 +2657,8 @@ class RegistryTests(ABC):
                 messages,
             )
 
-        # This query does yield results, but should also emit a warning because
-        # dataset type patterns to queryDataIds is deprecated; just look for
-        # the warning.
-        with self.assertWarns(FutureWarning):
+        # Wildcards on dataset types are not permitted in queryDataIds.
+        with self.assertRaises(DatasetTypeExpressionError):
             registry.queryDataIds(["detector"], datasets=re.compile("^nonexistent$"), collections=...)
 
         # These queries yield no results due to problems that can be identified

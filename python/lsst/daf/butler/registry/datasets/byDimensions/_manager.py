@@ -420,7 +420,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 result.append(datasetType)
         elif wildcard.patterns:
             if explicit_only:
-                raise DatasetTypeExpressionError("Wildcard patterns are not supported when explicit only.")
+                raise DatasetTypeExpressionError(
+                    "Dataset type wildcard expressions are not supported in this context."
+                )
             dataset_types = self._fetch_dataset_types()
             for datasetType in dataset_types:
                 if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
