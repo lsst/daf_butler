@@ -151,7 +151,7 @@ class SqlRegistry(Registry):
         config.replaceRoot(butlerRoot)
 
         if isinstance(dimensionConfig, str):
-            dimensionConfig = DimensionConfig(config)
+            dimensionConfig = DimensionConfig(dimensionConfig)
         elif dimensionConfig is None:
             dimensionConfig = DimensionConfig()
         elif not isinstance(dimensionConfig, DimensionConfig):
@@ -507,6 +507,8 @@ class SqlRegistry(Registry):
             ]
         try:
             refs = list(storage.insert(runRecord, expandedDataIds, idGenerationMode))
+            if self._managers.obscore:
+                self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 f"A database constraint failure was triggered by inserting "
@@ -577,6 +579,8 @@ class SqlRegistry(Registry):
 
         try:
             refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode, reuseIds))
+            if self._managers.obscore:
+                self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 f"A database constraint failure was triggered by inserting "
@@ -622,6 +626,10 @@ class SqlRegistry(Registry):
             storage = self._managers.datasets[datasetType.name]
             try:
                 storage.associate(collectionRecord, refsForType)
+                if self._managers.obscore:
+                    # If a TAGGED collection is being monitored by ObsCore
+                    # manager then we may need to save the dataset.
+                    self._managers.obscore.associate(refsForType, collectionRecord)
             except sqlalchemy.exc.IntegrityError as err:
                 raise ConflictingDefinitionError(
                     f"Constraint violation while associating dataset of type {datasetType.name} with "
@@ -644,6 +652,8 @@ class SqlRegistry(Registry):
         ):
             storage = self._managers.datasets[datasetType.name]
             storage.disassociate(collectionRecord, refsForType)
+            if self._managers.obscore:
+                self._managers.obscore.disassociate(refsForType, collectionRecord)
 
     @transactional
     def certify(self, collection: str, refs: Iterable[DatasetRef], timespan: Timespan) -> None:

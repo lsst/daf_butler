@@ -150,10 +150,11 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         removeTestTempDir(self.testdir)
 
     def testChained(self):
-        root = makeTestTempDir(TESTDIR)
-        testRepo = MetricTestRepo(root, configFile=os.path.join(TESTDIR, "config/basic/butler-chained.yaml"))
+        testRepo = MetricTestRepo(
+            self.repoDir, configFile=os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
+        )
 
-        tables = self._queryDatasets(repo=root, show_uri=True)
+        tables = self._queryDatasets(repo=self.repoDir, show_uri=True)
 
         self.assertAstropyTablesEqual(
             tables,

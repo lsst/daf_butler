@@ -232,7 +232,7 @@ class QueryWhereClause:
     Governor dimensions not present in this mapping are not constrained at all.
     """
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def temporal(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose timespans are referenced by this
@@ -422,7 +422,7 @@ class QuerySummary:
         """All known dimensions (`DimensionUniverse`)."""
         return self.requested.universe
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def spatial(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose regions and skypix IDs should be included
@@ -459,7 +459,7 @@ class QuerySummary:
             result.add(self.universe.commonSkyPix)
         return result.freeze()
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def temporal(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose timespans should be included in the
@@ -471,7 +471,7 @@ class QuerySummary:
             raise NotImplementedError("Queries that should involve temporal joins are not yet supported.")
         return self.where.temporal
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def mustHaveKeysJoined(self) -> DimensionGraph:
         """Dimensions whose primary keys must be used in the JOIN ON clauses
@@ -486,7 +486,7 @@ class QuerySummary:
             names.update(dataset_type.dimensions.names)
         return DimensionGraph(self.universe, names=names)
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def mustHaveTableJoined(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose associated tables must appear in the

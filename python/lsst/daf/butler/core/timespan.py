@@ -246,7 +246,7 @@ class Timespan:
             )
         return Timespan(None, None, _nsec=(nsec, nsec + 1))
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def begin(self) -> TimespanBound:
         """Minimum timestamp in the interval, inclusive.
@@ -262,7 +262,7 @@ class Timespan:
         else:
             return TimeConverter().nsec_to_astropy(self._nsec[0])
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def end(self) -> TimespanBound:
         """Maximum timestamp in the interval, exclusive.

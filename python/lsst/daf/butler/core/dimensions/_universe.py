@@ -317,7 +317,7 @@ class DimensionUniverse:
         """
         return NamedValueSet(d for d in self._elements if isinstance(d, DatabaseDimensionElement)).freeze()
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def skypix(self) -> NamedValueAbstractSet[SkyPixSystem]:
         """All skypix systems known to this universe.

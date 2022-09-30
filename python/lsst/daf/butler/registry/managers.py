@@ -29,7 +29,8 @@ __all__ = (
 import dataclasses
 import logging
 import warnings
-from typing import Any, Dict, Generic, Type, TypeVar
+from collections.abc import Mapping
+from typing import Any, Dict, Generic, Optional, Type, TypeVar
 
 import sqlalchemy
 from lsst.utils import doImportType
@@ -43,6 +44,7 @@ from .interfaces import (
     DatasetRecordStorageManager,
     DatastoreRegistryBridgeManager,
     DimensionRecordStorageManager,
+    ObsCoreTableManager,
     OpaqueTableStorageManager,
     StaticTablesContext,
 )
@@ -54,6 +56,7 @@ _Collections = TypeVar("_Collections")
 _Datasets = TypeVar("_Datasets")
 _Opaque = TypeVar("_Opaque")
 _Datastores = TypeVar("_Datastores")
+_ObsCore = TypeVar("_ObsCore")
 
 
 _LOG = logging.getLogger(__name__)
@@ -61,10 +64,13 @@ _LOG = logging.getLogger(__name__)
 # key for dimensions configuration in attributes table
 _DIMENSIONS_ATTR = "config:dimensions.json"
 
+# key for obscore configuration in attributes table
+_OBSCORE_ATTR = "config:obscore.json"
+
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class _GenericRegistryManagers(
-    Generic[_Attributes, _Dimensions, _Collections, _Datasets, _Opaque, _Datastores]
+    Generic[_Attributes, _Dimensions, _Collections, _Datasets, _Opaque, _Datastores, _ObsCore]
 ):
     """Base struct used to pass around the manager instances or types that back
     a `Registry`.
@@ -97,7 +103,12 @@ class _GenericRegistryManagers(
     """Manager for the interface between `Registry` and `Datastore`.
     """
 
+    obscore: Optional[_ObsCore]
+    """Manager for `ObsCore` table(s).
+    """
 
+
+@dataclasses.dataclass(frozen=True, eq=False)
 class RegistryManagerTypes(
     _GenericRegistryManagers[
         Type[ButlerAttributeManager],
@@ -106,6 +117,7 @@ class RegistryManagerTypes(
         Type[DatasetRecordStorageManager],
         Type[OpaqueTableStorageManager],
         Type[DatastoreRegistryBridgeManager],
+        Type[ObsCoreTableManager],
     ]
 ):
     """A struct used to pass around the types of the manager objects that back
@@ -128,7 +140,42 @@ class RegistryManagerTypes(
         types : `RegistryManagerTypes`
             A new struct containing type objects.
         """
-        return cls(**{f.name: doImportType(config["managers", f.name]) for f in dataclasses.fields(cls)})
+        # We only check for manager names defined in class attributes.
+        # TODO: Maybe we need to check keys for unknown names/typos?
+        managers = {field.name for field in dataclasses.fields(cls)} - {"manager_configs"}
+        # Values of "config" sub-key, if any, indexed by manager name.
+        configs: Dict[str, Mapping] = {}
+        manager_types: Dict[str, Type] = {}
+        for manager in managers:
+            manager_config = config["managers"].get(manager)
+            if isinstance(manager_config, Config):
+                # Expect "cls" and optional "config" sub-keys.
+                manager_config_dict = manager_config.toDict()
+                try:
+                    class_name = manager_config_dict.pop("cls")
+                except KeyError:
+                    raise KeyError(f"'cls' key is not defined in {manager!r} manager configuration") from None
+                if (mgr_config := manager_config_dict.pop("config", None)) is not None:
+                    configs[manager] = mgr_config
+                if manager_config_dict:
+                    raise ValueError(
+                        f"{manager!r} manager configuration has unexpected keys: {set(manager_config_dict)}"
+                    )
+            elif isinstance(manager_config, str):
+                class_name = manager_config
+            elif manager_config is None:
+                # Some managers may be optional.
+                continue
+            else:
+                raise KeyError(f"Unexpected type of {manager!r} manager configuration: {manager_config!r}")
+            manager_types[manager] = doImportType(class_name)
+
+        # obscore need special care because it's the only manager which can be
+        # None, and we cannot define default value for it.
+        if "obscore" in manager_types:
+            return cls(**manager_types, manager_configs=configs)
+        else:
+            return cls(**manager_types, obscore=None, manager_configs=configs)
 
     def makeRepo(self, database: Database, dimensionConfig: DimensionConfig) -> RegistryManagerInstances:
         """Create all persistent `Registry` state for a new, empty data
@@ -170,6 +217,9 @@ class RegistryManagerTypes(
             instances.attributes.set(_DIMENSIONS_ATTR, json)
         else:
             raise RuntimeError("Unexpectedly failed to serialize DimensionConfig to JSON")
+        if instances.obscore is not None:
+            json = instances.obscore.config_json()
+            instances.attributes.set(_OBSCORE_ATTR, json)
         return instances
 
     def loadRepo(self, database: Database) -> RegistryManagerInstances:
@@ -204,6 +254,16 @@ class RegistryManagerTypes(
         else:
             raise LookupError(f"Registry attribute {_DIMENSIONS_ATTR} is missing from database")
         universe = DimensionUniverse(dimensionConfig)
+        if self.obscore is not None:
+            # Get ObsCore configuration from attributes table, this silently
+            # overrides whatever may come from config file. Idea is that we do
+            # not want to carry around the whole thing, and butler config will
+            # have empty obscore configuration after initialization.
+            obscoreString = attributes.get(_OBSCORE_ATTR)
+            if obscoreString is not None:
+                self.manager_configs["obscore"] = Config.fromString(obscoreString, format="json")
+            else:
+                raise LookupError(f"Registry attribute {_OBSCORE_ATTR} is missing from database")
         with database.declareStaticTables(create=False) as context:
             instances = RegistryManagerInstances.initialize(database, context, types=self, universe=universe)
             versions = instances.getVersions()
@@ -213,6 +273,10 @@ class RegistryManagerTypes(
         # Load content from database that we try to keep in-memory.
         instances.refresh()
         return instances
+
+    manager_configs: Dict[str, Mapping] = dataclasses.field(default_factory=dict)
+    """Per-manager configuration options passed to their initialize methods.
+    """
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -224,6 +288,7 @@ class RegistryManagerInstances(
         DatasetRecordStorageManager,
         OpaqueTableStorageManager,
         DatastoreRegistryBridgeManager,
+        ObsCoreTableManager,
     ]
 ):
     """A struct used to pass around the manager instances that back a
@@ -295,6 +360,17 @@ class RegistryManagerInstances(
             datasets=types.datasets,
             universe=universe,
         )
+        if types.obscore is not None:
+            kwargs["obscore"] = types.obscore.initialize(
+                database,
+                context,
+                universe=universe,
+                config=types.manager_configs["obscore"],
+                datasets=types.datasets,
+                dimensions=kwargs["dimensions"],
+            )
+        else:
+            kwargs["obscore"] = None
         return cls(**kwargs)
 
     def getVersions(self) -> ButlerVersionsManager:

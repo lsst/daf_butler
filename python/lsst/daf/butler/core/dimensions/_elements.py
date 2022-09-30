@@ -197,7 +197,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     associated (`DimensionUniverse`).
     """
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def governor(self) -> Optional[GovernorDimension]:
         """Return the governor dimension.
@@ -253,7 +253,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         """
         raise NotImplementedError()
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def dimensions(self) -> NamedValueAbstractSet[Dimension]:
         """Return all dimensions.
@@ -274,7 +274,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         """
         return NamedValueSet(list(self.required) + list(self.implied)).freeze()
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def graph(self) -> DimensionGraph:
         """Return minimal graph that includes this element (`DimensionGraph`).
@@ -287,7 +287,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         """
         return self.universe.extract(self.dimensions.names)
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def RecordClass(self) -> Type[DimensionRecord]:
         """Return the record subclass for this element.
@@ -349,7 +349,7 @@ class Dimension(DimensionElement):
         """
         raise NotImplementedError()
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def primaryKey(self) -> ddl.FieldSpec:
         """Return primary key field for this dimension (`FieldSpec`).
@@ -361,7 +361,7 @@ class Dimension(DimensionElement):
         primaryKey, *_ = self.uniqueKeys
         return primaryKey
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def alternateKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
         """Return alternate keys.

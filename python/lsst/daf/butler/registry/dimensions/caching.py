@@ -132,9 +132,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
             if record is ...:
                 missing.add(dataId)
             elif record is not None:
-                # Unclear why MyPy can't tell that this isn't ..., but it
-                # thinks it's still a possibility.
-                yield record  # type: ignore
+                yield record
         if missing:
             toFetch = DataCoordinateSet(missing, graph=self.element.graph)
             for record in self._nested.fetch(toFetch):
