@@ -1,0 +1,9 @@
+It is now possible to override the python type returned by ``butler.get()`` (if the types are compatible with each other) by using the new ``readStorageClass`` parameter.
+
+For example, to return an `astropy.table.Table` from something that usually returns an ``lsst.afw.table.Catalog`` you would do:
+
+.. code-block:: python
+
+    table = butler.getDirect(ref, readStorageClass="AstropyTable")
+
+Any parameters given to the ``get()`` must still refer to the native storage class.

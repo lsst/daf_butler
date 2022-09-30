@@ -1,0 +1,1 @@
+A method has been added to ``DatasetRef`` and ``DatasetType``, named ``overrideStorageClass``, to allow a new object to be created that has a different storage class associated with it.
