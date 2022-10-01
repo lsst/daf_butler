@@ -5,7 +5,6 @@ __all__ = (
     "ByDimensionsDatasetRecordStorageManagerUUID",
 )
 
-import copy
 import logging
 import warnings
 from collections import defaultdict
@@ -254,14 +253,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def find(self, name: str) -> DatasetRecordStorage | None:
         # Docstring inherited from DatasetRecordStorageManager.
-        compositeName, componentName = DatasetType.splitDatasetTypeName(name)
-        storage = self._byName.get(compositeName)
-        if storage is not None and componentName is not None:
-            componentStorage = copy.copy(storage)
-            componentStorage.datasetType = storage.datasetType.makeComponentDatasetType(componentName)
-            return componentStorage
-        else:
-            return storage
+        return self._byName.get(name)
 
     def register(self, datasetType: DatasetType) -> tuple[DatasetRecordStorage, bool]:
         # Docstring inherited from DatasetRecordStorageManager.

@@ -67,6 +67,7 @@ from .._exceptions import (
     DatasetTypeError,
     InconsistentDataIdError,
     MissingCollectionError,
+    MissingDatasetTypeError,
     OrphanedRecordError,
 )
 from ..interfaces import ButlerAttributeExistsError, DatasetIdGenEnum
@@ -433,7 +434,7 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         registry.removeDatasetType("flat")
-        with self.assertRaises(KeyError):
+        with self.assertRaises(MissingDatasetTypeError):
             registry.getDatasetType("flat")
 
     def testRemoveDatasetTypeFailure(self):

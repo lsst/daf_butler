@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy.sql
 
 from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
+from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -596,7 +597,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         """
         result = self.find(name)
         if result is None:
-            raise KeyError(f"Dataset type with name '{name}' not found.")
+            raise MissingDatasetTypeError(f"Dataset type with name '{name}' not found.")
         return result
 
     @abstractmethod

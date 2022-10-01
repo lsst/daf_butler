@@ -639,8 +639,13 @@ class Registry(ABC):
 
         Raises
         ------
-        KeyError
-            Requested named DatasetType could not be found in registry.
+        MissingDatasetTypeError
+            Raised if the requested dataset type has not been registered.
+
+        Notes
+        -----
+        This method handles component dataset types automatically, though most
+        other registry operations do not.
         """
         raise NotImplementedError()
 
@@ -712,7 +717,7 @@ class Registry(ABC):
             ``self.defaults.collections`` is `None`.
         LookupError
             Raised if one or more data ID keys are missing.
-        KeyError
+        MissingDatasetTypeError
             Raised if the dataset type does not exist.
         MissingCollectionError
             Raised if any of ``collections`` does not exist in the registry.
@@ -728,6 +733,9 @@ class Registry(ABC):
         reported consistently, regardless of the reason, and that adding
         additional collections that do not contain a match to the search path
         never changes the behavior.
+
+        This method handles component dataset types automatically, though most
+        other registry operations do not.
         """
         raise NotImplementedError()
 
