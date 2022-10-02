@@ -168,8 +168,11 @@ def arrow_to_astropy(arrow_table: pa.Table) -> Any:
     """
     from astropy.table import Table
 
-    # Will want to support units in the schema metadata.
-    return Table(arrow_to_numpy_dict(arrow_table))
+    astropy_table = Table(arrow_to_numpy_dict(arrow_table))
+
+    _apply_astropy_metadata(astropy_table, arrow_table.schema.metadata)
+
+    return astropy_table
 
 
 def arrow_to_numpy(arrow_table: pa.Table) -> Any:
@@ -216,12 +219,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, Any]:
         col = arrow_table[name].to_numpy()
 
         if schema.field(name).type in (pa.string(), pa.binary()):
-            md_name = f"lsst::arrow::len::{name}".encode("UTF-8")
-            if md_name in schema.metadata:
-                strlen = int(schema.metadata[md_name])
-            else:
-                strlen = max(len(row) for row in col)
-            col = col.astype(f"|U{strlen}")
+            col = col.astype(_arrow_string_to_numpy_dtype(schema, name, col))
 
         numpy_dict[name] = col
 
@@ -305,8 +303,8 @@ def astropy_to_arrow(astropy_table: Any) -> pa.Table:
     arrow_table : `pyarrow.Table`
     """
     import numpy as np
+    from astropy.table import meta
 
-    # Will want to support units in the metadata.
     type_list = [
         (name, pa.from_numpy_dtype(astropy_table.dtype[name].type)) for name in astropy_table.dtype.names
     ]
@@ -319,6 +317,10 @@ def astropy_to_arrow(astropy_table: Any) -> pa.Table:
             md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(col.dtype.itemsize // 4)
         elif col.dtype.type is np.bytes_:
             md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(col.dtype.itemsize)
+
+    meta_yaml = meta.get_yaml_from_table(astropy_table)
+    meta_yaml_str = "\n".join(meta_yaml)
+    md[b"table_meta_yaml"] = meta_yaml_str
 
     schema = pa.schema(type_list, metadata=md)
 
@@ -477,19 +479,15 @@ class ArrowAstropySchema:
                 dtype.append(schema.field(name).type.to_pandas_dtype())
                 continue
 
-            # Special-case for string and binary columns
-            md_name = f"lsst::arrow::len::{name}"
-            if md_name.encode("UTF-8") in schema.metadata:
-                # String/bytes length from header.
-                strlen = int(schema.metadata[md_name.encode("UTF-8")])
-            else:
-                strlen = 10
-
-            dtype.append(f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}")
+            dtype.append(_arrow_string_to_numpy_dtype(schema, name))
 
         data = np.zeros(0, dtype=list(zip(schema.names, dtype)))
 
-        return cls(Table(data=data))
+        astropy_table = Table(data=data)
+
+        _apply_astropy_metadata(astropy_table, schema.metadata)
+
+        return cls(astropy_table)
 
     @property
     def schema(self) -> Any:
@@ -504,7 +502,18 @@ class ArrowAstropySchema:
         if not isinstance(other, ArrowAstropySchema):
             return False
 
-        return np.all(self._schema.dtype == other._schema.dtype)
+        if not self._schema.dtype == other._schema.dtype:
+            return False
+
+        for name in self._schema.columns:
+            if not self._schema[name].unit == other._schema[name].unit:
+                return False
+            if not self._schema[name].description == other._schema[name].description:
+                return False
+            if not self._schema[name].format == other._schema[name].format:
+                return False
+
+        return True
 
 
 def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequence[str]]:
@@ -587,3 +596,68 @@ def _standardize_multi_index_columns(
             names.append(str(requested))
 
     return names
+
+
+def _apply_astropy_metadata(astropy_table: Any, metadata: Dict) -> None:
+    """Apply any astropy metadata from the schema metadata.
+
+    Parameters
+    ----------
+    astropy_table : `astropy.table.Table`
+        Table to apply metdata
+    metadata : `dict` [`bytes`]
+        Metadata dict.
+    """
+    from astropy.table import meta
+
+    meta_yaml = metadata.get(b"table_meta_yaml", None)
+    meta_dict = {}
+    if meta_yaml:
+        meta_yaml = meta_yaml.decode("UTF8").split("\n")
+        meta_hdr = meta.get_header_from_yaml(meta_yaml)
+        if "meta" in meta_hdr:
+            meta_dict = meta_hdr["meta"]
+
+        # Set description, format, unit, meta from the column
+        # metadata that was serialized with the table.
+        header_cols = {x["name"]: x for x in meta_hdr["datatype"]}
+        for col in astropy_table.columns.values():
+            for attr in ("description", "format", "unit", "meta"):
+                if attr in header_cols[col.name]:
+                    setattr(col, attr, header_cols[col.name][attr])
+
+
+def _arrow_string_to_numpy_dtype(
+    schema: pa.Schema, name: str, numpy_column: Any | None = None, default_length: int = 10
+) -> str:
+    """Get the numpy dtype string associated with an arrow column.
+
+    Parameters
+    ----------
+    schema : `pyarrow.Schema`
+        Arrow table schema.
+    name : `str`
+        Column name.
+    arrow_column : `pyarrow.Array` or `pyarrow.ChunkedArray`, optional
+        Column to determine numpy dtype.
+    default_length : `int`, optional
+        Default string length when not in metadata or can be inferred from column.
+
+    Returns
+    -------
+    dtype_str : `str`
+        Numpy dtype string.
+    """
+    # Special-case for string and binary columns
+    md_name = f"lsst::arrow::len::{name}"
+    strlen = default_length
+    if md_name.encode("UTF-8") in schema.metadata:
+        # String/bytes length from header.
+        strlen = int(schema.metadata[md_name.encode("UTF-8")])
+    elif numpy_column:
+        if len(numpy_column) > 0:
+            strlen = max(len(row) for row in col)
+
+    dtype = f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}"
+
+    return dtype

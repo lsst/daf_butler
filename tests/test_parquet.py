@@ -29,6 +29,7 @@ import unittest
 
 import numpy as np
 import pandas as pd
+from astropy import units
 from astropy.table import Table
 from lsst.daf.butler import Butler, Config, DatasetType, StorageClassConfig, StorageClassFactory
 from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
@@ -110,7 +111,11 @@ def _makeSimpleAstropyTable():
         The test table.
     """
     data = _makeSimpleNumpyTable()
-    return Table(data)
+    # Add a couple of units
+    table = Table(data)
+    table["a"].unit = units.degree
+    table["b"].unit = units.meter
+    return table
 
 
 def _makeSimpleArrowTable():
@@ -315,6 +320,10 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         table2 : `astropy.table.Table`
         """
         self.assertEqual(table1.dtype, table2.dtype)
+        for name in table1.columns:
+            self.assertEqual(table1[name].unit, table2[name].unit)
+            self.assertEqual(table1[name].description, table2[name].description)
+            self.assertEqual(table1[name].format, table2[name].format)
         self.assertTrue(np.all(table1 == table2))
 
 
