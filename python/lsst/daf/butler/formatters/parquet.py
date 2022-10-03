@@ -33,6 +33,8 @@ __all__ = (
     "numpy_dict_to_arrow",
     "arrow_schema_to_pandas_index",
     "DataFrameSchema",
+    "ArrowAstropySchema",
+    "ArrowNumpySchema",
 )
 
 import collections.abc
