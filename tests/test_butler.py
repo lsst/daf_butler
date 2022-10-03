@@ -679,6 +679,18 @@ class ButlerTests(ButlerPutGetTests):
         self.assertIs(type(model), new_sc.pytype)
         self.assertEqual(retrieved, model)
 
+        # Defer but override later.
+        deferred = butler.getDirectDeferred(ref)
+        model = deferred.get(storageClass=new_sc)
+        self.assertIs(type(model), new_sc.pytype)
+        self.assertEqual(retrieved, model)
+
+        # Defer but override up front.
+        deferred = butler.getDirectDeferred(ref, storageClass=new_sc)
+        model = deferred.get()
+        self.assertIs(type(model), new_sc.pytype)
+        self.assertEqual(retrieved, model)
+
         # Retrieve a component. Should be a tuple.
         data = butler.get("anything.data", dataId, storageClass="StructuredDataDataTestTuple")
         self.assertIs(type(data), tuple)
