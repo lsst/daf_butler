@@ -32,7 +32,7 @@ from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, DatasetRecordStorage, GovernorDimensionRecordStorage
-from ..wildcards import CollectionQuery, CollectionSearch
+from ..wildcards import CollectionWildcard
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
 from ._query_backend import QueryBackend
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
@@ -169,15 +169,13 @@ class QueryBuilder:
             return no results.
         """
         assert datasetType in self.summary.datasets
+        collections = CollectionWildcard.from_expression(collections)
         if isResult and findFirst:
-            collections = CollectionSearch.fromExpression(collections)
-        else:
-            collections = CollectionQuery.fromExpression(collections)
-        explicitCollections = frozenset(collections.explicitNames())
+            collections.require_ordered()
         # If we are searching all collections with no constraints, loop over
         # RUN collections only, because that will include all datasets.
         collectionTypes: Set[CollectionType]
-        if collections == CollectionQuery():
+        if collections == CollectionWildcard():
             collectionTypes = {CollectionType.RUN}
         else:
             collectionTypes = CollectionType.all()
@@ -193,8 +191,8 @@ class QueryBuilder:
             return False
         collectionRecords: list[CollectionRecord] = []
         rejections: list[str] = []
-        for collectionRecord in collections.iter(
-            self._backend.managers.collections, collectionTypes=collectionTypes
+        for collectionRecord in self._backend.resolve_collection_wildcard(
+            collections, collection_types=collectionTypes
         ):
             # Only include collections that (according to collection summaries)
             # might have datasets of this type and governor dimensions
@@ -214,7 +212,7 @@ class QueryBuilder:
                 # skip it to not break queries of other included collections.
                 if datasetType.isCalibration():
                     if self.summary.temporal or self.summary.mustHaveKeysJoined.temporal:
-                        if collectionRecord.name in explicitCollections:
+                        if collectionRecord.name in collections.strings:
                             raise NotImplementedError(
                                 f"Temporal query for dataset type '{datasetType.name}' in CALIBRATION-type "
                                 f"collection '{collectionRecord.name}' is not yet supported."
@@ -228,7 +226,7 @@ class QueryBuilder:
                             )
                             continue
                     elif findFirst:
-                        if collectionRecord.name in explicitCollections:
+                        if collectionRecord.name in collections.strings:
                             raise NotImplementedError(
                                 f"Find-first query for dataset type '{datasetType.name}' in "
                                 f"CALIBRATION-type collection '{collectionRecord.name}' is not yet "

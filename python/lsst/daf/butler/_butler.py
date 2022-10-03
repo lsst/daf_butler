@@ -49,6 +49,7 @@ from typing import (
     List,
     MutableMapping,
     Optional,
+    Sequence,
     Set,
     TextIO,
     Tuple,
@@ -90,7 +91,6 @@ from .core import (
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional
 from .registry import (
-    CollectionSearch,
     CollectionType,
     ConflictingDefinitionError,
     DataIdError,
@@ -504,7 +504,7 @@ class Butler(LimitedButler):
     def _unpickle(
         cls,
         config: ButlerConfig,
-        collections: Optional[CollectionSearch],
+        collections: Optional[tuple[str, ...]],
         run: Optional[str],
         defaultDataId: Dict[str, str],
         writeable: bool,
@@ -521,7 +521,7 @@ class Butler(LimitedButler):
             Butler configuration, already coerced into a true `ButlerConfig`
             instance (and hence after any search paths for overrides have been
             utilized).
-        collections : `CollectionSearch`
+        collections : `tuple` [ `str` ]
             Names of the default collections to read from.
         run : `str`, optional
             Name of the default `~CollectionType.RUN` collection to write to.
@@ -2486,8 +2486,9 @@ class Butler(LimitedButler):
             raise ValidationError(";\n".join(messages))
 
     @property
-    def collections(self) -> CollectionSearch:
-        """The collections to search by default, in order (`CollectionSearch`).
+    def collections(self) -> Sequence[str]:
+        """The collections to search by default, in order
+        (`Sequence` [ `str` ]).
 
         This is an alias for ``self.registry.defaults.collections``.  It cannot
         be set directly in isolation, but all defaults may be changed together

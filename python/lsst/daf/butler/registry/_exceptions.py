@@ -33,6 +33,7 @@ __all__ = (
     "DimensionNameError",
     "InconsistentDataIdError",
     "MissingCollectionError",
+    "MissingDatasetTypeError",
     "NoDefaultCollectionError",
     "OrphanedRecordError",
     "RegistryError",
@@ -64,6 +65,10 @@ class ArgumentError(RegistryError):
 
 class DatasetTypeError(RegistryError):
     """Exception raised for problems with dataset types."""
+
+
+class MissingDatasetTypeError(DatasetTypeError):
+    """Exception raised when a dataset type does not exist."""
 
 
 class DatasetTypeExpressionError(RegistryError):

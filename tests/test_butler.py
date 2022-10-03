@@ -71,7 +71,6 @@ import sqlalchemy
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,
-    CollectionSearch,
     CollectionType,
     Config,
     DatasetIdGenEnum,
@@ -546,7 +545,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(collections, {special_run})
 
         butler2 = Butler(butler=butler, collections=["other"])
-        self.assertEqual(butler2.collections, CollectionSearch.fromExpression(["other"]))
+        self.assertEqual(butler2.collections, ("other",))
         self.assertIsNone(butler2.run)
         self.assertIs(butler.datastore, butler2.datastore)
 

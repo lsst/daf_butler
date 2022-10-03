@@ -22,28 +22,27 @@ from __future__ import annotations
 
 __all__ = (
     "CategorizedWildcard",
-    "CollectionQuery",
+    "CollectionWildcard",
     "CollectionSearch",
+    "DatasetTypeWildcard",
 )
 
+import dataclasses
 import re
-from collections.abc import Callable, Iterator, Sequence, Set
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from typing import Any
 
+from deprecated.sphinx import deprecated
 from lsst.utils.ellipsis import Ellipsis, EllipsisType
 from lsst.utils.iteration import ensure_iterable
 from pydantic import BaseModel
 
 from ..core import DatasetType
 from ..core.utils import globToRegex
-from ._collectionType import CollectionType
-
-if TYPE_CHECKING:
-    from .interfaces import CollectionManager, CollectionRecord
+from ._exceptions import CollectionExpressionError, DatasetTypeExpressionError
 
 
-@dataclass
+@dataclasses.dataclass
 class CategorizedWildcard:
     """The results of preprocessing a wildcard expression to separate match
     patterns from strings.
@@ -93,9 +92,8 @@ class CategorizedWildcard:
             A callback that takes a single argument of arbitrary type and
             returns either a `str` - appended to `strings` - or a `tuple` of
             (`str`, `Any`) to be appended to `items`.  This will be called on
-            objects of unrecognized type, with the return value added to
-            `strings`. Exceptions will be reraised as `TypeError` (and
-            chained).
+            objects of unrecognized type. Exceptions will be reraised as
+            `TypeError` (and chained).
         coerceItemValue: `Callable`, optional
             If provided, ``expression`` may be a mapping from `str` to any
             type that can be passed to this function; the result of that call
@@ -197,25 +195,30 @@ class CategorizedWildcard:
             if allowPatterns and isinstance(element, re.Pattern):
                 self.patterns.append(element)
                 return None
+            if alreadyCoerced:
+                try:
+                    k, v = element
+                except TypeError:
+                    raise TypeError(
+                        f"Object '{element!r}' returned by coercion function must be `str` or `tuple`."
+                    ) from None
+                else:
+                    self.items.append((k, v))
+                    return None
             if coerceItemValue is not None:
                 try:
                     k, v = element
                 except TypeError:
                     pass
                 else:
-                    if not alreadyCoerced:
-                        if not isinstance(k, str):
-                            raise TypeError(f"Item key '{k}' is not a string.")
-                        try:
-                            v = coerceItemValue(v)
-                        except Exception as err:
-                            raise TypeError(
-                                f"Could not coerce tuple item value '{v}' for key '{k}'."
-                            ) from err
+                    if not isinstance(k, str):
+                        raise TypeError(f"Item key '{k}' is not a string.")
+                    try:
+                        v = coerceItemValue(v)
+                    except Exception as err:
+                        raise TypeError(f"Could not coerce tuple item value '{v}' for key '{k}'.") from err
                     self.items.append((k, v))
                     return None
-            if alreadyCoerced:
-                raise TypeError(f"Object '{element!r}' returned by coercion function is still unrecognized.")
             if coerceUnrecognized is not None:
                 try:
                     # This should be safe but flake8 cant tell that the
@@ -255,63 +258,11 @@ class CategorizedWildcard:
     """
 
 
-def _yieldCollectionRecords(
-    manager: CollectionManager,
-    record: CollectionRecord,
-    collectionTypes: Set[CollectionType] = CollectionType.all(),
-    done: set[str] | None = None,
-    flattenChains: bool = True,
-    includeChains: bool | None = None,
-) -> Iterator[CollectionRecord]:
-    """A helper function containing common logic for `CollectionSearch.iter`
-    and `CollectionQuery.iter`: recursively yield `CollectionRecord` only if
-    they match the criteria given in other arguments.
-
-    Parameters
-    ----------
-    manager : `CollectionManager`
-        Object responsible for managing the collection tables in a `Registry`.
-    record : `CollectionRecord`
-        Record to conditionally yield.
-    collectionTypes : `AbstractSet` [ `CollectionType` ], optional
-        If provided, only yield collections of these types.
-    done : `set` [ `str` ], optional
-        A `set` of already-yielded collection names; if provided, ``record``
-        will only be yielded if it is not already in ``done``, and ``done``
-        will be updated to include it on return.
-    flattenChains : `bool`, optional
-        If `True` (default) recursively yield the child collections of
-        `~CollectionType.CHAINED` collections.
-    includeChains : `bool`, optional
-        If `False`, return records for `~CollectionType.CHAINED` collections
-        themselves.  The default is the opposite of ``flattenChains``: either
-        return records for CHAINED collections or their children, but not both.
-
-    Yields
-    ------
-    record : `CollectionRecord`
-        Matching collection records.
-    """
-    if done is None:
-        done = set()
-    includeChains = includeChains if includeChains is not None else not flattenChains
-    if record.type in collectionTypes:
-        done.add(record.name)
-        if record.type is not CollectionType.CHAINED or includeChains:
-            yield record
-    if flattenChains and record.type is CollectionType.CHAINED:
-        done.add(record.name)
-        # We know this is a ChainedCollectionRecord because of the enum value,
-        # but MyPy doesn't.
-        yield from record.children.iter(  # type: ignore
-            manager,
-            collectionTypes=collectionTypes,
-            done=done,
-            flattenChains=flattenChains,
-            includeChains=includeChains,
-        )
-
-
+@deprecated(
+    reason="Tuples of string collection names are now preferred.  Will be removed after v26.",
+    version="v25.0",
+    category=FutureWarning,
+)
 class CollectionSearch(BaseModel, Sequence[str]):
     """An ordered search path of collections.
 
@@ -330,8 +281,8 @@ class CollectionSearch(BaseModel, Sequence[str]):
     A `CollectionSearch` is used to find a single dataset (or set of datasets
     with different dataset types or data IDs) according to its dataset type and
     data ID, giving preference to collections in the order in which they are
-    specified.  A `CollectionQuery` can be constructed from a broader range of
-    expressions but does not order the collections to be searched.
+    specified.  A `CollectionWildcard` can be constructed from a broader range
+    of expressions but does not order the collections to be searched.
 
     `CollectionSearch` is an immutable sequence of `str` collection names.
 
@@ -371,11 +322,14 @@ class CollectionSearch(BaseModel, Sequence[str]):
         # them down to other routines that accept arbitrary expressions.
         if isinstance(expression, cls):
             return expression
-        wildcard = CategorizedWildcard.fromExpression(
-            expression,
-            allowAny=False,
-            allowPatterns=False,
-        )
+        try:
+            wildcard = CategorizedWildcard.fromExpression(
+                expression,
+                allowAny=False,
+                allowPatterns=False,
+            )
+        except TypeError as err:
+            raise CollectionExpressionError(str(err)) from None
         assert wildcard is not Ellipsis
         assert not wildcard.patterns
         assert not wildcard.items
@@ -384,63 +338,6 @@ class CollectionSearch(BaseModel, Sequence[str]):
             if name not in deduplicated:
                 deduplicated.append(name)
         return cls(__root__=tuple(deduplicated))
-
-    def iter(
-        self,
-        manager: CollectionManager,
-        *,
-        datasetType: DatasetType | None = None,
-        collectionTypes: Set[CollectionType] = CollectionType.all(),
-        done: set[str] | None = None,
-        flattenChains: bool = True,
-        includeChains: bool | None = None,
-    ) -> Iterator[CollectionRecord]:
-        """Iterate over collection records that match this instance and the
-        given criteria, in order.
-
-        This method is primarily intended for internal use by `Registry`;
-        other callers should generally prefer `Registry.findDatasets` or
-        other `Registry` query methods.
-
-        Parameters
-        ----------
-        manager : `CollectionManager`
-            Object responsible for managing the collection tables in a
-            `Registry`.
-        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
-            If provided, only yield collections of these types.
-        done : `set`, optional
-            A `set` containing the names of all collections already yielded;
-            any collections whose names are already present in this set will
-            not be yielded again, and those yielded will be added to it while
-            iterating.  If not provided, an empty `set` will be created and
-            used internally to avoid duplicates.
-        flattenChains : `bool`, optional
-            If `True` (default) recursively yield the child collections of
-            `~CollectionType.CHAINED` collections.
-        includeChains : `bool`, optional
-            If `False`, return records for `~CollectionType.CHAINED`
-            collections themselves.  The default is the opposite of
-            ``flattenChains``: either return records for CHAINED collections or
-            their children, but not both.
-
-        Yields
-        ------
-        record : `CollectionRecord`
-            Matching collection records.
-        """
-        if done is None:
-            done = set()
-        for name in self:
-            if name not in done:
-                yield from _yieldCollectionRecords(
-                    manager,
-                    manager.find(name),
-                    collectionTypes=collectionTypes,
-                    done=done,
-                    flattenChains=flattenChains,
-                    includeChains=includeChains,
-                )
 
     def explicitNames(self) -> Iterator[str]:
         """Iterate over collection names that were specified explicitly."""
@@ -467,51 +364,44 @@ class CollectionSearch(BaseModel, Sequence[str]):
         return f"CollectionSearch({self.__root__!r})"
 
 
-class CollectionQuery:
-    """An unordered query for collections and dataset type restrictions.
+@dataclasses.dataclass(frozen=True)
+class CollectionWildcard:
+    """A validated wildcard for collection names
 
-    The `fromExpression` method should almost always be used to construct
+    The `from_expression` method should almost always be used to construct
     instances, as the regular constructor performs no checking of inputs (and
     that can lead to confusing error messages downstream).
 
-    Parameters
-    ----------
-    search : `CollectionSearch` or `...`
-        An object representing an ordered search for explicitly-named
-        collections (to be interpreted here as unordered), or the special
-        value `...` indicating all collections.  `...` must be accompanied
-        by ``patterns=None``.
-    patterns : `tuple` of `re.Pattern`
-        Regular expression patterns to match against collection names.
-    universe : `DimensionUniverse`
-        Object managing all dimensions.
-
     Notes
     -----
-    A `CollectionQuery` is used to find all matching datasets in any number
-    of collections, or to find collections themselves.
-
-    `CollectionQuery` is expected to be rarely used outside of `Registry`
+    `CollectionWildcard` is expected to be rarely used outside of `Registry`
     (which uses it to back several of its "query" methods that take general
-    expressions for collections), but it may occassionally be useful outside
+    expressions for collections), but it may occasionally be useful outside
     `Registry` as a way to preprocess expressions that contain single-pass
     iterators into a form that can be used to call those `Registry` methods
     multiple times.
     """
 
-    def __init__(
-        self,
-        search: CollectionSearch | EllipsisType = Ellipsis,
-        patterns: tuple[re.Pattern, ...] = (),
-    ):
-        self._search = search
-        self._patterns = patterns
+    strings: tuple[str, ...] = ()
+    """An an ordered list of explicitly-named collections. (`tuple` [ `str` ]).
+    """
 
-    __slots__ = ("_search", "_patterns")
+    patterns: tuple[re.Pattern, ...] | EllipsisType = Ellipsis
+    """Regular expression patterns to match against collection names, or the
+    special value ``...`` indicating all collections.
+
+    `...` must be accompanied by ``strings=()``.
+    """
+
+    def __post_init__(self) -> None:
+        if self.patterns is Ellipsis and self.strings:
+            raise ValueError(
+                f"Collection wildcard matches any string, but still has explicit strings {self.strings}."
+            )
 
     @classmethod
-    def fromExpression(cls, expression: Any) -> CollectionQuery:
-        """Process a general expression to construct a `CollectionQuery`
+    def from_expression(cls, expression: Any) -> CollectionWildcard:
+        """Process a general expression to construct a `CollectionWildcard`
         instance.
 
         Parameters
@@ -522,23 +412,21 @@ class CollectionQuery:
              - an `re.Pattern` instance to match (with `re.Pattern.fullmatch`)
                against collection names;
              - any iterable containing any of the above;
-             - a `CollectionSearch` instance;
-             - another `CollectionQuery` instance (passed through unchanged).
+             - another `CollectionWildcard` instance (passed through
+               unchanged).
 
             Duplicate collection names will be removed (preserving the first
             appearance of each collection name).
 
         Returns
         -------
-        collections : `CollectionQuery`
-            A `CollectionQuery` instance.
+        wildcard : `CollectionWildcard`
+            A `CollectionWildcard` instance.
         """
         if isinstance(expression, cls):
             return expression
         if expression is Ellipsis:
             return cls()
-        if isinstance(expression, CollectionSearch):
-            return cls(search=expression, patterns=())
         wildcard = CategorizedWildcard.fromExpression(
             expression,
             allowAny=True,
@@ -546,97 +434,136 @@ class CollectionQuery:
         )
         if wildcard is Ellipsis:
             return cls()
-        assert (
-            not wildcard.items
-        ), "We should no longer be transforming to (str, DatasetTypeRestriction) tuples."
         return cls(
-            search=CollectionSearch.fromExpression(wildcard.strings),
+            strings=tuple(wildcard.strings),
             patterns=tuple(wildcard.patterns),
         )
 
-    def iter(
-        self,
-        manager: CollectionManager,
-        *,
-        collectionTypes: Set[CollectionType] = CollectionType.all(),
-        flattenChains: bool = True,
-        includeChains: bool | None = None,
-    ) -> Iterator[CollectionRecord]:
-        """Iterate over collection records that match this instance and the
-        given criteria, in an arbitrary order.
-
-        This method is primarily intended for internal use by `Registry`;
-        other callers should generally prefer `Registry.queryDatasets` or
-        other `Registry` query methods.
+    @classmethod
+    def from_names(cls, names: Iterable[str]) -> CollectionWildcard:
+        """Construct from an iterable of explicit collection names.
 
         Parameters
         ----------
-        manager : `CollectionManager`
-            Object responsible for managing the collection tables in a
-            `Registry`.
-        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
-            If provided, only yield collections of these types.
-        flattenChains : `bool`, optional
-            If `True` (default) recursively yield the child collections of
-            `~CollectionType.CHAINED` collections.
-        includeChains : `bool`, optional
-            If `False`, return records for `~CollectionType.CHAINED`
-            collections themselves.  The default is the opposite of
-            ``flattenChains``: either return records for CHAINED collections or
-            their children, but not both.
+        names : `Iterable` [ `str` ]
+            Iterable of collection names.
 
-        Yields
-        ------
-        record : `CollectionRecord`
-            Matching collection records.
+        Returns
+        -------
+        wildcard : ~CollectionWildcard`
+            A `CollectionWildcard` instance.  `require_ordered` is guaranteed
+            to succeed and return the given names in order.
         """
-        if self._search is Ellipsis:
-            for record in manager:
-                yield from _yieldCollectionRecords(
-                    manager,
-                    record,
-                    collectionTypes=collectionTypes,
-                    flattenChains=flattenChains,
-                    includeChains=includeChains,
-                )
-        else:
-            done: set[str] = set()
-            yield from self._search.iter(
-                manager,
-                collectionTypes=collectionTypes,
-                done=done,
-                flattenChains=flattenChains,
-                includeChains=includeChains,
+        return cls(strings=tuple(names), patterns=())
+
+    def require_ordered(self) -> tuple[str, ...]:
+        """Require that this wildcard contains no patterns, and return the
+        ordered tuple of names that it does hold.
+
+        Returns
+        -------
+        names : `tuple` [ `str` ]
+            Ordered tuple of collection names.
+
+        Raises
+        ------
+        CollectionExpressionError
+            Raised if the patterns has regular expression, glob patterns, or
+            the ``...`` wildcard.
+        """
+        if self.patterns:
+            raise CollectionExpressionError(
+                f"An ordered collection expression is required; got patterns {self.patterns}."
             )
-            for record in manager:
-                if record.name not in done and any(p.fullmatch(record.name) for p in self._patterns):
-                    yield from _yieldCollectionRecords(
-                        manager,
-                        record,
-                        collectionTypes=collectionTypes,
-                        done=done,
-                        flattenChains=flattenChains,
-                        includeChains=includeChains,
-                    )
-
-    def explicitNames(self) -> Iterator[str]:
-        """Iterate over collection names that were specified explicitly."""
-        if isinstance(self._search, CollectionSearch):
-            yield from self._search.explicitNames()
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, CollectionQuery):
-            return self._search == other._search and self._patterns == other._patterns
-        else:
-            return False
+        return self.strings
 
     def __str__(self) -> str:
-        if self._search is Ellipsis:
+        if self.patterns is Ellipsis:
             return "..."
         else:
-            terms = list(self._search)
-            terms.extend(str(p) for p in self._patterns)
+            terms = list(self.strings)
+            terms.extend(str(p) for p in self.patterns)
             return "[{}]".format(", ".join(terms))
 
-    def __repr__(self) -> str:
-        return f"CollectionQuery({self._search!r}, {self._patterns!r})"
+
+@dataclasses.dataclass
+class DatasetTypeWildcard:
+    """A validated expression that resolves to one or more dataset types.
+
+    The `from_expression` method should almost always be used to construct
+    instances, as the regular constructor performs no checking of inputs (and
+    that can lead to confusing error messages downstream).
+    """
+
+    values: Mapping[str, DatasetType | None] = dataclasses.field(default_factory=dict)
+    """A mapping with `str` dataset type name keys and optional `DatasetType`
+    instances.
+    """
+
+    patterns: tuple[re.Pattern, ...] | EllipsisType = Ellipsis
+    """Regular expressions to be matched against dataset type names, or the
+    special value ``...`` indicating all dataset types.
+
+    Any pattern matching a dataset type is considered an overall match for
+    the expression.
+    """
+
+    @classmethod
+    def from_expression(cls, expression: Any) -> DatasetTypeWildcard:
+        """Construct an instance by analyzing the given expression.
+
+        Parameters
+        ----------
+        expression
+            Expression to analyze.  May be any of the following:
+
+            - a `str` dataset type name;
+            - a `DatasetType` instance;
+            - a `re.Pattern` to match against dataset type names;
+            - an iterable whose elements may be any of the above (any dataset
+              type matching any element in the list is an overall match);
+            - an existing `DatasetTypeWildcard` instance;
+            - the special ``...`` ellipsis object, which matches any dataset
+              type.
+
+        Returns
+        -------
+        query : `DatasetTypeWildcard`
+            An instance of this class (new unless an existing instance was
+            passed in).
+
+        Raises
+        ------
+        DatasetTypeExpressionError
+            Raised if the given expression does not have one of the allowed
+            types.
+        """
+        if isinstance(expression, cls):
+            return expression
+        try:
+            wildcard = CategorizedWildcard.fromExpression(
+                expression, coerceUnrecognized=lambda d: (d.name, d)
+            )
+        except TypeError as err:
+            raise DatasetTypeExpressionError(f"Invalid dataset type expression: {expression!r}.") from err
+        if wildcard is Ellipsis:
+            return cls()
+        values: dict[str, DatasetType | None] = {}
+        for name in wildcard.strings:
+            values[name] = None
+        for name, item in wildcard.items:
+            if not isinstance(item, DatasetType):
+                raise DatasetTypeExpressionError(
+                    f"Invalid value '{item}' of type {type(item)} in dataset type expression; "
+                    "expected str, re.Pattern, DatasetType objects, iterables thereof, or '...'."
+                )
+            values[name] = item
+        return cls(values, patterns=tuple(wildcard.patterns))
+
+    def __str__(self) -> str:
+        if self.patterns is Ellipsis:
+            return "..."
+        else:
+            terms = list(self.values.keys())
+            terms.extend(str(p) for p in self.patterns)
+            return "[{}]".format(", ".join(terms))

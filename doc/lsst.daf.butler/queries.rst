@@ -30,7 +30,9 @@ Arguments that specify one or more dataset types can generally take any of the f
  - iterables of any of the above;
  - the special value "``...``", which matches all dataset types.
 
-Some of these are not allowed in certain contexts (as documented there).
+Wildcards (`re.Pattern` and ``...``) are not allowed in certain contexts, such as `Registry.queryDataIds` and `Registry.queryDimensionRecords`, particularly when datasets are used only as a constraint on what is returned.
+`Registry.queryDatasetTypes` can be used to resolve patterns before calling these methods when desired.
+In these contexts, passing a dataset type or name that is not registered with the repository will result in `MissingDatasetTypeError` being raised, while contexts that do accept wildcards will typically ignore unregistered dataset types (for example, `Registry.queryDatasets` will return no datasets for these).
 
 .. _daf_butler_collection_expressions:
 
@@ -45,8 +47,10 @@ Arguments that specify one or more collections are similar to those for dataset 
  - iterables of any of the above;
  - the special value "``...``", which matches all collections;
 
-Collection expressions are processed by the `~registry.wildcards.CollectionQuery` class.
+Collection expressions are processed by the `~registry.wildcards.CollectionWildcard` class.
 User code will rarely need to interact with these directly, but they can be passed to `Registry` instead of the expression objects themselves, and hence may be useful as a way to transform an expression that may include single-pass iterators into an equivalent form that can be reused.
+
+.. _daf_butler_ordered_collection_searches:
 
 Ordered collection searches
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -55,7 +59,7 @@ An *ordered* collection expression is required in contexts where we want to sear
 These include all direct `Butler` operations, the definitions of `~CollectionType.CHAINED` collections, `Registry.findDataset`, and the ``findFirst=True`` mode of `Registry.queryDatasets`.
 In these contexts, regular expressions and "``...``" are not allowed for collection names, because they make it impossible to unambiguously define the order in which to search.
 
-Ordered collection searches are processed by the `~registry.wildcards.CollectionSearch` class.
+The `CollectionWildcard.require_ordered` method can be used to verify that a collection expression resolves to an ordered sequence.
 
 .. _daf_butler_dimension_expressions:
 

@@ -35,6 +35,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
@@ -68,7 +69,6 @@ from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from .interfaces import DatasetIdFactory, DatasetIdGenEnum
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
-from .wildcards import CollectionSearch
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -439,7 +439,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getCollectionChain(self, parent: str) -> CollectionSearch:
+    def getCollectionChain(self, parent: str) -> Sequence[str]:
         """Return the child collections in a `~CollectionType.CHAINED`
         collection.
 
@@ -451,9 +451,9 @@ class Registry(ABC):
 
         Returns
         -------
-        children : `CollectionSearch`
-            An object that defines the search path of the collection.
-            See :ref:`daf_butler_collection_expressions` for more information.
+        children : `Sequence` [ `str` ]
+            An ordered sequence of collection names that are searched when the
+            given chained collection is searched.
 
         Raises
         ------
@@ -1195,7 +1195,7 @@ class Registry(ABC):
         *,
         components: Optional[bool] = None,
         missing: Optional[List[str]] = None,
-    ) -> Iterator[DatasetType]:
+    ) -> Iterable[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
 
         Parameters
@@ -1218,10 +1218,11 @@ class Registry(ABC):
             regular expression patterns) but not found will be appended to this
             list, if it is provided.
 
-        Yields
-        ------
-        datasetType : `DatasetType`
-            A `DatasetType` instance whose name matches ``expression``.
+        Returns
+        -------
+        dataset_types : `Iterable` [ `DatasetType`]
+            An `Iterable` of `DatasetType` instances whose names match
+            ``expression``.
 
         Raises
         ------
@@ -1238,7 +1239,7 @@ class Registry(ABC):
         collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
         includeChains: Optional[bool] = None,
-    ) -> Iterator[str]:
+    ) -> Sequence[str]:
         """Iterate over the collections whose names match an expression.
 
         Parameters
@@ -1264,10 +1265,10 @@ class Registry(ABC):
             collections.  Default is the opposite of ``flattenChains``: include
             either CHAINED collections or their children, but not both.
 
-        Yields
-        ------
-        collection : `str`
-            The name of a collection that matches ``expression``.
+        Returns
+        -------
+        collections : `Sequence` [ `str` ]
+            The names of collections that match ``expression``.
 
         Raises
         ------
@@ -1432,10 +1433,9 @@ class Registry(ABC):
             ``exposure``, ``detector``, and ``physical_filter`` values to only
             those for which at least one "raw" dataset exists in
             ``collections``.  Allowed types include `DatasetType`, `str`,
-            `re.Pattern`, and iterables thereof.  Unlike other dataset type
-            expressions, ``...`` is not permitted - it doesn't make sense to
-            constrain data IDs on the existence of *all* datasets.
-            See :ref:`daf_butler_dataset_type_expressions` for more
+            and iterables thereof.  Regular expression objects (i.e.
+            `re.Pattern`) are deprecated and will be removed after the v26
+            release.  See :ref:`daf_butler_dataset_type_expressions` for more
             information.
         collections: `Any`, optional
             An expression that identifies the collections to search for

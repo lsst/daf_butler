@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("RegistryDefaults",)
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, AbstractSet, Any, Optional
 
 from lsst.utils.classes import immutable
@@ -30,7 +31,7 @@ from lsst.utils.classes import immutable
 from ..core import DataCoordinate
 from ._collection_summary import CollectionSummary
 from ._exceptions import MissingCollectionError
-from .wildcards import CollectionSearch
+from .wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
     from ._registry import Registry
@@ -80,7 +81,7 @@ class RegistryDefaults:
                 collections = (run,)
             else:
                 collections = ()
-        self.collections = CollectionSearch.fromExpression(collections)
+        self.collections = CollectionWildcard.from_expression(collections).require_ordered()
         self.run = run
         self._infer = infer
         self._kwargs = kwargs
@@ -126,8 +127,8 @@ class RegistryDefaults:
                         self._kwargs[dimensionName] = value
         self.dataId = registry.expandDataId(self._kwargs, withDefaults=False)
 
-    collections: CollectionSearch
-    """The collections to search by default, in order (`CollectionSearch`).
+    collections: Sequence[str]
+    """The collections to search by default, in order (`Sequence` [ `str` ]).
     """
 
     run: Optional[str]
