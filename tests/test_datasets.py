@@ -269,7 +269,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertFalse(dA.is_compatible_with(dA3))
 
     def testOverrideStorageClass(self):
-        storageA = StorageClass("test_a", pytype=list)
+        storageA = StorageClass("test_a", pytype=list, converters={"dict": "builtins.list"})
         storageB = StorageClass("test_b", pytype=dict)
         dimensions = self.universe.extract(["instrument"])
 

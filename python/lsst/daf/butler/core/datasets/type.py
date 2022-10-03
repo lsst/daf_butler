@@ -553,12 +553,19 @@ class DatasetType:
         will be retained.
         """
         parent = self._parentStorageClass if self._parentStorageClass else self._parentStorageClassName
-        return DatasetType(
+        new = DatasetType(
             self.name,
             dimensions=self.dimensions,
             storageClass=storageClass,
             parentStorageClass=parent,
             isCalibration=self.isCalibration(),
+        )
+        # Check validity.
+        if new.is_compatible_with(self) or self.is_compatible_with(new):
+            return new
+        raise ValueError(
+            f"The new storage class ({new.storageClass}) is not compatible with the "
+            f"existing storage class ({self.storageClass})."
         )
 
     def isComponent(self) -> bool:
