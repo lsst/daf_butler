@@ -41,12 +41,17 @@ import collections.abc
 import itertools
 import json
 import re
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Union
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from lsst.daf.butler import Formatter
 from lsst.utils.iteration import ensure_iterable
+
+if TYPE_CHECKING:
+    import astropy.table as atable
+    import numpy as np
+    import pandas as pd
 
 
 class ParquetFormatter(Formatter):
@@ -141,7 +146,7 @@ class ParquetFormatter(Formatter):
         pq.write_table(arrow_table, location.path)
 
 
-def arrow_to_pandas(arrow_table: pa.Table) -> Any:
+def arrow_to_pandas(arrow_table: pa.Table) -> pd.DataFrame:
     """Convert a pyarrow table to a pandas DataFrame.
     If the input table has ``pandas`` metadata in the schema it will be
     used in the construction of the DataFrame.
@@ -157,7 +162,7 @@ def arrow_to_pandas(arrow_table: pa.Table) -> Any:
     return arrow_table.to_pandas(use_threads=False)
 
 
-def arrow_to_astropy(arrow_table: pa.Table) -> Any:
+def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
     """Convert a pyarrow table to an astropy.Table.
 
     Parameters
@@ -177,8 +182,8 @@ def arrow_to_astropy(arrow_table: pa.Table) -> Any:
     return astropy_table
 
 
-def arrow_to_numpy(arrow_table: pa.Table) -> Any:
-    """Convert a pyarrow table to a numpy.recarray.
+def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray:
+    """Convert a pyarrow table to a structured numpy array.
 
     Parameters
     ----------
@@ -186,7 +191,7 @@ def arrow_to_numpy(arrow_table: pa.Table) -> Any:
 
     Returns
     -------
-    recarray : `numpy.ndarray` (N,)
+    array : `numpy.ndarray` (N,)
     """
     import numpy as np
 
@@ -196,12 +201,12 @@ def arrow_to_numpy(arrow_table: pa.Table) -> Any:
     for name, col in numpy_dict.items():
         dtype.append((name, col.dtype))
 
-    recarray = np.rec.fromarrays(numpy_dict.values(), dtype=dtype)
+    array = np.rec.fromarrays(numpy_dict.values(), dtype=dtype)
 
-    return recarray
+    return array
 
 
-def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, Any]:
+def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, np.ndarray]:
     """Convert a pyarrow table to a dict of numpy arrays.
 
     Parameters
@@ -228,7 +233,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, Any]:
     return numpy_dict
 
 
-def numpy_dict_to_arrow(numpy_dict: Dict[str, Any]) -> pa.Table:
+def numpy_dict_to_arrow(numpy_dict: Dict[str, np.ndarray]) -> pa.Table:
     """Convert a dict of numpy arrays to an arrow table.
 
     Parameters
@@ -261,7 +266,7 @@ def numpy_dict_to_arrow(numpy_dict: Dict[str, Any]) -> pa.Table:
     return arrow_table
 
 
-def numpy_to_arrow(np_array: Any) -> pa.Table:
+def numpy_to_arrow(np_array: np.ndarray) -> pa.Table:
     """Convert a numpy array table to an arrow table.
 
     Parameters
@@ -293,7 +298,7 @@ def numpy_to_arrow(np_array: Any) -> pa.Table:
     return arrow_table
 
 
-def astropy_to_arrow(astropy_table: Any) -> pa.Table:
+def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     """Convert an astropy table to an arrow table.
 
     Parameters
@@ -332,7 +337,7 @@ def astropy_to_arrow(astropy_table: Any) -> pa.Table:
     return arrow_table
 
 
-def pandas_to_arrow(dataframe: Any) -> pa.Table:
+def pandas_to_arrow(dataframe: pd.DataFrame) -> pa.Table:
     """Convert a pandas dataframe to an arrow table.
 
     Parameters
@@ -364,7 +369,7 @@ def pandas_to_arrow(dataframe: Any) -> pa.Table:
     return arrow_table
 
 
-def arrow_schema_to_pandas_index(schema: pa.Schema) -> Any:
+def arrow_schema_to_pandas_index(schema: pa.Schema) -> pd.Index | pd.MultiIndex:
     """Convert an arrow schema to a pandas index/multiindex.
 
     Parameters
@@ -414,7 +419,7 @@ class DataFrameSchema:
         Dataframe to turn into a schema.
     """
 
-    def __init__(self, dataframe: Any) -> DataFrameSchema:
+    def __init__(self, dataframe: pd.DataFrame) -> DataFrameSchema:
         self._dtypes = dataframe.dtypes
 
     @classmethod
@@ -434,7 +439,7 @@ class DataFrameSchema:
         return cls(empty_table.to_pandas())
 
     @property
-    def schema(self) -> Any:
+    def schema(self) -> np.dtype:
         return self._dtypes
 
     def __repr__(self):
@@ -457,7 +462,7 @@ class ArrowAstropySchema:
     astropy_table : `astropy.table.Table`
     """
 
-    def __init__(self, astropy_table: Any) -> ArrowAstropySchema:
+    def __init__(self, astropy_table: atable.Table) -> ArrowAstropySchema:
         self._schema = astropy_table[:0]
 
     @classmethod
@@ -492,7 +497,7 @@ class ArrowAstropySchema:
         return cls(astropy_table)
 
     @property
-    def schema(self) -> Any:
+    def schema(self) -> atable.Table:
         return self._schema
 
     def __repr__(self):
@@ -524,7 +529,7 @@ class ArrowNumpySchema:
     numpy_dtype : `numpy.dtype` or `list` [`str`]
     """
 
-    def __init__(self, numpy_dtype: Any) -> ArrowNumpySchema:
+    def __init__(self, numpy_dtype: np.dtype | Iterable) -> ArrowNumpySchema:
         import numpy as np
 
         if isinstance(numpy_dtype, (tuple, list)):
@@ -555,7 +560,7 @@ class ArrowNumpySchema:
         return cls(dtype)
 
     @property
-    def schema(self) -> Any:
+    def schema(self) -> np.dtype:
         return self._dtype
 
     def __repr__(self):
@@ -653,7 +658,7 @@ def _standardize_multi_index_columns(
     return names
 
 
-def _apply_astropy_metadata(astropy_table: Any, metadata: Dict) -> None:
+def _apply_astropy_metadata(astropy_table: atable.Table, metadata: Dict) -> None:
     """Apply any astropy metadata from the schema metadata.
 
     Parameters
@@ -680,7 +685,7 @@ def _apply_astropy_metadata(astropy_table: Any, metadata: Dict) -> None:
 
 
 def _arrow_string_to_numpy_dtype(
-    schema: pa.Schema, name: str, numpy_column: Any | None = None, default_length: int = 10
+    schema: pa.Schema, name: str, numpy_column: np.ndarray | None = None, default_length: int = 10
 ) -> str:
     """Get the numpy dtype string associated with an arrow column.
 
