@@ -419,7 +419,7 @@ class DataFrameSchema:
         Dataframe to turn into a schema.
     """
 
-    def __init__(self, dataframe: pd.DataFrame) -> DataFrameSchema:
+    def __init__(self, dataframe: pd.DataFrame) -> None:
         self._dtypes = dataframe.dtypes
 
     @classmethod
@@ -442,16 +442,16 @@ class DataFrameSchema:
     def schema(self) -> np.dtype:
         return self._dtypes
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._dtypes)
 
-    def __eq__(self, other: DataFrameSchema) -> bool:
+    def __eq__(self, other: object) -> bool:
         import numpy as np
 
         if not isinstance(other, DataFrameSchema):
             return False
 
-        return np.all(self._dtypes == other._dtypes)
+        return bool(np.all(self._dtypes == other._dtypes))
 
 
 class ArrowAstropySchema:
@@ -462,12 +462,12 @@ class ArrowAstropySchema:
     astropy_table : `astropy.table.Table`
     """
 
-    def __init__(self, astropy_table: atable.Table) -> ArrowAstropySchema:
+    def __init__(self, astropy_table: atable.Table) -> None:
         self._schema = astropy_table[:0]
 
     @classmethod
-    def from_arrow(cls, schema: pa.Schema) -> DataFrameSchema:
-        """Convert an arrow schema into a DataFrameSchema.
+    def from_arrow(cls, schema: pa.Schema) -> ArrowAstropySchema:
+        """Convert an arrow schema into a ArrowAstropySchema.
 
         Parameters
         ----------
@@ -500,10 +500,10 @@ class ArrowAstropySchema:
     def schema(self) -> atable.Table:
         return self._schema
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._schema)
 
-    def __eq__(self, other: ArrowAstropySchema) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, ArrowAstropySchema):
             return False
 
@@ -529,13 +529,8 @@ class ArrowNumpySchema:
     numpy_dtype : `numpy.dtype` or `list` [`str`]
     """
 
-    def __init__(self, numpy_dtype: np.dtype | Iterable) -> ArrowNumpySchema:
-        import numpy as np
-
-        if isinstance(numpy_dtype, (tuple, list)):
-            self._dtype = np.dtype(numpy_dtype)
-        else:
-            self._dtype = numpy_dtype
+    def __init__(self, numpy_dtype: np.dtype) -> None:
+        self._dtype = numpy_dtype
 
     @classmethod
     def from_arrow(cls, schema: pa.Schema) -> ArrowNumpySchema:
@@ -549,6 +544,8 @@ class ArrowNumpySchema:
         -------
         numpy_schema : `ArrowNumpySchema`
         """
+        import numpy as np
+
         dtype = []
         for name in schema.names:
             if schema.field(name).type not in (pa.string(), pa.binary()):
@@ -557,16 +554,16 @@ class ArrowNumpySchema:
 
             dtype.append((name, _arrow_string_to_numpy_dtype(schema, name)))
 
-        return cls(dtype)
+        return cls(np.dtype(dtype))
 
     @property
     def schema(self) -> np.dtype:
         return self._dtype
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._dtype)
 
-    def __eq__(self, other: ArrowNumpySchema) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, ArrowNumpySchema):
             return False
 
@@ -596,7 +593,7 @@ def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequen
     column_names : `list` [`tuple` [`str`]]
         A list of multi-index column name tuples.
     """
-    column_names = []
+    column_names: List[Sequence[str]] = []
 
     pattern = re.compile(r"\({}\)".format(", ".join(["'(.*)'"] * n)))
     for name in names:
