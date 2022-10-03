@@ -33,7 +33,12 @@ from astropy import units
 from astropy.table import Table
 from lsst.daf.butler import Butler, Config, DatasetType, StorageClassConfig, StorageClassFactory
 from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
-from lsst.daf.butler.formatters.parquet import ArrowAstropySchema, DataFrameSchema, numpy_to_arrow
+from lsst.daf.butler.formatters.parquet import (
+    ArrowAstropySchema,
+    ArrowNumpySchema,
+    DataFrameSchema,
+    numpy_to_arrow,
+)
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -324,6 +329,85 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
             self.assertEqual(table1[name].unit, table2[name].unit)
             self.assertEqual(table1[name].description, table2[name].description)
             self.assertEqual(table1[name].format, table2[name].format)
+        self.assertTrue(np.all(table1 == table2))
+
+
+class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
+    """Tests for ParquetFormatter, ArrowNumpy, using local file datastore."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        """Create a new butler root for each test."""
+        self.root = makeTestTempDir(TESTDIR)
+        config = Config(self.configFile)
+        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        # No dimensions in dataset type so we don't have to worry about
+        # inserting dimension data or defining data IDs.
+        self.datasetType = DatasetType(
+            "data", dimensions=(), storageClass="ArrowNumpy", universe=self.butler.registry.dimensions
+        )
+        self.butler.registry.registerDatasetType(self.datasetType)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def testAstropyTable(self):
+        tab1 = _makeSimpleNumpyTable()
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+        # Read the whole Table.
+        tab2 = self.butler.get(self.datasetType, dataId={})
+        self._checkNumpyTableEquality(tab1, tab2)
+        # Read the columns.
+        columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
+        self.assertEqual(len(columns2), len(tab1.dtype.names))
+        for i, name in enumerate(tab1.dtype.names):
+            self.assertEqual(columns2[i], name)
+        # Read the rowcount.
+        rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
+        self.assertEqual(rowcount, len(tab1))
+        # Read the schema
+        schema = self.butler.get(self.datasetType.componentTypeName("schema"), dataId={})
+        self.assertEqual(schema, ArrowNumpySchema(tab1.dtype))
+        # Read just some columns a few different ways.
+        tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
+        self._checkNumpyTableEquality(tab1[["a", "c"]], tab3)
+        tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
+        self._checkNumpyTableEquality(
+            tab1[
+                [
+                    "a",
+                ]
+            ],
+            tab4,
+        )
+        tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
+        self._checkNumpyTableEquality(tab1[["index", "a"]], tab5)
+        tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
+        self._checkNumpyTableEquality(
+            tab1[
+                [
+                    "ddd",
+                ]
+            ],
+            tab6,
+        )
+        # Passing an unrecognized column should be a ValueError.
+        with self.assertRaises(ValueError):
+            self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
+
+    def _checkNumpyTableEquality(self, table1, table2):
+        """Check if two numpy tables have the same columns/values
+
+        Parameters
+        ----------
+        table1 : `numpy.ndarray`
+        table2 : `numpy.ndarray`
+        """
+        self.assertEqual(table1.dtype.names, table2.dtype.names)
+        for name in table1.dtype.names:
+            self.assertEqual(table1.dtype[name], table2.dtype[name])
         self.assertTrue(np.all(table1 == table2))
 
 

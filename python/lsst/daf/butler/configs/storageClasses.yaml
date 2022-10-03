@@ -150,6 +150,21 @@ storageClasses:
     pytype: lsst.daf.butler.formatters.parquet.ArrowAstropySchema
     converters:
       pyarrow.Schema: lsst.daf.butler.formatters.parquet.ArrowAstropySchema.from_arrow
+  ArrowNumpy:
+    pytype: numpy.ndarray
+    converters:
+      pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_numpy
+    derivedComponents:
+      columns: ArrowColumnList
+      rowcount: int
+      schema: ArrowNumpySchema
+    parameters:
+      - columns
+      - filters
+  ArrowNumpySchema:
+    pytype: lsst.daf.butler.formatters.parquet.ArrowNumpySchema
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.ArrowNumpySchema.from_arrow
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
   PropertySet:

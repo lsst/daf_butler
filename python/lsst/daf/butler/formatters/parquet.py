@@ -497,8 +497,6 @@ class ArrowAstropySchema:
         return repr(self._schema)
 
     def __eq__(self, other: ArrowAstropySchema) -> bool:
-        import numpy as np
-
         if not isinstance(other, ArrowAstropySchema):
             return False
 
@@ -512,6 +510,61 @@ class ArrowAstropySchema:
                 return False
             if not self._schema[name].format == other._schema[name].format:
                 return False
+
+        return True
+
+
+class ArrowNumpySchema:
+    """Wrapper class for a schema for a numpy ndarray.
+
+    Parameters
+    ----------
+    numpy_dtype : `numpy.dtype` or `list` [`str`]
+    """
+
+    def __init__(self, numpy_dtype: Any) -> ArrowNumpySchema:
+        import numpy as np
+
+        if isinstance(numpy_dtype, (tuple, list)):
+            self._dtype = np.dtype(numpy_dtype)
+        else:
+            self._dtype = numpy_dtype
+
+    @classmethod
+    def from_arrow(cls, schema: pa.Schema) -> ArrowNumpySchema:
+        """Convert an arrow schema into an ArrowNumpySchema.
+
+        Parameters
+        ----------
+        schema : `pyarrow.Schema`
+
+        Returns
+        -------
+        numpy_schema : `ArrowNumpySchema`
+        """
+        dtype = []
+        for name in schema.names:
+            if schema.field(name).type not in (pa.string(), pa.binary()):
+                dtype.append((name, schema.field(name).type.to_pandas_dtype()))
+                continue
+
+            dtype.append((name, _arrow_string_to_numpy_dtype(schema, name)))
+
+        return cls(dtype)
+
+    @property
+    def schema(self) -> Any:
+        return self._dtype
+
+    def __repr__(self):
+        return repr(self._dtype)
+
+    def __eq__(self, other: ArrowNumpySchema) -> bool:
+        if not isinstance(other, ArrowNumpySchema):
+            return False
+
+        if not self._dtype == other._dtype:
+            return False
 
         return True
 
@@ -611,12 +664,9 @@ def _apply_astropy_metadata(astropy_table: Any, metadata: Dict) -> None:
     from astropy.table import meta
 
     meta_yaml = metadata.get(b"table_meta_yaml", None)
-    meta_dict = {}
     if meta_yaml:
         meta_yaml = meta_yaml.decode("UTF8").split("\n")
         meta_hdr = meta.get_header_from_yaml(meta_yaml)
-        if "meta" in meta_hdr:
-            meta_dict = meta_hdr["meta"]
 
         # Set description, format, unit, meta from the column
         # metadata that was serialized with the table.
@@ -641,7 +691,8 @@ def _arrow_string_to_numpy_dtype(
     arrow_column : `pyarrow.Array` or `pyarrow.ChunkedArray`, optional
         Column to determine numpy dtype.
     default_length : `int`, optional
-        Default string length when not in metadata or can be inferred from column.
+        Default string length when not in metadata or can be inferred
+        from column.
 
     Returns
     -------
@@ -656,7 +707,7 @@ def _arrow_string_to_numpy_dtype(
         strlen = int(schema.metadata[md_name.encode("UTF-8")])
     elif numpy_column:
         if len(numpy_column) > 0:
-            strlen = max(len(row) for row in col)
+            strlen = max(len(row) for row in numpy_column)
 
     dtype = f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}"
 
