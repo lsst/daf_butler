@@ -466,7 +466,7 @@ class Datastore(metaclass=ABCMeta):
         self,
         datasetRef: DatasetRef,
         parameters: Mapping[str, Any] = None,
-        readStorageClass: Optional[Union[StorageClass, str]] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Any:
         """Load an `InMemoryDataset` from the store.
 
@@ -477,7 +477,7 @@ class Datastore(metaclass=ABCMeta):
         parameters : `dict`
             `StorageClass`-specific parameters that specify a slice of the
             Dataset to be loaded.
-        readStorageClass : `StorageClass` or `str`, optional
+        storageClass : `StorageClass` or `str`, optional
             The storage class to be used to override the Python type
             returned by this method. By default the returned type matches
             the dataset type definition for this dataset. Specifying a

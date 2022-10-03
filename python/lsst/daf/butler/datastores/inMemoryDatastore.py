@@ -284,7 +284,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         self,
         ref: DatasetRef,
         parameters: Optional[Mapping[str, Any]] = None,
-        readStorageClass: Optional[Union[StorageClass, str]] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Any:
         """Load an InMemoryDataset from the store.
 
@@ -295,7 +295,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
             a slice of the dataset to be loaded.
-        readStorageClass : `StorageClass` or `str`, optional
+        storageClass : `StorageClass` or `str`, optional
             The storage class to be used to override the Python type
             returned by this method. By default the returned type matches
             the dataset type definition for this dataset. Specifying a
@@ -323,8 +323,8 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         # We have a write storage class and a read storage class and they
         # can be different for concrete composites or if overridden.
-        if readStorageClass is not None:
-            ref = ref.overrideStorageClass(readStorageClass)
+        if storageClass is not None:
+            ref = ref.overrideStorageClass(storageClass)
         refStorageClass = ref.datasetType.storageClass
         writeStorageClass = storedItemInfo.storageClass
 

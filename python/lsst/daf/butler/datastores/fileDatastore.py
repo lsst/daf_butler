@@ -1925,7 +1925,7 @@ class FileDatastore(GenericBaseDatastore):
         self,
         ref: DatasetRef,
         parameters: Optional[Mapping[str, Any]] = None,
-        readStorageClass: Optional[Union[StorageClass, str]] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Any:
         """Load an InMemoryDataset from the store.
 
@@ -1936,7 +1936,7 @@ class FileDatastore(GenericBaseDatastore):
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
             a slice of the dataset to be loaded.
-        readStorageClass : `StorageClass` or `str`, optional
+        storageClass : `StorageClass` or `str`, optional
             The storage class to be used to override the Python type
             returned by this method. By default the returned type matches
             the dataset type definition for this dataset. Specifying a
@@ -1960,8 +1960,8 @@ class FileDatastore(GenericBaseDatastore):
         # Supplied storage class for the component being read is either
         # from the ref itself or some an override if we want to force
         # type conversion.
-        if readStorageClass is not None:
-            ref = ref.overrideStorageClass(readStorageClass)
+        if storageClass is not None:
+            ref = ref.overrideStorageClass(storageClass)
         refStorageClass = ref.datasetType.storageClass
 
         allGetInfo = self._prepare_for_get(ref, parameters)

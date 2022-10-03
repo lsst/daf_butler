@@ -559,7 +559,7 @@ class DatastoreMock:
     def _mock_get(
         ref: DatasetRef,
         parameters: Optional[Mapping[str, Any]] = None,
-        readStorageClass: Optional[Union[StorageClass, str]] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Tuple[int, Optional[Mapping[str, Any]]]:
         """A mock of `Datastore.get` that just returns the integer dataset ID
         value and parameters it was given.

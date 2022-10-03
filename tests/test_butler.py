@@ -674,13 +674,13 @@ class ButlerTests(ButlerPutGetTests):
 
         # Specify an override.
         new_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
-        model = butler.getDirect(ref, readStorageClass=new_sc)
+        model = butler.getDirect(ref, storageClass=new_sc)
         self.assertNotEqual(type(model), type(retrieved))
         self.assertIs(type(model), new_sc.pytype)
         self.assertEqual(retrieved, model)
 
         # Retrieve a component. Should be a tuple.
-        data = butler.get("anything.data", dataId, readStorageClass="StructuredDataDataTestTuple")
+        data = butler.get("anything.data", dataId, storageClass="StructuredDataDataTestTuple")
         self.assertIs(type(data), tuple)
         self.assertEqual(data, tuple(retrieved.data))
 
@@ -689,7 +689,7 @@ class ButlerTests(ButlerPutGetTests):
         data = butler.get(
             "anything.data",
             dataId,
-            readStorageClass="StructuredDataDataTestTuple",
+            storageClass="StructuredDataDataTestTuple",
             parameters={"slice": slice(2, 4)},
         )
         self.assertEqual(len(data), 2)
@@ -700,7 +700,7 @@ class ButlerTests(ButlerPutGetTests):
             butler.get(
                 "anything.data",
                 dataId,
-                readStorageClass="StructuredDataDataTestTuple",
+                storageClass="StructuredDataDataTestTuple",
                 parameters={"xslice": slice(2, 4)},
             )
 

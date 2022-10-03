@@ -1235,7 +1235,7 @@ class Butler(LimitedButler):
         ref: DatasetRef,
         *,
         parameters: Optional[Dict[str, Any]] = None,
-        readStorageClass: Optional[Union[StorageClass, str]] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Any:
         """Retrieve a stored dataset.
 
@@ -1250,13 +1250,19 @@ class Butler(LimitedButler):
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------
         obj : `object`
             The dataset.
         """
-        return self.datastore.get(ref, parameters=parameters, readStorageClass=readStorageClass)
+        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getDirectDeferred(
         self, ref: DatasetRef, *, parameters: Union[dict, None] = None
@@ -1346,7 +1352,7 @@ class Butler(LimitedButler):
         *,
         parameters: Optional[Dict[str, Any]] = None,
         collections: Any = None,
-        readStorageClass: Optional[Union[StorageClass, str]] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
         **kwargs: Any,
     ) -> Any:
         """Retrieve a stored dataset.
@@ -1367,7 +1373,7 @@ class Butler(LimitedButler):
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
             to butler construction.
-        readStorageClass : `StorageClass` or `str`, optional
+        storageClass : `StorageClass` or `str`, optional
             The storage class to be used to override the Python type
             returned by this method. By default the returned type matches
             the dataset type definition for this dataset. Specifying a
@@ -1405,7 +1411,7 @@ class Butler(LimitedButler):
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self.getDirect(ref, parameters=parameters, readStorageClass=readStorageClass)
+        return self.getDirect(ref, parameters=parameters, storageClass=storageClass)
 
     def getURIs(
         self,
