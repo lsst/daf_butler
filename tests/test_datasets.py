@@ -598,6 +598,12 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref_new.datasetType.storageClass, storageA)
         self.assertEqual(ref_new.overrideStorageClass(ref.datasetType.storageClass), ref)
 
+        incompatible_sc = StorageClass("my_int", pytype=int)
+        with self.assertRaises(ValueError):
+            # Do not test against "ref" because it has a default storage class
+            # of "object" which is compatible with everything.
+            ref_new.overrideStorageClass(incompatible_sc)
+
     def testPickle(self):
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
         s = pickle.dumps(ref)
