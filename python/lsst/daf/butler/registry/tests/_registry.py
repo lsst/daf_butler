@@ -2666,6 +2666,16 @@ class RegistryTests(ABC):
         self.assertEqual(query5.count(exact=True), 0)
         messages = list(query5.explain_no_results())
         self.assertFalse(messages)
+        # This query should yield results from one dataset type but not the
+        # other, which is not registered.
+        query5 = registry.queryDatasets(["bias", "nonexistent"], collections=["biases"])
+        self.assertTrue(set(query5))
+        self.assertTrue(query5.any(execute=False, exact=False))
+        self.assertTrue(query5.any(execute=True, exact=False))
+        self.assertTrue(query5.any(execute=True, exact=True))
+        self.assertGreaterEqual(query5.count(exact=False), 1)
+        self.assertGreaterEqual(query5.count(exact=True), 1)
+        self.assertFalse(messages, list(query5.explain_no_results()))
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""

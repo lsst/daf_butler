@@ -1038,7 +1038,7 @@ class SqlRegistry(Registry):
                 check=check,
                 datasets=[parent_dataset_type],
             )
-            builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
+            builder = self._makeQueryBuilder(summary)
             # Add the dataset subquery to the query, telling the QueryBuilder
             # to include the rank of the selected collection in the results
             # only if we need to findFirst.  Note that if any of the
