@@ -163,41 +163,6 @@ class SimpleButlerTestCase(unittest.TestCase):
             [self.comparableRef(ref) for ref in datasets2],
         )
 
-    def testComponentExport(self):
-        """Test exporting component datasets and then importing them.
-
-        This test exports component datasets and then checks via the parent
-        dataset type, since this is the only valid way to handle component
-        exports (since Registry cannot record just a component without a
-        parent, even if Datastore can).
-        """
-        # Import data to play with.
-        butler1 = self.makeButler(writeable=True)
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as file:
-            # Export all datasets.
-            with butler1.export(filename=file.name) as exporter:
-                exporter.saveDatasets(
-                    ref.makeComponentRef("psf")
-                    for ref in butler1.registry.queryDatasets("flat", collections=...)
-                )
-            # Import it all again.
-            butler2 = self.makeButler(writeable=True)
-            butler2.import_(filename=file.name)
-        datasets1 = [
-            ref.makeComponentRef("psf") for ref in butler1.registry.queryDatasets("flat", collections=...)
-        ]
-        datasets2 = [
-            ref.makeComponentRef("psf") for ref in butler2.registry.queryDatasets("flat", collections=...)
-        ]
-        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets1))
-        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets2))
-        self.assertCountEqual(
-            [self.comparableRef(ref) for ref in datasets1],
-            [self.comparableRef(ref) for ref in datasets2],
-        )
-
     def testImportTwice(self):
         """Test exporting dimension records and datasets from a repo and then
         importing them all back in again twice.
