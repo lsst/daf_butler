@@ -36,6 +36,7 @@ from .type import DatasetType, SerializedDatasetType
 
 if TYPE_CHECKING:
     from ...registry import Registry
+    from ..storageClass import StorageClass
 
 
 class AmbiguousDatasetError(Exception):
@@ -562,6 +563,29 @@ class DatasetRef:
         return DatasetRef(
             self.datasetType.makeComponentDatasetType(name),
             self.dataId,
+            id=self.id,
+            run=self.run,
+            conform=False,
+        )
+
+    def overrideStorageClass(self, storageClass: str | StorageClass) -> DatasetRef:
+        """Create a new `DatasetRef` from this one, but with a modified
+        `DatasetType` that has a different `StorageClass`.
+
+        Parameters
+        ----------
+        storageClass : `str` or `StorageClass`
+            The new storage class.
+
+        Returns
+        -------
+        modified : `DatasetRef`
+            A new dataset reference that is the same as the current one but
+            with a different storage class in the `DatasetType`.
+        """
+        return DatasetRef(
+            datasetType=self.datasetType.overrideStorageClass(storageClass),
+            dataId=self.dataId,
             id=self.id,
             run=self.run,
             conform=False,

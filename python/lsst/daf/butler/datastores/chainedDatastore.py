@@ -311,7 +311,12 @@ class ChainedDatastore(Datastore):
                 return True
         return False
 
-    def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
+    def get(
+        self,
+        ref: DatasetRef,
+        parameters: Optional[Mapping[str, Any]] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
+    ) -> Any:
         """Load an InMemoryDataset from the store.
 
         The dataset is returned from the first datastore that has
@@ -324,6 +329,12 @@ class ChainedDatastore(Datastore):
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
             a slice of the dataset to be loaded.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------
@@ -342,7 +353,7 @@ class ChainedDatastore(Datastore):
 
         for datastore in self.datastores:
             try:
-                inMemoryObject = datastore.get(ref, parameters)
+                inMemoryObject = datastore.get(ref, parameters, storageClass=storageClass)
                 log.debug("Found dataset %s in datastore %s", ref, datastore.name)
                 return inMemoryObject
             except FileNotFoundError:

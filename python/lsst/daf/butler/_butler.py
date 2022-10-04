@@ -84,6 +84,7 @@ from .core import (
     DimensionUniverse,
     FileDataset,
     Progress,
+    StorageClass,
     StorageClassFactory,
     Timespan,
     ValidationError,
@@ -1229,7 +1230,13 @@ class Butler(LimitedButler):
 
         return ref
 
-    def getDirect(self, ref: DatasetRef, *, parameters: Optional[Dict[str, Any]] = None) -> Any:
+    def getDirect(
+        self,
+        ref: DatasetRef,
+        *,
+        parameters: Optional[Dict[str, Any]] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
+    ) -> Any:
         """Retrieve a stored dataset.
 
         Unlike `Butler.get`, this method allows datasets outside the Butler's
@@ -1243,16 +1250,26 @@ class Butler(LimitedButler):
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------
         obj : `object`
             The dataset.
         """
-        return self.datastore.get(ref, parameters=parameters)
+        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getDirectDeferred(
-        self, ref: DatasetRef, *, parameters: Union[dict, None] = None
+        self,
+        ref: DatasetRef,
+        *,
+        parameters: Union[dict, None] = None,
+        storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
         from a resolved `DatasetRef`.
@@ -1264,6 +1281,12 @@ class Butler(LimitedButler):
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------
@@ -1279,7 +1302,7 @@ class Butler(LimitedButler):
             raise AmbiguousDatasetError(
                 f"Dataset of type {ref.datasetType.name} with data ID {ref.dataId} is not resolved."
             )
-        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters)
+        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
         self,
@@ -1288,6 +1311,7 @@ class Butler(LimitedButler):
         *,
         parameters: Union[dict, None] = None,
         collections: Any = None,
+        storageClass: str | StorageClass | None = None,
         **kwargs: Any,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
@@ -1309,6 +1333,12 @@ class Butler(LimitedButler):
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
             to butler construction.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -1330,7 +1360,7 @@ class Butler(LimitedButler):
             Raised if no collections were provided.
         """
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters)
+        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def get(
         self,
@@ -1339,6 +1369,7 @@ class Butler(LimitedButler):
         *,
         parameters: Optional[Dict[str, Any]] = None,
         collections: Any = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
         **kwargs: Any,
     ) -> Any:
         """Retrieve a stored dataset.
@@ -1359,6 +1390,12 @@ class Butler(LimitedButler):
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
             to butler construction.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -1391,7 +1428,7 @@ class Butler(LimitedButler):
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self.getDirect(ref, parameters=parameters)
+        return self.getDirect(ref, parameters=parameters, storageClass=storageClass)
 
     def getURIs(
         self,

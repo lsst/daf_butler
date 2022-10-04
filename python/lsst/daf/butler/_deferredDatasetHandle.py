@@ -27,11 +27,11 @@ from __future__ import annotations
 __all__ = ("DeferredDatasetHandle",)
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
     from ._limited_butler import LimitedButler
-    from .core import DataCoordinate, DatasetRef
+    from .core import DataCoordinate, DatasetRef, StorageClass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -39,7 +39,12 @@ class DeferredDatasetHandle:
     """Proxy class that provides deferred loading of datasets from a butler."""
 
     def get(
-        self, *, component: Optional[str] = None, parameters: Optional[dict] = None, **kwargs: dict
+        self,
+        *,
+        component: Optional[str] = None,
+        parameters: Optional[dict] = None,
+        storageClass: str | StorageClass | None = None,
+        **kwargs: dict,
     ) -> Any:
         """Retrieves the dataset pointed to by this handle
 
@@ -56,6 +61,13 @@ class DeferredDatasetHandle:
             It defaults to None. If the value is not None,  this dict will
             be merged with the parameters dict used to construct the
             `DeferredDatasetHandle` class.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset or the storage
+            class specified when this object was created. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
         **kwargs
             This argument is deprecated and only exists to support legacy
             gen2 butler code during migration. It is completely ignored
@@ -74,9 +86,11 @@ class DeferredDatasetHandle:
             mergedParameters = parameters
         else:
             mergedParameters = {}
+        if storageClass is None:
+            storageClass = self.storageClass
 
         ref = self.ref.makeComponentRef(component) if component is not None else self.ref
-        return self.butler.getDirect(ref, parameters=mergedParameters)
+        return self.butler.getDirect(ref, parameters=mergedParameters, storageClass=storageClass)
 
     @property
     def dataId(self) -> DataCoordinate:
@@ -99,3 +113,6 @@ class DeferredDatasetHandle:
     """Optional parameters that may be used to specify a subset of the dataset
     to be loaded (`dict` or `None`).
     """
+
+    storageClass: Optional[Union[str, StorageClass]] = None
+    """Optional storage class override that can be applied on ``get()``."""

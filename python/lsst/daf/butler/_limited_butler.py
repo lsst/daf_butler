@@ -28,7 +28,14 @@ from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict, Iterable, Optional, Union
 
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from .core import AmbiguousDatasetError, DatasetRef, Datastore, DimensionUniverse, StorageClassFactory
+from .core import (
+    AmbiguousDatasetError,
+    DatasetRef,
+    Datastore,
+    DimensionUniverse,
+    StorageClass,
+    StorageClassFactory,
+)
 
 log = logging.getLogger(__name__)
 
@@ -84,7 +91,13 @@ class LimitedButler(ABC):
         """
         raise NotImplementedError()
 
-    def getDirect(self, ref: DatasetRef, *, parameters: Optional[Dict[str, Any]] = None) -> Any:
+    def getDirect(
+        self,
+        ref: DatasetRef,
+        *,
+        parameters: Optional[Dict[str, Any]] = None,
+        storageClass: str | StorageClass | None = None,
+    ) -> Any:
         """Retrieve a stored dataset.
 
         Unlike `Butler.get`, this method allows datasets outside the Butler's
@@ -98,6 +111,12 @@ class LimitedButler(ABC):
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------
@@ -109,10 +128,14 @@ class LimitedButler(ABC):
         AmbiguousDatasetError
             Raised if ``ref.id is None``, i.e. the reference is unresolved.
         """
-        return self.datastore.get(ref, parameters=parameters)
+        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getDirectDeferred(
-        self, ref: DatasetRef, *, parameters: Union[dict, None] = None
+        self,
+        ref: DatasetRef,
+        *,
+        parameters: Union[dict, None] = None,
+        storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
         from a resolved `DatasetRef`.
@@ -124,6 +147,12 @@ class LimitedButler(ABC):
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------
@@ -139,7 +168,7 @@ class LimitedButler(ABC):
             raise AmbiguousDatasetError(
                 f"Dataset of type {ref.datasetType.name} with data ID {ref.dataId} is not resolved."
             )
-        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters)
+        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def datasetExistsDirect(self, ref: DatasetRef) -> bool:
         """Return `True` if a dataset is actually present in the Datastore.

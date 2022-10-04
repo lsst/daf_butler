@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = ("JsonFormatter",)
 
 import builtins
+import dataclasses
 import json
 from typing import TYPE_CHECKING, Any, Optional, Type
 
@@ -150,9 +151,11 @@ class JsonFormatter(FileFormatter):
             Object of expected type ``readStorageClass.pytype``.
         """
         if inMemoryDataset is not None and not hasattr(builtins, readStorageClass.pytype.__name__):
-            if readStorageClass.isComposite():
-                inMemoryDataset = readStorageClass.delegate().assemble(
-                    inMemoryDataset, pytype=readStorageClass.pytype
+            if writeStorageClass.isComposite():
+                # We know we must be able to assemble the written
+                # storage class. Coerce later to the read type.
+                inMemoryDataset = writeStorageClass.delegate().assemble(
+                    inMemoryDataset, pytype=writeStorageClass.pytype
                 )
             elif not isinstance(inMemoryDataset, readStorageClass.pytype):
                 # JSON data are returned as simple python types.
@@ -161,7 +164,11 @@ class JsonFormatter(FileFormatter):
                 try:
                     inMemoryDataset = writeStorageClass.pytype.parse_obj(inMemoryDataset)
                 except AttributeError:
-                    # Hope that we can pass the arguments in directly
-                    inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
-                inMemoryDataset = readStorageClass.coerce_type(inMemoryDataset)
-        return inMemoryDataset
+                    if dataclasses.is_dataclass(writeStorageClass.pytype):
+                        # dataclasses accept key/value parameters.
+                        inMemoryDataset = writeStorageClass.pytype(**inMemoryDataset)
+                    else:
+                        # Hope that we can pass the arguments in directly
+                        inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
+        # Coerce to the read storage class if necessary.
+        return readStorageClass.coerce_type(inMemoryDataset)

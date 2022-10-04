@@ -71,6 +71,15 @@ storageClasses:
       counter: Integer
     parameters:
       - slice
+  StructuredDataDataTestTuple:
+    pytype: tuple
+    delegate: lsst.daf.butler.tests.ListDelegate
+    derivedComponents:
+      counter: Integer
+    parameters:
+      - slice
+    converters:
+      builtins.list: builtins.tuple
   Integer:
     pytype: int
   StructuredCompositeReadComp:
@@ -92,3 +101,15 @@ storageClasses:
       lsst.daf.butler.bad.type: lsst.daf.butler.tests.MetricsExampleModel.from_metrics
       lsst.daf.butler.tests.MetricsExampleModel: lsst.daf.butler.bad.function
       lsst.daf.butler.Butler: lsst.daf.butler.core.location.__all__
+  MetricsConversion:
+    # Special storage class to test conversions with components and params.
+    pytype: lsst.daf.butler.tests.MetricsExampleModel
+    delegate: lsst.daf.butler.tests.MetricsDelegate
+    parameters:
+      - xslice
+    components:
+      summary: StructuredDataDictYaml
+      output: StructuredDataDictYaml
+      data: StructuredDataDataTestTuple
+    converters:
+      lsst.daf.butler.tests.MetricsExample: lsst.daf.butler.tests.MetricsExampleModel.from_metrics

@@ -462,7 +462,12 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def get(self, datasetRef: DatasetRef, parameters: Mapping[str, Any] = None) -> Any:
+    def get(
+        self,
+        datasetRef: DatasetRef,
+        parameters: Mapping[str, Any] = None,
+        storageClass: Optional[Union[StorageClass, str]] = None,
+    ) -> Any:
         """Load an `InMemoryDataset` from the store.
 
         Parameters
@@ -472,6 +477,12 @@ class Datastore(metaclass=ABCMeta):
         parameters : `dict`
             `StorageClass`-specific parameters that specify a slice of the
             Dataset to be loaded.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
 
         Returns
         -------

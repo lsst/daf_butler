@@ -43,6 +43,7 @@ from .core import (
     DimensionUniverse,
     Quantum,
     SerializedDatastoreRecordData,
+    StorageClass,
     StorageClassFactory,
     ddl,
 )
@@ -235,10 +236,16 @@ class QuantumBackedButler(LimitedButler):
         # Docstring inherited.
         return True
 
-    def getDirect(self, ref: DatasetRef, *, parameters: Optional[Dict[str, Any]] = None) -> Any:
+    def getDirect(
+        self,
+        ref: DatasetRef,
+        *,
+        parameters: Optional[Dict[str, Any]] = None,
+        storageClass: str | StorageClass | None = None,
+    ) -> Any:
         # Docstring inherited.
         try:
-            obj = super().getDirect(ref, parameters=parameters)
+            obj = super().getDirect(ref, parameters=parameters, storageClass=storageClass)
         except (LookupError, FileNotFoundError, IOError):
             self._unavailable_inputs.add(ref.getCheckedId())
             raise
@@ -249,7 +256,11 @@ class QuantumBackedButler(LimitedButler):
         return obj
 
     def getDirectDeferred(
-        self, ref: DatasetRef, *, parameters: Union[dict, None] = None
+        self,
+        ref: DatasetRef,
+        *,
+        parameters: Union[dict, None] = None,
+        storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         # Docstring inherited.
         if ref.id in self._predicted_inputs:
@@ -257,7 +268,7 @@ class QuantumBackedButler(LimitedButler):
             # loading, so it's conceivable here that we're marking an input
             # as "actual" even when it's not even available.
             self._actual_inputs.add(ref.id)
-        return super().getDirectDeferred(ref, parameters=parameters)
+        return super().getDirectDeferred(ref, parameters=parameters, storageClass=storageClass)
 
     def datasetExistsDirect(self, ref: DatasetRef) -> bool:
         # Docstring inherited.
