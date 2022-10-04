@@ -465,6 +465,12 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         # Set cache directory if it pre-exists, else defer creation until
         # requested. Allow external override from environment.
         root = os.environ.get("DAF_BUTLER_CACHE_DIRECTORY") or self.config.get("root")
+
+        # Allow the execution environment to override the default values
+        # so long as no default value has been set from the line above.
+        if root is None:
+            root = os.environ.get("DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET")
+
         self._cache_directory = (
             ResourcePath(root, forceAbsolute=True, forceDirectory=True) if root is not None else None
         )

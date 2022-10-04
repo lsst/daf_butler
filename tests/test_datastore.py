@@ -25,6 +25,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from collections import UserDict
 from dataclasses import dataclass
 
@@ -1351,6 +1352,55 @@ cached:
         cache_manager = self._make_cache_manager(config_str)
 
         self.assertCache(cache_manager)
+
+    def testEnvvarCacheDir(self):
+        config_str = f"""
+cached:
+  root: '{self.root}'
+  cacheable:
+    metric0: true
+        """
+
+        root = ResourcePath(self.root, forceDirectory=True)
+        env_dir = root.join("somewhere", forceDirectory=True)
+        elsewhere = root.join("elsewhere", forceDirectory=True)
+
+        # Environment variable should override the config value.
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY": env_dir.ospath}):
+            cache_manager = self._make_cache_manager(config_str)
+        self.assertEqual(cache_manager.cache_directory, env_dir)
+
+        # This environment variable should not override the config value.
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": env_dir.ospath}):
+            cache_manager = self._make_cache_manager(config_str)
+        self.assertEqual(cache_manager.cache_directory, root)
+
+        # No default setting.
+        config_str = """
+cached:
+  root: null
+  default: true
+  cacheable:
+    metric1: false
+        """
+        cache_manager = self._make_cache_manager(config_str)
+
+        # This environment variable should override the config value.
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": env_dir.ospath}):
+            cache_manager = self._make_cache_manager(config_str)
+        self.assertEqual(cache_manager.cache_directory, env_dir)
+
+        # If both environment variables are set the main (not IF_UNSET)
+        # variable should win.
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "DAF_BUTLER_CACHE_DIRECTORY": env_dir.ospath,
+                "DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": elsewhere.ospath,
+            },
+        ):
+            cache_manager = self._make_cache_manager(config_str)
+        self.assertEqual(cache_manager.cache_directory, env_dir)
 
     def testExplicitCacheDir(self):
         config_str = f"""
