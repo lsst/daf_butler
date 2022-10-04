@@ -27,7 +27,7 @@ from __future__ import annotations
 __all__ = ("DeferredDatasetHandle",)
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
     from ._limited_butler import LimitedButler
@@ -114,5 +114,5 @@ class DeferredDatasetHandle:
     to be loaded (`dict` or `None`).
     """
 
-    storageClass: None | str | StorageClass
+    storageClass: Optional[Union[str, StorageClass]] = None
     """Optional storage class override that can be applied on ``get()``."""
