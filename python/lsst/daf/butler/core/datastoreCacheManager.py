@@ -601,6 +601,14 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         # item.
         self._expire_cache()
 
+        # The above reset the in-memory cache status. It's entirely possible
+        # that another process has just cached this file (if multiple
+        # processes are caching on read), so check our in-memory cache
+        # before attempting to cache the dataset.
+        path_in_cache = cached_location.relative_to(self.cache_directory)
+        if path_in_cache and path_in_cache in self._cache_entries:
+            return cached_location
+
         # Move into the cache. Given that multiple processes might be
         # sharing a single cache directory, and the file we need might have
         # been copied in whilst we were checking, allow overwrite without
