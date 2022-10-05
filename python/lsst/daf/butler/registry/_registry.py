@@ -639,8 +639,13 @@ class Registry(ABC):
 
         Raises
         ------
-        KeyError
-            Requested named DatasetType could not be found in registry.
+        MissingDatasetTypeError
+            Raised if the requested dataset type has not been registered.
+
+        Notes
+        -----
+        This method handles component dataset types automatically, though most
+        other registry operations do not.
         """
         raise NotImplementedError()
 
@@ -712,7 +717,7 @@ class Registry(ABC):
             ``self.defaults.collections`` is `None`.
         LookupError
             Raised if one or more data ID keys are missing.
-        KeyError
+        MissingDatasetTypeError
             Raised if the dataset type does not exist.
         MissingCollectionError
             Raised if any of ``collections`` does not exist in the registry.
@@ -728,6 +733,9 @@ class Registry(ABC):
         reported consistently, regardless of the reason, and that adding
         additional collections that do not contain a match to the search path
         never changes the behavior.
+
+        This method handles component dataset types automatically, though most
+        other registry operations do not.
         """
         raise NotImplementedError()
 
@@ -1213,6 +1221,10 @@ class Registry(ABC):
             parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -1348,6 +1360,10 @@ class Registry(ABC):
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         bind : `Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -1459,6 +1475,10 @@ class Registry(ABC):
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         bind : `Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -1547,6 +1567,10 @@ class Registry(ABC):
         components : `bool`, optional
             Whether to apply dataset expressions to components as well.
             See `queryDataIds` for more information.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         bind : `Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.

@@ -138,8 +138,9 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             addDataIdValue(self.butler, "tract", 43, skymap="map")
 
     def testAddDatasetType(self):
-        # 1 for StructuredDataNoComponents, 4 for StructuredData
-        self.assertEqual(len(list(self.butler.registry.queryDatasetTypes(components=True))), 5)
+        # 1 for StructuredDataNoComponents, 1 for StructuredData (components
+        # not included).
+        self.assertEqual(len(list(self.butler.registry.queryDatasetTypes(components=False))), 2)
 
         # Testing the DatasetType objects is not practical, because all tests
         # need a DimensionUniverse. So just check that we have the dataset

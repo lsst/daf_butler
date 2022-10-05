@@ -67,7 +67,7 @@ class DatasetTypeError(RegistryError):
     """Exception raised for problems with dataset types."""
 
 
-class MissingDatasetTypeError(DatasetTypeError):
+class MissingDatasetTypeError(DatasetTypeError, KeyError):
     """Exception raised when a dataset type does not exist."""
 
 

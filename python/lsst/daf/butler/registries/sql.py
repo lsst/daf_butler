@@ -418,7 +418,12 @@ class SqlRegistry(Registry):
 
     def getDatasetType(self, name: str) -> DatasetType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        return self._managers.datasets[name].datasetType
+        parent_name, component = DatasetType.splitDatasetTypeName(name)
+        storage = self._managers.datasets[parent_name]
+        if component is None:
+            return storage.datasetType
+        else:
+            return storage.datasetType.makeComponentDatasetType(component)
 
     def supportsIdGenerationMode(self, mode: DatasetIdGenEnum) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -435,9 +440,10 @@ class SqlRegistry(Registry):
     ) -> Optional[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if isinstance(datasetType, DatasetType):
-            storage = self._managers.datasets[datasetType.name]
+            parent_name, component = datasetType.nameAndComponent()
         else:
-            storage = self._managers.datasets[datasetType]
+            parent_name, component = DatasetType.splitDatasetTypeName(datasetType)
+        storage = self._managers.datasets[parent_name]
         dataId = DataCoordinate.standardize(
             dataId,
             graph=storage.datasetType.dimensions,
@@ -460,6 +466,8 @@ class SqlRegistry(Registry):
                 continue
             result = storage.find(collectionRecord, dataId, timespan=timespan)
             if result is not None:
+                if component is not None:
+                    return result.makeComponentRef(component)
                 return result
 
         return None
@@ -929,6 +937,10 @@ class SqlRegistry(Registry):
             parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         mode : `str`, optional
             The way in which datasets are being used in this query; one of:
 
@@ -1026,7 +1038,7 @@ class SqlRegistry(Registry):
                 check=check,
                 datasets=[parent_dataset_type],
             )
-            builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
+            builder = self._makeQueryBuilder(summary)
             # Add the dataset subquery to the query, telling the QueryBuilder
             # to include the rank of the selected collection in the results
             # only if we need to findFirst.  Note that if any of the

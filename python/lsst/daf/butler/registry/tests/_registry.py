@@ -67,6 +67,7 @@ from .._exceptions import (
     DatasetTypeError,
     InconsistentDataIdError,
     MissingCollectionError,
+    MissingDatasetTypeError,
     OrphanedRecordError,
 )
 from ..interfaces import ButlerAttributeExistsError, DatasetIdGenEnum
@@ -433,7 +434,7 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         registry.removeDatasetType("flat")
-        with self.assertRaises(KeyError):
+        with self.assertRaises(MissingDatasetTypeError):
             registry.getDatasetType("flat")
 
     def testRemoveDatasetTypeFailure(self):
@@ -547,7 +548,12 @@ class RegistryTests(ABC):
         self.assertNotEqual(ref4.id, ref1.id)
 
     def testDatasetTypeComponentQueries(self):
-        """Test component options when querying for dataset types."""
+        """Test component options when querying for dataset types.
+
+        All of the behavior here is deprecated, so many of these tests are
+        currently wrapped in a context to check that we get a warning whenever
+        a component dataset is actually returned.
+        """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
@@ -556,33 +562,37 @@ class RegistryTests(ABC):
         # when components=True.
         self.assertEqual({"bias", "flat"}, NamedValueSet(registry.queryDatasetTypes()).names)
         self.assertEqual({"bias", "flat"}, NamedValueSet(registry.queryDatasetTypes(components=False)).names)
-        self.assertLess(
-            {"bias", "flat", "bias.wcs", "flat.photoCalib"},
-            NamedValueSet(registry.queryDatasetTypes(components=True)).names,
-        )
+        with self.assertWarns(FutureWarning):
+            self.assertLess(
+                {"bias", "flat", "bias.wcs", "flat.photoCalib"},
+                NamedValueSet(registry.queryDatasetTypes(components=True)).names,
+            )
         # Use a pattern that can match either parent or components.  Again,
         # components are only returned if components=True.
         self.assertEqual({"bias"}, NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"))).names)
         self.assertEqual(
             {"bias"}, NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=False)).names
         )
-        self.assertLess(
-            {"bias", "bias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=True)).names,
-        )
+        with self.assertWarns(FutureWarning):
+            self.assertLess(
+                {"bias", "bias.wcs"},
+                NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=True)).names,
+            )
         # This pattern matches only a component.  In this case we also return
         # that component dataset type if components=None.
-        self.assertEqual(
-            {"bias.wcs"}, NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"))).names
-        )
+        with self.assertWarns(FutureWarning):
+            self.assertEqual(
+                {"bias.wcs"}, NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"))).names
+            )
         self.assertEqual(
             set(),
             NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=False)).names,
         )
-        self.assertEqual(
-            {"bias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=True)).names,
-        )
+        with self.assertWarns(FutureWarning):
+            self.assertEqual(
+                {"bias.wcs"},
+                NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=True)).names,
+            )
         # Add a dataset type using a StorageClass that we'll then remove; check
         # that this does not affect our ability to query for dataset types
         # (though it will warn).
@@ -607,8 +617,9 @@ class RegistryTests(ABC):
         # Querying for all dataset types, including components, should include
         # at least all non-component dataset types (and I don't want to
         # enumerate all of the Exposure components for bias and flat here).
-        with self.assertLogs("lsst.daf.butler.registry", logging.WARN) as cm:
-            everything = NamedValueSet(registry.queryDatasetTypes(components=True))
+        with self.assertWarns(FutureWarning):
+            with self.assertLogs("lsst.daf.butler.registry", logging.WARN) as cm:
+                everything = NamedValueSet(registry.queryDatasetTypes(components=True))
         self.assertIn("TempStorageClass", cm.output[0])
         self.assertLess({"bias", "flat", "temporary"}, everything.names)
         # It should not include "temporary.columns", because we tried to remove
@@ -634,7 +645,12 @@ class RegistryTests(ABC):
         self.assertIn("test message", cm.output[0])
 
     def testComponentLookups(self):
-        """Test searching for component datasets via their parents."""
+        """Test searching for component datasets via their parents.
+
+        All of the behavior here is deprecated, so many of these tests are
+        currently wrapped in a context to check that we get a warning whenever
+        a component dataset is actually returned.
+        """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
@@ -654,11 +670,12 @@ class RegistryTests(ABC):
         self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
         # Search for detector data IDs constrained by component dataset
         # existence with queryDataIds.
-        dataIds = registry.queryDataIds(
-            ["detector"],
-            datasets=["bias.wcs"],
-            collections=collection,
-        ).toSet()
+        with self.assertWarns(FutureWarning):
+            dataIds = registry.queryDataIds(
+                ["detector"],
+                datasets=["bias.wcs"],
+                collections=collection,
+            ).toSet()
         self.assertEqual(
             dataIds,
             DataCoordinateSet(
@@ -670,12 +687,13 @@ class RegistryTests(ABC):
             ),
         )
         # Search for multiple datasets of a single type with queryDatasets.
-        childRefs2 = set(
-            registry.queryDatasets(
-                "bias.wcs",
-                collections=collection,
+        with self.assertWarns(FutureWarning):
+            childRefs2 = set(
+                registry.queryDatasets(
+                    "bias.wcs",
+                    collections=collection,
+                )
             )
-        )
         self.assertEqual(
             {ref.unresolved() for ref in childRefs2}, {DatasetRef(childType, dataId) for dataId in dataIds}
         )
@@ -1444,29 +1462,26 @@ class RegistryTests(ABC):
 
         # Use a component dataset type.
         self.assertCountEqual(
-            list(
-                subsetDataIds.findDatasets(
-                    bias.makeComponentDatasetType("image"),
+            [
+                ref.makeComponentRef("image")
+                for ref in subsetDataIds.findDatasets(
+                    bias,
                     collections=["imported_r", "imported_g"],
                     findFirst=False,
                 )
-            ),
+            ],
             [ref.makeComponentRef("image") for ref in expectedAllBiases],
         )
 
         # Use a named dataset type that does not exist and a dataset type
         # object that does not exist.
         unknown_type = DatasetType("not_known", dimensions=bias.dimensions, storageClass="Exposure")
-        unknown_component_type = unknown_type.makeComponentDatasetType("image")
 
-        # Four combinations of unknown dataset type need to be tested.
-        # Composite and component and string name vs dataset type object.
+        # Test both string name and dataset type object.
         test_type: Union[str, DatasetType]
         for test_type, test_type_name in (
             (unknown_type, unknown_type.name),
             (unknown_type.name, unknown_type.name),
-            (unknown_component_type, unknown_type.name),
-            (unknown_component_type.name, unknown_component_type.name),
         ):
             with self.assertRaisesRegex(DatasetTypeError, expected_regex=test_type_name):
                 list(
@@ -2651,6 +2666,16 @@ class RegistryTests(ABC):
         self.assertEqual(query5.count(exact=True), 0)
         messages = list(query5.explain_no_results())
         self.assertFalse(messages)
+        # This query should yield results from one dataset type but not the
+        # other, which is not registered.
+        query5 = registry.queryDatasets(["bias", "nonexistent"], collections=["biases"])
+        self.assertTrue(set(query5))
+        self.assertTrue(query5.any(execute=False, exact=False))
+        self.assertTrue(query5.any(execute=True, exact=False))
+        self.assertTrue(query5.any(execute=True, exact=True))
+        self.assertGreaterEqual(query5.count(exact=False), 1)
+        self.assertGreaterEqual(query5.count(exact=True), 1)
+        self.assertFalse(messages, list(query5.explain_no_results()))
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""

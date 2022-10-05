@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy.sql
 
 from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
+from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -596,7 +597,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         """
         result = self.find(name)
         if result is None:
-            raise KeyError(f"Dataset type with name '{name}' not found.")
+            raise MissingDatasetTypeError(f"Dataset type with name '{name}' not found.")
         return result
 
     @abstractmethod
@@ -680,6 +681,10 @@ class DatasetRecordStorageManager(VersionedExtension):
             datasets were not matched by the expression.  Fully-specified
             component datasets (`str` or `DatasetType` instances) are always
             included.
+
+            Values other than `False` are deprecated, and only `False` will be
+            supported after v26.  After v27 this argument will be removed
+            entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this

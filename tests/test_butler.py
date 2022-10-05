@@ -1016,7 +1016,10 @@ class ButlerTests(ButlerPutGetTests):
             for componentName in storageClass.components:
                 components.add(DatasetType.nameWithComponent(datasetTypeName, componentName))
 
-        fromRegistry = set(butler.registry.queryDatasetTypes(components=True))
+        fromRegistry: set[DatasetType] = set()
+        for parent_dataset_type in butler.registry.queryDatasetTypes():
+            fromRegistry.add(parent_dataset_type)
+            fromRegistry.update(parent_dataset_type.makeAllComponentDatasetTypes())
         self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
 
         # Now that we have some dataset types registered, validate them
