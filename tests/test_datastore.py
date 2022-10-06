@@ -1402,6 +1402,29 @@ cached:
             cache_manager = self._make_cache_manager(config_str)
         self.assertEqual(cache_manager.cache_directory, env_dir)
 
+        # Use the API to set the environment variable, making sure that the
+        # variable is reset on exit.
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": ""},
+        ):
+            defined, cache_dir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
+            self.assertTrue(defined)
+            cache_manager = self._make_cache_manager(config_str)
+            self.assertEqual(cache_manager.cache_directory, ResourcePath(cache_dir, forceDirectory=True))
+
+        # Now create the cache manager ahead of time and set the fallback
+        # later.
+        cache_manager = self._make_cache_manager(config_str)
+        self.assertIsNone(cache_manager._cache_directory)
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET": ""},
+        ):
+            defined, cache_dir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
+            self.assertTrue(defined)
+            self.assertEqual(cache_manager.cache_directory, ResourcePath(cache_dir, forceDirectory=True))
+
     def testExplicitCacheDir(self):
         config_str = f"""
 cached:
