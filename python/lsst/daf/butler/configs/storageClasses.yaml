@@ -128,6 +128,7 @@ storageClasses:
       pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_arrow
       astropy.table.Table: lsst.daf.butler.formatters.parquet.astropy_to_arrow
       numpy.ndarray: lsst.daf.butler.formatters.parquet.numpy_to_arrow
+    delegate: lsst.daf.butler.delegates.arrowtable.ArrowTableDelegate
     derivedComponents:
       columns: ArrowColumnList
       rowcount: int

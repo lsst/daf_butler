@@ -32,6 +32,7 @@ import pandas as pd
 from astropy import units
 from astropy.table import Table
 from lsst.daf.butler import Butler, Config, DatasetType, StorageClassConfig, StorageClassFactory
+from lsst.daf.butler.delegates.arrowtable import ArrowTableDelegate
 from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
 from lsst.daf.butler.formatters.parquet import (
     ArrowAstropySchema,
@@ -281,7 +282,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
 
 
 class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
-    """Tests for InMemoryDatastore, using DataFrameDelegate"""
+    """Tests for InMemoryDatastore, using DataFrameDelegate."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
@@ -691,6 +692,34 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         for name in table1.dtype.names:
             self.assertEqual(table1.dtype[name], table2.dtype[name])
         self.assertTrue(np.all(table1 == table2))
+
+
+class InMemoryArrowTableDelegateTestCase(ParquetFormatterArrowTableTestCase):
+    """Tests for InMemoryDatastore, using ArrowTableDelegate."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+
+    def testBadInput(self):
+        delegate = ArrowTableDelegate("ArrowTable")
+
+        with self.assertRaises(ValueError):
+            delegate.handleParameters(inMemoryDataset="not_a_dataframe")
+
+    def testStorageClass(self):
+        tab1 = _makeSimpleArrowTable()
+
+        factory = StorageClassFactory()
+        factory.addFromConfig(StorageClassConfig())
+
+        storageClass = factory.findStorageClass(type(tab1), compare_types=False)
+        # Force the name lookup to do name matching.
+        storageClass._pytype = None
+        self.assertEqual(storageClass.name, "ArrowTable")
+
+        storageClass = factory.findStorageClass(type(tab1), compare_types=True)
+        # Force the name lookup to do name matching.
+        storageClass._pytype = None
+        self.assertEqual(storageClass.name, "ArrowTable")
 
 
 if __name__ == "__main__":

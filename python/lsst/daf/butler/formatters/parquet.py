@@ -69,7 +69,7 @@ class ParquetFormatter(Formatter):
 
         if component in ("columns", "schema"):
             # The schema will be translated to column format
-            # depending on the input type
+            # depending on the input type.
             return schema
         elif component == "rowcount":
             # Get the rowcount from the metadata if possible, otherwise count.
