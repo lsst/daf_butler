@@ -32,7 +32,7 @@ datastore:
       threshold: 4
     # Default cache value. This will be the default decision if no specific
     # match is found in the "cacheable" section later on.
-    default: false
+    default: true
     # Use a dict over list to simplify merging logic.
     cacheable:
       Exposure: true
