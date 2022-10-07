@@ -28,8 +28,10 @@ __all__ = (
     "arrow_to_numpy",
     "arrow_to_numpy_dict",
     "pandas_to_arrow",
+    "pandas_to_astropy",
     "astropy_to_arrow",
     "numpy_to_arrow",
+    "numpy_to_astropy",
     "numpy_dict_to_arrow",
     "arrow_schema_to_pandas_index",
     "DataFrameSchema",
@@ -367,6 +369,42 @@ def pandas_to_arrow(dataframe: pd.DataFrame) -> pa.Table:
     arrow_table = arrow_table.replace_schema_metadata(md)
 
     return arrow_table
+
+
+def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
+    """Convert a pandas dataframe to an astropy table, preserving indexes.
+
+    Parameters
+    ----------
+    dataframe : `pandas.DataFrame`
+
+    Returns
+    -------
+    astropy_table : `astropy.table.Table`
+    """
+    import pandas as pd
+    from astropy.table import Table
+
+    if isinstance(dataframe.columns, pd.MultiIndex):
+        raise ValueError("Cannot convert a multi-index dataframe to an astropy table.")
+
+    return Table.from_pandas(dataframe, index=True)
+
+
+def numpy_to_astropy(np_array: np.ndarray) -> atable.Table:
+    """Convert a numpy table to an astropy table.
+
+    Parameters
+    ----------
+    np_array : `numpy.ndarray`
+
+    Returns
+    -------
+    astropy_table : `astropy.table.Table`
+    """
+    from astropy.table import Table
+
+    return Table(data=np_array, copy=False)
 
 
 def arrow_schema_to_pandas_index(schema: pa.Schema) -> pd.Index | pd.MultiIndex:

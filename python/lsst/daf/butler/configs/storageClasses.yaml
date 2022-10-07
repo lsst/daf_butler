@@ -104,6 +104,8 @@ storageClasses:
     pytype: pandas.core.frame.DataFrame
     converters:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_pandas
+      astropy.table.Table: astropy.table.Table.to_pandas
+      numpy.ndarray: pandas.DataFrame.from_records
     delegate: lsst.daf.butler.delegates.dataframe.DataFrameDelegate
     derivedComponents:
       columns: DataFrameIndex
@@ -122,6 +124,10 @@ storageClasses:
       pyarrow.Schema: lsst.daf.butler.formatters.parquet.DataFrameSchema.from_arrow
   ArrowTable:
     pytype: pyarrow.Table
+    converters:
+      pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_arrow
+      astropy.table.Table: lsst.daf.butler.formatters.parquet.astropy_to_arrow
+      numpy.ndarray: lsst.daf.butler.formatters.parquet.numpy_to_arrow
     derivedComponents:
       columns: ArrowColumnList
       rowcount: int
@@ -139,6 +145,8 @@ storageClasses:
     pytype: astropy.table.Table
     converters:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_astropy
+      pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_astropy
+      numpy.ndarray: lsst.daf.butler.formatters.parquet.numpy_to_astropy
     derivedComponents:
       columns: ArrowColumnList
       rowcount: int
@@ -154,6 +162,8 @@ storageClasses:
     pytype: numpy.ndarray
     converters:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_numpy
+      pandas.core.frame.DataFrame: pandas.DataFrame.to_records
+      astropy.table.Table: astropy.table.Table.as_array
     derivedComponents:
       columns: ArrowColumnList
       rowcount: int
