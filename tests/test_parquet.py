@@ -32,6 +32,7 @@ import pandas as pd
 from astropy import units
 from astropy.table import Table
 from lsst.daf.butler import Butler, Config, DatasetType, StorageClassConfig, StorageClassFactory
+from lsst.daf.butler.delegates.arrowastropy import ArrowAstropyDelegate
 from lsst.daf.butler.delegates.arrowtable import ArrowTableDelegate
 from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
 from lsst.daf.butler.formatters.parquet import (
@@ -443,6 +444,34 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.assertTrue(np.all(table1 == table2))
 
 
+class InMemoryArrowAstropyDelegateTestCase(ParquetFormatterArrowAstropyTestCase):
+    """Tests for InMemoryDatastore, using ArrowAstropyDelegate."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+
+    def testBadInput(self):
+        delegate = ArrowAstropyDelegate("ArrowAstropy")
+
+        with self.assertRaises(ValueError):
+            delegate.handleParameters(inMemoryDataset="not_an_astropy_table")
+
+    def testStorageClass(self):
+        tab1 = _makeSimpleAstropyTable()
+
+        factory = StorageClassFactory()
+        factory.addFromConfig(StorageClassConfig())
+
+        storageClass = factory.findStorageClass(type(tab1), compare_types=False)
+        # Force the name lookup to do name matching.
+        storageClass._pytype = None
+        self.assertEqual(storageClass.name, "ArrowAstropy")
+
+        storageClass = factory.findStorageClass(type(tab1), compare_types=True)
+        # Force the name lookup to do name matching.
+        storageClass._pytype = None
+        self.assertEqual(storageClass.name, "ArrowAstropy")
+
+
 class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
     """Tests for ParquetFormatter, ArrowNumpy, using local file datastore."""
 
@@ -703,7 +732,7 @@ class InMemoryArrowTableDelegateTestCase(ParquetFormatterArrowTableTestCase):
         delegate = ArrowTableDelegate("ArrowTable")
 
         with self.assertRaises(ValueError):
-            delegate.handleParameters(inMemoryDataset="not_a_dataframe")
+            delegate.handleParameters(inMemoryDataset="not_an_arrow_table")
 
     def testStorageClass(self):
         tab1 = _makeSimpleArrowTable()
