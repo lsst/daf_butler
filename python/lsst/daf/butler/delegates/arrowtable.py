@@ -22,7 +22,6 @@
 """Support for reading Arrow tables."""
 from __future__ import annotations
 
-import collections.abc
 from typing import Any, Mapping, Optional
 
 import pyarrow as pa
