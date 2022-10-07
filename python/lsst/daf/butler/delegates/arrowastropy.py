@@ -22,7 +22,6 @@
 """Support for reading Astropy tables with the Arrow formatter."""
 from __future__ import annotations
 
-import collections.abc
 from typing import Any, Mapping, Optional
 
 import astropy.table as atable
