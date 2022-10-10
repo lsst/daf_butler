@@ -23,33 +23,26 @@ from __future__ import annotations
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 import dataclasses
-from collections.abc import Iterable, Iterator, Mapping, Set
-from typing import Any, cast
+from collections.abc import Iterable, Mapping, Set
+from typing import Any
 
 import astropy.time
 from lsst.daf.relation import ColumnExpression, ColumnTag, Predicate, SortTerm
 from lsst.sphgeom import Region
 from lsst.utils.classes import cached_getter, immutable
-from sqlalchemy.sql import ColumnElement
 
 from ...core import (
-    ColumnTypeInfo,
     DataCoordinate,
-    DatasetColumnTag,
     DatasetType,
-    Dimension,
     DimensionElement,
     DimensionGraph,
     DimensionKeyColumnTag,
     DimensionRecordColumnTag,
     DimensionUniverse,
-    LogicalColumn,
-    NamedKeyDict,
     NamedValueAbstractSet,
     NamedValueSet,
     SkyPixDimension,
     Timespan,
-    TimespanDatabaseRepresentation,
 )
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
@@ -535,191 +528,3 @@ class QuerySummary:
         )
         tags.update(DimensionKeyColumnTag.generate(dimensions.names))
         return (tags, dimensions)
-
-
-@dataclasses.dataclass
-class DatasetQueryColumns:
-    """A struct containing the columns used to reconstruct `DatasetRef`
-    instances from query results.
-    """
-
-    datasetType: DatasetType
-    """The dataset type being queried (`DatasetType`).
-    """
-
-    id: ColumnElement
-    """Column containing the unique integer ID for this dataset.
-    """
-
-    runKey: ColumnElement
-    """Foreign key column to the `~CollectionType.RUN` collection that holds
-    this dataset.
-    """
-
-    ingestDate: ColumnElement | None
-    """Column containing the ingest timestamp, this is not a part of
-    `DatasetRef` but it comes from the same table.
-    """
-
-    def __iter__(self) -> Iterator[ColumnElement]:
-        yield self.id
-        yield self.runKey
-
-
-@dataclasses.dataclass
-class QueryColumns:
-    """A struct organizing the columns in an under-construction or currently-
-    executing query.
-
-    Takes no parameters at construction, as expected usage is to add elements
-    to its container attributes incrementally.
-    """
-
-    def __init__(self) -> None:
-        self.keys = NamedKeyDict()
-        self.timespans = NamedKeyDict()
-        self.regions = NamedKeyDict()
-        self.datasets = None
-
-    keys: NamedKeyDict[Dimension, list[ColumnElement]]
-    """Columns that correspond to the primary key values of dimensions
-    (`NamedKeyDict` mapping `Dimension` to a `list` of `ColumnElement`).
-
-    Each value list contains columns from multiple tables corresponding to the
-    same dimension, and the query should constrain the values of those columns
-    to be the same.
-
-    In a `Query`, the keys of this dictionary must include at least the
-    dimensions in `QuerySummary.requested` and `QuerySummary.data_id.graph`.
-    """
-
-    timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]
-    """Columns that correspond to timespans for elements that participate in a
-    temporal join or filter in the query (`NamedKeyDict` mapping
-    `DimensionElement` to `TimespanDatabaseRepresentation`).
-
-    In a `Query`, the keys of this dictionary must be exactly the elements
-    in `QuerySummary.temporal`.
-    """
-
-    regions: NamedKeyDict[DimensionElement, ColumnElement]
-    """Columns that correspond to regions for elements that participate in a
-    spatial join or filter in the query (`NamedKeyDict` mapping
-    `DimensionElement` to `sqlalchemy.sql.ColumnElement`).
-
-    In a `Query`, the keys of this dictionary must be exactly the elements
-    in `QuerySummary.spatial`.
-    """
-
-    datasets: DatasetQueryColumns | None
-    """Columns that can be used to construct `DatasetRef` instances from query
-    results.
-    (`DatasetQueryColumns` or `None`).
-    """
-
-    def isEmpty(self) -> bool:
-        """Return `True` if this query has no columns at all."""
-        return not (self.keys or self.timespans or self.regions or self.datasets is not None)
-
-    def getKeyColumn(self, dimension: Dimension | str) -> ColumnElement:
-        """Return one of the columns in self.keys for the given dimension.
-
-        The column selected is an implentation detail but is guaranteed to
-        be deterministic and consistent across multiple calls.
-
-        Parameters
-        ----------
-        dimension : `Dimension` or `str`
-            Dimension for which to obtain a key column.
-
-        Returns
-        -------
-        column : `sqlalchemy.sql.ColumnElement`
-            SQLAlchemy column object.
-        """
-        # Choosing the last element here is entirely for human readers of the
-        # query (e.g. developers debugging things); it makes it more likely a
-        # dimension key will be provided by the dimension's own table, or
-        # failing that, some closely related dimension, which might be less
-        # surprising to see than e.g. some dataset subquery.  From the
-        # database's perspective this is entirely arbitrary, because the query
-        # guarantees they all have equal values.
-        return self.keys[dimension][-1]
-
-    def make_logical_column_mapping(self) -> dict[ColumnTag, LogicalColumn]:
-        """Create a dictionary with `ColumnTag` keys for the columns
-        tracked by this object.
-
-        This is a transitional method that converts from the old way of
-        representing columns in queries (this class) to the new one (containers
-        involving `ColumnTag`).
-        """
-        result: dict[ColumnTag, LogicalColumn] = {}
-        for dimension in self.keys:
-            result[DimensionKeyColumnTag(dimension.name)] = self.getKeyColumn(dimension)
-        for element, region_column in self.regions.items():
-            result[DimensionRecordColumnTag(element.name, "region")] = region_column
-        for element, timespan_column in self.timespans.items():
-            result[DimensionRecordColumnTag(element.name, "timespan")] = timespan_column
-        if self.datasets is not None:
-            dataset_type_name = self.datasets.datasetType.name
-            result[DatasetColumnTag(dataset_type_name, "dataset_id")] = self.datasets.id
-            result[DatasetColumnTag(dataset_type_name, "run")] = self.datasets.runKey
-            if self.datasets.ingestDate is not None:
-                result[DatasetColumnTag(dataset_type_name, "ingest_date")] = self.datasets.ingestDate
-        return result
-
-    @staticmethod
-    def from_logical_columns(
-        logical_columns: Mapping[ColumnTag, LogicalColumn],
-        dataset_types: NamedValueAbstractSet[DatasetType],
-        column_types: ColumnTypeInfo,
-    ) -> QueryColumns:
-        """Create a `QueryColumns` instance from a mapping keyed by
-        `sql.ColumnTag`.
-
-        This is a transitional method that converts from the new way of
-        representing columns in queries to this old one.
-
-        Parameters
-        ----------
-        logical_columns : `Mapping` [ `ColumnTag`, `LogicalColumn` ]
-            Mapping of columns to convert.
-        dataset_types : `NamedValueAbstractSet` [ `DatasetType` ]
-            Set of all dataset types participating in the query.
-        column_types : `ColumnTypeInfo`
-            Information about column types that can vary between data
-            repositories.
-
-        Returns
-        -------
-        columns : `QueryColumns`
-            Translated `QueryColumns` instance.
-        """
-        result = QueryColumns()
-        dataset_kwargs: dict[str, Any] = {}
-        for tag in logical_columns.keys():
-            match tag:
-                case DimensionKeyColumnTag(dimension=dimension_name):
-                    dimension = cast(Dimension, column_types.universe[dimension_name])
-                    result.keys[dimension] = [cast(ColumnElement, logical_columns[tag])]
-                case DimensionRecordColumnTag(element=element_name, column="timespan"):
-                    element = column_types.universe[element_name]
-                    result.timespans[element] = cast(TimespanDatabaseRepresentation, logical_columns[tag])
-                case DimensionRecordColumnTag(element=element_name, column="region"):
-                    element = column_types.universe[element_name]
-                    result.regions[element] = cast(ColumnElement, logical_columns[tag])
-                case DatasetColumnTag(dataset_type=dataset_type_name, column=column_name):
-                    dataset_type = dataset_types[dataset_type_name]
-                    old_dataset_type = dataset_kwargs.setdefault("datasetType", dataset_type)
-                    assert old_dataset_type == dataset_type, "Queries can only have one result dataset type."
-                    match column_name:
-                        case "dataset_id":
-                            dataset_kwargs["id"] = cast(ColumnElement, logical_columns[tag])
-                        case "run":
-                            dataset_kwargs["runKey"] = cast(ColumnElement, logical_columns[tag])
-                        case "ingest_date":
-                            dataset_kwargs["ingestDate"] = cast(ColumnElement, logical_columns[tag])
-        if dataset_kwargs:
-            result.datasets = DatasetQueryColumns(**dataset_kwargs)
-        return result
