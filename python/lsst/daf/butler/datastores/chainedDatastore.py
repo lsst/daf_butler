@@ -262,6 +262,18 @@ class ChainedDatastore(Datastore):
                 return True
         return False
 
+    def knows_these(self, refs: Iterable[DatasetRef]) -> dict[DatasetRef, bool]:
+        # Docstring inherited from the base class.
+        refs_known: dict[DatasetRef, bool] = {}
+        for datastore in self.datastores:
+            refs_known.update(datastore.knows_these(refs))
+
+            # No need to check in next datastore for refs that are known.
+            # We only update entries that were initially False.
+            refs = [ref for ref, known in refs_known.items() if not known]
+
+        return refs_known
+
     def mexists(
         self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:

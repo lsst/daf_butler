@@ -261,6 +261,11 @@ class DatastoreTests(DatastoreTestsBase):
 
             # Does it exist?
             self.assertTrue(datastore.exists(ref))
+            self.assertTrue(datastore.knows(ref))
+            multi = datastore.knows_these([ref])
+            self.assertTrue(multi[ref])
+            multi = datastore.mexists([ref])
+            self.assertTrue(multi[ref])
 
             # Get
             metricsOut = datastore.get(ref, parameters=None)
@@ -359,6 +364,11 @@ class DatastoreTests(DatastoreTestsBase):
 
             # Does it exist?
             self.assertTrue(datastore.exists(ref))
+            self.assertTrue(datastore.knows(ref))
+            multi = datastore.knows_these([ref])
+            self.assertTrue(multi[ref])
+            multi = datastore.mexists([ref])
+            self.assertTrue(multi[ref])
 
             # Get
             metricsOut = datastore.get(ref)
@@ -381,6 +391,11 @@ class DatastoreTests(DatastoreTestsBase):
 
             # Does it exist?
             self.assertFalse(datastore.exists(ref))
+            self.assertFalse(datastore.knows(ref))
+            multi = datastore.knows_these([ref])
+            self.assertFalse(multi[ref])
+            multi = datastore.mexists([ref])
+            self.assertFalse(multi[ref])
 
             with self.assertRaises(FileNotFoundError):
                 datastore.get(ref)

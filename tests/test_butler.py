@@ -954,6 +954,10 @@ class ButlerTests(ButlerPutGetTests):
         self.assertTrue(existence[ref1])
         self.assertTrue(existence[ref2])
         self.assertFalse(existence[ref3])
+        existence = butler.datastore.knows_these([ref1, ref2, ref3])
+        self.assertTrue(existence[ref1])
+        self.assertTrue(existence[ref2])
+        self.assertFalse(existence[ref3])
         # Redefine and then delete the chain with unstore=True.  Only ref1
         # should be unstored (ref3 has already been unstored, but otherwise
         # would be now).
@@ -974,6 +978,7 @@ class ButlerTests(ButlerPutGetTests):
             butler.registry.getCollectionType(run1)
         self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref2])
         self.assertTrue(butler.datastore.exists(ref2))
+        self.assertTrue(butler.datastore.knows(ref2))
         # Remove run2.  This removes ref2 from the registry and the datastore.
         butler.pruneCollection(run2, purge=True, unstore=True)
         with self.assertRaises(MissingCollectionError):

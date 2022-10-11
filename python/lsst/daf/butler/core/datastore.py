@@ -420,6 +420,25 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    def knows_these(self, refs: Iterable[DatasetRef]) -> dict[DatasetRef, bool]:
+        """Check which of the given datasets are known to this datastore.
+
+        This is like ``mexist()`` but does not check that the file exists.
+
+        Parameters
+        ----------
+        refs : iterable `DatasetRef`
+            The datasets to check.
+
+        Returns
+        -------
+        exists : `dict`[`DatasetRef`, `bool`]
+            Mapping of dataset to boolean indicating whether the dataset
+            is known to the datastore.
+        """
+        # Non-optimized default calls knows() repeatedly.
+        return {ref: self.knows(ref) for ref in refs}
+
     def mexists(
         self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:

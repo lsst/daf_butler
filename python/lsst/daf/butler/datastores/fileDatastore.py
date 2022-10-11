@@ -1373,6 +1373,14 @@ class FileDatastore(GenericBaseDatastore):
             return True
         return False
 
+    def knows_these(self, refs: Iterable[DatasetRef]) -> dict[DatasetRef, bool]:
+        # Docstring inherited from the base class.
+
+        # The records themselves. Could be missing some entries.
+        records = self._get_stored_records_associated_with_refs(refs)
+
+        return {ref: ref.id in records for ref in refs}
+
     def _process_mexists_records(
         self,
         id_to_ref: Dict[DatasetId, DatasetRef],
