@@ -1270,15 +1270,14 @@ class FileDatastoreButlerTests(ButlerTests):
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
         uri = butler.getURI(ref)
+        self.assertTrue(uri.exists())
         self.assertTrue(
-            self.checkFileExists(
-                butler.datastore.root, f"{self.default_run}/metric1/??#?/d-r/DummyCamComp_423.pickle"
-            ),
-            f"Checking existence of {uri}",
+            uri.unquoted_path.endswith(f"{self.default_run}/metric1/??#?/d-r/DummyCamComp_423.pickle")
         )
 
         # Check the template based on dimensions
-        butler.datastore.templates.validateTemplates([ref])
+        if hasattr(butler.datastore, "templates"):
+            butler.datastore.templates.validateTemplates([ref])
 
         # Put with extra data ID keys (physical_filter is an optional
         # dependency); should not change template (at least the way we're
@@ -1286,15 +1285,14 @@ class FileDatastoreButlerTests(ButlerTests):
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
         uri = butler.getURI(ref)
+        self.assertTrue(uri.exists())
         self.assertTrue(
-            self.checkFileExists(
-                butler.datastore.root, f"{self.default_run}/metric2/d-r/DummyCamComp_v423.pickle"
-            ),
-            f"Checking existence of {uri}",
+            uri.unquoted_path.endswith(f"{self.default_run}/metric2/d-r/DummyCamComp_v423.pickle")
         )
 
         # Check the template based on dimensions
-        butler.datastore.templates.validateTemplates([ref])
+        if hasattr(butler.datastore, "templates"):
+            butler.datastore.templates.validateTemplates([ref])
 
         # Use a template that has a typo in dimension record metadata.
         # Easier to test with a butler that has a ref with records attached.
@@ -1327,7 +1325,6 @@ class FileDatastoreButlerTests(ButlerTests):
         """This test does an export to a temp directory and an import back
         into a new temp directory repo. It does not assume a posix datastore"""
         exportButler = self.runPutGetTest(storageClass, "test_metric")
-        print("Root:", exportButler.datastore.root)
         # Test that the repo actually has at least one dataset.
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
@@ -1661,7 +1658,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         pass
 
 
-class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
+class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization"""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
