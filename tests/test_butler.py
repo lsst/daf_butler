@@ -819,10 +819,16 @@ class ButlerTests(ButlerPutGetTests):
             # Create a DatasetRef for ingest
             refs.append(DatasetRef(datasetType, dataId, id=None))
 
-        datasets = []
-        datasets.append(FileDataset(path=metricFile, refs=refs, formatter=MultiDetectorFormatter))
+        # Test "move" transfer to ensure that the files themselves
+        # have disappeared following ingest.
+        with ResourcePath.temporary_uri(suffix=".yaml") as tempFile:
+            tempFile.transfer_from(ResourcePath(metricFile), transfer="copy")
 
-        butler.ingest(*datasets, transfer="copy", record_validation_info=False)
+            datasets = []
+            datasets.append(FileDataset(path=tempFile, refs=refs, formatter=MultiDetectorFormatter))
+
+            butler.ingest(*datasets, transfer="move", record_validation_info=False)
+            self.assertFalse(tempFile.exists())
 
         # Check that the datastore recorded no file size.
         # Not all datastores can support this.

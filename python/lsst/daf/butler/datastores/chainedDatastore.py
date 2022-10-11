@@ -61,8 +61,8 @@ class _IngestPrepData(Datastore.IngestPrepData):
         Pairs of `Datastore`, `IngestPrepData` for all child datastores.
     """
 
-    def __init__(self, children: List[Tuple[Datastore, Datastore.IngestPrepData]]):
-        super().__init__(itertools.chain.from_iterable(data.refs.values() for _, data in children))
+    def __init__(self, children: List[Tuple[Datastore, Datastore.IngestPrepData, set[ResourcePath]]]):
+        super().__init__(itertools.chain.from_iterable(data.refs.values() for _, data, _ in children))
         self.children = children
 
 
@@ -446,8 +446,8 @@ class ChainedDatastore(Datastore):
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
-        if transfer is None or transfer == "move":
-            raise NotImplementedError("ChainedDatastore does not support transfer=None or transfer='move'.")
+        if transfer is None:
+            raise NotImplementedError("ChainedDatastore does not support transfer=None.")
 
         def isDatasetAcceptable(dataset: FileDataset, *, name: str, constraints: Constraints) -> bool:
             acceptable = [ref for ref in dataset.refs if constraints.isAcceptable(ref)]
@@ -471,7 +471,7 @@ class ChainedDatastore(Datastore):
 
         # Iterate over nested datastores and call _prepIngest on each.
         # Save the results to a list:
-        children: List[Tuple[Datastore, Datastore.IngestPrepData]] = []
+        children: List[Tuple[Datastore, Datastore.IngestPrepData, set[ResourcePath]]] = []
         # ...and remember whether all of the failures are due to
         # NotImplementedError being raised.
         allFailuresAreNotImplementedError = True
@@ -495,7 +495,16 @@ class ChainedDatastore(Datastore):
                 )
                 continue
             allFailuresAreNotImplementedError = False
-            children.append((datastore, prepDataForChild))
+            if okForChild:
+                # Do not store for later if a datastore has rejected
+                # everything.
+                # Include the source paths if this is a "move". It's clearer
+                # to find the paths now rather than try to infer how
+                # each datastore has stored them in the internal prep class.
+                paths = (
+                    {ResourcePath(dataset.path) for dataset in okForChild} if transfer == "move" else set()
+                )
+                children.append((datastore, prepDataForChild, paths))
         if allFailuresAreNotImplementedError:
             raise NotImplementedError(f"No child datastore supports transfer mode {transfer}.")
         return _IngestPrepData(children=children)
@@ -508,10 +517,26 @@ class ChainedDatastore(Datastore):
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited from Datastore._finishIngest.
-        for datastore, prepDataForChild in prepData.children:
+        # For "move" we must use "copy" and then delete the input
+        # data at the end. This has no rollback option if the ingest
+        # subsequently fails. If there is only one active datastore
+        # accepting any files we can leave it as "move"
+        actual_transfer: str | None
+        if transfer == "move" and len(prepData.children) > 1:
+            actual_transfer = "copy"
+        else:
+            actual_transfer = transfer
+        to_be_deleted: set[ResourcePath] = set()
+        for datastore, prepDataForChild, paths in prepData.children:
             datastore._finishIngest(
-                prepDataForChild, transfer=transfer, record_validation_info=record_validation_info
+                prepDataForChild, transfer=actual_transfer, record_validation_info=record_validation_info
             )
+            to_be_deleted.update(paths)
+        if actual_transfer != transfer:
+            # These datasets were copied but now need to be deleted.
+            # This can not be rolled back.
+            for uri in to_be_deleted:
+                uri.remove()
 
     def getManyURIs(
         self,

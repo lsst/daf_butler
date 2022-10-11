@@ -1070,7 +1070,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     hasUnsupportedPut = False
     canIngestNoTransferAuto = False
-    ingestTransferModes = ("copy", "hardlink", "symlink", "relsymlink", "link", "auto")
+    ingestTransferModes = ("copy", "move", "hardlink", "symlink", "relsymlink", "link", "auto")
     isEphemeral = False
     rootKeys = (".datastores.1.root", ".datastores.2.root")
     validationCanFail = True
