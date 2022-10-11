@@ -2704,10 +2704,10 @@ class FileDatastore(GenericBaseDatastore):
     ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
         if transfer is not None and directory is None:
-            raise RuntimeError(f"Cannot export using transfer mode {transfer} with no export directory given")
+            raise TypeError(f"Cannot export using transfer mode {transfer} with no export directory given")
 
         if transfer == "move":
-            raise RuntimeError("Can not export by moving files out of datastore.")
+            raise TypeError("Can not export by moving files out of datastore.")
         elif transfer == "direct":
             # For an export, treat this as equivalent to None. We do not
             # want an import to risk using absolute URIs to datasets owned
