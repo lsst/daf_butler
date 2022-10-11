@@ -1,0 +1,2 @@
+Chained Datastore can now support "move" transfer mode for ingest.
+Files are copied to each child datastore unless only one child datastore is accepting the incoming files, in which case "move" is used.
