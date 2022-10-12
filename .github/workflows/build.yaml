@@ -38,10 +38,16 @@ jobs:
         run: |
           conda install -y -q sqlite
 
+      # Postgres-14 is already installed from official postgres repo, but we
+      # also need pgsphere which is not installed. The repo is not in the list,
+      # so we need to re-add it first.
       - name: Install postgresql (server)
         run: |
+          sudo sh -c \
+            'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
           sudo apt-get update
-          sudo apt-get install postgresql
+          sudo apt-get install postgresql-14 postgresql-14-pgsphere
 
       - name: Install postgresql Python packages
         shell: bash -l {0}
