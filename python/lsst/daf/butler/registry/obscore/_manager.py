@@ -27,7 +27,7 @@ import json
 import re
 import uuid
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Type, cast
 
 import sqlalchemy
@@ -44,8 +44,9 @@ from lsst.utils.iteration import chunk_iterable
 
 from ..interfaces import ObsCoreTableManager, VersionTuple
 from ._config import ConfigCollectionType, ObsCoreManagerConfig
-from ._records import ExposureRegionFactory, RecordFactory
+from ._records import ExposureRegionFactory, Record, RecordFactory
 from ._schema import ObsCoreSchema
+from ._spatial import SpatialObsCorePlugin
 
 if TYPE_CHECKING:
     from ..interfaces import (
@@ -134,14 +135,18 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         universe: DimensionUniverse,
         config: ObsCoreManagerConfig,
         dimensions: DimensionRecordStorageManager,
+        spatial_plugins: Collection[SpatialObsCorePlugin],
     ):
         self.db = db
         self.table = table
         self.schema = schema
         self.universe = universe
         self.config = config
+        self.spatial_plugins = spatial_plugins
         exposure_region_factory = _ExposureRegionFactory(dimensions)
-        self.record_factory = RecordFactory(config, schema, universe, exposure_region_factory)
+        self.record_factory = RecordFactory(
+            config, schema, universe, spatial_plugins, exposure_region_factory
+        )
         self.tagged_collection: Optional[str] = None
         self.run_patterns: list[re.Pattern] = []
         if config.collection_type is ConfigCollectionType.TAGGED:
@@ -174,8 +179,21 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         config_data = Config(config)
         obscore_config = ObsCoreManagerConfig.parse_obj(config_data)
 
-        schema = ObsCoreSchema(config=obscore_config, datasets=datasets)
+        # Instantiate all spatial plugins.
+        spatial_plugins = SpatialObsCorePlugin.load_plugins(obscore_config.spatial_plugins, db)
+
+        schema = ObsCoreSchema(config=obscore_config, spatial_plugins=spatial_plugins, datasets=datasets)
+
+        # Generate table specification for main obscore table.
+        table_spec = schema.table_spec
+        for plugin in spatial_plugins:
+            plugin.extend_table_spec(table_spec)
         table = context.addTable(obscore_config.table_name, schema.table_spec)
+
+        # Create additional tables if needed.
+        for plugin in spatial_plugins:
+            plugin.make_extra_tables(schema, context)
+
         return ObsCoreLiveTableManager(
             db=db,
             table=table,
@@ -183,6 +201,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             universe=universe,
             config=obscore_config,
             dimensions=dimensions,
+            spatial_plugins=spatial_plugins,
         )
 
     def config_json(self) -> str:
@@ -241,15 +260,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # Take all refs, no collection check.
             obscore_refs = refs
 
-        # Convert them all to records.
-        records: List[dict] = []
-        for ref in obscore_refs:
-            if (record := self.record_factory(ref)) is not None:
-                records.append(record)
-
-        if records:
-            # Ignore potential conflicts with existing datasets.
-            self.db.ensure(self.table, *records, primary_key_only=True)
+        self._populate(obscore_refs)
 
     def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
         # Docstring inherited from base class.
@@ -259,15 +270,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             return
 
         if collection.name == self.tagged_collection:
-
-            records: List[dict] = []
-            for ref in refs:
-                if (record := self.record_factory(ref)) is not None:
-                    records.append(record)
-
-            if records:
-                # Ignore potential conflicts with existing datasets.
-                self.db.ensure(self.table, *records, primary_key_only=True)
+            self._populate(refs)
 
     def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
         # Docstring inherited from base class.
@@ -287,6 +290,25 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
                 for ids in chunk_iterable(dataset_ids):
                     where = self.table.columns[fk_field.name].in_(ids)
                     self.db.deleteWhere(self.table, where)
+
+    def _populate(self, refs: Iterable[DatasetRef]) -> None:
+        """Populate obscore table with the data from given datasets."""
+        records: List[Record] = []
+        extra_plugin_records: Dict[sqlalchemy.schema.Table, List[Record]] = defaultdict(list)
+        for ref in refs:
+            record, extra_records = self.record_factory(ref)
+            if record is not None:
+                records.append(record)
+            if extra_records is not None:
+                for table, table_records in extra_records.items():
+                    extra_plugin_records[table].extend(table_records)
+
+        if records:
+            # Ignore potential conflicts with existing datasets.
+            self.db.ensure(self.table, *records, primary_key_only=True)
+        if extra_plugin_records:
+            for table, table_records in extra_plugin_records.items():
+                self.db.ensure(table, *table_records, primary_key_only=True)
 
     def _check_dataset_run(self, run: str) -> bool:
         """Check that specified run collection matches know patterns."""

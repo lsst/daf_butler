@@ -38,6 +38,7 @@ __all__ = (
     "TableSpec",
     "FieldSpec",
     "ForeignKeySpec",
+    "IndexSpec",
     "Base64Bytes",
     "Base64Region",
     "AstropyTimeNsecTai",
@@ -494,6 +495,37 @@ class ForeignKeySpec:
         )
 
 
+@dataclass(frozen=True)
+class IndexSpec:
+    """Specification of an index on table columns.
+
+    Parameters
+    ----------
+    *columns : `str`
+        Names of the columns to index.
+    **kwargs: `Any`
+        Additional keyword arguments to pass directly to
+        `sqlalchemy.schema.Index` constructor. This could be used to provide
+        backend-specific options, e.g. to create a ``GIST`` index in PostgreSQL
+        one can pass ``postgresql_using="gist"``.
+    """
+
+    def __init__(self, *columns: str, **kwargs: Any):
+        object.__setattr__(self, "columns", tuple(columns))
+        object.__setattr__(self, "kwargs", kwargs)
+
+    def __hash__(self) -> int:
+        return hash(self.columns)
+
+    columns: Tuple[str, ...]
+    """Column names to include in the index (`Tuple` [ `str` ])."""
+
+    kwargs: dict[str, Any]
+    """Additional keyword arguments passed directly to
+    `sqlalchemy.schema.Index` constructor (`dict` [ `str`, `Any` ]).
+    """
+
+
 @dataclass
 class TableSpec:
     """A data class used to define a table or table-like query interface.
@@ -504,7 +536,7 @@ class TableSpec:
         Specifications for the columns in this table.
     unique : `Iterable` [ `tuple` [ `str` ] ], optional
         Non-primary-key unique constraints for the table.
-    indexes: `Iterable` [ `tuple` [ `str` ] ], optional
+    indexes: `Iterable` [ `IndexSpec` ], optional
         Indexes for the table.
     foreignKeys : `Iterable` [ `ForeignKeySpec` ], optional
         Foreign key constraints for the table.
@@ -527,7 +559,7 @@ class TableSpec:
         fields: Iterable[FieldSpec],
         *,
         unique: Iterable[Tuple[str, ...]] = (),
-        indexes: Iterable[Tuple[str, ...]] = (),
+        indexes: Iterable[IndexSpec] = (),
         foreignKeys: Iterable[ForeignKeySpec] = (),
         exclusion: Iterable[Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...]] = (),
         recycleIds: bool = True,
@@ -547,7 +579,7 @@ class TableSpec:
     unique: Set[Tuple[str, ...]]
     """Non-primary-key unique constraints for the table."""
 
-    indexes: Set[Tuple[str, ...]]
+    indexes: Set[IndexSpec]
     """Indexes for the table."""
 
     foreignKeys: List[ForeignKeySpec]

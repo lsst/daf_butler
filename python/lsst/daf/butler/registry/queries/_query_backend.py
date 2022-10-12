@@ -96,7 +96,7 @@ class QueryBackend(ABC):
             their children, but not both.
 
         Returns
-        ------
+        -------
         records : `list` [ `CollectionRecord` ]
             Matching collection records.
         """

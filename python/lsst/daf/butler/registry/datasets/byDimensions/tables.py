@@ -450,5 +450,5 @@ def makeCalibTableSpec(
         # in our DatasetRecordStorage.certify() implementation, and just create
         # a regular index here in the hope that helps with lookups.
         index.extend(fieldSpec.name for fieldSpec in tsFieldSpecs)
-        tableSpec.indexes.add(tuple(index))  # type: ignore
+        tableSpec.indexes.add(ddl.IndexSpec(*index))  # type: ignore
     return tableSpec

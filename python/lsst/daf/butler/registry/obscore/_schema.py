@@ -23,13 +23,15 @@ from __future__ import annotations
 
 __all__ = ["ObsCoreSchema"]
 
-from typing import TYPE_CHECKING, List, Optional, Tuple, Type
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, List, Optional, Type
 
 import sqlalchemy
 from lsst.daf.butler import ddl
 from lsst.utils.iteration import ensure_iterable
 
 from ._config import DatasetTypeConfig, ExtraColumnConfig, ObsCoreConfig
+from ._spatial import SpatialObsCorePlugin
 
 if TYPE_CHECKING:
     from ..interfaces import DatasetRecordStorageManager
@@ -67,15 +69,8 @@ _STATIC_COLUMNS = (
         name="access_url", dtype=sqlalchemy.String, length=65535, doc="URL used to access (download) dataset"
     ),
     ddl.FieldSpec(name="access_format", dtype=sqlalchemy.String, length=255, doc="File content format"),
-    ddl.FieldSpec(name="s_ra", dtype=sqlalchemy.Float, doc="Central right ascension, ICRS (deg)"),
-    ddl.FieldSpec(name="s_dec", dtype=sqlalchemy.Float, doc="Central declination, ICRS (deg)"),
-    ddl.FieldSpec(name="s_fov", dtype=sqlalchemy.Float, doc="Diameter (bounds) of the covered region (deg)"),
-    ddl.FieldSpec(
-        name="s_region",
-        dtype=sqlalchemy.String,
-        length=65535,
-        doc="Sky region covered by the data product (expressed in ICRS frame)",
-    ),
+    # Spatial columns s_ra, s_dec, s_fow, s_region are managed by a default
+    # spatial plugin
     ddl.FieldSpec(
         name="s_resolution", dtype=sqlalchemy.Float, doc="Spatial resolution of data as FWHM (arcsec)"
     ),
@@ -127,10 +122,6 @@ class ObsCoreSchema:
         Type of dataset records manager. If specified, the ObsCore table will
         define a foreign key to ``datasets`` table with "ON DELETE CASCADE"
         constraint.
-    collections : `type`, optional
-        Manager of Registry collections. If specified, the ObsCore table will
-        define a foreign key to ``run`` table with "ON DELETE CASCADE"
-        constraint.
 
     Notes
     -----
@@ -144,6 +135,7 @@ class ObsCoreSchema:
     def __init__(
         self,
         config: ObsCoreConfig,
+        spatial_plugins: Sequence[SpatialObsCorePlugin],
         datasets: Optional[Type[DatasetRecordStorageManager]] = None,
     ):
 
@@ -159,9 +151,11 @@ class ObsCoreSchema:
                 for col_name, col_value in cfg.extra_columns.items():
                     if col_name in column_names:
                         continue
+                    doc: Optional[str] = None
                     if isinstance(col_value, ExtraColumnConfig):
                         col_type = ddl.VALID_CONFIG_COLUMN_TYPES.get(col_value.type.name)
                         col_length = col_value.length
+                        doc = col_value.doc
                     else:
                         # Only value is provided, guess type from Python, and
                         # use a fixed length of 255 for strings.
@@ -171,28 +165,37 @@ class ObsCoreSchema:
                         raise TypeError(
                             f"Unexpected type in extra_columns: column={col_name}, value={col_value}"
                         )
-                    fields.append(ddl.FieldSpec(name=col_name, dtype=col_type, length=col_length, doc=""))
+                    fields.append(ddl.FieldSpec(name=col_name, dtype=col_type, length=col_length, doc=doc))
                     column_names.add(col_name)
 
-        indices: List[Tuple[str, ...]] = []
+        indices: List[ddl.IndexSpec] = []
         if config.indices:
             for columns in config.indices.values():
-                indices.append(tuple(ensure_iterable(columns)))
+                indices.append(ddl.IndexSpec(*ensure_iterable(columns)))
 
         self._table_spec = ddl.TableSpec(fields=fields, indexes=indices)
+
+        # Possibly extend table specs with plugin-added stuff.
+        for plugin in spatial_plugins:
+            plugin.extend_table_spec(self._table_spec)
 
         self._dataset_fk: Optional[ddl.FieldSpec] = None
         if datasets is not None:
             # Add FK to datasets, is also a PK for this table
             self._dataset_fk = datasets.addDatasetForeignKey(
-                self._table_spec, name="registry_dataset", onDelete="CASCADE"
+                self._table_spec, name="registry_dataset", onDelete="CASCADE", doc="Registry dataset ID"
             )
             self._dataset_fk.primaryKey = True
 
     @property
     def table_spec(self) -> ddl.TableSpec:
+        """Specification for obscore table (`ddl.TableSpec`)."""
         return self._table_spec
 
     @property
     def dataset_fk(self) -> Optional[ddl.FieldSpec]:
+        """Specification for the field which is a foreign key to ``datasets``
+        table, and also a primary key for obscore table (`ddl.FieldSpec` or
+        `None`).
+        """
         return self._dataset_fk
