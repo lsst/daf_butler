@@ -190,10 +190,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             plugin.extend_table_spec(table_spec)
         table = context.addTable(obscore_config.table_name, schema.table_spec)
 
-        # Create additional tables if needed.
-        for plugin in spatial_plugins:
-            plugin.make_extra_tables(schema, context)
-
         return ObsCoreLiveTableManager(
             db=db,
             table=table,
@@ -294,21 +290,14 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
     def _populate(self, refs: Iterable[DatasetRef]) -> None:
         """Populate obscore table with the data from given datasets."""
         records: List[Record] = []
-        extra_plugin_records: Dict[sqlalchemy.schema.Table, List[Record]] = defaultdict(list)
         for ref in refs:
-            record, extra_records = self.record_factory(ref)
+            record = self.record_factory(ref)
             if record is not None:
                 records.append(record)
-            if extra_records is not None:
-                for table, table_records in extra_records.items():
-                    extra_plugin_records[table].extend(table_records)
 
         if records:
             # Ignore potential conflicts with existing datasets.
             self.db.ensure(self.table, *records, primary_key_only=True)
-        if extra_plugin_records:
-            for table, table_records in extra_plugin_records.items():
-                self.db.ensure(table, *table_records, primary_key_only=True)
 
     def _check_dataset_run(self, run: str) -> bool:
         """Check that specified run collection matches know patterns."""

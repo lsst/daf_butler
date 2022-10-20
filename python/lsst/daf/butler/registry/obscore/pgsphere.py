@@ -25,7 +25,7 @@ __all__ = ["PgSphereObsCorePlugin"]
 
 import warnings
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 import sqlalchemy
 from lsst.daf.butler import DatasetId
@@ -37,9 +37,8 @@ from ...core import ddl
 from ._spatial import MissingDatabaseError, RegionTypeWarning, SpatialObsCorePlugin
 
 if TYPE_CHECKING:
-    from ..interfaces import Database, StaticTablesContext
+    from ..interfaces import Database
     from ._records import Record
-    from ._schema import ObsCoreSchema
 
 
 class PgSpherePoint(UserDefinedType):
@@ -159,17 +158,11 @@ class PgSphereObsCorePlugin(SpatialObsCorePlugin):
         table_spec.indexes.add(ddl.IndexSpec(self._region_column_name, postgresql_using="gist"))
         table_spec.indexes.add(ddl.IndexSpec(self._position_column_name, postgresql_using="gist"))
 
-    def make_extra_tables(self, schema: ObsCoreSchema, context: StaticTablesContext) -> None:
-        # docstring inherited.
-        return
-
-    def make_records(
-        self, dataset_id: DatasetId, region: Optional[Region]
-    ) -> Tuple[Optional[Record], Optional[Mapping[sqlalchemy.schema.Table, Sequence[Record]]]]:
+    def make_records(self, dataset_id: DatasetId, region: Optional[Region]) -> Optional[Record]:
         # docstring inherited.
 
         if region is None:
-            return None, None
+            return None
 
         record: Record = {}
         circle = region.getBoundingCircle()
@@ -185,4 +178,4 @@ class PgSphereObsCorePlugin(SpatialObsCorePlugin):
                 category=RegionTypeWarning,
             )
 
-        return record, None
+        return record

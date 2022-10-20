@@ -24,8 +24,8 @@ from __future__ import annotations
 __all__ = ["DefaultSpatialObsCorePlugin"]
 
 import warnings
-from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Optional
 
 import sqlalchemy
 from lsst.daf.butler import DatasetId
@@ -35,9 +35,8 @@ from ...core import ddl
 from ._spatial import RegionTypeWarning, SpatialObsCorePlugin
 
 if TYPE_CHECKING:
-    from ..interfaces import Database, StaticTablesContext
+    from ..interfaces import Database
     from ._records import Record
-    from ._schema import ObsCoreSchema
 
 # Columns added/filled by this plugin
 _COLUMNS = (
@@ -72,17 +71,11 @@ class DefaultSpatialObsCorePlugin(SpatialObsCorePlugin):
         # docstring inherited.
         table_spec.fields.update(_COLUMNS)
 
-    def make_extra_tables(self, schema: ObsCoreSchema, context: StaticTablesContext) -> None:
-        # docstring inherited.
-        return
-
-    def make_records(
-        self, dataset_id: DatasetId, region: Optional[Region]
-    ) -> Tuple[Optional[Record], Optional[Mapping[sqlalchemy.schema.Table, Sequence[Record]]]]:
+    def make_records(self, dataset_id: DatasetId, region: Optional[Region]) -> Optional[Record]:
         # docstring inherited.
 
         if region is None:
-            return None, None
+            return None
 
         record: Record = {}
 
@@ -108,4 +101,4 @@ class DefaultSpatialObsCorePlugin(SpatialObsCorePlugin):
                 category=RegionTypeWarning,
             )
 
-        return record, None
+        return record

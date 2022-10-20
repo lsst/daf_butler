@@ -25,19 +25,17 @@ __all__ = ["MissingDatabaseError", "RegionTypeWarning", "SpatialObsCorePlugin"]
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
-import sqlalchemy
 from lsst.daf.butler import DatasetId
 from lsst.sphgeom import Region
 from lsst.utils import doImportType
 
 if TYPE_CHECKING:
     from ...core import ddl
-    from ..interfaces import Database, StaticTablesContext
+    from ..interfaces import Database
     from ._config import SpatialPluginConfig
     from ._records import Record
-    from ._schema import ObsCoreSchema
 
 
 class MissingDatabaseError(Exception):
@@ -105,27 +103,7 @@ class SpatialObsCorePlugin(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_extra_tables(self, schema: ObsCoreSchema, context: StaticTablesContext) -> None:
-        """Create any additional tables filled by this plugin.
-
-        Parameters
-        ----------
-        schema : `ObsCoreSchema`
-            Instance of a class controlling obscore table schema.
-        context : `StaticTablesContext`
-            Context object obtained from `Database.declareStaticTables`.
-
-        Notes
-        -----
-        This method is called after the schema of the main obscore table has
-        been created already.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def make_records(
-        self, dataset_id: DatasetId, region: Optional[Region]
-    ) -> Tuple[Optional[Record], Optional[Mapping[sqlalchemy.schema.Table, Sequence[Record]]]]:
+    def make_records(self, dataset_id: DatasetId, region: Optional[Region]) -> Optional[Record]:
         """Return data for obscore records corresponding to a given region.
 
         Parameters
@@ -140,9 +118,6 @@ class SpatialObsCorePlugin(ABC):
         record : `dict` [ `str`, `Any` ] or `None`
             Data to store in the main obscore table with column values
             corresponding to a region or `None` if there is nothing to store.
-        extra_records : `dict` [ `sqlalchemy.Table`, `list` [ `Record` ] ]
-            Records to store in additional plugin-specific tables, indexed by
-            the corresponding table object.
         """
         raise NotImplementedError()
 

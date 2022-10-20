@@ -25,13 +25,11 @@ __all__ = ["ExposureRegionFactory", "Record", "RecordFactory"]
 
 import logging
 from abc import abstractmethod
-from collections import defaultdict
-from collections.abc import Collection, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, cast
+from collections.abc import Collection, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
 from uuid import UUID
 
 import astropy.time
-import sqlalchemy
 from lsst.daf.butler import DataCoordinate, DatasetRef, Dimension, DimensionRecord, DimensionUniverse
 
 from ._config import ExtraColumnConfig, ExtraColumnType, ObsCoreConfig
@@ -111,9 +109,7 @@ class RecordFactory:
         self.visit = universe["visit"]
         self.physical_filter = cast(Dimension, universe["physical_filter"])
 
-    def __call__(
-        self, ref: DatasetRef
-    ) -> Tuple[Optional[Record], Optional[Mapping[sqlalchemy.schema.Table, Sequence[Record]]]]:
+    def __call__(self, ref: DatasetRef) -> Optional[Record]:
         """Make an ObsCore record from a dataset.
 
         Parameters
@@ -127,9 +123,6 @@ class RecordFactory:
             ObsCore record represented as a dictionary. `None` is returned if
             dataset does not need to be stored in the obscore table, e.g. when
             dataset type is not in obscore configuration.
-        extra_records : `dict` [ `sqlalchemy.Table`, `list` [ `Record` ] ]
-            Records to store in additional plugin-specific tables, indexed by
-            the corresponding table object.
 
         Notes
         -----
@@ -142,7 +135,7 @@ class RecordFactory:
         dataset_type_name = ref.datasetType.name
         dataset_config = self.config.dataset_types.get(dataset_type_name)
         if dataset_config is None:
-            return None, None
+            return None
 
         dataId = ref.dataId
         # _LOG.debug("New record, dataId=%s", dataId.full)
@@ -185,15 +178,11 @@ class RecordFactory:
                 self._visit_records(dimension_record, record)
 
         # ask each plugin for its values to add to a record.
-        extra_plugin_records: Dict[sqlalchemy.schema.Table, List[Record]] = defaultdict(list)
         for plugin in self.spatial_plugins:
-            assert ref.id is not None, "Datasett ID must be defined"
-            plugin_record, extra_records = plugin.make_records(ref.id, region)
+            assert ref.id is not None, "Dataset ID must be defined"
+            plugin_record = plugin.make_records(ref.id, region)
             if plugin_record is not None:
                 record.update(plugin_record)
-            if extra_records is not None:
-                for table, table_records in extra_records.items():
-                    extra_plugin_records[table].extend(table_records)
 
         if self.band in dataId:
             em_range = None
@@ -243,7 +232,7 @@ class RecordFactory:
                 # Just a static value.
                 record[key] = column_value
 
-        return record, extra_plugin_records
+        return record
 
     def _exposure_records(self, dimension_record: DimensionRecord, record: Dict[str, Any]) -> None:
         """Extract all needed info from a visit dimension record."""
