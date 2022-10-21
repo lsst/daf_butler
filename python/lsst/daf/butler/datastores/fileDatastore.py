@@ -237,7 +237,7 @@ class FileDatastore(GenericBaseDatastore):
                 ddl.FieldSpec(name="file_size", dtype=BigInteger, nullable=True),
             ],
             unique=frozenset(),
-            indexes=[tuple(["path"])],
+            indexes=[ddl.IndexSpec("path")],
         )
 
     def __init__(

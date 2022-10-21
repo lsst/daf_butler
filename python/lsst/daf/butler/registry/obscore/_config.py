@@ -28,6 +28,7 @@ __all__ = [
     "ExtraColumnType",
     "ObsCoreConfig",
     "ObsCoreManagerConfig",
+    "SpatialPluginConfig",
 ]
 
 import enum
@@ -59,6 +60,9 @@ class ExtraColumnConfig(BaseModel):
 
     length: Optional[int] = None
     """Optional length qualifier for a column, only used for strings."""
+
+    doc: Optional[str] = None
+    """Documentation string for this column."""
 
 
 class DatasetTypeConfig(BaseModel):
@@ -98,6 +102,16 @@ class DatasetTypeConfig(BaseModel):
 
     Keys are the names of the columns, values can be literal constants with the
     values, or ExtraColumnConfig mappings."""
+
+
+class SpatialPluginConfig(BaseModel):
+    """Configuration class for a spatial plugin."""
+
+    cls: str
+    """Name of the class implementing plugin methods."""
+
+    config: Dict[str, Any] = {}
+    """Configuration object passed to plugin ``initialize()`` method."""
 
 
 class ObsCoreConfig(BaseModel):
@@ -143,9 +157,10 @@ class ObsCoreConfig(BaseModel):
     spectral_ranges: Dict[str, Tuple[float, float]] = {}
     """Maps band name or filter name to a min/max of spectral range."""
 
-    spatial_backend: Optional[str] = None
-    """The name of a spatial backend which manages additional spatial
-    columns and indices (e.g. "pgsphere"). By default there is no spatial
+    spatial_plugins: Dict[str, SpatialPluginConfig] = {}
+    """Optional configuration for plugins managing spatial columns and
+    indices. The key is an arbitrary name and the value is an object describing
+    plugin class and its configuration options. By default there is no spatial
     indexing support, but a standard ``s_region`` column is always included.
     """
 

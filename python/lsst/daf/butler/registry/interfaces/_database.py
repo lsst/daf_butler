@@ -975,14 +975,15 @@ class Database(ABC):
         allIndexes.update(spec.unique)
         args.extend(
             sqlalchemy.schema.Index(
-                self.shrinkDatabaseEntityName("_".join([name, "idx"] + list(columns))),
-                *columns,
-                unique=(columns in spec.unique),
+                self.shrinkDatabaseEntityName("_".join([name, "idx"] + list(index.columns))),
+                *index.columns,
+                unique=(index.columns in spec.unique),
+                **index.kwargs,
             )
-            for columns in spec.indexes
-            if columns not in allIndexes
+            for index in spec.indexes
+            if index.columns not in allIndexes
         )
-        allIndexes.update(spec.indexes)
+        allIndexes.update(index.columns for index in spec.indexes)
         args.extend(
             sqlalchemy.schema.Index(
                 self.shrinkDatabaseEntityName("_".join((name, "fkidx") + fk.source)),

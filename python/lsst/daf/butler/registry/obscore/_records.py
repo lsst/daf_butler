@@ -21,20 +21,24 @@
 
 from __future__ import annotations
 
-__all__ = ["ExposureRegionFactory", "RecordFactory"]
+__all__ = ["ExposureRegionFactory", "Record", "RecordFactory"]
 
 import logging
 from abc import abstractmethod
-from collections.abc import Mapping
-from typing import Any, Callable, Dict, Optional, cast
+from collections.abc import Collection, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
 from uuid import UUID
 
 import astropy.time
 from lsst.daf.butler import DataCoordinate, DatasetRef, Dimension, DimensionRecord, DimensionUniverse
-from lsst.sphgeom import ConvexPolygon, LonLat, Region
 
 from ._config import ExtraColumnConfig, ExtraColumnType, ObsCoreConfig
-from ._schema import ObsCoreSchema
+
+if TYPE_CHECKING:
+    from lsst.sphgeom import Region
+
+    from ._schema import ObsCoreSchema
+    from ._spatial import SpatialObsCorePlugin
 
 _LOG = logging.getLogger(__name__)
 
@@ -67,6 +71,9 @@ class ExposureRegionFactory:
         raise NotImplementedError()
 
 
+Record = Dict[str, Any]
+
+
 class RecordFactory:
     """Class that implements conversion of dataset information to ObsCore.
 
@@ -87,12 +94,14 @@ class RecordFactory:
         config: ObsCoreConfig,
         schema: ObsCoreSchema,
         universe: DimensionUniverse,
+        spatial_plugins: Collection[SpatialObsCorePlugin],
         exposure_region_factory: Optional[ExposureRegionFactory] = None,
     ):
         self.config = config
         self.schema = schema
         self.universe = universe
         self.exposure_region_factory = exposure_region_factory
+        self.spatial_plugins = spatial_plugins
 
         # All dimension elements used below.
         self.band = cast(Dimension, universe["band"])
@@ -100,7 +109,7 @@ class RecordFactory:
         self.visit = universe["visit"]
         self.physical_filter = cast(Dimension, universe["physical_filter"])
 
-    def __call__(self, ref: DatasetRef) -> Optional[Dict[str, str | int | float | UUID | None]]:
+    def __call__(self, ref: DatasetRef) -> Optional[Record]:
         """Make an ObsCore record from a dataset.
 
         Parameters
@@ -168,7 +177,12 @@ class RecordFactory:
             if (dimension_record := dataId.records[self.visit]) is not None:
                 self._visit_records(dimension_record, record)
 
-        self.region_to_columns(region, record)
+        # ask each plugin for its values to add to a record.
+        for plugin in self.spatial_plugins:
+            assert ref.id is not None, "Dataset ID must be defined"
+            plugin_record = plugin.make_records(ref.id, region)
+            if plugin_record is not None:
+                record.update(plugin_record)
 
         if self.band in dataId:
             em_range = None
@@ -219,47 +233,6 @@ class RecordFactory:
                 record[key] = column_value
 
         return record
-
-    @classmethod
-    def region_to_columns(cls, region: Optional[Region], record: Dict[str, Any]) -> None:
-        """Fill obscore column values from sphgeom region.
-
-        Parameters
-        ----------
-        region : `lsst.sphgeom.Region`
-            Spatial region, expected to be a ``ConvexPolygon`` instance,
-            warning will be logged for other types.
-        record : `dict` [ `str`, `Any` ]
-            Obscore record that will be expanded with the new columns.
-
-        Notes
-        -----
-        This method adds ``s_ra``, ``s_dec``, and ``s_fov`` values to the
-        record, they are computed from the region bounding circle. If the
-        region is a ``ConvexPolygon`` instance, then ``s_region`` value is
-        added as well representing the polygon in ADQL format.
-        """
-        if region is None:
-            return
-
-        # Get spatial parameters from the bounding circle.
-        circle = region.getBoundingCircle()
-        center = LonLat(circle.getCenter())
-        record["s_ra"] = center.getLon().asDegrees()
-        record["s_dec"] = center.getLat().asDegrees()
-        record["s_fov"] = circle.getOpeningAngle().asDegrees() * 2
-
-        if isinstance(region, ConvexPolygon):
-            poly = ["POLYGON ICRS"]
-            for vertex in region.getVertices():
-                lon_lat = LonLat(vertex)
-                poly += [
-                    f"{lon_lat.getLon().asDegrees():.6f}",
-                    f"{lon_lat.getLat().asDegrees():.6f}",
-                ]
-            record["s_region"] = " ".join(poly)
-        else:
-            _LOG.warning(f"Unexpected region type: {type(region)}")
 
     def _exposure_records(self, dimension_record: DimensionRecord, record: Dict[str, Any]) -> None:
         """Extract all needed info from a visit dimension record."""

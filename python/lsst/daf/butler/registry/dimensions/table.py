@@ -562,12 +562,12 @@ class _SkyPixOverlapTables:
                 # This index has the same fields as the PK, in a different
                 # order, to facilitate queries that know skypix_index and want
                 # to find the other element.
-                (
+                ddl.IndexSpec(
                     "skypix_system",
                     "skypix_level",
                     "skypix_index",
-                )
-                + tuple(element.graph.required.names),
+                    *element.graph.required.names,
+                ),
             },
             foreignKeys=[
                 # Foreign key to summary table.  This makes sure we don't
