@@ -85,7 +85,7 @@ class DatabaseTopologicalFamily(TopologicalFamily):
                 return member
         raise RuntimeError(f"No recognized endpoints for {self.name} in {endpoints}.")
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def governor(self) -> GovernorDimension:
         """Return `GovernorDimension` common to all members of this family.

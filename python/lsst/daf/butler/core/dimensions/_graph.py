@@ -401,7 +401,7 @@ class DimensionGraph:
         """
         return self.intersection(other)
 
-    @property  # type: ignore
+    @property
     @cached_getter
     def primaryKeyTraversalOrder(self) -> Tuple[DimensionElement, ...]:
         """Return a tuple of all elements in specific order.
