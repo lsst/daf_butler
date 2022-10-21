@@ -98,7 +98,7 @@ def convertExpressionToSql(
     elements : `NamedKeyMapping`
         `DimensionElement` instances and their associated tables.
     bind : `Mapping`
-        Mapping from string names to literal values that should be subsituted
+        Mapping from string names to literal values that should be substituted
         for those names when they appear (as identifiers) in the expression.
     TimespanReprClass : `type`; subclass of `TimespanDatabaseRepresentation`
         Class that encapsulates the representation of `Timespan` objects in
@@ -147,7 +147,7 @@ class _TimestampLiteral(sqlalchemy.sql.ColumnElement):
 def compile_timestamp_literal_sqlite(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
     """Compilation of TIMESTAMP literal for SQLite.
 
-    SQLite defines ``datetiem`` function that can be used to convert timestamp
+    SQLite defines ``datetime`` function that can be used to convert timestamp
     value to Unix seconds.
     """
     return compiler.process(func.datetime(sqlalchemy.sql.literal(element._literal)), **kw)
@@ -215,7 +215,7 @@ class WhereClauseConverter(ABC):
         Parameters
         ----------
         node : `Node`
-            Original expression tree  nodethis converter represents; used only
+            Original expression tree node this converter represents; used only
             for error reporting.
 
         Returns
@@ -377,6 +377,57 @@ class ScalarWhereClauseConverter(WhereClauseConverter):
                 f"{dtype.__name__}, but item has type {self.dtype.__name__}."
             )
         literals.append(self.column)
+
+
+class SequenceWhereClauseConverter(WhereClauseConverter):
+    """Implementation of WhereClauseConverter, for expressions that represent
+    a sequence of `sqlalchemy.sql.ColumnElement` instance.
+
+    This converter is intended for bound identifiers whose bind value is a
+    sequence (but not string), which should only appear in the right hand side
+    of ``IN`` operator. It should be constructed by calling `fromLiteral`
+    method.
+
+    Parameters
+    ----------
+    columns : `list` [ `ScalarWhereClauseConverter` ]
+        Converters for items in the sequence.
+    """
+
+    def __init__(self, scalars: List[ScalarWhereClauseConverter]):
+        self.scalars = scalars
+
+    @classmethod
+    def fromLiteral(cls, values: Iterable[Any]) -> SequenceWhereClauseConverter:
+        """Construct from an iterable of Python literals.
+
+        Parameters
+        ----------
+        values : `list`
+            The Python literals to wrap.
+
+        Returns
+        -------
+        converter : `SequenceWhereClauseConverter`
+            Converter instance that wraps ``values``.
+        """
+        return cls([ScalarWhereClauseConverter.fromLiteral(value) for value in values])
+
+    @property
+    def dtype(self) -> type:
+        # Docstring inherited.
+        return list
+
+    def categorizeForIn(
+        self,
+        literals: List[sqlalchemy.sql.ColumnElement],
+        ranges: List[Tuple[int, int, int]],
+        dtype: type,
+        node: Node,
+    ) -> None:
+        # Docstring inherited.
+        for scalar in self.scalars:
+            scalar.categorizeForIn(literals, ranges, dtype, node)
 
 
 class TimespanWhereClauseConverter(WhereClauseConverter):
@@ -615,7 +666,7 @@ class TimeBinaryOperator:
         Returns
         -------
         converters : `list` [ `ScalarWhereClauseConverter` ]
-            List of converters in the same order as they appera in argument
+            List of converters in the same order as they appear in argument
             list, some of them can be coerced to `datetime` type, non-coerced
             arguments are returned without any change.
         """
@@ -1006,7 +1057,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
     elements: `NamedKeyMapping`
         `DimensionElement` instances and their associated tables.
     bind: `Mapping`
-        Mapping from string names to literal values that should be subsituted
+        Mapping from string names to literal values that should be substituted
         for those names when they appear (as identifiers) in the expression.
     TimespanReprClass: `type`; subclass of `TimespanDatabaseRepresentation`
         Class that encapsulates the representation of `Timespan` objects in
@@ -1052,6 +1103,10 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
             value = self.bind[name]
             if isinstance(value, Timespan):
                 return TimespanWhereClauseConverter(self._TimespanReprClass.fromLiteral(value))
+            elif isinstance(value, (list, tuple)):
+                # Only accept lists and tuples, general test for Iterables is
+                # not reliable (e.g. astropy Time is Iterable).
+                return SequenceWhereClauseConverter.fromLiteral(value)
             return ScalarWhereClauseConverter.fromLiteral(value)
         constant = categorizeConstant(name)
         if constant is ExpressionConstant.INGEST_DATE:

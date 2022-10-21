@@ -26,6 +26,7 @@ from lsst.daf.butler.core import NamedKeyDict, TimespanDatabaseRepresentation
 from lsst.daf.butler.registry.queries._structs import QueryColumns
 from lsst.daf.butler.registry.queries.expressions import (
     CheckVisitor,
+    InspectionVisitor,
     NormalForm,
     NormalFormExpression,
     ParserYacc,
@@ -105,6 +106,227 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
             str(column_element.compile(dialect=dialect, compile_kwargs={"literal_binds": True})),
             "datetime(ingest_date) < datetime('2020-01-01 00:00:00.000000')",
         )
+
+    def test_bind(self):
+        """Test with bind parameters"""
+
+        parser = ParserYacc()
+        tree = parser.parse("a > b OR t in (x, y, z)")
+        self.assertIsNotNone(tree)
+
+        columns = QueryColumns()
+        elements = NamedKeyDict()
+        column_element = convertExpressionToSql(
+            tree,
+            self.universe,
+            columns,
+            elements,
+            {"a": 1, "b": 2, "t": 0, "x": 10, "y": 20, "z": 30},
+            TimespanDatabaseRepresentation.Compound,
+        )
+        self.assertEqual(
+            str(column_element.compile()), ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6)"
+        )
+        self.assertEqual(
+            str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 2 OR 0 IN (10, 20, 30)"
+        )
+
+    def test_bind_list(self):
+        """Test with bind parameter which is list inside IN rhs."""
+
+        parser = ParserYacc()
+        columns = QueryColumns()
+        elements = NamedKeyDict()
+
+        # Single bound variable inside IN()
+        tree = parser.parse("a > b OR t in (x)")
+        self.assertIsNotNone(tree)
+        column_element = convertExpressionToSql(
+            tree,
+            self.universe,
+            columns,
+            elements,
+            {"a": 1, "b": 2, "t": 0, "x": (10, 20, 30)},
+            TimespanDatabaseRepresentation.Compound,
+        )
+        self.assertEqual(
+            str(column_element.compile()), ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6)"
+        )
+        self.assertEqual(
+            str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 2 OR 0 IN (10, 20, 30)"
+        )
+
+        # Couple of bound variables inside IN() with different combinations
+        # of scalars and list.
+        tree = parser.parse("a > b OR t in (x, y)")
+        self.assertIsNotNone(tree)
+        column_element = convertExpressionToSql(
+            tree,
+            self.universe,
+            columns,
+            elements,
+            {"a": 1, "b": 2, "t": 0, "x": 10, "y": 20},
+            TimespanDatabaseRepresentation.Compound,
+        )
+        self.assertEqual(
+            str(column_element.compile()), ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5)"
+        )
+        self.assertEqual(
+            str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 2 OR 0 IN (10, 20)"
+        )
+
+        column_element = convertExpressionToSql(
+            tree,
+            self.universe,
+            columns,
+            elements,
+            {"a": 1, "b": 2, "t": 0, "x": [10, 30], "y": 20},
+            TimespanDatabaseRepresentation.Compound,
+        )
+        self.assertEqual(
+            str(column_element.compile()), ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6)"
+        )
+        self.assertEqual(
+            str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 2 OR 0 IN (10, 30, 20)"
+        )
+
+        column_element = convertExpressionToSql(
+            tree,
+            self.universe,
+            columns,
+            elements,
+            {"a": 1, "b": 2, "t": 0, "x": (10, 30), "y": (20, 40)},
+            TimespanDatabaseRepresentation.Compound,
+        )
+        self.assertEqual(
+            str(column_element.compile()),
+            ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6, :param_7)",
+        )
+        self.assertEqual(
+            str(column_element.compile(compile_kwargs={"literal_binds": True})),
+            "1 > 2 OR 0 IN (10, 30, 20, 40)",
+        )
+
+
+class InspectionVisitorTestCase(unittest.TestCase):
+    """Tests for InspectionVisitor class."""
+
+    def test_simple(self):
+        """Test for simple expressions"""
+
+        universe = DimensionUniverse()
+        parser = ParserYacc()
+
+        tree = parser.parse("instrument = 'LSST'")
+        bind = {}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertFalse(summary.columns)
+        self.assertFalse(summary.hasIngestDate)
+        self.assertEqual(summary.dataIdKey, universe["instrument"])
+        self.assertEqual(summary.dataIdValue, "LSST")
+
+        tree = parser.parse("instrument != 'LSST'")
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertFalse(summary.columns)
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+        tree = parser.parse("instrument = 'LSST' AND visit = 1")
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertFalse(summary.columns)
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+        tree = parser.parse("instrument = 'LSST' AND visit = 1 AND skymap = 'x'")
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(
+            summary.dimensions.names, {"instrument", "visit", "band", "physical_filter", "skymap"}
+        )
+        self.assertFalse(summary.columns)
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+    def test_bind(self):
+        """Test for simple expressions with binds."""
+
+        universe = DimensionUniverse()
+        parser = ParserYacc()
+
+        tree = parser.parse("instrument = instr")
+        bind = {"instr": "LSST"}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertFalse(summary.hasIngestDate)
+        self.assertEqual(summary.dataIdKey, universe["instrument"])
+        self.assertEqual(summary.dataIdValue, "LSST")
+
+        tree = parser.parse("instrument != instr")
+        self.assertEqual(summary.dimensions.names, {"instrument"})
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+        tree = parser.parse("instrument = instr AND visit = visit_id")
+        bind = {"instr": "LSST", "visit_id": 1}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+        tree = parser.parse("instrument = 'LSST' AND visit = 1 AND skymap = skymap_name")
+        bind = {"instr": "LSST", "visit_id": 1, "skymap_name": "x"}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(
+            summary.dimensions.names, {"instrument", "visit", "band", "physical_filter", "skymap"}
+        )
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+    def test_in(self):
+        """Test for IN expressions."""
+
+        universe = DimensionUniverse()
+        parser = ParserYacc()
+
+        tree = parser.parse("instrument IN ('LSST')")
+        bind = {}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertFalse(summary.hasIngestDate)
+        # we do not handle IN with a single item as `=`
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+        tree = parser.parse("instrument IN (instr)")
+        bind = {"instr": "LSST"}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+        tree = parser.parse("visit IN (1,2,3)")
+        bind = {}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+        tree = parser.parse("visit IN (visit1, visit2, visit3)")
+        bind = {"visit1": 1, "visit2": 2, "visit3": 3}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
+
+        tree = parser.parse("visit IN (visits)")
+        bind = {"visits": (1, 2, 3)}
+        summary = tree.visit(InspectionVisitor(universe, bind))
+        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertIsNone(summary.dataIdKey)
+        self.assertIsNone(summary.dataIdValue)
 
 
 class CheckVisitorTestCase(unittest.TestCase):

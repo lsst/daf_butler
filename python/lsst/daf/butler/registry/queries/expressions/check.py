@@ -184,7 +184,16 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
     def visitIdentifier(self, name: str, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitIdentifier
         if name in self.bind:
-            return TreeSummary(dataIdValue=self.bind[name])
+            value = self.bind[name]
+            if isinstance(value, (list, tuple)):
+                # This can happen on rhs of IN operator, if there is only one
+                # element in the list then take it.
+                if len(value) == 1:
+                    return TreeSummary(dataIdValue=value[0])
+                else:
+                    return TreeSummary()
+            else:
+                return TreeSummary(dataIdValue=value)
         constant = categorizeConstant(name)
         if constant is ExpressionConstant.INGEST_DATE:
             return TreeSummary(hasIngestDate=True)
