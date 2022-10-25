@@ -1009,6 +1009,8 @@ class ChainedDatastore(Datastore):
                 # Get the position and also delete it from the list.
                 exported[ref_positions.pop(ref)] = export
 
+        # Every dataset should be accounted for because of the earlier checks
+        # but make sure that we did fill all the slots to appease mypy.
         for i, dataset in enumerate(exported):
             if dataset is None:
                 raise FileNotFoundError(f"Failed to export dataset {refs[i]}.")
