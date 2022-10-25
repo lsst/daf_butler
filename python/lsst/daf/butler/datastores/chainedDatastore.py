@@ -979,16 +979,10 @@ class ChainedDatastore(Datastore):
         # better than exporting files from the first datastore and then finding
         # that one is missing but is not in the second datastore either.
         known = [datastore.knows_these(refs) for datastore in self.datastores]
-        combined_known: dict[DatasetRef, bool] = {}
+        refs_known: set[DatasetRef] = set()
         for known_to_this in known:
-            for ref, knows_this in known_to_this.items():
-                # If we have not known it yet, store the newer value.
-                if not combined_known.get(ref):
-                    combined_known[ref] = knows_this
-        missing_count = 0
-        for knows_this in combined_known.values():
-            if not knows_this:
-                missing_count += 1
+            refs_known.update({ref for ref, knows_this in known_to_this.items() if knows_this})
+        missing_count = len(refs) - len(refs_known)
         if missing_count:
             raise FileNotFoundError(f"Not all datasets known to this datastore. Missing {missing_count}")
 

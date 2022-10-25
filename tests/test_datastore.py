@@ -885,6 +885,15 @@ class DatastoreTests(DatastoreTestsBase):
         with self.assertRaises(TypeError):
             list(datastore.export(refs, directory="exportDir", transfer="move"))
 
+        # Create a new ref that is not known to the datastore and try to
+        # export it.
+        sc = self.storageClassFactory.getStorageClass("ThingOne")
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = DataIdForTest({"instrument": "dummy", "visit": 52, "physical_filter": "V"})
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+        with self.assertRaises(FileNotFoundError):
+            list(datastore.export(refs + [ref], transfer=None))
+
 
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     """PosixDatastore specialization"""
