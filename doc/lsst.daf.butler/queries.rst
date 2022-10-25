@@ -164,9 +164,9 @@ schema and how SQL query is built). A simple identifier with a name
 ``ingest_date`` is used to reference dataset ingest time, which can be used to
 filter query results based on that property of datasets.
 
-Registry methods accepting user expressions also accept ``bind`` parameter which is a mapping from identifier name to its corresponding value.
-Identifiers appearing in a user expressions will be replaced with the corresponding value from this mapping.
-Use of ``bind`` parameter is encouraged when possible to simplify rendering of the query strings.
+Registry methods accepting user expressions also accept a ``bind`` parameter, which is a mapping from identifier name to its corresponding value.
+Identifiers appearing in user expressions will be replaced with the corresponding value from this mapping.
+Using the ``bind`` parameter is encouraged when possible to simplify rendering of the query strings.
 A partial example of comparing two approaches, without and with ``bind``:
 
 .. code-block:: Python
@@ -188,7 +188,7 @@ A partial example of comparing two approaches, without and with ``bind``:
     )
 
 Types of values provided in a ``bind`` mapping must correspond to the expected type of the expression, which is usually a scalar type, one of ``int``, ``float``, ``str``, etc.
-There is one context where a bound value can specify a list or a tuple of values, this can be provided for an identifier appearing in the right-hand side of :ref:`expressions-in-operator`.
+There is one context where a bound value can specify a list, tuple or set of values: an identifier appearing in the right-hand side of :ref:`expressions-in-operator`.
 Note that parentheses after ``IN`` are still required when identifier is bound to a list or a tuple.
 An example of this feature:
 
