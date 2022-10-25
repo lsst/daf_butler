@@ -29,6 +29,7 @@ __all__ = (
 import operator
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Set
 from datetime import datetime
 from typing import (
     TYPE_CHECKING,
@@ -1103,9 +1104,9 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
             value = self.bind[name]
             if isinstance(value, Timespan):
                 return TimespanWhereClauseConverter(self._TimespanReprClass.fromLiteral(value))
-            elif isinstance(value, (list, tuple)):
-                # Only accept lists and tuples, general test for Iterables is
-                # not reliable (e.g. astropy Time is Iterable).
+            elif isinstance(value, (list, tuple, Set)):
+                # Only accept list, tuple, and Set, general test for Iterables
+                # is not reliable (e.g. astropy Time is Iterable).
                 return SequenceWhereClauseConverter.fromLiteral(value)
             return ScalarWhereClauseConverter.fromLiteral(value)
         constant = categorizeConstant(name)

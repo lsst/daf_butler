@@ -27,7 +27,8 @@ __all__ = (
 )
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, List, Mapping, Optional, Sequence, Set, Tuple
+from collections.abc import Mapping, Sequence, Set
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 
 from ....core import (
     DataCoordinate,
@@ -72,7 +73,7 @@ class InspectionSummary:
     in this branch (`NamedValueSet` [ `Dimension` ]).
     """
 
-    columns: NamedKeyDict[DimensionElement, Set[str]] = dataclasses.field(default_factory=NamedKeyDict)
+    columns: NamedKeyDict[DimensionElement, set[str]] = dataclasses.field(default_factory=NamedKeyDict)
     """Dimension element tables whose columns were referenced anywhere in this
     branch (`NamedKeyDict` [ `DimensionElement`, `set` [ `str` ] ]).
     """
@@ -185,11 +186,11 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         # Docstring inherited from TreeVisitor.visitIdentifier
         if name in self.bind:
             value = self.bind[name]
-            if isinstance(value, (list, tuple)):
+            if isinstance(value, (list, tuple, Set)):
                 # This can happen on rhs of IN operator, if there is only one
                 # element in the list then take it.
                 if len(value) == 1:
-                    return TreeSummary(dataIdValue=value[0])
+                    return TreeSummary(dataIdValue=next(iter(value)))
                 else:
                     return TreeSummary()
             else:

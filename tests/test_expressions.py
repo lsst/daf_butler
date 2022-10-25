@@ -132,7 +132,7 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
         )
 
     def test_bind_list(self):
-        """Test with bind parameter which is list inside IN rhs."""
+        """Test with bind parameter which is list/tuple/set inside IN rhs."""
 
         parser = ParserYacc()
         columns = QueryColumns()
@@ -195,16 +195,16 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
             self.universe,
             columns,
             elements,
-            {"a": 1, "b": 2, "t": 0, "x": (10, 30), "y": (20, 40)},
+            {"a": 1, "b": 2, "t": 0, "x": (10, 30), "y": {20}},
             TimespanDatabaseRepresentation.Compound,
         )
         self.assertEqual(
             str(column_element.compile()),
-            ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6, :param_7)",
+            ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6)",
         )
         self.assertEqual(
             str(column_element.compile(compile_kwargs={"literal_binds": True})),
-            "1 > 2 OR 0 IN (10, 30, 20, 40)",
+            "1 > 2 OR 0 IN (10, 30, 20)",
         )
 
 
