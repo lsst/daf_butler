@@ -164,6 +164,46 @@ schema and how SQL query is built). A simple identifier with a name
 ``ingest_date`` is used to reference dataset ingest time, which can be used to
 filter query results based on that property of datasets.
 
+Registry methods accepting user expressions also accept a ``bind`` parameter, which is a mapping from identifier name to its corresponding value.
+Identifiers appearing in user expressions will be replaced with the corresponding value from this mapping.
+Using the ``bind`` parameter is encouraged when possible to simplify rendering of the query strings.
+A partial example of comparing two approaches, without and with ``bind``:
+
+.. code-block:: Python
+
+    instrument_name = "LSST"
+    visit_id = 12345
+
+    # Direct rendering of query not using bind
+    result = registry.queryDatasets(
+        ...,
+        where=f"instrument = '{instrument_name}' AND visit = {visit_id}",
+    )
+
+    # Same functionality using bind parameter
+    result = registry.queryDatasets(
+        ...,
+        where="instrument = instrument_name AND visit = visit_id",
+        bind={"instrument_name": instrument_name, "visit_id": visit_id},
+    )
+
+Types of values provided in a ``bind`` mapping must correspond to the expected type of the expression, which is usually a scalar type, one of ``int``, ``float``, ``str``, etc.
+There is one context where a bound value can specify a list, tuple or set of values: an identifier appearing in the right-hand side of :ref:`expressions-in-operator`.
+Note that parentheses after ``IN`` are still required when identifier is bound to a list or a tuple.
+An example of this feature:
+
+.. code-block:: Python
+
+    instrument_name = "LSST"
+    visit_ids = (12345, 12346, 12350)
+    result = registry.queryDatasets(
+        ...,
+        where="instrument = instrument_name AND visit IN (visit_ids)",
+        bind={"instrument_name": instrument_name, "visit_ids": visit_ids},
+    )
+
+
+
 Unary arithmetic operators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -190,6 +230,7 @@ expressions.
 .. note :: The equality comparison operator is a single ``=`` like in SQL, not
     double ``==`` like in Python or C++.
 
+.. _expressions-in-operator:
 
 IN operator
 ^^^^^^^^^^^
