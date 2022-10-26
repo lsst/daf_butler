@@ -876,11 +876,16 @@ class DatastoreTests(DatastoreTestsBase):
     def testExport(self):
         datastore, refs = self._populate_export_datastore("test_datastore")
 
-        datasets = list(datastore.export(refs, transfer=None))
+        datasets = list(datastore.export(refs))
         self.assertEqual(len(datasets), 3)
 
+        for transfer in (None, "auto"):
+            # Both will default to None
+            datasets = list(datastore.export(refs, transfer=transfer))
+            self.assertEqual(len(datasets), 3)
+
         with self.assertRaises(TypeError):
-            list(datastore.export(refs))
+            list(datastore.export(refs, transfer="copy"))
 
         with self.assertRaises(TypeError):
             list(datastore.export(refs, directory="exportDir", transfer="move"))

@@ -2703,6 +2703,9 @@ class FileDatastore(GenericBaseDatastore):
         transfer: Optional[str] = "auto",
     ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
+        if transfer == "auto" and directory is None:
+            transfer = None
+
         if transfer is not None and directory is None:
             raise TypeError(f"Cannot export using transfer mode {transfer} with no export directory given")
 

@@ -1033,7 +1033,7 @@ class Datastore(metaclass=ABCMeta):
         refs: Iterable[DatasetRef],
         *,
         directory: Optional[ResourcePathExpression] = None,
-        transfer: Optional[str] = None,
+        transfer: Optional[str] = "auto",
     ) -> Iterable[FileDataset]:
         """Export datasets for transfer to another data repository.
 
@@ -1043,12 +1043,14 @@ class Datastore(metaclass=ABCMeta):
             Dataset references to be exported.
         directory : `str`, optional
             Path to a directory that should contain files corresponding to
-            output datasets.  Ignored if ``transfer`` is `None`.
+            output datasets.  Ignored if ``transfer`` is explicitly `None`.
         transfer : `str`, optional
             Mode that should be used to move datasets out of the repository.
             Valid options are the same as those of the ``transfer`` argument
             to ``ingest``, and datastores may similarly signal that a transfer
-            mode is not supported by raising `NotImplementedError`.
+            mode is not supported by raising `NotImplementedError`. If "auto"
+            is given and no ``directory`` is specified, `None` will be
+            implied.
 
         Returns
         -------
