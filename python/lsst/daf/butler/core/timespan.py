@@ -564,7 +564,7 @@ class Timespan:
             )
 
     @classmethod
-    def from_yaml(cls, loader: yaml.SafeLoader, node: yaml.ScalarNode) -> Optional[Timespan]:
+    def from_yaml(cls, loader: yaml.SafeLoader, node: yaml.MappingNode) -> Optional[Timespan]:
         """Convert YAML node into _SpecialTimespanBound.
 
         Parameters
