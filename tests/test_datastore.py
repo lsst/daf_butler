@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 import os
 import shutil
 import sys
@@ -33,8 +35,10 @@ import lsst.utils.tests
 import yaml
 from lsst.daf.butler import (
     Config,
+    DatasetRef,
     DatasetRefURIs,
     DatasetTypeNotSupportedError,
+    Datastore,
     DatastoreCacheManager,
     DatastoreCacheManagerConfig,
     DatastoreConfig,
@@ -261,6 +265,11 @@ class DatastoreTests(DatastoreTestsBase):
 
             # Does it exist?
             self.assertTrue(datastore.exists(ref))
+            self.assertTrue(datastore.knows(ref))
+            multi = datastore.knows_these([ref])
+            self.assertTrue(multi[ref])
+            multi = datastore.mexists([ref])
+            self.assertTrue(multi[ref])
 
             # Get
             metricsOut = datastore.get(ref, parameters=None)
@@ -359,6 +368,11 @@ class DatastoreTests(DatastoreTestsBase):
 
             # Does it exist?
             self.assertTrue(datastore.exists(ref))
+            self.assertTrue(datastore.knows(ref))
+            multi = datastore.knows_these([ref])
+            self.assertTrue(multi[ref])
+            multi = datastore.mexists([ref])
+            self.assertTrue(multi[ref])
 
             # Get
             metricsOut = datastore.get(ref)
@@ -381,6 +395,11 @@ class DatastoreTests(DatastoreTestsBase):
 
             # Does it exist?
             self.assertFalse(datastore.exists(ref))
+            self.assertFalse(datastore.knows(ref))
+            multi = datastore.knows_these([ref])
+            self.assertFalse(multi[ref])
+            multi = datastore.mexists([ref])
+            self.assertFalse(multi[ref])
 
             with self.assertRaises(FileNotFoundError):
                 datastore.get(ref)
@@ -802,10 +821,8 @@ class DatastoreTests(DatastoreTestsBase):
                     # since it will get the same file name in store
                     datastore.remove(ref)
 
-    def testExportImportRecords(self):
-        """Test for export_records and import_records methods."""
-
-        datastore = self.makeDatastore("test_datastore")
+    def _populate_export_datastore(self, name: str) -> tuple[Datastore, list[DatasetRef]]:
+        datastore = self.makeDatastore(name)
 
         # For now only the FileDatastore can be used for this test.
         # ChainedDatastore that only includes InMemoryDatastores have to be
@@ -822,11 +839,17 @@ class DatastoreTests(DatastoreTestsBase):
 
         refs = []
         for visit in (2048, 2049, 2050):
-            dataId = {"instrument": "dummy", "visit": visit, "physical_filter": "Uprime"}
+            dataId = FakeDataCoordinate.from_dict(
+                {"instrument": "dummy", "visit": visit, "physical_filter": "Uprime"}
+            )
             ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
             datastore.put(metrics, ref)
             refs.append(ref)
+        return datastore, refs
 
+    def testExportImportRecords(self):
+        """Test for export_records and import_records methods."""
+        datastore, refs = self._populate_export_datastore("test_datastore")
         for exported_refs in (refs, refs[1:]):
             n_refs = len(exported_refs)
             records = datastore.export_records(exported_refs)
@@ -849,6 +872,32 @@ class DatastoreTests(DatastoreTestsBase):
         self.assertIsNotNone(data)
         data = datastore2.get(refs[2])
         self.assertIsNotNone(data)
+
+    def testExport(self):
+        datastore, refs = self._populate_export_datastore("test_datastore")
+
+        datasets = list(datastore.export(refs))
+        self.assertEqual(len(datasets), 3)
+
+        for transfer in (None, "auto"):
+            # Both will default to None
+            datasets = list(datastore.export(refs, transfer=transfer))
+            self.assertEqual(len(datasets), 3)
+
+        with self.assertRaises(TypeError):
+            list(datastore.export(refs, transfer="copy"))
+
+        with self.assertRaises(TypeError):
+            list(datastore.export(refs, directory="exportDir", transfer="move"))
+
+        # Create a new ref that is not known to the datastore and try to
+        # export it.
+        sc = self.storageClassFactory.getStorageClass("ThingOne")
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = DataIdForTest({"instrument": "dummy", "visit": 52, "physical_filter": "V"})
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+        with self.assertRaises(FileNotFoundError):
+            list(datastore.export(refs + [ref], transfer=None))
 
 
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):

@@ -1373,6 +1373,14 @@ class FileDatastore(GenericBaseDatastore):
             return True
         return False
 
+    def knows_these(self, refs: Iterable[DatasetRef]) -> dict[DatasetRef, bool]:
+        # Docstring inherited from the base class.
+
+        # The records themselves. Could be missing some entries.
+        records = self._get_stored_records_associated_with_refs(refs)
+
+        return {ref: ref.id in records for ref in refs}
+
     def _process_mexists_records(
         self,
         id_to_ref: Dict[DatasetId, DatasetRef],
@@ -2695,11 +2703,14 @@ class FileDatastore(GenericBaseDatastore):
         transfer: Optional[str] = "auto",
     ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
+        if transfer == "auto" and directory is None:
+            transfer = None
+
         if transfer is not None and directory is None:
-            raise RuntimeError(f"Cannot export using transfer mode {transfer} with no export directory given")
+            raise TypeError(f"Cannot export using transfer mode {transfer} with no export directory given")
 
         if transfer == "move":
-            raise RuntimeError("Can not export by moving files out of datastore.")
+            raise TypeError("Can not export by moving files out of datastore.")
         elif transfer == "direct":
             # For an export, treat this as equivalent to None. We do not
             # want an import to risk using absolute URIs to datasets owned

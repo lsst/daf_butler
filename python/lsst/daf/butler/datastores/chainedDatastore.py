@@ -48,6 +48,7 @@ from lsst.utils import doImportType
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey, StorageClass
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
+    from lsst.resources import ResourcePathExpression
 
 log = logging.getLogger(__name__)
 
@@ -261,6 +262,18 @@ class ChainedDatastore(Datastore):
                 log.debug("%s known to datastore %s", ref, datastore.name)
                 return True
         return False
+
+    def knows_these(self, refs: Iterable[DatasetRef]) -> dict[DatasetRef, bool]:
+        # Docstring inherited from the base class.
+        refs_known: dict[DatasetRef, bool] = {}
+        for datastore in self.datastores:
+            refs_known.update(datastore.knows_these(refs))
+
+            # No need to check in next datastore for refs that are known.
+            # We only update entries that were initially False.
+            refs = [ref for ref, known in refs_known.items() if not known]
+
+        return refs_known
 
     def mexists(
         self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
@@ -934,3 +947,74 @@ class ChainedDatastore(Datastore):
                 all_records[name] = record_data
 
         return all_records
+
+    def export(
+        self,
+        refs: Iterable[DatasetRef],
+        *,
+        directory: Optional[ResourcePathExpression] = None,
+        transfer: Optional[str] = "auto",
+    ) -> Iterable[FileDataset]:
+        # Docstring inherited from Datastore.export.
+        if transfer == "auto" and directory is None:
+            transfer = None
+
+        if transfer is not None and directory is None:
+            raise TypeError(f"Cannot export using transfer mode {transfer} with no export directory given")
+
+        if transfer == "move":
+            raise TypeError("Can not export by moving files out of datastore.")
+
+        # Exporting from a chain has the potential for a dataset to be
+        # in one or more of the datastores in the chain. We only need one
+        # of them since we assume the datasets are the same in all (but
+        # the file format could be different of course since that is a
+        # per-datastore configuration).
+        # We also do not know whether any of the datastores in the chain
+        # support file export.
+
+        # Ensure we have an ordered sequence that is not an iterator or set.
+        if not isinstance(refs, Sequence):
+            refs = list(refs)
+
+        # If any of the datasets are missing entirely we need to raise early
+        # before we try to run the export. This can be a little messy but is
+        # better than exporting files from the first datastore and then finding
+        # that one is missing but is not in the second datastore either.
+        known = [datastore.knows_these(refs) for datastore in self.datastores]
+        refs_known: set[DatasetRef] = set()
+        for known_to_this in known:
+            refs_known.update({ref for ref, knows_this in known_to_this.items() if knows_this})
+        missing_count = len(refs) - len(refs_known)
+        if missing_count:
+            raise FileNotFoundError(f"Not all datasets known to this datastore. Missing {missing_count}")
+
+        # To allow us to slot each result into the right place after
+        # asking each datastore, create a dict with the index.
+        ref_positions = {ref: i for i, ref in enumerate(refs)}
+
+        # Presize the final export list.
+        exported: list[FileDataset | None] = [None] * len(refs)
+
+        # The order of the returned dataset has to match the order of the
+        # given refs, even if they are all from different datastores.
+        for i, datastore in enumerate(self.datastores):
+            known_to_this = known[i]
+            filtered = [ref for ref, knows in known_to_this.items() if knows and ref in ref_positions]
+
+            try:
+                this_export = datastore.export(filtered, directory=directory, transfer=transfer)
+            except NotImplementedError:
+                # Try the next datastore.
+                continue
+
+            for ref, export in zip(filtered, this_export):
+                # Get the position and also delete it from the list.
+                exported[ref_positions.pop(ref)] = export
+
+        # Every dataset should be accounted for because of the earlier checks
+        # but make sure that we did fill all the slots to appease mypy.
+        for i, dataset in enumerate(exported):
+            if dataset is None:
+                raise FileNotFoundError(f"Failed to export dataset {refs[i]}.")
+            yield dataset
