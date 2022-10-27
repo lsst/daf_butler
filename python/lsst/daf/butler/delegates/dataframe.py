@@ -27,6 +27,7 @@ from typing import Any, Mapping, Optional
 
 import pandas
 from lsst.daf.butler import StorageClassDelegate
+from lsst.daf.butler.formatters.parquet import DataFrameSchema
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
@@ -56,6 +57,10 @@ class DataFrameDelegate(StorageClassDelegate):
         """
         if componentName == "columns":
             return pandas.Index(self._getAllColumns(composite))
+        elif componentName == "rowcount":
+            return len(composite)
+        elif componentName == "schema":
+            return DataFrameSchema(composite.iloc[:0])
         else:
             raise AttributeError(
                 f"Do not know how to retrieve component {componentName} from {get_full_type_name(composite)}"
@@ -113,6 +118,8 @@ class DataFrameDelegate(StorageClassDelegate):
                 for name in ensure_iterable(parameters["columns"])
                 if name not in inMemoryDataset.index.names
             ]
+            # Ensure uniqueness, keeping order.
+            readColumns = list(dict.fromkeys(readColumns))
 
             return inMemoryDataset[readColumns]
         else:
