@@ -102,13 +102,94 @@ storageClasses:
     pytype: lsst.afw.table.ExposureCatalog
   DataFrame:
     pytype: pandas.core.frame.DataFrame
+    converters:
+      pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_pandas
+      astropy.table.Table: astropy.table.Table.to_pandas
+      numpy.ndarray: pandas.DataFrame.from_records
     delegate: lsst.daf.butler.delegates.dataframe.DataFrameDelegate
     derivedComponents:
       columns: DataFrameIndex
+      rowcount: int
+      schema: DataFrameSchema
     parameters:
       - columns
+      - filters
   DataFrameIndex:
     pytype: pandas.Index
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.arrow_schema_to_pandas_index
+      list: pandas.Index
+  DataFrameSchema:
+    pytype: lsst.daf.butler.formatters.parquet.DataFrameSchema
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.DataFrameSchema.from_arrow
+      lsst.daf.butler.formatters.parquet.ArrowAstropySchema: lsst.daf.butler.formatters.parquet.ArrowAstropySchema.to_dataframe_schema
+      lsst.daf.butler.formatters.parquet.ArrowNumpySchema: lsst.daf.butler.formatters.parquet.ArrowNumpySchema.to_dataframe_schema
+  ArrowTable:
+    pytype: pyarrow.lib.Table
+    converters:
+      pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_arrow
+      astropy.table.Table: lsst.daf.butler.formatters.parquet.astropy_to_arrow
+      numpy.ndarray: lsst.daf.butler.formatters.parquet.numpy_to_arrow
+    delegate: lsst.daf.butler.delegates.arrowtable.ArrowTableDelegate
+    derivedComponents:
+      columns: ArrowColumnList
+      rowcount: int
+      schema: ArrowSchema
+    parameters:
+      - columns
+      - filters
+  ArrowColumnList:
+    pytype: list
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.arrow_schema_to_column_list
+      pandas.Index: pandas.Index.to_list
+  ArrowSchema:
+    pytype: pyarrow.Schema
+    converters:
+      lsst.daf.butler.formatters.parquet.DataFrameSchema: lsst.daf.butler.formatters.parquet.DataFrameSchema.to_arrow_schema
+      lsst.daf.butler.formatters.parquet.ArrowAstropySchema: lsst.daf.butler.formatters.parquet.ArrowAstropySchema.to_arrow_schema
+      lsst.daf.butler.formatters.parquet.ArrowNumpySchema: lsst.daf.butler.formatters.parquet.ArrowNumpySchema.to_arrow_schema
+  ArrowAstropy:
+    pytype: astropy.table.Table
+    converters:
+      pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_astropy
+      pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_astropy
+      numpy.ndarray: lsst.daf.butler.formatters.parquet.numpy_to_astropy
+    delegate: lsst.daf.butler.delegates.arrowastropy.ArrowAstropyDelegate
+    derivedComponents:
+      columns: ArrowColumnList
+      rowcount: int
+      schema: ArrowAstropySchema
+    parameters:
+      - columns
+      - filters
+  ArrowAstropySchema:
+    pytype: lsst.daf.butler.formatters.parquet.ArrowAstropySchema
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.ArrowAstropySchema.from_arrow
+      lsst.daf.butler.formatters.parquet.DataFrameSchema: lsst.daf.butler.formatters.parquet.DataFrameSchema.to_arrow_astropy_schema
+      lsst.daf.butler.formatters.parquet.ArrowNumpySchema: lsst.daf.butler.formatters.parquet.ArrowNumpySchema.to_arrow_astropy_schema
+  ArrowNumpy:
+    pytype: numpy.ndarray
+    converters:
+      pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_numpy
+      pandas.core.frame.DataFrame: pandas.DataFrame.to_records
+      astropy.table.Table: astropy.table.Table.as_array
+    delegate: lsst.daf.butler.delegates.arrownumpy.ArrowNumpyDelegate
+    derivedComponents:
+      columns: ArrowColumnList
+      rowcount: int
+      schema: ArrowNumpySchema
+    parameters:
+      - columns
+      - filters
+  ArrowNumpySchema:
+    pytype: lsst.daf.butler.formatters.parquet.ArrowNumpySchema
+    converters:
+      pyarrow.Schema: lsst.daf.butler.formatters.parquet.ArrowNumpySchema.from_arrow
+      lsst.daf.butler.formatters.parquet.DataFrameSchema: lsst.daf.butler.formatters.parquet.DataFrameSchema.to_arrow_numpy_schema
+      lsst.daf.butler.formatters.parquet.ArrowAstropySchema: lsst.daf.butler.formatters.parquet.ArrowAstropySchema.to_arrow_numpy_schema
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
   PropertySet:
