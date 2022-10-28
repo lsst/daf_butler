@@ -357,9 +357,6 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     -------
     arrow_table : `pyarrow.Table`
     """
-    import numpy as np
-    import pandas as pd
-
     arrow_table = pa.Table.from_pandas(dataframe)
 
     # Update the metadata
@@ -367,11 +364,13 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
 
     md[b"lsst::arrow::rowcount"] = str(arrow_table.num_rows)
 
-    if not isinstance(dataframe.columns, pd.MultiIndex):
-        for name in dataframe.columns:
-            if dataframe[name].dtype.type is np.object_:
-                if len(dataframe[name].values) > 0:
-                    strlen = max(len(row) for row in dataframe[name].values)
+    # We loop through the arrow table columns because the datatypes have
+    # been checked and converted from pandas objects.
+    for name in arrow_table.column_names:
+        if not name.startswith("__"):
+            if arrow_table[name].type == pa.string():
+                if len(arrow_table[name]) > 0:
+                    strlen = max(len(row.as_py()) for row in arrow_table[name])
                 else:
                     strlen = default_length
                 md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(strlen)
