@@ -370,7 +370,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
         if not name.startswith("__"):
             if arrow_table[name].type == pa.string():
                 if len(arrow_table[name]) > 0:
-                    strlen = max(len(row.as_py()) for row in arrow_table[name])
+                    strlen = max(len(row.as_py()) for row in arrow_table[name] if row.is_valid)
                 else:
                     strlen = default_length
                 md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(strlen)
