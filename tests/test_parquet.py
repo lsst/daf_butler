@@ -261,6 +261,32 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
 
+    def testSingleIndexDataFrameEmptyString(self):
+        """Test persisting a single index dataframe with empty strings."""
+        df1, _ = _makeSingleIndexDataFrame()
+
+        # Set one of the strings to None
+        df1.at[1, "strcol"] = None
+
+        self.butler.put(df1, self.datasetType, dataId={})
+        # Read the whole DataFrame.
+        df2 = self.butler.get(self.datasetType, dataId={})
+        self.assertTrue(df1.equals(df2))
+
+    def testSingleIndexDataFrameAllEmptyStrings(self):
+        """Test persisting a single index dataframe with an empty string
+        column.
+        """
+        df1, _ = _makeSingleIndexDataFrame()
+
+        # Set all of the strings to None
+        df1.loc[0:, "strcol"] = None
+
+        self.butler.put(df1, self.datasetType, dataId={})
+        # Read the whole DataFrame.
+        df2 = self.butler.get(self.datasetType, dataId={})
+        self.assertTrue(df1.equals(df2))
+
     def testLegacyDataFrame(self):
         """Test writing a dataframe to parquet via pandas (without additional
         metadata) and ensure that we can read it back with all the new
