@@ -58,7 +58,9 @@ class PgSpherePoint(UserDefinedType):
     def bind_processor(self, dialect: sqlalchemy.engine.Dialect) -> Callable:
         """Return processor method for bind values"""
 
-        def _process(value: LonLat) -> str:
+        def _process(value: LonLat | None) -> str | None:
+            if value is None:
+                return None
             lon = value.getLon().asRadians()
             lat = value.getLat().asRadians()
             return f"({lon},{lat})"
@@ -84,7 +86,9 @@ class PgSpherePolygon(UserDefinedType):
     def bind_processor(self, dialect: sqlalchemy.engine.Dialect) -> Callable:
         """Return processor method for bind values"""
 
-        def _process(value: Sequence[LonLat]) -> str:
+        def _process(value: Sequence[LonLat] | None) -> str | None:
+            if value is None:
+                return None
             points = []
             for lonlat in value:
                 lon = lonlat.getLon().asRadians()
