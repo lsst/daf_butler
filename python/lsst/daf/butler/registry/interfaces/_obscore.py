@@ -91,7 +91,7 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def add_datasets(self, refs: Iterable[DatasetRef]) -> None:
+    def add_datasets(self, refs: Iterable[DatasetRef]) -> int:
         """Possibly add datasets to the obscore table.
 
         This method should be called when new datasets are added to a RUN
@@ -103,6 +103,11 @@ class ObsCoreTableManager(VersionedExtension):
             Dataset refs to add. Dataset refs have to be completely expanded.
             If a record with the same dataset ID is already in obscore table,
             the dataset is ignored.
+
+        Returns
+        -------
+        count : `int`
+            Actual number of records inserted into obscore table.
 
         Notes
         -----
@@ -119,7 +124,7 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
         """Possibly add datasets to the obscore table.
 
         This method should be called when existing datasets are associated with
@@ -134,6 +139,11 @@ class ObsCoreTableManager(VersionedExtension):
         collection : `CollectionRecord`
             Collection record for a TAGGED collection.
 
+        Returns
+        -------
+        count : `int`
+            Actual number of records inserted into obscore table.
+
         Notes
         -----
         Dataset data types and collection names are checked against configured
@@ -145,7 +155,7 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+    def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
         """Possibly remove datasets from the obscore table.
 
         This method should be called when datasets are disassociated from a
@@ -157,6 +167,11 @@ class ObsCoreTableManager(VersionedExtension):
             Dataset refs to remove. Dataset refs have to be resolved.
         collection : `CollectionRecord`
             Collection record for a TAGGED collection.
+
+        Returns
+        -------
+        count : `int`
+            Actual number of records removed from obscore table.
 
         Notes
         -----
