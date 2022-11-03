@@ -23,6 +23,13 @@ storageClasses:
     pytype: lsst.afw.image.PhotoCalib
   TransmissionCurve:
     pytype: lsst.afw.image.TransmissionCurve
+    converters:
+      lsst.ip.isr.IntermediateTransmissionCurve: lsst.ip.isr.IntermediateTransmissionCurve.getTransmissionCurve
+      lsst.ip.isr.IntermediateFilterTransmissionCurve: lsst.ip.isr.IntermediateFilterTransmissionCurve.getTransmissionCurve
+      lsst.ip.isr.IntermediateSensorTransmissionCurve: lsst.ip.isr.IntermediateSensorTransmissionCurve.getTransmissionCurve
+      lsst.ip.isr.IntermediateOpticsTransmissionCurve: lsst.ip.isr.IntermediateOpticsTransmissionCurve.getTransmissionCurve
+      lsst.ip.isr.IntermediateAtmosphereTransmissionCurve: lsst.ip.isr.IntermediateAtmosphereTransmissionCurve.getTransmissionCurve
+      lsst.ip.isr.IntermediateSystemTransmissionCurve: lsst.ip.isr.IntermediateSystemTransmissionCurve.getTransmissionCurve
   ExposureSummaryStats:
     pytype: lsst.afw.image.ExposureSummaryStats
   Camera:
