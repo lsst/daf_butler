@@ -751,7 +751,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
                 keys_to_remove.append(key)
         self._remove_from_cache(keys_to_remove)
 
-    def _register_cache_entry(self, cached_location: ResourcePath, can_exist: bool = False) -> str:
+    def _register_cache_entry(self, cached_location: ResourcePath, can_exist: bool = False) -> Optional[str]:
         """Record the file in the cache registry.
 
         Parameters
@@ -766,8 +766,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
         Returns
         -------
-        cache_key : `str`
-            The key used in the registry for this file.
+        cache_key : `str` or `None`
+            The key used in the registry for this file. `None` if the file
+            no longer exists (it could have been expired by another process).
         """
         path_in_cache = cached_location.relative_to(self.cache_directory)
         if path_in_cache is None:
@@ -783,7 +784,10 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
                     f"Cached file {cached_location} is already known to the registry"
                     " but this was expected to be a new file."
                 )
-        details = CacheEntry.from_file(cached_location, root=self.cache_directory)
+        try:
+            details = CacheEntry.from_file(cached_location, root=self.cache_directory)
+        except FileNotFoundError:
+            return None
         self._cache_entries[path_in_cache] = details
         return path_in_cache
 
@@ -799,7 +803,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
                 continue
 
             path_in_cache = self._register_cache_entry(file, can_exist=True)
-            found.add(path_in_cache)
+            if path_in_cache:
+                found.add(path_in_cache)
 
         # Find any files that were recorded in the cache but are no longer
         # on disk. (something else cleared them out?)
