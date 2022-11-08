@@ -532,9 +532,17 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
     def pop(self, *args: str) -> K:
         # Docstring inherited.
         if not args:
-            return super().pop()
-        else:
-            return self._mapping.pop(*args)
+            # Parent is abstract method and we cannot call MutableSet
+            # implementation directly. Instead follow MutableSet and
+            # choose first element from iteration.
+            it = iter(self._mapping)
+            try:
+                value = next(it)
+            except StopIteration:
+                raise KeyError from None
+            args = (value,)
+
+        return self._mapping.pop(*args)
 
     def update(self, elements: Iterable[K]) -> None:
         """Add multiple new elements to the set.
