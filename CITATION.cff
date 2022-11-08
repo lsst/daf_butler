@@ -27,6 +27,9 @@ authors:
   orcid: "https://orcid.org/0000-0002-8324-0880"
 title: "lsst-daf-butler: Abstracted Data Access of Astronomical Data"
 repository-code: "https://github.com/lsst/daf_butler"
+identifiers:
+- type: swh
+  value: "swh:1:dir:ef572b4bb431e898d279d4de786bc462bd5ca466"
 abstract: |
   The Rubin Observatory's Data Butler is designed to allow data file location
   and file formats to be abstracted away from the people writing the science
