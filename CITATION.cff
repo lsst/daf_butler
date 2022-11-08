@@ -1,0 +1,71 @@
+cff-version: 1.2.0
+message: "Please cite the following when using this software: https://doi.org/10.1117/12.2629569"
+authors:
+- family-names: Jenness
+  given-names: Tim
+  orcid: "https://orcid.org/0000-0001-5982-167X"
+- family-names: Bosch
+  given-names: James F.
+  orcid: "https://orcid.org/0000-0003-2759-5764"
+- family-names: Salnikov
+  given-names: Andrei
+  orcid: "https://orcid.org/0000-0002-3623-0161"
+- family-names: Lust
+  given-names: Nate B.
+  orcid: "https://orcid.org/0000-0002-4122-9384"
+- family-names: Pease
+  given-names: Nathan M.
+  orcid: "https://orcid.org/0000-0002-9701-5975"
+- family-names: Gower
+  given-names: Michelle
+  orcid: "https://orcid.org/0000-0001-9513-6987"
+- family-names: Kowalik
+  given-names: Mikolaj
+- family-names: Schellart
+  given-names: Pim
+  orcid: "https://orcid.org/0000-0002-8324-0880"
+title: "lsst-daf-butler: Abstracted Data Access of Astronomical Data"
+repository-code: "https://github.com/lsst/daf_butler"
+abstract: |
+  The Rubin Observatory's Data Butler is designed to allow data file location
+  and file formats to be abstracted away from the people writing the science
+  pipeline algorithms. The Butler works in conjunction with the workflow graph
+  builder to allow pipelines to be constructed from the algorithmic tasks.
+preferred-citation:
+  type: article
+  title: "The Vera C. Rubin Observatory Data Butler and pipeline execution system"
+  identifiers:
+  - type: "doi"
+    value: "10.1117/12.2629569"
+  - type: "bibcode"
+    value: "2022SPIE12189E..11J"
+  authors:
+  - family-names: Jenness
+    given-names: Tim
+    orcid: "https://orcid.org/0000-0001-5982-167X"
+  - family-names: Bosch
+    given-names: James F.
+    orcid: "https://orcid.org/0000-0003-2759-5764"
+  - family-names: Salnikov
+    given-names: Andrei
+    orcid: "https://orcid.org/0000-0002-3623-0161"
+  - family-names: Lust
+    given-names: Nate B.
+    orcid: "https://orcid.org/0000-0002-4122-9384"
+  - family-names: Pease
+    given-names: Nathan M.
+    orcid: "https://orcid.org/0000-0002-9701-5975"
+  - family-names: Gower
+    given-names: Michelle
+    orcid: "https://orcid.org/0000-0001-9513-6987"
+  - family-names: Kowalik
+    given-names: Mikolaj
+  - family-names: Dubois-Felsmann
+    given-names: Gregory P.
+    orcid: "https://orcid.org/0000-0003-1598-6979"
+  - family-names: Mueller
+    given-names: Fritz
+    orcid: "https://orcid.org/0000-0002-7061-4644"
+  - family-names: Schellart
+    given-names: Pim
+    orcid: "https://orcid.org/0000-0002-8324-0880"
