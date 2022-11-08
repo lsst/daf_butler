@@ -1,6 +1,7 @@
 cff-version: 1.2.0
 message: "Please cite the following when using this software: https://doi.org/10.1117/12.2629569"
 authors:
+- name: "Rubin Observatory Data Management Team"
 - family-names: Jenness
   given-names: Tim
   orcid: "https://orcid.org/0000-0001-5982-167X"
