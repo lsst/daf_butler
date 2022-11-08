@@ -47,7 +47,7 @@ class YamlFormatter(FileFormatter):
     """Allow the normal yaml.dump to be used to write the YAML. Use this
     if you know that your class has registered representers."""
 
-    def _readFile(self, path: str, pytype: Type[Any] = None) -> Any:
+    def _readFile(self, path: str, pytype: Type[Any] | None = None) -> Any:
         """Read a file from the path in YAML format.
 
         Parameters

@@ -2160,7 +2160,7 @@ class Butler(LimitedButler):
         source_butler: Butler,
         source_refs: Iterable[DatasetRef],
         transfer: str = "auto",
-        id_gen_map: Dict[str, DatasetIdGenEnum] = None,
+        id_gen_map: Dict[str, DatasetIdGenEnum] | None = None,
         skip_missing: bool = True,
         register_dataset_types: bool = False,
         transfer_dimensions: bool = False,
@@ -2397,7 +2397,7 @@ class Butler(LimitedButler):
         self,
         logFailures: bool = False,
         datasetTypeNames: Optional[Iterable[str]] = None,
-        ignore: Iterable[str] = None,
+        ignore: Iterable[str] | None = None,
     ) -> None:
         """Validate butler configuration.
 

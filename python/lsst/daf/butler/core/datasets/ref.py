@@ -88,7 +88,7 @@ class SerializedDatasetRef(BaseModel):
         id: Optional[Union[str, int]] = None,
         datasetType: Optional[Dict[str, Any]] = None,
         dataId: Optional[Dict[str, Any]] = None,
-        run: str = None,
+        run: str | None = None,
         component: Optional[str] = None,
     ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.

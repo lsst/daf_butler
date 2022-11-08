@@ -350,7 +350,7 @@ class StorageClass:
             known.update(sc.knownParameters())
         return known
 
-    def validateParameters(self, parameters: Collection = None) -> None:
+    def validateParameters(self, parameters: Collection | None = None) -> None:
         """Check that the parameters are known to this `StorageClass`.
 
         Does not check the values.
@@ -381,7 +381,9 @@ class StorageClass:
             unknown = "', '".join(diff)
             raise KeyError(f"Parameter{s} '{unknown}' not understood by StorageClass {self.name}")
 
-    def filterParameters(self, parameters: Mapping[str, Any], subset: Collection = None) -> Mapping[str, Any]:
+    def filterParameters(
+        self, parameters: Mapping[str, Any], subset: Collection | None = None
+    ) -> Mapping[str, Any]:
         """Filter out parameters that are not known to this `StorageClass`.
 
         Parameters

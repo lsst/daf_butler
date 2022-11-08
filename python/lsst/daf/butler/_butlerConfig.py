@@ -66,7 +66,7 @@ class ButlerConfig(Config):
     def __init__(
         self,
         other: Optional[Union[ResourcePathExpression, Config]] = None,
-        searchPaths: Sequence[ResourcePathExpression] = None,
+        searchPaths: Sequence[ResourcePathExpression] | None = None,
     ):
 
         self.configDir: Optional[ResourcePath] = None

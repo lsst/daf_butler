@@ -244,7 +244,7 @@ class FileDatastore(GenericBaseDatastore):
         self,
         config: Union[DatastoreConfig, str],
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: str = None,
+        butlerRoot: str | None = None,
     ):
         super().__init__(config, bridgeManager)
         if "root" not in self.config:
