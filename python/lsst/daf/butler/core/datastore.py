@@ -484,7 +484,7 @@ class Datastore(metaclass=ABCMeta):
     def get(
         self,
         datasetRef: DatasetRef,
-        parameters: Mapping[str, Any] = None,
+        parameters: Mapping[str, Any] | None = None,
         storageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Any:
         """Load an `InMemoryDataset` from the store.

@@ -85,7 +85,7 @@ class Node(ABC):
         Possibly empty list of sub-nodes.
     """
 
-    def __init__(self, children: Tuple[Node, ...] = None):
+    def __init__(self, children: Tuple[Node, ...] | None = None):
         self.children = tuple(children or ())
 
     @abstractmethod

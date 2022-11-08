@@ -148,6 +148,27 @@ class NamedValueSetTest(unittest.TestCase):
         self.checkOperator(ab ^ bc, {self.a, self.c})
         self.checkOperator(ab - bc, {self.a})
 
+    def testPop(self):
+        # Construct with list for repeatable ordering.
+        nvs = NamedValueSet([self.a, self.b, self.c])
+        self.assertEqual(nvs.pop("c"), self.c)
+        self.assertEqual(nvs.pop(), self.a)
+        self.assertEqual(nvs.pop(), self.b)
+        self.assertEqual(nvs.pop("d", self.c), self.c)
+        with self.assertRaises(KeyError):
+            nvs.pop()
+
+    def testRemove(self):
+        nvs = NamedValueSet([self.a, self.b, self.c])
+        nvs.remove("b")
+        self.assertIn("a", nvs)
+        self.assertNotIn("b", nvs)
+        with self.assertRaises(KeyError):
+            nvs.remove("d")
+        nvs.discard("d")
+        nvs.discard("a")
+        self.assertNotIn("a", nvs)
+
 
 class GlobToRegexTestCase(unittest.TestCase):
     def testStarInList(self):

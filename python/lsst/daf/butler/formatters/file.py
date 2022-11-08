@@ -223,8 +223,7 @@ class FileFormatter(Formatter):
         if not hasattr(self, "_fromBytes"):
             raise NotImplementedError("Type does not support reading from bytes.")
 
-        # mypy can not understand that the previous line protects this call
-        data = self._fromBytes(serializedDataset, self.fileDescriptor.storageClass.pytype)  # type: ignore
+        data = self._fromBytes(serializedDataset, self.fileDescriptor.storageClass.pytype)
 
         # Assemble the requested dataset and potentially return only its
         # component coercing it to its appropriate pytype
@@ -281,5 +280,4 @@ class FileFormatter(Formatter):
         if not hasattr(self, "_toBytes"):
             raise NotImplementedError("Type does not support reading from bytes.")
 
-        # mypy can not understand that the previous line protects this call
-        return self._toBytes(inMemoryDataset)  # type: ignore
+        return self._toBytes(inMemoryDataset)

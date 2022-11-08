@@ -179,7 +179,7 @@ class CollectionSummaryManager:
         specs = CollectionSummaryTables.makeTableSpecs(collections, dimensions)
         tables = CollectionSummaryTables(
             datasetType=context.addTable("collection_summary_dataset_type", specs.datasetType),
-            dimensions=NamedKeyDict(
+            dimensions=NamedKeyDict[GovernorDimension, sqlalchemy.schema.Table](
                 {
                     dimension: context.addTable(f"collection_summary_{dimension.name}", spec)
                     for dimension, spec in specs.dimensions.items()

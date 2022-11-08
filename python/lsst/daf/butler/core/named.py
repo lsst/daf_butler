@@ -68,7 +68,7 @@ V = TypeVar("V")
 V_co = TypeVar("V_co", covariant=True)
 
 
-class NamedKeyMapping(Mapping[K_co, V_co]):
+class NamedKeyMapping(Mapping[K, V_co]):
     """Custom mapping class.
 
     An abstract base class for custom mappings whose keys are objects with
@@ -107,21 +107,21 @@ class NamedKeyMapping(Mapping[K_co, V_co]):
         return dict(zip(self.names, self.values()))
 
     @abstractmethod
-    def keys(self) -> NamedValueAbstractSet[K_co]:  # type: ignore
+    def keys(self) -> NamedValueAbstractSet[K]:  # type: ignore
         # TODO: docs
         raise NotImplementedError()
 
     @abstractmethod
-    def __getitem__(self, key: Union[str, K_co]) -> V_co:
+    def __getitem__(self, key: Union[str, K]) -> V_co:
         raise NotImplementedError()
 
-    def get(self, key: Union[str, K_co], default: Any = None) -> Any:
+    def get(self, key: Union[str, K], default: Any = None) -> Any:
         # Delegating to super is not allowed by typing, because it doesn't
         # accept str, but we know it just delegates to __getitem__, which does.
         return super().get(key, default)  # type: ignore
 
 
-NameLookupMapping = Union[NamedKeyMapping[K_co, V_co], Mapping[str, V_co]]
+NameLookupMapping = Union[NamedKeyMapping[K, V_co], Mapping[str, V_co]]
 """A type annotation alias for signatures that want to use ``mapping[s]``
 (or ``mapping.get(s)``) where ``s`` is a `str`, and don't care whether
 ``mapping.keys()`` returns named objects or direct `str` instances.
@@ -532,9 +532,17 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
     def pop(self, *args: str) -> K:
         # Docstring inherited.
         if not args:
-            return super().pop()
-        else:
-            return self._mapping.pop(*args)
+            # Parent is abstract method and we cannot call MutableSet
+            # implementation directly. Instead follow MutableSet and
+            # choose first element from iteration.
+            it = iter(self._mapping)
+            try:
+                value = next(it)
+            except StopIteration:
+                raise KeyError from None
+            args = (value,)
+
+        return self._mapping.pop(*args)
 
     def update(self, elements: Iterable[K]) -> None:
         """Add multiple new elements to the set.
