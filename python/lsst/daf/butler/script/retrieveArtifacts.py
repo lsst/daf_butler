@@ -19,18 +19,32 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("retrieveArtifacts",)
 
 import logging
+from typing import TYPE_CHECKING
 
 from .._butler import Butler
+
+if TYPE_CHECKING:
+    from lsst.resources import ResourcePath
 
 log = logging.getLogger(__name__)
 
 
 def retrieveArtifacts(
-    repo, destination, dataset_type, collections, where, find_first, transfer, preserve_path, clobber
-):
+    repo: str,
+    destination: str,
+    dataset_type: tuple[str, ...],
+    collections: tuple[str, ...],
+    where: str,
+    find_first: bool,
+    transfer: str,
+    preserve_path: bool,
+    clobber: bool,
+) -> list[ResourcePath]:
     """Parameters are those required for querying datasets plus a destination
     URI.
 
@@ -62,11 +76,8 @@ def retrieveArtifacts(
     transferred : `list` of `lsst.resources.ResourcePath`
         The destination URIs of every transferred artifact.
     """
-    if not dataset_type:
-        dataset_type = ...
-
-    if not collections:
-        collections = ...
+    query_types = dataset_type if dataset_type else ...
+    query_collections = collections if collections else ...
 
     butler = Butler(repo, writeable=False)
 
@@ -74,7 +85,7 @@ def retrieveArtifacts(
     # to caller.
     refs = list(
         butler.registry.queryDatasets(
-            datasetType=dataset_type, collections=collections, where=where, findFirst=find_first
+            datasetType=query_types, collections=query_collections, where=where, findFirst=find_first
         )
     )
 

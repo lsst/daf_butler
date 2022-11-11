@@ -19,10 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
+from typing import IO
+
 from .._butlerConfig import ButlerConfig
 
 
-def configDump(repo, subset, searchpath, outfile):
+def configDump(repo: str, subset: str, searchpath: str, outfile: IO) -> None:
     """Dump either a subset or full Butler configuration to standard output.
 
     Parameters

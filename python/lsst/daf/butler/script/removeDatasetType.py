@@ -19,12 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("removeDatasetType",)
 
 from .._butler import Butler
 
 
-def removeDatasetType(repo, dataset_type_name):
+def removeDatasetType(repo: str, dataset_type_name: str) -> None:
     """Remove the named dataset type definition.
 
     Parameters

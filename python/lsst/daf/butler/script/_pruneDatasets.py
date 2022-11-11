@@ -18,13 +18,18 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
-
+from collections.abc import Callable, Iterable
 from enum import Enum, auto
+from typing import TYPE_CHECKING, Any
 
 from .._butler import Butler
 from ..registry import CollectionType
 from .queryDatasets import QueryDatasets
+
+if TYPE_CHECKING:
+    from astropy.table import Table
 
 
 class PruneDatasetsResult:
@@ -35,9 +40,9 @@ class PruneDatasetsResult:
 
     Parameters
     ----------
-    tables : `list` [``astropy.table.table``], optional
+    tables : `list` [`astropy.table.Table`], optional
         The astropy tables that will be or were deleted, by default None.
-    state : ``PruneDatasetsResult.State``, optional
+    state : `PruneDatasetsResult.State`, optional
         The initial state of execution of the action, if `None` the result
         state is ``INIT``, by default None.
 
@@ -52,6 +57,9 @@ class PruneDatasetsResult:
         confirm the tables before performing the action.
     """
 
+    action: dict[str, Any] | None
+    onConfirmation: Callable | None
+
     class State(Enum):
         INIT = auto()
         DRY_RUN_COMPLETE = auto()
@@ -62,7 +70,12 @@ class PruneDatasetsResult:
         ERR_PRUNE_ON_NOT_RUN = auto()
         ERR_NO_OP = auto()
 
-    def __init__(self, tables=None, state=None, errDict=None):
+    def __init__(
+        self,
+        tables: list[Table] | None = None,
+        state: State | None = None,
+        errDict: dict[str, str] | None = None,
+    ):
         self.state = state or self.State.INIT
         self.tables = tables
         self.onConfirmation = None
@@ -74,37 +87,46 @@ class PruneDatasetsResult:
         self.errDict = errDict or {}
 
     @property
-    def dryRun(self):
+    def dryRun(self) -> bool:
         return self.state is self.State.DRY_RUN_COMPLETE
 
     @property
-    def confirm(self):
+    def confirm(self) -> bool:
         return self.state is self.State.AWAITING_CONFIRMATION
 
     @property
-    def finished(self):
+    def finished(self) -> bool:
         return self.state is self.State.FINISHED
 
     @property
-    def errPurgeAndDisassociate(self):
+    def errPurgeAndDisassociate(self) -> bool:
         return self.state is self.State.ERR_PURGE_AND_DISASSOCIATE
 
     @property
-    def errNoCollectionRestriction(self):
+    def errNoCollectionRestriction(self) -> bool:
         return self.state is self.State.ERR_NO_COLLECTION_RESTRICTION
 
     @property
-    def errPruneOnNotRun(self):
-        return self.state is self.state.ERR_PRUNE_ON_NOT_RUN
+    def errPruneOnNotRun(self) -> bool:
+        return self.state is self.State.ERR_PRUNE_ON_NOT_RUN
 
     @property
-    def errNoOp(self):
-        return self.state is self.state.ERR_NO_OP
+    def errNoOp(self) -> bool:
+        return self.state is self.State.ERR_NO_OP
 
 
 def pruneDatasets(
-    repo, collections, datasets, where, disassociate_tags, unstore, purge_run, dry_run, confirm, find_all
-):
+    repo: str,
+    collections: Iterable[str],
+    datasets: Iterable[str],
+    where: str | None,
+    disassociate_tags: Iterable[str],
+    unstore: bool,
+    purge_run: str,
+    dry_run: bool,
+    confirm: bool,
+    find_all: bool,
+) -> PruneDatasetsResult:
     """Prune datasets from a repository.
 
     Parameters
@@ -122,13 +144,6 @@ def pruneDatasets(
         A string expression similar to a SQL WHERE clause.  May involve any
         column of a dimension table or (as a shortcut for the primary key
         column of a dimension table) dimension name.
-    find_all : `bool`
-        If False, for each result data ID, will only delete the dataset from
-        the first collection in which a dataset of that dataset type appears
-        (according to the order of ``collections`` passed in).  If used,
-        ``collections`` must specify at least one expression and must not
-        contain wildcards. This is the inverse of ``QueryDataset``'s find_first
-        option.
     disassociate_tags : `list` [`str`]
         TAGGED collections to disassociate the datasets from. If not `None`
         then ``purge_run`` must be `None`.
@@ -144,7 +159,16 @@ def pruneDatasets(
         Get results for what would be removed and return the results for
         display & confirmation, with a completion function to run after
         confirmation.
+    find_all : `bool`
+        If False, for each result data ID, will only delete the dataset from
+        the first collection in which a dataset of that dataset type appears
+        (according to the order of ``collections`` passed in).  If used,
+        ``collections`` must specify at least one expression and must not
+        contain wildcards. This is the inverse of ``QueryDataset``'s find_first
+        option.
 
+    Notes
+    -----
     The matrix of legal & illegal combinations of purge, unstore, and
     disassociate is this:
     - none of (purge, unstore, disassociate): error, nothing to do
@@ -163,7 +187,7 @@ def pruneDatasets(
 
     Returns
     -------
-    results : ``PruneDatasetsResult``
+    results : `PruneDatasetsResult`
         A data structure that contains information about datasets for removal,
         removal status, and options to continue in some cases.
     """
@@ -194,7 +218,7 @@ def pruneDatasets(
                 state=PruneDatasetsResult.State.ERR_PRUNE_ON_NOT_RUN, errDict=dict(collection=purge_run)
             )
 
-    datasets = QueryDatasets(
+    datasets_found = QueryDatasets(
         repo=repo,
         glob=datasets,
         collections=collections,
@@ -207,7 +231,7 @@ def pruneDatasets(
         show_uri=False,
     )
 
-    result = PruneDatasetsResult(datasets.getTables())
+    result = PruneDatasetsResult(datasets_found.getTables())
 
     disassociate = bool(disassociate_tags) or bool(purge_run)
     purge = bool(purge_run)
@@ -218,10 +242,10 @@ def pruneDatasets(
         result.action = dict(disassociate=disassociate, purge=purge, unstore=unstore, collections=collections)
         return result
 
-    def doPruneDatasets():
+    def doPruneDatasets() -> PruneDatasetsResult:
         butler = Butler(repo, writeable=True)
         butler.pruneDatasets(
-            refs=datasets.getDatasets(),
+            refs=datasets_found.getDatasets(),
             disassociate=disassociate,
             tags=disassociate_tags or (),
             purge=purge,

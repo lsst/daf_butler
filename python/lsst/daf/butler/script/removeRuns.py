@@ -18,12 +18,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Dict, List, Mapping, Sequence, Tuple
+from typing import Dict, List, Tuple
 
 from .._butler import Butler
 from ..registry import CollectionType, MissingCollectionError

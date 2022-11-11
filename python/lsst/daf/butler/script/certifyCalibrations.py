@@ -18,6 +18,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
+
 import astropy.time
 
 from .._butler import Butler
@@ -26,8 +28,14 @@ from ..registry import CollectionType
 
 
 def certifyCalibrations(
-    repo, input_collection, output_collection, dataset_type_name, begin_date, end_date, search_all_inputs
-):
+    repo: str,
+    input_collection: str,
+    output_collection: str,
+    dataset_type_name: str,
+    begin_date: str | None,
+    end_date: str | None,
+    search_all_inputs: bool,
+) -> None:
     """Certify a set of calibrations with a validity range.
 
     Parameters

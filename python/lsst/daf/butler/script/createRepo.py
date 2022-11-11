@@ -18,12 +18,20 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 from .._butler import Butler
 from ..core import Config
 
 
-def createRepo(repo, seed_config=None, dimension_config=None, standalone=False, override=False, outfile=None):
+def createRepo(
+    repo: str,
+    seed_config: str | None = None,
+    dimension_config: str | None = None,
+    standalone: bool = False,
+    override: bool = False,
+    outfile: str | None = None,
+) -> None:
     """Create an empty Gen3 Butler repository.
 
     Parameters
