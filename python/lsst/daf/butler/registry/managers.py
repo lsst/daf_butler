@@ -258,12 +258,12 @@ class RegistryManagerTypes(
             # Get ObsCore configuration from attributes table, this silently
             # overrides whatever may come from config file. Idea is that we do
             # not want to carry around the whole thing, and butler config will
-            # have empty obscore configuration after initialization.
+            # have empty obscore configuration after initialization. When
+            # configuration is missing from attributes table, the obscore table
+            # does not exist, and we do not instantiate obscore manager.
             obscoreString = attributes.get(_OBSCORE_ATTR)
             if obscoreString is not None:
                 self.manager_configs["obscore"] = Config.fromString(obscoreString, format="json")
-            else:
-                raise LookupError(f"Registry attribute {_OBSCORE_ATTR} is missing from database")
         with database.declareStaticTables(create=False) as context:
             instances = RegistryManagerInstances.initialize(database, context, types=self, universe=universe)
             versions = instances.getVersions()
@@ -360,7 +360,7 @@ class RegistryManagerInstances(
             datasets=types.datasets,
             universe=universe,
         )
-        if types.obscore is not None:
+        if types.obscore is not None and "obscore" in types.manager_configs:
             kwargs["obscore"] = types.obscore.initialize(
                 database,
                 context,

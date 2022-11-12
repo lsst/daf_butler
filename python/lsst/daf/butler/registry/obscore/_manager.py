@@ -219,12 +219,12 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         # Docstring inherited from base class.
         return None
 
-    def add_datasets(self, refs: Iterable[DatasetRef]) -> None:
+    def add_datasets(self, refs: Iterable[DatasetRef]) -> int:
         # Docstring inherited from base class.
 
         # Only makes sense for RUN collection types
         if self.config.collection_type is not ConfigCollectionType.RUN:
-            return
+            return 0
 
         obscore_refs: Iterable[DatasetRef]
         if self.run_patterns:
@@ -256,25 +256,28 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # Take all refs, no collection check.
             obscore_refs = refs
 
-        self._populate(obscore_refs)
+        return self._populate(obscore_refs)
 
-    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
         # Docstring inherited from base class.
 
         # Only works when collection type is TAGGED
         if self.tagged_collection is None:
-            return
+            return 0
 
         if collection.name == self.tagged_collection:
-            self._populate(refs)
+            return self._populate(refs)
+        else:
+            return 0
 
-    def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> None:
+    def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
         # Docstring inherited from base class.
 
         # Only works when collection type is TAGGED
         if self.tagged_collection is None:
-            return
+            return 0
 
+        count = 0
         if collection.name == self.tagged_collection:
 
             # Sorting may improve performance
@@ -285,9 +288,11 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
                 # There may be too many of them, do it in chunks.
                 for ids in chunk_iterable(dataset_ids):
                     where = self.table.columns[fk_field.name].in_(ids)
-                    self.db.deleteWhere(self.table, where)
+                    count += self.db.deleteWhere(self.table, where)
 
-    def _populate(self, refs: Iterable[DatasetRef]) -> None:
+        return count
+
+    def _populate(self, refs: Iterable[DatasetRef]) -> int:
         """Populate obscore table with the data from given datasets."""
         records: List[Record] = []
         for ref in refs:
@@ -297,7 +302,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
         if records:
             # Ignore potential conflicts with existing datasets.
-            self.db.ensure(self.table, *records, primary_key_only=True)
+            return self.db.ensure(self.table, *records, primary_key_only=True)
+        else:
+            return 0
 
     def _check_dataset_run(self, run: str) -> bool:
         """Check that specified run collection matches know patterns."""

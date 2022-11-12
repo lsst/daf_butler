@@ -154,8 +154,10 @@ class ObsCoreConfig(BaseModel):
     an actual index.
     """
 
-    spectral_ranges: Dict[str, Tuple[float, float]] = {}
-    """Maps band name or filter name to a min/max of spectral range."""
+    spectral_ranges: Dict[str, Tuple[float | None, float | None]] = {}
+    """Maps band name or filter name to a min/max of spectral range. One or
+    both ends can be specified as `None`.
+    """
 
     spatial_plugins: Dict[str, SpatialPluginConfig] = {}
     """Optional configuration for plugins managing spatial columns and

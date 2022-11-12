@@ -141,7 +141,11 @@ class RecordFactory:
         # _LOG.debug("New record, dataId=%s", dataId.full)
         # _LOG.debug("New record, records=%s", dataId.records)
 
-        record: Dict[str, str | int | float | UUID | None] = {}
+        record: Dict[str, str | int | float | UUID | None]
+
+        # We need all columns filled, to simplify logic below just pre-fill
+        # everything with None.
+        record = {field.name: None for field in self.schema.table_spec.fields}
 
         record["dataproduct_type"] = dataset_config.dataproduct_type
         record["dataproduct_subtype"] = dataset_config.dataproduct_subtype
