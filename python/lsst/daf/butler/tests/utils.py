@@ -23,7 +23,6 @@ from __future__ import annotations
 
 __all__ = ()
 
-import io
 import os
 import shutil
 import tempfile
@@ -32,7 +31,6 @@ from typing import Optional
 
 import astropy
 from astropy.table import Table as AstropyTable
-from astropy.utils.diff import report_diff_values
 
 from .. import Butler, Config, StorageClassFactory
 from ..registry import CollectionType
@@ -128,7 +126,6 @@ class ButlerTestHelper:
             tables = [tables]
         if isinstance(expectedTables, AstropyTable):
             expectedTables = [expectedTables]
-        diff = io.StringIO()
         self.assertEqual(len(tables), len(expectedTables))
         for table, expected in zip(tables, expectedTables):
             # Assert that we are testing what we think we are testing:
@@ -142,8 +139,17 @@ class ButlerTestHelper:
                 table.sort(table.colnames)
                 expected = expected.copy()
                 expected.sort(expected.colnames)
-            # Assert that they match:
-            self.assertTrue(report_diff_values(table, expected, fileobj=diff), msg="\n" + diff.getvalue())
+            # Assert that they match.
+            # Recommendation from Astropy Slack is to format the table into
+            # lines for comparison. We do not compare column data types.
+            table1 = table.pformat_all()
+            expected1 = expected.pformat_all()
+            original_max = self.maxDiff
+            self.maxDiff = None  # This is required to get the full diff.
+            try:
+                self.assertEqual(table1, expected1)
+            finally:
+                self.maxDiff = original_max
 
 
 def readTable(textTable):
