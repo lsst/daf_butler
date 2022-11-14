@@ -133,10 +133,10 @@ def queryDataIds(
     )
 
     if order_by:
-        results.order_by(*order_by)
+        results = results.order_by(*order_by)
     if limit > 0:
         new_offset = offset if offset > 0 else None
-        results.limit(limit, new_offset)
+        results = results.limit(limit, new_offset)
 
     if results.count() > 0 and len(results.graph) > 0:
         table = _Table(results)

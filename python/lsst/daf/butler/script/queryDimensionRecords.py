@@ -51,10 +51,10 @@ def queryDimensionRecords(
     )
 
     if order_by:
-        query_results.order_by(*order_by)
+        query_results = query_results.order_by(*order_by)
     if limit > 0:
         new_offset = offset if offset > 0 else None
-        query_results.limit(limit, new_offset)
+        query_results = query_results.limit(limit, new_offset)
 
     records = list(query_results)
 
