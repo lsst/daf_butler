@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Optional, Union
 
 from astropy.table import Table
 
@@ -41,9 +40,9 @@ class PruneCollectionResult:
     def __init__(self, confirm: bool) -> None:
         # if `confirm == True`, will contain the astropy table describing data
         # that will be removed.
-        self.removeTable: Union[None, Table] = None
+        self.removeTable: None | Table = None
         # the callback function to do the work
-        self.onConfirmation: Union[None, Callable[[], None]] = None
+        self.onConfirmation: None | Callable[[], None] = None
         # true if the user should be shown what will be removed before pruning
         # the collection.
         self.confirm: bool = confirm
@@ -82,7 +81,7 @@ def pruneCollection(
         """Lightweight container to hold the type of collection and the number
         of datasets in the collection if applicable."""
 
-        count: Optional[int]
+        count: int | None
         type: str
 
     result = PruneCollectionResult(confirm)

@@ -24,7 +24,6 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
-from typing import Dict, List, Tuple
 
 from .._butler import Butler
 from ..registry import CollectionType, MissingCollectionError
@@ -38,7 +37,7 @@ class RemoveRun:
     # the name of the run:
     name: str
     # parent CHAINED collections the RUN belongs to:
-    parents: List[str]
+    parents: list[str]
 
 
 @dataclass
@@ -61,7 +60,7 @@ class RemoveRunsResult:
 def _getCollectionInfo(
     repo: str,
     collection: str,
-) -> Tuple[List[RemoveRun], Mapping[str, int]]:
+) -> tuple[list[RemoveRun], Mapping[str, int]]:
     """Get the names and types of collections that match the collection
     string.
 
@@ -92,7 +91,7 @@ def _getCollectionInfo(
     except MissingCollectionError:
         collectionNames = list()
     runs = []
-    datasets: Dict[str, int] = defaultdict(int)
+    datasets: dict[str, int] = defaultdict(int)
     for collectionName in collectionNames:
         assert butler.registry.getCollectionType(collectionName).name == "RUN"
         parents = butler.registry.getCollectionParentChains(collectionName)

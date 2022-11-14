@@ -23,7 +23,6 @@ from __future__ import annotations
 __all__ = ("transferDatasets",)
 
 import logging
-from typing import Tuple
 
 from .._butler import Butler
 from ..registry.queries import DatasetQueryResults
@@ -34,8 +33,8 @@ log = logging.getLogger(__name__)
 def transferDatasets(
     source: str,
     dest: str,
-    dataset_type: Tuple[str, ...],
-    collections: Tuple[str, ...],
+    dataset_type: tuple[str, ...],
+    collections: tuple[str, ...],
     where: str,
     find_first: bool,
     transfer: str,
