@@ -19,31 +19,44 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
+from typing import Any
+
 from astropy.table import Table
 
 from .._butler import Butler
 from ..core import Timespan
 
 
-def queryDimensionRecords(repo, element, datasets, collections, where, no_check, order_by, limit, offset):
+def queryDimensionRecords(
+    repo: str,
+    element: str,
+    datasets: tuple[str, ...],
+    collections: tuple[str, ...],
+    where: str,
+    no_check: bool,
+    order_by: tuple[str, ...],
+    limit: int,
+    offset: int,
+) -> Table | None:
     # Docstring for supported parameters is the same as
     # Registry.queryDimensionRecords except for ``no_check``, which is the
     # inverse of ``check``.
 
     butler = Butler(repo)
 
-    records = butler.registry.queryDimensionRecords(
+    query_results = butler.registry.queryDimensionRecords(
         element, datasets=datasets, collections=collections, where=where, check=not no_check
     )
 
     if order_by:
-        records.order_by(*order_by)
+        query_results = query_results.order_by(*order_by)
     if limit > 0:
-        if offset <= 0:
-            offset = None
-        records.limit(limit, offset)
+        new_offset = offset if offset > 0 else None
+        query_results = query_results.limit(limit, new_offset)
 
-    records = list(records)
+    records = list(query_results)
 
     if not records:
         return None
@@ -54,7 +67,7 @@ def queryDimensionRecords(repo, element, datasets, collections, where, no_check,
 
     keys = records[0].fields.names  # order the columns the same as the record's `field.names`
 
-    def conform(v):
+    def conform(v: Any) -> Any:
         if isinstance(v, Timespan):
             v = (v.begin, v.end)
         elif isinstance(v, bytes):

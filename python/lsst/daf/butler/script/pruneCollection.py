@@ -19,9 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Union
 
 from astropy.table import Table
 
@@ -39,16 +40,16 @@ class PruneCollectionResult:
     def __init__(self, confirm: bool) -> None:
         # if `confirm == True`, will contain the astropy table describing data
         # that will be removed.
-        self.removeTable: Union[None, Table] = None
+        self.removeTable: None | Table = None
         # the callback function to do the work
-        self.onConfirmation: Union[None, Callable[[], None]] = None
+        self.onConfirmation: None | Callable[[], None] = None
         # true if the user should be shown what will be removed before pruning
         # the collection.
         self.confirm: bool = confirm
 
 
 def pruneCollection(
-    repo: str, collection: str, purge: bool, unstore: bool, unlink: List[str], confirm: bool
+    repo: str, collection: str, purge: bool, unstore: bool, unlink: list[str], confirm: bool
 ) -> Table:
     """Remove a collection and possibly prune datasets within it.
 
@@ -80,7 +81,7 @@ def pruneCollection(
         """Lightweight container to hold the type of collection and the number
         of datasets in the collection if applicable."""
 
-        count: Optional[int]
+        count: int | None
         type: str
 
     result = PruneCollectionResult(confirm)
@@ -102,7 +103,7 @@ def pruneCollection(
             )
         )
 
-        collections: Dict[str, CollectionInfo] = {}
+        collections: dict[str, CollectionInfo] = {}
 
         def addCollection(name: str) -> None:
             """Add a collection to the collections, recursive if the collection
@@ -120,13 +121,14 @@ def pruneCollection(
 
         queryDatasets = QueryDatasets(
             repo=repo,
-            glob=None,
+            glob=[],
             collections=[collection],
             where=None,
             find_first=True,
             show_uri=False,
         )
         for datasetRef in queryDatasets.getDatasets():
+            assert datasetRef.run is not None, "This must be a resolved dataset ref"
             collectionInfo = collections[datasetRef.run]
             if collectionInfo.count is None:
                 raise RuntimeError(f"Unexpected dataset in collection of type {collectionInfo.type}")

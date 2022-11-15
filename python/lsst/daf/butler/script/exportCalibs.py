@@ -18,19 +18,27 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from astropy.table import Table
 
 from .._butler import Butler
 from ..registry import CollectionType
 
+if TYPE_CHECKING:
+    from lsst.daf.butler import DatasetRef, DatasetType, Registry
+
 log = logging.getLogger(__name__)
 
 
-def parseCalibrationCollection(registry, collection, datasetTypes):
+def parseCalibrationCollection(
+    registry: Registry, collection: str, datasetTypes: Iterable[DatasetType]
+) -> tuple[list[str], list[DatasetRef]]:
     """Search a calibration collection for calibration datasets.
 
     Parameters
@@ -47,7 +55,7 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
     -------
     exportCollections : `list` [`str`]
         List of collections to save on export.
-    exportDatasets : `list` [`lsst.daf.butler.queries.DatasetQueryResults`]
+    exportDatasets : `list` [`lsst.daf.butler.DatasetRef`]
         Datasets to save on export.
 
     Raises
@@ -70,11 +78,14 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
             dataId = registry.expandDataId(result.ref.dataId)
             ref = result.ref.expanded(dataId)
             exportDatasets.append(ref)
+            assert ref.run is not None, "These refs must all be resolved."
             exportCollections.append(ref.run)
     return exportCollections, exportDatasets
 
 
-def exportCalibs(repo, directory, collections, dataset_type, transfer):
+def exportCalibs(
+    repo: str, directory: str, collections: Iterable[str], dataset_type: Iterable[str], transfer: str
+) -> Table:
     """Certify a set of calibrations with a validity range.
 
     Parameters
@@ -107,14 +118,12 @@ def exportCalibs(repo, directory, collections, dataset_type, transfer):
     """
     butler = Butler(repo, writeable=False)
 
-    if not dataset_type:
-        dataset_type = ...
-    if not collections:
-        collections = ...
+    dataset_type_query = dataset_type if dataset_type else ...
+    collections_query = collections if collections else ...
 
     calibTypes = [
         datasetType
-        for datasetType in butler.registry.queryDatasetTypes(dataset_type)
+        for datasetType in butler.registry.queryDatasetTypes(dataset_type_query)
         if datasetType.isCalibration()
     ]
 
@@ -122,7 +131,7 @@ def exportCalibs(repo, directory, collections, dataset_type, transfer):
     datasetsToExport = []
 
     for collection in butler.registry.queryCollections(
-        collections,
+        collections_query,
         flattenChains=True,
         includeChains=True,
         collectionTypes={CollectionType.CALIBRATION, CollectionType.CHAINED},
@@ -157,7 +166,7 @@ def exportCalibs(repo, directory, collections, dataset_type, transfer):
 
     sortedDatasets = sorted(datasetsToExport, key=lambda x: x.datasetType.name)
 
-    requiredDimensions = set()
+    requiredDimensions: set[str] = set()
     for ref in sortedDatasets:
         requiredDimensions.update(ref.dimensions.names)
     dimensionColumns = {

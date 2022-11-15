@@ -19,11 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 from .._butler import Butler
 from ..core import ValidationError
 
 
-def configValidate(repo, quiet, dataset_type, ignore):
+def configValidate(repo: str, quiet: bool, dataset_type: list[str], ignore: list[str]) -> bool:
     """Validate the configuration files for a Gen3 Butler repository.
 
     Parameters
@@ -32,9 +34,9 @@ def configValidate(repo, quiet, dataset_type, ignore):
         URI to the location to create the repo.
     quiet : `bool`
         Do not report individual failures if True.
-    dataset_type : [`str`]
+    dataset_type : `list`[`str`]
         Specific DatasetTypes to validate.
-    ignore : [`str`]
+    ignore : `list`[`str`]
         "DatasetTypes to ignore for validation."
 
     Returns

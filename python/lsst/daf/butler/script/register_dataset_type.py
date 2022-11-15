@@ -22,8 +22,6 @@ from __future__ import annotations
 
 __all__ = ("register_dataset_type",)
 
-from typing import Tuple
-
 from .._butler import Butler
 from ..core import DatasetType
 
@@ -32,7 +30,7 @@ def register_dataset_type(
     repo: str,
     dataset_type: str,
     storage_class: str,
-    dimensions: Tuple[str, ...],
+    dimensions: tuple[str, ...],
     is_calibration: bool = False,
 ) -> bool:
     """Register a new dataset type.

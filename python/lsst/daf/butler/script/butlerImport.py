@@ -18,11 +18,22 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import TextIO
 
 from .._butler import Butler
 
 
-def butlerImport(repo, directory, export_file, transfer, skip_dimensions, reuse_ids):
+def butlerImport(
+    repo: str,
+    directory: str | None,
+    export_file: str | TextIO | None,
+    transfer: str | None,
+    skip_dimensions: Iterable[str] | None,
+    reuse_ids: bool,
+) -> None:
     """Import data into a butler repository.
 
     Parameters

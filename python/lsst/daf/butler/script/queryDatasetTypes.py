@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Any, List
+from collections.abc import Iterable
 
 from astropy.table import Table
 from numpy import array
@@ -28,7 +28,7 @@ from numpy import array
 from .._butler import Butler
 
 
-def queryDatasetTypes(repo, verbose, glob, components):
+def queryDatasetTypes(repo: str, verbose: bool, glob: Iterable[str], components: bool | None) -> Table:
     """Get the dataset types in a repository.
 
     Parameters
@@ -51,15 +51,13 @@ def queryDatasetTypes(repo, verbose, glob, components):
 
     Returns
     -------
-    collections : `dict` [`str`, [`str`]]
+    collections : `astropy.table.Table`
         A dict whose key is "datasetTypes" and whose value is a list of
         collection names.
     """
     butler = Butler(repo)
-    if not glob:
-        glob = ...
-    datasetTypes = butler.registry.queryDatasetTypes(components=components, expression=glob)
-    info: List[Any]
+    expression = glob if glob else ...
+    datasetTypes = butler.registry.queryDatasetTypes(components=components, expression=expression)
     if verbose:
         table = Table(
             array(

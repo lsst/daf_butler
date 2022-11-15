@@ -18,14 +18,20 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import numpy as np
 from astropy.table import Table as AstropyTable
 
-from .._butler import Butler
+from .._butler import Butler, DataCoordinate
 from ..cli.utils import sortAstropyTable
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import DimensionGraph
 
 _LOG = logging.getLogger(__name__)
 
@@ -40,20 +46,23 @@ class _Table:
         The DataIds to add to the table.
     """
 
-    def __init__(self, dataIds):
+    def __init__(self, dataIds: Iterable[DataCoordinate]):
         # use dict to store dataIds as keys to preserve ordering
         self.dataIds = dict.fromkeys(dataIds)
 
-    def getAstropyTable(self, order):
+    def getAstropyTable(self, order: bool) -> AstropyTable:
         """Get the table as an astropy table.
+
+        Parameters
+        ----------
+        order : `bool`
+            If True then order rows based on DataIds.
 
         Returns
         -------
         table : `astropy.table.Table`
             The dataIds, sorted by spatial and temporal columns first, and then
             the rest of the columns, with duplicate dataIds removed.
-        order : `bool`
-            If True then order rows based on DataIds.
         """
         # Should never happen; adding a dataset should be the action that
         # causes a _Table to be created.
@@ -78,7 +87,16 @@ class _Table:
         return table
 
 
-def queryDataIds(repo, dimensions, datasets, where, collections, order_by, limit, offset):
+def queryDataIds(
+    repo: str,
+    dimensions: Iterable[str],
+    datasets: tuple[str, ...],
+    where: str | None,
+    collections: Iterable[str],
+    order_by: tuple[str, ...],
+    limit: int,
+    offset: int,
+) -> tuple[AstropyTable | None, str | None]:
     # Docstring for supported parameters is the same as Registry.queryDataIds
 
     butler = Butler(repo)
@@ -87,7 +105,7 @@ def queryDataIds(repo, dimensions, datasets, where, collections, order_by, limit
         # Determine the dimensions relevant to all given dataset types.
         # Since we are going to AND together all dimensions, we can not
         # seed the result with an empty set.
-        graph = None
+        graph: DimensionGraph | None = None
         dataset_types = list(butler.registry.queryDatasetTypes(datasets))
         for dataset_type in dataset_types:
             if graph is None:
@@ -115,11 +133,10 @@ def queryDataIds(repo, dimensions, datasets, where, collections, order_by, limit
     )
 
     if order_by:
-        results.order_by(*order_by)
+        results = results.order_by(*order_by)
     if limit > 0:
-        if offset <= 0:
-            offset = None
-        results.limit(limit, offset)
+        new_offset = offset if offset > 0 else None
+        results = results.limit(limit, new_offset)
 
     if results.count() > 0 and len(results.graph) > 0:
         table = _Table(results)

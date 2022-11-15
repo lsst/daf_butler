@@ -24,7 +24,7 @@ __all__ = ("ingest_files",)
 
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 from astropy.table import Table
 from lsst.resources import ResourcePath
@@ -45,10 +45,10 @@ def ingest_files(
     dataset_type: str,
     run: str,
     table_file: str,
-    data_id: Tuple[str, ...] = (),
-    formatter: Optional[str] = None,
+    data_id: tuple[str, ...] = (),
+    formatter: str | None = None,
     id_generation_mode: str = "UNIQUE",
-    prefix: Optional[str] = None,
+    prefix: str | None = None,
     transfer: str = "auto",
 ) -> None:
     """Ingest files from a table.
@@ -117,11 +117,11 @@ def ingest_files(
 
 def extract_datasets_from_table(
     table: Table,
-    common_data_id: Dict,
+    common_data_id: dict,
     datasetType: DatasetType,
-    formatter: Optional[str] = None,
-    prefix: Optional[str] = None,
-) -> List[FileDataset]:
+    formatter: str | None = None,
+    prefix: str | None = None,
+) -> list[FileDataset]:
     """Extract datasets from the supplied table.
 
     Parameters
@@ -193,10 +193,10 @@ def extract_datasets_from_table(
     return datasets
 
 
-def parse_data_id_tuple(data_ids: Tuple[str, ...], universe: DimensionUniverse) -> Dict[str, Any]:
+def parse_data_id_tuple(data_ids: tuple[str, ...], universe: DimensionUniverse) -> dict[str, Any]:
     # Convert any additional k=v strings in the dataId tuple to dict
     # form.
-    data_id: Dict[str, Any] = {}
+    data_id: dict[str, Any] = {}
     for id_str in data_ids:
         dimension_str, value = id_str.split("=")
 

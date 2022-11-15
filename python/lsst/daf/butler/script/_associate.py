@@ -18,13 +18,23 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
+
+from collections.abc import Iterable
 
 from .._butler import Butler
 from ..registry import CollectionType
 from .queryDatasets import QueryDatasets
 
 
-def associate(repo, collection, dataset_type, collections, where, find_first):
+def associate(
+    repo: str,
+    collection: str,
+    dataset_type: Iterable[str],
+    collections: Iterable[str],
+    where: str | None,
+    find_first: bool,
+) -> None:
     """Add existing datasets to a CHAINED collection."""
 
     butler = Butler(repo, writeable=True)

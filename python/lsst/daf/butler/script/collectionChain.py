@@ -21,11 +21,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from .._butler import Butler
 from ..registry import CollectionType, MissingCollectionError
 
 
-def collectionChain(repo, mode, parent, children, doc, flatten):
+def collectionChain(
+    repo: str, mode: str, parent: str, children: Iterable[str], doc: str | None, flatten: bool
+) -> tuple[str, ...]:
     """Get the collections whose names match an expression.
 
     Parameters
@@ -52,7 +56,7 @@ def collectionChain(repo, mode, parent, children, doc, flatten):
     doc : `str`
         If the chained collection is being created, the documentation string
         that will be associated with it.
-    flatten : `str`
+    flatten : `bool`
         If `True`, recursively flatten out any nested
         `~CollectionType.CHAINED` collections in ``children`` first.
 
@@ -99,7 +103,7 @@ def collectionChain(repo, mode, parent, children, doc, flatten):
         if children:
             n_current = len(current)
 
-            def convert_index(i):
+            def convert_index(i: int) -> int:
                 """Convert negative index to positive."""
                 if i >= 0:
                     return i
@@ -108,16 +112,16 @@ def collectionChain(repo, mode, parent, children, doc, flatten):
             # For this mode the children should be integers.
             # Convert negative integers to positive ones to allow
             # sorting.
-            children = [convert_index(int(child)) for child in children]
+            indices = [convert_index(int(child)) for child in children]
 
             # Reverse sort order so we can remove from the end first
-            children = reversed(sorted(children))
+            indices = list(reversed(sorted(indices)))
 
         else:
-            # Nothing specified, pop from the front of the chin.
-            children = [0]
+            # Nothing specified, pop from the front of the chain.
+            indices = [0]
 
-        for i in children:
+        for i in indices:
             current.pop(i)
 
         children = current
