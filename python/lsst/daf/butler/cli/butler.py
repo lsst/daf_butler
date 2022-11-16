@@ -18,7 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+from __future__ import annotations
 
 __all__ = (
     "LoaderCLI",
@@ -33,7 +33,9 @@ import functools
 import logging
 import os
 import traceback
+import types
 from collections import defaultdict
+from typing import Any
 
 import click
 import yaml
@@ -47,7 +49,7 @@ log = logging.getLogger(__name__)
 
 
 @functools.lru_cache
-def _importPlugin(pluginName):
+def _importPlugin(pluginName: str) -> types.ModuleType | type | None | click.Command:
     """Import a plugin that contains Click commands.
 
     Parameters
@@ -82,12 +84,12 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
     """Extends `click.MultiCommand`, which dispatches to subcommands, to load
     subcommands at runtime."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
     @property
     @abc.abstractmethod
-    def localCmdPkg(self):
+    def localCmdPkg(self) -> str:
         """localCmdPkg identifies the location of the commands that are in this
         package. `getLocalCommands` assumes that the commands can be found in
         `localCmdPkg.__all__`, if this is not the case then getLocalCommands
@@ -98,9 +100,9 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         package : `str`
             The fully qualified location of this package.
         """
-        pass
+        raise NotImplementedError()
 
-    def getLocalCommands(self):
+    def getLocalCommands(self) -> defaultdict[str, list[str]]:
         """Get the commands offered by the local package. This assumes that the
         commands can be found in `localCmdPkg.__all__`, if this is not the case
         then this function should be overridden.
@@ -115,11 +117,12 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         if commandsLocation is None:
             # _importPlugins logs an error, don't need to do it again here.
             return defaultdict(list)
+        assert hasattr(commandsLocation, "__all__"), f"Must define __all__ in {commandsLocation}"
         return defaultdict(
             list, {self._funcNameToCmdName(f): [self.localCmdPkg] for f in commandsLocation.__all__}
         )
 
-    def list_commands(self, ctx):
+    def list_commands(self, ctx: click.Context) -> list[str]:
         """Used by Click to get all the commands that can be called by the
         butler command, it is used to generate the --help output.
 
@@ -138,7 +141,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         self._raiseIfDuplicateCommands(commands)
         return sorted(commands)
 
-    def get_command(self, ctx, name):
+    def get_command(self, ctx: click.Context, name: str) -> click.Command | None:
         """Used by Click to get a single command for execution.
 
         Parameters
@@ -158,9 +161,20 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         if name not in commands:
             return None
         self._raiseIfDuplicateCommands(commands)
-        return _importPlugin(commands[name][0] + "." + self._cmdNameToFuncName(name))
+        module_str = commands[name][0] + "." + self._cmdNameToFuncName(name)
+        # The click.command decorator returns an instance of a class, which
+        # is something that doImport is not expecting. We add it in as an
+        # option here to appease mypy.
+        plugin = _importPlugin(module_str)
+        if not plugin:
+            return None
+        if not isinstance(plugin, click.Command):
+            raise RuntimeError(
+                f"Command {name!r} loaded from {module_str} is not a click Command, is {type(plugin)}"
+            )
+        return plugin
 
-    def _setupLogging(self, ctx):
+    def _setupLogging(self, ctx: click.Context | None) -> None:
         """Init the logging system and config it for the command.
 
         Subcommands may further configure the log settings."""
@@ -184,7 +198,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             )
 
     @classmethod
-    def getPluginList(cls):
+    def getPluginList(cls) -> list[str]:
         """Get the list of importable yaml files that contain cli data for this
         command.
 
@@ -201,7 +215,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         return []
 
     @classmethod
-    def _funcNameToCmdName(cls, functionName):
+    def _funcNameToCmdName(cls, functionName: str) -> str:
         """Convert function name to the butler command name: change
         underscores, (used in functions) to dashes (used in commands), and
         change local-package command names that conflict with python keywords
@@ -210,7 +224,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         return functionName.replace("_", "-")
 
     @classmethod
-    def _cmdNameToFuncName(cls, commandName):
+    def _cmdNameToFuncName(cls, commandName: str) -> str:
         """Convert butler command name to function name: change dashes (used in
         commands) to underscores (used in functions), and for local-package
         commands names that conflict with python keywords, change the local,
@@ -218,7 +232,9 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         return commandName.replace("-", "_")
 
     @staticmethod
-    def _mergeCommandLists(a, b):
+    def _mergeCommandLists(
+        a: defaultdict[str, list[str]], b: defaultdict[str, list[str]]
+    ) -> defaultdict[str, list[str]]:
         """Combine two dicts whose keys are strings (command name) and values
         are list of string (the package(s) that provide the named command).
 
@@ -240,7 +256,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         return a
 
     @classmethod
-    def _getPluginCommands(cls):
+    def _getPluginCommands(cls) -> defaultdict[str, list[str]]:
         """Get the commands offered by plugin packages.
 
         Returns
@@ -249,7 +265,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """
-        commands = defaultdict(list)
+        commands: defaultdict[str, list[str]] = defaultdict(list)
         for pluginName in cls.getPluginList():
             try:
                 with open(pluginName, "r") as resourceFile:
@@ -264,7 +280,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             cls._mergeCommandLists(commands, defaultdict(list, pluginCommands))
         return commands
 
-    def _getCommands(self):
+    def _getCommands(self) -> defaultdict[str, list[str]]:
         """Get the commands offered by daf_butler and plugin packages.
 
         Returns
@@ -276,7 +292,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         return self._mergeCommandLists(self.getLocalCommands(), self._getPluginCommands())
 
     @staticmethod
-    def _raiseIfDuplicateCommands(commands):
+    def _raiseIfDuplicateCommands(commands: defaultdict[str, list[str]]) -> None:
         """If any provided command is offered by more than one package raise an
         exception.
 
@@ -308,7 +324,7 @@ class ButlerCLI(LoaderCLI):
     pluginEnvVar = "DAF_BUTLER_PLUGINS"
 
     @classmethod
-    def _funcNameToCmdName(cls, functionName):
+    def _funcNameToCmdName(cls, functionName: str) -> str:
         # Docstring inherited from base class.
 
         # The "import" command name and "butler_import" function name are
@@ -326,7 +342,7 @@ class ButlerCLI(LoaderCLI):
         return super()._funcNameToCmdName(functionName)
 
     @classmethod
-    def _cmdNameToFuncName(cls, commandName):
+    def _cmdNameToFuncName(cls, commandName: str) -> str:
         # Docstring inherited from base class.
         if commandName == "import":
             return "butler_import"
@@ -340,12 +356,12 @@ class ButlerCLI(LoaderCLI):
 @log_tty_option()
 @log_label_option()
 @ClickProgressHandler.option
-def cli(log_level, long_log, log_file, log_tty, log_label, progress):
+def cli(log_level: str, long_log: bool, log_file: str, log_tty: bool, log_label: str, progress: bool) -> None:
     # log_level is handled by get_command and list_commands, and is called in
     # one of those functions before this is called. long_log is handled by
     # setup_logging.
     pass
 
 
-def main():
+def main() -> click.Command:
     return cli()

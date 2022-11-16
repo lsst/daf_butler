@@ -18,13 +18,18 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 __all__ = ()
+
+from collections.abc import Callable
+from typing import Any, cast
 
 import click
 from deprecated.sphinx import deprecated
 
 from ... import script
+from .. import utils as cmd_utils
 from ..opt import (
     collection_argument,
     collection_type_option,
@@ -55,12 +60,17 @@ from ..utils import (
     MWOptionDecorator,
     option_section,
     printAstropyTables,
-    split_commas,
-    to_upper,
     typeStrAcceptsMultiple,
     unwrap,
     where_help,
 )
+
+# Cast the callback signatures to appease mypy since mypy thinks they
+# are too constrained.
+split_commas = cast(
+    Callable[[click.Context, click.Option | click.Parameter, Any], Any], cmd_utils.split_commas
+)
+to_upper = cast(Callable[[click.Context, click.Option | click.Parameter, Any], Any], cmd_utils.to_upper)
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
@@ -71,7 +81,7 @@ existingRepoHelp = "REPO is the URI or path to an existing data repository root 
 @collection_argument(help="COLLECTION is the collection the datasets should be associated with.")
 @query_datasets_options(repo=False, showUri=False, useArguments=False)
 @options_file_option()
-def associate(**kwargs):
+def associate(**kwargs: Any) -> None:
     """Add existing datasets to a tagged collection; searches for datasets with
     the options and adds them to the named COLLECTION.
     """
@@ -106,7 +116,7 @@ def associate(**kwargs):
 )
 @click.option("--reuse-ids", is_flag=True, help="Force re-use of imported dataset IDs for integer IDs.")
 @options_file_option()
-def butler_import(*args, **kwargs):
+def butler_import(*args: Any, **kwargs: Any) -> None:
     """Import data into a butler repository."""
     script.butlerImport(*args, **kwargs)
 
@@ -133,7 +143,7 @@ def butler_import(*args, **kwargs):
     "configuration. Default is to write butler.yaml into the specified repo.",
 )
 @options_file_option()
-def create(*args, **kwargs):
+def create(*args: Any, **kwargs: Any) -> None:
     """Create an empty Gen3 Butler repository."""
     script.createRepo(*args, **kwargs)
 
@@ -165,7 +175,7 @@ def create(*args, **kwargs):
     "by default.",
 )
 @options_file_option()
-def config_dump(*args, **kwargs):
+def config_dump(*args: Any, **kwargs: Any) -> None:
     """Dump either a subset or full Butler configuration to standard output."""
     script.configDump(*args, **kwargs)
 
@@ -184,7 +194,7 @@ def config_dump(*args, **kwargs):
     help="DatasetType(s) to ignore for validation.",
 )
 @options_file_option()
-def config_validate(*args, **kwargs):
+def config_validate(*args: Any, **kwargs: Any) -> None:
     """Validate the configuration files for a Gen3 Butler repository."""
     is_good = script.configValidate(*args, **kwargs)
     if not is_good:
@@ -228,7 +238,7 @@ def config_validate(*args, **kwargs):
     version="v24.0",
     category=FutureWarning,
 )
-def prune_collection(**kwargs):
+def prune_collection(**kwargs: Any) -> None:
     """Remove a collection and possibly prune datasets within it."""
     result = script.pruneCollection(**kwargs)
     if result.confirm:
@@ -373,7 +383,7 @@ quiet_option = MWOptionDecorator(
 @quiet_option()
 @option_section("Other Options:")
 @options_file_option()
-def prune_datasets(**kwargs):
+def prune_datasets(**kwargs: Any) -> None:
     """Query for and remove one or more datasets from a collection and/or
     storage.
     """
@@ -394,6 +404,7 @@ def prune_datasets(**kwargs):
     if result.errNoOp:
         raise click.ClickException(message=pruneDatasets_errNoOp)
     if result.dryRun:
+        assert result.action is not None, "Dry run results have not been set up properly."
         if result.action["disassociate"] and result.action["unstore"]:
             msg = pruneDatasets_wouldDisassociateAndRemoveMsg
         elif result.action["disassociate"]:
@@ -411,7 +422,8 @@ def prune_datasets(**kwargs):
         printAstropyTables(result.tables)
         doContinue = click.confirm(text=pruneDatasets_askContinueMsg, default=False)
         if doContinue:
-            result.onConfirmation()
+            if result.onConfirmation:
+                result.onConfirmation()
             print(pruneDatasets_didRemoveAforementioned)
         else:
             print(pruneDatasets_didNotRemoveAforementioned)
@@ -461,7 +473,7 @@ def prune_datasets(**kwargs):
     ),
 )
 @options_file_option()
-def query_collections(*args, **kwargs):
+def query_collections(*args: Any, **kwargs: Any) -> None:
     """Get the collections whose names match an expression."""
     table = script.queryCollections(*args, **kwargs)
     # The unit test that mocks script.queryCollections does not return a table
@@ -482,7 +494,7 @@ def query_collections(*args, **kwargs):
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
 @components_option()
 @options_file_option()
-def query_dataset_types(*args, **kwargs):
+def query_dataset_types(*args: Any, **kwargs: Any) -> None:
     """Get the dataset types in a repository."""
     table = script.queryDatasetTypes(*args, **kwargs)
     if table:
@@ -494,7 +506,7 @@ def query_dataset_types(*args, **kwargs):
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @click.argument("dataset-type-name", nargs=1)
-def remove_dataset_type(*args, **kwargs):
+def remove_dataset_type(*args: Any, **kwargs: Any) -> None:
     """Remove a dataset type definition from a repository."""
     script.removeDatasetType(*args, **kwargs)
 
@@ -502,7 +514,7 @@ def remove_dataset_type(*args, **kwargs):
 @click.command(cls=ButlerCommand)
 @query_datasets_options()
 @options_file_option()
-def query_datasets(**kwargs):
+def query_datasets(**kwargs: Any) -> None:
     """List the datasets in a repository."""
     for table in script.QueryDatasets(**kwargs).getTables():
         print("")
@@ -543,7 +555,7 @@ def query_datasets(**kwargs):
     ),
 )
 @options_file_option()
-def certify_calibrations(*args, **kwargs):
+def certify_calibrations(*args: Any, **kwargs: Any) -> None:
     """Certify calibrations in a repository."""
     script.certifyCalibrations(*args, **kwargs)
 
@@ -571,7 +583,7 @@ def certify_calibrations(*args, **kwargs):
 @limit_option()
 @offset_option()
 @options_file_option()
-def query_data_ids(**kwargs):
+def query_data_ids(**kwargs: Any) -> None:
     """List the data IDs in a repository."""
     table, reason = script.queryDataIds(**kwargs)
     if table:
@@ -609,7 +621,7 @@ def query_data_ids(**kwargs):
     ),
 )
 @options_file_option()
-def query_dimension_records(**kwargs):
+def query_dimension_records(**kwargs: Any) -> None:
     """Query for dimension information."""
     table = script.queryDimensionRecords(**kwargs)
     if table:
@@ -637,7 +649,7 @@ def query_dimension_records(**kwargs):
     help="If clobber, overwrite files if they exist locally.",
 )
 @options_file_option()
-def retrieve_artifacts(**kwargs):
+def retrieve_artifacts(**kwargs: Any) -> None:
     """Retrieve file artifacts associated with datasets in a repository."""
     verbose = kwargs.pop("verbose")
     transferred = script.retrieveArtifacts(**kwargs)
@@ -667,7 +679,7 @@ def retrieve_artifacts(**kwargs):
     ),
 )
 @options_file_option()
-def transfer_datasets(**kwargs):
+def transfer_datasets(**kwargs: Any) -> None:
     """Transfer datasets from a source butler to a destination butler.
 
     SOURCE is a URI to the Butler repository containing the RUN dataset.
@@ -706,7 +718,7 @@ def transfer_datasets(**kwargs):
     "'prepend': Modify existing chain to prepend the supplied CHILDREN to the front. "
     "'extend': Modify existing chain to extend it with the supplied CHILDREN.",
 )
-def collection_chain(**kwargs):
+def collection_chain(**kwargs: Any) -> None:
     """Define a collection chain.
 
     PARENT is the name of the chained collection to create or modify. If the
@@ -773,7 +785,7 @@ def collection_chain(**kwargs):
     " use the current working directory.",
 )
 @transfer_option()
-def ingest_files(**kwargs):
+def ingest_files(**kwargs: Any) -> None:
     """Ingest files from table file.
 
     DATASET_TYPE is the name of the dataset type to be associated with these
@@ -813,7 +825,7 @@ def ingest_files(**kwargs):
     default=False,
     help="Indicate that this dataset type can be part of a calibration collection.",
 )
-def register_dataset_type(**kwargs):
+def register_dataset_type(**kwargs: Any) -> None:
     """Register a new dataset type with this butler repository.
 
     DATASET_TYPE is the name of the dataset type.
@@ -842,7 +854,7 @@ def register_dataset_type(**kwargs):
 @collections_argument(help="COLLECTIONS are the collection to export calibrations from.")
 @dataset_type_option(help="Specific DatasetType(s) to export.", multiple=True)
 @transfer_option()
-def export_calibs(*args, **kwargs):
+def export_calibs(*args: Any, **kwargs: Any) -> None:
     """Export calibrations from the butler for import elsewhere."""
     table = script.exportCalibs(*args, **kwargs)
     if table:

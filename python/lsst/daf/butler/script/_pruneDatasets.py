@@ -77,6 +77,8 @@ class PruneDatasetsResult:
         errDict: dict[str, str] | None = None,
     ):
         self.state = state or self.State.INIT
+        if tables is None:
+            tables = []
         self.tables = tables
         self.onConfirmation = None
         # Action describes the removal action for dry-run, will be a dict with

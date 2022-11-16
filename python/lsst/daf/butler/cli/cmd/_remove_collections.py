@@ -18,7 +18,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
+__all__ = ["remove_collections"]
+
+from typing import Any
 
 import click
 
@@ -43,7 +47,7 @@ abortedMsg = "Aborted."
 )
 @confirm_option()
 @options_file_option()
-def remove_collections(**kwargs):
+def remove_collections(**kwargs: Any) -> None:
     """Remove one or more non-RUN collections.
 
     This command can be used to remove only non-RUN collections. If RUN
@@ -53,7 +57,7 @@ def remove_collections(**kwargs):
 
     Use the remove-runs subcommand to remove RUN collections.
     """
-    confirm = kwargs.pop("confirm")
+    confirm: bool = kwargs.pop("confirm")
     result = script.removeCollections(**kwargs)
     canRemoveCollections = len(result.removeCollectionsTable)
     doContinue = canRemoveCollections
