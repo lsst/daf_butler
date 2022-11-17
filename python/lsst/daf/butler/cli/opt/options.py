@@ -18,7 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+from __future__ import annotations
 
 __all__ = (
     "CollectionTypeCallback",
@@ -48,8 +48,8 @@ __all__ = (
     "offset_option",
 )
 
-
 from functools import partial
+from typing import Any
 
 import click
 from lsst.daf.butler.registry import CollectionType
@@ -63,7 +63,9 @@ class CollectionTypeCallback:
     collectionTypes = tuple(collectionType.name for collectionType in CollectionType.all())
 
     @staticmethod
-    def makeCollectionTypes(context, param, value):
+    def makeCollectionTypes(
+        context: click.Context, param: click.Option, value: tuple[str, ...] | str
+    ) -> tuple[CollectionType, ...]:
         if not value:
             # Click seems to demand that the default be an empty tuple, rather
             # than a sentinal like None.  The behavior that we want is that
@@ -113,9 +115,11 @@ components_option = MWOptionDecorator(
 )
 
 
-def _config_split(*args):
+def _config_split(*args: Any) -> dict[str, str]:
     # Config values might include commas so disable comma-splitting.
-    return split_kv(*args, multiple=False)
+    result = split_kv(*args, multiple=False)
+    assert isinstance(result, dict), "For mypy check that we get the expected result"
+    return result
 
 
 config_option = MWOptionDecorator(

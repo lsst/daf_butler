@@ -18,9 +18,12 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
+__all__ = ["remove_runs"]
 
-from typing import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import click
 
@@ -48,7 +51,7 @@ didUnlinkMsg = "{run}: was removed and unlinked from {parents}"
 mustBeUnlinkedMsg = "{run}: must be unlinked from {parents}"
 
 
-def _quoted(items: Sequence[str]) -> Iterator[str]:
+def _quoted(items: Sequence[str]) -> list[str]:
     return [f'"{i}"' for i in items]
 
 
@@ -98,7 +101,7 @@ def _print_requires_confirmation(runs: Sequence[script.RemoveRun], datasets: Map
     help="Required to remove RUN collections from parent collections if using --no-confirm.",
 )
 @options_file_option()
-def remove_runs(context, confirm, force, **kwargs):
+def remove_runs(context: click.Context, confirm: bool, force: bool, **kwargs: Any) -> None:
     """Remove one or more RUN collections.
 
     This command can be used to remove RUN collections and the datasets within

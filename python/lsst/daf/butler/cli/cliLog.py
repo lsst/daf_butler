@@ -18,18 +18,17 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+from __future__ import annotations
 
 __all__ = (
     "PrecisionLogFormatter",
     "CliLog",
 )
 
-
 import datetime
 import logging
 import os
-from typing import Dict, Optional, Set, Tuple
+from typing import Any
 
 try:
     import lsst.log as lsstLog
@@ -44,14 +43,14 @@ from ..core.logging import ButlerMDC, JsonLogFormatter
 class PrecisionLogFormatter(logging.Formatter):
     """A log formatter that issues accurate timezone-aware timestamps."""
 
-    converter = datetime.datetime.fromtimestamp
+    converter = datetime.datetime.fromtimestamp  # type: ignore
 
     use_local = True
     """Control whether local time is displayed instead of UTC."""
 
-    def formatTime(self, record, datefmt=None):
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
         """Format the time as an aware datetime."""
-        ct = self.converter(record.created, tz=datetime.timezone.utc)
+        ct: datetime.datetime = self.converter(record.created, tz=datetime.timezone.utc)  # type: ignore
         if self.use_local:
             ct = ct.astimezone()
         if datefmt:
@@ -82,20 +81,20 @@ class CliLog:
     """The log format used when the lsst.log package is not importable and the
     log is initialized with longlog=False."""
 
-    configState = []
+    configState: list[tuple[Any, ...]] = []
     """Configuration state. Contains tuples where first item in a tuple is
     a method and remaining items are arguments for the method.
     """
 
     _initialized = False
-    _componentSettings = []
+    _componentSettings: list[ComponentSettings] = []
 
-    _fileHandlers = []
+    _fileHandlers: list[logging.FileHandler] = []
     """Any FileHandler classes attached to the root logger by this class
     that need to be closed on reset."""
 
     @staticmethod
-    def root_loggers() -> Set[str]:
+    def root_loggers() -> set[str]:
         """Return the default root logger.
 
         Returns
@@ -122,9 +121,9 @@ class CliLog:
         cls,
         longlog: bool,
         log_tty: bool = True,
-        log_file: Tuple[str, ...] = (),
-        log_label: Optional[Dict[str, str]] = None,
-    ):
+        log_file: tuple[str, ...] = (),
+        log_label: dict[str, str] | None = None,
+    ) -> None:
         """Initialize logging. This should only be called once per program
         execution. After the first call this will log a warning and return.
 
@@ -169,6 +168,7 @@ class CliLog:
             # MDC is set via ButlerMDC, rather than in lsst.log.
             lsstLog.usePythonLogging()
 
+        formatter: logging.Formatter
         if not log_tty:
             logging.basicConfig(force=True, handlers=[logging.NullHandler()])
         elif longlog:
@@ -229,7 +229,7 @@ class CliLog:
         cls.configState.append((cls.initLog, longlog, log_tty, log_file, log_label))
 
     @classmethod
-    def resetLog(cls):
+    def resetLog(cls) -> None:
         """Uninitialize the butler CLI Log handler and reset component log
         levels.
 
@@ -264,7 +264,7 @@ class CliLog:
         cls.configState = []
 
     @classmethod
-    def setLogLevels(cls, logLevels):
+    def setLogLevels(cls, logLevels: list[tuple[str | None, str]] | dict[str, str]) -> None:
         """Set log level for one or more components or the root logger.
 
         Parameters
@@ -281,7 +281,7 @@ class CliLog:
         logger.
         """
         if isinstance(logLevels, dict):
-            logLevels = logLevels.items()
+            logLevels = list(logLevels.items())
 
         # configure individual loggers
         for component, level in logLevels:
@@ -290,7 +290,7 @@ class CliLog:
             cls.configState.append((cls._setLogLevel, component, level))
 
     @classmethod
-    def _setLogLevel(cls, component, level):
+    def _setLogLevel(cls, component: str | None, level: str) -> None:
         """Set the log level for the given component. Record the current log
         level of the component so that it can be restored when resetting this
         log.
@@ -304,9 +304,9 @@ class CliLog:
         level : `str`
             A valid python logging level.
         """
-        components: Set[Optional[str]]
+        components: set[str | None]
         if component is None:
-            components = cls.root_loggers()
+            components = {comp for comp in cls.root_loggers()}
         elif not component or component == ".":
             components = {None}
         else:
@@ -316,10 +316,12 @@ class CliLog:
             if lsstLog is not None:
                 lsstLogger = lsstLog.Log.getLogger(component or "")
                 lsstLogger.setLevel(cls._getLsstLogLevel(level))
-            logging.getLogger(component or None).setLevel(cls._getPyLogLevel(level))
+            pylevel = cls._getPyLogLevel(level)
+            if pylevel is not None:
+                logging.getLogger(component or None).setLevel(pylevel)
 
     @staticmethod
-    def _getPyLogLevel(level):
+    def _getPyLogLevel(level: str) -> int | None:
         """Get the numeric value for the given log level name.
 
         Parameters
@@ -339,7 +341,7 @@ class CliLog:
         return getattr(logging, level, None)
 
     @staticmethod
-    def _getLsstLogLevel(level):
+    def _getLsstLogLevel(level: str) -> int | None:
         """Get the numeric value for the given log level name.
 
         If `lsst.log` is not setup this function will return `None` regardless
@@ -375,7 +377,7 @@ class CliLog:
     class ComponentSettings:
         """Container for log level values for a logging component."""
 
-        def __init__(self, component):
+        def __init__(self, component: str | None):
             self.component = component
             self.pythonLogLevel = logging.getLogger(component).level
             self.lsstLogLevel = (
@@ -384,21 +386,21 @@ class CliLog:
             if self.lsstLogLevel == -1:
                 self.lsstLogLevel = CliLog.defaultLsstLogLevel
 
-        def __repr__(self):
+        def __repr__(self) -> str:
             return (
                 f"ComponentSettings(component={self.component}, pythonLogLevel={self.pythonLogLevel}, "
                 f"lsstLogLevel={self.lsstLogLevel})"
             )
 
     @classmethod
-    def _recordComponentSetting(cls, component):
+    def _recordComponentSetting(cls, component: str | None) -> None:
         """Cache current levels for the given component in the list of
         component levels."""
         componentSettings = cls.ComponentSettings(component)
         cls._componentSettings.append(componentSettings)
 
     @classmethod
-    def replayConfigState(cls, configState):
+    def replayConfigState(cls, configState: list[tuple[Any, ...]]) -> None:
         """Re-create configuration using configuration state recorded earlier.
 
         Parameters

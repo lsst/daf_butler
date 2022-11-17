@@ -18,7 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+from __future__ import annotations
 
 __all__ = (
     "astropyTablesToStr",
@@ -59,8 +59,10 @@ import traceback
 import uuid
 import warnings
 from collections import Counter
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from functools import partial, wraps
+from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
 
 import click
@@ -71,6 +73,10 @@ from lsst.utils.iteration import ensure_iterable
 
 from ..core.config import Config
 from .cliLog import CliLog
+
+if TYPE_CHECKING:
+    from astropy.table import Table
+    from lsst.daf.butler import Dimension
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +96,7 @@ where_help = (
 )
 
 
-def astropyTablesToStr(tables):
+def astropyTablesToStr(tables: list[Table]) -> str:
     """Render astropy tables to string as they are displayed in the CLI.
 
     Output formatting matches ``printAstropyTables``.
@@ -103,7 +109,7 @@ def astropyTablesToStr(tables):
     return ret
 
 
-def printAstropyTables(tables):
+def printAstropyTables(tables: list[Table]) -> None:
     """Print astropy tables to be displayed in the CLI.
 
     Output formatting matches ``astropyTablesToStr``.
@@ -114,7 +120,7 @@ def printAstropyTables(tables):
     print("")
 
 
-def textTypeStr(multiple):
+def textTypeStr(multiple: bool) -> str:
     """Get the text type string for CLI help documentation.
 
     Parameters
@@ -140,18 +146,18 @@ class LogCliRunner(click.testing.CliRunner):
     logging modules can be set back to NOTSET), instead they are set to
     `CliLog.defaultLsstLogLevel`."""
 
-    def invoke(self, *args, **kwargs):
+    def invoke(self, *args: Any, **kwargs: Any) -> Any:
         result = super().invoke(*args, **kwargs)
         CliLog.resetLog()
         return result
 
 
-def clickResultMsg(result):
+def clickResultMsg(result: click.testing.Result) -> str:
     """Get a standard assert message from a click result
 
     Parameters
     ----------
-    result : click.Result
+    result : click.testing.Result
         The result object returned from click.testing.CliRunner.invoke
 
     Returns
@@ -166,7 +172,7 @@ def clickResultMsg(result):
 
 
 @contextmanager
-def command_test_env(runner, commandModule, commandName):
+def command_test_env(runner: click.testing.CliRunner, commandModule: str, commandName: str) -> Iterator[None]:
     """A context manager that creates (and then cleans up) an environment that
     provides a CLI plugin command with the given name.
 
@@ -190,7 +196,7 @@ def command_test_env(runner, commandModule, commandName):
             yield
 
 
-def addArgumentHelp(doc, helpText):
+def addArgumentHelp(doc: str | None, helpText: str) -> str:
     """Add a Click argument's help message to a function's documentation.
 
     This is needed because click presents arguments in the order the argument
@@ -237,7 +243,9 @@ def addArgumentHelp(doc, helpText):
     return doc
 
 
-def split_commas(context, param, values):
+def split_commas(
+    context: click.Context, param: click.core.Option, values: str | Iterable[str] | None
+) -> tuple[str, ...]:
     """Process a tuple of values, where each value may contain comma-separated
     values, and return a single list of all the passed-in values.
 
@@ -265,7 +273,7 @@ def split_commas(context, param, values):
         combined into a single tuple.
     """
     if values is None:
-        return values
+        return tuple()
     valueList = []
     for value in ensure_iterable(values):
         # If we have [, or ,] we do the slow split. If square brackets
@@ -313,19 +321,20 @@ def split_commas(context, param, values):
 
 
 def split_kv(
-    context,
-    param,
-    values,
-    choice=None,
-    multiple=True,
-    normalize=False,
-    separator="=",
-    unseparated_okay=False,
-    return_type=dict,
-    default_key="",
-    reverse_kv=False,
-    add_to_default=False,
-):
+    context: click.Context,
+    param: click.core.Option,
+    values: list[str],
+    *,
+    choice: click.Choice | None = None,
+    multiple: bool = True,
+    normalize: bool = False,
+    separator: str = "=",
+    unseparated_okay: bool = False,
+    return_type: type[dict] | type[tuple] = dict,
+    default_key: str = "",
+    reverse_kv: bool = False,
+    add_to_default: bool = False,
+) -> dict[str, str] | tuple[tuple[str, str], ...]:
     """Process a tuple of values that are key-value pairs separated by a given
     separator. Multiple pairs may be comma separated. Return a dictionary of
     all the passed-in values.
@@ -386,8 +395,8 @@ def split_kv(
 
     Returns
     -------
-    values : `dict` [`str`, `str`]
-        The passed-in values in dict form.
+    values : `dict` [`str`, `str`] or `tuple`[`tuple`[`str`, `str`], ...]
+        The passed-in values in dict form or tuple form.
 
     Raises
     ------
@@ -396,7 +405,7 @@ def split_kv(
         are encountered.
     """
 
-    def norm(val):
+    def norm(val: str) -> str:
         """If `normalize` is True and `choice` is not `None`, find the value
         in the available choices and return the value as spelled in the
         choices.
@@ -412,38 +421,39 @@ def split_kv(
         return val
 
     class RetDict:
-        def __init__(self):
-            self.ret = {}
+        def __init__(self) -> None:
+            self.ret: dict[str, str] = {}
 
-        def add(self, key, val):
+        def add(self, key: str, val: str) -> None:
             if reverse_kv:
                 key, val = val, key
             self.ret[key] = val
 
-        def get(self):
+        def get(self) -> dict[str, str]:
             return self.ret
 
     class RetTuple:
-        def __init__(self):
-            self.ret = []
+        def __init__(self) -> None:
+            self.ret: list[tuple[str, str]] = []
 
-        def add(self, key, val):
+        def add(self, key: str, val: str) -> None:
             if reverse_kv:
                 key, val = val, key
             self.ret.append((key, val))
 
-        def get(self):
+        def get(self) -> tuple[tuple[str, str], ...]:
             return tuple(self.ret)
 
     if separator in (",", " "):
         raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
-    vals = values  # preserve the original argument for error reporting below.
+    vals = tuple(ensure_iterable(values))  # preserve the original argument for error reporting below.
 
     if add_to_default:
         default = param.get_default(context)
         if default:
-            vals = itertools.chain(default, vals)
+            vals = tuple(v for v in itertools.chain(default, vals))  # Convert to tuple for mypy
 
+    ret: RetDict | RetTuple
     if return_type is dict:
         ret = RetDict()
     elif return_type is tuple:
@@ -473,7 +483,7 @@ def split_kv(
     return ret.get()
 
 
-def to_upper(context, param, value):
+def to_upper(context: click.Context, param: click.core.Option, value: str) -> str:
     """Convert a value to upper case.
 
     Parameters
@@ -491,7 +501,7 @@ def to_upper(context, param, value):
     return value.upper()
 
 
-def unwrap(val):
+def unwrap(val: str) -> str:
     """Remove newlines and leading whitespace from a multi-line string with
     a consistent indentation level.
 
@@ -515,7 +525,7 @@ def unwrap(val):
         whitespace removed.
     """
 
-    def splitSection(val):
+    def splitSection(val: str) -> str:
         if not val.startswith("\n"):
             firstLine, _, val = val.partition("\n")
             firstLine += " "
@@ -536,10 +546,10 @@ class option_section:  # noqa: N801
         The text to print in the section identifier.
     """
 
-    def __init__(self, sectionText):
+    def __init__(self, sectionText: str) -> None:
         self.sectionText = "\n" + sectionText
 
-    def __call__(self, f):
+    def __call__(self, f: Any) -> click.Option:
         # Generate a parameter declaration that will be unique for this
         # section.
         return click.option(
@@ -569,14 +579,14 @@ class MWPath(click.Path):
 
     def __init__(
         self,
-        exists=None,
-        file_okay=True,
-        dir_okay=True,
-        writable=False,
-        readable=True,
-        resolve_path=False,
-        allow_dash=False,
-        path_type=None,
+        exists: bool | None = None,
+        file_okay: bool = True,
+        dir_okay: bool = True,
+        writable: bool = False,
+        readable: bool = True,
+        resolve_path: bool = False,
+        allow_dash: bool = False,
+        path_type: type | None = None,
     ):
         self.mustNotExist = exists is False
         if exists is None:
@@ -592,7 +602,7 @@ class MWPath(click.Path):
             path_type=path_type,
         )
 
-    def convert(self, value, param, ctx):
+    def convert(self, value: str, param: click.Parameter | None, ctx: click.Context | None) -> Any:
         """Called by click.ParamType to "convert values through types".
         `click.Path` uses this step to verify Path conditions."""
         if self.mustNotExist and os.path.exists(value):
@@ -603,7 +613,7 @@ class MWPath(click.Path):
 class MWOption(click.Option):
     """Overrides click.Option with desired behaviors."""
 
-    def make_metavar(self):
+    def make_metavar(self) -> str:
         """Overrides `click.Option.make_metavar`. Makes the metavar for the
         help menu. Adds a space and an elipsis after the metavar name if
         the option accepts multiple inputs, otherwise defers to the base
@@ -629,7 +639,7 @@ class MWOption(click.Option):
 class MWArgument(click.Argument):
     """Overrides click.Argument with desired behaviors."""
 
-    def make_metavar(self):
+    def make_metavar(self) -> str:
         """Overrides `click.Option.make_metavar`. Makes the metavar for the
         help menu. Always adds a space and an elipsis (' ...') after the
         metavar name if the option accepts multiple inputs.
@@ -684,18 +694,18 @@ class OptionSection(MWOption):
     """
 
     @property
-    def hidden(self):
+    def hidden(self) -> bool:
         return True
 
     @hidden.setter
-    def hidden(self, val):
+    def hidden(self, val: Any) -> None:
         pass
 
-    def __init__(self, sectionName, sectionText):
+    def __init__(self, sectionName: str, sectionText: str) -> None:
         super().__init__(sectionName, expose_value=False)
         self.sectionText = sectionText
 
-    def get_help_record(self, ctx):
+    def get_help_record(self, ctx: click.Context | None) -> tuple[str, str]:
         return (self.sectionText, "")
 
 
@@ -704,29 +714,29 @@ class MWOptionDecorator:
     and allows inspection of the shared option.
     """
 
-    def __init__(self, *param_decls, **kwargs):
+    def __init__(self, *param_decls: Any, **kwargs: Any) -> None:
         self.partialOpt = partial(click.option, *param_decls, cls=partial(MWOption), **kwargs)
         opt = click.Option(param_decls, **kwargs)
         self._name = opt.name
         self._opts = opt.opts
 
-    def name(self):
+    def name(self) -> str:
         """Get the name that will be passed to the command function for this
         option."""
         return self._name
 
-    def opts(self):
+    def opts(self) -> list[str]:
         """Get the flags that will be used for this option on the command
         line."""
         return self._opts
 
     @property
-    def help(self):
+    def help(self) -> str:
         """Get the help text for this option. Returns an empty string if no
         help was defined."""
         return self.partialOpt.keywords.get("help", "")
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.partialOpt(*args, **kwargs)
 
 
@@ -734,12 +744,12 @@ class MWArgumentDecorator:
     """Wraps the click.argument decorator to enable shared arguments to be
     declared."""
 
-    def __init__(self, *param_decls, **kwargs):
+    def __init__(self, *param_decls: Any, **kwargs: Any) -> None:
         self._helpText = kwargs.pop("help", None)
         self.partialArg = partial(click.argument, *param_decls, cls=MWArgument, **kwargs)
 
-    def __call__(self, *args, help=None, **kwargs):
-        def decorator(f):
+    def __call__(self, *args: Any, help: str | None = None, **kwargs: Any) -> Callable:
+        def decorator(f: Any) -> Any:
             if help is not None:
                 self._helpText = help
             if self._helpText:
@@ -753,9 +763,9 @@ class MWCommand(click.Command):
     """Command subclass that stores a copy of the args list for use by the
     command."""
 
-    extra_epilog = None
+    extra_epilog: str | None = None
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         # wrap callback method with catch_and_exit decorator
         callback = kwargs.get("callback")
         if callback is not None:
@@ -763,7 +773,7 @@ class MWCommand(click.Command):
             kwargs["callback"] = catch_and_exit(callback)
         super().__init__(*args, **kwargs)
 
-    def _capture_args(self, ctx, args):
+    def _capture_args(self, ctx: click.Context, args: list[str]) -> None:
         """Capture the command line options and arguments.
 
         See details about what is captured and the order in which it is stored
@@ -793,7 +803,7 @@ class MWCommand(click.Command):
         # always be present and if no value was provided on the command line
         # the value will be `None`. If the option accepts multiple values, the
         # value in `opts` is a tuple, otherwise it is a single item.
-        next_idx = Counter()
+        next_idx: Counter = Counter()
         captured_args = []
         for param in param_order:
             if isinstance(param, click.Option):
@@ -820,7 +830,7 @@ class MWCommand(click.Command):
                 assert False  # All parameters should be an Option or an Argument.
         MWCtxObj.getFrom(ctx).args = captured_args
 
-    def parse_args(self, ctx, args):
+    def parse_args(self, ctx: click.Context, args: Any) -> list[str]:
         """Given a context and a list of arguments this creates the parser and
         parses the arguments, then modifies the context as necessary. This is
         automatically invoked by make_context().
@@ -843,10 +853,10 @@ class MWCommand(click.Command):
             not at separators (like "=").
         """
         self._capture_args(ctx, args)
-        super().parse_args(ctx, args)
+        return super().parse_args(ctx, args)
 
     @property
-    def epilog(self):
+    def epilog(self) -> str | None:
         """Override the epilog attribute to add extra_epilog (if defined by a
         subclass) to the end of any epilog provided by a subcommand.
         """
@@ -858,7 +868,7 @@ class MWCommand(click.Command):
         return ret
 
     @epilog.setter
-    def epilog(self, val):
+    def epilog(self, val: str) -> None:
         self._epilog = val
 
 
@@ -872,7 +882,9 @@ class OptionGroup:
     """Base class for an option group decorator. Requires the option group
     subclass to have a property called `decorator`."""
 
-    def __call__(self, f):
+    decorators: list[Any]
+
+    def __call__(self, f: Any) -> Any:
         for decorator in reversed(self.decorators):
             f = decorator(f)
         return f
@@ -924,12 +936,12 @@ class MWCtxObj:
         & arguments above.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         self.args = None
 
     @staticmethod
-    def getFrom(ctx):
+    def getFrom(ctx: click.Context) -> Any:
         """If needed, initialize `ctx.obj` with a new `MWCtxObj`, and return
         the new or already existing `MWCtxObj`."""
         if ctx.obj is not None:
@@ -938,7 +950,7 @@ class MWCtxObj:
         return ctx.obj
 
 
-def yaml_presets(ctx, param, value):
+def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
     """Click callback that reads additional values from the supplied
     YAML file.
 
@@ -997,16 +1009,18 @@ def yaml_presets(ctx, param, value):
                 overrides[name] = overrides.pop(option)
         except Exception as e:
             raise click.BadOptionUsage(
-                option_name=param.name,
+                option_name=param,
                 message=f"Error reading overrides file: {e}",
                 ctx=ctx,
             )
         # Override the defaults for this subcommand
-        ctx.default_map.update(overrides)
+        # mypy: (this is declared Mapping not MutableMapping so must be
+        # ignored)
+        ctx.default_map.update(overrides)  # type: ignore[attr-defined]
     return
 
 
-def _read_yaml_presets(file_uri, cmd_name):
+def _read_yaml_presets(file_uri: str, cmd_name: str | None) -> dict[str, Any]:
     """Read file command line overrides from YAML config file.
 
     Parameters
@@ -1027,7 +1041,7 @@ def _read_yaml_presets(file_uri, cmd_name):
     return config[cmd_name]
 
 
-def sortAstropyTable(table, dimensions, sort_first=None):
+def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list[str] | None = None) -> Table:
     """Sort an astropy table, with prioritization given to columns in this
     order:
     1. the provided named columns
@@ -1056,8 +1070,8 @@ def sortAstropyTable(table, dimensions, sort_first=None):
     # For sorting we want to ignore the id
     # We also want to move temporal or spatial dimensions earlier
     sort_first = sort_first or []
-    sort_early = []
-    sort_late = []
+    sort_early: list[str] = []
+    sort_late: list[str] = []
     for dim in dimensions:
         if dim.spatial or dim.temporal:
             sort_early.extend(dim.required.names)
@@ -1073,13 +1087,13 @@ def sortAstropyTable(table, dimensions, sort_first=None):
     return table
 
 
-def catch_and_exit(func):
+def catch_and_exit(func: Callable) -> Callable:
     """Decorator which catches all exceptions, prints an exception traceback
     and signals click to exit.
     """
 
     @wraps(func)
-    def inner(*args, **kwargs):
+    def inner(*args: Any, **kwargs: Any) -> None:
         try:
             func(*args, **kwargs)
         except (click.exceptions.ClickException, click.exceptions.Exit, click.exceptions.Abort):
@@ -1087,6 +1101,9 @@ def catch_and_exit(func):
             raise
         except Exception:
             exc_type, exc_value, exc_tb = sys.exc_info()
+            assert exc_type is not None
+            assert exc_value is not None
+            assert exc_tb is not None
             if exc_tb.tb_next:
                 # do not show this decorator in traceback
                 exc_tb = exc_tb.tb_next

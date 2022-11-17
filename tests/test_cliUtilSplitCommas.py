@@ -48,7 +48,7 @@ class SplitCommasTestCase(unittest.TestCase):
         self.assertEqual(
             split_commas(ctx, param, ("one,two", "three,four")), ("one", "two", "three", "four")  # noqa E231
         )
-        self.assertEqual(split_commas(ctx, param, None), None)
+        self.assertEqual(split_commas(ctx, param, None), tuple())
 
     def test_single(self):
         """test the split_commas callback in an option with one value"""

@@ -19,12 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 from __future__ import annotations
 
 __all__ = ("ClickProgressHandler",)
 
-from typing import Any, ContextManager, Iterable, Optional, TypeVar
+from collections.abc import Iterable
+from typing import Any, ContextManager, TypeVar
 
 import click
 
@@ -49,7 +49,7 @@ class ClickProgressHandler(ProgressHandler):
         self._kwargs = kwargs
 
     @classmethod
-    def callback(cls, ctx, params, value):
+    def callback(cls, ctx: click.Context, params: click.Parameter, value: Any) -> None:
         """A `click` callback that installs this handler as the global handler
         for progress bars.
 
@@ -74,7 +74,7 @@ class ClickProgressHandler(ProgressHandler):
         )(cmd)
 
     def get_progress_bar(
-        self, iterable: Optional[Iterable[_T]], desc: Optional[str], total: Optional[int], level: int
+        self, iterable: Iterable[_T] | None, desc: str | None, total: int | None, level: int
     ) -> ContextManager[ProgressBar[_T]]:
         # Docstring inherited.
-        return click.progressbar(iterable=iterable, length=total, label=desc, **self._kwargs)
+        return click.progressbar(iterable=iterable, length=total, label=desc, **self._kwargs)  # type: ignore

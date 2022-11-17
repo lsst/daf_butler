@@ -65,7 +65,7 @@ class FailedLoadTest(unittest.TestCase):
         with command_test_env(self.runner, "test_cliPluginLoader", "non-existant-command-function"):
             with self.assertLogs() as cm:
                 result = self.runner.invoke(butler.cli, "--help")
-            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            self.assertEqual(result.exit_code, 0, f"output: {result.output!r} exception: {result.exception}")
             expectedErrMsg = (
                 "Could not import plugin from "
                 "test_cliPluginLoader.non_existant_command_function, skipping."
