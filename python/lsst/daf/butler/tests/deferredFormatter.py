@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = "DeferredFormatter"
 
-from typing import Any, Optional
+from typing import Any
 
 from ..core import Formatter
 
@@ -35,8 +35,8 @@ class DeferredFormatter(Formatter):
     We want to ensure that the formatter system loads this on demand.
     """
 
-    def read(self, component: Optional[str] = None) -> Any:
+    def read(self, component: str | None = None) -> Any:
         raise NotImplementedError("Type does not support reading")
 
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         raise NotImplementedError("Type does not support writing")

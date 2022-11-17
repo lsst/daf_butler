@@ -18,8 +18,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
-"""Unit tests for the daf_butler CliLog utility. Code is implemented in
+"""Unit tests for the daf_butler CliLog utility.
+
+Code is implemented in
 daf_butler but some only runs if lsst.log.Log can be imported so these parts of
 it can't be tested there because daf_butler does not directly depend on
 lsst.log, and only uses it if it has been setup by another package."""
@@ -31,9 +34,11 @@ import subprocess
 import tempfile
 import unittest
 from collections import namedtuple
+from collections.abc import Callable
 from functools import partial
 from io import StringIO
 from logging import DEBUG, INFO, WARNING
+from typing import TYPE_CHECKING, Any
 
 import click
 from lsst.daf.butler.cli.butler import cli as butlerCli
@@ -63,13 +68,13 @@ except ModuleNotFoundError:
 @click.option("--expected-lsstbutler-level", type=int)
 @click.option("--expected-lsstx-level", type=int)
 def command_log_settings_test(
-    expected_pyroot_level,
-    expected_pylsst_level,
-    expected_pybutler_level,
-    expected_lsstroot_level,
-    expected_lsstbutler_level,
-    expected_lsstx_level,
-):
+    expected_pyroot_level: str,
+    expected_pylsst_level: str,
+    expected_pybutler_level: str,
+    expected_lsstroot_level: str,
+    expected_lsstbutler_level: str,
+    expected_lsstx_level: str,
+) -> None:
 
     LogLevel = namedtuple("LogLevel", ("expected", "actual", "name"))
 
@@ -102,19 +107,28 @@ def command_log_settings_test(
 class CliLogTestBase:
     """Tests log initialization, reset, and setting log levels."""
 
+    if TYPE_CHECKING:
+        assertEqual: Callable
+        assertIn: Callable
+        assertTrue: Callable
+        assertFalse: Callable
+        assertGreater: Callable
+        subTest: Callable
+        assertNotIn: Callable
+
     lsstLogHandlerId = None
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.runner = LogCliRunner()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.lsstLogHandlerId = None
 
     class PythonLogger:
         """Keeps track of log level of a component and number of handlers
         attached to it at the time this object was initialized."""
 
-        def __init__(self, component):
+        def __init__(self, component: str | None) -> None:
             self.logger = logging.getLogger(component)
             self.initialLevel = self.logger.level
 
@@ -122,11 +136,11 @@ class CliLogTestBase:
         """Keeps track of log level for a component at the time this object was
         initialized."""
 
-        def __init__(self, component):
+        def __init__(self, component: str) -> None:
             self.logger = lsstLog.getLogger(component) if lsstLog else None
             self.initialLevel = self.logger.getLevel() if lsstLog else None
 
-    def runTest(self, cmd):
+    def runTest(self, cmd: Callable) -> None:
         """Test that the log context manager works with the butler cli to
         initialize the logging system according to cli inputs for the duration
         of the command execution and resets the logging system to its previous
@@ -157,7 +171,7 @@ class CliLogTestBase:
             )
             self.assertIn(lsstButler.logger.getLevel(), expectedLsstLogLevel)
 
-    def test_butlerCliLog(self):
+    def test_butlerCliLog(self) -> None:
         """Test that the log context manager works with the butler cli to
         initialize the logging system according to cli inputs for the duration
         of the command execution and resets the logging system to its previous
@@ -208,7 +222,7 @@ class CliLogTestBase:
         with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_ROOT_LOGGER": "lsstx"}):
             self._test_levels(log_levels)
 
-    def _test_levels(self, log_levels):
+    def _test_levels(self, log_levels: tuple[tuple[str, str, int, int, int, Any, Any, int], ...]) -> None:
         for level1, level2, x_pyroot, x_pylsst, x_pybutler, x_lsstroot, x_lsstbutler, x_lsstx in log_levels:
             with self.subTest("Test different log levels", level1=level1, level2=level2):
                 self.runTest(
@@ -237,13 +251,13 @@ class CliLogTestBase:
                     )
                 )
 
-    def test_helpLogReset(self):
+    def test_helpLogReset(self) -> None:
         """Verify that when a command does not execute, like when the help menu
         is printed instead, that CliLog is still reset."""
 
         self.runTest(partial(self.runner.invoke, butlerCli, ["command-log-settings-test", "--help"]))
 
-    def testLongLog(self):
+    def testLongLog(self) -> None:
         """Verify the timestamp is in the log messages when the --long-log
         flag is set."""
 
@@ -271,6 +285,7 @@ class CliLogTestBase:
                 # The pytest log handler interferes with the log configuration
                 # settings set up by initLog -- therefore test by using
                 # a subprocess.
+                args: tuple[str, ...]
                 if longlog:
                     args = ("butler", "--log-level", "DEBUG", "--long-log", "create", "here")
                 else:
@@ -297,7 +312,7 @@ class CliLogTestBase:
                         msg=f"did not find lines starting with module in: \n{output.getvalue()}",
                     )
 
-    def testFileLogging(self):
+    def testFileLogging(self) -> None:
         """Test --log-file option."""
         with self.runner.isolated_filesystem():
             for i, suffix in enumerate([".json", ".log"]):
@@ -328,21 +343,24 @@ class CliLogTestBase:
                 # messages.
                 num = 4
 
+                n_records = 5
                 if suffix == ".json":
                     records = ButlerLogRecords.from_file(filename)
                     self.assertGreater(len(records), num)
                     self.assertEqual(records[num].levelname, "DEBUG", str(records[num]))
                     self.assertEqual(records[0].MDC, dict(K1="v1", K2="v2", K3="v3"))
+
+                    self.assertGreater(len(records), n_records)
                 else:
-                    with open(filename) as fd:
-                        records = fd.readlines()
-                    self.assertGreater(len(records), num)
-                    self.assertIn("DEBUG", records[num], str(records[num]))
-                    self.assertNotIn("{", records[num], str(records[num]))
+                    with open(filename) as filed:
+                        records_text = filed.readlines()
+                    self.assertGreater(len(records_text), num)
+                    self.assertIn("DEBUG", records_text[num], str(records_text[num]))
+                    self.assertNotIn("{", records_text[num], str(records_text[num]))
 
-                self.assertGreater(len(records), 5)
+                    self.assertGreater(len(records), n_records)
 
-    def testLogTty(self):
+    def testLogTty(self) -> None:
         """Verify that log output to terminal can be suppressed."""
 
         with self.runner.isolated_filesystem():

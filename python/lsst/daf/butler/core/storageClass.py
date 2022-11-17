@@ -382,7 +382,7 @@ class StorageClass:
             raise KeyError(f"Parameter{s} '{unknown}' not understood by StorageClass {self.name}")
 
     def filterParameters(
-        self, parameters: Mapping[str, Any], subset: Collection | None = None
+        self, parameters: Mapping[str, Any] | None, subset: Collection | None = None
     ) -> Mapping[str, Any]:
         """Filter out parameters that are not known to this `StorageClass`.
 

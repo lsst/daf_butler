@@ -18,6 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 """
 Python classes that can be used to test datastores without requiring
@@ -35,13 +36,18 @@ __all__ = (
 
 
 import copy
-from typing import Any, Dict, List, Optional
+import types
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import StorageClass, StorageClassDelegate
 from pydantic import BaseModel
 
+if TYPE_CHECKING:
+    from lsst.daf.butler import Butler, Datastore, FormatterFactory
 
-def registerMetricsExample(butler):
+
+def registerMetricsExample(butler: Butler) -> None:
     """Modify a repository to support reading and writing
     `MetricsExample` objects.
 
@@ -102,7 +108,9 @@ def registerMetricsExample(butler):
     )
 
 
-def _addFullStorageClass(butler, name, formatter, *args, **kwargs):
+def _addFullStorageClass(
+    butler: Butler, name: str, formatter: str, *args: Any, **kwargs: Any
+) -> StorageClass:
     """Create a storage class-formatter pair in a repository if it does not
     already exist.
 
@@ -140,7 +148,7 @@ def _addFullStorageClass(butler, name, formatter, *args, **kwargs):
     return storage
 
 
-def _getAllFormatterRegistries(datastore):
+def _getAllFormatterRegistries(datastore: Datastore) -> list[FormatterFactory]:
     """Return all formatter registries used by a datastore.
 
     Parameters
@@ -150,12 +158,12 @@ def _getAllFormatterRegistries(datastore):
 
     Returns
     -------
-    registries : `list` [`lsst.daf.butler.FormatterRegistry`]
+    registries : `list` [`lsst.daf.butler.FormatterFactory`]
         A possibly empty list of all formatter registries used
         by ``datastore``.
     """
     try:
-        datastores = datastore.datastores
+        datastores = datastore.datastores  # type: ignore[attr-defined]
     except AttributeError:
         datastores = [datastore]
 
@@ -163,7 +171,7 @@ def _getAllFormatterRegistries(datastore):
     for datastore in datastores:
         try:
             # Not all datastores have a formatterFactory
-            formatterRegistry = datastore.formatterFactory
+            formatterRegistry = datastore.formatterFactory  # type: ignore[attr-defined]
         except AttributeError:
             pass  # no formatter needed
         else:
@@ -186,30 +194,39 @@ class MetricsExample:
         Arbitrary array data.
     """
 
-    def __init__(self, summary=None, output=None, data=None):
+    def __init__(
+        self,
+        summary: dict[str, Any] | None = None,
+        output: dict[str, Any] | None = None,
+        data: list[Any] | None = None,
+    ) -> None:
         self.summary = summary
         self.output = output
         self.data = data
 
-    def __eq__(self, other):
-        return self.summary == other.summary and self.output == other.output and self.data == other.data
+    def __eq__(self, other: Any) -> bool:
+        try:
+            return self.summary == other.summary and self.output == other.output and self.data == other.data
+        except AttributeError:
+            pass
+        return NotImplemented
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.exportAsDict())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"MetricsExample({self.exportAsDict()})"
 
-    def exportAsDict(self):
+    def exportAsDict(self) -> dict[str, list | dict | None]:
         """Convert object contents to a single python dict."""
-        exportDict = {"summary": self.summary, "output": self.output}
+        exportDict: dict[str, list | dict | None] = {"summary": self.summary, "output": self.output}
         if self.data is not None:
             exportDict["data"] = list(self.data)
         else:
             exportDict["data"] = None
         return exportDict
 
-    def _asdict(self):
+    def _asdict(self) -> dict[str, list | dict | None]:
         """Convert object contents to a single Python dict.
 
         This interface is used for JSON serialization.
@@ -223,7 +240,7 @@ class MetricsExample:
         return self.exportAsDict()
 
     @classmethod
-    def makeFromDict(cls, exportDict):
+    def makeFromDict(cls, exportDict: dict[str, list | dict | None]) -> MetricsExample:
         """Create a new object from a dict that is compatible with that
         created by `exportAsDict`.
 
@@ -237,18 +254,19 @@ class MetricsExample:
         newobject : `MetricsExample`
             New `MetricsExample` object.
         """
-        data = None
-        if "data" in exportDict:
-            data = exportDict["data"]
+        data = exportDict["data"] if "data" in exportDict else None
+        assert isinstance(data, list | types.NoneType)
+        assert isinstance(exportDict["summary"], dict | types.NoneType)
+        assert isinstance(exportDict["output"], dict | types.NoneType)
         return cls(exportDict["summary"], exportDict["output"], data)
 
 
 class MetricsExampleModel(BaseModel):
     """A variant of `MetricsExample` based on model."""
 
-    summary: Optional[Dict[str, Any]]
-    output: Optional[Dict[str, Any]]
-    data: Optional[List[Any]]
+    summary: dict[str, Any] | None
+    output: dict[str, Any] | None
+    data: list[Any] | None
 
     @classmethod
     def from_metrics(cls, metrics: MetricsExample) -> "MetricsExampleModel":
@@ -259,7 +277,7 @@ class MetricsExampleModel(BaseModel):
 class ListDelegate(StorageClassDelegate):
     """Parameter handler for list parameters"""
 
-    def handleParameters(self, inMemoryDataset, parameters=None):
+    def handleParameters(self, inMemoryDataset: Any, parameters: Mapping[str, Any] | None = None) -> Any:
         """Modify the in-memory dataset using the supplied parameters,
         returning a possibly new object.
 
@@ -289,7 +307,7 @@ class ListDelegate(StorageClassDelegate):
 class MetricsDelegate(StorageClassDelegate):
     """Parameter handler for parameters using Metrics"""
 
-    def handleParameters(self, inMemoryDataset, parameters=None):
+    def handleParameters(self, inMemoryDataset: Any, parameters: Mapping[str, Any] | None = None) -> Any:
         """Modify the in-memory dataset using the supplied parameters,
         returning a possibly new object.
 
@@ -315,13 +333,13 @@ class MetricsDelegate(StorageClassDelegate):
             inMemoryDataset.data = inMemoryDataset.data[use["slice"]]
         return inMemoryDataset
 
-    def getComponent(self, composite, componentName: str):
+    def getComponent(self, composite: Any, componentName: str) -> Any:
         if componentName == "counter":
             return len(composite.data)
         return super().getComponent(composite, componentName)
 
     @classmethod
-    def selectResponsibleComponent(cls, readComponent: str, fromComponents) -> str:
+    def selectResponsibleComponent(cls, readComponent: str, fromComponents: set[str | None]) -> str:
         forwarderMap = {
             "counter": "data",
         }

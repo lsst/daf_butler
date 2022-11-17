@@ -31,7 +31,8 @@ __all__ = [
 ]
 
 import random
-from typing import Any, Iterable, Mapping, Optional, Set, Tuple, Union
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import sqlalchemy
@@ -47,9 +48,12 @@ from lsst.daf.butler import (
     StorageClass,
 )
 
+if TYPE_CHECKING:
+    from lsst.daf.butler import DatasetId
+
 
 def makeTestRepo(
-    root: str, dataIds: Optional[Mapping[str, Iterable]] = None, *, config: Config = None, **kwargs
+    root: str, dataIds: Mapping[str, Iterable] | None = None, *, config: Config | None = None, **kwargs: Any
 ) -> Butler:
     """Create an empty test repository.
 
@@ -114,7 +118,7 @@ def makeTestRepo(
     return butler
 
 
-def makeTestCollection(repo: Butler, uniqueId: Optional[str] = None) -> Butler:
+def makeTestCollection(repo: Butler, uniqueId: str | None = None) -> Butler:
     """Create a read/write Butler to a fresh collection.
 
     Parameters
@@ -179,19 +183,24 @@ def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -
 
     # Start populating dicts that will become DimensionRecords by providing
     # alternate keys like detector names
-    record_dicts_by_dimension_name = {}
+    record_dicts_by_dimension_name: dict[str, list[dict[str, str | int | bytes]]] = {}
     for name, values in complete_data_id_values.items():
         record_dicts_by_dimension_name[name] = []
-        dimension = universe[name]
+        dimension_el = universe[name]
         for value in values:
-            record_dicts_by_dimension_name[name].append(_fillAllKeys(dimension, value))
+            # _fillAllKeys wants Dimension and not DimensionElement.
+            # universe.__getitem__ says it returns DimensionElement but this
+            # really does also seem to be a Dimension here.
+            record_dicts_by_dimension_name[name].append(
+                _fillAllKeys(dimension_el, value)  # type: ignore[arg-type]
+            )
 
     # Pick cross-relationships arbitrarily
     for name, record_dicts in record_dicts_by_dimension_name.items():
-        dimension = universe[name]
+        dimension_el = universe[name]
         for record_dict in record_dicts:
-            for other in dimension.dimensions:
-                if other != dimension:
+            for other in dimension_el.dimensions:
+                if other != dimension_el:
                     relation = record_dicts_by_dimension_name[other.name][0]
                     record_dict[other.name] = relation[other.primaryKey.name]
 
@@ -201,7 +210,7 @@ def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -
     }
 
 
-def _fillAllKeys(dimension: Dimension, value: Union[str, int]) -> Mapping[str, Union[str, int]]:
+def _fillAllKeys(dimension: Dimension, value: str | int) -> dict[str, str | int | bytes]:
     """Create an arbitrary mapping of all required keys for a given dimension
     that do not refer to other dimensions.
 
@@ -219,7 +228,7 @@ def _fillAllKeys(dimension: Dimension, value: Union[str, int]) -> Mapping[str, U
         maps to ``value``, but all other mappings (e.g., detector name)
         are arbitrary.
     """
-    expandedValue = {}
+    expandedValue: dict[str, str | int | bytes] = {}
     for key in dimension.uniqueKeys:
         if key.nbytes:
             # For `bytes` fields, we want something that casts at least `str`
@@ -244,7 +253,7 @@ def _fillAllKeys(dimension: Dimension, value: Union[str, int]) -> Mapping[str, U
     return expandedValue
 
 
-def _makeRandomDataIdValue(dimension: Dimension) -> Union[int, str]:
+def _makeRandomDataIdValue(dimension: Dimension) -> int | str:
     """Generate a random value of the appropriate type for a data ID key.
 
     Parameters
@@ -317,8 +326,8 @@ def expandUniqueId(butler: Butler, partialId: Mapping[str, Any]) -> DataCoordina
 
 
 def _findOrInventDataIdValue(
-    butler: Butler, data_id: dict[str, Union[str, int]], dimension: Dimension
-) -> tuple[Union[str, int], bool]:
+    butler: Butler, data_id: dict[str, str | int], dimension: Dimension
+) -> tuple[str | int, bool]:
     """Look up an arbitrary value for a dimension that is consistent with a
     partial data ID that does not specify that dimension, or invent one if no
     such value exists.
@@ -354,10 +363,12 @@ def _findOrInventDataIdValue(
         return dimension_value, True
     else:
         # A record does exist in the registry.  Use its data ID value.
-        return matches[0].dataId[dimension.name], False
+        dim_value = matches[0].dataId[dimension.name]
+        assert dim_value is not None
+        return dim_value, False
 
 
-def _makeDimensionRecordDict(data_id: dict[str, Union[str, int]], dimension: Dimension) -> dict[str, Any]:
+def _makeDimensionRecordDict(data_id: dict[str, str | int], dimension: Dimension) -> dict[str, Any]:
     """Create a dictionary that can be used to build a `DimensionRecord` that
     is consistent with the given data ID.
 
@@ -388,7 +399,7 @@ def _makeDimensionRecordDict(data_id: dict[str, Union[str, int]], dimension: Dim
     return record_dict
 
 
-def addDataIdValue(butler: Butler, dimension: str, value: Union[str, int], **related: Union[str, int]):
+def addDataIdValue(butler: Butler, dimension: str, value: str | int, **related: str | int) -> None:
     """Add the records that back a new data ID to a repository.
 
     Parameters
@@ -436,7 +447,7 @@ def addDataIdValue(butler: Butler, dimension: str, value: Union[str, int], **rel
 
     # Assemble a dictionary data ID holding the given primary dimension value
     # and all of the related ones.
-    data_id: dict[str, Union[int, str]] = {dimension: value}
+    data_id: dict[str, int | str] = {dimension: value}
     data_id.update(related)
 
     # Compute the set of all dimensions that these recursively depend on.
@@ -483,7 +494,7 @@ def addDataIdValue(butler: Butler, dimension: str, value: Union[str, int], **rel
             ) from e
 
 
-def addDatasetType(butler: Butler, name: str, dimensions: Set[str], storageClass: str) -> DatasetType:
+def addDatasetType(butler: Butler, name: str, dimensions: set[str], storageClass: str) -> DatasetType:
     """Add a new dataset type to a repository.
 
     Parameters
@@ -529,15 +540,15 @@ class DatastoreMock:
     """
 
     @staticmethod
-    def apply(butler):
+    def apply(butler: Butler) -> None:
         """Apply datastore mocks to a butler."""
-        butler.datastore.export = DatastoreMock._mock_export
-        butler.datastore.get = DatastoreMock._mock_get
-        butler.datastore.ingest = MagicMock()
+        butler.datastore.export = DatastoreMock._mock_export  # type: ignore
+        butler.datastore.get = DatastoreMock._mock_get  # type: ignore
+        butler.datastore.ingest = MagicMock()  # type: ignore
 
     @staticmethod
     def _mock_export(
-        refs: Iterable[DatasetRef], *, directory: Optional[str] = None, transfer: Optional[str] = None
+        refs: Iterable[DatasetRef], *, directory: str | None = None, transfer: str | None = None
     ) -> Iterable[FileDataset]:
         """A mock of `Datastore.export` that satisfies the requirement that
         the refs passed in are included in the `FileDataset` objects
@@ -558,10 +569,11 @@ class DatastoreMock:
     @staticmethod
     def _mock_get(
         ref: DatasetRef,
-        parameters: Optional[Mapping[str, Any]] = None,
-        storageClass: Optional[Union[StorageClass, str]] = None,
-    ) -> Tuple[int, Optional[Mapping[str, Any]]]:
+        parameters: Mapping[str, Any] | None = None,
+        storageClass: StorageClass | str | None = None,
+    ) -> tuple[DatasetId, Mapping[str, Any] | None]:
         """A mock of `Datastore.get` that just returns the integer dataset ID
         value and parameters it was given.
         """
+        assert ref.id is not None
         return (ref.id, parameters)

@@ -18,14 +18,22 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import abc
 import copy
 import os
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 from unittest.mock import DEFAULT, call, patch
 
 from ..cli import butler
 from ..cli.utils import LogCliRunner, clickResultMsg
+
+if TYPE_CHECKING:
+    import unittest
+
+    import click
 
 
 class CliCmdTestBase(abc.ABC):
@@ -33,47 +41,53 @@ class CliCmdTestBase(abc.ABC):
     and call their respective script functions correctly.
     """
 
+    if TYPE_CHECKING:
+        assertNotEqual: Callable
+        assertRegex: Callable
+        assertFalse: Callable
+        assertEqual: Callable
+
     @staticmethod
     @abc.abstractmethod
-    def defaultExpected():
+    def defaultExpected() -> dict[str, Any]:
         pass
 
     @staticmethod
     @abc.abstractmethod
-    def command():
+    def command() -> click.Command:
         """Get the click.Command being tested."""
         pass
 
     @property
-    def cli(self):
+    def cli(self) -> click.core.Command:
         """Get the command line interface function under test, can be
         overridden to test CLIs other than butler."""
         return butler.cli
 
     @property
-    def mock(self):
+    def mock(self) -> unittest.mock.Mock:
         """Get the mock object to use in place of `mockFuncName`. If not
-        provided will use the default provided by `unittest.patch`, this is
-        usually a `unittest.patch.MagicMock`."""
+        provided will use the default provided by `unittest.mock.patch`, this
+        is usually a `unittest.mock.MagicMock`."""
         return DEFAULT
 
     @property
     @abc.abstractmethod
-    def mockFuncName(self):
+    def mockFuncName(self) -> str:
         """The qualified name of the function to mock, will be passed to
         unittest.mock.patch, see python docs for details."""
         pass
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.runner = LogCliRunner()
 
     @classmethod
-    def makeExpected(cls, **kwargs):
+    def makeExpected(cls, **kwargs: Any) -> dict[str, Any]:
         expected = copy.copy(cls.defaultExpected())
         expected.update(kwargs)
         return expected
 
-    def run_command(self, inputs):
+    def run_command(self, inputs: list[str]) -> click.testing.Result:
         """Use the LogCliRunner with the mock environment variable set to
         execute a butler subcommand and parameters specified in inputs.
 
@@ -91,7 +105,9 @@ class CliCmdTestBase(abc.ABC):
         """
         return self.runner.invoke(self.cli, inputs)
 
-    def run_test(self, inputs, expectedKwargs, withTempFile=None):
+    def run_test(
+        self, inputs: list[str], expectedKwargs: dict[str, str], withTempFile: str | None = None
+    ) -> click.testing.Result:
         """Run the subcommand specified in inputs and verify a successful
         outcome where exit code = 0 and the mock object has been called with
         the expected arguments.
@@ -129,14 +145,11 @@ class CliCmdTestBase(abc.ABC):
             with patch(self.mockFuncName, self.mock) as mock:
                 result = self.run_command(inputs)
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            if isinstance(expectedKwargs, (list, tuple)):
-                calls = (call(**e) for e in expectedKwargs)
-            else:
-                calls = (call(**expectedKwargs),)
+            calls = (call(**expectedKwargs),)
             mock.assert_has_calls(list(calls))
         return result
 
-    def run_missing(self, inputs, expectedMsg):
+    def run_missing(self, inputs: list[str], expectedMsg: str) -> None:
         """Run the subcommand specified in inputs and verify a failed outcome
         where exit code != 0 and an expected message has been written to
         stdout.
@@ -154,7 +167,7 @@ class CliCmdTestBase(abc.ABC):
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertRegex(result.stdout, expectedMsg)
 
-    def test_help(self):
+    def test_help(self) -> None:
         self.assertFalse(
             self.command().get_short_help_str().endswith("..."),
             msg="The command help message is being truncated to "
