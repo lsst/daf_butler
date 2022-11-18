@@ -42,6 +42,30 @@ from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safe
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
+class ButlerTestRepoTestCase(unittest.TestCase):
+    """Simpler test than below without setUpClass getting in the way."""
+
+    def setUp(self):
+        self.root = makeTestTempDir(TESTDIR)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def testMakeTestRepo(self):
+
+        dataIds = {
+            "instrument": ["DummyCam"],
+            "physical_filter": ["d-r"],
+            "exposure": [42, 43, 44],
+            "visit": [42, 43, 44],
+        }
+
+        butler = makeTestRepo(self.root, dataIds)
+
+        records = list(butler.registry.queryDimensionRecords("visit"))
+        self.assertEqual(len(records), 3)
+
+
 class ButlerUtilsTestSuite(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
