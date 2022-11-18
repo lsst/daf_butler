@@ -26,7 +26,20 @@ import logging
 import traceback
 from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
-from typing import IO, Any, Callable, ClassVar, Dict, Generator, Iterable, Iterator, List, Optional, Union
+from typing import (
+    IO,
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Generator,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Union,
+    overload,
+)
 
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
@@ -466,6 +479,14 @@ class ButlerLogRecords(BaseModel):
 
     def __setitem__(self, index: int, value: Record) -> None:
         self.__root__[index] = self._validate_record(value)
+
+    @overload
+    def __getitem__(self, index: int) -> ButlerLogRecord:
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> "ButlerLogRecords":
+        ...
 
     def __getitem__(self, index: Union[slice, int]) -> "Union[ButlerLogRecords, ButlerLogRecord]":
         # Handles slices and returns a new collection in that

@@ -18,17 +18,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 __all__ = ("DummyRegistry",)
 
-
-from typing import Any, Iterable, Iterator, Optional, Type
+from collections.abc import Iterable, Iterator
+from typing import Any
 
 import sqlalchemy
-from lsst.daf.butler import DatasetRef, DimensionUniverse, ddl
+from lsst.daf.butler import DimensionUniverse, ddl
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 from lsst.daf.butler.registry.interfaces import (
     Database,
+    DatasetIdRef,
     DatasetRecordStorageManager,
     DatastoreRegistryBridge,
     DatastoreRegistryBridgeManager,
@@ -40,12 +42,12 @@ from lsst.daf.butler.registry.interfaces import (
 
 
 class DummyOpaqueTableStorage(OpaqueTableStorage):
-    def __init__(self, name: str, spec: ddl.TableSpec):
+    def __init__(self, name: str, spec: ddl.TableSpec) -> None:
         super().__init__(name=name)
-        self._rows = []
+        self._rows: list[dict] = []
         self._spec = spec
 
-    def insert(self, *data: dict):
+    def insert(self, *data: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.
         uniqueConstraints = list(self._spec.unique)
         uniqueConstraints.append(tuple(field.name for field in self._spec.fields if field.primaryKey))
@@ -82,7 +84,7 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
                 else:
                     yield d
 
-    def delete(self, columns: Iterable[str], *rows: dict):
+    def delete(self, columns: Iterable[str], *rows: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.
         kept_rows = []
         for table_row in self._rows:
@@ -95,8 +97,8 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
 
 
 class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
-    def __init__(self):
-        self._storages = {}
+    def __init__(self) -> None:
+        self._storages: dict[str, DummyOpaqueTableStorage] = {}
 
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext) -> OpaqueTableStorageManager:
@@ -104,20 +106,20 @@ class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
         # Not used, but needed to satisfy ABC requirement.
         return cls()
 
-    def get(self, name: str) -> Optional[OpaqueTableStorage]:
+    def get(self, name: str) -> OpaqueTableStorage | None:
         # Docstring inherited from OpaqueTableStorageManager.
-        return self._storage.get(name)
+        return self._storages.get(name)
 
     def register(self, name: str, spec: ddl.TableSpec) -> OpaqueTableStorage:
         # Docstring inherited from OpaqueTableStorageManager.
         return self._storages.setdefault(name, DummyOpaqueTableStorage(name, spec))
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersion(cls) -> VersionTuple | None:
         # Docstring inherited from VersionedExtension.
         return None
 
-    def schemaDigest(self) -> Optional[str]:
+    def schemaDigest(self) -> str | None:
         # Docstring inherited from VersionedExtension.
         return None
 
@@ -127,7 +129,7 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         self, opaque: OpaqueTableStorageManager, universe: DimensionUniverse, datasetIdColumnType: type
     ):
         super().__init__(opaque=opaque, universe=universe, datasetIdColumnType=datasetIdColumnType)
-        self._bridges = {}
+        self._bridges: dict[str, EphemeralDatastoreRegistryBridge] = {}
 
     @classmethod
     def initialize(
@@ -136,14 +138,14 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         context: StaticTablesContext,
         *,
         opaque: OpaqueTableStorageManager,
-        datasets: Type[DatasetRecordStorageManager],
+        datasets: type[DatasetRecordStorageManager],
         universe: DimensionUniverse,
     ) -> DatastoreRegistryBridgeManager:
         # Docstring inherited from DatastoreRegistryBridgeManager
         # Not used, but needed to satisfy ABC requirement.
         return cls(opaque=opaque, universe=universe, datasetIdColumnType=datasets.getIdColumnType())
 
-    def refresh(self):
+    def refresh(self) -> None:
         # Docstring inherited from DatastoreRegistryBridgeManager
         pass
 
@@ -151,18 +153,18 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         # Docstring inherited from DatastoreRegistryBridgeManager
         return self._bridges.setdefault(name, EphemeralDatastoreRegistryBridge(name))
 
-    def findDatastores(self, ref: DatasetRef) -> Iterable[str]:
+    def findDatastores(self, ref: DatasetIdRef) -> Iterable[str]:
         # Docstring inherited from DatastoreRegistryBridgeManager
         for name, bridge in self._bridges.items():
             if ref in bridge:
                 yield name
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersion(cls) -> VersionTuple | None:
         # Docstring inherited from VersionedExtension.
         return None
 
-    def schemaDigest(self) -> Optional[str]:
+    def schemaDigest(self) -> str | None:
         # Docstring inherited from VersionedExtension.
         return None
 
@@ -170,12 +172,12 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
 class DummyRegistry:
     """Dummy Registry, for Datastore test purposes."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._opaque = DummyOpaqueTableStorageManager()
         self.dimensions = DimensionUniverse()
         self._datastoreBridges = DummyDatastoreRegistryBridgeManager(
             self._opaque, self.dimensions, sqlalchemy.BigInteger
         )
 
-    def getDatastoreBridgeManager(self):
+    def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
         return self._datastoreBridges

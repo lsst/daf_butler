@@ -31,7 +31,8 @@ __all__ = (
 )
 
 import json
-from typing import TYPE_CHECKING, Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -46,10 +47,10 @@ class DoNothingFormatter(Formatter):
     """A test formatter that does not need to format anything and has
     parameters."""
 
-    def read(self, component: Optional[str] = None) -> Any:
+    def read(self, component: str | None = None) -> Any:
         raise NotImplementedError("Type does not support reading")
 
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         raise NotImplementedError("Type does not support writing")
 
 
@@ -58,14 +59,14 @@ class FormatterTest(Formatter):
 
     supportedWriteParameters = frozenset({"min", "max", "median", "comment", "extra", "recipe"})
 
-    def read(self, component: Optional[str] = None) -> Any:
+    def read(self, component: str | None = None) -> Any:
         raise NotImplementedError("Type does not support reading")
 
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         raise NotImplementedError("Type does not support writing")
 
     @staticmethod
-    def validateWriteRecipes(recipes: Optional[Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
+    def validateWriteRecipes(recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
         if not recipes:
             return recipes
         for recipeName in recipes:
@@ -108,7 +109,7 @@ class MetricsExampleFormatter(Formatter):
         """Always write yaml by default."""
         return ".yaml"
 
-    def read(self, component=None):
+    def read(self, component: str | None = None) -> Any:
         """Read data from a file.
 
         Parameters
@@ -167,7 +168,7 @@ class MetricsExampleFormatter(Formatter):
             return len(inMemoryDataset.data)
         raise ValueError(f"Unsupported component: {component}")
 
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         """Write a Dataset.
 
         Parameters
@@ -187,7 +188,6 @@ class MetricsExampleFormatter(Formatter):
 
         with open(fileDescriptor.location.path, "w") as fd:
             yaml.dump(inMemoryDataset._asdict(), fd)
-        return fileDescriptor.location.pathInStore
 
 
 class MetricsExampleDataFormatter(Formatter):
@@ -203,7 +203,7 @@ class MetricsExampleDataFormatter(Formatter):
     extension = ".yaml"
     """Always write YAML"""
 
-    def read(self, component=None):
+    def read(self, component: str | None = None) -> Any:
         """Read data from a file.
 
         Parameters
@@ -250,7 +250,7 @@ class MetricsExampleDataFormatter(Formatter):
             return len(inMemoryDataset)
         raise ValueError(f"Unsupported component: {component}")
 
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         """Write a Dataset.
 
         Parameters
@@ -270,4 +270,3 @@ class MetricsExampleDataFormatter(Formatter):
 
         with open(fileDescriptor.location.path, "w") as fd:
             yaml.dump(inMemoryDataset, fd)
-        return fileDescriptor.location.pathInStore

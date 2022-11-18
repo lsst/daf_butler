@@ -26,8 +26,9 @@ __all__ = ()
 import os
 import shutil
 import tempfile
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Optional
+from typing import TYPE_CHECKING, Any
 
 import astropy
 from astropy.table import Table as AstropyTable
@@ -35,6 +36,9 @@ from astropy.table import Table as AstropyTable
 from .. import Butler, Config, StorageClassFactory
 from ..registry import CollectionType
 from ..tests import MetricsExample, addDatasetType
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import DatasetType
 
 
 def makeTestTempDir(default_base: str) -> str:
@@ -58,7 +62,7 @@ def makeTestTempDir(default_base: str) -> str:
     return tempfile.mkdtemp(dir=base)
 
 
-def removeTestTempDir(root: Optional[str]) -> None:
+def removeTestTempDir(root: str | None) -> None:
     """Attempt to remove a temporary test directory, but do not raise if
     unable to.
 
@@ -75,7 +79,7 @@ def removeTestTempDir(root: Optional[str]) -> None:
 
 
 @contextmanager
-def safeTestTempDir(default_base: str) -> str:
+def safeTestTempDir(default_base: str) -> Iterator[str]:
     """Return a context manager that creates a temporary directory and then
     attempts to remove it.
 
@@ -101,7 +105,17 @@ def safeTestTempDir(default_base: str) -> str:
 class ButlerTestHelper:
     """Mixin with helpers for unit tests."""
 
-    def assertAstropyTablesEqual(self, tables, expectedTables, filterColumns=False, unorderedRows=False):
+    assertEqual: Callable
+    assertIsInstance: Callable
+    maxDiff: int | None
+
+    def assertAstropyTablesEqual(
+        self,
+        tables: AstropyTable | Sequence[AstropyTable],
+        expectedTables: AstropyTable | Sequence[AstropyTable],
+        filterColumns: bool = False,
+        unorderedRows: bool = False,
+    ) -> None:
         """Verify that a list of astropy tables matches a list of expected
         astropy tables.
 
@@ -152,7 +166,7 @@ class ButlerTestHelper:
                 self.maxDiff = original_max
 
 
-def readTable(textTable):
+def readTable(textTable: str) -> AstropyTable:
     """Read an astropy table from formatted text.
 
     Contains formatting that causes the astropy table to print an empty string
@@ -190,7 +204,7 @@ class MetricTestRepo:
     """
 
     @staticmethod
-    def _makeExampleMetrics():
+    def _makeExampleMetrics() -> MetricsExample:
         """Make an object to put into the repository."""
         return MetricsExample(
             {"AM1": 5.2, "AM2": 30.6},
@@ -198,18 +212,7 @@ class MetricTestRepo:
             [563, 234, 456.7, 752, 8, 9, 27],
         )
 
-    @staticmethod
-    def _makeDimensionData(id, name, datetimeBegin=None, datetimeEnd=None):
-        """Make a dict of dimensional data with default values to insert into
-        the registry.
-        """
-        data = dict(instrument="DummyCamComp", id=id, name=name, physical_filter="d-r", visit_system=1)
-        if datetimeBegin:
-            data["datetime_begin"] = datetimeBegin
-            data["datetime_end"] = datetimeEnd
-        return data
-
-    def __init__(self, root, configFile):
+    def __init__(self, root: str, configFile: str) -> None:
         self.root = root
         Butler.makeRepo(self.root, config=Config(configFile))
         butlerConfigFile = os.path.join(self.root, "butler.yaml")
@@ -225,7 +228,7 @@ class MetricTestRepo:
 
         # Create and register a DatasetType
         self.datasetType = addDatasetType(
-            self.butler, "test_metric_comp", ("instrument", "visit"), "StructuredCompositeReadComp"
+            self.butler, "test_metric_comp", {"instrument", "visit"}, "StructuredCompositeReadComp"
         )
 
         # Add needed Dimensions
@@ -262,7 +265,9 @@ class MetricTestRepo:
         self.addDataset({"instrument": "DummyCamComp", "visit": 423})
         self.addDataset({"instrument": "DummyCamComp", "visit": 424})
 
-    def addDataset(self, dataId, run=None, datasetType=None):
+    def addDataset(
+        self, dataId: dict[str, Any], run: str | None = None, datasetType: DatasetType | None = None
+    ) -> None:
         """Create a new example metric and add it to the named run with the
         given dataId.
 
