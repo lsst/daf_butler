@@ -1,4 +1,4 @@
-version: 2
+version: 3
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
@@ -193,7 +193,7 @@ elements:
       -
         name: observation_reason
         type: string
-        length: 32
+        length: 68
         doc: >
           The reason this visit was taken. (e.g. science,
           filter scan, unknown, various).
@@ -262,7 +262,7 @@ elements:
       -
         name: observation_reason
         type: string
-        length: 32
+        length: 68
         doc: >
           The reason this observation was taken. (e.g. science,
           filter scan, unknown).
