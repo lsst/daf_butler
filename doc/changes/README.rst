@@ -13,7 +13,6 @@ The ``<TYPE>`` should be one of:
 * ``perf``: A performance enhancement.
 * ``doc``: A documentation improvement.
 * ``removal``: An API removal or deprecation.
-* ``other``: Other Changes and Additions of interest to general users.
 * ``misc``: Changes that are of minor interest.
 
 An example file name would therefore look like ``DM-30291.misc.rst``.
