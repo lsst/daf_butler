@@ -79,6 +79,28 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         nested = NestedClass.initialize(
             db, element, context=context, config=config, governors=governors, view_target=view_target
         )
+        if view_target is not None:
+            # Caching records that are really a view into another element's
+            # records is problematic, because the caching code has no way of
+            # intercepting changes to its target's records.  Instead of
+            # inventing a callback system to address that directly or dealing
+            # with an untrustworthy combination, we just ban this combination.
+            # But there's a problem: this is how we've configured the default
+            # dimension universe from the beginning, with the 'band' dimension
+            # being a cached view into physical_filter, and we don't want to
+            # break all those configurations.
+            if isinstance(view_target, CachingDimensionRecordStorage):
+                # Happily, there's a way out: if the view target's record
+                # storage is _also_ cached, then this outer caching is pretty
+                # thoroughly unnecessary as well as problematic, and it's
+                # reasonable to silently drop it, by returning the nested
+                # storage object instead of a new caching wrapper.  And this
+                # too is the case with the default dimension configuration.
+                return nested
+            raise RuntimeError(
+                f"Invalid dimension storage configuration: cannot cache dimension element {element} "
+                f"that is itself a view of {view_target.element}."
+            )
         return cls(nested)
 
     @property

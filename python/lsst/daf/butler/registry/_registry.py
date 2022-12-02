@@ -1115,6 +1115,14 @@ class Registry(ABC):
             dimensions or values, or when a resulting data ID contains
             contradictory key-value pairs, according to dimension
             relationships.
+
+        Notes
+        -----
+        This method cannot be relied upon to reject invalid data ID values
+        for dimensions that do actually not have any record columns.  For
+        efficiency reasons the records for these dimensions (which have only
+        dimension key values that are given by the caller) may be constructed
+        directly rather than obtained from the registry database.
         """
         raise NotImplementedError()
 

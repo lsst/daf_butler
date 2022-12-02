@@ -2527,7 +2527,9 @@ class RegistryTests(ABC):
         # Second query should yield no results, which we should see when
         # we attempt to expand the data ID.
         query2 = registry.queryDataIds(["physical_filter"], band="h")
-        self.assertFalse(query2.any(execute=False, exact=False))
+        # There's no execute=False, exact=Fals test here because the behavior
+        # not something we want to guarantee in this case (and exact=False
+        # says either answer is legal).
         self.assertFalse(query2.any(execute=True, exact=False))
         self.assertFalse(query2.any(execute=True, exact=True))
         self.assertEqual(query2.count(exact=False), 0)
