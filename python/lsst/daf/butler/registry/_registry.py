@@ -686,7 +686,10 @@ class Registry(ABC):
         Parameters
         ----------
         datasetType : `DatasetType` or `str`
-            A `DatasetType` or the name of one.
+            A `DatasetType` or the name of one.  If this is a `DatasetType`
+            instance, its storage class will be respected and propagated to
+            the output, even if it differs from the dataset type definition
+            in the registry, as long as the storage classes are convertible.
         dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
