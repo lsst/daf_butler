@@ -37,3 +37,4 @@ StructuredCompositeReadComp: lsst.daf.butler.tests.testFormatters.MetricsExample
 StructuredCompositeReadCompNoDisassembly: lsst.daf.butler.tests.testFormatters.MetricsExampleFormatter
 StructuredDataDataTest: lsst.daf.butler.tests.testFormatters.MetricsExampleDataFormatter
 StructuredDataNoComponentsModel: lsst.daf.butler.formatters.json.JsonFormatter
+DictConvertibleModel: lsst.daf.butler.formatters.json.JsonFormatter

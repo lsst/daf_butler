@@ -35,6 +35,7 @@ import lsst.utils.tests
 import yaml
 from lsst.daf.butler import (
     Config,
+    DataCoordinate,
     DatasetRef,
     DatasetRefURIs,
     DatasetTypeNotSupportedError,
@@ -59,6 +60,7 @@ from lsst.daf.butler.tests import (
     DummyRegistry,
     MetricsExample,
 )
+from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
@@ -901,6 +903,24 @@ class DatastoreTests(DatastoreTestsBase):
         ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
         with self.assertRaises(FileNotFoundError):
             list(datastore.export(refs + [ref], transfer=None))
+
+    def test_pydantic_dict_storage_class_conversions(self):
+        """Test converting a dataset stored as a pydantic model into a dict on
+        read.
+        """
+        datastore = self.makeDatastore()
+        store_as_model = self.makeDatasetRef(
+            "store_as_model",
+            dimensions=self.universe.empty,
+            storageClass="DictConvertibleModel",
+            dataId=DataCoordinate.makeEmpty(self.universe),
+        )
+        content = {"a": "one", "b": "two"}
+        model = DictConvertibleModel.from_dict(content, extra="original content")
+        datastore.put(model, store_as_model)
+        loaded = datastore.get(store_as_model.overrideStorageClass("NativeDictForConvertibleModel"))
+        self.assertEqual(type(loaded), dict)
+        self.assertEqual(loaded, content)
 
 
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
