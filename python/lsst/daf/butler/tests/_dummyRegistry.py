@@ -40,6 +40,8 @@ from lsst.daf.butler.registry.interfaces import (
     VersionTuple,
 )
 
+from ..core.datastore import DatastoreTransaction
+
 
 class DummyOpaqueTableStorage(OpaqueTableStorage):
     def __init__(self, name: str, spec: ddl.TableSpec) -> None:
@@ -47,7 +49,7 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
         self._rows: list[dict] = []
         self._spec = spec
 
-    def insert(self, *data: dict) -> None:
+    def insert(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         # Docstring inherited from OpaqueTableStorage.
         uniqueConstraints = list(self._spec.unique)
         uniqueConstraints.append(tuple(field.name for field in self._spec.fields if field.primaryKey))
@@ -59,6 +61,8 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
                         f"Unique constraint {constraint} violation in external table {self.name}."
                     )
             self._rows.append(d)
+            if transaction is not None:
+                transaction.registerUndo("insert", self.delete, [], d)
 
     def fetch(self, **where: Any) -> Iterator[dict]:
         # Docstring inherited from OpaqueTableStorage.

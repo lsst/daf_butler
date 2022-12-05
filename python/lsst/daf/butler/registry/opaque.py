@@ -27,7 +27,7 @@ opaque tables for `Registry`.
 __all__ = ["ByNameOpaqueTableStorage", "ByNameOpaqueTableStorageManager"]
 
 import itertools
-from typing import Any, ClassVar, Dict, Iterable, Iterator, List, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, Iterator, List, Optional
 
 import sqlalchemy
 
@@ -39,6 +39,9 @@ from .interfaces import (
     StaticTablesContext,
     VersionTuple,
 )
+
+if TYPE_CHECKING:
+    from ..core.datastore import DatastoreTransaction
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(0, 2, 0)
@@ -68,7 +71,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         self._db = db
         self._table = table
 
-    def insert(self, *data: dict) -> None:
+    def insert(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         # Docstring inherited from OpaqueTableStorage.
         self._db.insert(self._table, *data)
 

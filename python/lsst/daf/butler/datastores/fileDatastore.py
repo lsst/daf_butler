@@ -369,7 +369,7 @@ class FileDatastore(GenericBaseDatastore):
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore
         records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos)]
-        self._table.insert(*records)
+        self._table.insert(*records, transaction=self._transaction)
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
@@ -2838,7 +2838,7 @@ class FileDatastore(GenericBaseDatastore):
                     assert isinstance(info, StoredFileInfo), "Expecting StoredFileInfo records"
                     unpacked_records.append(info.to_record())
         if unpacked_records:
-            self._table.insert(*unpacked_records)
+            self._table.insert(*unpacked_records, transaction=self._transaction)
 
     def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
         # Docstring inherited from the base class.
