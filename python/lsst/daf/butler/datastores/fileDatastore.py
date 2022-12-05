@@ -1702,18 +1702,8 @@ class FileDatastore(GenericBaseDatastore):
             `None`), and the URIs to any components associated with the dataset
             artifact. (can be empty if there are no components).
         """
-        # if this has never been written then we have to guess
-        if not self.exists(ref):
-            if not predict:
-                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
-
-            return self._predict_URIs(ref)
-
-        # If this is a ref that we have written we can get the path.
-        # Get file metadata and internal metadata
-        fileLocations = self._get_dataset_locations_info(ref)
-
-        return self._locations_to_URI(ref, fileLocations)
+        many = self.getManyURIs([ref], predict=predict, allow_missing=False)
+        return many[ref]
 
     def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.
