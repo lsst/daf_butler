@@ -1529,7 +1529,7 @@ class FileDatastore(GenericBaseDatastore):
         return dataset_existence
 
     def _mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
+        self, refs: Sequence[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
@@ -1566,30 +1566,63 @@ class FileDatastore(GenericBaseDatastore):
 
         missing_ids = requested_ids - handled_ids
         if missing_ids:
-            if not self.trustGetRequest:
-                # Must assume these do not exist
-                for missing in missing_ids:
-                    dataset_existence[id_to_ref[missing]] = False
-            else:
-                log.debug(
-                    "%d out of %d datasets were not known to datastore during initial existence check.",
-                    len(missing_ids),
-                    len(requested_ids),
+            dataset_existence.update(
+                self._mexists_check_expected(
+                    [id_to_ref[missing] for missing in missing_ids], artifact_existence
                 )
+            )
 
-                # Construct data structure identical to that returned
-                # by _get_stored_records_associated_with_refs() but using
-                # guessed names.
-                records = {}
-                for missing in missing_ids:
-                    expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
-                    records[missing] = [info for _, info in expected]
+        return dataset_existence
 
-                dataset_existence.update(
-                    self._process_mexists_records(
-                        id_to_ref, records, False, artifact_existence=artifact_existence
-                    )
+    def _mexists_check_expected(
+        self, refs: Sequence[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
+    ) -> Dict[DatasetRef, bool]:
+        """Check existence of refs that are not known to datastore.
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked. These are assumed not to be known
+            to datastore.
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
+            if the caller is not interested.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from dataset to boolean indicating existence.
+        """
+        dataset_existence: Dict[DatasetRef, bool] = {}
+        if not self.trustGetRequest:
+            # Must assume these do not exist
+            for ref in refs:
+                dataset_existence[ref] = False
+        else:
+            log.debug(
+                "%d datasets were not known to datastore during initial existence check.",
+                len(refs),
+            )
+
+            # Construct data structure identical to that returned
+            # by _get_stored_records_associated_with_refs() but using
+            # guessed names.
+            records = {}
+            id_to_ref = {}
+            for missing_ref in refs:
+                expected = self._get_expected_dataset_locations_info(missing_ref)
+                dataset_id = missing_ref.getCheckedId()
+                records[dataset_id] = [info for _, info in expected]
+                id_to_ref[dataset_id] = missing_ref
+
+            dataset_existence.update(
+                self._process_mexists_records(
+                    id_to_ref,
+                    records,
+                    False,
+                    artifact_existence=artifact_existence,
                 )
+            )
 
         return dataset_existence
 
