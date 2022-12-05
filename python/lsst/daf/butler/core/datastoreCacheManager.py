@@ -38,6 +38,7 @@ import logging
 import os
 import shutil
 import tempfile
+import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from random import Random
@@ -706,7 +707,16 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             # is created.
             path_in_cache = cached_location.relative_to(self.cache_directory)
             assert path_in_cache is not None, f"Somehow {cached_location} not in cache directory"
-            temp_location: Optional[ResourcePath] = self._temp_exempt_directory.join(path_in_cache)
+
+            # Need to use a unique file name for the temporary location to
+            # ensure that two different processes can read the file
+            # simultaneously without one of them deleting it when it's in
+            # use elsewhere. Retain the original filename for easier debugging.
+            random = str(uuid.uuid4())[:8]
+            basename = cached_location.basename()
+            filename = f"{random}-{basename}"
+
+            temp_location: Optional[ResourcePath] = self._temp_exempt_directory.join(filename)
             try:
                 if temp_location is not None:
                     temp_location.transfer_from(cached_location, transfer="hardlink")
