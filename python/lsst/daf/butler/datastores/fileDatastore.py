@@ -1809,11 +1809,27 @@ class FileDatastore(GenericBaseDatastore):
         records = self._get_stored_records_associated_with_refs(refs)
         records_keys = records.keys()
 
-        existing_refs = (ref for ref in refs if ref.id in records_keys)
-        missing_refs = (ref for ref in refs if ref.id not in records_keys)
+        existing_refs = tuple(ref for ref in refs if ref.id in records_keys)
+        missing_refs = tuple(ref for ref in refs if ref.id not in records_keys)
+
+        # Have to handle trustGetRequest mode by checking for the existence
+        # of the missing refs on disk.
+        if missing_refs:
+            dataset_existence = self._mexists_check_expected(missing_refs, None)
+            really_missing = set()
+            not_missing = set()
+            for ref, exists in dataset_existence.items():
+                if exists:
+                    not_missing.add(ref)
+                else:
+                    really_missing.add(ref)
+
+            if not_missing:
+                # Need to recalculate the missing/existing split.
+                existing_refs = existing_refs + tuple(not_missing)
+                missing_refs = tuple(really_missing)
 
         for ref in missing_refs:
-
             # if this has never been written then we have to guess
             if not predict:
                 if not allow_missing:
