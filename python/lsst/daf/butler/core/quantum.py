@@ -564,6 +564,7 @@ class Quantum:
                 dict(self.initInputs.items()),
                 dict(self.inputs),
                 dict(self.outputs),
+                self.datastore_records,
             ),
         )
 
@@ -578,7 +579,7 @@ class Quantum:
         initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]],
         inputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
         outputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
-        datastore_records: Optional[Mapping[str, DatastoreRecordData]] = None,
+        datastore_records: Mapping[str, DatastoreRecordData],
     ) -> Quantum:
         return Quantum(
             taskName=taskName,
