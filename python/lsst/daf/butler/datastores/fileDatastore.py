@@ -1578,6 +1578,7 @@ class FileDatastore(GenericBaseDatastore):
         self, refs: Sequence[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:
         """Check existence of refs that are not known to datastore.
+
         Parameters
         ----------
         refs : iterable of `DatasetRef`
