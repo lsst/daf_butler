@@ -369,7 +369,7 @@ class FileDatastore(GenericBaseDatastore):
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore
         records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos)]
-        self._table.insert(*records)
+        self._table.insert(*records, transaction=self._transaction)
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
@@ -1529,7 +1529,7 @@ class FileDatastore(GenericBaseDatastore):
         return dataset_existence
 
     def _mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
+        self, refs: Sequence[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
@@ -1537,6 +1537,10 @@ class FileDatastore(GenericBaseDatastore):
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
+            if the caller is not interested.
 
         Returns
         -------
@@ -1562,30 +1566,64 @@ class FileDatastore(GenericBaseDatastore):
 
         missing_ids = requested_ids - handled_ids
         if missing_ids:
-            if not self.trustGetRequest:
-                # Must assume these do not exist
-                for missing in missing_ids:
-                    dataset_existence[id_to_ref[missing]] = False
-            else:
-                log.debug(
-                    "%d out of %d datasets were not known to datastore during initial existence check.",
-                    len(missing_ids),
-                    len(requested_ids),
+            dataset_existence.update(
+                self._mexists_check_expected(
+                    [id_to_ref[missing] for missing in missing_ids], artifact_existence
                 )
+            )
 
-                # Construct data structure identical to that returned
-                # by _get_stored_records_associated_with_refs() but using
-                # guessed names.
-                records = {}
-                for missing in missing_ids:
-                    expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
-                    records[missing] = [info for _, info in expected]
+        return dataset_existence
 
-                dataset_existence.update(
-                    self._process_mexists_records(
-                        id_to_ref, records, False, artifact_existence=artifact_existence
-                    )
+    def _mexists_check_expected(
+        self, refs: Sequence[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
+    ) -> Dict[DatasetRef, bool]:
+        """Check existence of refs that are not known to datastore.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked. These are assumed not to be known
+            to datastore.
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
+            if the caller is not interested.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from dataset to boolean indicating existence.
+        """
+        dataset_existence: Dict[DatasetRef, bool] = {}
+        if not self.trustGetRequest:
+            # Must assume these do not exist
+            for ref in refs:
+                dataset_existence[ref] = False
+        else:
+            log.debug(
+                "%d datasets were not known to datastore during initial existence check.",
+                len(refs),
+            )
+
+            # Construct data structure identical to that returned
+            # by _get_stored_records_associated_with_refs() but using
+            # guessed names.
+            records = {}
+            id_to_ref = {}
+            for missing_ref in refs:
+                expected = self._get_expected_dataset_locations_info(missing_ref)
+                dataset_id = missing_ref.getCheckedId()
+                records[dataset_id] = [info for _, info in expected]
+                id_to_ref[dataset_id] = missing_ref
+
+            dataset_existence.update(
+                self._process_mexists_records(
+                    id_to_ref,
+                    records,
+                    False,
+                    artifact_existence=artifact_existence,
                 )
+            )
 
         return dataset_existence
 
@@ -1665,18 +1703,8 @@ class FileDatastore(GenericBaseDatastore):
             `None`), and the URIs to any components associated with the dataset
             artifact. (can be empty if there are no components).
         """
-        # if this has never been written then we have to guess
-        if not self.exists(ref):
-            if not predict:
-                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
-
-            return self._predict_URIs(ref)
-
-        # If this is a ref that we have written we can get the path.
-        # Get file metadata and internal metadata
-        fileLocations = self._get_dataset_locations_info(ref)
-
-        return self._locations_to_URI(ref, fileLocations)
+        many = self.getManyURIs([ref], predict=predict, allow_missing=False)
+        return many[ref]
 
     def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.
@@ -1772,11 +1800,27 @@ class FileDatastore(GenericBaseDatastore):
         records = self._get_stored_records_associated_with_refs(refs)
         records_keys = records.keys()
 
-        existing_refs = (ref for ref in refs if ref.id in records_keys)
-        missing_refs = (ref for ref in refs if ref.id not in records_keys)
+        existing_refs = tuple(ref for ref in refs if ref.id in records_keys)
+        missing_refs = tuple(ref for ref in refs if ref.id not in records_keys)
+
+        # Have to handle trustGetRequest mode by checking for the existence
+        # of the missing refs on disk.
+        if missing_refs:
+            dataset_existence = self._mexists_check_expected(missing_refs, None)
+            really_missing = set()
+            not_missing = set()
+            for ref, exists in dataset_existence.items():
+                if exists:
+                    not_missing.add(ref)
+                else:
+                    really_missing.add(ref)
+
+            if not_missing:
+                # Need to recalculate the missing/existing split.
+                existing_refs = existing_refs + tuple(not_missing)
+                missing_refs = tuple(really_missing)
 
         for ref in missing_refs:
-
             # if this has never been written then we have to guess
             if not predict:
                 if not allow_missing:
@@ -2838,7 +2882,7 @@ class FileDatastore(GenericBaseDatastore):
                     assert isinstance(info, StoredFileInfo), "Expecting StoredFileInfo records"
                     unpacked_records.append(info.to_record())
         if unpacked_records:
-            self._table.insert(*unpacked_records)
+            self._table.insert(*unpacked_records, transaction=self._transaction)
 
     def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
         # Docstring inherited from the base class.

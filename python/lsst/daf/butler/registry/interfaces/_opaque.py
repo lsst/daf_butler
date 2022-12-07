@@ -27,11 +27,14 @@ from __future__ import annotations
 __all__ = ["OpaqueTableStorageManager", "OpaqueTableStorage"]
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
 
 from ...core.ddl import TableSpec
 from ._database import Database, StaticTablesContext
 from ._versioning import VersionedExtension
+
+if TYPE_CHECKING:
+    from ...core.datastore import DatastoreTransaction
 
 
 class OpaqueTableStorage(ABC):
@@ -48,7 +51,7 @@ class OpaqueTableStorage(ABC):
         self.name = name
 
     @abstractmethod
-    def insert(self, *data: dict) -> None:
+    def insert(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         """Insert records into the table
 
         Parameters
@@ -56,6 +59,11 @@ class OpaqueTableStorage(ABC):
         *data
             Each additional positional argument is a dictionary that represents
             a single row to be added.
+        transaction : `DatastoreTransaction`, optional
+            Transaction object that can be used to enable an explicit rollback
+            of the insert to be registered. Can be ignored if rollback is
+            handled via a different mechanism, such as by a database. Can be
+            `None` if no external transaction is available.
         """
         raise NotImplementedError()
 

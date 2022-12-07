@@ -1,0 +1,2 @@
+``Butler.getURIs`` no longer checks the file system to see if the file exists before returning a URI if the datastore thinks it knows about the file.
+This does mean that if someone has removed the file from the file system without deleting it from datastore that a URI could be retrieved for something that does not exist.
