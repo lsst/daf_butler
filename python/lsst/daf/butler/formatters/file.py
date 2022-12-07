@@ -25,11 +25,12 @@ from __future__ import annotations
 
 __all__ = ("FileFormatter",)
 
+import builtins
+import dataclasses
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Optional, Type
 
 from lsst.daf.butler import Formatter
-from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
     from lsst.daf.butler import StorageClass
@@ -104,34 +105,83 @@ class FileFormatter(Formatter):
         """
         fileDescriptor = self.fileDescriptor
 
-        # if read and write storage classes differ, more work is required
+        # Get the read and write storage classes.
         readStorageClass = fileDescriptor.readStorageClass
-        if readStorageClass != fileDescriptor.storageClass:
-            if component is None:
-                # This likely means that type conversion is required but
-                # it will be an error if no valid converter is available
-                # for this pytype.
-                if not readStorageClass.can_convert(fileDescriptor.storageClass):
-                    raise ValueError(
-                        f"Storage class inconsistency ({readStorageClass.name} vs"
-                        f" {fileDescriptor.storageClass.name}) but no"
-                        " component requested or converter registered for"
-                        f" converting type {get_full_type_name(fileDescriptor.storageClass.pytype)}"
-                        f" to {get_full_type_name(readStorageClass.pytype)}."
-                    )
-            else:
-                # Concrete composite written as a single file (we hope)
-                try:
-                    data = fileDescriptor.storageClass.delegate().getComponent(data, component)
-                except AttributeError:
-                    # Defer the complaint
-                    data = None
+        writeStorageClass = fileDescriptor.storageClass
 
-        # Coerce to the requested type (not necessarily the type that was
-        # written)
-        data = self._coerceType(data, fileDescriptor.storageClass, readStorageClass)
+        if component is not None:
+            # Requesting a component implies that we need to first ensure
+            # that the composite is the correct python type. Lie to the
+            # coercion routine since the read StorageClass is not relevant
+            # if we want the original.
+            data = self._coerceType(data, writeStorageClass, writeStorageClass)
+
+            # Concrete composite written as a single file (we hope)
+            # so try to get the component.
+            try:
+                data = fileDescriptor.storageClass.delegate().getComponent(data, component)
+            except AttributeError:
+                # Defer the complaint
+                data = None
+
+            # Update the write storage class to match that of the component.
+            # It should be safe to use the component storage class directly
+            # since that should match what was returned from getComponent
+            # (else we could create a temporary storage class guaranteed to
+            # match the python type we have).
+            writeStorageClass = writeStorageClass.allComponents()[component]
+
+        # Coerce to the requested type.
+        data = self._coerceType(data, writeStorageClass, readStorageClass)
 
         return data
+
+    def _coerceBuiltinType(self, inMemoryDataset: Any, writeStorageClass: StorageClass) -> Any:
+        """Coerce the supplied inMemoryDataset to the written python type if it
+        is currently a built-in type.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to coerce to expected type.
+        writeStorageClass : `StorageClass`
+            Storage class used to serialize this data.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Object of expected type ``writeStorageClass.pytype``.
+        """
+        # Only do anything if this is a built-in type and we did not originally
+        # store it as a builtin type.
+        if (
+            inMemoryDataset is not None
+            and not hasattr(builtins, writeStorageClass.pytype.__name__)
+            and hasattr(builtins, type(inMemoryDataset).__name__)
+        ):
+            if not isinstance(inMemoryDataset, writeStorageClass.pytype):
+                # Try different ways of converting to the required type.
+                if hasattr(writeStorageClass.pytype, "parse_obj"):
+                    # This is for a Pydantic model.
+                    inMemoryDataset = writeStorageClass.pytype.parse_obj(inMemoryDataset)
+                elif dataclasses.is_dataclass(writeStorageClass.pytype):
+                    # Dataclasses accept key/value parameters.
+                    inMemoryDataset = writeStorageClass.pytype(**inMemoryDataset)
+                elif isinstance(inMemoryDataset, dict):
+                    if writeStorageClass.isComposite():
+                        # Assume that this type can be constructed
+                        # using the registered assembler from a dict.
+                        inMemoryDataset = writeStorageClass.delegate().assemble(
+                            inMemoryDataset, pytype=writeStorageClass.pytype
+                        )
+                    else:
+                        # Unpack the dict and hope that works.
+                        inMemoryDataset = writeStorageClass.pytype(**inMemoryDataset)
+                else:
+                    # Hope that we can pass the arguments in directly.
+                    inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
+
+        return inMemoryDataset
 
     def _coerceType(
         self, inMemoryDataset: Any, writeStorageClass: StorageClass, readStorageClass: StorageClass
@@ -152,6 +202,7 @@ class FileFormatter(Formatter):
         inMemoryDataset : `object`
             Object of expected type ``readStorageClass.pytype``.
         """
+        inMemoryDataset = self._coerceBuiltinType(inMemoryDataset, writeStorageClass)
         return readStorageClass.coerce_type(inMemoryDataset)
 
     def read(self, component: Optional[str] = None) -> Any:

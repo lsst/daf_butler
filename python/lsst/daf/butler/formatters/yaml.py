@@ -23,16 +23,12 @@ from __future__ import annotations
 
 __all__ = ("YamlFormatter",)
 
-import builtins
 import dataclasses
-from typing import TYPE_CHECKING, Any, Optional, Type
+from typing import Any, Optional, Type
 
 import yaml
 
 from .file import FileFormatter
-
-if TYPE_CHECKING:
-    from lsst.daf.butler import StorageClass
 
 
 class YamlFormatter(FileFormatter):
@@ -166,43 +162,3 @@ class YamlFormatter(FileFormatter):
         else:
             serialized = yaml.safe_dump(inMemoryDataset)
         return serialized.encode()
-
-    def _coerceType(
-        self, inMemoryDataset: Any, writeStorageClass: StorageClass, readStorageClass: StorageClass
-    ) -> Any:
-        """Coerce the supplied inMemoryDataset to the correct python type.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to coerce to expected type.
-        writeStorageClass : `StorageClass`
-            Storage class used to serialize this data.
-        readStorageClass : `StorageClass`
-            Storage class requested as the outcome.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            Object of expected type ``readStorageClass.pytype``.
-        """
-        if inMemoryDataset is not None and not hasattr(builtins, readStorageClass.pytype.__name__):
-            if writeStorageClass.isComposite():
-                # We know that the write storage class should work,
-                # then we convert to read storage class.
-                inMemoryDataset = writeStorageClass.delegate().assemble(
-                    inMemoryDataset, pytype=writeStorageClass.pytype
-                )
-            elif not isinstance(inMemoryDataset, readStorageClass.pytype):
-                if not isinstance(inMemoryDataset, writeStorageClass.pytype):
-                    # This does not look like the written type or the required
-                    # type. Try to cast it to the written type and then coerce
-                    # to requested type.
-                    if dataclasses.is_dataclass(writeStorageClass.pytype):
-                        # dataclasses accept key/value parameters.
-                        inMemoryDataset = writeStorageClass.pytype(**inMemoryDataset)
-                    else:
-                        # Hope that we can pass the arguments in directly.
-                        inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
-        # Coerce to the read storage class if necessary.
-        return readStorageClass.coerce_type(inMemoryDataset)
