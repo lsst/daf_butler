@@ -60,8 +60,10 @@ class OpaqueTableStorage(ABC):
             Each additional positional argument is a dictionary that represents
             a single row to be added.
         transaction : `DatastoreTransaction`, optional
-            Transaction object. Can be `None` in some bridges if no rollback
-            is required.
+            Transaction object that can be used to enable an explicit rollback
+            of the insert to be registered. Can be ignored if rollback is
+            handled via a different mechanism, such as by a database. Can be
+            `None` if no external transaction is available.
         """
         raise NotImplementedError()
 
