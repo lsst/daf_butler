@@ -25,7 +25,6 @@ from __future__ import annotations
 
 __all__ = ("FileFormatter",)
 
-import builtins
 import dataclasses
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Optional, Type
@@ -151,35 +150,50 @@ class FileFormatter(Formatter):
         -------
         inMemoryDataset : `object`
             Object of expected type ``writeStorageClass.pytype``.
+
+        Notes
+        -----
+        This method only modifies the supplied object if the object is:
+
+        * Not already the required type.
+        * Not `None`.
+        * Looks like a built-in type.
+
+        It is intended to be used as a helper for file formats that do not
+        store the original Python type information in serialized form and
+        instead return built-in types such as `dict` and `list` that need
+        to be converted to the required form. This happens before
+        `StorageClass` converters trigger so that constructors can be
+        called that can build the original type first before checking the
+        requested Python type. This is important for Pydantic models where
+        the internal structure of the model may not match the `dict` form
+        in a scenario where the user has requested a `dict`.
         """
-        # Only do anything if this is a built-in type and we did not originally
-        # store it as a builtin type.
         if (
             inMemoryDataset is not None
-            and not hasattr(builtins, writeStorageClass.pytype.__name__)
-            and hasattr(builtins, type(inMemoryDataset).__name__)
+            and not isinstance(inMemoryDataset, writeStorageClass.pytype)
+            and type(inMemoryDataset).__module__ == "builtins"
         ):
-            if not isinstance(inMemoryDataset, writeStorageClass.pytype):
-                # Try different ways of converting to the required type.
-                if hasattr(writeStorageClass.pytype, "parse_obj"):
-                    # This is for a Pydantic model.
-                    inMemoryDataset = writeStorageClass.pytype.parse_obj(inMemoryDataset)
-                elif dataclasses.is_dataclass(writeStorageClass.pytype):
+            # Try different ways of converting to the required type.
+            if hasattr(writeStorageClass.pytype, "parse_obj"):
+                # This is for a Pydantic model.
+                inMemoryDataset = writeStorageClass.pytype.parse_obj(inMemoryDataset)
+            elif isinstance(inMemoryDataset, dict):
+                if dataclasses.is_dataclass(writeStorageClass.pytype):
                     # Dataclasses accept key/value parameters.
                     inMemoryDataset = writeStorageClass.pytype(**inMemoryDataset)
-                elif isinstance(inMemoryDataset, dict):
-                    if writeStorageClass.isComposite():
-                        # Assume that this type can be constructed
-                        # using the registered assembler from a dict.
-                        inMemoryDataset = writeStorageClass.delegate().assemble(
-                            inMemoryDataset, pytype=writeStorageClass.pytype
-                        )
-                    else:
-                        # Unpack the dict and hope that works.
-                        inMemoryDataset = writeStorageClass.pytype(**inMemoryDataset)
+                elif writeStorageClass.isComposite():
+                    # Assume that this type can be constructed
+                    # using the registered assembler from a dict.
+                    inMemoryDataset = writeStorageClass.delegate().assemble(
+                        inMemoryDataset, pytype=writeStorageClass.pytype
+                    )
                 else:
-                    # Hope that we can pass the arguments in directly.
-                    inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
+                    # Unpack the dict and hope that works.
+                    inMemoryDataset = writeStorageClass.pytype(**inMemoryDataset)
+            else:
+                # Hope that we can pass the arguments in directly.
+                inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
 
         return inMemoryDataset
 
