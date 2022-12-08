@@ -209,24 +209,6 @@ class SqliteFileRegistryTests(RegistryTests):
             return Registry.fromConfig(config, butlerRoot=self.root)
 
 
-class SqliteFileRegistryNameKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
-    """Tests for `Registry` backed by a SQLite file-based database.
-
-    This test case uses NameKeyCollectionManager and
-    ByDimensionsDatasetRecordStorageManager.
-    """
-
-    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Registry:
-        if share_repo_with is None:
-            with self.assertWarns(FutureWarning):
-                return super().makeRegistry()
-        else:
-            return super().makeRegistry(share_repo_with)
-
-    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
-    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
-
-
 class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
     """Tests for `Registry` backed by a SQLite file-based database.
 

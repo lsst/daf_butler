@@ -49,9 +49,11 @@ class SimpleButlerTestCase(unittest.TestCase):
     can instead utilize an in-memory SQLite Registry and a mocked Datastore.
     """
 
-    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
-    datasetsImportFile = "datasets.yaml"
-    datasetsIdType = int
+    datasetsManager = (
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
+    datasetsImportFile = "datasets-uuid.yaml"
+    datasetsIdType = uuid.UUID
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
@@ -673,18 +675,6 @@ class SimpleButlerTestCase(unittest.TestCase):
         for expression, expected in expressions:
             result = butler.registry.queryCollections(expression)
             self.assertEqual(set(result), expected)
-
-
-class SimpleButlerUUIDTestCase(SimpleButlerTestCase):
-    """Same as SimpleButlerTestCase but uses UUID-based datasets manager and
-    loads datasets from YAML file with UUIDs.
-    """
-
-    datasetsManager = (
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
-    )
-    datasetsImportFile = "datasets-uuid.yaml"
-    datasetsIdType = uuid.UUID
 
 
 class SimpleButlerMixedUUIDTestCase(SimpleButlerTestCase):
