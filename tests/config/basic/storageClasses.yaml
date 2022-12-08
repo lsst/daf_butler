@@ -125,3 +125,21 @@ storageClasses:
     pytype: dict
     converters:
       lsst.daf.butler.tests.dict_convertible_model.DictConvertibleModel: lsst.daf.butler.tests.dict_convertible_model.DictConvertibleModel.to_dict
+  # Simple storage classes that can be used for testing with JSON and
+  # YAML serialization. Need two storage classes for each python type.
+  MetricsExampleA:
+    pytype: lsst.daf.butler.tests.MetricsExample
+  MetricsExampleB:
+    pytype: lsst.daf.butler.tests.MetricsExample
+  MetricsExampleDataclassA:
+    pytype: lsst.daf.butler.tests.MetricsExampleDataclass
+  MetricsExampleDataclassB:
+    pytype: lsst.daf.butler.tests.MetricsExampleDataclass
+  MetricsExampleModelA:
+    pytype: lsst.daf.butler.tests.MetricsExampleModel
+  MetricsExampleModelB:
+    pytype: lsst.daf.butler.tests.MetricsExampleModel
+  TupleExampleA:
+    pytype: tuple
+  TupleExampleB:
+    pytype: tuple

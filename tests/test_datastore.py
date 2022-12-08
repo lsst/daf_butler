@@ -59,6 +59,8 @@ from lsst.daf.butler.tests import (
     DatastoreTestHelper,
     DummyRegistry,
     MetricsExample,
+    MetricsExampleDataclass,
+    MetricsExampleModel,
 )
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.resources import ResourcePath
@@ -918,9 +920,52 @@ class DatastoreTests(DatastoreTestsBase):
         content = {"a": "one", "b": "two"}
         model = DictConvertibleModel.from_dict(content, extra="original content")
         datastore.put(model, store_as_model)
+        retrieved_model = datastore.get(store_as_model)
+        self.assertEqual(retrieved_model, model)
         loaded = datastore.get(store_as_model.overrideStorageClass("NativeDictForConvertibleModel"))
         self.assertEqual(type(loaded), dict)
         self.assertEqual(loaded, content)
+
+    def test_simple_class_put_get(self):
+        """Test that we can put and get a simple class with dict()
+        constructor."""
+        datastore = self.makeDatastore()
+        data = MetricsExample(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
+        self._assert_different_puts(datastore, "MetricsExample", data)
+
+    def test_dataclass_put_get(self):
+        """Test that we can put and get a simple dataclass."""
+        datastore = self.makeDatastore()
+        data = MetricsExampleDataclass(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
+        self._assert_different_puts(datastore, "MetricsExampleDataclass", data)
+
+    def test_pydantic_put_get(self):
+        """Test that we can put and get a simple Pydantic model."""
+        datastore = self.makeDatastore()
+        data = MetricsExampleModel(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
+        self._assert_different_puts(datastore, "MetricsExampleModel", data)
+
+    def test_tuple_put_get(self):
+        """Test that we can put and get a tuple."""
+        datastore = self.makeDatastore()
+        data = tuple(["a", "b", 1])
+        self._assert_different_puts(datastore, "TupleExample", data)
+
+    def _assert_different_puts(self, datastore: Datastore, storageClass_root: str, data) -> None:
+        refs = {
+            x: self.makeDatasetRef(
+                f"stora_as_{x}",
+                dimensions=self.universe.empty,
+                storageClass=f"{storageClass_root}{x}",
+                dataId=DataCoordinate.makeEmpty(self.universe),
+            )
+            for x in ["A", "B"]
+        }
+
+        for ref in refs.values():
+            datastore.put(data, ref)
+
+        self.assertEqual(datastore.get(refs["A"]), datastore.get(refs["B"]))
 
 
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):

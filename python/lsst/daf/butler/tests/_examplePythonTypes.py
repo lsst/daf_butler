@@ -32,10 +32,12 @@ __all__ = (
     "MetricsExample",
     "registerMetricsExample",
     "MetricsExampleModel",
+    "MetricsExampleDataclass",
 )
 
 
 import copy
+import dataclasses
 import types
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
@@ -272,6 +274,15 @@ class MetricsExampleModel(BaseModel):
     def from_metrics(cls, metrics: MetricsExample) -> "MetricsExampleModel":
         """Create a model based on an example."""
         return cls.parse_obj(metrics.exportAsDict())
+
+
+@dataclasses.dataclass
+class MetricsExampleDataclass:
+    """A variant of `MetricsExample` based on a dataclass."""
+
+    summary: dict[str, Any] | None
+    output: dict[str, Any] | None
+    data: list[Any] | None
 
 
 class ListDelegate(StorageClassDelegate):
