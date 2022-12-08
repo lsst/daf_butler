@@ -152,6 +152,13 @@ class YamlFormatter(FileFormatter):
         This will fail for data structures that have complex python classes
         without a registered YAML representer.
         """
+        if hasattr(inMemoryDataset, "dict") and hasattr(inMemoryDataset, "json"):
+            # Pydantic-like model if both dict() and json() exist.
+            try:
+                inMemoryDataset = inMemoryDataset.dict()
+            except Exception:
+                pass
+
         if dataclasses.is_dataclass(inMemoryDataset):
             inMemoryDataset = dataclasses.asdict(inMemoryDataset)
         elif hasattr(inMemoryDataset, "_asdict"):

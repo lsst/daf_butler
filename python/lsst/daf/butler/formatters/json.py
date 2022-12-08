@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("JsonFormatter",)
 
+import dataclasses
 import json
 from typing import Any, Optional, Type
 
@@ -122,6 +123,8 @@ class JsonFormatter(FileFormatter):
         except AttributeError:
             pass
 
-        if hasattr(inMemoryDataset, "_asdict"):
+        if dataclasses.is_dataclass(inMemoryDataset):
+            inMemoryDataset = dataclasses.asdict(inMemoryDataset)
+        elif hasattr(inMemoryDataset, "_asdict"):
             inMemoryDataset = inMemoryDataset._asdict()
         return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
