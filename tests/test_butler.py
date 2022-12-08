@@ -2083,23 +2083,6 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Setting id_gen_map should have no effect here
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
-    def testTransferIntToInt(self):
-        with self.assertWarns(FutureWarning):
-            self.create_butlers(
-                "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
-                "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
-            )
-        # int dataset ID only allows UNIQUE
-        self.assertButlerTransfers()
-
-    def testTransferIntToUuid(self):
-        with self.assertWarns(FutureWarning):
-            self.create_butlers(
-                "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
-                "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-            )
-        self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
-
     def testTransferMissing(self):
         """Test transfers where datastore records are missing.
 
