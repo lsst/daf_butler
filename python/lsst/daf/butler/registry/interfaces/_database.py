@@ -41,8 +41,6 @@ import sqlalchemy
 from ...core import SpatialRegionDatabaseRepresentation, TimespanDatabaseRepresentation, ddl, time_utils
 from .._exceptions import ConflictingDefinitionError
 
-_IN_SAVEPOINT_TRANSACTION = "IN_SAVEPOINT_TRANSACTION"
-
 
 def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: List[Dict[str, Any]]) -> None:
     """Test that the definition of a table in a `ddl.TableSpec` and from
@@ -504,26 +502,18 @@ class Database(ABC):
                 "Logic error in transaction nesting: an operation that would "
                 "interrupt the active transaction context has been requested."
             )
-            # We remember whether we are already in a SAVEPOINT transaction via
-            # the connection object's 'info' dict, which is explicitly for user
-            # information like this.  This is safer than a regular `Database`
-            # instance attribute, because it guards against multiple `Database`
-            # instances sharing the same connection.  The need to use our own
-            # flag here to track whether we're in a nested transaction should
-            # go away in SQLAlchemy 1.4, which seems to have a
-            # `Connection.in_nested_transaction()` method.
-            savepoint = savepoint or connection.info.get(_IN_SAVEPOINT_TRANSACTION, False)
-            connection.info[_IN_SAVEPOINT_TRANSACTION] = savepoint
+            savepoint = savepoint or connection.in_nested_transaction()
             trans: sqlalchemy.engine.Transaction
-            if connection.in_transaction() and savepoint:
-                trans = connection.begin_nested()
-            elif not connection.in_transaction():
+            if connection.in_transaction():
+                if savepoint:
+                    trans = connection.begin_nested()
+                else:
+                    # Nested non-savepoint transactions don't do anything.
+                    trans = None
+            else:
                 # Use a regular (non-savepoint) transaction always for the
                 # outermost context.
                 trans = connection.begin()
-            else:
-                # Nested non-savepoint transactions, don't do anything.
-                trans = None
             self._lockTables(connection, lock)
             try:
                 yield
@@ -533,9 +523,6 @@ class Database(ABC):
                 if trans is not None:
                     trans.rollback()
                 raise
-            finally:
-                if not connection.in_transaction():
-                    connection.info.pop(_IN_SAVEPOINT_TRANSACTION, None)
 
     @contextmanager
     def _connection(self) -> Iterator[sqlalchemy.engine.Connection]:
