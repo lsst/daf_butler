@@ -865,6 +865,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     dataset.columns[self._runKeyColumn] != tmp_tags.columns[collFkName],
                 )
             )
+            .limit(1)
         )
         result = self._db.query(query)
         if (row := result.first()) is not None:
@@ -895,6 +896,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     ],
                 )
             )
+            .limit(1)
         )
         result = self._db.query(query)
         if (row := result.first()) is not None:
@@ -927,6 +929,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 )
             )
             .where(tags.columns.dataset_id != tmp_tags.columns.dataset_id)
+            .limit(1)
         )
         result = self._db.query(query)
         if (row := result.first()) is not None:
