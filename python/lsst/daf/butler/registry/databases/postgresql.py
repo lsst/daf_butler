@@ -119,6 +119,27 @@ class PostgresqlDatabase(Database):
     ) -> Iterator[None]:
         with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock):
             assert self._session_connection is not None, "Guaranteed to have a connection in transaction"
+            # pgbouncer with transaction-level pooling (which we aim to
+            # support) says that SET cannot be used, except for a list of
+            # "Startup parameters" that includes "timezone" (see
+            # https://www.pgbouncer.org/features.html#fnref:0).  But I don't
+            # see "timezone" in PostgreSQL's list of parameters passed when
+            # creating a new connection
+            # (https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS).
+            # Given that the pgbouncer docs say, "PgBouncer detects their
+            # changes and so it can guarantee they remain consistent for the
+            # client", I assume we can use "SET TIMESPAN" and pgbouncer will
+            # take care of clients that share connections being set
+            # consistently.  And if that assumption is wrong, we should still
+            # probably be okay, since all clients should be Butler clients, and
+            # they'll all be setting the same thing.
+            #
+            # The "SET TRANSACTION READ ONLY" should also be safe, because it
+            # only ever acts on the current transaction; I think it's not
+            # included in pgbouncer's declaration that SET is incompatible with
+            # transaction-level pooling because PostgreSQL actually considers
+            # SET TRANSACTION to be a fundamentally different statement from
+            # SET (they have their own distinct doc pages, at least).
             if not self.isWriteable():
                 with closing(self._session_connection.connection.cursor()) as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
