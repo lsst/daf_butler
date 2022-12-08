@@ -1753,7 +1753,7 @@ class RegistryTests(ABC):
         # Find some commonSkyPix indices that overlap the large regions but not
         # overlap the small regions.  We use commonSkyPix here to make sure the
         # real tests later involve what's in the database, not just post-query
-        # region filtering.
+        # filtering of regions.
         child_difference_indices = []
         for large, small in zip(child_regions_large, child_regions_small):
             difference = list(unpack_range_set(commonSkyPix.envelope(large) - commonSkyPix.envelope(small)))
@@ -1840,8 +1840,8 @@ class RegistryTests(ABC):
                     )
                 },
             )
-        # Use sync to update the tract region and insert to update the patch
-        # regions, to the "small" suite.
+        # Use sync to update the tract region and insert to update the regions
+        # of the patches, to the "small" suite.
         updated = registry.syncDimensionData(
             "tract",
             {"skymap": skymap_name, "id": 0, "region": parent_region_small},
