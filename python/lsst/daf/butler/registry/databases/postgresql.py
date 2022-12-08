@@ -123,6 +123,7 @@ class PostgresqlDatabase(Database):
             if not self.isWriteable():
                 with closing(self._session_connection.connection.cursor()) as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
+                    cursor.execute("SET TIME ZONE 0")
             else:
                 with closing(self._session_connection.connection.cursor()) as cursor:
                     # Make timestamps UTC, because we didn't use TIMESTAMPZ for
