@@ -284,9 +284,8 @@ class DatabaseTests(ABC):
             table = db1.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
 
     def testTemporaryTables(self):
-        """Tests for `Database.makeTemporaryTable`,
-        `Database.dropTemporaryTable`, and `Database.insert` with
-        the ``select`` argument.
+        """Tests for `Database.temporary_table`, and `Database.insert` with the
+        ``select`` argument.
         """
         # Need to start with the static schema; also insert some test data.
         newDatabase = self.makeEmptyDatabase()
@@ -301,71 +300,64 @@ class DatabaseTests(ABC):
             returnIds=True,
         )
         # Create the table.
-        with newDatabase.session() as session:
-            table1 = session.makeTemporaryTable(TEMPORARY_TABLE_SPEC, "e1")
-            self.checkTable(TEMPORARY_TABLE_SPEC, table1)
-            # Insert via a INSERT INTO ... SELECT query.
-            newDatabase.insert(
-                table1,
-                select=sqlalchemy.sql.select(
-                    static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")
-                )
-                .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
-                .where(
-                    sqlalchemy.sql.and_(
-                        static.a.columns.name == "a1",
-                        static.b.columns.value <= 12,
+        with newDatabase.session():
+            with newDatabase.temporary_table(TEMPORARY_TABLE_SPEC, "e1") as table1:
+                self.checkTable(TEMPORARY_TABLE_SPEC, table1)
+                # Insert via a INSERT INTO ... SELECT query.
+                newDatabase.insert(
+                    table1,
+                    select=sqlalchemy.sql.select(
+                        static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")
                     )
-                ),
-            )
-            # Check that the inserted rows are present.
-            self.assertCountEqual(
-                [{"a_name": "a1", "b_id": bId} for bId in bIds[:2]],
-                [row._asdict() for row in self.query_list(newDatabase, table1.select())],
-            )
-            # Create another one via a read-only connection to the database.
-            # We _do_ allow temporary table modifications in read-only
-            # databases.
+                    .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
+                    .where(
+                        sqlalchemy.sql.and_(
+                            static.a.columns.name == "a1",
+                            static.b.columns.value <= 12,
+                        )
+                    ),
+                )
+                # Check that the inserted rows are present.
+                self.assertCountEqual(
+                    [{"a_name": "a1", "b_id": bId} for bId in bIds[:2]],
+                    [row._asdict() for row in self.query_list(newDatabase, table1.select())],
+                )
+            # Create another one via a read-only connection to the
+            # database.  We _do_ allow temporary table modifications in
+            # read-only databases.
             with self.asReadOnly(newDatabase) as existingReadOnlyDatabase:
                 with existingReadOnlyDatabase.declareStaticTables(create=False) as context:
                     context.addTableTuple(STATIC_TABLE_SPECS)
-                with existingReadOnlyDatabase.session() as session2:
-                    with session2.temporary_table(TEMPORARY_TABLE_SPEC) as table2:
-                        self.checkTable(TEMPORARY_TABLE_SPEC, table2)
-                        # Those tables should not be the same, despite having
-                        # the same ddl.
-                        self.assertIsNot(table1, table2)
-                        # Do a slightly different insert into this table, to
-                        # check that it works in a read-only database.  This
-                        # time we pass column names as a kwarg to insert
-                        # instead of by labeling the columns in the select.
-                        existingReadOnlyDatabase.insert(
-                            table2,
-                            select=sqlalchemy.sql.select(static.a.columns.name, static.b.columns.id)
-                            .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
-                            .where(
-                                sqlalchemy.sql.and_(
-                                    static.a.columns.name == "a2",
-                                    static.b.columns.value >= 12,
-                                )
-                            ),
-                            names=["a_name", "b_id"],
-                        )
-                        # Check that the inserted rows are present.
-                        self.assertCountEqual(
-                            [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
-                            [
-                                row._asdict()
-                                for row in self.query_list(existingReadOnlyDatabase, table2.select())
-                            ],
-                        )
-                        # Exiting the context manager will drop the temporary
-                        # table from the read-only DB.  It's unspecified
-                        # whether attempting to use it after this point is an
-                        # error or just never returns any results, so we can't
-                        # test what it does, only that it's not an error.
-            # Drop the original temporary table.
-            session.dropTemporaryTable(table1)
+                with existingReadOnlyDatabase.temporary_table(TEMPORARY_TABLE_SPEC) as table2:
+                    self.checkTable(TEMPORARY_TABLE_SPEC, table2)
+                    # Those tables should not be the same, despite having
+                    # the same ddl.
+                    self.assertIsNot(table1, table2)
+                    # Do a slightly different insert into this table, to
+                    # check that it works in a read-only database.  This
+                    # time we pass column names as a kwarg to insert
+                    # instead of by labeling the columns in the select.
+                    existingReadOnlyDatabase.insert(
+                        table2,
+                        select=sqlalchemy.sql.select(static.a.columns.name, static.b.columns.id)
+                        .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
+                        .where(
+                            sqlalchemy.sql.and_(
+                                static.a.columns.name == "a2",
+                                static.b.columns.value >= 12,
+                            )
+                        ),
+                        names=["a_name", "b_id"],
+                    )
+                    # Check that the inserted rows are present.
+                    self.assertCountEqual(
+                        [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
+                        [row._asdict() for row in self.query_list(existingReadOnlyDatabase, table2.select())],
+                    )
+            # Exiting the context managers will drop the temporary tables from
+            # the read-only DB.  It's unspecified whether attempting to use it
+            # after this point is an error or just never returns any results,
+            # so we can't test what it does, only that it's not an error.
 
     def testSchemaSeparation(self):
         """Test that creating two different `Database` instances allows us

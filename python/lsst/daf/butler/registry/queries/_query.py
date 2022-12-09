@@ -897,8 +897,7 @@ class DirectQuery(Query):
     def materialize(self, db: Database) -> Iterator[Query]:
         # Docstring inherited from Query.
         spec = self._makeTableSpec()
-        with db.session() as session:
-            table = session.makeTemporaryTable(spec)
+        with db.temporary_table(spec) as table:
             if not self._doomed_by:
                 db.insert(table, select=self.sql, names=spec.fields.names)
             yield MaterializedQuery(
@@ -911,7 +910,6 @@ class DirectQuery(Query):
                 managers=self.managers,
                 doomed_by=self._doomed_by,
             )
-            session.dropTemporaryTable(table)
 
     def subset(
         self, *, graph: Optional[DimensionGraph] = None, datasets: bool = True, unique: bool = False
