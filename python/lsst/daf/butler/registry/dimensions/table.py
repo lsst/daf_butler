@@ -185,11 +185,12 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 message="SELECT statement has a cartesian product",
                 category=sqlalchemy.exc.SAWarning,
             )
-            for row in self._db.query(query.combine()):
-                values = row._asdict()
-                if self.element.temporal is not None:
-                    values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
-                yield RecordClass(**values)
+            with self._db.query(query.combine()) as sql_result:
+                for row in sql_result:
+                    values = row._asdict()
+                    if self.element.temporal is not None:
+                        values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
+                    yield RecordClass(**values)
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -367,7 +368,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 )
             )
         )
-        bad_summary_rows = self._db.query(check_sql).fetchall()
+        with self._db.query(check_sql) as sql_result:
+            bad_summary_rows = sql_result.fetchall()
         if bad_summary_rows:
             bad_skypix_names = [f"{row.skypix_system}{row.skypix.level}" for row in bad_summary_rows]
             raise RuntimeError(
