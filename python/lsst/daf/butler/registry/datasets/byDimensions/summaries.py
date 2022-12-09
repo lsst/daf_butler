@@ -282,8 +282,10 @@ class CollectionSummaryManager:
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
         # with no datasets.
-        summaries: Dict[Any, CollectionSummary] = {}
-        for row in self._db.query(sql).mappings():
+        summaries: dict[Any, CollectionSummary] = {}
+        with self._db.query(sql) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        for row in sql_rows:
             # Collection key should never be None/NULL; it's what we join on.
             # Extract that and then turn it into a collection name.
             collectionKey = row[self._collectionKeyName]

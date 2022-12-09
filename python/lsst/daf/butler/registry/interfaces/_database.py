@@ -1670,14 +1670,15 @@ class Database(ABC):
         with self._connection() as connection:
             return connection.execute(sql, rows).rowcount
 
+    @contextmanager
     def query(
-        self, sql: sqlalchemy.sql.Selectable, *args: Any, **kwargs: Any
-    ) -> sqlalchemy.engine.ResultProxy:
+        self, sql: sqlalchemy.sql.expression.SelectBase, *args: Any, **kwargs: Any
+    ) -> Iterator[sqlalchemy.engine.CursorResult]:
         """Run a SELECT query against the database.
 
         Parameters
         ----------
-        sql : `sqlalchemy.sql.Selectable`
+        sql : `sqlalchemy.sql.expression.SelectBase`
             A SQLAlchemy representation of a ``SELECT`` query.
         *args
             Additional positional arguments are forwarded to
@@ -1688,28 +1689,20 @@ class Database(ABC):
 
         Returns
         -------
-        result : `sqlalchemy.engine.ResultProxy`
-            Query results.
-
-        Notes
-        -----
-        The default implementation should be sufficient for most derived
-        classes.
+        result_context : `sqlalchemy.engine.CursorResults`
+            Context manager that returns the query result object when entered.
+            These results are invalidated when the context is exited.
         """
-        # We are returning a Result object so we need to take care of
-        # connection lifetime. If this is happening in transaction context
-        # then just use existing connection, otherwise make a special
-        # connection which will be closed when result is closed.
-        #
-        # TODO: May be better approach would be to make this method return a
-        # context manager, but this means big changes for callers of this
-        # method.
-        if self._session_connection is not None:
-            connection = self._session_connection
+        if self._session_connection is None:
+            connection = self._engine.connect()
         else:
-            connection = self._engine.connect(close_with_result=True)
-        # TODO: should we guard against non-SELECT queries here?
-        return connection.execute(sql, *args, **kwargs)
+            connection = self._session_connection
+        result = connection.execute(sql, *args, **kwargs)
+        try:
+            yield result
+        finally:
+            if connection is not self._session_connection:
+                connection.close()
 
     origin: int
     """An integer ID that should be used as the default for any datasets,

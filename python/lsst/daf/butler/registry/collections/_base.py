@@ -283,9 +283,10 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
             .where(self._table.columns.parent == self.key)
             .order_by(self._table.columns.position)
         )
-        return CollectionSearch.fromExpression(
-            [manager[row._mapping[self._table.columns.child]].name for row in self._db.query(sql)]
-        )
+        with self._db.query(sql) as sql_result:
+            return CollectionSearch.fromExpression(
+                tuple(manager[row[self._table.columns.child]].name for row in sql_result.mappings())
+            )
 
 
 K = TypeVar("K")
@@ -340,7 +341,9 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         records = []
         chains = []
         TimespanReprClass = self._db.getTimespanRepresentation()
-        for row in self._db.query(sql).mappings():
+        with self._db.query(sql) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        for row in sql_rows:
             collection_id = row[self._tables.collection.columns[self._collectionIdName]]
             name = row[self._tables.collection.columns.name]
             type = CollectionType(row["type"])
@@ -465,7 +468,8 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
             .select_from(self._tables.collection)
             .where(self._tables.collection.columns[self._collectionIdName] == key)
         )
-        return self._db.query(sql).scalar()
+        with self._db.query(sql) as sql_result:
+            return sql_result.scalar()
 
     def setDocumentation(self, key: Any, doc: Optional[str]) -> None:
         # Docstring inherited from CollectionManager.

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import itertools
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import sqlalchemy
 
@@ -299,8 +299,10 @@ class _DimensionGraphStorage:
         This should be done automatically whenever needed, but it can also
         be called explicitly.
         """
-        dimensionNamesByKey: Dict[int, Set[str]] = defaultdict(set)
-        for row in self._db.query(self._definitionTable.select()).mappings():
+        dimensionNamesByKey: dict[int, set[str]] = defaultdict(set)
+        with self._db.query(self._definitionTable.select()) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        for row in sql_rows:
             key = row[self._definitionTable.columns.dimension_graph_id]
             dimensionNamesByKey[key].add(row[self._definitionTable.columns.dimension_name])
         keysByGraph: Dict[DimensionGraph, int] = {self._universe.empty: 0}

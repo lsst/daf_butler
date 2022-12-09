@@ -91,9 +91,11 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         sql = sqlalchemy.sql.select(
             *[self._table.columns[name] for name in RecordClass.fields.standard.names]
         ).select_from(self._table)
-        cache: Dict[str, DimensionRecord] = {}
-        for row in self._db.query(sql):
-            record = RecordClass(**row._asdict())
+        cache: dict[str, DimensionRecord] = {}
+        with self._db.query(sql) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        for row in sql_rows:
+            record = RecordClass(**row)
             cache[getattr(record, self._dimension.primaryKey.name)] = record
         self._cache = cache
 

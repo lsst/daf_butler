@@ -1179,7 +1179,9 @@ class SqlRegistry(Registry):
             flattenChains=flattenChains,
         ):
             query = storage.select(collectionRecord)
-            for row in self._db.query(query).mappings():
+            with self._db.query(query) as sql_result:
+                sql_mappings = sql_result.mappings().fetchall()
+            for row in sql_mappings:
                 dataId = DataCoordinate.fromRequiredValues(
                     storage.datasetType.dimensions,
                     tuple(row[name] for name in storage.datasetType.dimensions.required.names),
