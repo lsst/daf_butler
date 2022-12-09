@@ -37,3 +37,12 @@ StructuredCompositeReadComp: lsst.daf.butler.tests.testFormatters.MetricsExample
 StructuredCompositeReadCompNoDisassembly: lsst.daf.butler.tests.testFormatters.MetricsExampleFormatter
 StructuredDataDataTest: lsst.daf.butler.tests.testFormatters.MetricsExampleDataFormatter
 StructuredDataNoComponentsModel: lsst.daf.butler.formatters.json.JsonFormatter
+DictConvertibleModel: lsst.daf.butler.formatters.json.JsonFormatter
+MetricsExampleA: lsst.daf.butler.formatters.json.JsonFormatter
+MetricsExampleB: lsst.daf.butler.formatters.yaml.YamlFormatter
+MetricsExampleDataclassA: lsst.daf.butler.formatters.json.JsonFormatter
+MetricsExampleDataclassB: lsst.daf.butler.formatters.yaml.YamlFormatter
+MetricsExampleModelA: lsst.daf.butler.formatters.json.JsonFormatter
+MetricsExampleModelB: lsst.daf.butler.formatters.yaml.YamlFormatter
+TupleExampleA: lsst.daf.butler.formatters.json.JsonFormatter
+TupleExampleB: lsst.daf.butler.formatters.yaml.YamlFormatter

@@ -113,3 +113,33 @@ storageClasses:
       data: StructuredDataDataTestTuple
     converters:
       lsst.daf.butler.tests.MetricsExample: lsst.daf.butler.tests.MetricsExampleModel.from_metrics
+  DictConvertibleModel:
+    # Special storage class to test Pydantic model conversions to/from dict,
+    # when that's also what the formatter returns natively.
+    pytype: lsst.daf.butler.tests.dict_convertible_model.DictConvertibleModel
+    converters:
+      dict: lsst.daf.butler.tests.dict_convertible_model.DictConvertibleModel.from_dict
+  NativeDictForConvertibleModel:
+    # Variant of StructuredDataDict for tests with DictConvertibleModel, to
+    # avoid disruption from unexpected conversions in other storage classes.
+    pytype: dict
+    converters:
+      lsst.daf.butler.tests.dict_convertible_model.DictConvertibleModel: lsst.daf.butler.tests.dict_convertible_model.DictConvertibleModel.to_dict
+  # Simple storage classes that can be used for testing with JSON and
+  # YAML serialization. Need two storage classes for each python type.
+  MetricsExampleA:
+    pytype: lsst.daf.butler.tests.MetricsExample
+  MetricsExampleB:
+    pytype: lsst.daf.butler.tests.MetricsExample
+  MetricsExampleDataclassA:
+    pytype: lsst.daf.butler.tests.MetricsExampleDataclass
+  MetricsExampleDataclassB:
+    pytype: lsst.daf.butler.tests.MetricsExampleDataclass
+  MetricsExampleModelA:
+    pytype: lsst.daf.butler.tests.MetricsExampleModel
+  MetricsExampleModelB:
+    pytype: lsst.daf.butler.tests.MetricsExampleModel
+  TupleExampleA:
+    pytype: tuple
+  TupleExampleB:
+    pytype: tuple
