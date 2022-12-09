@@ -186,7 +186,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 category=sqlalchemy.exc.SAWarning,
             )
             with self._db.query(query.combine()) as sql_result:
-                for row in sql_result:
+                for row in sql_result.fetchall():
                     values = row._asdict()
                     if self.element.temporal is not None:
                         values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)

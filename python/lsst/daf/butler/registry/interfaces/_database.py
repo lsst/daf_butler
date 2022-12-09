@@ -25,7 +25,6 @@ __all__ = [
     "ReadOnlyDatabaseError",
     "DatabaseConflictError",
     "SchemaAlreadyDefinedError",
-    "Session",
     "StaticTablesContext",
 ]
 
@@ -162,135 +161,6 @@ class StaticTablesContext:
         self._initializers.append(initializer)
 
 
-class Session:
-    """Class representing a persistent connection to a database.
-
-    Parameters
-    ----------
-    db : `Database`
-        Database instance.
-
-    Notes
-    -----
-    Instances of Session class should not be created by client code;
-    `Database.session` should be used to create context for a session::
-
-        with db.session() as session:
-            session.method()
-            db.method()
-
-    In the current implementation sessions can be nested and transactions can
-    be nested within a session. All nested sessions and transaction share the
-    same database connection.
-
-    Session class represents a limited subset of database API that requires
-    persistent connection to a database (e.g. temporary tables which have
-    lifetime of a session). Potentially most of the database API could be
-    associated with a Session class.
-    """
-
-    def __init__(self, db: Database):
-        self._db = db
-
-    def makeTemporaryTable(self, spec: ddl.TableSpec, name: Optional[str] = None) -> sqlalchemy.schema.Table:
-        """Create a temporary table.
-
-        Parameters
-        ----------
-        spec : `TableSpec`
-            Specification for the table.
-        name : `str`, optional
-            A unique (within this session/connetion) name for the table.
-            Subclasses may override to modify the actual name used.  If not
-            provided, a unique name will be generated.
-
-        Returns
-        -------
-        table : `sqlalchemy.schema.Table`
-            SQLAlchemy representation of the table.
-
-        Notes
-        -----
-        Temporary tables may be created, dropped, and written to even in
-        read-only databases - at least according to the Python-level
-        protections in the `Database` classes.  Server permissions may say
-        otherwise, but in that case they probably need to be modified to
-        support the full range of expected read-only butler behavior.
-
-        Temporary table rows are guaranteed to be dropped when a connection is
-        closed.  `Database` implementations are permitted to allow the table to
-        remain as long as this is transparent to the user (i.e. "creating" the
-        temporary table in a new session should not be an error, even if it
-        does nothing).
-
-        It may not be possible to use temporary tables within transactions with
-        some database engines (or configurations thereof).
-        """
-        if name is None:
-            name = f"tmp_{uuid.uuid4().hex}"
-        metadata = self._db._metadata
-        if metadata is None:
-            raise RuntimeError("Cannot create temporary table before static schema is defined.")
-        table = self._db._convertTableSpec(
-            name, spec, metadata, prefixes=["TEMPORARY"], schema=sqlalchemy.schema.BLANK_SCHEMA
-        )
-        if table.key in self._db._tempTables:
-            if table.key != name:
-                raise ValueError(
-                    f"A temporary table with name {name} (transformed to {table.key} by "
-                    f"Database) already exists."
-                )
-        for foreignKeySpec in spec.foreignKeys:
-            table.append_constraint(self._db._convertForeignKeySpec(name, foreignKeySpec, metadata))
-        with self._db._connection() as connection:
-            table.create(connection)
-        self._db._tempTables.add(table.key)
-        return table
-
-    def dropTemporaryTable(self, table: sqlalchemy.schema.Table) -> None:
-        """Drop a temporary table.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.schema.Table`
-            A SQLAlchemy object returned by a previous call to
-            `makeTemporaryTable`.
-        """
-        if table.key in self._db._tempTables:
-            with self._db._connection() as connection:
-                table.drop(connection)
-            self._db._tempTables.remove(table.key)
-        else:
-            raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
-
-    @contextmanager
-    def temporary_table(
-        self, spec: ddl.TableSpec, name: Optional[str] = None
-    ) -> Iterator[sqlalchemy.schema.Table]:
-        """Return a context manager that creates and then drops a context
-        manager.
-
-        Parameters
-        ----------
-        spec : `ddl.TableSpec`
-            Specification for the columns.  Unique and foreign key constraints
-            may be ignored.
-        name : `str`, optional
-            If provided, the name of the SQL construct.  If not provided, an
-            opaque but unique identifier is generated.
-
-        Returns
-        -------
-        table : `sqlalchemy.schema.Table`
-            SQLAlchemy representation of the table.
-        """
-        table = self.makeTemporaryTable(spec=spec, name=name)
-        try:
-            yield table
-        finally:
-            self.dropTemporaryTable(table)
-
-
 class Database(ABC):
     """An abstract interface that represents a particular database engine's
     representation of a single schema/namespace/database.
@@ -342,7 +212,7 @@ class Database(ABC):
         self._engine = engine
         self._session_connection: Optional[sqlalchemy.engine.Connection] = None
         self._metadata: Optional[sqlalchemy.schema.MetaData] = None
-        self._tempTables: Set[str] = set()
+        self._temp_tables: Set[str] = set()
 
     def __repr__(self) -> str:
         # Rather than try to reproduce all the parameters used to create
@@ -464,24 +334,24 @@ class Database(ABC):
         raise NotImplementedError()
 
     @contextmanager
-    def session(self) -> Iterator:
+    def session(self) -> Iterator[None]:
         """Return a context manager that represents a session (persistent
         connection to a database).
         """
         if self._session_connection is not None:
             # session already started, just reuse that
-            yield Session(self)
+            yield
         else:
             try:
                 # open new connection and close it when done
                 self._session_connection = self._engine.connect()
-                yield Session(self)
+                yield
             finally:
                 if self._session_connection is not None:
                     self._session_connection.close()
                     self._session_connection = None
                 # Temporary tables only live within session
-                self._tempTables = set()
+                self._temp_tables = set()
 
     @contextmanager
     def transaction(
@@ -490,7 +360,8 @@ class Database(ABC):
         interrupting: bool = False,
         savepoint: bool = False,
         lock: Iterable[sqlalchemy.schema.Table] = (),
-    ) -> Iterator:
+        for_temp_tables: bool = False,
+    ) -> Iterator[bool]:
         """Return a context manager that represents a transaction.
 
         Parameters
@@ -516,6 +387,20 @@ class Database(ABC):
             this transaction (only) to acquire the same locks (others should
             block), but only prevent concurrent reads if the database engine
             requires that in order to block concurrent writes.
+        for_temp_tables : `bool`, optional
+            If `True`, this transaction may involve creating temporary tables.
+
+        Returns
+        -------
+        context : `AbstractContextManager` [ `bool` ]
+            A context manager that commits the transaction when it is exited
+            without error and rolls back the transactoin when it is exited via
+            an exception.  Entering the context manager returns a `bool` that
+            indicates whether a new full transaction was actually created
+            (`True`) or if one already existed (`False`).  If `False`, the exit
+            behavior is to do nothing, allowing the outer transaction context
+            to perform it, unless ``savepoint=True``, in which case only the
+            save point is committed or rolled back.
 
         Notes
         -----
@@ -527,13 +412,14 @@ class Database(ABC):
         with self.session():
             assert self._session_connection is not None
             connection = self._session_connection
-            assert not (interrupting and connection.in_transaction()), (
+            already_in_transaction = connection.in_transaction()
+            assert not (interrupting and already_in_transaction), (
                 "Logic error in transaction nesting: an operation that would "
                 "interrupt the active transaction context has been requested."
             )
             savepoint = savepoint or connection.in_nested_transaction()
             trans: sqlalchemy.engine.Transaction
-            if connection.in_transaction():
+            if already_in_transaction:
                 if savepoint:
                     trans = connection.begin_nested()
                 else:
@@ -545,7 +431,7 @@ class Database(ABC):
                 trans = connection.begin()
             self._lockTables(connection, lock)
             try:
-                yield
+                yield not already_in_transaction
                 if trans is not None:
                     trans.commit()
             except BaseException:
@@ -554,21 +440,56 @@ class Database(ABC):
                 raise
 
     @contextmanager
-    def _connection(self) -> Iterator[sqlalchemy.engine.Connection]:
-        """Return context manager for Connection."""
-        if self._session_connection is not None:
-            # It means that we are in Session context, but we may not be in
-            # transaction context. Start a short transaction in that case.
-            if self._session_connection.in_transaction():
-                yield self._session_connection
-            else:
-                with self._session_connection.begin():
-                    yield self._session_connection
-        else:
-            # Make new connection and transaction, transaction will be
-            # committed on context exit.
-            with self._engine.begin() as connection:
-                yield connection
+    def temporary_table(
+        self, spec: ddl.TableSpec, name: Optional[str] = None
+    ) -> Iterator[sqlalchemy.schema.Table]:
+        """Return a context manager that creates and then drops a temporary
+        table.
+
+        Parameters
+        ----------
+        spec : `ddl.TableSpec`
+            Specification for the columns.  Unique and foreign key constraints
+            may be ignored.
+        name : `str`, optional
+            If provided, the name of the SQL construct.  If not provided, an
+            opaque but unique identifier is generated.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy representation of the table.
+
+        Notes
+        -----
+        Temporary tables may be created, dropped, and written to even in
+        read-only databases - at least according to the Python-level
+        protections in the `Database` classes.  Server permissions may say
+        otherwise, but in that case they probably need to be modified to
+        support the full range of expected read-only butler behavior.
+        """
+        with self._transaction_connection(for_temp_tables=True) as connection:
+            table = self._make_temporary_table(connection, spec=spec, name=name)
+            self._temp_tables.add(table.key)
+            try:
+                yield table
+            finally:
+                table.drop(connection)
+                self._temp_tables.remove(table.key)
+
+    @contextmanager
+    def _transaction_connection(
+        self, for_temp_tables: bool = False
+    ) -> Iterator[sqlalchemy.engine.Connection]:
+        """Return context manager for a connection that guarantees that a
+        transaction is active.
+
+        This is a thin wrapper around the public `transaction` method for
+        internal use; it just returns the protected connection object as well.
+        """
+        with self.transaction(for_temp_tables=for_temp_tables):
+            assert self._session_connection is not None, "Guaranteed by transaction()."
+            yield self._session_connection
 
     @abstractmethod
     def _lockTables(
@@ -607,7 +528,7 @@ class Database(ABC):
         writeable : `bool`
             Whether this table is writeable.
         """
-        return self.isWriteable() or table.key in self._tempTables
+        return self.isWriteable() or table.key in self._temp_tables
 
     def assertTableWriteable(self, table: sqlalchemy.schema.Table, msg: str) -> None:
         """Raise if the given table is not writeable, either because the
@@ -679,7 +600,7 @@ class Database(ABC):
             if create:
                 if self.namespace is not None:
                     if self.namespace not in context._inspector.get_schema_names():
-                        with self._connection() as connection:
+                        with self._transaction_connection() as connection:
                             connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
                 # In our tables we have columns that make use of sqlalchemy
                 # Sequence objects. There is currently a bug in sqlalchemy that
@@ -1038,7 +959,7 @@ class Database(ABC):
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
         try:
-            with self._connection() as connection:
+            with self._transaction_connection() as connection:
                 table.create(connection)
         except sqlalchemy.exc.DatabaseError:
             # Some other process could have created the table meanwhile, which
@@ -1101,6 +1022,55 @@ class Database(ABC):
                 for foreignKeySpec in spec.foreignKeys:
                     table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
                 return table
+        return table
+
+    def _make_temporary_table(
+        self,
+        connection: sqlalchemy.engine.Connection,
+        spec: ddl.TableSpec,
+        name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> sqlalchemy.schema.Table:
+        """Create a temporary table.
+
+        Parameters
+        ----------
+        connection : `sqlalchemy.engine.Connection`
+            Connection to use when creating the table.
+        spec : `TableSpec`
+            Specification for the table.
+        name : `str`, optional
+            A unique (within this session/connetion) name for the table.
+            Subclasses may override to modify the actual name used.  If not
+            provided, a unique name will be generated.
+        **kwargs
+            Additional keyword arguments to forward to the
+            `sqlalchemy.schema.Table` constructor.  This is provided to make it
+            easier for derived classes to delegate to ``super()`` while making
+            only minor changes.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy representation of the table.
+        """
+        if name is None:
+            name = f"tmp_{uuid.uuid4().hex}"
+        metadata = self._metadata
+        if metadata is None:
+            raise RuntimeError("Cannot create temporary table before static schema is defined.")
+        table = self._convertTableSpec(
+            name, spec, metadata, prefixes=["TEMPORARY"], schema=sqlalchemy.schema.BLANK_SCHEMA, **kwargs
+        )
+        if table.key in self._temp_tables:
+            if table.key != name:
+                raise ValueError(
+                    f"A temporary table with name {name} (transformed to {table.key} by "
+                    f"Database) already exists."
+                )
+        for foreignKeySpec in spec.foreignKeys:
+            table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, metadata))
+        table.create(connection)
         return table
 
     @classmethod
@@ -1237,7 +1207,7 @@ class Database(ABC):
                 .select_from(table)
                 .where(sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()]))
             )
-            with self._connection() as connection:
+            with self._transaction_connection() as connection:
                 fetched = list(connection.execute(selectSql).mappings())
             if len(fetched) != 1:
                 return len(fetched), None, None
@@ -1309,7 +1279,7 @@ class Database(ABC):
                             "daf_butler."
                         )
                     elif update:
-                        with self._connection() as connection:
+                        with self._transaction_connection() as connection:
                             connection.execute(
                                 table.update()
                                 .where(sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()]))
@@ -1405,7 +1375,7 @@ class Database(ABC):
                 return []
             else:
                 return None
-        with self._connection() as connection:
+        with self._transaction_connection() as connection:
             if not returnIds:
                 if select is not None:
                     if names is None:
@@ -1562,7 +1532,7 @@ class Database(ABC):
             whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
             if whereTerms:
                 sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-            with self._connection() as connection:
+            with self._transaction_connection() as connection:
                 return connection.execute(sql, rows).rowcount
         else:
             # One of the columns has changing values but any others are
@@ -1587,7 +1557,7 @@ class Database(ABC):
             rowcount = 0
             iposn = 0
             n_per_loop = 1_000  # Controls how many items to put in IN clause
-            with self._connection() as connection:
+            with self._transaction_connection() as connection:
                 for iposn in range(0, n_elements, n_per_loop):
                     endpos = iposn + n_per_loop
                     in_clause = table.columns[name].in_(in_content[iposn:endpos])
@@ -1629,7 +1599,7 @@ class Database(ABC):
         self.assertTableWriteable(table, f"Cannot delete from read-only table {table}.")
 
         sql = table.delete().where(where)
-        with self._connection() as connection:
+        with self._transaction_connection() as connection:
             return connection.execute(sql).rowcount
 
     def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
@@ -1675,7 +1645,7 @@ class Database(ABC):
         sql = table.update().where(
             sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(v) for k, v in where.items()])
         )
-        with self._connection() as connection:
+        with self._transaction_connection() as connection:
             return connection.execute(sql, rows).rowcount
 
     @contextmanager
