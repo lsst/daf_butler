@@ -162,7 +162,8 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         db.insert(tbl, *rows)
 
         # Test basic round-trip through database.
-        self.assertEqual(rows, [row._asdict() for row in db.query(tbl.select().order_by(tbl.columns.id))])
+        with db.query(tbl.select().order_by(tbl.columns.id)) as sql_result:
+            self.assertEqual(rows, [row._asdict() for row in sql_result])
 
         # Test that Timespan's Python methods are consistent with our usage of
         # half-open ranges and PostgreSQL operators on ranges.
@@ -194,10 +195,10 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
             warnings.filterwarnings(
                 "ignore", message=".*cartesian product", category=sqlalchemy.exc.SAWarning
             )
-            dbResults = {
-                (row[columns.n1], row[columns.n2]): row[columns.overlaps]
-                for row in db.query(query).mappings()
-            }
+            with db.query(query) as sql_result:
+                dbResults = {
+                    (row[columns.n1], row[columns.n2]): row[columns.overlaps] for row in sql_result.mappings()
+                }
 
         pyResults = {
             (n1, n2): t1.overlaps(t2)

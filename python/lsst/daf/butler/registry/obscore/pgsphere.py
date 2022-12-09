@@ -132,13 +132,13 @@ class PgSphereObsCorePlugin(SpatialObsCorePlugin):
         if db.dialect.name != "postgresql":
             raise RuntimeError("PgSphere spatial plugin for obscore requires PostgreSQL database.")
         query = "SELECT COUNT(*) FROM pg_extension WHERE extname='pg_sphere'"
-        result = db.query(sqlalchemy.sql.text(query))
-        if result.scalar() == 0:
-            raise RuntimeError(
-                "PgSphere spatial plugin for obscore requires the pgSphere extension. "
-                "Please run `CREATE EXTENSION pg_sphere;` on a database containing obscore table "
-                "from a PostgreSQL superuser account."
-            )
+        with db.query(sqlalchemy.sql.text(query)) as result:
+            if result.scalar() == 0:
+                raise RuntimeError(
+                    "PgSphere spatial plugin for obscore requires the pgSphere extension. "
+                    "Please run `CREATE EXTENSION pg_sphere;` on a database containing obscore table "
+                    "from a PostgreSQL superuser account."
+                )
 
         return cls(name=name, config=config)
 

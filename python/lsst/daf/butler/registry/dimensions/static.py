@@ -299,7 +299,9 @@ class _DimensionGraphStorage:
         be called explicitly.
         """
         dimensionNamesByKey: dict[int, set[str]] = defaultdict(set)
-        for row in self._db.query(self._definitionTable.select()).mappings():
+        with self._db.query(self._definitionTable.select()) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        for row in sql_rows:
             key = row[self._definitionTable.columns.dimension_graph_id]
             dimensionNamesByKey[key].add(row[self._definitionTable.columns.dimension_name])
         keysByGraph: dict[DimensionGraph, int] = {self._universe.empty: 0}

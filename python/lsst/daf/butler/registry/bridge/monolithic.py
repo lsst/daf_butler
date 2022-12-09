@@ -186,7 +186,9 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                 )
             )
         )
-        for row in self._db.query(sql).fetchall():
+        with self._db.query(sql) as sql_result:
+            sql_rows = sql_result.fetchall()
+        for row in sql_rows:
             yield byId[row.dataset_id]
 
     @contextmanager
@@ -234,9 +236,8 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
-        rows = [
-            dict(**row, datastore_name=self.datastoreName) for row in self._db.query(info_in_trash).mappings()
-        ]
+        with self._db.query(info_in_trash) as sql_result:
+            rows = [dict(**row, datastore_name=self.datastoreName) for row in sql_result.mappings()]
 
         # It is possible for trashed refs to be linked to artifacts that
         # are still associated with refs that are not to be trashed. We
@@ -265,7 +266,8 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                     == items_not_in_trash.columns[record_column],
                 )
             )
-            preserved = {row[record_column] for row in self._db.query(items_to_preserve).mappings()}
+            with self._db.query(items_to_preserve) as sql_result:
+                preserved = {row[record_column] for row in sql_result.mappings()}
 
         # Convert results to a tuple of id+info and a record of the artifacts
         # that should not be deleted from datastore. The id+info tuple is
@@ -361,7 +363,9 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
             .select_from(self._tables.dataset_location)
             .where(self._tables.dataset_location.columns.dataset_id == ref.getCheckedId())
         )
-        for row in self._db.query(sql).mappings():
+        with self._db.query(sql) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        for row in sql_rows:
             yield row[self._tables.dataset_location.columns.datastore_name]
         for name, bridge in self._ephemeral.items():
             if ref in bridge:

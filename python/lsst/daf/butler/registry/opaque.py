@@ -111,13 +111,13 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         sql = self._table.select()
         if where:
             # Split long IN clauses into shorter batches
-            for clause in _batch_in_clauses(**where):
-                sql_where = sql.where(clause)
-                for row in self._db.query(sql_where):
-                    yield row._asdict()
+            batched_sql = [sql.where(clause) for clause in _batch_in_clauses(**where)]
         else:
-            for row in self._db.query(sql):
-                yield row._asdict()
+            batched_sql = [sql]
+        for sql_batch in batched_sql:
+            with self._db.query(sql_batch) as sql_result:
+                sql_mappings = sql_result.mappings().fetchall()
+            yield from sql_mappings
 
     def delete(self, columns: Iterable[str], *rows: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.
