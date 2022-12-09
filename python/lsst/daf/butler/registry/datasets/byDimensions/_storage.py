@@ -779,26 +779,19 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 )
             dataIds[datasetId] = dataset.dataId
 
-        with self._db.session() as session:
-
-            # insert all new rows into a temporary table
-            tableSpec = makeTagTableSpec(
-                self.datasetType, type(self._collections), ddl.GUID, constraints=False
-            )
-            tmp_tags = session.makeTemporaryTable(tableSpec)
-
-            collFkName = self._collections.getCollectionForeignKeyName()
-            protoTagsRow = {
-                "dataset_type_id": self._dataset_type_id,
-                collFkName: run.key,
-            }
-            tmpRows = [
-                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
-                for dataset_id, dataId in dataIds.items()
-            ]
-
-            with self._db.transaction():
-
+        # We'll insert all new rows into a temporary table
+        tableSpec = makeTagTableSpec(self.datasetType, type(self._collections), ddl.GUID, constraints=False)
+        collFkName = self._collections.getCollectionForeignKeyName()
+        protoTagsRow = {
+            "dataset_type_id": self._dataset_type_id,
+            collFkName: run.key,
+        }
+        tmpRows = [
+            dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
+            for dataset_id, dataId in dataIds.items()
+        ]
+        with self._db.transaction(for_temp_tables=True):
+            with self._db.temporary_table(tableSpec) as tmp_tags:
                 # store all incoming data in a temporary table
                 self._db.insert(tmp_tags, *tmpRows)
 
@@ -831,14 +824,14 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 # Copy it into tags table.
                 self._db.insert(self._tags, select=tmp_tags.select())
 
-                # Return refs in the same order as in the input list.
-                for dataset_id, dataId in dataIds.items():
-                    yield DatasetRef(
-                        datasetType=self.datasetType,
-                        id=dataset_id,
-                        dataId=dataId,
-                        run=run.name,
-                    )
+        # Return refs in the same order as in the input list.
+        for dataset_id, dataId in dataIds.items():
+            yield DatasetRef(
+                datasetType=self.datasetType,
+                id=dataset_id,
+                dataId=dataId,
+                run=run.name,
+            )
 
     def _validateImport(self, tmp_tags: sqlalchemy.schema.Table, run: RunRecord) -> None:
         """Validate imported refs against existing datasets.

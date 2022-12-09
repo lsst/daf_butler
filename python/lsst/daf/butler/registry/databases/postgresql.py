@@ -117,41 +117,48 @@ class PostgresqlDatabase(Database):
         interrupting: bool = False,
         savepoint: bool = False,
         lock: Iterable[sqlalchemy.schema.Table] = (),
-    ) -> Iterator[None]:
-        with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock):
-            assert self._session_connection is not None, "Guaranteed to have a connection in transaction"
-            # pgbouncer with transaction-level pooling (which we aim to
-            # support) says that SET cannot be used, except for a list of
-            # "Startup parameters" that includes "timezone" (see
-            # https://www.pgbouncer.org/features.html#fnref:0).  But I don't
-            # see "timezone" in PostgreSQL's list of parameters passed when
-            # creating a new connection
-            # (https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS).
-            # Given that the pgbouncer docs say, "PgBouncer detects their
-            # changes and so it can guarantee they remain consistent for the
-            # client", I assume we can use "SET TIMESPAN" and pgbouncer will
-            # take care of clients that share connections being set
-            # consistently.  And if that assumption is wrong, we should still
-            # probably be okay, since all clients should be Butler clients, and
-            # they'll all be setting the same thing.
-            #
-            # The "SET TRANSACTION READ ONLY" should also be safe, because it
-            # only ever acts on the current transaction; I think it's not
-            # included in pgbouncer's declaration that SET is incompatible with
-            # transaction-level pooling because PostgreSQL actually considers
-            # SET TRANSACTION to be a fundamentally different statement from
-            # SET (they have their own distinct doc pages, at least).
-            if not self.isWriteable():
-                with closing(self._session_connection.connection.cursor()) as cursor:
-                    cursor.execute("SET TRANSACTION READ ONLY")
-                    cursor.execute("SET TIME ZONE 0")
-            else:
-                with closing(self._session_connection.connection.cursor()) as cursor:
-                    # Make timestamps UTC, because we didn't use TIMESTAMPZ for
-                    # the column type.  When we can tolerate a schema change,
-                    # we should change that type and remove this line.
-                    cursor.execute("SET TIME ZONE 0")
-            yield
+        for_temp_tables: bool = False,
+    ) -> Iterator[bool]:
+        with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock) as is_new:
+            if is_new:
+                assert self._session_connection is not None, "Guaranteed to have a connection in transaction"
+                # pgbouncer with transaction-level pooling (which we aim to
+                # support) says that SET cannot be used, except for a list of
+                # "Startup parameters" that includes "timezone" (see
+                # https://www.pgbouncer.org/features.html#fnref:0).  But I
+                # don't see "timezone" in PostgreSQL's list of parameters
+                # passed when creating a new connection
+                # (https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS).
+                # Given that the pgbouncer docs say, "PgBouncer detects their
+                # changes and so it can guarantee they remain consistent for
+                # the client", I assume we can use "SET TIMESPAN" and pgbouncer
+                # will take care of clients that share connections being set
+                # consistently.  And if that assumption is wrong, we should
+                # still probably be okay, since all clients should be Butler
+                # clients, and they'll all be setting the same thing.
+                #
+                # The "SET TRANSACTION READ ONLY" should also be safe, because
+                # it only ever acts on the current transaction; I think it's
+                # not included in pgbouncer's declaration that SET is
+                # incompatible with transaction-level pooling because
+                # PostgreSQL actually considers SET TRANSACTION to be a
+                # fundamentally different statement from SET (they have their
+                # own distinct doc pages, at least).
+                if not (self.isWriteable() or for_temp_tables):
+                    # PostgreSQL permits writing to temporary tables inside
+                    # read-only transactions, but it doesn't permit creating
+                    # them.
+                    with closing(self._session_connection.connection.cursor()) as cursor:
+                        cursor.execute("SET TRANSACTION READ ONLY")
+                        cursor.execute("SET TIME ZONE 0")
+                else:
+                    with closing(self._session_connection.connection.cursor()) as cursor:
+                        # Make timestamps UTC, because we didn't use TIMESTAMPZ
+                        # for the column type.  When we can tolerate a schema
+                        # change, we should change that type and remove this
+                        # line.
+                        cursor.execute("SET TIME ZONE 0")
+            yield is_new
 
     def _lockTables(
         self, connection: sqlalchemy.engine.Connection, tables: Iterable[sqlalchemy.schema.Table] = ()
@@ -194,6 +201,22 @@ class PostgresqlDatabase(Database):
             name=self.shrinkDatabaseEntityName("_".join(names)),
         )
 
+    def _make_temporary_table(
+        self,
+        connection: sqlalchemy.engine.Connection,
+        spec: ddl.TableSpec,
+        name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> sqlalchemy.schema.Table:
+        # Docstring inherited
+        # Adding ON COMMIT DROP here is really quite defensive: we already
+        # manually drop the table at the end of the temporary_table context
+        # manager, and that will usually happen first.  But this will guarantee
+        # that we drop the table at the end of the transaction even if the
+        # connection lasts longer, and that's good citizenship when connections
+        # may be multiplexed by e.g. pgbouncer.
+        return super()._make_temporary_table(connection, spec, name, postgresql_on_commit="DROP", **kwargs)
+
     @classmethod
     def getTimespanRepresentation(cls) -> Type[TimespanDatabaseRepresentation]:
         # Docstring inherited.
@@ -216,7 +239,7 @@ class PostgresqlDatabase(Database):
             if column.name not in table.primary_key
         }
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
-        with self._connection() as connection:
+        with self._transaction_connection() as connection:
             connection.execute(query, rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
@@ -230,7 +253,7 @@ class PostgresqlDatabase(Database):
             query = base_insert.on_conflict_do_nothing(constraint=table.primary_key)
         else:
             query = base_insert.on_conflict_do_nothing()
-        with self._connection() as connection:
+        with self._transaction_connection() as connection:
             return connection.execute(query, rows).rowcount
 
     def constant_rows(
