@@ -96,10 +96,10 @@ class StaticTablesContext:
     which should be the only way it should be constructed.
     """
 
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, connection: sqlalchemy.engine.Connection):
         self._db = db
         self._foreignKeys: List[Tuple[sqlalchemy.schema.Table, sqlalchemy.schema.ForeignKeyConstraint]] = []
-        self._inspector = sqlalchemy.inspect(self._db._engine)
+        self._inspector = sqlalchemy.inspect(connection)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
         self._initializers: List[Callable[[Database], None]] = []
 
@@ -587,32 +587,36 @@ class Database(ABC):
             raise ReadOnlyDatabaseError(f"Cannot create tables in read-only database {self}.")
         self._metadata = sqlalchemy.MetaData(schema=self.namespace)
         try:
-            context = StaticTablesContext(self)
-            if create and context._tableNames:
-                # Looks like database is already initalized, to avoid danger
-                # of modifying/destroying valid schema we refuse to do
-                # anything in this case
-                raise SchemaAlreadyDefinedError(f"Cannot create tables in non-empty database {self}.")
-            yield context
-            for table, foreignKey in context._foreignKeys:
-                table.append_constraint(foreignKey)
-            if create:
-                if self.namespace is not None:
-                    if self.namespace not in context._inspector.get_schema_names():
-                        with self._transaction_connection() as connection:
-                            connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
-                # In our tables we have columns that make use of sqlalchemy
-                # Sequence objects. There is currently a bug in sqlalchemy that
-                # causes a deprecation warning to be thrown on a property of
-                # the Sequence object when the repr for the sequence is
-                # created. Here a filter is used to catch these deprecation
-                # warnings when tables are created.
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
-                    self._metadata.create_all(self._engine)
-                # call all initializer methods sequentially
-                for init in context._initializers:
-                    init(self)
+            with self.session():
+                assert self._session_connection is not None, "Guaranteed by session()."
+                context = StaticTablesContext(self, self._session_connection)
+                if create and context._tableNames:
+                    # Looks like database is already initalized, to avoid
+                    # danger of modifying/destroying valid schema we refuse to
+                    # do anything in this case
+                    raise SchemaAlreadyDefinedError(f"Cannot create tables in non-empty database {self}.")
+                yield context
+                for table, foreignKey in context._foreignKeys:
+                    table.append_constraint(foreignKey)
+                if create:
+                    if self.namespace is not None:
+                        if self.namespace not in context._inspector.get_schema_names():
+                            with self.transaction():
+                                self._session_connection.execute(
+                                    sqlalchemy.schema.CreateSchema(self.namespace)
+                                )
+                    # In our tables we have columns that make use of sqlalchemy
+                    # Sequence objects. There is currently a bug in sqlalchemy
+                    # that causes a deprecation warning to be thrown on a
+                    # property of the Sequence object when the repr for the
+                    # sequence is created. Here a filter is used to catch these
+                    # deprecation warnings when tables are created.
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
+                        self._metadata.create_all(self._engine)
+                    # call all initializer methods sequentially
+                    for init in context._initializers:
+                        init(self)
         except BaseException:
             self._metadata = None
             raise
@@ -1013,7 +1017,9 @@ class Database(ABC):
                     f"the previous definition has {list(table.columns.keys())}."
                 )
         else:
-            inspector = sqlalchemy.inspect(self._engine)
+            inspector = sqlalchemy.inspect(
+                self._engine if self._session_connection is None else self._session_connection
+            )
             if name in inspector.get_table_names(schema=self.namespace):
                 _checkExistingTableDefinition(name, spec, inspector.get_columns(name, schema=self.namespace))
                 table = self._convertTableSpec(name, spec, self._metadata)

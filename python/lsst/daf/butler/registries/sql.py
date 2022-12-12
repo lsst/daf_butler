@@ -192,7 +192,8 @@ class SqlRegistry(Registry):
             writeable=writeable,
         )
         managerTypes = RegistryManagerTypes.fromConfig(config)
-        managers = managerTypes.loadRepo(database)
+        with database.session():
+            managers = managerTypes.loadRepo(database)
         if defaults is None:
             defaults = RegistryDefaults()
         return cls(database, defaults, managers)
