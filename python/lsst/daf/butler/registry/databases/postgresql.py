@@ -97,7 +97,7 @@ class PostgresqlDatabase(Database):
 
     @classmethod
     def makeEngine(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Engine:
-        return sqlalchemy.engine.create_engine(uri)
+        return sqlalchemy.engine.create_engine(uri, pool_size=1)
 
     @classmethod
     def fromEngine(
