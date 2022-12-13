@@ -51,6 +51,7 @@ from ..opt import (
     query_datasets_options,
     register_dataset_types_option,
     repo_argument,
+    transfer_dimensions_option,
     transfer_option,
     verbose_option,
     where_option,
@@ -667,17 +668,7 @@ def retrieve_artifacts(**kwargs: Any) -> None:
 @query_datasets_options(showUri=False, useArguments=False, repo=False)
 @transfer_option()
 @register_dataset_types_option()
-@click.option(
-    "--transfer-dimensions/--no-transfer-dimensions",
-    is_flag=True,
-    default=True,
-    help=unwrap(
-        """If true, also copy dimension records along with datasets.
-        If the dmensions are already present in the destination butler it
-        can be more efficient to disable this. The default is to transfer
-        dimensions."""
-    ),
-)
+@transfer_dimensions_option()
 @options_file_option()
 def transfer_datasets(**kwargs: Any) -> None:
     """Transfer datasets from a source butler to a destination butler.
