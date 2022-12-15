@@ -219,7 +219,10 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray:
 
     dtype = []
     for name, col in numpy_dict.items():
-        dtype.append((name, col.dtype))
+        if len(shape := numpy_dict[name].shape) <= 1:
+            dtype.append((name, col.dtype))
+        else:
+            dtype.append((name, (col.dtype, shape[1:])))
 
     array = np.rec.fromarrays(numpy_dict.values(), dtype=dtype)
 
@@ -238,15 +241,28 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, np.ndarray]:
     numpy_dict : `dict` [`str`, `numpy.ndarray`]
         Dict with keys as the column names, values as the arrays.
     """
+    import numpy as np
+
     schema = arrow_table.schema
+    metadata = schema.metadata if schema.metadata is not None else {}
 
     numpy_dict = {}
 
     for name in schema.names:
         col = arrow_table[name].to_numpy()
 
-        if schema.field(name).type in (pa.string(), pa.binary()):
+        t = schema.field(name).type
+        if t in (pa.string(), pa.binary()):
             col = col.astype(_arrow_string_to_numpy_dtype(schema, name, col))
+        elif isinstance(t, pa.FixedSizeListType):
+            if len(col) > 0:
+                col = np.stack(col)
+            else:
+                # this is an empty column, and needs to be coerced to type.
+                col = col.astype(t.value_type.to_pandas_dtype())
+
+            shape = _multidim_shape_from_metadata(metadata, t.list_size, name)
+            col = col.reshape((len(arrow_table), *shape))
 
         numpy_dict[name] = col
 
@@ -264,17 +280,31 @@ def numpy_to_arrow(np_array: np.ndarray) -> pa.Table:
     -------
     arrow_table : `pyarrow.Table`
     """
-    type_list = [(name, pa.from_numpy_dtype(np_array.dtype[name].type)) for name in np_array.dtype.names]
+    import numpy as np
+
+    type_list = _numpy_dtype_to_arrow_types(np_array.dtype)
 
     md = {}
     md[b"lsst::arrow::rowcount"] = str(len(np_array))
 
     for name in np_array.dtype.names:
         _append_numpy_string_metadata(md, name, np_array.dtype[name])
+        _append_numpy_multidim_metadata(md, name, np_array.dtype[name])
 
     schema = pa.schema(type_list, metadata=md)
 
-    arrays = [pa.array(np_array[col]) for col in np_array.dtype.names]
+    arrays = []
+    for name in np_array.dtype.names:
+        dt = np_array.dtype[name]
+        if len(dt.shape) > 0:
+            if len(np_array) > 0:
+                val = np.split(np_array[name].ravel(), len(np_array))
+            else:
+                val = []
+        else:
+            val = np_array[name]
+        arrays.append(pa.array(val, type=schema.field(name).type))
+
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
 
     return arrow_table
@@ -291,18 +321,36 @@ def numpy_dict_to_arrow(numpy_dict: Dict[str, np.ndarray]) -> pa.Table:
     Returns
     -------
     arrow_table : `pyarrow.Table`
+
+    Raises
+    ------
+    ValueError if columns in numpy_dict have unequal numbers of rows.
     """
-    type_list = [(name, pa.from_numpy_dtype(col.dtype.type)) for name, col in numpy_dict.items()]
+    import numpy as np
+
+    dtype, rowcount = _numpy_dict_to_dtype(numpy_dict)
+    type_list = _numpy_dtype_to_arrow_types(dtype)
 
     md = {}
-    md[b"lsst::arrow::rowcount"] = str(len(numpy_dict[list(numpy_dict.keys())[0]]))
+    md[b"lsst::arrow::rowcount"] = str(rowcount)
 
-    for name, col in numpy_dict.items():
-        _append_numpy_string_metadata(md, name, col.dtype)
+    for name in dtype.names:
+        _append_numpy_string_metadata(md, name, dtype[name])
+        _append_numpy_multidim_metadata(md, name, dtype[name])
 
     schema = pa.schema(type_list, metadata=md)
 
-    arrays = [pa.array(col) for col in numpy_dict.values()]
+    arrays = []
+    for name, col in numpy_dict.items():
+        if len(dtype[name].shape) > 0:
+            if rowcount > 0:
+                val = np.split(col.ravel(), rowcount)
+            else:
+                val = []
+        else:
+            val = col
+        arrays.append(pa.array(val, type=schema.field(name).type))
+
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
 
     return arrow_table
@@ -319,17 +367,17 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     -------
     arrow_table : `pyarrow.Table`
     """
+    import numpy as np
     from astropy.table import meta
 
-    type_list = [
-        (name, pa.from_numpy_dtype(astropy_table.dtype[name].type)) for name in astropy_table.dtype.names
-    ]
+    type_list = _numpy_dtype_to_arrow_types(astropy_table.dtype)
 
     md = {}
     md[b"lsst::arrow::rowcount"] = str(len(astropy_table))
 
-    for name, col in astropy_table.columns.items():
-        _append_numpy_string_metadata(md, name, col.dtype)
+    for name in astropy_table.dtype.names:
+        _append_numpy_string_metadata(md, name, astropy_table.dtype[name])
+        _append_numpy_multidim_metadata(md, name, astropy_table.dtype[name])
 
     meta_yaml = meta.get_yaml_from_table(astropy_table)
     meta_yaml_str = "\n".join(meta_yaml)
@@ -337,7 +385,18 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
 
     schema = pa.schema(type_list, metadata=md)
 
-    arrays = [pa.array(col) for col in astropy_table.itercols()]
+    arrays = []
+    for name in astropy_table.dtype.names:
+        dt = astropy_table.dtype[name]
+        if len(dt.shape) > 0:
+            if len(astropy_table) > 0:
+                val = np.split(astropy_table[name].ravel(), len(astropy_table))
+            else:
+                val = []
+        else:
+            val = astropy_table[name]
+        arrays.append(pa.array(val, type=schema.field(name).type))
+
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
 
     return arrow_table
@@ -555,16 +614,9 @@ class ArrowAstropySchema:
         import numpy as np
         from astropy.table import Table
 
-        dtype = []
-        for name in schema.names:
-            if schema.field(name).type not in (pa.string(), pa.binary()):
-                dtype.append(schema.field(name).type.to_pandas_dtype())
-                continue
+        dtype = _schema_to_dtype_list(schema)
 
-            dtype.append(_arrow_string_to_numpy_dtype(schema, name))
-
-        data = np.zeros(0, dtype=list(zip(schema.names, dtype)))
-
+        data = np.zeros(0, dtype=dtype)
         astropy_table = Table(data=data)
 
         metadata = schema.metadata if schema.metadata is not None else {}
@@ -654,13 +706,7 @@ class ArrowNumpySchema:
         """
         import numpy as np
 
-        dtype = []
-        for name in schema.names:
-            if schema.field(name).type not in (pa.string(), pa.binary()):
-                dtype.append((name, schema.field(name).type.to_pandas_dtype()))
-                continue
-
-            dtype.append((name, _arrow_string_to_numpy_dtype(schema, name)))
+        dtype = _schema_to_dtype_list(schema)
 
         return cls(np.dtype(dtype))
 
@@ -865,7 +911,7 @@ def _arrow_string_to_numpy_dtype(
 def _append_numpy_string_metadata(metadata: Dict[bytes, str], name: str, dtype: np.dtype) -> None:
     """Append numpy string length keys to arrow metadata.
 
-    All column types are handled, but only the metadata is only modified for
+    All column types are handled, but the metadata is only modified for
     string and byte columns.
 
     Parameters
@@ -883,3 +929,145 @@ def _append_numpy_string_metadata(metadata: Dict[bytes, str], name: str, dtype: 
         metadata[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(dtype.itemsize // 4)
     elif dtype.type is np.bytes_:
         metadata[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(dtype.itemsize)
+
+
+def _append_numpy_multidim_metadata(metadata: Dict[bytes, str], name: str, dtype: np.dtype) -> None:
+    """Append numpy multi-dimensional shapes to arrow metadata.
+
+    All column types are handled, but the metadata is only modified for
+    multi-dimensional columns.
+
+    Parameters
+    ----------
+    metadata : `dict` [`bytes`, `str`]
+        Metadata dictionary; modified in place.
+    name : `str`
+        Column name.
+    dtype : `np.dtype`
+        Numpy dtype.
+    """
+    if len(dtype.shape) > 1:
+        metadata[f"lsst::arrow::shape::{name}".encode("UTF-8")] = str(dtype.shape)
+
+
+def _multidim_shape_from_metadata(metadata: Dict[bytes, bytes], list_size: int, name: str) -> tuple[int, ...]:
+    """Retrieve the shape from the metadata, if available.
+
+    Parameters
+    ----------
+    metadata : `dict` [`bytes`, `bytes`]
+        Metadata dictionary.
+    list_size : `int`
+        Size of the list datatype.
+    name : `str`
+        Column name.
+
+    Returns
+    -------
+    shape : `tuple` [`int`]
+        Shape associated with the column.
+
+    Raises
+    ------
+    RuntimeError
+        Raised if metadata is found but has incorrect format.
+    """
+    md_name = f"lsst::arrow::shape::{name}"
+    if (encoded := md_name.encode("UTF-8")) in metadata:
+        groups = re.search(r"\((.*)\)", metadata[encoded].decode("UTF-8"))
+        if groups is None:
+            raise RuntimeError("Illegal value found in metadata.")
+        shape = tuple(int(x) for x in groups[1].split(",") if x != "")
+    else:
+        shape = (list_size,)
+
+    return shape
+
+
+def _schema_to_dtype_list(schema: pa.Schema) -> list[tuple[str, tuple[Any] | str]]:
+    """Convert a pyarrow schema to a numpy dtype.
+
+    Parameters
+    ----------
+    schema : `pyarrow.Schema`
+
+    Returns
+    -------
+    dtype_list: `list` [`tuple`]
+        A list with name, type pairs.
+    """
+    metadata = schema.metadata if schema.metadata is not None else {}
+
+    dtype = []
+    for name in schema.names:
+        t = schema.field(name).type
+        if isinstance(t, pa.FixedSizeListType):
+            shape = _multidim_shape_from_metadata(metadata, t.list_size, name)
+            dtype.append((name, (t.value_type.to_pandas_dtype(), shape)))
+        elif t not in (pa.string(), pa.binary()):
+            dtype.append((name, t.to_pandas_dtype()))
+        else:
+            dtype.append((name, _arrow_string_to_numpy_dtype(schema, name)))
+
+    return dtype
+
+
+def _numpy_dtype_to_arrow_types(dtype: np.dtype) -> list[Any]:
+    """Convert a numpy dtype to a list of arrow types.
+
+    Parameters
+    ----------
+    dtype : `numpy.dtype`
+        Numpy dtype to convert.
+
+    Returns
+    -------
+    type_list : `list` [`object`]
+    """
+    from math import prod
+
+    type_list = []
+    for name in dtype.names:
+        dt = dtype[name]
+        if len(dt.shape) > 0:
+            type_list.append((name, pa.list_(pa.from_numpy_dtype(dt.subdtype[0].type), prod(dt.shape))))
+        else:
+            type_list.append((name, pa.from_numpy_dtype(dt.type)))
+    return type_list
+
+
+def _numpy_dict_to_dtype(numpy_dict: Dict[str, np.ndarray]) -> tuple[np.dtype, int]:
+    """Extract equivalent table dtype from dict of numpy arrays.
+
+    Parameters
+    ----------
+    numpy_dict : `dict` [`str`, `numpy.ndarray`]
+        Dict with keys as the column names, values as the arrays.
+
+    Returns
+    -------
+    dtype : `numpy.dtype`
+        dtype of equivalent table.
+    rowcount : `int`
+        Number of rows in the table.
+
+    Raises
+    ------
+    ValueError if columns in numpy_dict have unequal numbers of rows.
+    """
+    import numpy as np
+
+    dtype_list = []
+    rowcount = None
+    for name, col in numpy_dict.items():
+        if rowcount is None:
+            rowcount = len(col)
+        if len(col) != rowcount:
+            raise ValueError(f"Column {name} has a different number of rows.")
+        if len(col.shape) == 1:
+            dtype_list.append((name, col.dtype))
+        else:
+            dtype_list.append((name, (col.dtype, col.shape[1:])))
+    dtype = np.dtype(dtype_list)
+
+    return (dtype, rowcount)
