@@ -246,7 +246,8 @@ class SqlRegistry(Registry):
 
     def refresh(self) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        self._managers.refresh()
+        with self._db.transaction():
+            self._managers.refresh()
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
