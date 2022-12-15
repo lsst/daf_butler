@@ -467,13 +467,14 @@ class Database(ABC):
         otherwise, but in that case they probably need to be modified to
         support the full range of expected read-only butler behavior.
         """
-        with self._transaction_connection(for_temp_tables=True) as connection:
-            table = self._make_temporary_table(connection, spec=spec, name=name)
+        with self.session():
+            assert self._session_connection is not None, "Guaranteed by session()."
+            table = self._make_temporary_table(self._session_connection, spec=spec, name=name)
             self._temp_tables.add(table.key)
             try:
                 yield table
             finally:
-                table.drop(connection)
+                table.drop(self._session_connection)
                 self._temp_tables.remove(table.key)
 
     @contextmanager
