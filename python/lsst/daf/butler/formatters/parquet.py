@@ -334,9 +334,10 @@ def numpy_dict_to_arrow(numpy_dict: Dict[str, np.ndarray]) -> pa.Table:
     md = {}
     md[b"lsst::arrow::rowcount"] = str(rowcount)
 
-    for name in dtype.names:
-        _append_numpy_string_metadata(md, name, dtype[name])
-        _append_numpy_multidim_metadata(md, name, dtype[name])
+    if dtype.names is not None:
+        for name in dtype.names:
+            _append_numpy_string_metadata(md, name, dtype[name])
+            _append_numpy_multidim_metadata(md, name, dtype[name])
 
     schema = pa.schema(type_list, metadata=md)
 
@@ -1026,13 +1027,18 @@ def _numpy_dtype_to_arrow_types(dtype: np.dtype) -> list[Any]:
     """
     from math import prod
 
-    type_list = []
+    type_list: list[Any] = []
+    if dtype.names is None:
+        return type_list
+
     for name in dtype.names:
         dt = dtype[name]
         if len(dt.shape) > 0:
-            type_list.append((name, pa.list_(pa.from_numpy_dtype(dt.subdtype[0].type), prod(dt.shape))))
+            arrow_type = pa.list_(pa.from_numpy_dtype(dt.subdtype[0].type), prod(dt.shape))
         else:
-            type_list.append((name, pa.from_numpy_dtype(dt.type)))
+            arrow_type = pa.from_numpy_dtype(dt.type)
+        type_list.append((name, arrow_type))
+
     return type_list
 
 
@@ -1058,9 +1064,9 @@ def _numpy_dict_to_dtype(numpy_dict: Dict[str, np.ndarray]) -> tuple[np.dtype, i
     import numpy as np
 
     dtype_list = []
-    rowcount = None
+    rowcount = 0
     for name, col in numpy_dict.items():
-        if rowcount is None:
+        if rowcount == 0:
             rowcount = len(col)
         if len(col) != rowcount:
             raise ValueError(f"Column {name} has a different number of rows.")
