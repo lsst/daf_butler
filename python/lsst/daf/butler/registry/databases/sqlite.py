@@ -320,7 +320,7 @@ class SqliteDatabase(Database):
             if column.name not in table.primary_key
         }
         query = query.on_conflict_do_update(index_elements=table.primary_key, set_=data)
-        with self._transaction_connection() as connection:
+        with self._transaction() as (_, connection):
             connection.execute(query, rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
@@ -332,7 +332,7 @@ class SqliteDatabase(Database):
             query = query.on_conflict_do_nothing(index_elements=table.primary_key)
         else:
             query = query.on_conflict_do_nothing()
-        with self._transaction_connection() as connection:
+        with self._transaction() as (_, connection):
             return connection.execute(query, rows).rowcount
 
     def constant_rows(

@@ -33,7 +33,21 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    final,
+)
 
 import astropy.time
 import sqlalchemy
@@ -333,26 +347,29 @@ class Database(ABC):
         """
         raise NotImplementedError()
 
+    @final
     @contextmanager
     def session(self) -> Iterator[None]:
         """Return a context manager that represents a session (persistent
         connection to a database).
-        """
-        if self._session_connection is not None:
-            # session already started, just reuse that
-            yield
-        else:
-            try:
-                # open new connection and close it when done
-                self._session_connection = self._engine.connect()
-                yield
-            finally:
-                if self._session_connection is not None:
-                    self._session_connection.close()
-                    self._session_connection = None
-                # Temporary tables only live within session
-                self._temp_tables = set()
 
+        Returns
+        -------
+        context : `AbstractContextManager` [ `None` ]
+            A context manager that does not return a value when entered.
+
+        Notes
+        -----
+        This method should be used when a sequence of read-only SQL operations
+        will be performed in rapid succession *without* a requirement that they
+        yield consistent results in the presence of concurrent writes (or, more
+        rarely, when conflicting concurrent writes are rare/impossible and the
+        session will be open long enough that a transaction is inadvisable).
+        """
+        with self._session():
+            yield
+
+    @final
     @contextmanager
     def transaction(
         self,
@@ -361,7 +378,7 @@ class Database(ABC):
         savepoint: bool = False,
         lock: Iterable[sqlalchemy.schema.Table] = (),
         for_temp_tables: bool = False,
-    ) -> Iterator[bool]:
+    ) -> Iterator[None]:
         """Return a context manager that represents a transaction.
 
         Parameters
@@ -392,15 +409,10 @@ class Database(ABC):
 
         Returns
         -------
-        context : `AbstractContextManager` [ `bool` ]
+        context : `AbstractContextManager` [ `None` ]
             A context manager that commits the transaction when it is exited
             without error and rolls back the transactoin when it is exited via
-            an exception.  Entering the context manager returns a `bool` that
-            indicates whether a new full transaction was actually created
-            (`True`) or if one already existed (`False`).  If `False`, the exit
-            behavior is to do nothing, allowing the outer transaction context
-            to perform it, unless ``savepoint=True``, in which case only the
-            save point is committed or rolled back.
+            an exception.
 
         Notes
         -----
@@ -408,36 +420,10 @@ class Database(ABC):
         instances _must_ go through this method, or transaction state will not
         be correctly managed.
         """
-        # need a connection, use session to manage it
-        with self.session():
-            assert self._session_connection is not None
-            connection = self._session_connection
-            already_in_transaction = connection.in_transaction()
-            assert not (interrupting and already_in_transaction), (
-                "Logic error in transaction nesting: an operation that would "
-                "interrupt the active transaction context has been requested."
-            )
-            savepoint = savepoint or connection.in_nested_transaction()
-            trans: sqlalchemy.engine.Transaction
-            if already_in_transaction:
-                if savepoint:
-                    trans = connection.begin_nested()
-                else:
-                    # Nested non-savepoint transactions don't do anything.
-                    trans = None
-            else:
-                # Use a regular (non-savepoint) transaction always for the
-                # outermost context.
-                trans = connection.begin()
-            self._lockTables(connection, lock)
-            try:
-                yield not already_in_transaction
-                if trans is not None:
-                    trans.commit()
-            except BaseException:
-                if trans is not None:
-                    trans.rollback()
-                raise
+        with self._transaction(
+            interrupting=interrupting, savepoint=savepoint, lock=lock, for_temp_tables=for_temp_tables
+        ):
+            yield
 
     @contextmanager
     def temporary_table(
@@ -457,8 +443,9 @@ class Database(ABC):
 
         Returns
         -------
-        table : `sqlalchemy.schema.Table`
-            SQLAlchemy representation of the table.
+        context : `AbstractContextManager` [ `sqlalchemy.schema.Table` ]
+            A context manager that returns a SQLAlchemy representation of the
+            temporary table when entered.
 
         Notes
         -----
@@ -468,29 +455,127 @@ class Database(ABC):
         otherwise, but in that case they probably need to be modified to
         support the full range of expected read-only butler behavior.
         """
-        with self.session():
-            assert self._session_connection is not None, "Guaranteed by session()."
-            table = self._make_temporary_table(self._session_connection, spec=spec, name=name)
+        with self._session() as connection:
+            table = self._make_temporary_table(connection, spec=spec, name=name)
             self._temp_tables.add(table.key)
             try:
                 yield table
             finally:
-                table.drop(self._session_connection)
+                table.drop(connection)
                 self._temp_tables.remove(table.key)
 
     @contextmanager
-    def _transaction_connection(
-        self, for_temp_tables: bool = False
-    ) -> Iterator[sqlalchemy.engine.Connection]:
-        """Return context manager for a connection that guarantees that a
-        transaction is active.
+    def _session(self) -> Iterator[sqlalchemy.engine.Connection]:
+        """Protected implementation for `session` that actually returns the
+        connection.
 
-        This is a thin wrapper around the public `transaction` method for
-        internal use; it just returns the protected connection object as well.
+        This method is for internal `Database` calls that need the actual
+        SQLAlchemy connection object.  It should be overridden by subclasses
+        instead of `session` itself.
+
+        Returns
+        -------
+        context : `AbstractContextManager` [ `sqlalchemy.engine.Connection` ]
+            A context manager that returns a SQLALchemy connection when
+            entered.
+
         """
-        with self.transaction(for_temp_tables=for_temp_tables):
-            assert self._session_connection is not None, "Guaranteed by transaction()."
+        if self._session_connection is not None:
+            # session already started, just reuse that
             yield self._session_connection
+        else:
+            try:
+                # open new connection and close it when done
+                self._session_connection = self._engine.connect()
+                yield self._session_connection
+            finally:
+                if self._session_connection is not None:
+                    self._session_connection.close()
+                    self._session_connection = None
+                # Temporary tables only live within session
+                self._temp_tables = set()
+
+    @contextmanager
+    def _transaction(
+        self,
+        *,
+        interrupting: bool = False,
+        savepoint: bool = False,
+        lock: Iterable[sqlalchemy.schema.Table] = (),
+        for_temp_tables: bool = False,
+    ) -> Iterator[tuple[bool, sqlalchemy.engine.Connection]]:
+        """Protected implementation for `transaction` that actually returns the
+        connection and whether this is a new outermost transaction.
+
+        This method is for internal `Database` calls that need the actual
+        SQLAlchemy connection object.  It should be overridden by subclasses
+        instead of `transaction` itself.
+
+        Parameters
+        ----------
+        interrupting : `bool`, optional
+            If `True` (`False` is default), this transaction block may not be
+            nested without an outer one, and attempting to do so is a logic
+            (i.e. assertion) error.
+        savepoint : `bool`, optional
+            If `True` (`False` is default), create a `SAVEPOINT`, allowing
+            exceptions raised by the database (e.g. due to constraint
+            violations) during this transaction's context to be caught outside
+            it without also rolling back all operations in an outer transaction
+            block.  If `False`, transactions may still be nested, but a
+            rollback may be generated at any level and affects all levels, and
+            commits are deferred until the outermost block completes.  If any
+            outer transaction block was created with ``savepoint=True``, all
+            inner blocks will be as well (regardless of the actual value
+            passed).  This has no effect if this is the outermost transaction.
+        lock : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+            A list of tables to lock for the duration of this transaction.
+            These locks are guaranteed to prevent concurrent writes and allow
+            this transaction (only) to acquire the same locks (others should
+            block), but only prevent concurrent reads if the database engine
+            requires that in order to block concurrent writes.
+        for_temp_tables : `bool`, optional
+            If `True`, this transaction may involve creating temporary tables.
+
+        Returns
+        -------
+        context : `AbstractContextManager` [ `tuple` [ `bool`,
+                `sqlalchemy.engine.Connection` ] ]
+            A context manager that commits the transaction when it is exited
+            without error and rolls back the transactoin when it is exited via
+            an exception.  When entered, it returns a tuple of:
+
+            - ``is_new`` (`bool`): whether this is a new (outermost)
+              transaction;
+            - ``connection`` (`sqlalchemy.engine.Connection`): the connection.
+        """
+        with self._session() as connection:
+            already_in_transaction = connection.in_transaction()
+            assert not (interrupting and already_in_transaction), (
+                "Logic error in transaction nesting: an operation that would "
+                "interrupt the active transaction context has been requested."
+            )
+            savepoint = savepoint or connection.in_nested_transaction()
+            trans: sqlalchemy.engine.Transaction | None
+            if already_in_transaction:
+                if savepoint:
+                    trans = connection.begin_nested()
+                else:
+                    # Nested non-savepoint transactions don't do anything.
+                    trans = None
+            else:
+                # Use a regular (non-savepoint) transaction always for the
+                # outermost context.
+                trans = connection.begin()
+            self._lockTables(connection, lock)
+            try:
+                yield not already_in_transaction, connection
+                if trans is not None:
+                    trans.commit()
+            except BaseException:
+                if trans is not None:
+                    trans.rollback()
+                raise
 
     @abstractmethod
     def _lockTables(
@@ -589,9 +674,8 @@ class Database(ABC):
             raise ReadOnlyDatabaseError(f"Cannot create tables in read-only database {self}.")
         self._metadata = sqlalchemy.MetaData(schema=self.namespace)
         try:
-            with self.session():
-                assert self._session_connection is not None, "Guaranteed by session()."
-                context = StaticTablesContext(self, self._session_connection)
+            with self._session() as connection:
+                context = StaticTablesContext(self, connection)
                 if create and context._tableNames:
                     # Looks like database is already initalized, to avoid
                     # danger of modifying/destroying valid schema we refuse to
@@ -604,9 +688,7 @@ class Database(ABC):
                     if self.namespace is not None:
                         if self.namespace not in context._inspector.get_schema_names():
                             with self.transaction():
-                                self._session_connection.execute(
-                                    sqlalchemy.schema.CreateSchema(self.namespace)
-                                )
+                                connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
                     # In our tables we have columns that make use of sqlalchemy
                     # Sequence objects. There is currently a bug in sqlalchemy
                     # that causes a deprecation warning to be thrown on a
@@ -964,7 +1046,7 @@ class Database(ABC):
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
         try:
-            with self._transaction_connection() as connection:
+            with self._transaction() as (_, connection):
                 table.create(connection)
         except sqlalchemy.exc.DatabaseError:
             # Some other process could have created the table meanwhile, which
@@ -1214,7 +1296,7 @@ class Database(ABC):
                 .select_from(table)
                 .where(sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()]))
             )
-            with self._transaction_connection() as connection:
+            with self._transaction() as (_, connection):
                 fetched = list(connection.execute(selectSql).mappings())
             if len(fetched) != 1:
                 return len(fetched), None, None
@@ -1286,7 +1368,7 @@ class Database(ABC):
                             "daf_butler."
                         )
                     elif update:
-                        with self._transaction_connection() as connection:
+                        with self._transaction() as (_, connection):
                             connection.execute(
                                 table.update()
                                 .where(sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()]))
@@ -1382,7 +1464,7 @@ class Database(ABC):
                 return []
             else:
                 return None
-        with self._transaction_connection() as connection:
+        with self._transaction() as (_, connection):
             if not returnIds:
                 if select is not None:
                     if names is None:
@@ -1539,7 +1621,7 @@ class Database(ABC):
             whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
             if whereTerms:
                 sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-            with self._transaction_connection() as connection:
+            with self._transaction() as (_, connection):
                 return connection.execute(sql, rows).rowcount
         else:
             # One of the columns has changing values but any others are
@@ -1564,7 +1646,7 @@ class Database(ABC):
             rowcount = 0
             iposn = 0
             n_per_loop = 1_000  # Controls how many items to put in IN clause
-            with self._transaction_connection() as connection:
+            with self._transaction() as (_, connection):
                 for iposn in range(0, n_elements, n_per_loop):
                     endpos = iposn + n_per_loop
                     in_clause = table.columns[name].in_(in_content[iposn:endpos])
@@ -1606,7 +1688,7 @@ class Database(ABC):
         self.assertTableWriteable(table, f"Cannot delete from read-only table {table}.")
 
         sql = table.delete().where(where)
-        with self._transaction_connection() as connection:
+        with self._transaction() as (_, connection):
             return connection.execute(sql).rowcount
 
     def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
@@ -1652,7 +1734,7 @@ class Database(ABC):
         sql = table.update().where(
             sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(v) for k, v in where.items()])
         )
-        with self._transaction_connection() as connection:
+        with self._transaction() as (_, connection):
             return connection.execute(sql, rows).rowcount
 
     @contextmanager
