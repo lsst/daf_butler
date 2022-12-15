@@ -110,17 +110,19 @@ class PostgresqlDatabase(Database):
         return cls(engine=engine, origin=origin, namespace=namespace, writeable=writeable)
 
     @contextmanager
-    def transaction(
+    def _transaction(
         self,
         *,
         interrupting: bool = False,
         savepoint: bool = False,
         lock: Iterable[sqlalchemy.schema.Table] = (),
         for_temp_tables: bool = False,
-    ) -> Iterator[bool]:
-        with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock) as is_new:
+    ) -> Iterator[tuple[bool, sqlalchemy.engine.Connection]]:
+        with super()._transaction(interrupting=interrupting, savepoint=savepoint, lock=lock) as (
+            is_new,
+            connection,
+        ):
             if is_new:
-                assert self._session_connection is not None, "Guaranteed to have a connection in transaction"
                 # pgbouncer with transaction-level pooling (which we aim to
                 # support) says that SET cannot be used, except for a list of
                 # "Startup parameters" that includes "timezone" (see
@@ -147,17 +149,17 @@ class PostgresqlDatabase(Database):
                     # PostgreSQL permits writing to temporary tables inside
                     # read-only transactions, but it doesn't permit creating
                     # them.
-                    with closing(self._session_connection.connection.cursor()) as cursor:
+                    with closing(connection.connection.cursor()) as cursor:
                         cursor.execute("SET TRANSACTION READ ONLY")
                         cursor.execute("SET TIME ZONE 0")
                 else:
-                    with closing(self._session_connection.connection.cursor()) as cursor:
+                    with closing(connection.connection.cursor()) as cursor:
                         # Make timestamps UTC, because we didn't use TIMESTAMPZ
                         # for the column type.  When we can tolerate a schema
                         # change, we should change that type and remove this
                         # line.
                         cursor.execute("SET TIME ZONE 0")
-            yield is_new
+            yield is_new, connection
 
     @contextmanager
     def temporary_table(
@@ -247,7 +249,7 @@ class PostgresqlDatabase(Database):
             if column.name not in table.primary_key
         }
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
-        with self._transaction_connection() as connection:
+        with self._transaction() as (_, connection):
             connection.execute(query, rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
@@ -261,7 +263,7 @@ class PostgresqlDatabase(Database):
             query = base_insert.on_conflict_do_nothing(constraint=table.primary_key)
         else:
             query = base_insert.on_conflict_do_nothing()
-        with self._transaction_connection() as connection:
+        with self._transaction() as (_, connection):
             return connection.execute(query, rows).rowcount
 
 
