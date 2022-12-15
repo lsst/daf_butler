@@ -512,41 +512,6 @@ class RegistryTests(ABC):
                     # DATAID_TYPE_RUN ref can be imported into a new run
                     (ref2,) = registry._importDatasets([ref], idGenerationMode=idGenMode)
 
-    def testImportDatasetsInt(self):
-        """Test for `Registry._importDatasets` with integer dataset ID."""
-        if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManager"):
-            self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
-
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        run = "tésτ"
-        registry.registerRun(run)
-        datasetTypeBias = registry.getDatasetType("bias")
-        datasetTypeFlat = registry.getDatasetType("flat")
-        dataIdBias1 = {"instrument": "Cam1", "detector": 1}
-        dataIdBias2 = {"instrument": "Cam1", "detector": 2}
-        dataIdFlat1 = {"instrument": "Cam1", "detector": 1, "physical_filter": "Cam1-G", "band": "g"}
-        dataset_id = 999999999
-
-        ref = DatasetRef(datasetTypeBias, dataIdBias1, id=dataset_id, run=run)
-        (ref1,) = registry._importDatasets([ref])
-        # Should make new integer ID.
-        self.assertNotEqual(ref1.id, ref.id)
-
-        # Ingesting same dataId with different dataset ID is an error
-        ref2 = ref1.unresolved().resolved(dataset_id, run=run)
-        with self.assertRaises(ConflictingDefinitionError):
-            registry._importDatasets([ref2])
-
-        # Ingesting different dataId with the same dataset ID should work
-        ref3 = DatasetRef(datasetTypeBias, dataIdBias2, id=ref1.id, run=run)
-        (ref4,) = registry._importDatasets([ref3])
-        self.assertNotEqual(ref4.id, ref1.id)
-
-        ref3 = DatasetRef(datasetTypeFlat, dataIdFlat1, id=ref1.id, run=run)
-        (ref4,) = registry._importDatasets([ref3])
-        self.assertNotEqual(ref4.id, ref1.id)
-
     def testDatasetTypeComponentQueries(self):
         """Test component options when querying for dataset types.
 
