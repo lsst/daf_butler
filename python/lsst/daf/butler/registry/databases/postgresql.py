@@ -160,6 +160,15 @@ class PostgresqlDatabase(Database):
                         cursor.execute("SET TIME ZONE 0")
             yield is_new
 
+    @contextmanager
+    def temporary_table(
+        self, spec: ddl.TableSpec, name: Optional[str] = None
+    ) -> Iterator[sqlalchemy.schema.Table]:
+        # Docstring inherited.
+        with self.transaction(for_temp_tables=True):
+            with super().temporary_table(spec, name) as table:
+                yield table
+
     def _lockTables(
         self, connection: sqlalchemy.engine.Connection, tables: Iterable[sqlalchemy.schema.Table] = ()
     ) -> None:
