@@ -43,7 +43,7 @@ import collections.abc
 import itertools
 import json
 import re
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Union, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -343,6 +343,7 @@ def numpy_dict_to_arrow(numpy_dict: Dict[str, np.ndarray]) -> pa.Table:
 
     arrays = []
     for name, col in numpy_dict.items():
+        val: Any
         if len(dtype[name].shape) > 0:
             if rowcount > 0:
                 val = np.split(col.ravel(), rowcount)
@@ -999,7 +1000,7 @@ def _schema_to_dtype_list(schema: pa.Schema) -> list[tuple[str, tuple[Any] | str
     """
     metadata = schema.metadata if schema.metadata is not None else {}
 
-    dtype = []
+    dtype: list[Any] = []
     for name in schema.names:
         t = schema.field(name).type
         if isinstance(t, pa.FixedSizeListType):
@@ -1027,14 +1028,20 @@ def _numpy_dtype_to_arrow_types(dtype: np.dtype) -> list[Any]:
     """
     from math import prod
 
+    import numpy as np
+
     type_list: list[Any] = []
     if dtype.names is None:
         return type_list
 
     for name in dtype.names:
         dt = dtype[name]
+        arrow_type: Any
         if len(dt.shape) > 0:
-            arrow_type = pa.list_(pa.from_numpy_dtype(dt.subdtype[0].type), prod(dt.shape))
+            arrow_type = pa.list_(
+                pa.from_numpy_dtype(cast(tuple[np.dtype, tuple[int, ...]], dt.subdtype)[0].type),
+                prod(dt.shape),
+            )
         else:
             arrow_type = pa.from_numpy_dtype(dt.type)
         type_list.append((name, arrow_type))
