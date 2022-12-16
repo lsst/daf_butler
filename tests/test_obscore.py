@@ -239,8 +239,8 @@ class ObsCoreTests:
         """Select all rows from obscore table."""
         db = registry._db
         table = registry._managers.obscore.table
-        results = db.query(table.select())
-        return list(results)
+        with db.query(table.select()) as results:
+            return results.fetchall()
 
     def test_config_errors(self):
         """Test for handling various configuration problems."""
@@ -556,23 +556,23 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
 
         # position matching visit=1, there is a single dataset
         query = f"SELECT * FROM {table.key} WHERE pgs_center <-> '(2d,0d)'::spoint < .1"
-        results = db.query(sqlalchemy.text(query))
-        self.assertEqual(len(list(results)), 1)
+        with db.query(sqlalchemy.text(query)) as results:
+            self.assertEqual(len(list(results)), 1)
 
         # position matching visit=4, there are two datasets
         query = f"SELECT * FROM {table.key} WHERE pgs_center <-> '(272d,0d)'::spoint < .1"
-        results = db.query(sqlalchemy.text(query))
-        self.assertEqual(len(list(results)), 2)
+        with db.query(sqlalchemy.text(query)) as results:
+            self.assertEqual(len(list(results)), 2)
 
         # position matching visit=1, there is a single dataset
         query = f"SELECT * FROM {table.key} WHERE '(2d,-3d)'::spoint @ pgs_region"
-        results = db.query(sqlalchemy.text(query))
-        self.assertEqual(len(list(results)), 1)
+        with db.query(sqlalchemy.text(query)) as results:
+            self.assertEqual(len(list(results)), 1)
 
         # position matching visit=4, there are two datasets
         query = f"SELECT * FROM {table.key} WHERE '(272d,3d)'::spoint @ pgs_region"
-        results = db.query(sqlalchemy.text(query))
-        self.assertEqual(len(list(results)), 2)
+        with db.query(sqlalchemy.text(query)) as results:
+            self.assertEqual(len(list(results)), 2)
 
     def test_region_type_warning(self) -> None:
         """Test that non-polygon region generates a warning"""

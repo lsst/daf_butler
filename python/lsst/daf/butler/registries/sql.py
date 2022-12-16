@@ -203,7 +203,8 @@ class SqlRegistry(Registry):
             writeable=writeable,
         )
         managerTypes = RegistryManagerTypes.fromConfig(config)
-        managers = managerTypes.loadRepo(database)
+        with database.session():
+            managers = managerTypes.loadRepo(database)
         if defaults is None:
             defaults = RegistryDefaults()
         return cls(database, defaults, managers)
@@ -245,7 +246,8 @@ class SqlRegistry(Registry):
 
     def refresh(self) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        self._managers.refresh()
+        with self._db.transaction():
+            self._managers.refresh()
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
@@ -1169,7 +1171,9 @@ class SqlRegistry(Registry):
             flatten_chains=flattenChains,
         ):
             query = storage.select(collectionRecord)
-            for row in self._db.query(query).mappings():
+            with self._db.query(query) as sql_result:
+                sql_mappings = sql_result.mappings().fetchall()
+            for row in sql_mappings:
                 dataId = DataCoordinate.fromRequiredValues(
                     storage.datasetType.dimensions,
                     tuple(row[name] for name in storage.datasetType.dimensions.required.names),
