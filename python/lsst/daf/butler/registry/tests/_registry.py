@@ -1595,6 +1595,8 @@ class RegistryTests(ABC):
         self.assertEqual(query_data_ids_find_datasets_ref.datasetType, query_dataset_type)
         query_dataset_types_result = registry.queryDatasetTypes(query_dataset_type)
         self.assertEqual(list(query_dataset_types_result), [query_dataset_type])
+        find_dataset_ref = registry.findDataset(query_dataset_type, instrument="Cam1", collections=[run])
+        self.assertEqual(find_dataset_ref.datasetType, query_dataset_type)
 
     def testEmptyDimensionsQueries(self):
         """Test Query and QueryResults objects in the case where there are no

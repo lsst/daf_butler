@@ -31,7 +31,16 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy.sql
 
-from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
+from ...core import (
+    DataCoordinate,
+    DatasetId,
+    DatasetRef,
+    DatasetType,
+    SimpleQuery,
+    StorageClass,
+    Timespan,
+    ddl,
+)
 from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension
 
@@ -224,7 +233,11 @@ class DatasetRecordStorage(ABC):
 
     @abstractmethod
     def find(
-        self, collection: CollectionRecord, dataId: DataCoordinate, timespan: Timespan | None = None
+        self,
+        collection: CollectionRecord,
+        dataId: DataCoordinate,
+        timespan: Timespan | None = None,
+        storage_class: str | StorageClass | None = None,
     ) -> DatasetRef | None:
         """Search a collection for a dataset with the given data ID.
 
@@ -240,6 +253,8 @@ class DatasetRecordStorage(ABC):
             A timespan that the validity range of the dataset must overlap.
             Required if ``collection.type is CollectionType.CALIBRATION``, and
             ignored otherwise.
+        storage_class : `str` or `StorageClass`, optional
+            Storage class override to apply to returned dataset references.
 
         Returns
         -------

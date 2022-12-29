@@ -441,8 +441,11 @@ class SqlRegistry(Registry):
         **kwargs: Any,
     ) -> Optional[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
+        storage_class: str | None = None
         if isinstance(datasetType, DatasetType):
             parent_name, component = datasetType.nameAndComponent()
+            if component is None:
+                storage_class = datasetType.storageClass_name
         else:
             parent_name, component = DatasetType.splitDatasetTypeName(datasetType)
         storage = self._managers.datasets[parent_name]
@@ -466,7 +469,7 @@ class SqlRegistry(Registry):
                 not storage.datasetType.isCalibration() or timespan is None
             ):
                 continue
-            result = storage.find(collectionRecord, dataId, timespan=timespan)
+            result = storage.find(collectionRecord, dataId, timespan=timespan, storage_class=storage_class)
             if result is not None:
                 if component is not None:
                     return result.makeComponentRef(component)
