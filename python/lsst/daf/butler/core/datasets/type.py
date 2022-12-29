@@ -544,14 +544,17 @@ class DatasetType:
         Returns
         -------
         modified : `DatasetType`
-            A new dataset type that is the same as the current one but with
-            a different storage class.
+            A dataset type that is the same as the current one but with a
+            different storage class.  Will be ``self`` if the given storage
+            class is the current one.
 
         Notes
         -----
-        If this is a component dataset type, the parent storage class
-        will be retained.
+        If this is a component dataset type, the parent storage class will be
+        retained.
         """
+        if storageClass == self._storageClassName or storageClass == self._storageClass:
+            return self
         parent = self._parentStorageClass if self._parentStorageClass else self._parentStorageClassName
         new = DatasetType(
             self.name,
