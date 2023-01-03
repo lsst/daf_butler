@@ -244,7 +244,7 @@ def addArgumentHelp(doc: str | None, helpText: str) -> str:
 
 
 def split_commas(
-    context: click.Context, param: click.core.Option, values: str | Iterable[str] | None
+    context: click.Context | None, param: click.core.Option | None, values: str | Iterable[str] | None
 ) -> tuple[str, ...]:
     """Process a tuple of values, where each value may contain comma-separated
     values, and return a single list of all the passed-in values.

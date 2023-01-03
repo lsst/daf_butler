@@ -1563,6 +1563,41 @@ class RegistryTests(ABC):
                 ).materialize() as biases:
                     self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
 
+    def testStorageClassPropagation(self):
+        """Test that queries for datasets respect the storage class passed in
+        as part of a full dataset type.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        dataset_type_in_registry = DatasetType(
+            "tbl", dimensions=["instrument"], storageClass="DataFrame", universe=registry.dimensions
+        )
+        registry.registerDatasetType(dataset_type_in_registry)
+        run = "run1"
+        registry.registerRun(run)
+        (inserted_ref,) = registry.insertDatasets(
+            dataset_type_in_registry, [registry.expandDataId(instrument="Cam1")], run=run
+        )
+        self.assertEqual(inserted_ref.datasetType, dataset_type_in_registry)
+        query_dataset_type = DatasetType(
+            "tbl", dimensions=["instrument"], storageClass="ArrowAstropy", universe=registry.dimensions
+        )
+        self.assertNotEqual(dataset_type_in_registry, query_dataset_type)
+        query_datasets_result = registry.queryDatasets(query_dataset_type, collections=[run])
+        self.assertEqual(query_datasets_result.parentDatasetType, query_dataset_type)  # type: ignore
+        (query_datasets_ref,) = query_datasets_result
+        self.assertEqual(query_datasets_ref.datasetType, query_dataset_type)
+        query_data_ids_find_datasets_result = registry.queryDataIds(["instrument"]).findDatasets(
+            query_dataset_type, collections=[run]
+        )
+        self.assertEqual(query_data_ids_find_datasets_result.parentDatasetType, query_dataset_type)
+        (query_data_ids_find_datasets_ref,) = query_data_ids_find_datasets_result
+        self.assertEqual(query_data_ids_find_datasets_ref.datasetType, query_dataset_type)
+        query_dataset_types_result = registry.queryDatasetTypes(query_dataset_type)
+        self.assertEqual(list(query_dataset_types_result), [query_dataset_type])
+        find_dataset_ref = registry.findDataset(query_dataset_type, instrument="Cam1", collections=[run])
+        self.assertEqual(find_dataset_ref.datasetType, query_dataset_type)
+
     def testEmptyDimensionsQueries(self):
         """Test Query and QueryResults objects in the case where there are no
         dimensions.

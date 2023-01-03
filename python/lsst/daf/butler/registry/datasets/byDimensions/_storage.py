@@ -38,6 +38,7 @@ from ....core import (
     DatasetRef,
     DatasetType,
     SimpleQuery,
+    StorageClass,
     Timespan,
     ddl,
 )
@@ -85,7 +86,11 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._runKeyColumn = collections.getRunForeignKeyName()
 
     def find(
-        self, collection: CollectionRecord, dataId: DataCoordinate, timespan: Timespan | None = None
+        self,
+        collection: CollectionRecord,
+        dataId: DataCoordinate,
+        timespan: Timespan | None = None,
+        storage_class: StorageClass | str | None = None,
     ) -> DatasetRef | None:
         # Docstring inherited from DatasetRecordStorage.
         assert dataId.graph == self.datasetType.dimensions
@@ -118,8 +123,11 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                         f"Multiple matches found for calibration lookup in {collection.name} for "
                         f"{self.datasetType.name} with {dataId} overlapping {timespan}. "
                     )
+        datasetType = self.datasetType
+        if storage_class is not None:
+            datasetType = datasetType.overrideStorageClass(storage_class)
         return DatasetRef(
-            datasetType=self.datasetType,
+            datasetType=datasetType,
             dataId=dataId,
             id=row.id,
             run=self._collections[row._mapping[self._runKeyColumn]].name,
