@@ -108,6 +108,7 @@ def _makeSimpleNumpyTable(include_multidim=False):
             [
                 ("d1", "f4", (5,)),
                 ("d2", "i8", (5, 10)),
+                ("d3", "f8", (5, 10)),
             ]
         )
 
@@ -123,6 +124,7 @@ def _makeSimpleNumpyTable(include_multidim=False):
     if include_multidim:
         data["d1"] = np.random.randn(data["d1"].size).reshape(data["d1"].shape)
         data["d2"] = np.arange(data["d2"].size).reshape(data["d2"].shape)
+        data["d3"] = np.asfortranarray(np.random.randn(data["d3"].size).reshape(data["d3"].shape))
 
     return data
 
