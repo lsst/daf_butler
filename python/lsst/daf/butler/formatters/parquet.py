@@ -171,6 +171,7 @@ def arrow_to_pandas(arrow_table: pa.Table) -> pd.DataFrame:
     Returns
     -------
     dataframe : `pandas.DataFrame`
+        Converted pandas dataframe.
     """
     return arrow_table.to_pandas(use_threads=False)
 
@@ -188,6 +189,7 @@ def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
     Returns
     -------
     table : `astropy.Table`
+        Converted astropy table.
     """
     from astropy.table import Table
 
@@ -206,6 +208,7 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray:
     Parameters
     ----------
     arrow_table : `pyarrow.Table`
+        Input arrow table.
 
     Returns
     -------
@@ -235,6 +238,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, np.ndarray]:
     Parameters
     ----------
     arrow_table : `pyarrow.Table`
+        Input arrow table.
 
     Returns
     -------
@@ -364,10 +368,12 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     Parameters
     ----------
     astropy_table : `astropy.Table`
+        Input astropy table.
 
     Returns
     -------
     arrow_table : `pyarrow.Table`
+        Converted arrow table.
     """
     import numpy as np
     from astropy.table import meta
@@ -410,6 +416,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     Parameters
     ----------
     dataframe : `pandas.DataFrame`
+        Input pandas dataframe.
     default_length : `int`, optional
         Default string length when not in metadata or can be inferred
         from column.
@@ -417,6 +424,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     Returns
     -------
     arrow_table : `pyarrow.Table`
+        Converted arrow table.
     """
     arrow_table = pa.Table.from_pandas(dataframe)
 
@@ -447,10 +455,12 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
     Parameters
     ----------
     dataframe : `pandas.DataFrame`
+        Input pandas dataframe.
 
     Returns
     -------
     astropy_table : `astropy.table.Table`
+        Converted astropy table.
     """
     import pandas as pd
     from astropy.table import Table
@@ -467,10 +477,12 @@ def numpy_to_astropy(np_array: np.ndarray) -> atable.Table:
     Parameters
     ----------
     np_array : `numpy.ndarray`
+        Input numpy array with multiple fields.
 
     Returns
     -------
     astropy_table : `astropy.table.Table`
+        Converted astropy table.
     """
     from astropy.table import Table
 
@@ -483,10 +495,12 @@ def arrow_schema_to_pandas_index(schema: pa.Schema) -> pd.Index | pd.MultiIndex:
     Parameters
     ----------
     schema : `pyarrow.Schema`
+        Input pyarrow schema.
 
     Returns
     -------
     index : `pandas.Index` or `pandas.MultiIndex`
+        Converted pandas index.
     """
     import pandas as pd
 
@@ -510,10 +524,12 @@ def arrow_schema_to_column_list(schema: pa.Schema) -> list[str]:
     Parameters
     ----------
     schema : `pyarrow.Schema`
+        Input pyarrow schema.
 
     Returns
     -------
     column_list : `list` [`str`]
+        Converted list of column names.
     """
     return [name for name in schema.names]
 
@@ -542,6 +558,7 @@ class DataFrameSchema:
         Returns
         -------
         dataframe_schema : `DataFrameSchema`
+            Converted dataframe schema.
         """
         empty_table = pa.Table.from_pylist([] * len(schema.names), schema=schema)
 
@@ -553,6 +570,7 @@ class DataFrameSchema:
         Returns
         -------
         arrow_schema : `pyarrow.Schema`
+            Converted pyarrow schema.
         """
         arrow_table = pa.Table.from_pandas(self._schema)
 
@@ -564,6 +582,7 @@ class DataFrameSchema:
         Returns
         -------
         arrow_numpy_schema : `ArrowNumpySchema`
+            Converted arrow numpy schema.
         """
         return ArrowNumpySchema.from_arrow(self.to_arrow_schema())
 
@@ -573,6 +592,7 @@ class DataFrameSchema:
         Returns
         -------
         arrow_astropy_schema : `ArrowAstropySchema`
+            Converted arrow astropy schema.
         """
         return ArrowAstropySchema.from_arrow(self.to_arrow_schema())
 
@@ -596,6 +616,7 @@ class ArrowAstropySchema:
     Parameters
     ----------
     astropy_table : `astropy.table.Table`
+        Input astropy table.
     """
 
     def __init__(self, astropy_table: atable.Table) -> None:
@@ -608,10 +629,12 @@ class ArrowAstropySchema:
         Parameters
         ----------
         schema : `pyarrow.Schema`
+            Input pyarrow schema.
 
         Returns
         -------
         astropy_schema : `ArrowAstropySchema`
+            Converted arrow astropy schema.
         """
         import numpy as np
         from astropy.table import Table
@@ -633,6 +656,7 @@ class ArrowAstropySchema:
         Returns
         -------
         arrow_schema : `pyarrow.Schema`
+            Converted pyarrow schema.
         """
         return astropy_to_arrow(self._schema).schema
 
@@ -642,6 +666,7 @@ class ArrowAstropySchema:
         Returns
         -------
         dataframe_schema : `DataFrameSchema`
+            Converted dataframe schema.
         """
         return DataFrameSchema.from_arrow(astropy_to_arrow(self._schema).schema)
 
@@ -651,6 +676,7 @@ class ArrowAstropySchema:
         Returns
         -------
         arrow_numpy_schema : `ArrowNumpySchema`
+            Converted arrow numpy schema.
         """
         return ArrowNumpySchema.from_arrow(astropy_to_arrow(self._schema).schema)
 
@@ -705,6 +731,7 @@ class ArrowNumpySchema:
         Returns
         -------
         numpy_schema : `ArrowNumpySchema`
+            Converted arrow numpy schema.
         """
         import numpy as np
 
@@ -718,6 +745,7 @@ class ArrowNumpySchema:
         Returns
         -------
         astropy_schema : `ArrowAstropySchema`
+            Converted arrow astropy schema.
         """
         import numpy as np
 
@@ -729,6 +757,7 @@ class ArrowNumpySchema:
         Returns
         -------
         dataframe_schema : `DataFrameSchema`
+            Converted dataframe schema.
         """
         import numpy as np
 
@@ -740,6 +769,7 @@ class ArrowNumpySchema:
         Returns
         -------
         arrow_schema : `pyarrow.Schema`
+            Converted pyarrow schema.
         """
         import numpy as np
 
@@ -802,7 +832,9 @@ def _standardize_multi_index_columns(
     Parameters
     ----------
     schema : `pyarrow.Schema`
+        Pyarrow schema.
     columns : `list` [`tuple`] or `dict` [`str`, `str` or `list` [`str`]]
+        Columns to standardize.
 
     Returns
     -------
@@ -992,6 +1024,7 @@ def _schema_to_dtype_list(schema: pa.Schema) -> list[tuple[str, tuple[Any] | str
     Parameters
     ----------
     schema : `pyarrow.Schema`
+        Input pyarrow schema.
 
     Returns
     -------
@@ -1025,6 +1058,7 @@ def _numpy_dtype_to_arrow_types(dtype: np.dtype) -> list[Any]:
     Returns
     -------
     type_list : `list` [`object`]
+        Converted list of arrow types.
     """
     from math import prod
 
