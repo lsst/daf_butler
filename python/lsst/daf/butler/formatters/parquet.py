@@ -279,13 +279,13 @@ def numpy_to_arrow(np_array: np.ndarray) -> pa.Table:
     Parameters
     ----------
     np_array : `numpy.ndarray`
+        Input numpy array with multiple fields.
 
     Returns
     -------
     arrow_table : `pyarrow.Table`
+        Converted arrow table.
     """
-    import numpy as np
-
     type_list = _numpy_dtype_to_arrow_types(np_array.dtype)
 
     md = {}
@@ -297,17 +297,12 @@ def numpy_to_arrow(np_array: np.ndarray) -> pa.Table:
 
     schema = pa.schema(type_list, metadata=md)
 
-    arrays = []
-    for name in np_array.dtype.names:
-        dt = np_array.dtype[name]
-        if len(dt.shape) > 0:
-            if len(np_array) > 0:
-                val = np.split(np_array[name].ravel(), len(np_array))
-            else:
-                val = []
-        else:
-            val = np_array[name]
-        arrays.append(pa.array(val, type=schema.field(name).type))
+    arrays = _numpy_style_arrays_to_arrow_arrays(
+        np_array.dtype,
+        len(np_array),
+        np_array,
+        schema,
+    )
 
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
 
@@ -325,13 +320,12 @@ def numpy_dict_to_arrow(numpy_dict: Dict[str, np.ndarray]) -> pa.Table:
     Returns
     -------
     arrow_table : `pyarrow.Table`
+        Converted arrow table.
 
     Raises
     ------
     ValueError if columns in numpy_dict have unequal numbers of rows.
     """
-    import numpy as np
-
     dtype, rowcount = _numpy_dict_to_dtype(numpy_dict)
     type_list = _numpy_dtype_to_arrow_types(dtype)
 
@@ -345,17 +339,12 @@ def numpy_dict_to_arrow(numpy_dict: Dict[str, np.ndarray]) -> pa.Table:
 
     schema = pa.schema(type_list, metadata=md)
 
-    arrays = []
-    for name, col in numpy_dict.items():
-        val: Any
-        if len(dtype[name].shape) > 0:
-            if rowcount > 0:
-                val = np.split(col.ravel(), rowcount)
-            else:
-                val = []
-        else:
-            val = col
-        arrays.append(pa.array(val, type=schema.field(name).type))
+    arrays = _numpy_style_arrays_to_arrow_arrays(
+        dtype,
+        rowcount,
+        numpy_dict,
+        schema,
+    )
 
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
 
@@ -375,7 +364,6 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     arrow_table : `pyarrow.Table`
         Converted arrow table.
     """
-    import numpy as np
     from astropy.table import meta
 
     type_list = _numpy_dtype_to_arrow_types(astropy_table.dtype)
@@ -393,17 +381,12 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
 
     schema = pa.schema(type_list, metadata=md)
 
-    arrays = []
-    for name in astropy_table.dtype.names:
-        dt = astropy_table.dtype[name]
-        if len(dt.shape) > 0:
-            if len(astropy_table) > 0:
-                val = np.split(astropy_table[name].ravel(), len(astropy_table))
-            else:
-                val = []
-        else:
-            val = astropy_table[name]
-        arrays.append(pa.array(val, type=schema.field(name).type))
+    arrays = _numpy_style_arrays_to_arrow_arrays(
+        astropy_table.dtype,
+        len(astropy_table),
+        astropy_table,
+        schema,
+    )
 
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
 
@@ -1118,3 +1101,49 @@ def _numpy_dict_to_dtype(numpy_dict: Dict[str, np.ndarray]) -> tuple[np.dtype, i
     dtype = np.dtype(dtype_list)
 
     return (dtype, rowcount)
+
+
+def _numpy_style_arrays_to_arrow_arrays(
+    dtype: np.dtype,
+    rowcount: int,
+    np_style_arrays: Dict[str, np.ndarray] | np.ndarray | atable.Table,
+    schema: pa.Schema,
+) -> list[pa.Array]:
+    """Convert numpy-style arrays to arrow arrays.
+
+    Parameters
+    ----------
+    dtype : `numpy.dtype`
+        Numpy dtype of input table/arrays.
+    rowcount : `int`
+        Number of rows in input table/arrays.
+    np_style_arrays : `dict` [`str`, `np.ndarray`] or `np.ndarray`
+                      or `astropy.table.Table`
+        Arrays to convert to arrow.
+    schema : `pyarrow.Schema`
+        Schema of arrow table.
+
+    Returns
+    -------
+    arrow_arrays : `list` [`pyarrow.Array`]
+        List of converted pyarrow arrays.
+    """
+    import numpy as np
+
+    arrow_arrays: list[pa.Array] = []
+    if dtype.names is None:
+        return arrow_arrays
+
+    for name in dtype.names:
+        dt = dtype[name]
+        val: Any
+        if len(dt.shape) > 0:
+            if rowcount > 0:
+                val = np.split(np_style_arrays[name].ravel(), rowcount)
+            else:
+                val = []
+        else:
+            val = np_style_arrays[name]
+        arrow_arrays.append(pa.array(val, type=schema.field(name).type))
+
+    return arrow_arrays
