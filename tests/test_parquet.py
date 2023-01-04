@@ -63,6 +63,8 @@ from lsst.daf.butler.formatters.parquet import (
     ArrowNumpySchema,
     DataFrameSchema,
     ParquetFormatter,
+    _append_numpy_multidim_metadata,
+    _numpy_dtype_to_arrow_types,
     arrow_to_astropy,
     arrow_to_numpy,
     arrow_to_numpy_dict,
@@ -77,26 +79,40 @@ from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def _makeSimpleNumpyTable():
+def _makeSimpleNumpyTable(include_multidim=False):
     """Make a simple numpy table with random data.
+
+    Parameters
+    ----------
+    include_multidim : `bool`
+        Include multi-dimensional columns.
 
     Returns
     -------
     numpyTable : `numpy.ndarray`
     """
     nrow = 5
-    data = np.zeros(
-        nrow,
-        dtype=[
-            ("index", "i4"),
-            ("a", "f8"),
-            ("b", "f8"),
-            ("c", "f8"),
-            ("ddd", "f8"),
-            ("strcol", "U10"),
-            ("bytecol", "a10"),
-        ],
-    )
+
+    dtype = [
+        ("index", "i4"),
+        ("a", "f8"),
+        ("b", "f8"),
+        ("c", "f8"),
+        ("ddd", "f8"),
+        ("strcol", "U10"),
+        ("bytecol", "a10"),
+    ]
+
+    if include_multidim:
+        dtype.extend(
+            [
+                ("d1", "f4", (5,)),
+                ("d2", "i8", (5, 10)),
+                ("d3", "f8", (5, 10)),
+            ]
+        )
+
+    data = np.zeros(nrow, dtype=dtype)
     data["index"][:] = np.arange(nrow)
     data["a"] = np.random.randn(nrow)
     data["b"] = np.random.randn(nrow)
@@ -104,6 +120,11 @@ def _makeSimpleNumpyTable():
     data["ddd"] = np.random.randn(nrow)
     data["strcol"][:] = "teststring"
     data["bytecol"][:] = "teststring"
+
+    if include_multidim:
+        data["d1"] = np.random.randn(data["d1"].size).reshape(data["d1"].shape)
+        data["d2"] = np.arange(data["d2"].size).reshape(data["d2"].shape)
+        data["d3"] = np.asfortranarray(np.random.randn(data["d3"].size).reshape(data["d3"].shape))
 
     return data
 
@@ -150,15 +171,20 @@ def _makeMultiIndexDataFrame():
     return df
 
 
-def _makeSimpleAstropyTable():
+def _makeSimpleAstropyTable(include_multidim=False):
     """Make an astropy table for testing.
+
+    Parameters
+    ----------
+    include_multidim : `bool`
+        Include multi-dimensional columns.
 
     Returns
     -------
     astropyTable : `astropy.table.Table`
         The test table.
     """
-    data = _makeSimpleNumpyTable()
+    data = _makeSimpleNumpyTable(include_multidim=include_multidim)
     # Add a couple of units.
     table = atable.Table(data)
     table["a"].unit = units.degree
@@ -166,15 +192,20 @@ def _makeSimpleAstropyTable():
     return table
 
 
-def _makeSimpleArrowTable():
+def _makeSimpleArrowTable(include_multidim=False):
     """Make an arrow table for testing.
+
+    Parameters
+    ----------
+    include_multidim : `bool`
+        Include multi-dimensional columns.
 
     Returns
     -------
     arrowTable : `pyarrow.Table`
         The test table.
     """
-    data = _makeSimpleNumpyTable()
+    data = _makeSimpleNumpyTable(include_multidim=include_multidim)
     return numpy_to_arrow(data)
 
 
@@ -571,7 +602,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testAstropyTable(self):
-        tab1 = _makeSimpleAstropyTable()
+        tab1 = _makeSimpleAstropyTable(include_multidim=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
@@ -825,7 +856,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testNumpyTable(self):
-        tab1 = _makeSimpleNumpyTable()
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
@@ -879,7 +910,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
 
     def testArrowNumpySchema(self):
-        tab1 = _makeSimpleNumpyTable()
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
         tab1_arrow = numpy_to_arrow(tab1)
         schema = ArrowNumpySchema.from_arrow(tab1_arrow.schema)
 
@@ -898,7 +929,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
 
     @unittest.skipUnless(pa is not None, "Cannot test arrow conversions without pyarrow.")
     def testNumpyDictConversions(self):
-        tab1 = _makeSimpleNumpyTable()
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
 
         # Verify that everything round-trips, including the schema.
         tab1_arrow = numpy_to_arrow(tab1)
@@ -910,7 +941,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
 
     @unittest.skipUnless(pa is not None, "Cannot test reading as arrow without pyarrow.")
     def testWriteNumpyTableReadAsArrowTable(self):
-        tab1 = _makeSimpleNumpyTable()
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
 
@@ -966,7 +997,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
 
     @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
     def testWriteNumpyTableReadAsAstropyTable(self):
-        tab1 = _makeSimpleNumpyTable()
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
 
@@ -1062,7 +1093,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testArrowTable(self):
-        tab1 = _makeSimpleArrowTable()
+        tab1 = _makeSimpleArrowTable(include_multidim=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
@@ -1096,7 +1127,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
 
     def testEmptyArrowTable(self):
         data = _makeSimpleNumpyTable()
-        type_list = [(name, pa.from_numpy_dtype(data.dtype[name].type)) for name in data.dtype.names]
+        type_list = _numpy_dtype_to_arrow_types(data.dtype)
 
         schema = pa.schema(type_list)
         arrays = [[]] * len(schema.names)
@@ -1121,6 +1152,33 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
             tab1_pandas_arrow.select(("index", "a", "b", "c", "ddd")),
             tab1.select(("index", "a", "b", "c", "ddd")),
         )
+
+        tab1_astropy = arrow_to_astropy(tab1)
+        self.assertEqual(len(tab1_astropy), 0)
+        tab1_astropy_arrow = astropy_to_arrow(tab1_astropy)
+        self.assertEqual(tab1_astropy_arrow, tab1)
+
+    def testEmptyArrowTableMultidim(self):
+        data = _makeSimpleNumpyTable(include_multidim=True)
+        type_list = _numpy_dtype_to_arrow_types(data.dtype)
+
+        md = {}
+        for name in data.dtype.names:
+            _append_numpy_multidim_metadata(md, name, data.dtype[name])
+
+        schema = pa.schema(type_list, metadata=md)
+        arrays = [[]] * len(schema.names)
+
+        tab1 = pa.Table.from_arrays(arrays, schema=schema)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+        tab2 = self.butler.get(self.datasetType, dataId={})
+        self.assertEqual(tab2, tab1)
+
+        tab1_numpy = arrow_to_numpy(tab1)
+        self.assertEqual(len(tab1_numpy), 0)
+        tab1_numpy_arrow = numpy_to_arrow(tab1_numpy)
+        self.assertEqual(tab1_numpy_arrow, tab1)
 
         tab1_astropy = arrow_to_astropy(tab1)
         self.assertEqual(len(tab1_astropy), 0)
@@ -1188,7 +1246,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
 
     @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
     def testWriteArrowTableReadAsAstropyTable(self):
-        tab1 = _makeSimpleAstropyTable()
+        tab1 = _makeSimpleAstropyTable(include_multidim=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
 
@@ -1217,7 +1275,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteArrowTableReadAsNumpyTable(self):
-        tab1 = _makeSimpleNumpyTable()
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
 
