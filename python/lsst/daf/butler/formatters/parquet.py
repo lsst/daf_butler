@@ -43,7 +43,7 @@ import collections.abc
 import itertools
 import json
 import re
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Union, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -232,7 +232,7 @@ def arrow_to_numpy(arrow_table: pa.Table) -> np.ndarray:
     return array
 
 
-def arrow_to_numpy_dict(arrow_table: pa.Table) -> Dict[str, np.ndarray]:
+def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
     """Convert a pyarrow table to a dict of numpy arrays.
 
     Parameters
@@ -309,7 +309,7 @@ def numpy_to_arrow(np_array: np.ndarray) -> pa.Table:
     return arrow_table
 
 
-def numpy_dict_to_arrow(numpy_dict: Dict[str, np.ndarray]) -> pa.Table:
+def numpy_dict_to_arrow(numpy_dict: dict[str, np.ndarray]) -> pa.Table:
     """Convert a dict of numpy arrays to an arrow table.
 
     Parameters
@@ -807,7 +807,7 @@ def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequen
 
 
 def _standardize_multi_index_columns(
-    schema: pa.Schema, columns: Union[List[tuple], Dict[str, Union[str, List[str]]]]
+    schema: pa.Schema, columns: Union[List[tuple], dict[str, Union[str, List[str]]]]
 ) -> List[str]:
     """Transform a dictionary/iterable index from a multi-index column list
     into a string directly understandable by PyArrow.
@@ -861,7 +861,7 @@ def _standardize_multi_index_columns(
     return names
 
 
-def _apply_astropy_metadata(astropy_table: atable.Table, metadata: Dict) -> None:
+def _apply_astropy_metadata(astropy_table: atable.Table, metadata: dict) -> None:
     """Apply any astropy metadata from the schema metadata.
 
     Parameters
@@ -925,7 +925,7 @@ def _arrow_string_to_numpy_dtype(
     return dtype
 
 
-def _append_numpy_string_metadata(metadata: Dict[bytes, str], name: str, dtype: np.dtype) -> None:
+def _append_numpy_string_metadata(metadata: dict[bytes, str], name: str, dtype: np.dtype) -> None:
     """Append numpy string length keys to arrow metadata.
 
     All column types are handled, but the metadata is only modified for
@@ -948,7 +948,7 @@ def _append_numpy_string_metadata(metadata: Dict[bytes, str], name: str, dtype: 
         metadata[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(dtype.itemsize)
 
 
-def _append_numpy_multidim_metadata(metadata: Dict[bytes, str], name: str, dtype: np.dtype) -> None:
+def _append_numpy_multidim_metadata(metadata: dict[bytes, str], name: str, dtype: np.dtype) -> None:
     """Append numpy multi-dimensional shapes to arrow metadata.
 
     All column types are handled, but the metadata is only modified for
@@ -967,7 +967,7 @@ def _append_numpy_multidim_metadata(metadata: Dict[bytes, str], name: str, dtype
         metadata[f"lsst::arrow::shape::{name}".encode("UTF-8")] = str(dtype.shape)
 
 
-def _multidim_shape_from_metadata(metadata: Dict[bytes, bytes], list_size: int, name: str) -> tuple[int, ...]:
+def _multidim_shape_from_metadata(metadata: dict[bytes, bytes], list_size: int, name: str) -> tuple[int, ...]:
     """Retrieve the shape from the metadata, if available.
 
     Parameters
@@ -1066,7 +1066,7 @@ def _numpy_dtype_to_arrow_types(dtype: np.dtype) -> list[Any]:
     return type_list
 
 
-def _numpy_dict_to_dtype(numpy_dict: Dict[str, np.ndarray]) -> tuple[np.dtype, int]:
+def _numpy_dict_to_dtype(numpy_dict: dict[str, np.ndarray]) -> tuple[np.dtype, int]:
     """Extract equivalent table dtype from dict of numpy arrays.
 
     Parameters
@@ -1106,7 +1106,7 @@ def _numpy_dict_to_dtype(numpy_dict: Dict[str, np.ndarray]) -> tuple[np.dtype, i
 def _numpy_style_arrays_to_arrow_arrays(
     dtype: np.dtype,
     rowcount: int,
-    np_style_arrays: Dict[str, np.ndarray] | np.ndarray | atable.Table,
+    np_style_arrays: dict[str, np.ndarray] | np.ndarray | atable.Table,
     schema: pa.Schema,
 ) -> list[pa.Array]:
     """Convert numpy-style arrays to arrow arrays.
