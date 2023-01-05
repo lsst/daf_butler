@@ -239,13 +239,13 @@ class DimensionRecordStorage(ABC):
         return None
 
     @abstractmethod
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         """Return tables used for schema digest.
 
         Returns
         -------
-        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
-            Possibly empty set of tables for schema digest calculations.
+        tables : `list` [ `sqlalchemy.schema.Table` ]
+            Possibly empty list of tables for schema digest calculations.
         """
         raise NotImplementedError()
 

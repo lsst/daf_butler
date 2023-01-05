@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["QueryDimensionRecordStorage"]
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
@@ -144,6 +144,6 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # nothing to actually fetch: everything we need is in the data ID.
         return self.element.RecordClass(**data_id.byName())
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return []

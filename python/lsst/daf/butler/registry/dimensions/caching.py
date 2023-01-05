@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import Any
 
 import sqlalchemy
@@ -159,6 +159,6 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
             self._cache = cache
         return self._cache
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return self._nested.digestTables()

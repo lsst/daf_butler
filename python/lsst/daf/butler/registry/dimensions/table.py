@@ -24,7 +24,7 @@ __all__ = ["TableDimensionRecordStorage"]
 
 import dataclasses
 import logging
-from collections.abc import Iterable, Mapping, Sequence, Set
+from collections.abc import Mapping, Sequence, Set
 from typing import Any
 
 import sqlalchemy
@@ -209,7 +209,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 # We updated something other than a region.
         return inserted_or_updated
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         result = [self._table]
         if self._skypix_overlap_tables is not None:

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicSkyPixDimensionRecordStorage"]
 
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 import sqlalchemy
 from lsst.daf.relation import Calculation, ColumnExpression, Join, Relation
@@ -101,6 +101,6 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
         index = data_id[self._dimension.name]
         return self._dimension.RecordClass(id=index, region=self._dimension.pixelization.pixel(index))
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return []

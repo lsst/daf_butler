@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 import sqlalchemy
@@ -176,6 +176,6 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             self._cache = cache
         return cast(Mapping[DataCoordinate, DimensionRecord], self._cache)
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return [self._table]
