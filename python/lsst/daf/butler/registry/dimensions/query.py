@@ -22,21 +22,20 @@ from __future__ import annotations
 
 __all__ = ["QueryDimensionRecordStorage"]
 
-from collections.abc import Iterable, Mapping
-from typing import Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+from lsst.daf.relation import Relation
 
 from ...core import (
     DatabaseDimension,
     DatabaseDimensionElement,
-    DataCoordinateIterable,
-    DimensionElement,
+    DataCoordinate,
+    DimensionKeyColumnTag,
     DimensionRecord,
     GovernorDimension,
-    NamedKeyDict,
     NamedKeyMapping,
-    TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
     Database,
@@ -44,7 +43,9 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-from ..queries import QueryBuilder
+
+if TYPE_CHECKING:
+    from .. import queries
 
 
 class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
@@ -62,21 +63,20 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         dimension records.
     element : `DatabaseDimensionElement`
         The element whose records this storage will manage.
+    view_target : `DatabaseDimensionRecordStorage`
+        Storage object for the element this target's storage is a view of.
     """
 
-    def __init__(self, db: Database, element: DatabaseDimensionElement, viewOf: str):
+    def __init__(
+        self, db: Database, element: DatabaseDimensionElement, view_target: DatabaseDimensionRecordStorage
+    ):
         assert isinstance(
             element, DatabaseDimension
         ), "An element cannot be a dependency unless it is a dimension."
         self._db = db
         self._element = element
-        self._target = element.universe[viewOf]
-        self._targetSpec = self._target.RecordClass.fields.makeTableSpec(
-            TimespanReprClass=self._db.getTimespanRepresentation()
-        )
-        self._viewOf = viewOf
-        self._query = None  # Constructed on first use.
-        if element not in self._target.graph.dimensions:
+        self._target = view_target
+        if element not in self._target.element.graph.dimensions:
             raise NotImplementedError("Query-backed dimension must be a dependency of its target.")
         if element.metadata:
             raise NotImplementedError("Cannot use query to back dimension with metadata.")
@@ -98,10 +98,11 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
-        viewOf = config["view_of"]
-        return cls(db, element, viewOf)
+        assert view_target is not None, f"Storage for '{element}' is a view."
+        return cls(db, element, view_target)
 
     @property
     def element(self) -> DatabaseDimension:
@@ -112,68 +113,37 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
-    def _ensureQuery(self) -> None:
-        if self._query is None:
-            targetTable = self._db.getExistingTable(self._target.name, self._targetSpec)
-            assert targetTable is not None
-            columns = []
-            # The only columns for this dimension are ones for its required
-            # dependencies and its own primary key (guaranteed by the checks in
-            # the ctor).
-            for dimension in self.element.required:
-                if dimension == self.element:
-                    columns.append(targetTable.columns[dimension.name].label(dimension.primaryKey.name))
-                else:
-                    columns.append(targetTable.columns[dimension.name].label(dimension.name))
-            # This query doesn't do a SELECT DISTINCT, because that's confusing
-            # and potentially wasteful if we apply a restrictive WHERE clause,
-            # as SelectableDimensionRecordStorage.fetch will do.
-            # Instead, we add DISTINCT in join() only.
-            self._query = (
-                sqlalchemy.sql.select(*columns).distinct().select_from(targetTable).alias(self.element.name)
-            )
-
-    def join(
-        self,
-        builder: QueryBuilder,
-        *,
-        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
-        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
-    ) -> None:
+    def make_relation(self, context: queries.SqlQueryContext) -> Relation:
         # Docstring inherited from DimensionRecordStorage.
-        assert regions is None, "Should be guaranteed by constructor checks."
-        assert timespans is None, "Should be guaranteed by constructor checks."
-        if self._target in builder.summary.mustHaveKeysJoined:
-            # Do nothing; the target dimension is already being included, so
-            # joining against a subquery referencing it would just produce a
-            # more complicated query that's guaranteed to return the same
-            # results.
-            return
-        self._ensureQuery()
-        joinOn = builder.startJoin(
-            self._query, self.element.required, self.element.RecordClass.fields.required.names
+        columns = DimensionKeyColumnTag.generate([self.element.name])
+        return (
+            self._target.make_relation(context)
+            .with_only_columns(
+                frozenset(columns),
+                preferred_engine=context.preferred_engine,
+                require_preferred_engine=True,
+            )
+            .without_duplicates()
         )
-        builder.finishJoin(self._query, joinOn)
-        return self._query
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(
-            f"Cannot insert {self.element.name} records, define as part of {self._viewOf} instead."
+            f"Cannot insert {self.element.name} records, define as part of {self._target.element} instead."
         )
 
     def sync(self, record: DimensionRecord, update: bool = False) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
-        raise TypeError(f"Cannot sync {self.element.name} records, define as part of {self._viewOf} instead.")
+        raise TypeError(
+            f"Cannot sync {self.element.name} records, define as part of {self._target.element} instead."
+        )
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        RecordClass = self.element.RecordClass
-        for dataId in dataIds:
-            # Given the restrictions imposed at construction, we know there's
-            # nothing to actually fetch: everything we need is in the data ID.
-            yield RecordClass(**dataId.byName())
+    def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
+        # Docstring inherited from DimensionRecordStorage.
+        # Given the restrictions imposed at construction, we know there's
+        # nothing to actually fetch: everything we need is in the data ID.
+        return self.element.RecordClass(**data_id.byName())
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return []

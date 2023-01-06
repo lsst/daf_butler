@@ -28,23 +28,8 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from typing import (
-    AbstractSet,
-    Any,
-    Callable,
-    Collection,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    overload,
-)
+from typing import AbstractSet, Any, Collection, Dict, Iterable, Iterator, Optional, Sequence, overload
 
-import sqlalchemy
-
-from ..simpleQuery import SimpleQuery
 from ._coordinate import DataCoordinate
 from ._graph import DimensionGraph
 from ._universe import DimensionUniverse
@@ -152,29 +137,6 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
         return DataCoordinateSequence(
             tuple(self), graph=self.graph, hasFull=self.hasFull(), hasRecords=self.hasRecords(), check=False
         )
-
-    def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
-        """Constrain a SQL query to include or relate to only known data IDs.
-
-        Parameters
-        ----------
-        query : `SimpleQuery`
-            Struct that represents the SQL query to constrain, either by
-            appending to its WHERE clause, joining a new table or subquery,
-            or both.
-        columns : `Callable`
-            A callable that accepts `str` dimension names and returns
-            SQLAlchemy objects representing a column for that dimension's
-            primary key value in the query.
-        """
-        toOrTogether: List[sqlalchemy.sql.ColumnElement] = []
-        for dataId in self:
-            toOrTogether.append(
-                sqlalchemy.sql.and_(
-                    *[columns(dimension.name) == dataId[dimension.name] for dimension in self.graph.required]
-                )
-            )
-        query.where.append(sqlalchemy.sql.or_(*toOrTogether))
 
     @abstractmethod
     def subset(self, graph: DimensionGraph) -> DataCoordinateIterable:

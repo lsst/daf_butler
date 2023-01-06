@@ -23,13 +23,19 @@ from __future__ import annotations
 __all__ = ("addDimensionForeignKey",)
 
 import copy
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Tuple
 
+from lsst.utils.classes import cached_getter
+
 from .. import ddl
+from .._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..named import NamedValueSet
 from ..timespan import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
+    from lsst.daf.relation import ColumnTag
+
     from ._elements import Dimension, DimensionElement
 
 
@@ -234,6 +240,23 @@ class DimensionElementFields:
         if self.element.temporal is not None:
             lines.append("  timespan: lsst.daf.butler.Timespan")
         return "\n".join(lines)
+
+    @property
+    @cached_getter
+    def columns(self) -> Mapping[ColumnTag, str]:
+        """A mapping from `ColumnTag` to field name for all fields in this
+        element's records (`Mapping`).
+        """
+        result: dict[ColumnTag, str] = {}
+        for dimension_name, field_name in zip(self.element.dimensions.names, self.dimensions.names):
+            result[DimensionKeyColumnTag(dimension_name)] = field_name
+        for field_name in self.facts.names:
+            result[DimensionRecordColumnTag(self.element.name, field_name)] = field_name
+        if self.element.spatial:
+            result[DimensionRecordColumnTag(self.element.name, "region")] = "region"
+        if self.element.temporal:
+            result[DimensionRecordColumnTag(self.element.name, "timespan")] = "timespan"
+        return result
 
     element: DimensionElement
     """The dimension element these fields correspond to.

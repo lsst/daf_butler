@@ -26,26 +26,18 @@ __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage", "DatasetIdFact
 import enum
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Set
 from typing import TYPE_CHECKING, Any
 
-import sqlalchemy.sql
+from lsst.daf.relation import Relation
 
-from ...core import (
-    DataCoordinate,
-    DatasetId,
-    DatasetRef,
-    DatasetType,
-    SimpleQuery,
-    StorageClass,
-    Timespan,
-    ddl,
-)
+from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, Timespan, ddl
 from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from .._collection_summary import CollectionSummary
+    from ..queries import SqlQueryContext
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
@@ -232,39 +224,6 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def find(
-        self,
-        collection: CollectionRecord,
-        dataId: DataCoordinate,
-        timespan: Timespan | None = None,
-        storage_class: str | StorageClass | None = None,
-    ) -> DatasetRef | None:
-        """Search a collection for a dataset with the given data ID.
-
-        Parameters
-        ----------
-        collection : `CollectionRecord`
-            The record object describing the collection to search for the
-            dataset.  May have any `CollectionType`.
-        dataId: `DataCoordinate`
-            Complete (but not necessarily expanded) data ID to search with,
-            with ``dataId.graph == self.datasetType.dimensions``.
-        timespan : `Timespan`, optional
-            A timespan that the validity range of the dataset must overlap.
-            Required if ``collection.type is CollectionType.CALIBRATION``, and
-            ignored otherwise.
-        storage_class : `str` or `StorageClass`, optional
-            Storage class override to apply to returned dataset references.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A resolved `DatasetRef` (without components populated), or `None`
-            if no matching dataset was found.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
     def delete(self, datasets: Iterable[DatasetRef]) -> None:
         """Fully delete the given datasets from the registry.
 
@@ -332,7 +291,11 @@ class DatasetRecordStorage(ABC):
 
     @abstractmethod
     def certify(
-        self, collection: CollectionRecord, datasets: Iterable[DatasetRef], timespan: Timespan
+        self,
+        collection: CollectionRecord,
+        datasets: Iterable[DatasetRef],
+        timespan: Timespan,
+        context: SqlQueryContext,
     ) -> None:
         """Associate one or more datasets with a calibration collection and a
         validity range within it.
@@ -370,6 +333,7 @@ class DatasetRecordStorage(ABC):
         timespan: Timespan,
         *,
         dataIds: Iterable[DataCoordinate] | None = None,
+        context: SqlQueryContext,
     ) -> None:
         """Remove or adjust datasets to clear a validity range within a
         calibration collection.
@@ -397,23 +361,14 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def select(
+    def make_relation(
         self,
         *collections: CollectionRecord,
-        dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
-        id: SimpleQuery.Select.Or[DatasetId | None] = SimpleQuery.Select,
-        run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
-        timespan: SimpleQuery.Select.Or[Timespan | None] = SimpleQuery.Select,
-        ingestDate: SimpleQuery.Select.Or[Timespan | None] = None,
-        rank: SimpleQuery.Select.Or[None] = None,
-    ) -> sqlalchemy.sql.Selectable:
-        """Return a SQLAlchemy object that represents a ``SELECT`` query for
-        this `DatasetType`.
-
-        All arguments can either be a value that constrains the query or
-        the `SimpleQuery.Select` tag object to indicate that the value should
-        be returned in the columns in the ``SELECT`` clause.  The default is
-        `SimpleQuery.Select`.
+        columns: Set[str],
+        context: SqlQueryContext,
+    ) -> Relation:
+        """Return a `sql.Relation` that represents a query for for this
+        `DatasetType` in one or more collections.
 
         Parameters
         ----------
@@ -421,44 +376,23 @@ class DatasetRecordStorage(ABC):
             The record object(s) describing the collection(s) to query.  May
             not be of type `CollectionType.CHAINED`.  If multiple collections
             are passed, the query will search all of them in an unspecified
-            order, and all collections must have the same type.
-        dataId : `DataCoordinate` or `Select`
-            The data ID to restrict results with, or an instruction to return
-            the data ID via columns with names
-            ``self.datasetType.dimensions.names``.
-        id : `DatasetId`, `Select` or None,
-            The primary key value for the dataset, an instruction to return it
-            via a ``id`` column, or `None` to ignore it entirely.
-        run : `None` or `Select`
-            If `Select` (default), include the dataset's run key value (as
-            column labeled with the return value of
-            ``CollectionManager.getRunForeignKeyName``).
-            If `None`, do not include this column (to constrain the run,
-            pass a `RunRecord` as the ``collection`` argument instead).
-        timespan : `None`, `Select`, or `Timespan`
-            If `Select` (default), include the validity range timespan in the
-            result columns.  If a `Timespan` instance, constrain the results to
-            those whose validity ranges overlap that given timespan.  For
-            collections whose type is not `~CollectionType.CALIBRATION`, if
-            `Select` is passed a column with a literal ``NULL`` value will be
-            added, and ``sqlalchemy.sql.expressions.Null` may be passed to
-            force a constraint that the value be null (since `None` is
-            interpreted as meaning "do not select or constrain this column").
-        ingestDate : `None`, `Select`, or `Timespan`
-            If `Select` include the ingest timestamp in the result columns.
-            If a `Timespan` instance, constrain the results to those whose
-            ingest times which are inside given timespan and also include
-            timestamp in the result columns. If `None` (default) then there is
-            no constraint and timestamp is not returned.
-        rank : `Select` or `None`
-            If `Select`, include a calculated column that is the integer rank
-            of the row's collection in the given list of collections, starting
-            from zero.
+            order, and all collections must have the same type.  Must include
+            at least one collection.
+        columns : `~collections.abc.Set` [ `str` ]
+            Columns to include in the relation.  See `Query.find_datasets` for
+            most options, but this method supports one more:
+
+            - ``rank``: a calculated integer column holding the index of the
+              collection the dataset was found in, within the ``collections``
+              sequence given.
+        context : `SqlQueryContext`
+            The object that manages database connections, temporary tables and
+            relation engines for this query.
 
         Returns
-        -------
-        query : `sqlalchemy.sql.Selectable`
-            A SQLAlchemy object representing a simple ``SELECT`` query.
+        ------
+        relation : `~lsst.daf.relation.Relation`
+            Representation of the query.
         """
         raise NotImplementedError()
 
@@ -681,6 +615,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         components: bool | None = None,
         missing: list[str] | None = None,
         explicit_only: bool = False,
+        components_deprecated: bool = True,
     ) -> dict[DatasetType, list[str | None]]:
         """Resolve a dataset type wildcard expression.
 
@@ -696,10 +631,6 @@ class DatasetRecordStorageManager(VersionedExtension):
             datasets were not matched by the expression.  Fully-specified
             component datasets (`str` or `DatasetType` instances) are always
             included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -707,6 +638,11 @@ class DatasetRecordStorageManager(VersionedExtension):
         explicit_only : `bool`, optional
             If `True`, require explicit `DatasetType` instances or `str` names,
             with `re.Pattern` instances deprecated and ``...`` prohibited.
+        components_deprecated : `bool`, optional
+            If `True`, this is a context in which component dataset support is
+            deprecated.  This will result in a deprecation warning when
+            ``components=True`` or ``components=None`` and a component dataset
+            is matched.  In the future this will become an error.
 
         Returns
         -------

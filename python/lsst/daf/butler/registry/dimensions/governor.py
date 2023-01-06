@@ -22,21 +22,15 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from collections.abc import Callable, Iterable, Mapping, Set
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, cast
 
 import sqlalchemy
+from lsst.daf.relation import Relation
 
-from ...core import (
-    DataCoordinateIterable,
-    DimensionElement,
-    DimensionRecord,
-    GovernorDimension,
-    NamedKeyDict,
-    TimespanDatabaseRepresentation,
-)
+from ...core import DataCoordinate, DimensionRecord, GovernorDimension
+from .. import queries
 from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
-from ..queries import QueryBuilder
 
 
 class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
@@ -54,11 +48,20 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         The logical table for the dimension.
     """
 
-    def __init__(self, db: Database, dimension: GovernorDimension, table: sqlalchemy.schema.Table):
+    def __init__(
+        self,
+        db: Database,
+        dimension: GovernorDimension,
+        table: sqlalchemy.schema.Table,
+    ):
         self._db = db
         self._dimension = dimension
         self._table = table
-        self._cache: dict[str, DimensionRecord] = {}
+        # We need to allow the cache to be None so we have some recourse when
+        # it is cleared as part of transaction rollback - we can't run
+        # queries to repopulate them at that point, so we need to defer it
+        # until next use.
+        self._cache: dict[DataCoordinate, DimensionRecord] | None = None
         self._callbacks: list[Callable[[DimensionRecord], None]] = []
 
     @classmethod
@@ -85,25 +88,6 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.element.
         return self._dimension
 
-    def refresh(self) -> None:
-        # Docstring inherited from GovernorDimensionRecordStorage.
-        RecordClass = self._dimension.RecordClass
-        sql = sqlalchemy.sql.select(
-            *[self._table.columns[name] for name in RecordClass.fields.standard.names]
-        ).select_from(self._table)
-        cache: dict[str, DimensionRecord] = {}
-        with self._db.query(sql) as sql_result:
-            sql_rows = sql_result.mappings().fetchall()
-        for row in sql_rows:
-            record = RecordClass(**row)
-            cache[getattr(record, self._dimension.primaryKey.name)] = record
-        self._cache = cache
-
-    @property
-    def values(self) -> Set[str]:
-        # Docstring inherited from GovernorDimensionRecordStorage.
-        return self._cache.keys()
-
     @property
     def table(self) -> sqlalchemy.schema.Table:
         return self._table
@@ -114,21 +98,20 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
 
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
-        self._cache.clear()
+        self._cache = None
 
-    def join(
-        self,
-        builder: QueryBuilder,
-        *,
-        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
-        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
-    ) -> None:
-        # Docstring inherited from DimensionRecordStorage.
-        joinOn = builder.startJoin(
-            self._table, self.element.dimensions, self.element.RecordClass.fields.dimensions.names
+    def make_relation(self, context: queries.SqlQueryContext, _sized: bool = True) -> Relation:
+        # Docstring inherited.
+        payload = self._build_sql_payload(self._table, context.column_types)
+        if _sized:
+            cache = self.get_record_cache(context)
+        return context.sql_engine.make_leaf(
+            payload.columns_available.keys(),
+            name=self.element.name,
+            payload=payload,
+            min_rows=len(cache) if _sized else 0,
+            max_rows=len(cache) if _sized else None,
         )
-        builder.finishJoin(self._table, joinOn)
-        return self._table
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -141,14 +124,19 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             else:
                 self._db.insert(self._table, *elementRows)
         for record in records:
-            # We really shouldn't ever get into a situation where the record
-            # here differs from the one in the DB, but the last thing we want
-            # is to make it harder to debug by making the cache different from
-            # the DB.
-            if skip_existing:
-                self._cache.setdefault(getattr(record, self.element.primaryKey.name), record)
-            else:
-                self._cache[getattr(record, self.element.primaryKey.name)] = record
+            # We really shouldn't ever get into a situation where the
+            # record here differs from the one in the DB, but the last
+            # thing we want is to make it harder to debug by making the
+            # cache different from the DB.
+            if self._cache is not None:
+                # We really shouldn't ever get into a situation where the
+                # record here differs from the one in the DB, but the last
+                # thing we want is to make it harder to debug by making the
+                # cache different from the DB.
+                if skip_existing:
+                    self._cache.setdefault(record.dataId, record)
+                else:
+                    self._cache[record.dataId] = record
             for callback in self._callbacks:
                 callback(record)
 
@@ -166,22 +154,28 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
                 update=update,
             )
         if inserted_or_updated:
-            self._cache[getattr(record, self.element.primaryKey.name)] = record
+            if self._cache is not None:
+                self._cache[record.dataId] = record
             for callback in self._callbacks:
                 callback(record)
         return inserted_or_updated
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        try:
-            return [self._cache[dataId[self.element]] for dataId in dataIds]  # type: ignore
-        except KeyError:
-            pass
-        # If at first we don't succeed, refresh and try again.  But this time
-        # we use dict.get to return None if we don't find something.
-        self.refresh()
-        return [self._cache.get(dataId[self.element]) for dataId in dataIds]  # type: ignore
+    def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
+        # Docstring inherited.
+        cache = self.get_record_cache(context)
+        return cache.get(data_id)
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def get_record_cache(self, context: queries.SqlQueryContext) -> Mapping[DataCoordinate, DimensionRecord]:
+        # Docstring inherited.
+        if self._cache is None:
+            reader = queries.DimensionRecordReader(self.element)
+            cache = {}
+            for row in context.fetch_iterable(self.make_relation(context, _sized=False)):
+                record = reader.read(row)
+                cache[record.dataId] = record
+            self._cache = cache
+        return cast(Mapping[DataCoordinate, DimensionRecord], self._cache)
+
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return [self._table]

@@ -40,6 +40,9 @@ if TYPE_CHECKING:
     from ._schema import ObsCoreSchema
     from ._spatial import SpatialObsCorePlugin
 
+if TYPE_CHECKING:
+    from ..queries import SqlQueryContext
+
 _LOG = logging.getLogger(__name__)
 
 # Map extra column type to a conversion method that takes string.
@@ -55,13 +58,15 @@ class ExposureRegionFactory:
     """Abstract interface for a class that returns a Region for an exposure."""
 
     @abstractmethod
-    def exposure_region(self, dataId: DataCoordinate) -> Optional[Region]:
+    def exposure_region(self, dataId: DataCoordinate, context: SqlQueryContext) -> Optional[Region]:
         """Return a region for a given DataId that corresponds to an exposure.
 
         Parameters
         ----------
         dataId : `DataCoordinate`
             Data ID for an exposure dataset.
+        context : `SqlQueryContext`
+            Context used to execute queries for additional dimension metadata.
 
         Returns
         -------
@@ -109,13 +114,15 @@ class RecordFactory:
         self.visit = universe["visit"]
         self.physical_filter = cast(Dimension, universe["physical_filter"])
 
-    def __call__(self, ref: DatasetRef) -> Optional[Record]:
+    def __call__(self, ref: DatasetRef, context: SqlQueryContext) -> Optional[Record]:
         """Make an ObsCore record from a dataset.
 
         Parameters
         ----------
         ref : `DatasetRef`
             Dataset ref, its DataId must be in expanded form.
+        context : `SqlQueryContext`
+            Context used to execute queries for additional dimension metadata.
 
         Returns
         -------
@@ -176,7 +183,7 @@ class RecordFactory:
             if (dimension_record := dataId.records[self.exposure]) is not None:
                 self._exposure_records(dimension_record, record)
                 if self.exposure_region_factory is not None:
-                    region = self.exposure_region_factory.exposure_region(dataId)
+                    region = self.exposure_region_factory.exposure_region(dataId, context)
         elif self.visit in dataId:
             if (dimension_record := dataId.records[self.visit]) is not None:
                 self._visit_records(dimension_record, record)

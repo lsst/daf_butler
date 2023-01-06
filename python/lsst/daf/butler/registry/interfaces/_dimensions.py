@@ -34,21 +34,25 @@ from collections.abc import Callable, Iterable, Mapping, Set
 from typing import TYPE_CHECKING, Any, Tuple, Union
 
 import sqlalchemy
+from lsst.daf.relation import Join, Relation, sql
 
-from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension
+from ...core import (
+    ColumnTypeInfo,
+    DatabaseDimensionElement,
+    DataCoordinate,
+    DimensionElement,
+    DimensionGraph,
+    DimensionRecord,
+    DimensionUniverse,
+    GovernorDimension,
+    LogicalColumn,
+    SkyPixDimension,
+)
+from ...core.named import NamedKeyMapping
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
-    from ...core import (
-        DataCoordinateIterable,
-        DimensionElement,
-        DimensionRecord,
-        DimensionUniverse,
-        NamedKeyDict,
-        NamedKeyMapping,
-        TimespanDatabaseRepresentation,
-    )
-    from ..queries import QueryBuilder
+    from .. import queries
     from ._database import Database, StaticTablesContext
 
 
@@ -91,45 +95,36 @@ class DimensionRecordStorage(ABC):
     @abstractmethod
     def join(
         self,
-        builder: QueryBuilder,
-        *,
-        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
-        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
-    ) -> sqlalchemy.sql.FromClause:
-        """Add the dimension element's logical table to a query under
-        construction.
-
-        This is a visitor pattern interface that is expected to be called only
-        by `QueryBuilder.joinDimensionElement`.
+        target: Relation,
+        join: Join,
+        context: queries.SqlQueryContext,
+    ) -> Relation:
+        """Join this dimension element's records to a relation.
 
         Parameters
         ----------
-        builder : `QueryBuilder`
-            Builder for the query that should contain this element.
-        regions : `NamedKeyDict`, optional
-            A mapping from `DimensionElement` to a SQLAlchemy column containing
-            the region for that element, which should be updated to include a
-            region column for this element if one exists.  If `None`,
-            ``self.element`` is not being included in the query via a spatial
-            join.
-        timespan : `NamedKeyDict`, optional
-            A mapping from `DimensionElement` to a `Timespan` of SQLALchemy
-            columns containing the timespan for that element, which should be
-            updated to include timespan columns for this element if they exist.
-            If `None`, ``self.element`` is not being included in the query via
-            a temporal join.
+        target : `~lsst.daf.relation.Relation`
+            Existing relation to join to.  Implementations may require that
+            this relation already include dimension key columns for this
+            dimension element and assume that dataset or spatial join relations
+            that might provide these will be included in the relation tree
+            first.
+        join : `~lsst.daf.relation.Join`
+            Join operation to use when the implementation is an actual join.
+            When a true join is being simulated by other relation operations,
+            this objects `~lsst.daf.relation.Join.min_columns` and
+            `~lsst.daf.relation.Join.max_columns` should still be respected.
+        context : `.queries.SqlQueryContext`
+            Object that manages relation engines and database-side state (e.g.
+            temporary tables) for the query.
 
         Returns
         -------
-        fromClause : `sqlalchemy.sql.FromClause`
-            Table or clause for the element which is joined.
-
-        Notes
-        -----
-        Elements are only included in queries via spatial and/or temporal joins
-        when necessary to connect them to other elements in the query, so
-        ``regions`` and ``timespans`` cannot be assumed to be not `None` just
-        because an element has a region or timespan.
+        joined : `~lsst.daf.relation.Relation`
+            New relation that includes this relation's dimension key and record
+            columns, as well as all columns in ``target``,  with rows
+            constrained to those for which this element's dimension key values
+            exist in the registry and rows already exist in ``target``.
         """
         raise NotImplementedError()
 
@@ -202,33 +197,91 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
-        """Retrieve records from storage.
+    def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
+        """Retrieve a single record from storage.
 
         Parameters
         ----------
-        dataIds : `DataCoordinateIterable`
-            Data IDs that identify the records to be retrieved.
+        data_id : `DataCoordinate`
+            Data ID of the record to fetch.  Implied dimensions do not need to
+            be present.
+        context : `.queries.SqlQueryContext`
+            Context to be used to execute queries when no cached result is
+            available.
 
         Returns
         -------
-        records : `Iterable` [ `DimensionRecord` ]
-            Record retrieved from storage.  Not all data IDs may have
-            corresponding records (if there are no records that match a data
-            ID), and even if they are, the order of inputs is not preserved.
+        record : `DimensionRecord` or `None`
+            Fetched record, or *possibly* `None` if there was no match for the
+            given data ID.
         """
         raise NotImplementedError()
 
+    def get_record_cache(
+        self, context: queries.SqlQueryContext
+    ) -> Mapping[DataCoordinate, DimensionRecord] | None:
+        """Return a local cache of all `DimensionRecord` objects for this
+        element, fetching it if necessary.
+
+        Implementations that never cache records should return `None`.
+
+        Parameters
+        ----------
+        context : `.queries.SqlQueryContext`
+            Context to be used to execute queries when no cached result is
+            available.
+
+        Returns
+        -------
+        cache : `Mapping` [ `DataCoordinate`, `DimensionRecord` ] or `None`
+            Mapping from data ID to dimension record, or `None`.
+        """
+        return None
+
     @abstractmethod
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         """Return tables used for schema digest.
 
         Returns
         -------
-        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
-            Possibly empty set of tables for schema digest calculations.
+        tables : `list` [ `sqlalchemy.schema.Table` ]
+            Possibly empty list of tables for schema digest calculations.
         """
         raise NotImplementedError()
+
+    def _build_sql_payload(
+        self,
+        from_clause: sqlalchemy.sql.FromClause,
+        column_types: ColumnTypeInfo,
+    ) -> sql.Payload[LogicalColumn]:
+        """Construct a `lsst.daf.relation.sql.Payload` for a dimension table.
+
+        This is a conceptually "protected" helper method for use by subclass
+        `make_relation` implementations.
+
+        Parameters
+        ----------
+        from_clause : `sqlalchemy.sql.FromClause`
+            SQLAlchemy table or subquery to select from.
+        column_types : `ColumnTypeInfo`
+            Struct with information about column types that depend on registry
+            configuration.
+
+        Returns
+        -------
+        payload : `lsst.daf.relation.sql.Payload`
+            Relation SQL "payload" struct, containing a SQL FROM clause,
+            columns, and optional WHERE clause.
+        """
+        payload = sql.Payload[LogicalColumn](from_clause)
+        for tag, field_name in self.element.RecordClass.fields.columns.items():
+            if field_name == "timespan":
+                payload.columns_available[tag] = column_types.timespan_cls.from_columns(
+                    from_clause.columns, name=field_name
+                )
+            else:
+                payload.columns_available[tag] = from_clause.columns[field_name]
+        return payload
 
 
 class GovernorDimensionRecordStorage(DimensionRecordStorage):
@@ -273,32 +326,54 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.
         raise NotImplementedError()
 
-    @abstractmethod
-    def refresh(self) -> None:
-        """Ensure all other operations on this manager are aware of any
-        changes made by other clients since it was initialized or last
-        refreshed.
-        """
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def values(self) -> Set[str]:
-        """All primary key values for this dimension (`set` [ `str` ]).
-
-        This may rely on an in-memory cache and hence not reflect changes to
-        the set of values made by other `Butler` / `Registry` clients.  Call
-        `refresh` to ensure up-to-date results.
-        """
-        raise NotImplementedError()
-
     @property
     @abstractmethod
     def table(self) -> sqlalchemy.schema.Table:
         """The SQLAlchemy table that backs this dimension
         (`sqlalchemy.schema.Table`).
         """
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    def join(
+        self,
+        target: Relation,
+        join: Join,
+        context: queries.SqlQueryContext,
+    ) -> Relation:
+        # Docstring inherited.
+        # We use Join.partial(...).apply(...) instead of Join.apply(..., ...)
+        # for the "backtracking" insertion capabilities of the former; more
+        # specifically, if `target` is a tree that starts with SQL relations
+        # and ends with iteration-engine operations (e.g. region-overlap
+        # postprocessing), this will try to perform the join upstream in the
+        # SQL engine before the transfer to iteration.
+        return join.partial(self.make_relation(context)).apply(target)
+
+    @abstractmethod
+    def make_relation(self, context: queries.SqlQueryContext) -> Relation:
+        """Return a relation that represents this dimension element's table.
+
+        This is used to provide an implementation for
+        `DimensionRecordStorage.join`, and is also callable in its own right.
+
+        Parameters
+        ----------
+        context : `.queries.SqlQueryContext`
+            Object that manages relation engines and database-side state
+            (e.g. temporary tables) for the query.
+
+        Returns
+        -------
+        relation : `~lsst.daf.relation.Relation`
+            New relation that includes this relation's dimension key and
+            record columns, with rows constrained to those for which the
+            dimension key values exist in the registry.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_record_cache(self, context: queries.SqlQueryContext) -> Mapping[DataCoordinate, DimensionRecord]:
+        raise NotImplementedError()
 
     @abstractmethod
     def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:
@@ -342,6 +417,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
@@ -358,6 +434,9 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
             Extra configuration options specific to the implementation.
         governors : `NamedKeyMapping`
             Mapping containing all governor dimension storage implementations.
+        view_target : `DatabaseDimensionRecordStorage`, optional
+            Storage object for the element this target's storage is a view of
+            (i.e. when `viewOf` is not `None`).
 
         Returns
         -------
@@ -370,6 +449,39 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
     @abstractmethod
     def element(self) -> DatabaseDimensionElement:
         # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+    def join(
+        self,
+        target: Relation,
+        join: Join,
+        context: queries.SqlQueryContext,
+    ) -> Relation:
+        # Docstring inherited.
+        # See comment on similar code in GovernorDimensionRecordStorage.join
+        # for why we use `Join.partial` here.
+        return join.partial(self.make_relation(context)).apply(target)
+
+    @abstractmethod
+    def make_relation(self, context: queries.SqlQueryContext) -> Relation:
+        """Return a relation that represents this dimension element's table.
+
+        This is used to provide an implementation for
+        `DimensionRecordStorage.join`, and is also callable in its own right.
+
+        Parameters
+        ----------
+        context : `.queries.SqlQueryContext`
+            Object that manages relation engines and database-side state
+            (e.g. temporary tables) for the query.
+
+        Returns
+        -------
+        relation : `~lsst.daf.relation.Relation`
+            New relation that includes this relation's dimension key and
+            record columns, with rows constrained to those for which the
+            dimension key values exist in the registry.
+        """
         raise NotImplementedError()
 
     def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
@@ -389,6 +501,42 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
             database-backed element.
         """
         raise NotImplementedError(f"{type(self).__name__} does not support spatial elements.")
+
+    def make_spatial_join_relation(
+        self,
+        other: DimensionElement,
+        context: queries.SqlQueryContext,
+        governor_constraints: Mapping[str, Set[str]],
+    ) -> Relation | None:
+        """Return a `lsst.daf.relation.Relation` that represents the spatial
+        overlap join between two dimension elements.
+
+        High-level code should generally call
+        `DimensionRecordStorageManager.make_spatial_join_relation` (which
+        delegates to this) instead of calling this method directly.
+
+        Parameters
+        ----------
+        other : `DimensionElement`
+            Element to compute overlaps with.  Guaranteed by caller to be
+            spatial (as is ``self``), with a different topological family.  May
+            be a `DatabaseDimensionElement` or a `SkyPixDimension`.
+        context : `.queries.SqlQueryContext`
+            Object that manages relation engines and database-side state
+            (e.g. temporary tables) for the query.
+        governor_constraints : `Mapping` [ `str`, `~collections.abc.Set` ], \
+                optional
+            Constraints imposed by other aspects of the query on governor
+            dimensions.
+
+        Returns
+        -------
+        relation : `lsst.daf.relation.Relation` or `None`
+            Join relation.  Should be `None` when no direct overlaps for this
+            combination are stored; higher-level code is responsible for
+            working out alternative approaches involving multiple joins.
+        """
+        return None
 
 
 class DatabaseDimensionOverlapStorage(ABC):
@@ -438,6 +586,12 @@ class DatabaseDimensionOverlapStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def clearCaches(self) -> None:
+        """Clear any cached state about which overlaps have been
+        materialized."""
+        raise NotImplementedError()
+
+    @abstractmethod
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         """Return tables used for schema digest.
 
@@ -445,6 +599,39 @@ class DatabaseDimensionOverlapStorage(ABC):
         -------
         tables : `Iterable` [ `sqlalchemy.schema.Table` ]
             Possibly empty set of tables for schema digest calculations.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_relation(
+        self,
+        context: queries.SqlQueryContext,
+        governor_constraints: Mapping[str, Set[str]],
+    ) -> Relation | None:
+        """Return a `lsst.daf.relation.Relation` that represents the join
+        table.
+
+        High-level code should generally call
+        `DimensionRecordStorageManager.make_spatial_join_relation` (which
+        delegates to this) instead of calling this method directly.
+
+        Parameters
+        ----------
+        context : `.queries.SqlQueryContext`
+            Object that manages relation engines and database-side state
+            (e.g. temporary tables) for the query.
+        governor_constraints : `Mapping` [ `str`, `~collections.abc.Set` ], \
+                optional
+            Constraints imposed by other aspects of the query on governor
+            dimensions; collections inconsistent with these constraints will be
+            skipped.
+
+        Returns
+        -------
+        relation : `lsst.daf.relation.Relation` or `None`
+            Join relation.  Should be `None` when no direct overlaps for this
+            combination are stored; higher-level code is responsible for
+            working out alternative approaches involving multiple joins.
         """
         raise NotImplementedError()
 
@@ -497,25 +684,17 @@ class DimensionRecordStorageManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def refresh(self) -> None:
-        """Ensure all other operations on this manager are aware of any
-        changes made by other clients since it was initialized or last
-        refreshed.
-        """
-        raise NotImplementedError()
-
-    def __getitem__(self, element: DimensionElement) -> DimensionRecordStorage:
+    def __getitem__(self, element: DimensionElement | str) -> DimensionRecordStorage:
         """Interface to `get` that raises `LookupError` instead of returning
         `None` on failure.
         """
         r = self.get(element)
         if r is None:
-            raise LookupError(f"No dimension element '{element.name}' found in this registry layer.")
+            raise LookupError(f"No dimension element '{element}' found in this registry layer.")
         return r
 
     @abstractmethod
-    def get(self, element: DimensionElement) -> DimensionRecordStorage | None:
+    def get(self, element: DimensionElement | str) -> DimensionRecordStorage | None:
         """Return an object that provides access to the records associated with
         the given element, if one exists in this layer.
 
@@ -618,6 +797,43 @@ class DimensionRecordStorageManager(VersionedExtension):
         This is called by `Registry` when transactions are rolled back, to
         avoid in-memory caches from ever containing records that are not
         present in persistent storage.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_spatial_join_relation(
+        self,
+        element1: str,
+        element2: str,
+        context: queries.SqlQueryContext,
+        governor_constraints: Mapping[str, Set[str]],
+    ) -> tuple[Relation, bool]:
+        """Create a relation that represents the spatial join between two
+        dimension elements.
+
+        Parameters
+        ----------
+        element1 : `str`
+            Name of one of the elements participating in the join.
+        element2 : `str`
+            Name of the other element participating in the join.
+        context : `.queries.SqlQueryContext`
+            Object that manages relation engines and database-side state
+            (e.g. temporary tables) for the query.
+        governor_constraints : `Mapping` [ `str`, `collections.abc.Set` ], \
+                optional
+            Constraints imposed by other aspects of the query on governor
+            dimensions.
+
+        Returns
+        -------
+        relation : ``lsst.daf.relation.Relation`
+            New relation that represents a spatial join between the two given
+            elements.  Guaranteed to have key columns for all required
+            dimensions of both elements.
+        needs_refinement : `bool`
+            Whether the returned relation represents a conservative join that
+            needs refinement via native-iteration predicate.
         """
         raise NotImplementedError()
 

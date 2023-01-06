@@ -400,7 +400,7 @@ class CollectionWildcard:
             )
 
     @classmethod
-    def from_expression(cls, expression: Any) -> CollectionWildcard:
+    def from_expression(cls, expression: Any, require_ordered: bool = False) -> CollectionWildcard:
         """Process a general expression to construct a `CollectionWildcard`
         instance.
 
@@ -417,11 +417,20 @@ class CollectionWildcard:
 
             Duplicate collection names will be removed (preserving the first
             appearance of each collection name).
+        require_ordered : `bool`, optional
+            If `True` (`False` is default) require the expression to be
+            ordered, and raise `CollectionExpressionError` if it is not.
 
         Returns
         -------
         wildcard : `CollectionWildcard`
             A `CollectionWildcard` instance.
+
+        Raises
+        ------
+        CollectionExpressionError
+            Raised if the patterns has regular expression, glob patterns, or
+            the ``...`` wildcard, and ``require_ordered=True``.
         """
         if isinstance(expression, cls):
             return expression
@@ -434,10 +443,13 @@ class CollectionWildcard:
         )
         if wildcard is Ellipsis:
             return cls()
-        return cls(
+        result = cls(
             strings=tuple(wildcard.strings),
             patterns=tuple(wildcard.patterns),
         )
+        if require_ordered:
+            result.require_ordered()
+        return result
 
     @classmethod
     def from_names(cls, names: Iterable[str]) -> CollectionWildcard:

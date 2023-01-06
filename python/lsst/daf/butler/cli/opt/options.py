@@ -256,7 +256,9 @@ transfer_option = MWOptionDecorator(
 verbose_option = MWOptionDecorator("-v", "--verbose", help="Increase verbosity.", is_flag=True)
 
 
-where_option = MWOptionDecorator("--where", help="A string expression similar to a SQL WHERE clause.")
+where_option = MWOptionDecorator(
+    "--where", default="", help="A string expression similar to a SQL WHERE clause."
+)
 
 
 order_by_option = MWOptionDecorator(

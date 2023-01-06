@@ -22,8 +22,11 @@ from __future__ import annotations
 
 import itertools
 from collections import defaultdict
+from collections.abc import Mapping, Set
+from typing import TYPE_CHECKING
 
 import sqlalchemy
+from lsst.daf.relation import Relation
 
 from ...core import (
     DatabaseDimensionElement,
@@ -36,6 +39,7 @@ from ...core import (
     SkyPixDimension,
     ddl,
 )
+from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import (
     Database,
     DatabaseDimensionOverlapStorage,
@@ -46,6 +50,10 @@ from ..interfaces import (
     StaticTablesContext,
     VersionTuple,
 )
+
+if TYPE_CHECKING:
+    from .. import queries
+
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(6, 0, 2)
@@ -107,15 +115,38 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             governorStorage = dimension.makeStorage(db, context=context)
             governors[dimension] = governorStorage
             records[dimension] = governorStorage
-        # Next we initialize storage for DatabaseDimensionElements.
+        # Next we initialize storage for DatabaseDimensionElements.  Some
+        # elements' storage may be views into anothers; we'll do a first pass
+        # to gather a mapping from the names of those targets back to their
+        # views.
+        view_targets = {
+            element.viewOf: element
+            for element in universe.getDatabaseElements()
+            if element.viewOf is not None
+        }
         # We remember the spatial ones (grouped by family) so we can go back
         # and initialize overlap storage for them later.
         spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DatabaseDimensionRecordStorage]]()
         for element in universe.getDatabaseElements():
+            if element.viewOf is not None:
+                # We'll initialize this storage when the view's target is
+                # initialized.
+                continue
             elementStorage = element.makeStorage(db, context=context, governors=governors)
             records[element] = elementStorage
             if element.spatial is not None:
                 spatial.setdefault(element.spatial, []).append(elementStorage)
+            if (view_element := view_targets.get(element.name)) is not None:
+                view_element_storage = view_element.makeStorage(
+                    db,
+                    context=context,
+                    governors=governors,
+                    view_target=elementStorage,
+                )
+                records[view_element] = view_element_storage
+                if view_element.spatial is not None:
+                    spatial.setdefault(view_element.spatial, []).append(view_element_storage)
+
         # Finally we initialize overlap storage.  The implementation class for
         # this is currently hard-coded (it's not obvious there will ever be
         # others).  Note that overlaps between database-backed dimensions and
@@ -151,18 +182,14 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             dimensionGraphStorage=dimensionGraphStorage,
         )
 
-    def refresh(self) -> None:
-        # Docstring inherited from DimensionRecordStorageManager.
-        for dimension in self.universe.getGovernorDimensions():
-            storage = self._records[dimension]
-            assert isinstance(storage, GovernorDimensionRecordStorage)
-            storage.refresh()
-
-    def get(self, element: DimensionElement) -> DimensionRecordStorage | None:
+    def get(self, element: DimensionElement | str) -> DimensionRecordStorage | None:
         # Docstring inherited from DimensionRecordStorageManager.
         r = self._records.get(element)
-        if r is None and isinstance(element, SkyPixDimension):
-            return self.universe.skypix[element.system][element.level].makeStorage()
+        if r is None:
+            if isinstance(element, str):
+                element = self.universe[element]
+            if isinstance(element, SkyPixDimension):
+                return self.universe.skypix[element.system][element.level].makeStorage()
         return r
 
     def register(self, element: DimensionElement) -> DimensionRecordStorage:
@@ -183,6 +210,66 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         for storage in self._records.values():
             storage.clearCaches()
+
+    def make_spatial_join_relation(
+        self,
+        element1: str,
+        element2: str,
+        context: queries.SqlQueryContext,
+        governor_constraints: Mapping[str, Set[str]],
+    ) -> tuple[Relation, bool]:
+        # Docstring inherited.
+        storage1 = self[element1]
+        storage2 = self[element2]
+        overlaps: Relation | None = None
+        needs_refinement: bool = False
+        match (storage1, storage2):
+            case [
+                DatabaseDimensionRecordStorage() as db_storage1,
+                DatabaseDimensionRecordStorage() as db_storage2,
+            ]:
+                # Construction guarantees that we only need to try this in one
+                # direction; either both storage objects know about the other
+                # or neither do.
+                overlaps = db_storage1.make_spatial_join_relation(
+                    db_storage2.element, context, governor_constraints
+                )
+                if overlaps is None:
+                    # No direct materialized overlaps; use commonSkyPix as an
+                    # intermediary.
+                    common_skypix_overlap1 = db_storage1.make_spatial_join_relation(
+                        self.universe.commonSkyPix, context, governor_constraints
+                    )
+                    common_skypix_overlap2 = db_storage2.make_spatial_join_relation(
+                        self.universe.commonSkyPix, context, governor_constraints
+                    )
+                    assert (
+                        common_skypix_overlap1 is not None and common_skypix_overlap2 is not None
+                    ), "Overlaps with the common skypix dimension should always be available,"
+                    overlaps = common_skypix_overlap1.join(common_skypix_overlap2)
+                    needs_refinement = True
+            case [DatabaseDimensionRecordStorage() as db_storage, other]:
+                overlaps = db_storage.make_spatial_join_relation(other.element, context, governor_constraints)
+            case [other, DatabaseDimensionRecordStorage() as db_storage]:
+                overlaps = db_storage.make_spatial_join_relation(other.element, context, governor_constraints)
+        if overlaps is None:
+            # In the future, there's a lot more we could try here:
+            #
+            # - for skypix dimensions, looking for materialized overlaps at
+            #   smaller spatial scales (higher-levels) and using bit-shifting;
+            #
+            # - for non-skypix dimensions, looking for materialized overlaps
+            #   for more finer-grained members of the same family, and then
+            #   doing SELECT DISTINCT (or even tolerating duplicates) on the
+            #   columns we care about (e.g. use patch overlaps to satisfy a
+            #   request for tract overlaps).
+            #
+            # It's not obvious that's better than just telling the user to
+            # materialize more overlaps, though.
+            raise MissingSpatialOverlapError(
+                f"No materialized overlaps for spatial join between {element1!r} and {element2!r}."
+            )
+        return overlaps, needs_refinement
 
     @classmethod
     def currentVersion(cls) -> VersionTuple | None:

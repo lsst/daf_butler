@@ -42,6 +42,7 @@ except ImportError:
     np = None
 
 import lsst.sphgeom
+from lsst.daf.relation import RelationalAlgebraError
 
 from ...core import (
     DataCoordinate,
@@ -913,6 +914,13 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r", visit_system=1),
             dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r", visit_system=1),
         )
+        for i in range(1, 6):
+            registry.insertDimensionData(
+                "visit_detector_region",
+                dict(instrument="DummyCam", visit=10, detector=i),
+                dict(instrument="DummyCam", visit=11, detector=i),
+                dict(instrument="DummyCam", visit=20, detector=i),
+            )
         registry.insertDimensionData(
             "exposure",
             dict(instrument="DummyCam", id=100, obs_id="100", physical_filter="dummy_i"),
@@ -2081,7 +2089,7 @@ class RegistryTests(ABC):
             expected result.
             """
             if expected is Ambiguous:
-                with self.assertRaises(RuntimeError):
+                with self.assertRaises((DatasetTypeError, LookupError)):
                     registry.findDataset(
                         "bias",
                         collections=collection,
@@ -2476,6 +2484,26 @@ class RegistryTests(ABC):
             set(registry.queryDatasets("flat", where="band=my_band", bind={"my_band": "r"}, collections=...)),
         )
 
+    def testQueryIntRangeExpressions(self):
+        """Test integer range expressions in ``where`` arguments.
+
+        Note that our expressions use inclusive stop values, unlike Python's.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.assertEqual(
+            set(registry.queryDataIds(["detector"], instrument="Cam1", where="detector IN (1..2)")),
+            {registry.expandDataId(instrument="Cam1", detector=n) for n in [1, 2]},
+        )
+        self.assertEqual(
+            set(registry.queryDataIds(["detector"], instrument="Cam1", where="detector IN (1..4:2)")),
+            {registry.expandDataId(instrument="Cam1", detector=n) for n in [1, 3]},
+        )
+        self.assertEqual(
+            set(registry.queryDataIds(["detector"], instrument="Cam1", where="detector IN (2..4:2)")),
+            {registry.expandDataId(instrument="Cam1", detector=n) for n in [2, 4]},
+        )
+
     def testQueryResultSummaries(self):
         """Test summary methods like `count`, `any`, and `explain_no_results`
         on `DataCoordinateQueryResults` and `DatasetQueryResults`
@@ -2496,15 +2524,17 @@ class RegistryTests(ABC):
         self.assertEqual(query1.count(exact=False), 2)
         self.assertEqual(query1.count(exact=True), 2)
         self.assertFalse(list(query1.explain_no_results()))
-        # Second query should yield no results, but this isn't detectable
-        # unless we actually run a query.
+        # Second query should yield no results, which we should see when
+        # we attempt to expand the data ID.
         query2 = registry.queryDataIds(["physical_filter"], band="h")
-        self.assertTrue(query2.any(execute=False, exact=False))
+        # There's no execute=False, exact=Fals test here because the behavior
+        # not something we want to guarantee in this case (and exact=False
+        # says either answer is legal).
         self.assertFalse(query2.any(execute=True, exact=False))
         self.assertFalse(query2.any(execute=True, exact=True))
         self.assertEqual(query2.count(exact=False), 0)
         self.assertEqual(query2.count(exact=True), 0)
-        self.assertFalse(list(query2.explain_no_results()))
+        self.assertTrue(list(query2.explain_no_results()))
         # These queries yield no results due to various problems that can be
         # spotted prior to execution, yielding helpful diagnostics.
         base_query = registry.queryDataIds(["detector", "physical_filter"])
@@ -2591,12 +2621,12 @@ class RegistryTests(ABC):
             (
                 # No records for one of the involved dimensions.
                 registry.queryDataIds(["subfilter"]),
-                ["dimension records", "subfilter"],
+                ["no rows", "subfilter"],
             ),
             (
                 # No records for one of the involved dimensions.
                 registry.queryDimensionRecords("subfilter"),
-                ["dimension records", "subfilter"],
+                ["no rows", "subfilter"],
             ),
         ]:
             self.assertFalse(query.any(execute=True, exact=False))
@@ -2634,7 +2664,7 @@ class RegistryTests(ABC):
         self.assertTrue(query3.any(execute=True, exact=False))
         self.assertTrue(query3.any(execute=True, exact=True))
         self.assertGreaterEqual(query3.count(exact=False), 4)
-        self.assertGreaterEqual(query3.count(exact=True), 3)
+        self.assertGreaterEqual(query3.count(exact=True, discard=True), 3)
         self.assertFalse(list(query3.explain_no_results()))
         # This query yields overlaps in the database, but all are filtered
         # out in postprocessing.  The count queries again aren't very useful.
@@ -2653,19 +2683,10 @@ class RegistryTests(ABC):
         self.assertTrue(query4.any(execute=True, exact=False))
         self.assertFalse(query4.any(execute=True, exact=True))
         self.assertGreaterEqual(query4.count(exact=False), 1)
-        self.assertEqual(query4.count(exact=True), 0)
-        messages = list(query4.explain_no_results())
+        self.assertEqual(query4.count(exact=True, discard=True), 0)
+        messages = query4.explain_no_results()
         self.assertTrue(messages)
-        self.assertTrue(any("regions did not overlap" in message for message in messages))
-
-        # And there are cases when queries make empty results but we do not
-        # know how to explain that yet (could we just say miracles happen?)
-        query5 = registry.queryDimensionRecords(
-            "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
-        )
-        self.assertEqual(query5.count(exact=True), 0)
-        messages = list(query5.explain_no_results())
-        self.assertFalse(messages)
+        self.assertTrue(any("overlap" in message for message in messages))
         # This query should yield results from one dataset type but not the
         # other, which is not registered.
         query5 = registry.queryDatasets(["bias", "nonexistent"], collections=["biases"])
@@ -2675,7 +2696,18 @@ class RegistryTests(ABC):
         self.assertTrue(query5.any(execute=True, exact=True))
         self.assertGreaterEqual(query5.count(exact=False), 1)
         self.assertGreaterEqual(query5.count(exact=True), 1)
-        self.assertFalse(messages, list(query5.explain_no_results()))
+        self.assertFalse(list(query5.explain_no_results()))
+        # This query applies a selection that yields no results, fully in the
+        # database.  Explaining why it fails involves traversing the relation
+        # tree and running a LIMIT 1 query at each level that has the potential
+        # to remove rows.
+        query6 = registry.queryDimensionRecords(
+            "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
+        )
+        self.assertEqual(query6.count(exact=True), 0)
+        messages = query6.explain_no_results()
+        self.assertTrue(messages)
+        self.assertTrue(any("no-purpose" in message for message in messages))
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""
@@ -2760,9 +2792,9 @@ class RegistryTests(ABC):
             query = do_query(keys).order_by(*order_by)
             if test.limit is not None:
                 query = query.limit(*test.limit)
-            with query.materialize() as materialized:
-                dataIds = tuple(tuple(dataId[k] for k in keys) for dataId in materialized)
-                self.assertEqual(dataIds, test.result)
+            with self.assertRaises(RelationalAlgebraError):
+                with query.materialize():
+                    pass
 
         # errors in a name
         for order_by in ("", "-"):
@@ -2801,7 +2833,7 @@ class RegistryTests(ABC):
         self.loadData(registry, "datasets.yaml")
         self.loadData(registry, "spatial.yaml")
 
-        def do_query(dimensions, dataId=None, where=None, bind=None, **kwargs):
+        def do_query(dimensions, dataId=None, where="", bind=None, **kwargs):
             return registry.queryDataIds(dimensions, dataId=dataId, where=where, bind=bind, **kwargs)
 
         Test = namedtuple(
@@ -2843,18 +2875,18 @@ class RegistryTests(ABC):
                     do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs).count()
             else:
                 query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
-                self.assertEqual(query.count(), test.count)
+                self.assertEqual(query.count(discard=True), test.count)
 
             # and materialize
             if test.exception:
                 with self.assertRaises(test.exception):
                     query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
                     with query.materialize() as materialized:
-                        materialized.count()
+                        materialized.count(discard=True)
             else:
                 query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
                 with query.materialize() as materialized:
-                    self.assertEqual(materialized.count(), test.count)
+                    self.assertEqual(materialized.count(discard=True), test.count)
 
     def testQueryDimensionRecordsOrderBy(self):
         """Test order_by and limit on result returned by

@@ -38,20 +38,21 @@ from typing import (
     Optional,
     Sequence,
     Set,
-    Tuple,
     Union,
+    cast,
 )
 
 import sqlalchemy
+from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
     Config,
     DataCoordinate,
-    DataCoordinateIterable,
     DataId,
     DatasetAssociation,
+    DatasetColumnTag,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -441,41 +442,103 @@ class SqlRegistry(Registry):
         **kwargs: Any,
     ) -> Optional[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        storage_class: str | None = None
-        if isinstance(datasetType, DatasetType):
-            parent_name, component = datasetType.nameAndComponent()
-            if component is None:
-                storage_class = datasetType.storageClass_name
-        else:
-            parent_name, component = DatasetType.splitDatasetTypeName(datasetType)
-        storage = self._managers.datasets[parent_name]
-        dataId = DataCoordinate.standardize(
-            dataId,
-            graph=storage.datasetType.dimensions,
-            universe=self.dimensions,
-            defaults=self.defaults.dataId,
-            **kwargs,
-        )
         if collections is None:
             if not self.defaults.collections:
                 raise NoDefaultCollectionError(
                     "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections
-        collections = CollectionWildcard.from_expression(collections)
-        collections.require_ordered()
-        for collectionRecord in self._managers.collections.resolve_wildcard(collections):
-            if collectionRecord.type is CollectionType.CALIBRATION and (
-                not storage.datasetType.isCalibration() or timespan is None
-            ):
-                continue
-            result = storage.find(collectionRecord, dataId, timespan=timespan, storage_class=storage_class)
-            if result is not None:
-                if component is not None:
-                    return result.makeComponentRef(component)
-                return result
-
-        return None
+        backend = queries.SqlQueryBackend(self._db, self._managers)
+        collection_wildcard = CollectionWildcard.from_expression(collections, require_ordered=True)
+        matched_collections = backend.resolve_collection_wildcard(collection_wildcard)
+        parent_dataset_type, components = backend.resolve_single_dataset_type_wildcard(
+            datasetType, components_deprecated=False
+        )
+        if len(components) > 1:
+            raise DatasetTypeError(
+                f"findDataset requires exactly one dataset type; got multiple components {components} "
+                f"for parent dataset type {parent_dataset_type.name}."
+            )
+        component = components[0]
+        dataId = DataCoordinate.standardize(
+            dataId,
+            graph=parent_dataset_type.dimensions,
+            universe=self.dimensions,
+            defaults=self.defaults.dataId,
+            **kwargs,
+        )
+        governor_constraints = {name: {cast(str, dataId[name])} for name in dataId.graph.governors.names}
+        (filtered_collections,) = backend.filter_dataset_collections(
+            [parent_dataset_type],
+            matched_collections,
+            governor_constraints=governor_constraints,
+        ).values()
+        if not filtered_collections:
+            return None
+        tail_collections: list[CollectionRecord] = []
+        if timespan is None:
+            for n, collection_record in enumerate(filtered_collections):
+                if collection_record.type is CollectionType.CALIBRATION:
+                    tail_collections.extend(filtered_collections[n:])
+                    del filtered_collections[n:]
+                    break
+        requested_columns = {"dataset_id", "run", "collection"}
+        with backend.context() as context:
+            predicate = context.make_data_coordinate_predicate(
+                dataId.subset(parent_dataset_type.dimensions), full=False
+            )
+            if timespan is not None:
+                requested_columns.add("timespan")
+                predicate = predicate.logical_and(
+                    context.make_timespan_overlap_predicate(
+                        DatasetColumnTag(parent_dataset_type.name, "timespan"), timespan
+                    )
+                )
+            relation = backend.make_dataset_query_relation(
+                parent_dataset_type, filtered_collections, requested_columns, context
+            ).with_rows_satisfying(predicate)
+            rows = list(context.fetch_iterable(relation))
+        if not rows:
+            if tail_collections:
+                msg = (
+                    f"Cannot search for dataset '{parent_dataset_type.name}' in CALIBRATION collection "
+                    f"{tail_collections[0].name} without an input timespan."
+                )
+                if len(tail_collections) > 1:
+                    remainder_names = [", ".join(c.name for c in tail_collections[1:])]
+                    msg += f"  This also blocks searching collections [{remainder_names}] that follow it."
+                raise TypeError(msg)
+            return None
+        elif len(rows) == 1:
+            best_row = rows[0]
+        else:
+            rank_by_collection_key = {record.key: n for n, record in enumerate(filtered_collections)}
+            collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
+            row_iter = iter(rows)
+            best_row = next(row_iter)
+            best_rank = rank_by_collection_key[best_row[collection_tag]]
+            have_tie = False
+            for row in row_iter:
+                if (rank := rank_by_collection_key[row[collection_tag]]) < best_rank:
+                    best_row = row
+                    best_rank = rank
+                    have_tie = False
+                elif rank == best_rank:
+                    have_tie = True
+                    assert timespan is not None, "Rank ties should be impossible given DB constraints."
+            if have_tie:
+                raise LookupError(
+                    f"Ambiguous calibration lookup for {parent_dataset_type.name} in collections "
+                    f"{collection_wildcard.strings} with timespan {timespan}."
+                )
+        reader = queries.DatasetRefReader(
+            parent_dataset_type,
+            translate_collection=lambda k: self._managers.collections[k].name,
+        )
+        ref = reader.read(best_row, data_id=dataId)
+        if component is not None:
+            ref = ref.makeComponentRef(component)
+        return ref
 
     @transactional
     def insertDatasets(
@@ -520,7 +583,8 @@ class SqlRegistry(Registry):
         try:
             refs = list(storage.insert(runRecord, expandedDataIds, idGenerationMode))
             if self._managers.obscore:
-                self._managers.obscore.add_datasets(refs)
+                context = queries.SqlQueryContext(self._db, self._managers.column_types)
+                self._managers.obscore.add_datasets(refs, context)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 f"A database constraint failure was triggered by inserting "
@@ -592,7 +656,8 @@ class SqlRegistry(Registry):
         try:
             refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode, reuseIds))
             if self._managers.obscore:
-                self._managers.obscore.add_datasets(refs)
+                context = queries.SqlQueryContext(self._db, self._managers.column_types)
+                self._managers.obscore.add_datasets(refs, context)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 f"A database constraint failure was triggered by inserting "
@@ -641,7 +706,8 @@ class SqlRegistry(Registry):
                 if self._managers.obscore:
                     # If a TAGGED collection is being monitored by ObsCore
                     # manager then we may need to save the dataset.
-                    self._managers.obscore.associate(refsForType, collectionRecord)
+                    context = queries.SqlQueryContext(self._db, self._managers.column_types)
+                    self._managers.obscore.associate(refsForType, collectionRecord, context)
             except sqlalchemy.exc.IntegrityError as err:
                 raise ConflictingDefinitionError(
                     f"Constraint violation while associating dataset of type {datasetType.name} with "
@@ -676,7 +742,12 @@ class SqlRegistry(Registry):
             DatasetRef.groupByType(refs).items(), desc="Certifying datasets by type"
         ):
             storage = self._managers.datasets[datasetType.name]
-            storage.certify(collectionRecord, refsForType, timespan)
+            storage.certify(
+                collectionRecord,
+                refsForType,
+                timespan,
+                context=queries.SqlQueryContext(self._db, self._managers.column_types),
+            )
 
     @transactional
     def decertify(
@@ -698,7 +769,12 @@ class SqlRegistry(Registry):
             standardizedDataIds = [
                 DataCoordinate.standardize(d, graph=storage.datasetType.dimensions) for d in dataIds
             ]
-        storage.decertify(collectionRecord, timespan, dataIds=standardizedDataIds)
+        storage.decertify(
+            collectionRecord,
+            timespan,
+            dataIds=standardizedDataIds,
+            context=queries.SqlQueryContext(self._db, self._managers.column_types),
+        )
 
     def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
         """Return an object that allows a new `Datastore` instance to
@@ -749,6 +825,7 @@ class SqlRegistry(Registry):
         if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
             records.update(dataId.records.byName())
         keys = standardized.byName()
+        context = queries.SqlQueryContext(self._db, self._managers.column_types)
         for element in standardized.graph.primaryKeyTraversalOrder:
             record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
@@ -761,14 +838,7 @@ class SqlRegistry(Registry):
                     record = None
                 else:
                     storage = self._managers.dimensions[element]
-                    dataIdSet = DataCoordinateIterable.fromScalar(
-                        DataCoordinate.standardize(keys, graph=element.graph)
-                    )
-                    fetched = tuple(storage.fetch(dataIdSet))
-                    try:
-                        (record,) = fetched
-                    except ValueError:
-                        record = None
+                    record = storage.fetch_one(DataCoordinate.standardize(keys, graph=element.graph), context)
                 records[element.name] = record
             if record is not None:
                 for d in element.implied:
@@ -812,7 +882,7 @@ class SqlRegistry(Registry):
         else:
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
-        storage = self._managers.dimensions[element]  # type: ignore
+        storage = self._managers.dimensions[element]
         storage.insert(*records, replace=replace, skip_existing=skip_existing)
 
     def syncDimensionData(
@@ -830,7 +900,7 @@ class SqlRegistry(Registry):
         else:
             # Ignore typing since caller said to trust them with conform=False.
             record = row  # type: ignore
-        storage = self._managers.dimensions[element]  # type: ignore
+        storage = self._managers.dimensions[element]
         return storage.sync(record, update=update)
 
     def queryDatasetTypes(
@@ -884,7 +954,9 @@ class SqlRegistry(Registry):
         ]
 
     def _makeQueryBuilder(
-        self, summary: queries.QuerySummary, doomed_by: Iterable[str] = ()
+        self,
+        summary: queries.QuerySummary,
+        doomed_by: Iterable[str] = (),
     ) -> queries.QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
         managing more complex queries than those obtainable via `Registry`
@@ -910,10 +982,48 @@ class SqlRegistry(Registry):
         builder : `queries.QueryBuilder`
             Object that can be used to construct and perform advanced queries.
         """
+        doomed_by = list(doomed_by)
+        backend = queries.SqlQueryBackend(self._db, self._managers)
+        context = backend.context()
+        relation: Relation | None = None
+        if doomed_by:
+            relation = LeafRelation.make_doomed(context.sql_engine, set(), doomed_by)
         return queries.QueryBuilder(
             summary,
-            backend=queries.SqlQueryBackend(self._db, self._managers),
-            doomed_by=doomed_by,
+            backend=backend,
+            context=context,
+            relation=relation,
+        )
+
+    def _standardize_query_data_id_args(
+        self, data_id: DataId | None, *, doomed_by: list[str], **kwargs: Any
+    ) -> DataCoordinate:
+        """Preprocess the data ID arguments passed to query* methods.
+
+        Parameters
+        ----------
+        data_id : `DataId` or `None`
+            Data ID that constrains the query results.
+        doomed_by : `list` [ `str` ]
+            List to append messages indicating why the query is doomed to
+            yield no results.
+        **kwargs
+            Additional data ID key-value pairs, extending and overriding
+            ``data_id``.
+
+        Returns
+        -------
+        data_id : `DataCoordinate`
+            Standardized data ID.  Will be fully expanded unless expansion
+            fails, in which case a message will be appended to ``doomed_by``
+            on return.
+        """
+        try:
+            return self.expandDataId(data_id, **kwargs)
+        except DataIdValueError as err:
+            doomed_by.append(str(err))
+        return DataCoordinate.standardize(
+            data_id, **kwargs, universe=self.dimensions, defaults=self.defaults.dataId
         )
 
     def _standardize_query_dataset_args(
@@ -1007,7 +1117,7 @@ class SqlRegistry(Registry):
         collections: Any = None,
         dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
         dataId: Optional[DataId] = None,
-        where: Optional[str] = None,
+        where: str = "",
         findFirst: bool = False,
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
@@ -1016,7 +1126,7 @@ class SqlRegistry(Registry):
     ) -> queries.DatasetQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         doomed_by: list[str] = []
-        data_id = self.expandDataId(dataId, **kwargs)
+        data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
         dataset_composition, collections = self._standardize_query_dataset_args(
             datasetType,
             collections,
@@ -1036,7 +1146,7 @@ class SqlRegistry(Registry):
             # QueryBuilder.
             summary = queries.QuerySummary(
                 requested=DimensionGraph(self.dimensions, names=dimension_names),
-                dataId=data_id,
+                data_id=data_id,
                 expression=where,
                 bind=bind,
                 defaults=self.defaults.dataId,
@@ -1053,7 +1163,7 @@ class SqlRegistry(Registry):
             query = builder.finish()
             parent_results.append(
                 queries.ParentDatasetQueryResults(
-                    self._db, query, datasetType=parent_dataset_type, components=components_for_parent
+                    query, parent_dataset_type, components=components_for_parent
                 )
             )
         if not parent_results:
@@ -1075,7 +1185,7 @@ class SqlRegistry(Registry):
         dataId: Optional[DataId] = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
+        where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,
@@ -1085,32 +1195,25 @@ class SqlRegistry(Registry):
         dimensions = ensure_iterable(dimensions)
         requestedDimensions = self.dimensions.extract(dimensions)
         doomed_by: list[str] = []
-        data_id = self.expandDataId(dataId, **kwargs)
+        data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
         dataset_composition, collections = self._standardize_query_dataset_args(
             datasets, collections, components, doomed_by=doomed_by
         )
+        summary = queries.QuerySummary(
+            requested=requestedDimensions,
+            data_id=data_id,
+            expression=where,
+            bind=bind,
+            defaults=self.defaults.dataId,
+            check=check,
+            datasets=dataset_composition.keys(),
+        )
+        builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
+        for datasetType in dataset_composition.keys():
+            builder.joinDataset(datasetType, collections, isResult=False)
+        query = builder.finish()
 
-        def query_factory(
-            order_by: Optional[Iterable[str]] = None, limit: Optional[Tuple[int, Optional[int]]] = None
-        ) -> queries.Query:
-            """Construct the Query object that generates query results."""
-            summary = queries.QuerySummary(
-                requested=requestedDimensions,
-                dataId=data_id,
-                expression=where,
-                bind=bind,
-                defaults=self.defaults.dataId,
-                check=check,
-                datasets=dataset_composition.keys(),
-                order_by=order_by,
-                limit=limit,
-            )
-            builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
-            for datasetType in dataset_composition:
-                builder.joinDataset(datasetType, collections, isResult=False)
-            return builder.finish()
-
-        return queries.DataCoordinateQueryResults(self._db, query_factory, requestedDimensions)
+        return queries.DataCoordinateQueryResults(query)
 
     def queryDimensionRecords(
         self,
@@ -1119,7 +1222,7 @@ class SqlRegistry(Registry):
         dataId: Optional[DataId] = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
+        where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,
@@ -1134,18 +1237,25 @@ class SqlRegistry(Registry):
                     f"No such dimension '{element}', available dimensions: "
                     + str(self.dimensions.getStaticElements())
                 ) from e
-        dataIds = self.queryDataIds(
-            element.graph,
-            dataId=dataId,
-            datasets=datasets,
-            collections=collections,
-            where=where,
-            components=components,
-            bind=bind,
-            check=check,
-            **kwargs,
+        doomed_by: list[str] = []
+        data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
+        dataset_composition, collections = self._standardize_query_dataset_args(
+            datasets, collections, components, doomed_by=doomed_by
         )
-        return queries.DatabaseDimensionRecordQueryResults(dataIds, self._managers.dimensions[element])
+        summary = queries.QuerySummary(
+            requested=element.graph,
+            data_id=data_id,
+            expression=where,
+            bind=bind,
+            defaults=self.defaults.dataId,
+            check=check,
+            datasets=dataset_composition.keys(),
+        )
+        builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
+        for datasetType in dataset_composition.keys():
+            builder.joinDataset(datasetType, collections, isResult=False)
+        query = builder.finish().with_record_columns(element)
+        return queries.DatabaseDimensionRecordQueryResults(query, element)
 
     def queryDatasetAssociations(
         self,
@@ -1159,35 +1269,56 @@ class SqlRegistry(Registry):
         if collections is None:
             if not self.defaults.collections:
                 raise NoDefaultCollectionError(
-                    "No collections provided to findDataset, and no defaults from registry construction."
+                    "No collections provided to queryDatasetAssociations, "
+                    "and no defaults from registry construction."
                 )
             collections = self.defaults.collections
         collections = CollectionWildcard.from_expression(collections)
-        TimespanReprClass = self._db.getTimespanRepresentation()
-        if isinstance(datasetType, str):
-            storage = self._managers.datasets[datasetType]
-        else:
-            storage = self._managers.datasets[datasetType.name]
-        for collectionRecord in self._managers.collections.resolve_wildcard(
+        backend = queries.SqlQueryBackend(self._db, self._managers)
+        parent_dataset_type, _ = backend.resolve_single_dataset_type_wildcard(datasetType, components=False)
+        timespan_tag = DatasetColumnTag(parent_dataset_type.name, "timespan")
+        collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
+        for parent_collection_record in backend.resolve_collection_wildcard(
             collections,
             collection_types=frozenset(collectionTypes),
             flatten_chains=flattenChains,
         ):
-            query = storage.select(collectionRecord)
-            with self._db.query(query) as sql_result:
-                sql_mappings = sql_result.mappings().fetchall()
-            for row in sql_mappings:
-                dataId = DataCoordinate.fromRequiredValues(
-                    storage.datasetType.dimensions,
-                    tuple(row[name] for name in storage.datasetType.dimensions.required.names),
+            # Resolve this possibly-chained collection into a list of
+            # non-CHAINED collections that actually hold datasets of this
+            # type.
+            candidate_collection_records = backend.resolve_dataset_collections(
+                parent_dataset_type,
+                CollectionWildcard.from_names([parent_collection_record.name]),
+                allow_calibration_collections=True,
+                governor_constraints={},
+            )
+            if not candidate_collection_records:
+                continue
+            with backend.context() as context:
+                relation = backend.make_dataset_query_relation(
+                    parent_dataset_type,
+                    candidate_collection_records,
+                    columns={"dataset_id", "run", "timespan", "collection"},
+                    context=context,
                 )
-                runRecord = self._managers.collections[row[self._managers.collections.getRunForeignKeyName()]]
-                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name, conform=False)
-                if collectionRecord.type is CollectionType.CALIBRATION:
-                    timespan = TimespanReprClass.extract(row)
-                else:
-                    timespan = None
-                yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)
+                reader = queries.DatasetRefReader(
+                    parent_dataset_type,
+                    translate_collection=lambda k: self._managers.collections[k].name,
+                    full=False,
+                )
+                for row in context.fetch_iterable(relation):
+                    ref = reader.read(row)
+                    collection_record = self._managers.collections[row[collection_tag]]
+                    if collection_record.type is CollectionType.CALIBRATION:
+                        timespan = row[timespan_tag]
+                    else:
+                        # For backwards compatibility and (possibly?) user
+                        # convenience we continue to define the timespan of a
+                        # DatasetAssociation row for a non-CALIBRATION
+                        # collection to be None rather than a fully unbounded
+                        # timespan.
+                        timespan = None
+                    yield DatasetAssociation(ref=ref, collection=collection_record.name, timespan=timespan)
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).

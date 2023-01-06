@@ -22,20 +22,22 @@ from __future__ import annotations
 
 __all__ = ["BasicSkyPixDimensionRecordStorage"]
 
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import sqlalchemy
+from lsst.daf.relation import Calculation, ColumnExpression, Join, Relation
 
 from ...core import (
-    DataCoordinateIterable,
-    DimensionElement,
+    DataCoordinate,
+    DimensionKeyColumnTag,
     DimensionRecord,
-    NamedKeyDict,
+    DimensionRecordColumnTag,
     SkyPixDimension,
-    TimespanDatabaseRepresentation,
 )
 from ..interfaces import SkyPixDimensionRecordStorage
-from ..queries import QueryBuilder
+
+if TYPE_CHECKING:
+    from .. import queries
 
 
 class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
@@ -62,26 +64,29 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
+    def join_results_postprocessed(self) -> bool:
+        # Docstring inherited.
+        return True
+
     def join(
         self,
-        builder: QueryBuilder,
-        *,
-        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
-        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
-    ) -> None:
-        if builder.hasDimensionKey(self._dimension):
-            # If joining some other element or dataset type already brought in
-            # the key for this dimension, there's nothing left to do, because
-            # a SkyPix dimension never has metadata or implied dependencies,
-            # and its regions are never stored in the database.  This code path
-            # is the usual case for the storage instance that manages
-            # ``DimensionUniverse.commonSkyPix`` instance, which has no table
-            # of its own but many overlap tables.
-            # Storage instances for other skypix dimensions will probably hit
-            # the error below, but we don't currently have a use case for
-            # joining them in anyway.
-            return
-        raise NotImplementedError(f"Cannot includeSkyPix dimension {self.element.name} directly in query.")
+        relation: Relation,
+        join: Join,
+        context: queries.SqlQueryContext,
+    ) -> Relation:
+        # Docstring inherited.
+        assert join.predicate.as_trivial(), "Expected trivial join predicate for skypix relation."
+        id_column = DimensionKeyColumnTag(self._dimension.name)
+        assert id_column in relation.columns, "Guaranteed by QueryBuilder.make_dimension_relation."
+        function_name = f"{self._dimension.name}_region"
+        context.iteration_engine.functions[function_name] = self._dimension.pixelization.pixel
+        calculation = Calculation(
+            tag=DimensionRecordColumnTag(self._dimension.name, "region"),
+            expression=ColumnExpression.function(function_name, ColumnExpression.reference(id_column)),
+        )
+        return calculation.apply(
+            relation, preferred_engine=context.iteration_engine, transfer=True, backtrack=True
+        )
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -91,13 +96,11 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.sync.
         raise TypeError(f"Cannot sync SkyPixdimension {self._dimension.name}.")
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        RecordClass = self._dimension.RecordClass
-        for dataId in dataIds:
-            index = dataId[self._dimension.name]
-            yield RecordClass(id=index, region=self._dimension.pixelization.pixel(index))
+    def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord:
+        # Docstring inherited from DimensionRecordStorage.
+        index = data_id[self._dimension.name]
+        return self._dimension.RecordClass(id=index, region=self._dimension.pixelization.pixel(index))
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return []

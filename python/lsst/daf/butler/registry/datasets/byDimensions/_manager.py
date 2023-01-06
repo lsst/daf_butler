@@ -334,12 +334,13 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         components: bool | None = None,
         missing: list[str] | None = None,
         explicit_only: bool = False,
+        components_deprecated: bool = True,
     ) -> dict[DatasetType, list[str | None]]:
         wildcard = DatasetTypeWildcard.from_expression(expression)
         result: defaultdict[DatasetType, set[str | None]] = defaultdict(set)
         # This message can be transformed into an error on DM-36303 after v26,
-        # and the components argument here (and in all callers) can be removed
-        # entirely on DM-36457 after v27.
+        # and the components and components_deprecated arguments can be merged
+        # into one on DM-36457 after v27.
         deprecation_message = (
             "Querying for component datasets via Registry query methods is deprecated in favor of using "
             "DatasetRef and DatasetType methods on parent datasets. Only components=False will be supported "
@@ -347,7 +348,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         )
         for name, dataset_type in wildcard.values.items():
             parent_name, component_name = DatasetType.splitDatasetTypeName(name)
-            if component_name is not None:
+            if component_name is not None and components_deprecated:
                 warnings.warn(deprecation_message, FutureWarning)
             if (found_storage := self.find(parent_name)) is not None:
                 found_parent = found_storage.datasetType
@@ -384,7 +385,11 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                         result[storage.datasetType].update(
                             storage.datasetType.storageClass.allComponents().keys()
                         )
-                        if storage.datasetType.storageClass.allComponents() and not already_warned:
+                        if (
+                            storage.datasetType.storageClass.allComponents()
+                            and not already_warned
+                            and components_deprecated
+                        ):
                             warnings.warn(deprecation_message, FutureWarning)
                             already_warned = True
                     except KeyError as err:
@@ -423,7 +428,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                             for p in wildcard.patterns
                         ):
                             result[storage.datasetType].add(component_name)
-                            if not already_warned:
+                            if not already_warned and components_deprecated:
                                 warnings.warn(deprecation_message, FutureWarning)
                                 already_warned = True
         return {k: list(v) for k, v in result.items()}

@@ -686,7 +686,10 @@ class Registry(ABC):
         Parameters
         ----------
         datasetType : `DatasetType` or `str`
-            A `DatasetType` or the name of one.
+            A `DatasetType` or the name of one.  If this is a `DatasetType`
+            instance, its storage class will be respected and propagated to
+            the output, even if it differs from the dataset type definition
+            in the registry, as long as the storage classes are convertible.
         dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
@@ -1115,6 +1118,14 @@ class Registry(ABC):
             dimensions or values, or when a resulting data ID contains
             contradictory key-value pairs, according to dimension
             relationships.
+
+        Notes
+        -----
+        This method cannot be relied upon to reject invalid data ID values
+        for dimensions that do actually not have any record columns.  For
+        efficiency reasons the records for these dimensions (which have only
+        dimension key values that are given by the caller) may be constructed
+        directly rather than obtained from the registry database.
         """
         raise NotImplementedError()
 
@@ -1306,7 +1317,7 @@ class Registry(ABC):
         collections: Any = None,
         dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
         dataId: Optional[DataId] = None,
-        where: Optional[str] = None,
+        where: str = "",
         findFirst: bool = False,
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
@@ -1425,7 +1436,7 @@ class Registry(ABC):
         dataId: Optional[DataId] = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
+        where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,
@@ -1531,7 +1542,7 @@ class Registry(ABC):
         dataId: Optional[DataId] = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
+        where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,

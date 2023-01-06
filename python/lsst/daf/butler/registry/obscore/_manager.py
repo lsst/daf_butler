@@ -31,14 +31,8 @@ from collections.abc import Collection, Mapping
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Type, cast
 
 import sqlalchemy
-from lsst.daf.butler import (
-    Config,
-    DataCoordinate,
-    DataCoordinateIterable,
-    DatasetRef,
-    Dimension,
-    DimensionUniverse,
-)
+from lsst.daf.butler import Config, DataCoordinate, DatasetRef, DimensionRecordColumnTag, DimensionUniverse
+from lsst.daf.relation import Join
 from lsst.sphgeom import Region
 from lsst.utils.iteration import chunk_iterable
 
@@ -56,6 +50,7 @@ if TYPE_CHECKING:
         DimensionRecordStorageManager,
         StaticTablesContext,
     )
+    from ..queries import SqlQueryContext
 
 _VERSION = VersionTuple(0, 0, 1)
 
@@ -66,58 +61,44 @@ class _ExposureRegionFactory(ExposureRegionFactory):
     def __init__(self, dimensions: DimensionRecordStorageManager):
         self.dimensions = dimensions
         self.universe = dimensions.universe
-        self.exposure = self.universe["exposure"]
-        self.visit = self.universe["visit"]
+        self.exposure_dimensions = self.universe["exposure"].graph
+        self.exposure_detector_dimensions = self.universe.extract(["exposure", "detector"])
 
-    def exposure_region(self, dataId: DataCoordinate) -> Optional[Region]:
+    def exposure_region(self, dataId: DataCoordinate, context: SqlQueryContext) -> Optional[Region]:
         # Docstring is inherited from a base class.
+        # Make a relation that starts with visit_definition (mapping between
+        # exposure and visit).
+        relation = context.make_initial_relation()
         visit_definition_storage = self.dimensions.get(self.universe["visit_definition"])
         if visit_definition_storage is None:
             return None
-        exposureDataId = dataId.subset(self.exposure.graph)
-        records = visit_definition_storage.fetch(DataCoordinateIterable.fromScalar(exposureDataId))
-        # There may be more than one visit per exposure, they should nave the
-        # same  region, so we use arbitrary one.
-        record = next(iter(records), None)
-        if record is None:
-            return None
-        visit: int = record.visit
-
-        detector = cast(Dimension, self.universe["detector"])
-        if detector in dataId:
+        relation = visit_definition_storage.join(relation, Join(), context)
+        # Join in a table with either visit+detector regions or visit regions.
+        if "detector" in dataId.names:
             visit_detector_region_storage = self.dimensions.get(self.universe["visit_detector_region"])
             if visit_detector_region_storage is None:
                 return None
-            visitDataId = DataCoordinate.standardize(
-                {
-                    "instrument": dataId["instrument"],
-                    "visit": visit,
-                    "detector": dataId["detector"],
-                },
-                universe=self.universe,
-            )
-            records = visit_detector_region_storage.fetch(DataCoordinateIterable.fromScalar(visitDataId))
-            record = next(iter(records), None)
-            if record is not None:
-                return record.region
-
+            relation = visit_detector_region_storage.join(relation, Join(), context)
+            constraint_data_id = dataId.subset(self.exposure_detector_dimensions)
+            region_tag = DimensionRecordColumnTag("visit_detector_region", "region")
         else:
-
-            visit_storage = self.dimensions.get(self.visit)
+            visit_storage = self.dimensions.get(self.universe["visit"])
             if visit_storage is None:
                 return None
-            visitDataId = DataCoordinate.standardize(
-                {
-                    "instrument": dataId["instrument"],
-                    "visit": visit,
-                },
-                universe=self.universe,
-            )
-            records = visit_storage.fetch(DataCoordinateIterable.fromScalar(visitDataId))
-            record = next(iter(records), None)
-            if record is not None:
-                return record.region
-
+            relation = visit_storage.join(relation, Join(), context)
+            constraint_data_id = dataId.subset(self.exposure_dimensions)
+            region_tag = DimensionRecordColumnTag("visit", "region")
+        # Constrain the relation to match the given exposure and (if present)
+        # detector IDs.
+        relation = relation.with_rows_satisfying(
+            context.make_data_coordinate_predicate(constraint_data_id, full=False)
+        )
+        # If we get more than one result (because the exposure belongs to
+        # multiple visits), just pick an arbitrary one.
+        relation = relation[:1]
+        # Run the query and extract the region, if the query has any results.
+        for row in context.fetch_iterable(relation):
+            return row[region_tag]
         return None
 
 
@@ -219,7 +200,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         # Docstring inherited from base class.
         return None
 
-    def add_datasets(self, refs: Iterable[DatasetRef]) -> int:
+    def add_datasets(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
         # Docstring inherited from base class.
 
         # Only makes sense for RUN collection types
@@ -256,9 +237,11 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # Take all refs, no collection check.
             obscore_refs = refs
 
-        return self._populate(obscore_refs)
+        return self._populate(obscore_refs, context)
 
-    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
+    def associate(
+        self, refs: Iterable[DatasetRef], collection: CollectionRecord, context: SqlQueryContext
+    ) -> int:
         # Docstring inherited from base class.
 
         # Only works when collection type is TAGGED
@@ -266,7 +249,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             return 0
 
         if collection.name == self.tagged_collection:
-            return self._populate(refs)
+            return self._populate(refs, context)
         else:
             return 0
 
@@ -289,14 +272,13 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
                 for ids in chunk_iterable(dataset_ids):
                     where = self.table.columns[fk_field.name].in_(ids)
                     count += self.db.deleteWhere(self.table, where)
-
         return count
 
-    def _populate(self, refs: Iterable[DatasetRef]) -> int:
+    def _populate(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
         """Populate obscore table with the data from given datasets."""
         records: List[Record] = []
         for ref in refs:
-            record = self.record_factory(ref)
+            record = self.record_factory(ref, context)
             if record is not None:
                 records.append(record)
 

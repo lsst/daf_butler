@@ -235,6 +235,7 @@ class DatabaseDimensionElement(DimensionElement):
         *,
         context: Optional[StaticTablesContext] = None,
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
         """Make the dimension record storage instance for this database.
 
@@ -251,6 +252,9 @@ class DatabaseDimensionElement(DimensionElement):
         governors : `NamedKeyMapping`
             Mapping from `GovernorDimension` to the record storage backend for
             that dimension, containing all governor dimensions.
+        view_target : `DatabaseDimensionRecordStorage`, optional
+            Storage object for the element this target's storage is a view of
+            (i.e. when `viewOf` is not `None`).
 
         Returns
         -------
@@ -261,7 +265,14 @@ class DatabaseDimensionElement(DimensionElement):
 
         cls = doImportType(self._storage["cls"])
         assert issubclass(cls, DatabaseDimensionRecordStorage)
-        return cls.initialize(db, self, context=context, config=self._storage, governors=governors)
+        return cls.initialize(
+            db,
+            self,
+            context=context,
+            config=self._storage,
+            governors=governors,
+            view_target=view_target,
+        )
 
 
 class DatabaseDimension(Dimension, DatabaseDimensionElement):

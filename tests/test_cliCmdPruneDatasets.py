@@ -83,7 +83,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
     @staticmethod
     def makeQueryDatasetsArgs(*, repo, **kwargs):
         expectedArgs = dict(
-            repo=repo, collections=(), where=None, find_first=True, show_uri=False, glob=tuple()
+            repo=repo, collections=(), where="", find_first=True, show_uri=False, glob=tuple()
         )
         expectedArgs.update(kwargs)
         return expectedArgs

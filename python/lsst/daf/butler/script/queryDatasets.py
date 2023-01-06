@@ -141,7 +141,7 @@ class QueryDatasets:
     collections : iterable [`str`]
         A list of glob-style search string that fully or partially identify
         the collections to search for.
-    where : `str` or `None`
+    where : `str`
         A string expression similar to a SQL WHERE clause.  May involve any
         column of a dimension table or (as a shortcut for the primary key
         column of a dimension table) dimension name.
@@ -167,7 +167,7 @@ class QueryDatasets:
         self,
         glob: Iterable[str],
         collections: Iterable[str],
-        where: str | None,
+        where: str,
         find_first: bool,
         show_uri: bool,
         repo: str | None = None,
@@ -180,7 +180,7 @@ class QueryDatasets:
         self.showUri = show_uri
 
     def _getDatasets(
-        self, glob: Iterable[str], collections: Iterable[str], where: str | None, find_first: bool
+        self, glob: Iterable[str], collections: Iterable[str], where: str, find_first: bool
     ) -> None:
         datasetTypes = glob if glob else ...
         query_collections = collections if collections else ...

@@ -91,7 +91,7 @@ def queryDataIds(
     repo: str,
     dimensions: Iterable[str],
     datasets: tuple[str, ...],
-    where: str | None,
+    where: str,
     collections: Iterable[str],
     order_by: tuple[str, ...],
     limit: int,

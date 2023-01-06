@@ -24,26 +24,27 @@ __all__ = ["TableDimensionRecordStorage"]
 
 import dataclasses
 import logging
-import warnings
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set
 from typing import Any
 
 import sqlalchemy
+from lsst.daf.relation import Join, Relation, sql
 
 from ...core import (
     DatabaseDimensionElement,
-    DataCoordinateIterable,
+    DataCoordinate,
     DimensionElement,
+    DimensionKeyColumnTag,
     DimensionRecord,
     GovernorDimension,
-    NamedKeyDict,
+    LogicalColumn,
     NamedKeyMapping,
-    NamedValueSet,
-    SimpleQuery,
+    SkyPixDimension,
     TimespanDatabaseRepresentation,
     addDimensionForeignKey,
     ddl,
 )
+from .. import queries
 from ..interfaces import (
     Database,
     DatabaseDimensionOverlapStorage,
@@ -51,7 +52,6 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-from ..queries import QueryBuilder
 
 _LOG = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             )
         }
         self._skypix_overlap_tables = skypix_overlap_tables
-        self._otherOverlaps: list[DatabaseDimensionOverlapStorage] = []
+        self._otherOverlaps: dict[str, DatabaseDimensionOverlapStorage] = {}
 
     @classmethod
     def initialize(
@@ -113,8 +113,10 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
+        assert view_target is None, f"Storage for {element} is not a view."
         spec = element.RecordClass.fields.makeTableSpec(TimespanReprClass=db.getTimespanRepresentation())
         if context is not None:
             table = context.addTable(element.name, spec)
@@ -138,59 +140,27 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
-    def join(
-        self,
-        builder: QueryBuilder,
-        *,
-        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
-        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
-    ) -> None:
+    def make_relation(self, context: queries.SqlQueryContext) -> Relation:
         # Docstring inherited from DimensionRecordStorage.
-        if regions is not None:
-            dimensions = NamedValueSet(self.element.required)
-            dimensions.add(self.element.universe.commonSkyPix)
-            assert self._skypix_overlap_tables is not None
-            builder.joinTable(self._select_skypix_overlaps(), dimensions)
-            regionsInTable = self._table.columns["region"]
-            regions[self.element] = regionsInTable
-        joinOn = builder.startJoin(
-            self._table, self.element.dimensions, self.element.RecordClass.fields.dimensions.names
+        payload = self._build_sql_payload(self._table, context.column_types)
+        return context.sql_engine.make_leaf(
+            payload.columns_available.keys(),
+            name=self.element.name,
+            payload=payload,
         )
-        if timespans is not None:
-            timespanInTable = self._db.getTimespanRepresentation().from_columns(self._table.columns)
-            for timespanInQuery in timespans.values():
-                joinOn.append(timespanInQuery.overlaps(timespanInTable))
-            timespans[self.element] = timespanInTable
-        builder.finishJoin(self._table, joinOn)
-        return self._table
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
-        RecordClass = self.element.RecordClass
-        query = SimpleQuery()
-        query.columns.extend(self._table.columns[name] for name in RecordClass.fields.standard.names)
-        if self.element.spatial is not None:
-            query.columns.append(self._table.columns["region"])
-        if self.element.temporal is not None:
-            TimespanReprClass = self._db.getTimespanRepresentation()
-            query.columns.extend(self._table.columns[name] for name in TimespanReprClass.getFieldNames())
-        query.join(self._table)
-        dataIds.constrain(query, lambda name: self._fetchColumns[name])
-        with warnings.catch_warnings():
-            # Some of our generated queries may contain cartesian joins, this
-            # is not a serious issue as it is properly constrained, so we want
-            # to suppress sqlalchemy warnings.
-            warnings.filterwarnings(
-                "ignore",
-                message="SELECT statement has a cartesian product",
-                category=sqlalchemy.exc.SAWarning,
-            )
-            with self._db.query(query.combine()) as sql_result:
-                for row in sql_result.fetchall():
-                    values = row._asdict()
-                    if self.element.temporal is not None:
-                        values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
-                    yield RecordClass(**values)
+    def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
+        # Docstring inherited from DimensionRecordStorage.
+        from .. import queries
+
+        relation = self.join(context.make_initial_relation(), Join(), context).with_rows_satisfying(
+            context.make_data_coordinate_predicate(data_id, full=False)
+        )[0:1]
+        rows = list(context.fetch_iterable(relation))
+        if not rows:
+            return None
+        reader = queries.DimensionRecordReader(self._element)
+        return reader.read(rows[0])
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -239,7 +209,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 # We updated something other than a region.
         return inserted_or_updated
 
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+    def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         result = [self._table]
         if self._skypix_overlap_tables is not None:
@@ -249,7 +219,23 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
         # Docstring inherited from DatabaseDimensionRecordStorage.
-        self._otherOverlaps.append(overlaps)
+        (other,) = set(overlaps.elements) - {self.element}
+        self._otherOverlaps[other.name] = overlaps
+
+    def make_spatial_join_relation(
+        self,
+        other: DimensionElement,
+        context: queries.SqlQueryContext,
+        governor_constraints: Mapping[str, Set[str]],
+    ) -> Relation | None:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
+        match other:
+            case SkyPixDimension() as skypix:
+                return self._make_skypix_join_relation(skypix, context)
+            case DatabaseDimensionElement() as other:
+                return self._otherOverlaps[other.name].make_relation(context, governor_constraints)
+            case _:
+                raise TypeError(f"Unexpected dimension element type for spatial join: {other}.")
 
     def _on_governor_insert(self, record: DimensionRecord) -> None:
         """A `GovernorDimensionRecordStorage.registerInsertionListener`
@@ -377,38 +363,52 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 "are not supported by this version of daf_butler.  Please use a newer version."
             )
 
-    def _select_skypix_overlaps(self) -> sqlalchemy.sql.FromClause:
-        """Construct a subquery expression containing overlaps between common
-        skypix dimension and this dimension element.
+    def _make_skypix_join_relation(
+        self,
+        skypix: SkyPixDimension,
+        context: queries.SqlQueryContext,
+    ) -> Relation | None:
+        """Construct a subquery expression containing overlaps between the
+        given skypix dimension and governor values.
+
+        Parameters
+        ----------
+        skypix : `SkyPixDimension`
+            The skypix dimension (system and level) for which overlaps should
+            be materialized.
+        context : `.queries.SqlQueryContext`
+            Object that manages relation engines and database-side state
+            (e.g. temporary tables) for the query.
 
         Returns
         -------
-        subquery : `sqlalchemy.sql.FromClause`
-            A SELECT query with an alias, intended for use as a subquery, with
-            columns equal to::
-
-                list(self.element.required.names)
-                    + [self.element.universe.commonSkyPix.name]
+        relation : `sql.Relation` or `None`
+            Join relation, or `None` if overlaps are not materialized for this
+            combination of dimensions.
         """
         assert self._element.spatial is not None, "Only called for spatial dimension elements."
         assert (
             self._skypix_overlap_tables is not None
         ), "Spatial dimension elements always have skypix overlap tables."
-        skypix = self._element.universe.commonSkyPix
+        if skypix != self._element.universe.commonSkyPix:
+            return None
         table = self._skypix_overlap_tables.overlaps
-        columns = [table.columns.skypix_index.label(skypix.name)]
-        columns.extend(table.columns[name] for name in self.element.graph.required.names)
-        query = (
-            sqlalchemy.sql.select(*columns)
-            .select_from(table)
-            .where(
-                sqlalchemy.sql.and_(
-                    table.columns.skypix_system == skypix.system.name,
-                    table.columns.skypix_level == skypix.level,
-                )
-            )
+        payload = sql.Payload[LogicalColumn](table)
+        payload.columns_available[
+            DimensionKeyColumnTag(skypix.name)
+        ] = payload.from_clause.columns.skypix_index
+        for dimension_name in self.element.graph.required.names:
+            payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
+                dimension_name
+            ]
+        payload.where.append(table.columns.skypix_system == skypix.system.name)
+        payload.where.append(table.columns.skypix_level == skypix.level)
+        leaf = context.sql_engine.make_leaf(
+            payload.columns_available.keys(),
+            name=f"{self.element.name}_{skypix.name}_overlap",
+            payload=payload,
         )
-        return query.alias(f"{self.element.name}_{skypix.name}_overlap")
+        return leaf
 
 
 @dataclasses.dataclass
