@@ -482,22 +482,25 @@ class SqlRegistry(Registry):
                     tail_collections.extend(filtered_collections[n:])
                     del filtered_collections[n:]
                     break
-        requested_columns = {"dataset_id", "run", "collection"}
-        with backend.context() as context:
-            predicate = context.make_data_coordinate_predicate(
-                dataId.subset(parent_dataset_type.dimensions), full=False
-            )
-            if timespan is not None:
-                requested_columns.add("timespan")
-                predicate = predicate.logical_and(
-                    context.make_timespan_overlap_predicate(
-                        DatasetColumnTag(parent_dataset_type.name, "timespan"), timespan
-                    )
+        if filtered_collections:
+            requested_columns = {"dataset_id", "run", "collection"}
+            with backend.context() as context:
+                predicate = context.make_data_coordinate_predicate(
+                    dataId.subset(parent_dataset_type.dimensions), full=False
                 )
-            relation = backend.make_dataset_query_relation(
-                parent_dataset_type, filtered_collections, requested_columns, context
-            ).with_rows_satisfying(predicate)
-            rows = list(context.fetch_iterable(relation))
+                if timespan is not None:
+                    requested_columns.add("timespan")
+                    predicate = predicate.logical_and(
+                        context.make_timespan_overlap_predicate(
+                            DatasetColumnTag(parent_dataset_type.name, "timespan"), timespan
+                        )
+                    )
+                relation = backend.make_dataset_query_relation(
+                    parent_dataset_type, filtered_collections, requested_columns, context
+                ).with_rows_satisfying(predicate)
+                rows = list(context.fetch_iterable(relation))
+        else:
+            rows = []
         if not rows:
             if tail_collections:
                 msg = (
