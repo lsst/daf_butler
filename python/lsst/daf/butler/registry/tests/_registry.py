@@ -427,6 +427,71 @@ class RegistryTests(ABC):
         # Check that requesting a non-existing dataId returns None
         nonExistingDataId = {"instrument": "Cam1", "detector": 3}
         self.assertIsNone(registry.findDataset(datasetType, nonExistingDataId, collections=run))
+        # Search more than one collection, in which two have the right
+        # dataset type and another does not.
+        registry.registerRun("empty")
+        self.loadData(registry, "datasets-uuid.yaml")
+        bias1 = registry.findDataset("bias", instrument="Cam1", detector=2, collections=["imported_g"])
+        self.assertIsNotNone(bias1)
+        bias2 = registry.findDataset("bias", instrument="Cam1", detector=2, collections=["imported_r"])
+        self.assertIsNotNone(bias2)
+        self.assertEqual(
+            bias1,
+            registry.findDataset(
+                "bias", instrument="Cam1", detector=2, collections=["empty", "imported_g", "imported_r"]
+            ),
+        )
+        self.assertEqual(
+            bias2,
+            registry.findDataset(
+                "bias", instrument="Cam1", detector=2, collections=["empty", "imported_r", "imported_g"]
+            ),
+        )
+        # Search more than one collection, with one of them a CALIBRATION
+        # collection.
+        registry.registerCollection("Cam1/calib", CollectionType.CALIBRATION)
+        timespan = Timespan(
+            begin=astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai"),
+            end=astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai"),
+        )
+        registry.certify("Cam1/calib", [bias2], timespan=timespan)
+        self.assertEqual(
+            bias1,
+            registry.findDataset(
+                "bias",
+                instrument="Cam1",
+                detector=2,
+                collections=["empty", "imported_g", "Cam1/calib"],
+                timespan=timespan,
+            ),
+        )
+        self.assertEqual(
+            bias2,
+            registry.findDataset(
+                "bias",
+                instrument="Cam1",
+                detector=2,
+                collections=["empty", "Cam1/calib", "imported_g"],
+                timespan=timespan,
+            ),
+        )
+        # If we try to search those same collections without a timespan, the
+        # first one works, since the CALIBRATION collection is irrelevant after
+        # the datast is found in the first collection.  But the second one
+        # should raise.
+        self.assertEqual(
+            bias1,
+            registry.findDataset(
+                "bias", instrument="Cam1", detector=2, collections=["empty", "imported_g", "Cam1/calib"]
+            ),
+        )
+        with self.assertRaises(TypeError):
+            self.assertEqual(
+                bias2,
+                registry.findDataset(
+                    "bias", instrument="Cam1", detector=2, collections=["empty", "Cam1/calib", "imported_g"]
+                ),
+            )
 
     def testRemoveDatasetTypeSuccess(self):
         """Test that Registry.removeDatasetType works when there are no
