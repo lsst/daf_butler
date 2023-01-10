@@ -886,6 +886,9 @@ def _apply_astropy_metadata(astropy_table: atable.Table, metadata: dict) -> None
                 if attr in header_cols[col.name]:
                     setattr(col, attr, header_cols[col.name][attr])
 
+        if "meta" in meta_hdr:
+            astropy_table.meta.update(meta_hdr["meta"])
+
 
 def _arrow_string_to_numpy_dtype(
     schema: pa.Schema, name: str, numpy_column: np.ndarray | None = None, default_length: int = 10
