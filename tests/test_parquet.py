@@ -634,6 +634,29 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
 
+    def testAstropyTableWithMetadata(self):
+        tab1 = _makeSimpleAstropyTable(include_multidim=True)
+
+        meta = {
+            "meta_a": 5,
+            "meta_b": 10.0,
+            "meta_c": [1, 2, 3],
+            "meta_d": True,
+            "meta_e": "string",
+        }
+
+        tab1.meta.update(meta)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+        # Read the whole Table.
+        tab2 = self.butler.get(self.datasetType, dataId={})
+        self._checkAstropyTableEquality(tab1, tab2)
+
+        # Check the metadata
+        for key in meta:
+            self.assertIn(key, tab2.meta)
+            self.assertEqual(tab2.meta[key], tab1.meta[key])
+
     def testArrowAstropySchema(self):
         tab1 = _makeSimpleAstropyTable()
         tab1_arrow = astropy_to_arrow(tab1)
