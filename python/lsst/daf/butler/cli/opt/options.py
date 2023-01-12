@@ -40,6 +40,7 @@ __all__ = (
     "regex_option",
     "register_dataset_types_option",
     "run_option",
+    "transfer_dimensions_option",
     "transfer_option",
     "verbose_option",
     "where_option",
@@ -231,10 +232,7 @@ regex_option = MWOptionDecorator("--regex")
 
 register_dataset_types_option = MWOptionDecorator(
     "--register-dataset-types",
-    help=unwrap(
-        """Register DatasetTypes that do not already
-                                                              exist in the Registry."""
-    ),
+    help="Register DatasetTypes that do not already exist in the Registry.",
     is_flag=True,
 )
 
@@ -249,6 +247,19 @@ transfer_option = MWOptionDecorator(
     type=click.Choice(
         choices=["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink", "direct"],
         case_sensitive=False,
+    ),
+)
+
+
+transfer_dimensions_option = MWOptionDecorator(
+    "--transfer-dimensions/--no-transfer-dimensions",
+    is_flag=True,
+    default=True,
+    help=unwrap(
+        """If true, also copy dimension records along with datasets.
+        If the dmensions are already present in the destination butler it
+        can be more efficient to disable this. The default is to transfer
+        dimensions."""
     ),
 )
 

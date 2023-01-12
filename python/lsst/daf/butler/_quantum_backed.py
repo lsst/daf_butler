@@ -98,10 +98,10 @@ class QuantumBackedButler(LimitedButler):
 
     Parameters
     ----------
-    quantum : `Quantum`
-        Object describing the predicted input and output dataset relevant to
-        this butler.  This must have resolved `DatasetRef` instances for all
-        inputs and outputs.
+    predicted_inputs : `~collections.abc.Iterable` [`DatasetId`]
+        Dataset IDs for datasets that can can be read from this butler.
+    predicted_outputs : `~collections.abc.Iterable` [`DatasetId`]
+        Dataset IDs for datasets that can be stored in this butler.
     dimensions : `DimensionUniverse`
         Object managing all dimension definitions.
     datastore : `Datastore`
@@ -148,19 +148,15 @@ class QuantumBackedButler(LimitedButler):
 
     def __init__(
         self,
-        quantum: Quantum,
+        predicted_inputs: Iterable[DatasetId],
+        predicted_outputs: Iterable[DatasetId],
         dimensions: DimensionUniverse,
         datastore: Datastore,
         storageClasses: StorageClassFactory,
     ):
-        self._quantum = quantum
         self._dimensions = dimensions
-        self._predicted_inputs: Set[DatasetId] = {
-            ref.getCheckedId() for ref in itertools.chain.from_iterable(quantum.inputs.values())
-        }
-        self._predicted_outputs: Set[DatasetId] = {
-            ref.getCheckedId() for ref in itertools.chain.from_iterable(quantum.outputs.values())
-        }
+        self._predicted_inputs = set(predicted_inputs)
+        self._predicted_outputs = set(predicted_outputs)
         self._available_inputs: Set[DatasetId] = set()
         self._unavailable_inputs: Set[DatasetId] = set()
         self._actual_inputs: Set[DatasetId] = set()
@@ -205,6 +201,121 @@ class QuantumBackedButler(LimitedButler):
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
         """
+        predicted_inputs = [
+            ref.getCheckedId() for ref in itertools.chain.from_iterable(quantum.inputs.values())
+        ]
+        predicted_inputs += [ref.getCheckedId() for ref in quantum.initInputs.values()]
+        predicted_outputs = [
+            ref.getCheckedId() for ref in itertools.chain.from_iterable(quantum.outputs.values())
+        ]
+        return cls._initialize(
+            config=config,
+            predicted_inputs=predicted_inputs,
+            predicted_outputs=predicted_outputs,
+            dimensions=dimensions,
+            filename=filename,
+            datastore_records=quantum.datastore_records,
+            OpaqueManagerClass=OpaqueManagerClass,
+            BridgeManagerClass=BridgeManagerClass,
+            search_paths=search_paths,
+        )
+
+    @classmethod
+    def from_predicted(
+        cls,
+        config: Union[Config, str],
+        predicted_inputs: Iterable[DatasetId],
+        predicted_outputs: Iterable[DatasetId],
+        dimensions: DimensionUniverse,
+        datastore_records: Mapping[str, DatastoreRecordData],
+        filename: str = ":memory:",
+        OpaqueManagerClass: Type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
+        BridgeManagerClass: Type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
+        search_paths: Optional[List[str]] = None,
+    ) -> QuantumBackedButler:
+        """Construct a new `QuantumBackedButler` from sets of input and output
+        dataset IDs.
+
+        Parameters
+        ----------
+        config : `Config` or `str`
+            A butler repository root, configuration filename, or configuration
+            instance.
+        predicted_inputs : `~collections.abc.Iterable` [`DatasetId`]
+            Dataset IDs for datasets that can can be read from this butler.
+        predicted_outputs : `~collections.abc.Iterable` [`DatasetId`]
+            Dataset IDs for datasets that can be stored in this butler, must be
+            fully resolved.
+        dimensions : `DimensionUniverse`
+            Object managing all dimension definitions.
+        filename : `str`, optional
+            Name for the SQLite database that will back this butler; defaults
+            to an in-memory database.
+        datastore_records : `dict` [`str`, `DatastoreRecordData`] or `None`
+            Datastore records to import into a datastore.
+        OpaqueManagerClass : `type`, optional
+            A subclass of `OpaqueTableStorageManager` to use for datastore
+            opaque records.  Default is a SQL-backed implementation.
+        BridgeManagerClass : `type`, optional
+            A subclass of `DatastoreRegistryBridgeManager` to use for datastore
+            location records.  Default is a SQL-backed implementation.
+        search_paths : `list` of `str`, optional
+            Additional search paths for butler configuration.
+        """
+        return cls._initialize(
+            config=config,
+            predicted_inputs=predicted_inputs,
+            predicted_outputs=predicted_outputs,
+            dimensions=dimensions,
+            filename=filename,
+            datastore_records=datastore_records,
+            OpaqueManagerClass=OpaqueManagerClass,
+            BridgeManagerClass=BridgeManagerClass,
+            search_paths=search_paths,
+        )
+
+    @classmethod
+    def _initialize(
+        cls,
+        *,
+        config: Union[Config, str],
+        predicted_inputs: Iterable[DatasetId],
+        predicted_outputs: Iterable[DatasetId],
+        dimensions: DimensionUniverse,
+        filename: str = ":memory:",
+        datastore_records: Mapping[str, DatastoreRecordData] | None = None,
+        OpaqueManagerClass: Type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
+        BridgeManagerClass: Type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
+        search_paths: Optional[List[str]] = None,
+    ) -> QuantumBackedButler:
+        """Internal method with common implementation used by `initialize` and
+        `for_output`.
+
+        Parameters
+        ----------
+        config : `Config` or `str`
+            A butler repository root, configuration filename, or configuration
+            instance.
+        predicted_inputs : `~collections.abc.Iterable` [`DatasetId`]
+            Dataset IDs for datasets that can can be read from this butler.
+        predicted_outputs : `~collections.abc.Iterable` [`DatasetId`]
+            Dataset IDs for datasets that can be stored in this butler.
+        dimensions : `DimensionUniverse`
+            Object managing all dimension definitions.
+        filename : `str`, optional
+            Name for the SQLite database that will back this butler; defaults
+            to an in-memory database.
+        datastore_records : `dict` [`str`, `DatastoreRecordData`] or `None`
+            Datastore records to import into a datastore.
+        OpaqueManagerClass : `type`, optional
+            A subclass of `OpaqueTableStorageManager` to use for datastore
+            opaque records.  Default is a SQL-backed implementation.
+        BridgeManagerClass : `type`, optional
+            A subclass of `DatastoreRegistryBridgeManager` to use for datastore
+            location records.  Default is a SQL-backed implementation.
+        search_paths : `list` of `str`, optional
+            Additional search paths for butler configuration.
+        """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
         if "root" in butler_config:
             butler_root = butler_config["root"]
@@ -227,10 +338,11 @@ class QuantumBackedButler(LimitedButler):
         # For now just force this option as we cannot work without it.
         butler_config["datastore", "trust_get_request"] = True
         datastore = Datastore.fromConfig(butler_config, bridge_manager, butler_root)
-        datastore.import_records(quantum.datastore_records)
+        if datastore_records is not None:
+            datastore.import_records(datastore_records)
         storageClasses = StorageClassFactory()
         storageClasses.addFromConfig(butler_config)
-        return cls(quantum, dimensions, datastore, storageClasses=storageClasses)
+        return cls(predicted_inputs, predicted_outputs, dimensions, datastore, storageClasses=storageClasses)
 
     def isWriteable(self) -> bool:
         # Docstring inherited.

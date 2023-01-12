@@ -130,6 +130,46 @@ class DatasetIdFactory:
             data = ",".join(f"{key}={value}" for key, value in items)
             return uuid.uuid5(self.NS_UUID, data)
 
+    def resolveRef(
+        self,
+        ref: DatasetRef,
+        run: str,
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+    ) -> DatasetRef:
+        """Generate resolved dataset reference for predicted datasets.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset ref, can be already resolved.
+        run : `str`
+            Name of the RUN collection for the dataset.
+        idGenerationMode : `DatasetIdGenEnum`
+            ID generation option. `~DatasetIdGenEnum.UNIQUE` makes a random
+            UUID4-type ID. `~DatasetIdGenEnum.DATAID_TYPE` makes a
+            deterministic UUID5-type ID based on a dataset type name and
+            ``dataId``.  `~DatasetIdGenEnum.DATAID_TYPE_RUN` makes a
+            deterministic UUID5-type ID based on a dataset type name, run
+            collection name, and ``dataId``.
+
+        Returns
+        -------
+        resolved : `DatasetRef`
+            Resolved dataset ref, if input reference is already resolved it
+            is returned without modification.
+
+        Notes
+        -----
+        This method can only be used for predicted dataset references that do
+        not exist yet in the database. It does not resolve existing dataset
+        references already stored in registry.
+        """
+        if ref.id is not None:
+            return ref
+        datasetId = self.makeDatasetId(run, ref.datasetType, ref.dataId, idGenerationMode)
+        resolved = ref.resolved(datasetId, run)
+        return resolved
+
 
 class DatasetRecordStorage(ABC):
     """An interface that manages the records associated with a particular

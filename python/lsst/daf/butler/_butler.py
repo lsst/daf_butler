@@ -2157,7 +2157,7 @@ class Butler(LimitedButler):
 
     def transfer_from(
         self,
-        source_butler: Butler,
+        source_butler: LimitedButler,
         source_refs: Iterable[DatasetRef],
         transfer: str = "auto",
         id_gen_map: Dict[str, DatasetIdGenEnum] | None = None,
@@ -2169,8 +2169,10 @@ class Butler(LimitedButler):
 
         Parameters
         ----------
-        source_butler : `Butler`
-            Butler from which the datasets are to be transferred.
+        source_butler : `LimitedButler`
+            Butler from which the datasets are to be transferred. If data IDs
+            in ``source_refs`` are not expanded then this has to be a full
+            `Butler` whose registry will be used to expand data IDs.
         source_refs : iterable of `DatasetRef`
             Datasets defined in the source butler that should be transferred to
             this butler.
@@ -2300,8 +2302,13 @@ class Butler(LimitedButler):
             dataIds = set(ref.dataId for ref in source_refs)
             # This logic comes from saveDataIds.
             for dataId in dataIds:
-                # Should be a no-op if the ref has already been expanded.
-                dataId = source_butler.registry.expandDataId(dataId)
+                # Need an expanded record, if not expanded that we need a full
+                # butler with registry (allow mocks with registry too).
+                if not dataId.hasRecords():
+                    if registry := getattr(source_butler, "registry", None):
+                        dataId = registry.expandDataId(dataId)
+                    else:
+                        raise TypeError("Input butler needs to be a full butler to expand DataId.")
                 # If this butler doesn't know about a dimension in the source
                 # butler things will break later.
                 for record in dataId.records.values():
@@ -2332,7 +2339,11 @@ class Butler(LimitedButler):
                 grouped_refs.items(), desc="Importing to registry by run and dataset type"
             ):
                 if run not in handled_collections:
-                    run_doc = source_butler.registry.getCollectionDocumentation(run)
+                    # May need to create output collection. If source butler
+                    # has a registry, ask for documentation string.
+                    run_doc = None
+                    if registry := getattr(source_butler, "registry", None):
+                        run_doc = registry.getCollectionDocumentation(run)
                     registered = self.registry.registerRun(run, doc=run_doc)
                     handled_collections.add(run)
                     if registered:
