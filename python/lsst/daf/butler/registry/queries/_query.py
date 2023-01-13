@@ -232,7 +232,8 @@ class Query(ABC):
                 filtered_count += 1
             return filtered_count
         else:
-            return db.query(sql.with_only_columns([sqlalchemy.sql.func.count()]).order_by(None)).scalar()
+            with db.query(sql.with_only_columns([sqlalchemy.sql.func.count()]).order_by(None)) as sql_result:
+                return sql_result.scalar()
 
     def any(
         self,
@@ -275,7 +276,8 @@ class Query(ABC):
                 return True
             return False
         elif execute:
-            return db.query(sql.limit(1)).one_or_none() is not None
+            with db.query(sql.limit(1)) as sql_result:
+                return sql_result.one_or_none() is not None
         else:
             return True
 
@@ -368,7 +370,7 @@ class Query(ABC):
         """
         raise NotImplementedError()
 
-    def rows(self, db: Database) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
+    def rows(self, db: Database) -> Iterator[Optional[sqlalchemy.engine.Row]]:
         """Execute the query and yield result rows, applying `predicate`.
 
         Parameters
@@ -386,7 +388,9 @@ class Query(ABC):
             return
         self._filtered_by_where = 0
         self._filtered_by_join = 0
-        for row in db.query(self.sql):
+        with db.query(self.sql) as sql_result:
+            sql_rows = sql_result.fetchall()
+        for row in sql_rows:
             rowRegions = [row._mapping[self.getRegionColumn(element.name)] for element in self.spatial]
             if self.whereRegion and any(r.isDisjointFrom(self.whereRegion) for r in rowRegions):
                 self._filtered_by_where += 1
@@ -867,8 +871,7 @@ class DirectQuery(Query):
     def materialize(self, db: Database) -> Iterator[Query]:
         # Docstring inherited from Query.
         spec = self._makeTableSpec()
-        with db.session() as session:
-            table = session.makeTemporaryTable(spec)
+        with db.temporary_table(spec) as table:
             if not self._doomed_by:
                 db.insert(table, select=self.sql, names=spec.fields.names)
             yield MaterializedQuery(
@@ -881,7 +884,6 @@ class DirectQuery(Query):
                 backend=self.backend,
                 doomed_by=self._doomed_by,
             )
-            session.dropTemporaryTable(table)
 
     def subset(
         self, *, graph: Optional[DimensionGraph] = None, datasets: bool = True, unique: bool = False

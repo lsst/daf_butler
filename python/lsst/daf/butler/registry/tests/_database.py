@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import ContextManager, Iterable, Optional, Set, Tuple
+from typing import Any, ContextManager, Iterable, Optional, Set, Tuple
 
 import astropy.time
 import sqlalchemy
@@ -133,6 +133,30 @@ class DatabaseTests(ABC):
         storage as the given one.
         """
         raise NotImplementedError()
+
+    def query_list(
+        self, database: Database, executable: sqlalchemy.sql.expression.SelectBase
+    ) -> list[sqlalchemy.engine.Row]:
+        """Run a SELECT or other read-only query against the database and
+        return the results as a list.
+
+        This is a thin wrapper around database.query() that just avoids
+        context-manager boilerplate that is usefully verbose in production code
+        but just noise in tests.
+        """
+        with database.query(executable) as result:
+            return result.fetchall()
+
+    def query_scalar(self, database: Database, executable: sqlalchemy.sql.expression.SelectBase) -> Any:
+        """Run a SELECT query that yields a single column and row against the
+        database and return its value.
+
+        This is a thin wrapper around database.query() that just avoids
+        context-manager boilerplate that is usefully verbose in production code
+        but just noise in tests.
+        """
+        with database.query(executable) as result:
+            return result.scalar()
 
     def checkTable(self, spec: ddl.TableSpec, table: sqlalchemy.schema.Table):
         self.assertCountEqual(spec.fields.names, table.columns.keys())
@@ -260,9 +284,8 @@ class DatabaseTests(ABC):
             table = db1.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
 
     def testTemporaryTables(self):
-        """Tests for `Database.makeTemporaryTable`,
-        `Database.dropTemporaryTable`, `Session.temporary_table`, and
-        `Database.insert` with the ``select`` argument.
+        """Tests for `Database.temporary_table`, and `Database.insert` with the
+        ``select`` argument.
         """
         # Need to start with the static schema; also insert some test data.
         newDatabase = self.makeEmptyDatabase()
@@ -277,68 +300,64 @@ class DatabaseTests(ABC):
             returnIds=True,
         )
         # Create the table.
-        with newDatabase.session() as session:
-            table1 = session.makeTemporaryTable(TEMPORARY_TABLE_SPEC, "e1")
-            self.checkTable(TEMPORARY_TABLE_SPEC, table1)
-            # Insert via a INSERT INTO ... SELECT query.
-            newDatabase.insert(
-                table1,
-                select=sqlalchemy.sql.select(
-                    static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")
-                )
-                .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
-                .where(
-                    sqlalchemy.sql.and_(
-                        static.a.columns.name == "a1",
-                        static.b.columns.value <= 12,
+        with newDatabase.session():
+            with newDatabase.temporary_table(TEMPORARY_TABLE_SPEC, "e1") as table1:
+                self.checkTable(TEMPORARY_TABLE_SPEC, table1)
+                # Insert via a INSERT INTO ... SELECT query.
+                newDatabase.insert(
+                    table1,
+                    select=sqlalchemy.sql.select(
+                        static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")
                     )
-                ),
-            )
-            # Check that the inserted rows are present.
-            self.assertCountEqual(
-                [{"a_name": "a1", "b_id": bId} for bId in bIds[:2]],
-                [row._asdict() for row in newDatabase.query(table1.select())],
-            )
-            # Create another one via a read-only connection to the database.
-            # We _do_ allow temporary table modifications in read-only
-            # databases.
+                    .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
+                    .where(
+                        sqlalchemy.sql.and_(
+                            static.a.columns.name == "a1",
+                            static.b.columns.value <= 12,
+                        )
+                    ),
+                )
+                # Check that the inserted rows are present.
+                self.assertCountEqual(
+                    [{"a_name": "a1", "b_id": bId} for bId in bIds[:2]],
+                    [row._asdict() for row in self.query_list(newDatabase, table1.select())],
+                )
+            # Create another one via a read-only connection to the
+            # database.  We _do_ allow temporary table modifications in
+            # read-only databases.
             with self.asReadOnly(newDatabase) as existingReadOnlyDatabase:
                 with existingReadOnlyDatabase.declareStaticTables(create=False) as context:
                     context.addTableTuple(STATIC_TABLE_SPECS)
-                with existingReadOnlyDatabase.session() as session2:
-                    with session2.temporary_table(TEMPORARY_TABLE_SPEC) as table2:
-                        self.checkTable(TEMPORARY_TABLE_SPEC, table2)
-                        # Those tables should not be the same, despite having
-                        # the same ddl.
-                        self.assertIsNot(table1, table2)
-                        # Do a slightly different insert into this table, to
-                        # check that it works in a read-only database.  This
-                        # time we pass column names as a kwarg to insert
-                        # instead of by labeling the columns in the select.
-                        existingReadOnlyDatabase.insert(
-                            table2,
-                            select=sqlalchemy.sql.select(static.a.columns.name, static.b.columns.id)
-                            .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
-                            .where(
-                                sqlalchemy.sql.and_(
-                                    static.a.columns.name == "a2",
-                                    static.b.columns.value >= 12,
-                                )
-                            ),
-                            names=["a_name", "b_id"],
-                        )
-                        # Check that the inserted rows are present.
-                        self.assertCountEqual(
-                            [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
-                            [row._asdict() for row in existingReadOnlyDatabase.query(table2.select())],
-                        )
-                        # Exiting the context manager will drop the temporary
-                        # table from the read-only DB.  It's unspecified
-                        # whether attempting to use it after this point is an
-                        # error or just never returns any results, so we can't
-                        # test what it does, only that it's not an error.
-            # Drop the original temporary table.
-            session.dropTemporaryTable(table1)
+                with existingReadOnlyDatabase.temporary_table(TEMPORARY_TABLE_SPEC) as table2:
+                    self.checkTable(TEMPORARY_TABLE_SPEC, table2)
+                    # Those tables should not be the same, despite having
+                    # the same ddl.
+                    self.assertIsNot(table1, table2)
+                    # Do a slightly different insert into this table, to
+                    # check that it works in a read-only database.  This
+                    # time we pass column names as a kwarg to insert
+                    # instead of by labeling the columns in the select.
+                    existingReadOnlyDatabase.insert(
+                        table2,
+                        select=sqlalchemy.sql.select(static.a.columns.name, static.b.columns.id)
+                        .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
+                        .where(
+                            sqlalchemy.sql.and_(
+                                static.a.columns.name == "a2",
+                                static.b.columns.value >= 12,
+                            )
+                        ),
+                        names=["a_name", "b_id"],
+                    )
+                    # Check that the inserted rows are present.
+                    self.assertCountEqual(
+                        [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
+                        [row._asdict() for row in self.query_list(existingReadOnlyDatabase, table2.select())],
+                    )
+            # Exiting the context managers will drop the temporary tables from
+            # the read-only DB.  It's unspecified whether attempting to use it
+            # after this point is an error or just never returns any results,
+            # so we can't test what it does, only that it's not an error.
 
     def testSchemaSeparation(self):
         """Test that creating two different `Database` instances allows us
@@ -372,11 +391,11 @@ class DatabaseTests(ABC):
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         row = {"name": "a1", "region": region}
         db.insert(tables.a, row)
-        self.assertEqual([r._asdict() for r in db.query(tables.a.select())], [row])
+        self.assertEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row])
         # Insert multiple autoincrement rows but do not try to get the IDs
         # back immediately.
         db.insert(tables.b, {"name": "b1", "value": 10}, {"name": "b2", "value": 20})
-        results = [r._asdict() for r in db.query(tables.b.select().order_by("id"))]
+        results = [r._asdict() for r in self.query_list(db, tables.b.select().order_by("id"))]
         self.assertEqual(len(results), 2)
         for row in results:
             self.assertIn(row["name"], ("b1", "b2"))
@@ -386,7 +405,8 @@ class DatabaseTests(ABC):
         rows = [{"name": "b3", "value": 30}, {"name": "b4", "value": 40}]
         ids = db.insert(tables.b, *rows, returnIds=True)
         results = [
-            r._asdict() for r in db.query(tables.b.select().where(tables.b.columns.id > results[1]["id"]))
+            r._asdict()
+            for r in self.query_list(db, tables.b.select().where(tables.b.columns.id > results[1]["id"]))
         ]
         expected = [dict(row, id=id) for row, id in zip(rows, ids)]
         self.assertCountEqual(results, expected)
@@ -395,7 +415,7 @@ class DatabaseTests(ABC):
         # then use the returned IDs to insert into a dynamic table.
         rows = [{"b_id": results[0]["id"]}, {"b_id": None}]
         ids = db.insert(tables.c, *rows, returnIds=True)
-        results = [r._asdict() for r in db.query(tables.c.select())]
+        results = [r._asdict() for r in self.query_list(db, tables.c.select())]
         expected = [dict(row, id=id) for row, id in zip(rows, ids)]
         self.assertCountEqual(results, expected)
         self.assertTrue(all(result["id"] is not None for result in results))
@@ -404,7 +424,7 @@ class DatabaseTests(ABC):
         # Insert into it.
         rows = [{"c_id": id, "a_name": "a1"} for id in ids]
         db.insert(d, *rows)
-        results = [r._asdict() for r in db.query(d.select())]
+        results = [r._asdict() for r in self.query_list(db, d.select())]
         self.assertCountEqual(rows, results)
         # Insert multiple rows into a table with an autoincrement primary key,
         # but pass in a value for the autoincrement key.
@@ -413,14 +433,14 @@ class DatabaseTests(ABC):
             {"id": 701, "b_id": None},
         ]
         db.insert(tables.c, *rows2)
-        results = [r._asdict() for r in db.query(tables.c.select())]
+        results = [r._asdict() for r in self.query_list(db, tables.c.select())]
         self.assertCountEqual(results, expected + rows2)
         self.assertTrue(all(result["id"] is not None for result in results))
 
         # Define 'SELECT COUNT(*)' query for later use.
         count = sqlalchemy.sql.select(sqlalchemy.sql.func.count())
         # Get the values we inserted into table b.
-        bValues = [r._asdict() for r in db.query(tables.b.select())]
+        bValues = [r._asdict() for r in self.query_list(db, tables.b.select())]
         # Remove two row from table b by ID.
         n = db.delete(tables.b, ["id"], {"id": bValues[0]["id"]}, {"id": bValues[1]["id"]})
         self.assertEqual(n, 2)
@@ -428,19 +448,22 @@ class DatabaseTests(ABC):
         n = db.delete(tables.b, ["name"], {"name": bValues[2]["name"]}, {"name": bValues[3]["name"]})
         self.assertEqual(n, 2)
         # There should now be no rows in table b.
-        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 0)
+        self.assertEqual(self.query_scalar(db, count.select_from(tables.b)), 0)
         # All b_id values in table c should now be NULL, because there's an
         # onDelete='SET NULL' foreign key.
         self.assertEqual(
-            db.query(count.select_from(tables.c).where(tables.c.columns.b_id != None)).scalar(),  # noqa:E711
+            self.query_scalar(
+                db,
+                count.select_from(tables.c).where(tables.c.columns.b_id != None),  # noqa:E711
+            ),
             0,
         )
         # Remove all rows in table a (there's only one); this should remove all
         # rows in d due to onDelete='CASCADE'.
         n = db.delete(tables.a, [])
         self.assertEqual(n, 1)
-        self.assertEqual(db.query(count.select_from(tables.a)).scalar(), 0)
-        self.assertEqual(db.query(count.select_from(d)).scalar(), 0)
+        self.assertEqual(self.query_scalar(db, count.select_from(tables.a)), 0)
+        self.assertEqual(self.query_scalar(db, count.select_from(d)), 0)
 
     def testDeleteWhere(self):
         """Tests for `Database.deleteWhere`."""
@@ -452,7 +475,7 @@ class DatabaseTests(ABC):
 
         n = db.deleteWhere(tables.b, tables.b.columns.id.in_([0, 1, 2]))
         self.assertEqual(n, 3)
-        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 7)
+        self.assertEqual(self.query_scalar(db, count.select_from(tables.b)), 7)
 
         n = db.deleteWhere(
             tables.b,
@@ -461,15 +484,15 @@ class DatabaseTests(ABC):
             ),
         )
         self.assertEqual(n, 4)
-        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 3)
+        self.assertEqual(self.query_scalar(db, count.select_from(tables.b)), 3)
 
         n = db.deleteWhere(tables.b, tables.b.columns.name == "b5")
         self.assertEqual(n, 1)
-        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 2)
+        self.assertEqual(self.query_scalar(db, count.select_from(tables.b)), 2)
 
         n = db.deleteWhere(tables.b, sqlalchemy.sql.literal(True))
         self.assertEqual(n, 2)
-        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 0)
+        self.assertEqual(self.query_scalar(db, count.select_from(tables.b)), 0)
 
     def testUpdate(self):
         """Tests for `Database.update`."""
@@ -484,7 +507,7 @@ class DatabaseTests(ABC):
         self.assertEqual(n, 1)
         sql = sqlalchemy.sql.select(tables.a.columns.name, tables.a.columns.region).select_from(tables.a)
         self.assertCountEqual(
-            [r._asdict() for r in db.query(sql)],
+            [r._asdict() for r in self.query_list(db, sql)],
             [{"name": "a1", "region": None}, {"name": "a2", "region": region}],
         )
 
@@ -498,7 +521,7 @@ class DatabaseTests(ABC):
         self.assertTrue(inserted)
         self.assertEqual(
             [{"id": values["id"], "name": "b1", "value": 10}],
-            [r._asdict() for r in db.query(tables.b.select())],
+            [r._asdict() for r in self.query_list(db, tables.b.select())],
         )
         # Repeat that operation, which should do nothing but return the
         # requested values.
@@ -506,7 +529,7 @@ class DatabaseTests(ABC):
         self.assertFalse(inserted)
         self.assertEqual(
             [{"id": values["id"], "name": "b1", "value": 10}],
-            [r._asdict() for r in db.query(tables.b.select())],
+            [r._asdict() for r in self.query_list(db, tables.b.select())],
         )
         # Repeat the operation without the 'extra' arg, which should also just
         # return the existing row.
@@ -514,7 +537,7 @@ class DatabaseTests(ABC):
         self.assertFalse(inserted)
         self.assertEqual(
             [{"id": values["id"], "name": "b1", "value": 10}],
-            [r._asdict() for r in db.query(tables.b.select())],
+            [r._asdict() for r in self.query_list(db, tables.b.select())],
         )
         # Repeat the operation with a different value in 'extra'.  That still
         # shouldn't be an error, because 'extra' is only used if we really do
@@ -523,7 +546,7 @@ class DatabaseTests(ABC):
         self.assertFalse(inserted)
         self.assertEqual(
             [{"id": values["id"], "name": "b1", "value": 10}],
-            [r._asdict() for r in db.query(tables.b.select())],
+            [r._asdict() for r in self.query_list(db, tables.b.select())],
         )
         # Repeat the operation with the correct value in 'compared' instead of
         # 'extra'.
@@ -531,7 +554,7 @@ class DatabaseTests(ABC):
         self.assertFalse(inserted)
         self.assertEqual(
             [{"id": values["id"], "name": "b1", "value": 10}],
-            [r._asdict() for r in db.query(tables.b.select())],
+            [r._asdict() for r in self.query_list(db, tables.b.select())],
         )
         # Repeat the operation with an incorrect value in 'compared'; this
         # should raise.
@@ -546,7 +569,7 @@ class DatabaseTests(ABC):
             self.assertFalse(inserted)
             self.assertEqual(
                 [{"id": values["id"], "name": "b1", "value": 10}],
-                [r._asdict() for r in rodb.query(tables.b.select())],
+                [r._asdict() for r in self.query_list(rodb, tables.b.select())],
             )
             with self.assertRaises(ReadOnlyDatabaseError):
                 rodb.sync(tables.b, keys={"name": "b2"}, extra={"value": 20})
@@ -556,7 +579,7 @@ class DatabaseTests(ABC):
         self.assertEqual(updated, {"value": 10})
         self.assertEqual(
             [{"id": values["id"], "name": "b1", "value": 20}],
-            [r._asdict() for r in db.query(tables.b.select())],
+            [r._asdict() for r in self.query_list(db, tables.b.select())],
         )
 
     def testReplace(self):
@@ -569,25 +592,27 @@ class DatabaseTests(ABC):
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         row1 = {"name": "a1", "region": region}
         db.replace(tables.a, row1)
-        self.assertEqual([r._asdict() for r in db.query(tables.a.select())], [row1])
+        self.assertEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1])
         # Insert another row without a region.
         row2 = {"name": "a2", "region": None}
         db.replace(tables.a, row2)
-        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
         # Use replace to re-insert both of those rows again, which should do
         # nothing.
         db.replace(tables.a, row1, row2)
-        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
         # Replace row1 with a row with no region, while reinserting row2.
         row1a = {"name": "a1", "region": None}
         db.replace(tables.a, row1a, row2)
-        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1a, row2])
+        self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1a, row2])
         # Replace both rows, returning row1 to its original state, while adding
         # a new one.  Pass them in in a different order.
         row2a = {"name": "a2", "region": region}
         row3 = {"name": "a3", "region": None}
         db.replace(tables.a, row3, row2a, row1)
-        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2a, row3])
+        self.assertCountEqual(
+            [r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2a, row3]
+        )
 
     def testEnsure(self):
         """Tests for `Database.ensure`."""
@@ -599,27 +624,29 @@ class DatabaseTests(ABC):
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         row1 = {"name": "a1", "region": region}
         self.assertEqual(db.ensure(tables.a, row1), 1)
-        self.assertEqual([r._asdict() for r in db.query(tables.a.select())], [row1])
+        self.assertEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1])
         # Insert another row without a region.
         row2 = {"name": "a2", "region": None}
         self.assertEqual(db.ensure(tables.a, row2), 1)
-        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
         # Use ensure to re-insert both of those rows again, which should do
         # nothing.
         self.assertEqual(db.ensure(tables.a, row1, row2), 0)
-        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
         # Attempt to insert row1's key with no region, while
         # reinserting row2.  This should also do nothing.
         row1a = {"name": "a1", "region": None}
         self.assertEqual(db.ensure(tables.a, row1a, row2), 0)
-        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2])
         # Attempt to insert new rows for both existing keys, this time also
         # adding a new row.  Pass them in in a different order.  Only the new
         # row should be added.
         row2a = {"name": "a2", "region": region}
         row3 = {"name": "a3", "region": None}
         self.assertEqual(db.ensure(tables.a, row3, row2a, row1a), 1)
-        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2, row3])
+        self.assertCountEqual(
+            [r._asdict() for r in self.query_list(db, tables.a.select())], [row1, row2, row3]
+        )
         # Add some data to a table with both a primary key and a different
         # unique constraint.
         row_b = {"id": 5, "name": "five", "value": 50}
@@ -627,18 +654,18 @@ class DatabaseTests(ABC):
         # Attempt ensure with primary_key_only=False and a conflict for the
         # non-PK constraint.  This should do nothing.
         db.ensure(tables.b, {"id": 10, "name": "five", "value": 200})
-        self.assertEqual([r._asdict() for r in db.query(tables.b.select())], [row_b])
+        self.assertEqual([r._asdict() for r in self.query_list(db, tables.b.select())], [row_b])
         # Now use primary_key_only=True with conflict in only the non-PK field.
         # This should be an integrity error and nothing should change.
         with self.assertRaises(sqlalchemy.exc.IntegrityError):
             db.ensure(tables.b, {"id": 10, "name": "five", "value": 200}, primary_key_only=True)
-        self.assertEqual([r._asdict() for r in db.query(tables.b.select())], [row_b])
+        self.assertEqual([r._asdict() for r in self.query_list(db, tables.b.select())], [row_b])
         # With primary_key_only=True a conflict in the primary key is ignored
         # regardless of whether there is a conflict elsewhere.
         db.ensure(tables.b, {"id": 5, "name": "ten", "value": 100}, primary_key_only=True)
-        self.assertEqual([r._asdict() for r in db.query(tables.b.select())], [row_b])
+        self.assertEqual([r._asdict() for r in self.query_list(db, tables.b.select())], [row_b])
         db.ensure(tables.b, {"id": 5, "name": "five", "value": 100}, primary_key_only=True)
-        self.assertEqual([r._asdict() for r in db.query(tables.b.select())], [row_b])
+        self.assertEqual([r._asdict() for r in self.query_list(db, tables.b.select())], [row_b])
 
     def testTransactionNesting(self):
         """Test that transactions can be nested with the behavior in the
@@ -665,7 +692,7 @@ class DatabaseTests(ABC):
                     # an exception.
                     db.insert(tables.a, {"name": "a1"})
         self.assertCountEqual(
-            [r._asdict() for r in db.query(tables.a.select())],
+            [r._asdict() for r in self.query_list(db, tables.a.select())],
             [{"name": "a1", "region": None}, {"name": "a2", "region": None}],
         )
         # Second test: error recovery via implicit savepoint=True, when the
@@ -688,7 +715,7 @@ class DatabaseTests(ABC):
                         # raising an exception.
                         db.insert(tables.a, {"name": "a1"})
         self.assertCountEqual(
-            [r._asdict() for r in db.query(tables.a.select())],
+            [r._asdict() for r in self.query_list(db, tables.a.select())],
             [{"name": "a1", "region": None}, {"name": "a2", "region": None}, {"name": "a3", "region": None}],
         )
 
@@ -713,12 +740,12 @@ class DatabaseTests(ABC):
             # Give Side2 a chance to create a connection
             await asyncio.sleep(1.0)
             with db1.transaction(lock=lock):
-                names1 = {row.name for row in db1.query(tables1.a.select())}
+                names1 = {row.name for row in self.query_list(db1, tables1.a.select())}
                 # Give Side2 a chance to insert (which will be blocked if
                 # we've acquired a lock).
                 await asyncio.sleep(2.0)
                 db1.insert(tables1.a, {"name": "a1"})
-                names2 = {row.name for row in db1.query(tables1.a.select())}
+                names2 = {row.name for row in self.query_list(db1, tables1.a.select())}
             return names1, names2
 
         async def side2() -> None:
@@ -896,7 +923,7 @@ class DatabaseTests(ABC):
             aRows,
             [
                 convertRowFromSelect(row._asdict())
-                for row in db.query(aTable.select().order_by(aTable.columns.id))
+                for row in self.query_list(db, aTable.select().order_by(aTable.columns.id))
             ],
         )
         # Create another table B with a not-null timespan and (if the database
@@ -935,7 +962,7 @@ class DatabaseTests(ABC):
             bRows,
             [
                 convertRowFromSelect(row._asdict())
-                for row in db.query(bTable.select().order_by(bTable.columns.id))
+                for row in self.query_list(db, bTable.select().order_by(bTable.columns.id))
             ],
         )
         # Test that we can't insert timespan=None into this table.
@@ -975,8 +1002,8 @@ class DatabaseTests(ABC):
             [row[TimespanReprClass.NAME] is None for row in aRows],
             [
                 row.f
-                for row in db.query(
-                    sqlalchemy.sql.select(aRepr.isNull().label("f")).order_by(aTable.columns.id)
+                for row in self.query_list(
+                    db, sqlalchemy.sql.select(aRepr.isNull().label("f")).order_by(aTable.columns.id)
                 )
             ],
         )
@@ -985,8 +1012,8 @@ class DatabaseTests(ABC):
             [False for row in bRows],
             [
                 row.f
-                for row in db.query(
-                    sqlalchemy.sql.select(bRepr.isNull().label("f")).order_by(bTable.columns.id)
+                for row in self.query_list(
+                    db, sqlalchemy.sql.select(bRepr.isNull().label("f")).order_by(bTable.columns.id)
                 )
             ],
         )
@@ -1018,7 +1045,7 @@ class DatabaseTests(ABC):
                 ).select_from(aTable)
                 queried = {
                     row.lhs: (row.overlaps, row.contains, row.less_than, row.greater_than)
-                    for row in db.query(sql)
+                    for row in self.query_list(db, sql)
                 }
                 self.assertEqual(expected, queried)
         # Test relationship expressions that relate in-database timespans to
@@ -1051,7 +1078,7 @@ class DatabaseTests(ABC):
         ).select_from(lhsSubquery.join(rhsSubquery, onclause=sqlalchemy.sql.literal(True)))
         queried = {
             (row.lhs, row.rhs): (row.overlaps, row.contains, row.less_than, row.greater_than)
-            for row in db.query(sql)
+            for row in self.query_list(db, sql)
         }
         self.assertEqual(expected, queried)
         # Test relationship expressions between in-database timespans and
@@ -1079,7 +1106,7 @@ class DatabaseTests(ABC):
                 ).select_from(aTable)
                 queried = {
                     row.lhs: (row.contains, row.overlaps_point, row.less_than, row.greater_than)
-                    for row in db.query(sql)
+                    for row in self.query_list(db, sql)
                 }
                 self.assertEqual(expected, queried)
 
@@ -1111,13 +1138,13 @@ class DatabaseTests(ABC):
             values.columns["b"], values.columns["s"], values.columns["r"]
         )
         self.assertCountEqual(
-            [dict(row) for row in new_db.query(select_values_alone)],
+            [dict(row) for row in self.query_list(new_db, select_values_alone)],
             values_data,
         )
         select_values_joined = sqlalchemy.sql.select(
             values.columns["s"].label("name"), static.b.columns["value"].label("value")
         ).select_from(values.join(static.b, onclause=static.b.columns["id"] == values.columns["b"]))
         self.assertCountEqual(
-            [dict(row) for row in new_db.query(select_values_joined)],
+            [dict(row) for row in self.query_list(new_db, select_values_joined)],
             [{"value": 11, "name": "b1"}, {"value": 13, "name": "b3"}],
         )

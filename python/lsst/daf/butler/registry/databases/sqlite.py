@@ -50,16 +50,6 @@ def _onSqlite3Connect(
         cursor.execute("PRAGMA busy_timeout = 300000;")  # in ms, so 5min (way longer than should be needed)
 
 
-def _onSqlite3Begin(connection: sqlalchemy.engine.Connection) -> sqlalchemy.engine.Connection:
-    assert connection.dialect.name == "sqlite"
-    # Replace pysqlite's buggy transaction handling that never BEGINs with our
-    # own that does, and tell SQLite to try to acquire a lock as soon as we
-    # start a transaction (this should lead to more blocking and fewer
-    # deadlocks).
-    connection.execute(sqlalchemy.text("BEGIN IMMEDIATE"))
-    return connection
-
-
 class SqliteDatabase(Database):
     """An implementation of the `Database` interface for SQLite3.
 
@@ -191,6 +181,19 @@ class SqliteDatabase(Database):
         engine = sqlalchemy.engine.create_engine(uri, creator=creator)
 
         sqlalchemy.event.listen(engine, "connect", _onSqlite3Connect)
+
+        def _onSqlite3Begin(connection: sqlalchemy.engine.Connection) -> sqlalchemy.engine.Connection:
+            assert connection.dialect.name == "sqlite"
+            # Replace pysqlite's buggy transaction handling that never BEGINs
+            # with our own that does, and tell SQLite to try to acquire a lock
+            # as soon as we start a transaction that might involve writes (this
+            # should lead to more blocking and fewer deadlocks).
+            if writeable:
+                connection.execute(sqlalchemy.text("BEGIN IMMEDIATE"))
+            else:
+                connection.execute(sqlalchemy.text("BEGIN"))
+            return connection
+
         sqlalchemy.event.listen(engine, "begin", _onSqlite3Begin)
 
         return engine
@@ -320,7 +323,7 @@ class SqliteDatabase(Database):
             if column.name not in table.primary_key
         }
         query = query.on_conflict_do_update(index_elements=table.primary_key, set_=data)
-        with self._connection() as connection:
+        with self._transaction() as (_, connection):
             connection.execute(query, rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
@@ -332,7 +335,7 @@ class SqliteDatabase(Database):
             query = query.on_conflict_do_nothing(index_elements=table.primary_key)
         else:
             query = query.on_conflict_do_nothing()
-        with self._connection() as connection:
+        with self._transaction() as (_, connection):
             return connection.execute(query, rows).rowcount
 
     def constant_rows(
