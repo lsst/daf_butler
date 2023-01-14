@@ -29,6 +29,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+from deprecated.sphinx import deprecated
 
 from ....core import (
     DataCoordinate,
@@ -582,6 +583,12 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         )
 
 
+@deprecated(
+    "Integer dataset IDs are deprecated in favor of UUIDs; support will be removed after v26. "
+    "Please migrate or re-create this data repository.",
+    version="v25.0",
+    category=FutureWarning,
+)
 class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
     """Implementation of ByDimensionsDatasetRecordStorage which uses integer
     auto-incremented column for dataset IDs.

@@ -11,6 +11,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+from deprecated.sphinx import deprecated
 from lsst.utils.ellipsis import Ellipsis
 
 from ....core import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
@@ -474,6 +475,12 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     """Type of dataset column used to store dataset ID."""
 
 
+@deprecated(
+    "Integer dataset IDs are deprecated in favor of UUIDs; support will be removed after v26. "
+    "Please migrate or re-create this data repository.",
+    version="v25.0",
+    category=FutureWarning,
+)
 class ByDimensionsDatasetRecordStorageManager(ByDimensionsDatasetRecordStorageManagerBase):
     """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
     auto-incremental integer for dataset primary key.
