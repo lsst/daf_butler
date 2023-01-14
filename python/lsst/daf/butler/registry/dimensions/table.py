@@ -213,11 +213,12 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 message="SELECT statement has a cartesian product",
                 category=sqlalchemy.exc.SAWarning,
             )
-            for row in self._db.query(query.combine()):
-                values = row._asdict()
-                if self.element.temporal is not None:
-                    values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
-                yield RecordClass(**values)
+            with self._db.query(query.combine()) as sql_result:
+                for row in sql_result.fetchall():
+                    values = row._asdict()
+                    if self.element.temporal is not None:
+                        values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
+                    yield RecordClass(**values)
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -681,9 +682,10 @@ class _SkyPixOverlapStorage:
             skypix: Dict[str, NamedKeyDict[SkyPixSystem, List[int]]] = {
                 gv: NamedKeyDict() for gv in grouped.keys()
             }
-            for summaryRow in self._db.query(query).mappings():
-                system = self.element.universe.skypix[summaryRow[sysCol]]
-                skypix[summaryRow[gvCol]].setdefault(system, []).append(summaryRow[lvlCol])
+            with self._db.query(query) as sql_result:
+                for summaryRow in sql_result.mappings():
+                    system = self.element.universe.skypix[summaryRow[sysCol]]
+                    skypix[summaryRow[gvCol]].setdefault(system, []).append(summaryRow[lvlCol])
             if replace:
                 # Construct constraints for a DELETE query as a list of dicts.
                 # We include the skypix_system and skypix_level column values

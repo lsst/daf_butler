@@ -185,7 +185,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         byName = {}
         byId: Dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
         c = self._static.dataset_type.columns
-        for row in self._db.query(self._static.dataset_type.select()).mappings():
+        with self._db.query(self._static.dataset_type.select()) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        for row in sql_rows:
             name = row[c.name]
             dimensions = self._dimensions.loadDimensionGraph(row[c.dimensions_key])
             calibTableName = row[c.calibration_association_table]
@@ -346,7 +348,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             .select_from(self._static.dataset)
             .where(self._static.dataset.columns.id == id)
         )
-        row = self._db.query(sql).mappings().fetchone()
+        with self._db.query(sql) as sql_result:
+            row = sql_result.mappings().fetchone()
         if row is None:
             return None
         recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])

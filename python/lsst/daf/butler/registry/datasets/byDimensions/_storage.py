@@ -77,26 +77,27 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         sql = self.select(
             collection, dataId=dataId, id=SimpleQuery.Select, run=SimpleQuery.Select, timespan=timespan
         )
-        results = self._db.query(sql)
-        row = results.fetchone()
-        if row is None:
-            return None
-        if collection.type is CollectionType.CALIBRATION:
-            # For temporal calibration lookups (only!) our invariants do not
-            # guarantee that the number of result rows is <= 1.
-            # They would if `select` constrained the given timespan to be
-            # _contained_ by the validity range in the self._calibs table,
-            # instead of simply _overlapping_ it, because we do guarantee that
-            # the validity ranges are disjoint for a particular dataset type,
-            # collection, and data ID.  But using an overlap test and a check
-            # for multiple result rows here allows us to provide a more useful
-            # diagnostic, as well as allowing `select` to support more general
-            # queries where multiple results are not an error.
-            if results.fetchone() is not None:
-                raise RuntimeError(
-                    f"Multiple matches found for calibration lookup in {collection.name} for "
-                    f"{self.datasetType.name} with {dataId} overlapping {timespan}. "
-                )
+        with self._db.query(sql) as results:
+            row = results.fetchone()
+            if row is None:
+                return None
+            if collection.type is CollectionType.CALIBRATION:
+                # For temporal calibration lookups (only!) our invariants do
+                # not guarantee that the number of result rows is <= 1.  They
+                # would if `select` constrained the given timespan to be
+                # _contained_ by the validity range in the self._calibs table,
+                # instead of simply _overlapping_ it, because we do guarantee
+                # that the validity ranges are disjoint for a particular
+                # dataset type, collection, and data ID.  But using an overlap
+                # test and a check for multiple result rows here allows us to
+                # provide a more useful diagnostic, as well as allowing
+                # `select` to support more general queries where multiple
+                # results are not an error.
+                if results.fetchone() is not None:
+                    raise RuntimeError(
+                        f"Multiple matches found for calibration lookup in {collection.name} for "
+                        f"{self.datasetType.name} with {dataId} overlapping {timespan}. "
+                    )
         return DatasetRef(
             datasetType=self.datasetType,
             dataId=dataId,
@@ -247,7 +248,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # failure here should not roll back.
             with self._db.transaction(lock=[self._calibs], savepoint=True):
                 # Run the check SELECT query.
-                conflicting = self._db.query(sql).scalar()
+                with self._db.query(sql) as sql_result:
+                    conflicting = sql_result.scalar()
                 if conflicting > 0:
                     raise ConflictingDefinitionError(
                         f"{conflicting} validity range conflicts certifying datasets of type "
@@ -297,7 +299,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Acquire a table lock to ensure there are no concurrent writes
         # between the SELECT and the DELETE and INSERT queries based on it.
         with self._db.transaction(lock=[self._calibs], savepoint=True):
-            for row in self._db.query(sql).mappings():
+            with self._db.query(sql) as sql_result:
+                sql_rows = sql_result.mappings().fetchall()
+            for row in sql_rows:
                 rowsToDelete.append({"id": row["id"]})
                 # Construct the insert row(s) by copying the prototype row,
                 # then adding the dimension column values, then adding what's
@@ -524,7 +528,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
             .limit(1)
         )
-        row = self._db.query(sql).mappings().fetchone()
+        with self._db.query(sql) as sql_result:
+            row = sql_result.mappings().fetchone()
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
         return DataCoordinate.standardize(
             {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},
@@ -728,26 +733,19 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             dataIds[datasetId] = dataset.dataId
             governorValues.update_extract(dataset.dataId)
 
-        with self._db.session() as session:
-
-            # insert all new rows into a temporary table
-            tableSpec = makeTagTableSpec(
-                self.datasetType, type(self._collections), ddl.GUID, constraints=False
-            )
-            tmp_tags = session.makeTemporaryTable(tableSpec)
-
-            collFkName = self._collections.getCollectionForeignKeyName()
-            protoTagsRow = {
-                "dataset_type_id": self._dataset_type_id,
-                collFkName: run.key,
-            }
-            tmpRows = [
-                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
-                for dataset_id, dataId in dataIds.items()
-            ]
-
-            with self._db.transaction():
-
+        # We'll insert all new rows into a temporary table
+        tableSpec = makeTagTableSpec(self.datasetType, type(self._collections), ddl.GUID, constraints=False)
+        collFkName = self._collections.getCollectionForeignKeyName()
+        protoTagsRow = {
+            "dataset_type_id": self._dataset_type_id,
+            collFkName: run.key,
+        }
+        tmpRows = [
+            dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
+            for dataset_id, dataId in dataIds.items()
+        ]
+        with self._db.transaction(for_temp_tables=True):
+            with self._db.temporary_table(tableSpec) as tmp_tags:
                 # store all incoming data in a temporary table
                 self._db.insert(tmp_tags, *tmpRows)
 
@@ -780,14 +778,14 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 # Copy it into tags table.
                 self._db.insert(self._tags, select=tmp_tags.select())
 
-                # Return refs in the same order as in the input list.
-                for dataset_id, dataId in dataIds.items():
-                    yield DatasetRef(
-                        datasetType=self.datasetType,
-                        id=dataset_id,
-                        dataId=dataId,
-                        run=run.name,
-                    )
+        # Return refs in the same order as in the input list.
+        for dataset_id, dataId in dataIds.items():
+            yield DatasetRef(
+                datasetType=self.datasetType,
+                id=dataset_id,
+                dataId=dataId,
+                run=run.name,
+            )
 
     def _validateImport(self, tmp_tags: sqlalchemy.schema.Table, run: RunRecord) -> None:
         """Validate imported refs against existing datasets.
@@ -826,13 +824,14 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     dataset.columns[self._runKeyColumn] != tmp_tags.columns[collFkName],
                 )
             )
+            .limit(1)
         )
-        result = self._db.query(query)
-        if (row := result.first()) is not None:
-            # Only include the first one in the exception message
-            raise ConflictingDefinitionError(
-                f"Existing dataset type or run do not match new dataset: {row._asdict()}"
-            )
+        with self._db.query(query) as result:
+            if (row := result.first()) is not None:
+                # Only include the first one in the exception message
+                raise ConflictingDefinitionError(
+                    f"Existing dataset type or run do not match new dataset: {row._asdict()}"
+                )
 
         # Check that matching dataset in tags table has the same DataId.
         query = (
@@ -856,13 +855,15 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     ],
                 )
             )
+            .limit(1)
         )
-        result = self._db.query(query)
-        if (row := result.first()) is not None:
-            # Only include the first one in the exception message
-            raise ConflictingDefinitionError(
-                f"Existing dataset type or dataId do not match new dataset: {row._asdict()}"
-            )
+
+        with self._db.query(query) as result:
+            if (row := result.first()) is not None:
+                # Only include the first one in the exception message
+                raise ConflictingDefinitionError(
+                    f"Existing dataset type or dataId do not match new dataset: {row._asdict()}"
+                )
 
         # Check that matching run+dataId have the same dataset ID.
         query = (
@@ -888,13 +889,14 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 )
             )
             .where(tags.columns.dataset_id != tmp_tags.columns.dataset_id)
+            .limit(1)
         )
-        result = self._db.query(query)
-        if (row := result.first()) is not None:
-            # only include the first one in the exception message
-            raise ConflictingDefinitionError(
-                f"Existing dataset type and dataId does not match new dataset: {row._asdict()}"
-            )
+        with self._db.query(query) as result:
+            if (row := result.first()) is not None:
+                # only include the first one in the exception message
+                raise ConflictingDefinitionError(
+                    f"Existing dataset type and dataId does not match new dataset: {row._asdict()}"
+                )
 
     def _makeDatasetId(
         self, run: RunRecord, dataId: DataCoordinate, idGenerationMode: DatasetIdGenEnum
