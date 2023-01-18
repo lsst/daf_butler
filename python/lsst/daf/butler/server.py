@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
@@ -36,10 +36,10 @@ log = logging.getLogger("excalibur")
 class MaximalDataId(BaseModel):
     """Something that looks like a DataId but isn't."""
 
-    detector: Optional[int] = None
-    instrument: Optional[str] = None
-    physical_filter: Optional[str] = None
-    exposure: Optional[int] = None
+    detector: int | None = None
+    instrument: str | None = None
+    physical_filter: str | None = None
+    exposure: int | None = None
 
 
 class CollectionTypeNames(str, Enum):
@@ -70,7 +70,7 @@ def butler_readwrite_dependency() -> Butler:
     return Butler(butler=GLOBAL_READWRITE_BUTLER)
 
 
-def unpack_dataId(butler: Butler, data_id: Optional[SerializedDataCoordinate]) -> Optional[DataCoordinate]:
+def unpack_dataId(butler: Butler, data_id: SerializedDataCoordinate | None) -> DataCoordinate | None:
     """Convert the serialized dataId back to full DataCoordinate.
 
     Parameters
@@ -95,7 +95,7 @@ def read_root() -> str:
     return "Welcome to Excalibur... aka your Butler Server"
 
 
-@app.get("/butler/butler.json", response_model=Dict[str, Any])
+@app.get("/butler/butler.json", response_model=dict[str, Any])
 def read_server_config() -> Mapping:
     """Return the butler configuration that the client should use."""
     config_str = f"""
@@ -109,7 +109,7 @@ registry:
     return config
 
 
-@app.get("/butler/universe", response_model=Dict[str, Any])
+@app.get("/butler/universe", response_model=dict[str, Any])
 def get_dimension_universe(butler: Butler = Depends(butler_readonly_dependency)) -> DimensionConfig:
     """Allow remote client to get dimensions definition."""
     return butler.registry.dimensions.dimensionConfig
@@ -146,14 +146,14 @@ def get_dataset_type(
 @app.get(
     "/butler/v1/registry/datasetTypes",
     summary="Retrieve all dataset type definitions.",
-    response_model=List[SerializedDatasetType],
+    response_model=list[SerializedDatasetType],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
 def query_all_dataset_types(
-    components: Optional[bool] = Query(None), butler: Butler = Depends(butler_readonly_dependency)
-) -> List[SerializedDatasetType]:
+    components: bool | None = Query(None), butler: Butler = Depends(butler_readonly_dependency)
+) -> list[SerializedDatasetType]:
     datasetTypes = butler.registry.queryDatasetTypes(..., components=components)
     return [d.to_simple() for d in datasetTypes]
 
@@ -161,39 +161,39 @@ def query_all_dataset_types(
 @app.get(
     "/butler/v1/registry/datasetTypes/re",
     summary="Retrieve dataset type definitions matching expressions",
-    response_model=List[SerializedDatasetType],
+    response_model=list[SerializedDatasetType],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
 def query_dataset_types_re(
-    regex: Optional[List[str]] = Query(None),
-    glob: Optional[List[str]] = Query(None),
-    components: Optional[bool] = Query(None),
+    regex: list[str] | None = Query(None),
+    glob: list[str] | None = Query(None),
+    components: bool | None = Query(None),
     butler: Butler = Depends(butler_readonly_dependency),
-) -> List[SerializedDatasetType]:
+) -> list[SerializedDatasetType]:
     expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
 
     datasetTypes = butler.registry.queryDatasetTypes(expression_params.expression(), components=components)
     return [d.to_simple() for d in datasetTypes]
 
 
-@app.get("/butler/v1/registry/collection/chain/{parent:path}", response_model=List[str])
-def get_collection_chain(parent: str, butler: Butler = Depends(butler_readonly_dependency)) -> List[str]:
+@app.get("/butler/v1/registry/collection/chain/{parent:path}", response_model=list[str])
+def get_collection_chain(parent: str, butler: Butler = Depends(butler_readonly_dependency)) -> list[str]:
     chain = butler.registry.getCollectionChain(parent)
     return list(chain)
 
 
-@app.get("/butler/v1/registry/collections", response_model=List[str])
+@app.get("/butler/v1/registry/collections", response_model=list[str])
 def query_collections(
-    regex: Optional[List[str]] = Query(None),
-    glob: Optional[List[str]] = Query(None),
-    datasetType: Optional[str] = Query(None),
+    regex: list[str] | None = Query(None),
+    glob: list[str] | None = Query(None),
+    datasetType: str | None = Query(None),
     flattenChains: bool = Query(False),
-    collectionType: Optional[List[CollectionTypeNames]] = Query(None),
-    includeChains: Optional[bool] = Query(None),
+    collectionType: list[CollectionTypeNames] | None = Query(None),
+    includeChains: bool | None = Query(None),
     butler: Butler = Depends(butler_readonly_dependency),
-) -> List[str]:
+) -> list[str]:
 
     expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
     collectionTypes = CollectionType.from_names(collectionType)
@@ -219,7 +219,7 @@ def get_collection_type(name: str, butler: Butler = Depends(butler_readonly_depe
 def register_collection(
     name: str,
     collectionTypeName: CollectionTypeNames,
-    doc: Optional[str] = Query(None),
+    doc: str | None = Query(None),
     butler: Butler = Depends(butler_readwrite_dependency),
 ) -> str:
     collectionType = CollectionType.from_name(collectionTypeName)
@@ -235,14 +235,14 @@ def register_collection(
 @app.get(
     "/butler/v1/registry/dataset/{id}",
     summary="Retrieve this dataset definition.",
-    response_model=Optional[SerializedDatasetRef],
+    response_model=SerializedDatasetRef | None,
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
 def get_dataset(
     id: DatasetId, butler: Butler = Depends(butler_readonly_dependency)
-) -> Optional[SerializedDatasetRef]:
+) -> SerializedDatasetRef | None:
     ref = butler.registry.getDataset(id)
     if ref is not None:
         return ref.to_simple()
@@ -251,8 +251,8 @@ def get_dataset(
     return ref
 
 
-@app.get("/butler/v1/registry/datasetLocations/{id}", response_model=List[str])
-def get_dataset_locations(id: DatasetId, butler: Butler = Depends(butler_readonly_dependency)) -> List[str]:
+@app.get("/butler/v1/registry/datasetLocations/{id}", response_model=list[str])
+def get_dataset_locations(id: DatasetId, butler: Butler = Depends(butler_readonly_dependency)) -> list[str]:
     # Takes an ID so need to convert to a real DatasetRef
     fake_ref = SerializedDatasetRef(id=id)
 
@@ -280,10 +280,10 @@ def get_dataset_locations(id: DatasetId, butler: Butler = Depends(butler_readonl
 )
 def find_dataset(
     datasetType: str,
-    dataId: Optional[SerializedDataCoordinate] = None,
-    collections: Optional[List[str]] = Query(None),
+    dataId: SerializedDataCoordinate | None = None,
+    collections: list[str] | None = Query(None),
     butler: Butler = Depends(butler_readonly_dependency),
-) -> Optional[SerializedDatasetRef]:
+) -> SerializedDatasetRef | None:
     collection_query = collections if collections else None
 
     ref = butler.registry.findDataset(
@@ -296,14 +296,14 @@ def find_dataset(
 @app.post(
     "/butler/v1/registry/datasets",
     summary="Query all dataset holdings.",
-    response_model=List[SerializedDatasetRef],
+    response_model=list[SerializedDatasetRef],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
 def query_datasets(
     query: QueryDatasetsModel, butler: Butler = Depends(butler_readonly_dependency)
-) -> List[SerializedDatasetRef]:
+) -> list[SerializedDatasetRef]:
     # This method might return a lot of results
 
     if query.collections:
@@ -330,14 +330,14 @@ def query_datasets(
 @app.post(
     "/butler/v1/registry/dataIds",
     summary="Query all data IDs.",
-    response_model=List[SerializedDataCoordinate],
+    response_model=list[SerializedDataCoordinate],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
 def query_data_ids(
     query: QueryDataIdsModel, butler: Butler = Depends(butler_readonly_dependency)
-) -> List[SerializedDataCoordinate]:
+) -> list[SerializedDataCoordinate]:
     if query.datasets:
         datasets = query.datasets.expression()
     else:
@@ -365,14 +365,14 @@ def query_data_ids(
 @app.post(
     "/butler/v1/registry/dimensionRecords/{element}",
     summary="Retrieve dimension records matching query",
-    response_model=List[SerializedDimensionRecord],
+    response_model=list[SerializedDimensionRecord],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
 def query_dimension_records(
     element: str, query: QueryDimensionRecordsModel, butler: Butler = Depends(butler_readonly_dependency)
-) -> List[SerializedDimensionRecord]:
+) -> list[SerializedDimensionRecord]:
 
     if query.datasets:
         datasets = query.datasets.expression()

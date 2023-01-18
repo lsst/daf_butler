@@ -25,7 +25,7 @@ __all__ = ("RemoteRegistry",)
 
 import contextlib
 import functools
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Union
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Sequence, Set
 
 import httpx
 from lsst.daf.butler import __version__
@@ -93,9 +93,9 @@ class RemoteRegistry(Registry):
     @classmethod
     def createFromConfig(
         cls,
-        config: Optional[Union[RegistryConfig, str]] = None,
-        dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
-        butlerRoot: Optional[ResourcePathExpression] = None,
+        config: RegistryConfig | str | None = None,
+        dimensionConfig: DimensionConfig | str | None = None,
+        butlerRoot: ResourcePathExpression | None = None,
     ) -> Registry:
         """Create registry database and return `Registry` instance.
 
@@ -107,10 +107,10 @@ class RemoteRegistry(Registry):
     @classmethod
     def fromConfig(
         cls,
-        config: Union[ButlerConfig, RegistryConfig, Config, str],
-        butlerRoot: Optional[ResourcePathExpression] = None,
+        config: ButlerConfig | RegistryConfig | Config | str,
+        butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
-        defaults: Optional[RegistryDefaults] = None,
+        defaults: RegistryDefaults | None = None,
     ) -> Registry:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         config = cls.forceRegistryConfig(config)
@@ -133,7 +133,7 @@ class RemoteRegistry(Registry):
         # All PUT calls should be short-circuited if not writeable.
         self._writeable = writeable
 
-        self._dimensions: Optional[DimensionUniverse] = None
+        self._dimensions: DimensionUniverse | None = None
 
         headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
         self._client = httpx.Client(headers=headers)
@@ -155,7 +155,7 @@ class RemoteRegistry(Registry):
         # Can be used to prevent any PUTs to server
         return self._writeable
 
-    def copy(self, defaults: Optional[RegistryDefaults] = None) -> Registry:
+    def copy(self, defaults: RegistryDefaults | None = None) -> Registry:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if defaults is None:
             # No need to copy, because `RegistryDefaults` is immutable; we
@@ -198,7 +198,7 @@ class RemoteRegistry(Registry):
     #    use by Datastore. DatastoreBridgeManager also is not needed.
 
     def registerCollection(
-        self, name: str, type: CollectionType = CollectionType.TAGGED, doc: Optional[str] = None
+        self, name: str, type: CollectionType = CollectionType.TAGGED, doc: str | None = None
     ) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
@@ -218,7 +218,7 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError
 
-    def registerRun(self, name: str, doc: Optional[str] = None) -> bool:
+    def registerRun(self, name: str, doc: str | None = None) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -242,11 +242,11 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def getCollectionDocumentation(self, collection: str) -> Optional[str]:
+    def getCollectionDocumentation(self, collection: str) -> str | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def setCollectionDocumentation(self, collection: str, doc: Optional[str]) -> None:
+    def setCollectionDocumentation(self, collection: str, doc: str | None) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -270,7 +270,7 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def _simplify_dataId(self, dataId: Optional[DataId]) -> Optional[SerializedDataCoordinate]:
+    def _simplify_dataId(self, dataId: DataId | None) -> SerializedDataCoordinate | None:
         """Take a generic Data ID and convert it to a serializable form.
 
         Parameters
@@ -292,24 +292,24 @@ class RemoteRegistry(Registry):
 
     def findDataset(
         self,
-        datasetType: Union[DatasetType, str],
-        dataId: Optional[DataId] = None,
+        datasetType: DatasetType | str,
+        dataId: DataId | None = None,
         *,
         collections: Any = None,
-        timespan: Optional[Timespan] = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
-    ) -> Optional[DatasetRef]:
+    ) -> DatasetRef | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
     def insertDatasets(
         self,
-        datasetType: Union[DatasetType, str],
+        datasetType: DatasetType | str,
         dataIds: Iterable[DataId],
-        run: Optional[str] = None,
+        run: str | None = None,
         expand: bool = True,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-    ) -> List[DatasetRef]:
+    ) -> list[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -319,11 +319,11 @@ class RemoteRegistry(Registry):
         expand: bool = True,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
         reuseIds: bool = False,
-    ) -> List[DatasetRef]:
+    ) -> list[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def getDataset(self, id: DatasetId) -> Optional[DatasetRef]:
+    def getDataset(self, id: DatasetId) -> DatasetRef | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -346,10 +346,10 @@ class RemoteRegistry(Registry):
     def decertify(
         self,
         collection: str,
-        datasetType: Union[str, DatasetType],
+        datasetType: str | DatasetType,
         timespan: Timespan,
         *,
-        dataIds: Optional[Iterable[DataId]] = None,
+        dataIds: Iterable[DataId] | None = None,
     ) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
@@ -374,10 +374,10 @@ class RemoteRegistry(Registry):
 
     def expandDataId(
         self,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         *,
-        graph: Optional[DimensionGraph] = None,
-        records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
+        graph: DimensionGraph | None = None,
+        records: NameLookupMapping[DimensionElement, DimensionRecord | None] | None = None,
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
@@ -386,8 +386,8 @@ class RemoteRegistry(Registry):
 
     def insertDimensionData(
         self,
-        element: Union[DimensionElement, str],
-        *data: Union[Mapping[str, Any], DimensionRecord],
+        element: DimensionElement | str,
+        *data: Mapping[str, Any] | DimensionRecord,
         conform: bool = True,
         replace: bool = False,
         skip_existing: bool = False,
@@ -397,11 +397,11 @@ class RemoteRegistry(Registry):
 
     def syncDimensionData(
         self,
-        element: Union[DimensionElement, str],
-        row: Union[Mapping[str, Any], DimensionRecord],
+        element: DimensionElement | str,
+        row: Mapping[str, Any] | DimensionRecord,
         conform: bool = True,
         update: bool = False,
-    ) -> Union[bool, Dict[str, Any]]:
+    ) -> bool | dict[str, Any]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -409,14 +409,14 @@ class RemoteRegistry(Registry):
         self,
         expression: Any = ...,
         *,
-        components: Optional[bool] = None,
-        missing: Optional[List[str]] = None,
+        components: bool | None = None,
+        missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if missing is not None:
             raise NotImplementedError("RemoteRegistry does not support the 'missing' parameter.")
 
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
 
         expression = ExpressionQueryParameter.from_expression(expression)
         if expression.regex is not None:
@@ -445,13 +445,13 @@ class RemoteRegistry(Registry):
     def queryCollections(
         self,
         expression: Any = ...,
-        datasetType: Optional[DatasetType] = None,
-        collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
+        datasetType: DatasetType | None = None,
+        collectionTypes: Iterable[CollectionType] | CollectionType = CollectionType.all(),
         flattenChains: bool = False,
-        includeChains: Optional[bool] = None,
+        includeChains: bool | None = None,
     ) -> Sequence[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        params: Dict[str, Any] = {"flattenChains": flattenChains}
+        params: dict[str, Any] = {"flattenChains": flattenChains}
 
         expression = ExpressionQueryParameter.from_expression(expression)
         if expression.regex is not None:
@@ -478,12 +478,12 @@ class RemoteRegistry(Registry):
         datasetType: Any,
         *,
         collections: Any = None,
-        dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
-        dataId: Optional[DataId] = None,
+        dimensions: Iterable[Dimension | str] | None = None,
+        dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> Iterable[DatasetRef]:
@@ -521,14 +521,14 @@ class RemoteRegistry(Registry):
 
     def queryDataIds(  # type: ignore
         self,
-        dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str],
+        dimensions: Iterable[Dimension | str] | Dimension | str,
         *,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        where: str = "",
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateSequence:
@@ -570,14 +570,14 @@ class RemoteRegistry(Registry):
 
     def queryDimensionRecords(  # type: ignore
         self,
-        element: Union[DimensionElement, str],
+        element: DimensionElement | str,
         *,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        where: str = "",
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> Iterator[DimensionRecord]:
@@ -613,7 +613,7 @@ class RemoteRegistry(Registry):
 
     def queryDatasetAssociations(
         self,
-        datasetType: Union[str, DatasetType],
+        datasetType: str | DatasetType,
         collections: Any = ...,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
