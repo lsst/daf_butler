@@ -499,7 +499,9 @@ class QueryBackend(Generic[_C]):
             dimensions=DimensionKeyColumnTag.generate(dimensions.required.names),
             rank=DatasetColumnTag(dataset_type.name, "rank"),
         )
-        return find_first.apply(base).with_only_columns(base.columns - {find_first.rank})
+        return find_first.apply(
+            base, preferred_engine=context.preferred_engine, require_preferred_engine=True
+        ).with_only_columns(base.columns - {find_first.rank})
 
     def make_doomed_dataset_relation(
         self,

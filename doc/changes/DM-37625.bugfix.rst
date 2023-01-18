@@ -1,0 +1,1 @@
+Fix an order-of-operations bug in the query system (and as a result, `QuantumGraph` generation) that manifested as a "Custom operation find_first not supported by engine iteration" message.
