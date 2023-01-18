@@ -270,6 +270,26 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
+    def _simplify_dataId(self, dataId: Optional[DataId]) -> Optional[SerializedDataCoordinate]:
+        """Take a generic Data ID and convert it to a serializable form.
+
+        Parameters
+        ----------
+        dataId : `dict`, `None`, `DataCoordinate`
+            The data ID to normalize.
+
+        Returns
+        -------
+        data_id : `SerializedDataCoordinate` or `None`
+            A serializable form.
+        """
+        if dataId is None:
+            return None
+        if isinstance(dataId, DataCoordinate):
+            return dataId.to_simple()
+        # Assume we can treat it as a dict.
+        return SerializedDataCoordinate(dataId=dataId)
+
     def findDataset(
         self,
         datasetType: Union[DatasetType, str],
@@ -460,7 +480,7 @@ class RemoteRegistry(Registry):
         collections: Any = None,
         dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
         dataId: Optional[DataId] = None,
-        where: Optional[str] = None,
+        where: str = "",
         findFirst: bool = False,
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
@@ -478,7 +498,7 @@ class RemoteRegistry(Registry):
             datasetType=ExpressionQueryParameter.from_expression(datasetType),
             collections=collections,
             dimensions=dimensions,
-            dataId=dataId,
+            dataId=self._simplify_dataId(dataId),
             where=where,
             findFirst=findFirst,
             components=components,
@@ -522,7 +542,7 @@ class RemoteRegistry(Registry):
 
         parameters = QueryDataIdsModel(
             dimensions=cleaned_dimensions,
-            dataId=dataId,
+            dataId=self._simplify_dataId(dataId),
             collections=collections,
             datasets=datasets,
             where=where,
@@ -568,7 +588,7 @@ class RemoteRegistry(Registry):
             datasets = DatasetsQueryParameter.from_expression(datasets)
 
         parameters = QueryDimensionRecordsModel(
-            dataId=dataId,
+            dataId=self._simplify_dataId(dataId),
             datasets=datasets,
             collections=collections,
             where=where,
