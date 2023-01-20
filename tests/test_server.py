@@ -28,7 +28,7 @@ try:
     from fastapi.testclient import TestClient
 except ImportError:
     TestClient = None
-from lsst.daf.butler import Butler, Config
+from lsst.daf.butler import Butler, Config, DataCoordinate
 from lsst.daf.butler.server import app
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
 
@@ -91,8 +91,16 @@ class ButlerClientServerTestCase(unittest.TestCase):
         datasets = list(self.butler.registry.queryDatasets(..., collections=...))
         self.assertEqual(len(datasets), 2)
 
-        records = list(self.butler.registry.queryDataIds("visit", dataId={"instrument": "DummyCamComp"}))
-        self.assertEqual(len(records), 2)
+        dataIds = list(self.butler.registry.queryDataIds("visit", dataId={"instrument": "DummyCamComp"}))
+        self.assertEqual(len(dataIds), 2)
+
+        # Create a DataCoordinate to test the alternate path for specifying
+        # a data ID.
+        data_id = DataCoordinate.standardize(
+            {"instrument": "DummyCamComp"}, universe=self.butler.registry.dimensions
+        )
+        records = list(self.butler.registry.queryDimensionRecords("physical_filter", dataId=data_id))
+        self.assertEqual(len(records), 1)
 
 
 if __name__ == "__main__":
