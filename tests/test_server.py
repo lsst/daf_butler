@@ -75,6 +75,10 @@ class ButlerClientServerTestCase(unittest.TestCase):
         removeTestTempDir(cls.root)
 
     def test_simple(self):
+        response = self.client.get("/butler/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Butler Server", response.json())
+
         response = self.client.get("/butler/butler.json")
         self.assertEqual(response.status_code, 200)
         self.assertIn("registry", response.json())
@@ -97,6 +101,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         collections = self.butler.registry.queryCollections(...)
         self.assertEqual(len(collections), 2, collections)
+
+        collection_type = self.butler.registry.getCollectionType("ingest")
+        self.assertEqual(collection_type.name, "TAGGED")
 
         datasets = list(self.butler.registry.queryDatasets(..., collections=...))
         self.assertEqual(len(datasets), 2)
