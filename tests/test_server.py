@@ -22,20 +22,27 @@
 import os.path
 import unittest
 
-import lsst.daf.butler.server
+try:
+    import lsst.daf.butler.server
+except ImportError:
+    pass  # Import below will set skip variable.
 
 try:
     from fastapi.testclient import TestClient
 except ImportError:
     TestClient = None
 from lsst.daf.butler import Butler, Config, DataCoordinate
-from lsst.daf.butler.server import app
+
+try:
+    from lsst.daf.butler.server import app
+except ImportError:
+    app = None
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-@unittest.skipIf(TestClient is None, "FastAPI not installed.")
+@unittest.skipIf(TestClient is None or app is None, "FastAPI not installed.")
 class ButlerClientServerTestCase(unittest.TestCase):
     """Test for Butler client/server."""
 
