@@ -119,10 +119,21 @@ class RemoteRegistry(Registry):
         if defaults is None:
             defaults = RegistryDefaults()
 
-        server_uri = ResourcePath(config["db"])
-        return cls(server_uri, defaults, writeable)
+        if isinstance(config["db"], httpx.Client):
+            client = config["db"]
+            server_uri = ResourcePath("/")
+        else:
+            client = None
+            server_uri = ResourcePath(config["db"])
+        return cls(server_uri, defaults, writeable, client=client)
 
-    def __init__(self, server_uri: ResourcePath, defaults: RegistryDefaults, writeable: bool):
+    def __init__(
+        self,
+        server_uri: ResourcePath,
+        defaults: RegistryDefaults,
+        writeable: bool,
+        client: httpx.Client | None = None,
+    ):
         self._db = server_uri
         self._defaults = defaults
 
@@ -135,8 +146,13 @@ class RemoteRegistry(Registry):
 
         self._dimensions: DimensionUniverse | None = None
 
-        headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
-        self._client = httpx.Client(headers=headers)
+        if client is not None:
+            # We have injected a client explicitly in to the class.
+            # This is generally done for testing.
+            self._client = client
+        else:
+            headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
+            self._client = httpx.Client(headers=headers)
 
         # Does each API need to be sent the defaults so that the server
         # can use specific defaults each time?
@@ -163,6 +179,26 @@ class RemoteRegistry(Registry):
             defaults = self.defaults
         return type(self)(self._db, defaults, self.isWriteable())
 
+    def _get_url(self, path: str) -> str:
+        """Form the full URL to the server given the path on server.
+
+        Parameters
+        ----------
+        path : `str`
+            The path to the server endpoint. Should not include the "/butler"
+            prefix.
+
+        Returns
+        -------
+        url : `str`
+            The full URL to the service.
+        """
+        prefix = "butler"
+        if self._db.scheme == "file":
+            # Not a server, assume a test server and so prepend a /.
+            return f"/{prefix}/{path}"
+        return str(self._db.join(prefix).join(path))
+
     @property
     def dimensions(self) -> DimensionUniverse:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -170,7 +206,7 @@ class RemoteRegistry(Registry):
             return self._dimensions
 
         # Access /dimensions.json on server and cache it locally.
-        response = self._client.get(str(self._db.join("universe")))
+        response = self._client.get(self._get_url("universe"))
         response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
@@ -209,7 +245,7 @@ class RemoteRegistry(Registry):
         # This could use a local cache since collection types won't
         # change.
         path = f"v1/registry/collection/type/{name}"
-        response = self._client.get(str(self._db.join(path)))
+        response = self._client.get(self._get_url(path))
         response.raise_for_status()
         typeName = response.json()
         return CollectionType.from_name(typeName)
@@ -229,7 +265,7 @@ class RemoteRegistry(Registry):
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         path = f"v1/registry/collection/chain/{parent}"
-        response = self._client.get(str(self._db.join(path)))
+        response = self._client.get(self._get_url(path))
         response.raise_for_status()
         chain = response.json()
         return CollectionSearch.parse_obj(chain)
@@ -431,7 +467,7 @@ class RemoteRegistry(Registry):
         if components is not None:
             params = {"components": components}
 
-        response = self._client.get(str(self._db.join(path)), params=params)
+        response = self._client.get(self._get_url(path), params=params)
         response.raise_for_status()
 
         # Really could do with a ListSerializedDatasetType model but for
@@ -467,7 +503,7 @@ class RemoteRegistry(Registry):
         params["collectionType"] = collection_types
 
         path = "v1/registry/collections"
-        response = self._client.get(str(self._db.join(path)), params=params)
+        response = self._client.get(self._get_url(path), params=params)
         response.raise_for_status()
 
         collections = response.json()
@@ -508,7 +544,7 @@ class RemoteRegistry(Registry):
         )
 
         response = self._client.post(
-            str(self._db.join("v1/registry/datasets")),
+            self._get_url("v1/registry/datasets"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
@@ -553,7 +589,7 @@ class RemoteRegistry(Registry):
         )
 
         response = self._client.post(
-            str(self._db.join("v1/registry/dataIds")),
+            self._get_url("v1/registry/dataIds"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
@@ -598,7 +634,7 @@ class RemoteRegistry(Registry):
             keyword_args=kwargs,
         )
         response = self._client.post(
-            str(self._db.join(f"v1/registry/dimensionRecords/{element}")),
+            self._get_url(f"v1/registry/dimensionRecords/{element}"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
