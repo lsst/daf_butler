@@ -1,4 +1,27 @@
+# This file is part of daf_butler.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (http://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from __future__ import annotations
+
+__all__ = ()
 
 import logging
 from collections.abc import Mapping
@@ -58,15 +81,26 @@ class CollectionTypeNames(str, Enum):
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-GLOBAL_READONLY_BUTLER = Butler(BUTLER_ROOT, writeable=False)
-GLOBAL_READWRITE_BUTLER = Butler(BUTLER_ROOT, writeable=True)
+
+GLOBAL_READWRITE_BUTLER = None
+GLOBAL_READONLY_BUTLER = None
+
+
+def _make_global_butler() -> None:
+    global GLOBAL_READONLY_BUTLER, GLOBAL_READWRITE_BUTLER
+    if GLOBAL_READONLY_BUTLER is None:
+        GLOBAL_READONLY_BUTLER = Butler(BUTLER_ROOT, writeable=False)
+    if GLOBAL_READWRITE_BUTLER is None:
+        GLOBAL_READWRITE_BUTLER = Butler(BUTLER_ROOT, writeable=True)
 
 
 def butler_readonly_dependency() -> Butler:
+    _make_global_butler()
     return Butler(butler=GLOBAL_READONLY_BUTLER)
 
 
 def butler_readwrite_dependency() -> Butler:
+    _make_global_butler()
     return Butler(butler=GLOBAL_READWRITE_BUTLER)
 
 
@@ -227,7 +261,8 @@ def register_collection(
 
     # Need to refresh the global read only butler otherwise other clients
     # may not see this change.
-    GLOBAL_READONLY_BUTLER.registry.refresh()
+    if GLOBAL_READONLY_BUTLER is not None:  # for mypy
+        GLOBAL_READONLY_BUTLER.registry.refresh()
 
     return name
 
