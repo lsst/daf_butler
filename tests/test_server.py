@@ -87,6 +87,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         universe = self.butler.registry.dimensions
         self.assertEqual(universe.namespace, "daf_butler")
 
+        dataset_type = self.butler.registry.getDatasetType("test_metric_comp")
+        self.assertEqual(dataset_type.name, "test_metric_comp")
+
         dataset_types = list(self.butler.registry.queryDatasetTypes(...))
         self.assertEqual(len(dataset_types), 1)
         dataset_types = list(self.butler.registry.queryDatasetTypes("test_*"))
@@ -97,6 +100,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         datasets = list(self.butler.registry.queryDatasets(..., collections=...))
         self.assertEqual(len(datasets), 2)
+
+        ref = self.butler.registry.getDataset(datasets[0].id)
+        self.assertEqual(ref, datasets[0])
 
         dataIds = list(self.butler.registry.queryDataIds("visit", dataId={"instrument": "DummyCamComp"}))
         self.assertEqual(len(dataIds), 2)

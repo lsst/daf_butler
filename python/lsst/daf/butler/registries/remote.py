@@ -300,7 +300,10 @@ class RemoteRegistry(Registry):
 
     def getDatasetType(self, name: str) -> DatasetType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        path = f"v1/registry/datasetType/{name}"
+        response = self._client.get(self._get_url(path))
+        response.raise_for_status()
+        return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def supportsIdGenerationMode(self, mode: DatasetIdGenEnum) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -361,7 +364,10 @@ class RemoteRegistry(Registry):
 
     def getDataset(self, id: DatasetId) -> DatasetRef | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        path = f"v1/registry/dataset/{id}"
+        response = self._client.get(self._get_url(path))
+        response.raise_for_status()
+        return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
 
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
