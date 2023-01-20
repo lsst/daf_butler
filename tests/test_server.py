@@ -23,7 +23,11 @@ import os.path
 import unittest
 
 import lsst.daf.butler.server
-from fastapi.testclient import TestClient
+
+try:
+    from fastapi.testclient import TestClient
+except ImportError:
+    TestClient = None
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler.server import app
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
@@ -31,6 +35,7 @@ from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeT
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
+@unittest.skipIf(TestClient is None, "FastAPI not installed.")
 class ButlerClientServerTestCase(unittest.TestCase):
     """Test for Butler client/server."""
 
