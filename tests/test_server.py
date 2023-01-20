@@ -21,6 +21,7 @@
 
 import os.path
 import unittest
+import uuid
 
 try:
     import lsst.daf.butler.server
@@ -31,7 +32,7 @@ try:
     from fastapi.testclient import TestClient
 except ImportError:
     TestClient = None
-from lsst.daf.butler import Butler, Config, DataCoordinate
+from lsst.daf.butler import Butler, Config, DataCoordinate, DatasetRef
 
 try:
     from lsst.daf.butler.server import app
@@ -110,6 +111,18 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         ref = self.butler.registry.getDataset(datasets[0].id)
         self.assertEqual(ref, datasets[0])
+
+        locations = self.butler.registry.getDatasetLocations(ref)
+        self.assertEqual(locations[0], "FileDatastore@<butlerRoot>")
+
+        fake_ref = DatasetRef(
+            dataset_type,
+            dataId={"instrument": "DummyCamComp", "physical_filter": "d-r", "visit": 424},
+            id=uuid.uuid4(),
+            run="missing",
+        )
+        locations = self.butler.registry.getDatasetLocations(fake_ref)
+        self.assertEqual(locations, [])
 
         dataIds = list(self.butler.registry.queryDataIds("visit", dataId={"instrument": "DummyCamComp"}))
         self.assertEqual(len(dataIds), 2)

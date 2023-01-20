@@ -412,7 +412,10 @@ class RemoteRegistry(Registry):
 
     def getDatasetLocations(self, ref: DatasetRef) -> Iterable[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        path = f"v1/registry/datasetLocations/{ref.id}"
+        response = self._client.get(self._get_url(path))
+        response.raise_for_status()
+        return response.json()
 
     def expandDataId(
         self,
