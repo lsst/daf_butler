@@ -32,7 +32,7 @@ try:
     from fastapi.testclient import TestClient
 except ImportError:
     TestClient = None
-from lsst.daf.butler import Butler, Config, DataCoordinate, DatasetRef
+from lsst.daf.butler import Butler, CollectionType, Config, DataCoordinate, DatasetRef
 from lsst.daf.butler.tests import addDatasetType
 
 try:
@@ -53,6 +53,10 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # First create a butler and populate it.
         cls.root = makeTestTempDir(TESTDIR)
         cls.repo = MetricTestRepo(root=cls.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+
+        # Add a collection chain.
+        cls.repo.butler.registry.registerCollection("chain", CollectionType.CHAINED)
+        cls.repo.butler.registry.setCollectionChain("chain", ["ingest"])
 
         # Globally change where the server thinks its butler repository
         # is located. This will prevent any other server tests and is
@@ -100,11 +104,16 @@ class ButlerClientServerTestCase(unittest.TestCase):
         dataset_types = list(self.butler.registry.queryDatasetTypes("test_*"))
         self.assertEqual(len(dataset_types), 1)
 
-        collections = self.butler.registry.queryCollections(...)
+        collections = self.butler.registry.queryCollections(
+            ..., collectionTypes={CollectionType.RUN, CollectionType.TAGGED}
+        )
         self.assertEqual(len(collections), 2, collections)
 
         collection_type = self.butler.registry.getCollectionType("ingest")
         self.assertEqual(collection_type.name, "TAGGED")
+
+        chain = self.butler.registry.getCollectionChain("chain")
+        self.assertEqual([coll for coll in chain], ["ingest"])
 
         datasets = list(self.butler.registry.queryDatasets("test_metric_comp", collections=...))
         self.assertEqual(len(datasets), 2)
