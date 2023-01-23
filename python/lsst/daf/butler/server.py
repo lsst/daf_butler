@@ -162,6 +162,15 @@ def get_uri(id: DatasetId, butler: Butler = Depends(butler_readonly_dependency))
     return str(uri)
 
 
+@app.put("/butler/v1/registry/refresh")
+def refresh(butler: Butler = Depends(butler_readonly_dependency)) -> None:
+    # Unclear whether this should exist. Which butler is really being
+    # refreshed? How do we know the server we are refreshing is used later?
+    # For testing at the moment it is important if a test adds a dataset type
+    # directly in the server since the test client will not see it.
+    butler.registry.refresh()
+
+
 @app.get(
     "/butler/v1/registry/datasetType/{datasetTypeName}",
     summary="Retrieve this dataset type definition.",

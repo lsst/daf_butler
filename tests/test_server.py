@@ -33,6 +33,7 @@ try:
 except ImportError:
     TestClient = None
 from lsst.daf.butler import Butler, Config, DataCoordinate, DatasetRef
+from lsst.daf.butler.tests import addDatasetType
 
 try:
     from lsst.daf.butler.server import app
@@ -68,7 +69,6 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Since there is no client datastore we also need to specify
         # the datastore root.
         config["datastore", "root"] = cls.root
-        print(config)
         cls.butler = Butler(config)
 
     @classmethod
@@ -96,7 +96,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(dataset_type.name, "test_metric_comp")
 
         dataset_types = list(self.butler.registry.queryDatasetTypes(...))
-        self.assertEqual(len(dataset_types), 1)
+        self.assertIn("test_metric_comp", [ds.name for ds in dataset_types])
         dataset_types = list(self.butler.registry.queryDatasetTypes("test_*"))
         self.assertEqual(len(dataset_types), 1)
 
@@ -106,7 +106,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         collection_type = self.butler.registry.getCollectionType("ingest")
         self.assertEqual(collection_type.name, "TAGGED")
 
-        datasets = list(self.butler.registry.queryDatasets(..., collections=...))
+        datasets = list(self.butler.registry.queryDatasets("test_metric_comp", collections=...))
         self.assertEqual(len(datasets), 2)
 
         ref = self.butler.registry.getDataset(datasets[0].id)
@@ -134,6 +134,24 @@ class ButlerClientServerTestCase(unittest.TestCase):
         )
         records = list(self.butler.registry.queryDimensionRecords("physical_filter", dataId=data_id))
         self.assertEqual(len(records), 1)
+
+    def test_experimental(self):
+        """Experimental interfaces."""
+        # Got URI testing we can not yet support disassembly so must
+        # add a dataset with a different dataset type.
+        datasetType = addDatasetType(
+            self.repo.butler, "metric", {"instrument", "visit"}, "StructuredCompositeReadCompNoDisassembly"
+        )
+
+        self.repo.addDataset({"instrument": "DummyCamComp", "visit": 424}, datasetType=datasetType)
+        self.butler.registry.refresh()
+
+        # Need a DatasetRef.
+        datasets = list(self.butler.registry.queryDatasets("metric", collections=...))
+
+        response = self.client.get(f"/butler/v1/uri/{datasets[0].id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("file://", response.json())
 
 
 if __name__ == "__main__":

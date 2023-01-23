@@ -218,7 +218,12 @@ class RemoteRegistry(Registry):
 
         # Need to determine what to refresh.
         # Might need a server method to return all the DatasetTypes up front.
-        pass
+        # How do we know which server should be refreshed?
+        # Should there be caches in the client?
+        response = self._client.put(self._get_url("v1/registry/refresh"))
+        response.raise_for_status()
+
+        return
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
@@ -458,6 +463,7 @@ class RemoteRegistry(Registry):
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
+        # Note no caching implemented in client.
         if missing is not None:
             raise NotImplementedError("RemoteRegistry does not support the 'missing' parameter.")
 
