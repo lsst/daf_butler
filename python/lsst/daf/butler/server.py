@@ -68,7 +68,7 @@ class MaximalDataId(BaseModel):
 class CollectionTypeNames(str, Enum):
     """Collection type names supported by the interface."""
 
-    def _generate_next_value_(name, start, count, last_values) -> str:  # type: ignore
+    def _generate_next_value_(name, start, count, last_values) -> str:  # type: ignore  # noqa: N805
         # Use the name directly as the value
         return name
 
