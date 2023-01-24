@@ -320,7 +320,7 @@ class RemoteRegistry(Registry):
         Parameters
         ----------
         dataId : `dict`, `None`, `DataCoordinate`
-            The data ID to normalize.
+            The data ID to serialize.
 
         Returns
         -------

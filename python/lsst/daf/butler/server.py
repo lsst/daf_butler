@@ -111,7 +111,7 @@ def unpack_dataId(butler: Butler, data_id: SerializedDataCoordinate | None) -> D
     ----------
     butler : `lsst.daf.butler.Butler`
         The butler to use for registry and universe.
-    data_id : `SerializedDatacoordinate` or `None`
+    data_id : `SerializedDataCoordinate` or `None`
         The serialized form.
 
     Returns
