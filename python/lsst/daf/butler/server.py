@@ -49,20 +49,10 @@ from lsst.daf.butler.core.serverModels import (
     QueryDimensionRecordsModel,
 )
 from lsst.daf.butler.registry import CollectionType
-from pydantic import BaseModel
 
 BUTLER_ROOT = "ci_hsc_gen3/DATA"
 
 log = logging.getLogger("excalibur")
-
-
-class MaximalDataId(BaseModel):
-    """Something that looks like a DataId but isn't."""
-
-    detector: int | None = None
-    instrument: str | None = None
-    physical_filter: str | None = None
-    exposure: int | None = None
 
 
 class CollectionTypeNames(str, Enum):
