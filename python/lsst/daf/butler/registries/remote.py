@@ -179,7 +179,7 @@ class RemoteRegistry(Registry):
             defaults = self.defaults
         return type(self)(self._db, defaults, self.isWriteable())
 
-    def _get_url(self, path: str) -> str:
+    def _get_url(self, path: str, version: str = "v1") -> str:
         """Form the full URL to the server given the path on server.
 
         Parameters
@@ -187,6 +187,8 @@ class RemoteRegistry(Registry):
         path : `str`
             The path to the server endpoint. Should not include the "/butler"
             prefix.
+        version : `str`, optional
+            Version string to prepend to path. Defaults to "v1".
 
         Returns
         -------
@@ -196,7 +198,7 @@ class RemoteRegistry(Registry):
         prefix = "butler"
         if self._db.scheme == "file":
             # Not a server, assume a test server and so prepend a /.
-            return f"/{prefix}/{path}"
+            return f"/{prefix}/{version}/{path}"
         return str(self._db.join(prefix).join(path))
 
     @property
@@ -206,7 +208,7 @@ class RemoteRegistry(Registry):
             return self._dimensions
 
         # Access /dimensions.json on server and cache it locally.
-        response = self._client.get(self._get_url("v1/universe"))
+        response = self._client.get(self._get_url("universe"))
         response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
@@ -220,7 +222,7 @@ class RemoteRegistry(Registry):
         # Might need a server method to return all the DatasetTypes up front.
         # How do we know which server should be refreshed?
         # Should there be caches in the client?
-        response = self._client.put(self._get_url("v1/registry/refresh"))
+        response = self._client.put(self._get_url("registry/refresh"))
         response.raise_for_status()
 
         return
@@ -249,7 +251,7 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         # This could use a local cache since collection types won't
         # change.
-        path = f"v1/registry/collection/type/{name}"
+        path = f"registry/collection/type/{name}"
         response = self._client.get(self._get_url(path))
         response.raise_for_status()
         typeName = response.json()
@@ -269,7 +271,7 @@ class RemoteRegistry(Registry):
 
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        path = f"v1/registry/collection/chain/{parent}"
+        path = f"registry/collection/chain/{parent}"
         response = self._client.get(self._get_url(path))
         response.raise_for_status()
         chain = response.json()
@@ -305,7 +307,7 @@ class RemoteRegistry(Registry):
 
     def getDatasetType(self, name: str) -> DatasetType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        path = f"v1/registry/datasetType/{name}"
+        path = f"registry/datasetType/{name}"
         response = self._client.get(self._get_url(path))
         response.raise_for_status()
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
@@ -369,7 +371,7 @@ class RemoteRegistry(Registry):
 
     def getDataset(self, id: DatasetId) -> DatasetRef | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        path = f"v1/registry/dataset/{id}"
+        path = f"registry/dataset/{id}"
         response = self._client.get(self._get_url(path))
         response.raise_for_status()
         return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
@@ -417,7 +419,7 @@ class RemoteRegistry(Registry):
 
     def getDatasetLocations(self, ref: DatasetRef) -> Iterable[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        path = f"v1/registry/datasetLocations/{ref.id}"
+        path = f"registry/datasetLocations/{ref.id}"
         response = self._client.get(self._get_url(path))
         response.raise_for_status()
         return response.json()
@@ -475,7 +477,7 @@ class RemoteRegistry(Registry):
         if expression.glob is not None:
             params["glob"] = expression.glob
 
-        path = "v1/registry/datasetTypes"
+        path = "registry/datasetTypes"
         if params:
             path += "/re"
 
@@ -517,7 +519,7 @@ class RemoteRegistry(Registry):
         collection_types = [collectionType.name for collectionType in ensure_iterable(collectionTypes)]
         params["collectionType"] = collection_types
 
-        path = "v1/registry/collections"
+        path = "registry/collections"
         response = self._client.get(self._get_url(path), params=params)
         response.raise_for_status()
 
@@ -559,7 +561,7 @@ class RemoteRegistry(Registry):
         )
 
         response = self._client.post(
-            self._get_url("v1/registry/datasets"),
+            self._get_url("registry/datasets"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
@@ -604,7 +606,7 @@ class RemoteRegistry(Registry):
         )
 
         response = self._client.post(
-            self._get_url("v1/registry/dataIds"),
+            self._get_url("registry/dataIds"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
@@ -649,7 +651,7 @@ class RemoteRegistry(Registry):
             keyword_args=kwargs,
         )
         response = self._client.post(
-            self._get_url(f"v1/registry/dimensionRecords/{element}"),
+            self._get_url(f"registry/dimensionRecords/{element}"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
