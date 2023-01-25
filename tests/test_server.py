@@ -24,21 +24,16 @@ import unittest
 import uuid
 
 try:
+    # Failing to import any of these should disable the tests.
     import lsst.daf.butler.server
-except ImportError:
-    pass  # Import below will set skip variable.
-
-try:
     from fastapi.testclient import TestClient
-except ImportError:
-    TestClient = None
-from lsst.daf.butler import Butler, CollectionType, Config, DataCoordinate, DatasetRef
-from lsst.daf.butler.tests import addDatasetType
-
-try:
     from lsst.daf.butler.server import app
 except ImportError:
+    TestClient = None
     app = None
+
+from lsst.daf.butler import Butler, CollectionType, Config, DataCoordinate, DatasetRef
+from lsst.daf.butler.tests import addDatasetType
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
