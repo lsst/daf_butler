@@ -25,7 +25,7 @@ __all__ = ("RemoteRegistry",)
 
 import contextlib
 import functools
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Union
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Sequence, Set
 
 import httpx
 from lsst.daf.butler import __version__
@@ -93,9 +93,9 @@ class RemoteRegistry(Registry):
     @classmethod
     def createFromConfig(
         cls,
-        config: Optional[Union[RegistryConfig, str]] = None,
-        dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
-        butlerRoot: Optional[ResourcePathExpression] = None,
+        config: RegistryConfig | str | None = None,
+        dimensionConfig: DimensionConfig | str | None = None,
+        butlerRoot: ResourcePathExpression | None = None,
     ) -> Registry:
         """Create registry database and return `Registry` instance.
 
@@ -107,10 +107,10 @@ class RemoteRegistry(Registry):
     @classmethod
     def fromConfig(
         cls,
-        config: Union[ButlerConfig, RegistryConfig, Config, str],
-        butlerRoot: Optional[ResourcePathExpression] = None,
+        config: ButlerConfig | RegistryConfig | Config | str,
+        butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
-        defaults: Optional[RegistryDefaults] = None,
+        defaults: RegistryDefaults | None = None,
     ) -> Registry:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         config = cls.forceRegistryConfig(config)
@@ -119,10 +119,21 @@ class RemoteRegistry(Registry):
         if defaults is None:
             defaults = RegistryDefaults()
 
-        server_uri = ResourcePath(config["db"])
-        return cls(server_uri, defaults, writeable)
+        if isinstance(config["db"], httpx.Client):
+            client = config["db"]
+            server_uri = ResourcePath("/")
+        else:
+            client = None
+            server_uri = ResourcePath(config["db"])
+        return cls(server_uri, defaults, writeable, client=client)
 
-    def __init__(self, server_uri: ResourcePath, defaults: RegistryDefaults, writeable: bool):
+    def __init__(
+        self,
+        server_uri: ResourcePath,
+        defaults: RegistryDefaults,
+        writeable: bool,
+        client: httpx.Client | None = None,
+    ):
         self._db = server_uri
         self._defaults = defaults
 
@@ -133,10 +144,15 @@ class RemoteRegistry(Registry):
         # All PUT calls should be short-circuited if not writeable.
         self._writeable = writeable
 
-        self._dimensions: Optional[DimensionUniverse] = None
+        self._dimensions: DimensionUniverse | None = None
 
-        headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
-        self._client = httpx.Client(headers=headers)
+        if client is not None:
+            # We have injected a client explicitly in to the class.
+            # This is generally done for testing.
+            self._client = client
+        else:
+            headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
+            self._client = httpx.Client(headers=headers)
 
         # Does each API need to be sent the defaults so that the server
         # can use specific defaults each time?
@@ -155,13 +171,35 @@ class RemoteRegistry(Registry):
         # Can be used to prevent any PUTs to server
         return self._writeable
 
-    def copy(self, defaults: Optional[RegistryDefaults] = None) -> Registry:
+    def copy(self, defaults: RegistryDefaults | None = None) -> Registry:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if defaults is None:
             # No need to copy, because `RegistryDefaults` is immutable; we
             # effectively copy on write.
             defaults = self.defaults
         return type(self)(self._db, defaults, self.isWriteable())
+
+    def _get_url(self, path: str, version: str = "v1") -> str:
+        """Form the full URL to the server given the path on server.
+
+        Parameters
+        ----------
+        path : `str`
+            The path to the server endpoint. Should not include the "/butler"
+            prefix.
+        version : `str`, optional
+            Version string to prepend to path. Defaults to "v1".
+
+        Returns
+        -------
+        url : `str`
+            The full URL to the service.
+        """
+        prefix = "butler"
+        if self._db.scheme == "file":
+            # Not a server, assume a test server and so prepend a /.
+            return f"/{prefix}/{version}/{path}"
+        return str(self._db.join(prefix).join(path))
 
     @property
     def dimensions(self) -> DimensionUniverse:
@@ -170,7 +208,7 @@ class RemoteRegistry(Registry):
             return self._dimensions
 
         # Access /dimensions.json on server and cache it locally.
-        response = self._client.get(str(self._db.join("universe")))
+        response = self._client.get(self._get_url("universe"))
         response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
@@ -182,7 +220,12 @@ class RemoteRegistry(Registry):
 
         # Need to determine what to refresh.
         # Might need a server method to return all the DatasetTypes up front.
-        pass
+        # How do we know which server should be refreshed?
+        # Should there be caches in the client?
+        response = self._client.put(self._get_url("registry/refresh"))
+        response.raise_for_status()
+
+        return
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
@@ -198,7 +241,7 @@ class RemoteRegistry(Registry):
     #    use by Datastore. DatastoreBridgeManager also is not needed.
 
     def registerCollection(
-        self, name: str, type: CollectionType = CollectionType.TAGGED, doc: Optional[str] = None
+        self, name: str, type: CollectionType = CollectionType.TAGGED, doc: str | None = None
     ) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
@@ -208,8 +251,8 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         # This could use a local cache since collection types won't
         # change.
-        path = f"v1/registry/collection/type/{name}"
-        response = self._client.get(str(self._db.join(path)))
+        path = f"registry/collection/type/{name}"
+        response = self._client.get(self._get_url(path))
         response.raise_for_status()
         typeName = response.json()
         return CollectionType.from_name(typeName)
@@ -218,7 +261,7 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError
 
-    def registerRun(self, name: str, doc: Optional[str] = None) -> bool:
+    def registerRun(self, name: str, doc: str | None = None) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -228,8 +271,8 @@ class RemoteRegistry(Registry):
 
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        path = f"v1/registry/collection/chain/{parent}"
-        response = self._client.get(str(self._db.join(path)))
+        path = f"registry/collection/chain/{parent}"
+        response = self._client.get(self._get_url(path))
         response.raise_for_status()
         chain = response.json()
         return CollectionSearch.parse_obj(chain)
@@ -242,11 +285,11 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def getCollectionDocumentation(self, collection: str) -> Optional[str]:
+    def getCollectionDocumentation(self, collection: str) -> str | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def setCollectionDocumentation(self, collection: str, doc: Optional[str]) -> None:
+    def setCollectionDocumentation(self, collection: str, doc: str | None) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -264,32 +307,55 @@ class RemoteRegistry(Registry):
 
     def getDatasetType(self, name: str) -> DatasetType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        path = f"registry/datasetType/{name}"
+        response = self._client.get(self._get_url(path))
+        response.raise_for_status()
+        return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def supportsIdGenerationMode(self, mode: DatasetIdGenEnum) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
+    def _simplify_dataId(self, dataId: DataId | None) -> SerializedDataCoordinate | None:
+        """Take a generic Data ID and convert it to a serializable form.
+
+        Parameters
+        ----------
+        dataId : `dict`, `None`, `DataCoordinate`
+            The data ID to serialize.
+
+        Returns
+        -------
+        data_id : `SerializedDataCoordinate` or `None`
+            A serializable form.
+        """
+        if dataId is None:
+            return None
+        if isinstance(dataId, DataCoordinate):
+            return dataId.to_simple()
+        # Assume we can treat it as a dict.
+        return SerializedDataCoordinate(dataId=dataId)
+
     def findDataset(
         self,
-        datasetType: Union[DatasetType, str],
-        dataId: Optional[DataId] = None,
+        datasetType: DatasetType | str,
+        dataId: DataId | None = None,
         *,
         collections: Any = None,
-        timespan: Optional[Timespan] = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
-    ) -> Optional[DatasetRef]:
+    ) -> DatasetRef | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
     def insertDatasets(
         self,
-        datasetType: Union[DatasetType, str],
+        datasetType: DatasetType | str,
         dataIds: Iterable[DataId],
-        run: Optional[str] = None,
+        run: str | None = None,
         expand: bool = True,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-    ) -> List[DatasetRef]:
+    ) -> list[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -299,13 +365,16 @@ class RemoteRegistry(Registry):
         expand: bool = True,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
         reuseIds: bool = False,
-    ) -> List[DatasetRef]:
+    ) -> list[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def getDataset(self, id: DatasetId) -> Optional[DatasetRef]:
+    def getDataset(self, id: DatasetId) -> DatasetRef | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        path = f"registry/dataset/{id}"
+        response = self._client.get(self._get_url(path))
+        response.raise_for_status()
+        return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
 
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -326,10 +395,10 @@ class RemoteRegistry(Registry):
     def decertify(
         self,
         collection: str,
-        datasetType: Union[str, DatasetType],
+        datasetType: str | DatasetType,
         timespan: Timespan,
         *,
-        dataIds: Optional[Iterable[DataId]] = None,
+        dataIds: Iterable[DataId] | None = None,
     ) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
@@ -350,14 +419,17 @@ class RemoteRegistry(Registry):
 
     def getDatasetLocations(self, ref: DatasetRef) -> Iterable[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        path = f"registry/datasetLocations/{ref.id}"
+        response = self._client.get(self._get_url(path))
+        response.raise_for_status()
+        return response.json()
 
     def expandDataId(
         self,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         *,
-        graph: Optional[DimensionGraph] = None,
-        records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
+        graph: DimensionGraph | None = None,
+        records: NameLookupMapping[DimensionElement, DimensionRecord | None] | None = None,
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
@@ -366,8 +438,8 @@ class RemoteRegistry(Registry):
 
     def insertDimensionData(
         self,
-        element: Union[DimensionElement, str],
-        *data: Union[Mapping[str, Any], DimensionRecord],
+        element: DimensionElement | str,
+        *data: Mapping[str, Any] | DimensionRecord,
         conform: bool = True,
         replace: bool = False,
         skip_existing: bool = False,
@@ -377,11 +449,11 @@ class RemoteRegistry(Registry):
 
     def syncDimensionData(
         self,
-        element: Union[DimensionElement, str],
-        row: Union[Mapping[str, Any], DimensionRecord],
+        element: DimensionElement | str,
+        row: Mapping[str, Any] | DimensionRecord,
         conform: bool = True,
         update: bool = False,
-    ) -> Union[bool, Dict[str, Any]]:
+    ) -> bool | dict[str, Any]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -389,14 +461,15 @@ class RemoteRegistry(Registry):
         self,
         expression: Any = ...,
         *,
-        components: Optional[bool] = None,
-        missing: Optional[List[str]] = None,
+        components: bool | None = None,
+        missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
+        # Note no caching implemented in client.
         if missing is not None:
             raise NotImplementedError("RemoteRegistry does not support the 'missing' parameter.")
 
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
 
         expression = ExpressionQueryParameter.from_expression(expression)
         if expression.regex is not None:
@@ -404,14 +477,14 @@ class RemoteRegistry(Registry):
         if expression.glob is not None:
             params["glob"] = expression.glob
 
-        path = "v1/registry/datasetTypes"
+        path = "registry/datasetTypes"
         if params:
             path += "/re"
 
         if components is not None:
             params = {"components": components}
 
-        response = self._client.get(str(self._db.join(path)), params=params)
+        response = self._client.get(self._get_url(path), params=params)
         response.raise_for_status()
 
         # Really could do with a ListSerializedDatasetType model but for
@@ -425,13 +498,13 @@ class RemoteRegistry(Registry):
     def queryCollections(
         self,
         expression: Any = ...,
-        datasetType: Optional[DatasetType] = None,
-        collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
+        datasetType: DatasetType | None = None,
+        collectionTypes: Iterable[CollectionType] | CollectionType = CollectionType.all(),
         flattenChains: bool = False,
-        includeChains: Optional[bool] = None,
+        includeChains: bool | None = None,
     ) -> Sequence[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        params: Dict[str, Any] = {"flattenChains": flattenChains}
+        params: dict[str, Any] = {"flattenChains": flattenChains}
 
         expression = ExpressionQueryParameter.from_expression(expression)
         if expression.regex is not None:
@@ -446,8 +519,8 @@ class RemoteRegistry(Registry):
         collection_types = [collectionType.name for collectionType in ensure_iterable(collectionTypes)]
         params["collectionType"] = collection_types
 
-        path = "v1/registry/collections"
-        response = self._client.get(str(self._db.join(path)), params=params)
+        path = "registry/collections"
+        response = self._client.get(self._get_url(path), params=params)
         response.raise_for_status()
 
         collections = response.json()
@@ -458,12 +531,12 @@ class RemoteRegistry(Registry):
         datasetType: Any,
         *,
         collections: Any = None,
-        dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
-        dataId: Optional[DataId] = None,
-        where: Optional[str] = None,
+        dimensions: Iterable[Dimension | str] | None = None,
+        dataId: DataId | None = None,
+        where: str = "",
         findFirst: bool = False,
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> Iterable[DatasetRef]:
@@ -478,7 +551,7 @@ class RemoteRegistry(Registry):
             datasetType=ExpressionQueryParameter.from_expression(datasetType),
             collections=collections,
             dimensions=dimensions,
-            dataId=dataId,
+            dataId=self._simplify_dataId(dataId),
             where=where,
             findFirst=findFirst,
             components=components,
@@ -488,7 +561,7 @@ class RemoteRegistry(Registry):
         )
 
         response = self._client.post(
-            str(self._db.join("v1/registry/datasets")),
+            self._get_url("registry/datasets"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
@@ -501,14 +574,14 @@ class RemoteRegistry(Registry):
 
     def queryDataIds(  # type: ignore
         self,
-        dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str],
+        dimensions: Iterable[Dimension | str] | Dimension | str,
         *,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        where: str = "",
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateSequence:
@@ -522,7 +595,7 @@ class RemoteRegistry(Registry):
 
         parameters = QueryDataIdsModel(
             dimensions=cleaned_dimensions,
-            dataId=dataId,
+            dataId=self._simplify_dataId(dataId),
             collections=collections,
             datasets=datasets,
             where=where,
@@ -533,7 +606,7 @@ class RemoteRegistry(Registry):
         )
 
         response = self._client.post(
-            str(self._db.join("v1/registry/dataIds")),
+            self._get_url("registry/dataIds"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
@@ -550,14 +623,14 @@ class RemoteRegistry(Registry):
 
     def queryDimensionRecords(  # type: ignore
         self,
-        element: Union[DimensionElement, str],
+        element: DimensionElement | str,
         *,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        where: str = "",
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> Iterator[DimensionRecord]:
@@ -568,7 +641,7 @@ class RemoteRegistry(Registry):
             datasets = DatasetsQueryParameter.from_expression(datasets)
 
         parameters = QueryDimensionRecordsModel(
-            dataId=dataId,
+            dataId=self._simplify_dataId(dataId),
             datasets=datasets,
             collections=collections,
             where=where,
@@ -578,7 +651,7 @@ class RemoteRegistry(Registry):
             keyword_args=kwargs,
         )
         response = self._client.post(
-            str(self._db.join(f"v1/registry/dimensionRecords/{element}")),
+            self._get_url(f"registry/dimensionRecords/{element}"),
             json=parameters.dict(exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
@@ -593,7 +666,7 @@ class RemoteRegistry(Registry):
 
     def queryDatasetAssociations(
         self,
-        datasetType: Union[str, DatasetType],
+        datasetType: str | DatasetType,
         collections: Any = ...,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),

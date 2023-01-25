@@ -1,0 +1,4 @@
+Integrate experimental Butler server into distribution.
+``lsst.daf.butler.server`` will likely not be in this location permanently.
+The interface is also evolving and should be considered extremely unstable.
+Some testing of the remote registry code has been included.

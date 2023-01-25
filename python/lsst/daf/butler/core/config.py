@@ -246,7 +246,10 @@ class Config(collections.abc.MutableMapping):
             return
 
         if isinstance(other, Config):
-            self._data = copy.deepcopy(other._data)
+            # Deep copy might be more efficient but if someone has overridden
+            # a config entry to store a complex object then deep copy may
+            # fail. Safer to use update().
+            self.update(other._data)
             self.configFile = other.configFile
         elif isinstance(other, (dict, collections.abc.Mapping)):
             # In most cases we have a dict, and it's more efficient

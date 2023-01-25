@@ -146,7 +146,7 @@ class DatasetsQueryParameter(ExpressionQueryParameter):
 
 # Shared field definitions
 Where = Field(
-    None,
+    "",
     title="String expression similar to a SQL WHERE clause.",
     example="detector = 5 AND instrument = 'HSC'",
 )
@@ -238,7 +238,7 @@ class QueryDatasetsModel(QueryBaseModel):
     collections: Optional[ExpressionQueryParameter] = Collections
     dimensions: Optional[List[str]] = OptionalDimensions
     dataId: Optional[SerializedDataCoordinate] = DataId
-    where: Optional[str] = Where
+    where: str = Where
     findFirst: bool = FindFirst
     components: Optional[bool] = Components
     bind: Optional[BindType] = Bind
@@ -253,7 +253,7 @@ class QueryDataIdsModel(QueryBaseModel):
     dataId: Optional[SerializedDataCoordinate] = DataId
     datasets: Optional[DatasetsQueryParameter] = Datasets
     collections: Optional[ExpressionQueryParameter] = Collections
-    where: Optional[str] = Where
+    where: str = Where
     components: Optional[bool] = Components
     bind: Optional[BindType] = Bind
     check: bool = Check
@@ -266,7 +266,7 @@ class QueryDimensionRecordsModel(QueryBaseModel):
     dataId: Optional[SerializedDataCoordinate] = DataId
     datasets: Optional[DatasetsQueryParameter] = Datasets
     collections: Optional[ExpressionQueryParameter] = Collections
-    where: Optional[str] = Where
+    where: str = Where
     components: Optional[bool] = Components
     bind: Optional[SimpleDataId] = Bind
     check: bool = Check
