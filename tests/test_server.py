@@ -88,7 +88,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("registry", response.json())
 
-        response = self.client.get("/butler/universe")
+        response = self.client.get("/butler/v1/universe")
         self.assertEqual(response.status_code, 200)
         self.assertIn("namespace", response.json())
 

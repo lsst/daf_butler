@@ -206,7 +206,7 @@ class RemoteRegistry(Registry):
             return self._dimensions
 
         # Access /dimensions.json on server and cache it locally.
-        response = self._client.get(self._get_url("universe"))
+        response = self._client.get(self._get_url("v1/universe"))
         response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
