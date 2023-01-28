@@ -173,7 +173,7 @@ def arrow_to_pandas(arrow_table: pa.Table) -> pd.DataFrame:
     dataframe : `pandas.DataFrame`
         Converted pandas dataframe.
     """
-    return arrow_table.to_pandas(use_threads=False)
+    return arrow_table.to_pandas(use_threads=False, integer_object_nulls=True)
 
 
 def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
@@ -253,9 +253,26 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
     numpy_dict = {}
 
     for name in schema.names:
-        col = arrow_table[name].to_numpy()
-
         t = schema.field(name).type
+
+        if arrow_table[name].null_count == 0:
+            # Regular non-masked column
+            col = arrow_table[name].to_numpy()
+        else:
+            # For a masked column, we need to ask arrow to fill the null
+            # values with an appropriately typed value before conversion.
+            # Then we apply the mask to get a masked array of the correct type.
+
+            if t in (pa.string(), pa.binary()):
+                dummy = ""
+            else:
+                dummy = t.to_pandas_dtype()(0)
+
+            col = np.ma.masked_array(
+                data=arrow_table[name].fill_null(dummy).to_numpy(),
+                mask=arrow_table[name].is_null().to_numpy(),
+            )
+
         if t in (pa.string(), pa.binary()):
             col = col.astype(_arrow_string_to_numpy_dtype(schema, name, col))
         elif isinstance(t, pa.FixedSizeListType):
