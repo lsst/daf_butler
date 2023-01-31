@@ -99,6 +99,7 @@ def _makeSimpleNumpyTable(include_multidim=False):
         ("b", "f8"),
         ("c", "f8"),
         ("ddd", "f8"),
+        ("f", "i8"),
         ("strcol", "U10"),
         ("bytecol", "a10"),
     ]
@@ -118,6 +119,7 @@ def _makeSimpleNumpyTable(include_multidim=False):
     data["b"] = np.random.randn(nrow)
     data["c"] = np.random.randn(nrow)
     data["ddd"] = np.random.randn(nrow)
+    data["f"] = np.arange(nrow) * 10
     data["strcol"][:] = "teststring"
     data["bytecol"][:] = "teststring"
 
@@ -129,8 +131,13 @@ def _makeSimpleNumpyTable(include_multidim=False):
     return data
 
 
-def _makeSingleIndexDataFrame():
+def _makeSingleIndexDataFrame(include_masked=False):
     """Make a single index data frame for testing.
+
+    Parameters
+    ----------
+    include_masked : `bool`
+        Include masked columns.
 
     Returns
     -------
@@ -142,6 +149,15 @@ def _makeSingleIndexDataFrame():
     data = _makeSimpleNumpyTable()
     df = pd.DataFrame(data)
     df = df.set_index("index")
+
+    if include_masked:
+        nrow = len(df)
+
+        df["m1"] = pd.array(np.arange(nrow), dtype=pd.Int64Dtype())
+        df["m2"] = pd.array(np.arange(nrow), dtype=np.float32)
+        df["mstrcol"] = pd.array(np.array(["text"] * nrow))
+        df.loc[1, ["m1", "m2", "mstrcol"]] = None
+
     allColumns = df.columns.append(pd.Index(df.index.names))
 
     return df, allColumns
@@ -171,13 +187,15 @@ def _makeMultiIndexDataFrame():
     return df
 
 
-def _makeSimpleAstropyTable(include_multidim=False):
+def _makeSimpleAstropyTable(include_multidim=False, include_masked=False):
     """Make an astropy table for testing.
 
     Parameters
     ----------
     include_multidim : `bool`
         Include multi-dimensional columns.
+    include_masked : `bool`
+        Include masked columns.
 
     Returns
     -------
@@ -189,24 +207,37 @@ def _makeSimpleAstropyTable(include_multidim=False):
     table = atable.Table(data)
     table["a"].unit = units.degree
     table["b"].unit = units.meter
+
+    # Add some masked columns.
+    if include_masked:
+        nrow = len(table)
+        mask = np.zeros(nrow, dtype=bool)
+        mask[1] = True
+        table["m1"] = np.ma.masked_array(data=np.arange(nrow, dtype="i8"), mask=mask)
+        table["m2"] = np.ma.masked_array(data=np.arange(nrow, dtype="f4"), mask=mask)
+        table["mstrcol"] = np.ma.masked_array(data=np.array(["text"] * nrow), mask=mask)
+        table["mbytecol"] = np.ma.masked_array(data=np.array([b"bytes"] * nrow), mask=mask)
+
     return table
 
 
-def _makeSimpleArrowTable(include_multidim=False):
+def _makeSimpleArrowTable(include_multidim=False, include_masked=False):
     """Make an arrow table for testing.
 
     Parameters
     ----------
     include_multidim : `bool`
         Include multi-dimensional columns.
+    include_masked : `bool`
+        Include masked columns.
 
     Returns
     -------
     arrowTable : `pyarrow.Table`
         The test table.
     """
-    data = _makeSimpleNumpyTable(include_multidim=include_multidim)
-    return numpy_to_arrow(data)
+    data = _makeSimpleAstropyTable(include_multidim=include_multidim, include_masked=include_masked)
+    return astropy_to_arrow(data)
 
 
 @unittest.skipUnless(pd is not None, "Cannot test ParquetFormatterDataFrame without pandas.")
@@ -232,7 +263,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testSingleIndexDataFrame(self):
-        df1, allColumns = _makeSingleIndexDataFrame()
+        df1, allColumns = _makeSingleIndexDataFrame(include_masked=True)
 
         self.butler.put(df1, self.datasetType, dataId={})
         # Read the whole DataFrame.
@@ -411,6 +442,34 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
             self.assertIn(name, schema2.schema.columns)
             if schema2.schema[name].dtype != np.dtype("O"):
                 self.assertEqual(schema2.schema[name].dtype, schema.schema[name].dtype)
+
+    @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
+    def testWriteSingleIndexDataFrameWithMaskedColsReadAsAstropyTable(self):
+        # We need to special-case the write-as-pandas read-as-astropy code
+        # with masks because pandas has multiple ways to use masked columns.
+        # (The string column mask handling in particular is frustratingly
+        # inconsistent.)
+        df1, allColumns = _makeSingleIndexDataFrame(include_masked=True)
+
+        self.butler.put(df1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+        tab2_df = tab2.to_pandas(index="index")
+
+        self.assertTrue(df1.columns.equals(tab2_df.columns))
+        for name in tab2_df.columns:
+            col1 = df1[name]
+            col2 = tab2_df[name]
+
+            if col1.hasnans:
+                notNull = col1.notnull()
+                self.assertTrue(notNull.equals(col2.notnull()))
+                # Need to check value-by-value because column may
+                # be made of objects, depending on what pandas decides.
+                for index in notNull.values.nonzero()[0]:
+                    self.assertEqual(col1[index], col2[index])
+            else:
+                self.assertTrue(col1.equals(col2))
 
     @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
     def testWriteMultiIndexDataFrameReadAsAstropyTable(self):
@@ -602,7 +661,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testAstropyTable(self):
-        tab1 = _makeSimpleAstropyTable(include_multidim=True)
+        tab1 = _makeSimpleAstropyTable(include_multidim=True, include_masked=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
@@ -685,10 +744,6 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.assertNotEqual(schema2, schema)
 
     def testAstropyParquet(self):
-        """Test writing a dataframe to parquet via pandas (without additional
-        metadata) and ensure that we can read it back with all the new
-        functionality.
-        """
         tab1 = _makeSimpleAstropyTable()
 
         fname = os.path.join(self.root, "test_astropy.parq")
@@ -730,7 +785,8 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
     @unittest.skipUnless(pa is not None, "Cannot test reading as arrow without pyarrow.")
     def testWriteAstropyReadAsArrowTable(self):
-        tab1 = _makeSimpleAstropyTable()
+        # This astropy <-> arrow works fine with masked columns.
+        tab1 = _makeSimpleAstropyTable(include_masked=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
 
@@ -782,6 +838,35 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         )
 
         self.assertEqual(schema2, schema)
+
+    @unittest.skipUnless(pd is not None, "Cannot test reading as a dataframe without pandas.")
+    def testWriteAstropyWithMaskedColsReadAsDataFrame(self):
+        # We need to special-case the write-as-astropy read-as-pandas code
+        # with masks because pandas has multiple ways to use masked columns.
+        # (When writing an astropy table with masked columns we get an object
+        # column back, but each unmasked element has the correct type.)
+        tab1 = _makeSimpleAstropyTable(include_masked=True)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="DataFrame")
+
+        tab1_df = tab1.to_pandas()
+
+        self.assertTrue(tab1_df.columns.equals(tab2.columns))
+        for name in tab2.columns:
+            col1 = tab1_df[name]
+            col2 = tab2[name]
+
+            if col1.hasnans:
+                notNull = col1.notnull()
+                self.assertTrue(notNull.equals(col2.notnull()))
+                # Need to check value-by-value because column may
+                # be made of objects, depending on what pandas decides.
+                for index in notNull.values.nonzero()[0]:
+                    self.assertEqual(col1[index], col2[index])
+            else:
+                self.assertTrue(col1.equals(col2))
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteAstropyReadAsNumpyTable(self):
@@ -1113,7 +1198,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testArrowTable(self):
-        tab1 = _makeSimpleArrowTable(include_multidim=True)
+        tab1 = _makeSimpleArrowTable(include_multidim=True, include_masked=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
@@ -1266,7 +1351,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
 
     @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
     def testWriteArrowTableReadAsAstropyTable(self):
-        tab1 = _makeSimpleAstropyTable(include_multidim=True)
+        tab1 = _makeSimpleAstropyTable(include_multidim=True, include_masked=True)
 
         self.butler.put(tab1, self.datasetType, dataId={})
 
