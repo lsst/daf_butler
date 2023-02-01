@@ -25,5 +25,3 @@ would only report the datastore section of the config.
 .. note::
 
   Options explicitly given on the command-line always take precedence over those specified from an external options file.
-
-
