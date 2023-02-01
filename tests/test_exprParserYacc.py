@@ -536,8 +536,7 @@ class ParserLexTestCase(unittest.TestCase):
         result = tree.visit(visitor)
         self.assertEqual(
             result,
-            "B(B(IN(ID(x) (N(1), N(2))) AND !IN(ID(y) (N(1.1), N(.25), N(1e2))))"
-            " OR IN(ID(z) (S(a), S(b))))",
+            "B(B(IN(ID(x) (N(1), N(2))) AND !IN(ID(y) (N(1.1), N(.25), N(1e2)))) OR IN(ID(z) (S(a), S(b))))",
         )
 
         tree = parser.parse("x in (1,2,5..15) AND y NOT IN (-100..100:10)")

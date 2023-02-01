@@ -31,7 +31,6 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class ImportTestCase(CliCmdTestBase, unittest.TestCase):
-
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
 
     @staticmethod
@@ -64,7 +63,6 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
 
 class ExportFileCase(CliCmdTestBase, unittest.TestCase):
-
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
 
     @property

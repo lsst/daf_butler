@@ -138,7 +138,6 @@ class ObsCoreSchema:
         spatial_plugins: Sequence[SpatialObsCorePlugin],
         datasets: Optional[Type[DatasetRecordStorageManager]] = None,
     ):
-
         fields = list(_STATIC_COLUMNS)
 
         column_names = set(col.name for col in fields)

@@ -211,7 +211,9 @@ class MWArgumentDecoratorTest(unittest.TestCase):
 
                 result = self.runner.invoke(cmd, ["--help"])
                 self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-                expectedOutput = f"""Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'} {'... ' if numberOfArgs != 1 else ''}OTHER
+                things = "THINGS" if required else "[THINGS]"
+                additional = "... " if numberOfArgs != 1 else ""
+                expectedOutput = f"""Usage: cmd [OPTIONS] {things} {additional}OTHER
 
   Cmd help text.
 
@@ -231,7 +233,7 @@ class MWArgumentDecoratorTest(unittest.TestCase):
             mock(things)
 
         self.runner = click.testing.CliRunner()
-        result = self.runner.invoke(cli, ("foo"))
+        result = self.runner.invoke(cli, "foo")
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         mock.assert_called_with("foo")
 

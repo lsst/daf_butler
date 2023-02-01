@@ -215,7 +215,7 @@ def makeStaticTableSpecs(
                     name="dataset_type_id",
                     dtype=sqlalchemy.BigInteger,
                     nullable=False,
-                    doc=("Reference to the associated entry in the dataset_type table."),
+                    doc="Reference to the associated entry in the dataset_type table.",
                 ),
                 ddl.FieldSpec(
                     name="ingest_date",

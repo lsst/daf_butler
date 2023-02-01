@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 
 
 class _BaseColumnTag:
-
     __slots__ = ()
 
     @classmethod

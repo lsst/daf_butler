@@ -83,7 +83,6 @@ class LookupKey:
         self._name = None
 
         if name is not None:
-
             if not isinstance(name, str):
                 raise ValueError(f"Supplied name must be str not: '{name}'")
 

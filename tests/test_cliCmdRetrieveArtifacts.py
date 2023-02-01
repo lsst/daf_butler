@@ -36,7 +36,6 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
-
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
 
@@ -54,7 +53,6 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
     def testRetrieveAll(self):
         runner = LogCliRunner()
         with runner.isolated_filesystem():
-
             # When preserving the path the run will be in the directory along
             # with a . in the component name.  When not preserving paths the
             # filename will have an underscore rather than dot.

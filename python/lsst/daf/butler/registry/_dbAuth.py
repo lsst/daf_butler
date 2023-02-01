@@ -191,7 +191,6 @@ class DbAuth:
             raise DbAuthError("Missing database parameter")
 
         for authDict in self.authList:
-
             # Check for mandatory entries
             if "url" not in authDict:
                 raise DbAuthError("Missing URL in DbAuth configuration")
@@ -248,8 +247,7 @@ class DbAuth:
                 return (authDict["username"], authDict["password"])
 
         raise DbAuthNotFoundError(
-            "No matching DbAuth configuration for: "
-            f"({dialectname}, {username}, {host}, {port}, {database})"
+            f"No matching DbAuth configuration for: ({dialectname}, {username}, {host}, {port}, {database})"
         )
 
     def getUrl(self, url: str) -> str:

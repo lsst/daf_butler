@@ -75,8 +75,7 @@ def replaceRoot(configRoot: str, butlerRoot: Optional[ResourcePathExpression]) -
     # None or empty string indicate a problem
     if not butlerRoot:
         raise ValueError(
-            f"Required to replace {BUTLER_ROOT_TAG} in '{configRoot}' "
-            "but a replacement has not been defined"
+            f"Required to replace {BUTLER_ROOT_TAG} in '{configRoot}' but a replacement has not been defined"
         )
 
     # Use absolute file path if this refers to a local file, else use

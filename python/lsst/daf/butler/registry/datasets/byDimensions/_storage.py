@@ -171,7 +171,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if self._calibs is None:
             raise CollectionTypeError(
                 f"Cannot certify datasets of type {self.datasetType.name}, for which "
-                f"DatasetType.isCalibration() is False."
+                "DatasetType.isCalibration() is False."
             )
         if collection.type is not CollectionType.CALIBRATION:
             raise CollectionTypeError(
@@ -251,7 +251,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if self._calibs is None:
             raise CollectionTypeError(
                 f"Cannot decertify datasets of type {self.datasetType.name}, for which "
-                f"DatasetType.isCalibration() is False."
+                "DatasetType.isCalibration() is False."
             )
         if collection.type is not CollectionType.CALIBRATION:
             raise CollectionTypeError(

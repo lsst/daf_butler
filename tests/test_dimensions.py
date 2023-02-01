@@ -400,7 +400,6 @@ class SplitByStateFlags:
 
 
 class DataCoordinateTestCase(unittest.TestCase):
-
     RANDOM_SEED = 10
 
     @classmethod

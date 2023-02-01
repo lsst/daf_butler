@@ -40,7 +40,6 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
-
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryCollections"
 
     @staticmethod
@@ -127,7 +126,6 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
 
     def testChained(self):
         with self.runner.isolated_filesystem():
-
             # Create a butler and add some chained collections:
             butlerCfg = Butler.makeRepo("here")
 

@@ -191,7 +191,7 @@ class NormalFormExpressionTestCase(unittest.TestCase):
         )
         self.check(
             "(A OR (B AND NOT (C OR (NOT D AND E)))) OR F",
-            conjunctive=("(A OR B OR F) AND (A OR NOT C OR F) AND (A OR D OR NOT E OR F)"),
+            conjunctive="(A OR B OR F) AND (A OR NOT C OR F) AND (A OR D OR NOT E OR F)",
             disjunctive="A OR (B AND NOT C AND D) OR (B AND NOT C AND NOT E) OR F",
         )
 

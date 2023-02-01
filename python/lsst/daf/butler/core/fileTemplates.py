@@ -470,7 +470,6 @@ class FileTemplate:
         output = ""
 
         for literal, field_name, format_spec, conversion in parts:
-
             if field_name == "component":
                 usedComponent = True
 
@@ -691,8 +690,7 @@ class FileTemplate:
         # Calculate any field usage that does not match a dimension
         if not required.issubset(maximal):
             raise FileTemplateValidationError(
-                f"Template '{self}' is inconsistent with {entity}:"
-                f" {required} is not a subset of {maximal}."
+                f"Template '{self}' is inconsistent with {entity}: {required} is not a subset of {maximal}."
             )
 
         if not allfields.issuperset(minimal):

@@ -180,8 +180,8 @@ class GenericBaseDatastore(Datastore):
         # Sanity check
         if not isinstance(inMemoryDataset, storageClass.pytype):
             raise TypeError(
-                "Inconsistency between supplied object ({}) "
-                "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype)
+                f"Inconsistency between supplied object ({type(inMemoryDataset)}) "
+                f"and storage class type ({storageClass.pytype})"
             )
 
         # Confirm that we can accept this dataset

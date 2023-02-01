@@ -216,7 +216,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # Instead of just checking that, we group them by run again.
             refs_by_run: Dict[str, List[DatasetRef]] = defaultdict(list)
             for ref in refs:
-
                 # Record factory will filter dataset types, but to reduce
                 # collection checks we also pre-filter it here.
                 if ref.datasetType.name not in self.config.dataset_types:
@@ -233,7 +232,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             obscore_refs = good_refs
 
         else:
-
             # Take all refs, no collection check.
             obscore_refs = refs
 
@@ -262,7 +260,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
         count = 0
         if collection.name == self.tagged_collection:
-
             # Sorting may improve performance
             dataset_ids = sorted(cast(uuid.UUID, ref.id) for ref in refs)
             if dataset_ids:

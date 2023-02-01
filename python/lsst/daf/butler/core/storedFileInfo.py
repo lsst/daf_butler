@@ -108,7 +108,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         file_size: int,
         dataset_id: DatasetId,
     ):
-
         # Use these shenanigans to allow us to use a frozen dataclass
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "storageClass", storageClass)
