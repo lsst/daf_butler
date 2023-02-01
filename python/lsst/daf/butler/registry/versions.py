@@ -225,7 +225,6 @@ class ButlerVersionsManager:
               schema digest as a value.
         """
         for extension in self._managers.values():
-
             version = extension.currentVersion()
             if version:
                 key = self._managerVersionKey(extension)

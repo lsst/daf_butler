@@ -711,7 +711,6 @@ class DatastoreTests(DatastoreTestsBase):
     def testIngestNoTransfer(self):
         """Test ingesting existing files with no transfer."""
         for mode in (None, "auto"):
-
             # Some datastores have auto but can't do in place transfer
             if mode == "auto" and "auto" in self.ingestTransferModes and not self.canIngestNoTransferAuto:
                 continue
@@ -1146,7 +1145,6 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
         # a file behind
         for formatter in (BadWriteFormatter, BadNoWriteFormatter):
             with self.subTest(formatter=formatter):
-
                 # Monkey patch the formatter
                 datastore.formatterFactory.registerFormatter(ref.datasetType, formatter, overwrite=True)
 
@@ -1322,7 +1320,6 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
             ("metric33", dataId2, sc2, (True, True, False), True),
             ("metric5", dataId1, sc2, (False, True, False), True),
         ):
-
             # Choose different temp file depending on StorageClass
             testfile = testfile_j if sc.name.endswith("Json") else testfile_y
 

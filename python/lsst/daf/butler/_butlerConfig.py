@@ -68,7 +68,6 @@ class ButlerConfig(Config):
         other: Optional[Union[ResourcePathExpression, Config]] = None,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
     ):
-
         self.configDir: Optional[ResourcePath] = None
 
         # If this is already a ButlerConfig we assume that defaults

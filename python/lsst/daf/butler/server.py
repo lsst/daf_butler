@@ -227,7 +227,6 @@ def query_collections(
     includeChains: bool | None = Query(None),
     butler: Butler = Depends(butler_readonly_dependency),
 ) -> list[str]:
-
     expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
     collectionTypes = CollectionType.from_names(collectionType)
     dataset_type = butler.registry.getDatasetType(datasetType) if datasetType else None
@@ -407,7 +406,6 @@ def query_data_ids(
 def query_dimension_records(
     element: str, query: QueryDimensionRecordsModel, butler: Butler = Depends(butler_readonly_dependency)
 ) -> list[SerializedDimensionRecord]:
-
     if query.datasets:
         datasets = query.datasets.expression()
     else:

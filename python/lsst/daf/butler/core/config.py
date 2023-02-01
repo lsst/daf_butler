@@ -429,7 +429,6 @@ class Config(collections.abc.MutableMapping):
         names = self.nameTuples()
         for path in names:
             if path[-1] == self.includeKey:
-
                 log.debug("Processing file include directive at %s", self._D + self._D.join(path))
                 basePath = path[:-1]
 
@@ -1123,7 +1122,6 @@ class ConfigSubset(Config):
     """
 
     def __init__(self, other=None, validate=True, mergeDefaults=True, searchPaths=None):
-
         # Create a blank object to receive the defaults
         # Once we have the defaults we then update with the external values
         super().__init__()
@@ -1151,7 +1149,6 @@ class ConfigSubset(Config):
 
         # Sometimes we do not want to merge with defaults.
         if mergeDefaults:
-
             # Supplied search paths have highest priority
             fullSearchPath = []
             if searchPaths:
