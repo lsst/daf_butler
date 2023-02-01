@@ -161,7 +161,7 @@ def make_string_expression_predicate(
         if exprNormal == exprOriginal:
             msg = f'Error in query expression "{exprOriginal}": {err}'
         else:
-            msg = f'Error in query expression "{exprOriginal}" ' f'(normalized to "{exprNormal}"): {err}'
+            msg = f'Error in query expression "{exprOriginal}" (normalized to "{exprNormal}"): {err}'
         raise UserExpressionError(msg) from None
     for dimension_name, values in summary.dimension_constraints.items():
         if dimension_name in dimensions.universe.getGovernorDimensions().names:

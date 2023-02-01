@@ -102,8 +102,8 @@ class StorageClassDelegate:
             tail = componentName[1:]
         else:
             tail = ""
-        capitalized = "{}{}{}".format(root, first, tail)
-        return (componentName, "{}_{}".format(root, componentName), capitalized)
+        capitalized = f"{root}{first}{tail}"
+        return (componentName, f"{root}_{componentName}", capitalized)
 
     def assemble(self, components: Dict[str, Any], pytype: Optional[Type] = None) -> Any:
         """Construct an object from components based on storageClass.
@@ -144,7 +144,7 @@ class StorageClassDelegate:
         requested = set(components.keys())
         unknown = requested - understood
         if unknown:
-            raise ValueError("Requested component(s) not known to StorageClass: {}".format(unknown))
+            raise ValueError(f"Requested component(s) not known to StorageClass: {unknown}")
 
         # First try to create an instance directly using keyword args
         try:
@@ -172,7 +172,7 @@ class StorageClassDelegate:
                         failed.append(name)
 
             if failed:
-                raise ValueError("Unhandled components during assembly ({})".format(failed))
+                raise ValueError(f"Unhandled components during assembly ({failed})")
 
         return obj
 
@@ -242,7 +242,7 @@ class StorageClassDelegate:
                     component = component()
                 break
         else:
-            raise AttributeError("Unable to get component {}".format(componentName))
+            raise AttributeError(f"Unable to get component {componentName}")
         return component
 
     def disassemble(
@@ -286,14 +286,13 @@ class StorageClassDelegate:
         """
         if not self.storageClass.isComposite():
             raise TypeError(
-                "Can not disassemble something that is not a composite"
-                f" (storage class={self.storageClass})"
+                f"Can not disassemble something that is not a composite (storage class={self.storageClass})"
             )
 
         if not self.storageClass.validateInstance(composite):
             raise TypeError(
-                "Unexpected type mismatch between parent and StorageClass"
-                " ({} != {})".format(type(composite), self.storageClass.pytype)
+                "Unexpected type mismatch between parent and StorageClass "
+                f"({type(composite)} != {self.storageClass.pytype})"
             )
 
         requested = set(self.storageClass.components)
@@ -302,7 +301,7 @@ class StorageClassDelegate:
             subset = set(subset)
             diff = subset - requested
             if diff:
-                raise ValueError("Requested subset is not a subset of supported components: {}".format(diff))
+                raise ValueError(f"Requested subset is not a subset of supported components: {diff}")
             requested = subset
 
         if override is not None:
@@ -326,7 +325,7 @@ class StorageClassDelegate:
                 requested.remove(c)
 
         if requested:
-            raise ValueError("Unhandled components during disassembly ({})".format(requested))
+            raise ValueError(f"Unhandled components during disassembly ({requested})")
 
         return components
 

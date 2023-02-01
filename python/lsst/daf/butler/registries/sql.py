@@ -590,12 +590,12 @@ class SqlRegistry(Registry):
                 self._managers.obscore.add_datasets(refs, context)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
-                f"A database constraint failure was triggered by inserting "
+                "A database constraint failure was triggered by inserting "
                 f"one or more datasets of type {storage.datasetType} into "
                 f"collection '{run}'. "
-                f"This probably means a dataset with the same data ID "
-                f"and dataset type already exists, but it may also mean a "
-                f"dimension row is missing."
+                "This probably means a dataset with the same data ID "
+                "and dataset type already exists, but it may also mean a "
+                "dimension row is missing."
             ) from err
         return refs
 
@@ -663,12 +663,12 @@ class SqlRegistry(Registry):
                 self._managers.obscore.add_datasets(refs, context)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
-                f"A database constraint failure was triggered by inserting "
+                "A database constraint failure was triggered by inserting "
                 f"one or more datasets of type {storage.datasetType} into "
                 f"collection '{run}'. "
-                f"This probably means a dataset with the same data ID "
-                f"and dataset type already exists, but it may also mean a "
-                f"dimension row is missing."
+                "This probably means a dataset with the same data ID "
+                "and dataset type already exists, but it may also mean a "
+                "dimension row is missing."
             ) from err
         return refs
 
@@ -715,8 +715,8 @@ class SqlRegistry(Registry):
                 raise ConflictingDefinitionError(
                     f"Constraint violation while associating dataset of type {datasetType.name} with "
                     f"collection {collection}.  This probably means that one or more datasets with the same "
-                    f"dataset type and data ID already exist in the collection, but it may also indicate "
-                    f"that the datasets do not exist."
+                    "dataset type and data ID already exist in the collection, but it may also indicate "
+                    "that the datasets do not exist."
                 ) from err
 
     @transactional

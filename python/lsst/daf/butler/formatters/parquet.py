@@ -862,8 +862,7 @@ def _standardize_multi_index_columns(
             )
         if not set(index_level_names).issuperset(columns.keys()):
             raise ValueError(
-                f"Cannot use dict with keys {set(columns.keys())} "
-                f"to select columns from {index_level_names}."
+                f"Cannot use dict with keys {set(columns.keys())} to select columns from {index_level_names}."
             )
         factors = [
             ensure_iterable(columns.get(level, pd_index.levels[i]))

@@ -1039,8 +1039,7 @@ class Database(ABC):
             return table
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(
-                f"Table {name} does not exist, and cannot be created "
-                f"because database {self} is read-only."
+                f"Table {name} does not exist, and cannot be created because database {self} is read-only."
             )
         table = self._convertTableSpec(name, spec, self._metadata)
         for foreignKeySpec in spec.foreignKeys:
@@ -1155,7 +1154,7 @@ class Database(ABC):
             if table.key != name:
                 raise ValueError(
                     f"A temporary table with name {name} (transformed to {table.key} by "
-                    f"Database) already exists."
+                    "Database) already exists."
                 )
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, metadata))

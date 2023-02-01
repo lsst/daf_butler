@@ -233,7 +233,7 @@ class MWArgumentDecoratorTest(unittest.TestCase):
             mock(things)
 
         self.runner = click.testing.CliRunner()
-        result = self.runner.invoke(cli, ("foo"))
+        result = self.runner.invoke(cli, "foo")
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         mock.assert_called_with("foo")
 

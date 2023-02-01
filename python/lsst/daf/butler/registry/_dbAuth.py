@@ -247,8 +247,7 @@ class DbAuth:
                 return (authDict["username"], authDict["password"])
 
         raise DbAuthNotFoundError(
-            "No matching DbAuth configuration for: "
-            f"({dialectname}, {username}, {host}, {port}, {database})"
+            f"No matching DbAuth configuration for: ({dialectname}, {username}, {host}, {port}, {database})"
         )
 
     def getUrl(self, url: str) -> str:

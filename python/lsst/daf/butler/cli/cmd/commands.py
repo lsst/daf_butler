@@ -172,8 +172,7 @@ def create(*args: Any, **kwargs: Any) -> None:
     "outfile",
     type=click.File(mode="w"),
     default="-",
-    help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
-    "by default.",
+    help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout by default.",
 )
 @options_file_option()
 def config_dump(*args: Any, **kwargs: Any) -> None:
@@ -223,7 +222,7 @@ def config_validate(*args: Any, **kwargs: Any) -> None:
 )
 @click.option(
     "--unstore",
-    help=("""Remove all datasets in the collection from all datastores in which they appear."""),
+    help="Remove all datasets in the collection from all datastores in which they appear.",
     is_flag=True,
 )
 @click.option(

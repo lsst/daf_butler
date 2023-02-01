@@ -505,10 +505,10 @@ class DimensionUniverse:
         except KeyError as err:
             raise pickle.UnpicklingError(
                 f"DimensionUniverse with version '{version}' and namespace {namespace!r} "
-                f"not found.  Note that DimensionUniverse objects are not "
-                f"truly serialized; when using pickle to transfer them "
-                f"between processes, an equivalent instance with the same "
-                f"version must already exist in the receiving process."
+                "not found.  Note that DimensionUniverse objects are not "
+                "truly serialized; when using pickle to transfer them "
+                "between processes, an equivalent instance with the same "
+                "version must already exist in the receiving process."
             ) from err
 
     def __reduce__(self) -> tuple:

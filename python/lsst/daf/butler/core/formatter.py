@@ -123,8 +123,7 @@ class Formatter(metaclass=ABCMeta):
         if writeParameters:
             if self.supportedWriteParameters is None:
                 raise ValueError(
-                    "This formatter does not accept any write parameters. "
-                    f"Got: {', '.join(writeParameters)}"
+                    f"This formatter does not accept any write parameters. Got: {', '.join(writeParameters)}"
                 )
             else:
                 given = set(writeParameters)

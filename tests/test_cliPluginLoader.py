@@ -67,8 +67,7 @@ class FailedLoadTest(unittest.TestCase):
                 result = self.runner.invoke(butler.cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output!r} exception: {result.exception}")
             expectedErrMsg = (
-                "Could not import plugin from "
-                "test_cliPluginLoader.non_existant_command_function, skipping."
+                "Could not import plugin from test_cliPluginLoader.non_existant_command_function, skipping."
             )
             self.assertIn(expectedErrMsg, " ".join(cm.output))
 

@@ -2881,13 +2881,13 @@ class RegistryTests(ABC):
         with self.assertRaisesRegex(
             ValueError, "Cannot find any temporal dimension element for 'timespan.begin'"
         ):
-            list(do_query(("tract")).order_by("timespan.begin"))
+            list(do_query("tract").order_by("timespan.begin"))
 
         with self.assertRaisesRegex(ValueError, "Cannot use 'timespan.begin' with non-temporal element"):
-            list(do_query(("tract")).order_by("tract.timespan.begin"))
+            list(do_query("tract").order_by("tract.timespan.begin"))
 
         with self.assertRaisesRegex(ValueError, "Field 'name' does not exist in 'tract'."):
-            list(do_query(("tract")).order_by("tract.name"))
+            list(do_query("tract").order_by("tract.name"))
 
     def testQueryDataIdsGovernorExceptions(self):
         """Test exceptions raised by queryDataIds() for incorrect governors."""

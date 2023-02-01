@@ -237,7 +237,7 @@ class DimensionRecord:
                 v2 = kwargs.setdefault(self.definition.name, v)
                 if v != v2:
                     raise ValueError(
-                        f"Multiple inconsistent values for "
+                        "Multiple inconsistent values for "
                         f"{self.definition.name}.{self.definition.primaryKey.name}: {v!r} != {v2!r}."
                     )
         for name in self.__slots__:
