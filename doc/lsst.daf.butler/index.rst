@@ -101,12 +101,6 @@ Python API reference
 
 .. automodapi:: lsst.daf.butler
    :no-main-docstr:
-   :skip: ButlerURI
-
-.. py:class:: lsst.daf.butler.ButlerURI(uri)
-
-   ``ButlerURI`` implementation. Exists for backwards compatibility.
-   New code should use `lsst.resources.ResourcePath`.
 
 .. automodapi:: lsst.daf.butler.registry
    :no-main-docstr:
