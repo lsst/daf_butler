@@ -33,8 +33,6 @@ __all__ = [
 import logging
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional
 
-from deprecated.sphinx import deprecated
-
 from .interfaces import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
@@ -315,33 +313,4 @@ class ButlerVersionsManager:
                     raise IncompatibleVersionError(
                         f"Configured version {version} is not compatible with stored version "
                         f"{storedVersion} for extension {extension.extensionName()}"
-                    )
-
-    @deprecated(reason="Schema checksums are ignored", category=FutureWarning, version="v24.0")
-    def checkManagersDigests(self) -> None:
-        """Compare current schema digests with digests stored in database.
-
-        Raises
-        ------
-        DigestMismatchError
-            Raised if digests are not equal.
-
-        Notes
-        -----
-        This method is not used currently and will probably disappear in the
-        future as we remove schema checksums.
-        """
-        if self._attributesEmpty:
-            return
-
-        for extension in self._managers.values():
-            digest = extension.schemaDigest()
-            if digest is not None:
-                key = self._managerDigestKey(extension)
-                storedDigest = self._attributes.get(key)
-                _LOG.debug("found manager schema digest %s=%s, current digest %s", key, storedDigest, digest)
-                if storedDigest != digest:
-                    raise DigestMismatchError(
-                        f"Current schema digest '{digest}' is not the same as stored digest "
-                        f"'{storedDigest}' for extension {extension.extensionName()}"
                     )
