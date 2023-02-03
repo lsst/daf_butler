@@ -26,7 +26,6 @@ from collections.abc import Callable
 from typing import Any, cast
 
 import click
-from deprecated.sphinx import deprecated
 
 from ... import script
 from .. import utils as cmd_utils
@@ -199,59 +198,6 @@ def config_validate(*args: Any, **kwargs: Any) -> None:
     is_good = script.configValidate(*args, **kwargs)
     if not is_good:
         raise click.exceptions.Exit(1)
-
-
-@click.command(cls=ButlerCommand)
-@repo_argument(required=True)
-@collection_argument(
-    help=unwrap(
-        """COLLECTION is the Name of the collection to remove. If this is a tagged or
-                          chained collection, datasets within the collection are not modified unless --unstore
-                          is passed. If this is a run collection, --purge and --unstore must be passed, and
-                          all datasets in it are fully removed from the data repository."""
-    )
-)
-@click.option(
-    "--purge",
-    help=unwrap(
-        """Permit RUN collections to be removed, fully removing datasets within them.
-                          Requires --unstore as an added precaution against accidental deletion. Must not be
-                          passed if the collection is not a RUN."""
-    ),
-    is_flag=True,
-)
-@click.option(
-    "--unstore",
-    help="Remove all datasets in the collection from all datastores in which they appear.",
-    is_flag=True,
-)
-@click.option(
-    "--unlink",
-    help="Before removing the given `collection` unlink it from from this parent collection.",
-    multiple=True,
-    callback=split_commas,
-)
-@confirm_option()
-@options_file_option()
-@deprecated(
-    reason="Please consider using remove-collections or remove-runs instead. Will be removed after v24.",
-    version="v24.0",
-    category=FutureWarning,
-)
-def prune_collection(**kwargs: Any) -> None:
-    """Remove a collection and possibly prune datasets within it."""
-    result = script.pruneCollection(**kwargs)
-    if result.confirm:
-        print("The following collections will be removed:")
-        result.removeTable.pprint_all(align="<")
-        doContinue = click.confirm(text="Continue?", default=False)
-    else:
-        doContinue = True
-    if doContinue:
-        result.onConfirmation()
-        print("Removed collections.")
-    else:
-        print("Aborted.")
 
 
 pruneDatasets_wouldRemoveMsg = unwrap(

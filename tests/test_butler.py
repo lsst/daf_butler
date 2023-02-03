@@ -849,133 +849,6 @@ class ButlerTests(ButlerPutGetTests):
         multi2b = butler.get(datasetTypeName, dataId2)
         self.assertEqual(multi2, multi2b)
 
-    def testPruneCollections(self):
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler(self.tmpConfigFile, writeable=True)
-        # Load registry data with dimensions to hang datasets off of.
-        registryDataDir = os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
-        butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
-        # Add some RUN-type collections.
-        run1 = "run1"
-        butler.registry.registerRun(run1)
-        run2 = "run2"
-        butler.registry.registerRun(run2)
-        # put some datasets.  ref1 and ref2 have the same data ID, and are in
-        # different runs.  ref3 has a different data ID.
-        metric = makeExampleMetrics()
-        dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
-        datasetType = self.addDatasetType(
-            "prune_collections_test_dataset", dimensions, storageClass, butler.registry
-        )
-        ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
-        ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
-        ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
-
-        # Try to delete a RUN collection without purge, or with purge and not
-        # unstore.
-        with self.assertRaises(TypeError):
-            butler.pruneCollection(run1)
-        with self.assertRaises(TypeError):
-            butler.pruneCollection(run2, purge=True)
-        # Add a TAGGED collection and associate ref3 only into it.
-        tag1 = "tag1"
-        registered = butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
-        self.assertTrue(registered)
-        # Registering a second time should be allowed.
-        registered = butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
-        self.assertFalse(registered)
-        butler.registry.associate(tag1, [ref3])
-        # Add a CHAINED collection that searches run1 and then run2.  It
-        # logically contains only ref1, because ref2 is shadowed due to them
-        # having the same data ID and dataset type.
-        chain1 = "chain1"
-        butler.registry.registerCollection(chain1, type=CollectionType.CHAINED)
-        butler.registry.setCollectionChain(chain1, [run1, run2])
-        # Try to delete RUN collections, which should fail with complete
-        # rollback because they're still referenced by the CHAINED
-        # collection.
-        with self.assertRaises(sqlalchemy.exc.IntegrityError):
-            butler.pruneCollection(run1, purge=True, unstore=True)
-        with self.assertRaises(sqlalchemy.exc.IntegrityError):
-            butler.pruneCollection(run2, purge=True, unstore=True)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
-        existence = butler.datastore.mexists([ref1, ref2, ref3])
-        self.assertTrue(existence[ref1])
-        self.assertTrue(existence[ref2])
-        self.assertTrue(existence[ref3])
-        # Try to delete CHAINED and TAGGED collections with purge; should not
-        # work.
-        with self.assertRaises(TypeError):
-            butler.pruneCollection(tag1, purge=True, unstore=True)
-        with self.assertRaises(TypeError):
-            butler.pruneCollection(chain1, purge=True, unstore=True)
-        # Remove the tagged collection with unstore=False.  This should not
-        # affect the datasets.
-        butler.pruneCollection(tag1)
-        with self.assertRaises(MissingCollectionError):
-            butler.registry.getCollectionType(tag1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
-        existence = butler.datastore.mexists([ref1, ref2, ref3])
-        self.assertTrue(existence[ref1])
-        self.assertTrue(existence[ref2])
-        self.assertTrue(existence[ref3])
-        # Add the tagged collection back in, and remove it with unstore=True.
-        # This should remove ref3 only from the datastore.
-        butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
-        butler.registry.associate(tag1, [ref3])
-        butler.pruneCollection(tag1, unstore=True)
-        with self.assertRaises(MissingCollectionError):
-            butler.registry.getCollectionType(tag1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
-        existence = butler.datastore.mexists([ref1, ref2, ref3])
-        self.assertTrue(existence[ref1])
-        self.assertTrue(existence[ref2])
-        self.assertFalse(existence[ref3])
-        # Delete the chain with unstore=False.  The datasets should not be
-        # affected at all.
-        butler.pruneCollection(chain1)
-        with self.assertRaises(MissingCollectionError):
-            butler.registry.getCollectionType(chain1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
-        existence = butler.datastore.mexists([ref1, ref2, ref3])
-        self.assertTrue(existence[ref1])
-        self.assertTrue(existence[ref2])
-        self.assertFalse(existence[ref3])
-        existence = butler.datastore.knows_these([ref1, ref2, ref3])
-        self.assertTrue(existence[ref1])
-        self.assertTrue(existence[ref2])
-        self.assertFalse(existence[ref3])
-        # Redefine and then delete the chain with unstore=True.  Only ref1
-        # should be unstored (ref3 has already been unstored, but otherwise
-        # would be now).
-        butler.registry.registerCollection(chain1, type=CollectionType.CHAINED)
-        butler.registry.setCollectionChain(chain1, [run1, run2])
-        butler.pruneCollection(chain1, unstore=True)
-        with self.assertRaises(MissingCollectionError):
-            butler.registry.getCollectionType(chain1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
-        existence = butler.datastore.mexists([ref1, ref2, ref3])
-        self.assertFalse(existence[ref1])
-        self.assertTrue(existence[ref2])
-        self.assertFalse(existence[ref3])
-        # Remove run1.  This removes ref1 and ref3 from the registry (they're
-        # already gone from the datastore, which is fine).
-        butler.pruneCollection(run1, purge=True, unstore=True)
-        with self.assertRaises(MissingCollectionError):
-            butler.registry.getCollectionType(run1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref2])
-        self.assertTrue(butler.datastore.exists(ref2))
-        self.assertTrue(butler.datastore.knows(ref2))
-        # Remove run2.  This removes ref2 from the registry and the datastore.
-        butler.pruneCollection(run2, purge=True, unstore=True)
-        with self.assertRaises(MissingCollectionError):
-            butler.registry.getCollectionType(run2)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [])
-
-        # Now that the collections have been pruned we can remove the
-        # dataset type
-        butler.registry.removeDatasetType(datasetType.name)
-
     def testPickle(self):
         """Test pickle support."""
         butler = Butler(self.tmpConfigFile, run=self.default_run)
@@ -2115,7 +1988,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         # Now prune run2 collection and create instead a CHAINED collection.
         # This should block the transfer.
-        self.target_butler.pruneCollection("run2", purge=True, unstore=True)
+        self.target_butler.removeRuns(["run2"], unstore=True)
         self.target_butler.registry.registerCollection("run2", CollectionType.CHAINED)
         with self.assertRaises(CollectionTypeError):
             # Re-importing the run1 datasets can be problematic if they
