@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ()  # all symbols intentionally private; for internal package use.
 
 import enum
-from typing import Optional, Tuple
+from typing import Optional, Tuple, cast
 
 from ....core import Dimension, DimensionElement, DimensionGraph, DimensionUniverse
 
@@ -184,15 +184,21 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionEl
             element = graph.elements[name]
         else:
             # Can be a metadata name or any of unique keys
-            matches = [elem for elem in graph.elements if name in elem.metadata.names]
-            matches += [dim for dim in graph if name in dim.uniqueKeys.names]
-            if len(matches) == 1:
-                element = matches[0]
+            match_pairs: list[tuple[DimensionElement, bool]] = [
+                (elem, False) for elem in graph.elements if name in elem.metadata.names
+            ]
+            match_pairs += [(dim, True) for dim in graph if name in dim.uniqueKeys.names]
+            if len(match_pairs) == 1:
+                element, is_dimension_key = match_pairs[0]
+                if is_dimension_key and name == cast(Dimension, element).primaryKey.name:
+                    # Need to treat reference to primary key field as a
+                    # reference to the dimension name.
+                    return element, None
                 field_name = name
-            elif len(matches) > 1:
+            elif len(match_pairs) > 1:
                 raise ValueError(
-                    f"Metadata '{name}' exists in more than one dimension element: {matches},"
-                    " qualify metadata name with dimension name."
+                    f"Metadata '{name}' exists in more than one dimension element: "
+                    f"{[element for element, _ in match_pairs]}, qualify metadata name with dimension name."
                 )
             else:
                 raise ValueError(f"Metadata '{name}' cannot be found in any dimension.")
@@ -268,13 +274,17 @@ def categorizeElementOrderByName(element: DimensionElement, name: str) -> Option
             if not isinstance(element, Dimension):
                 raise ValueError(f"Element '{element}' is not a dimension.")
         else:
-            # Can be a metadata name or any of the keys
-            if name in element.metadata.names or (
-                isinstance(element, Dimension) and name in element.uniqueKeys.names
-            ):
-                field_name = name
-            else:
-                raise ValueError(f"Field '{name}' does not exist in '{element}'.")
+            # Can be a metadata name or any of the keys, but primary key needs
+            # to be treated the same as a reference to the dimension name
+            # itself.
+            if isinstance(element, Dimension):
+                if name == element.primaryKey.name:
+                    return None
+                elif name in element.uniqueKeys.names:
+                    return name
+            if name in element.metadata.names:
+                return name
+            raise ValueError(f"Field '{name}' does not exist in '{element}'.")
     else:
         # qualified name, must be a dimension element and a field
         elem_name, _, field_name = name.partition(".")

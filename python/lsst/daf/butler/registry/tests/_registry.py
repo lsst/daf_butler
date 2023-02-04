@@ -3119,3 +3119,52 @@ class RegistryTests(ABC):
         datasetId = factory.makeDatasetId(run, dataset_type, data_id, DatasetIdGenEnum.DATAID_TYPE_RUN)
         self.assertIsInstance(datasetId, uuid.UUID)
         self.assertEqual(datasetId.version, 5)
+
+    def testExposureQueries(self):
+        """Test query methods using arguments sourced from the exposure log
+        service.
+
+        The most complete test dataset currently available to daf_butler tests
+        is hsc-rc2-subset.yaml export (which is unfortunately distinct from the
+        the lsst/rc2_subset GitHub repo), but that does not have 'exposure'
+        dimension records as it was focused on providing nontrivial spatial
+        overlaps between visit+detector and tract+patch.  So in this test we
+        need to translate queries that originally used the exposure dimension
+        to use the (very similar) visit dimension instead.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "hsc-rc2-subset.yaml")
+        self.assertEqual(
+            [
+                record.id
+                for record in registry.queryDimensionRecords("visit", instrument="HSC")
+                .order_by("id")
+                .limit(5)
+            ],
+            [318, 322, 326, 330, 332],
+        )
+        self.assertEqual(
+            [
+                data_id["visit"]
+                for data_id in registry.queryDataIds(["visit"], instrument="HSC").order_by("id").limit(5)
+            ],
+            [318, 322, 326, 330, 332],
+        )
+        self.assertEqual(
+            [
+                record.id
+                for record in registry.queryDimensionRecords("detector", instrument="HSC")
+                .order_by("full_name")
+                .limit(5)
+            ],
+            [73, 72, 71, 70, 65],
+        )
+        self.assertEqual(
+            [
+                data_id["detector"]
+                for data_id in registry.queryDataIds(["detector"], instrument="HSC")
+                .order_by("full_name")
+                .limit(5)
+            ],
+            [73, 72, 71, 70, 65],
+        )
