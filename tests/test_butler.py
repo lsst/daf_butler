@@ -30,13 +30,9 @@ import pickle
 import posixpath
 import random
 import shutil
-import socket
 import string
 import tempfile
-import time
 import unittest
-from tempfile import gettempdir
-from threading import Thread
 
 try:
     import boto3
@@ -58,13 +54,6 @@ try:
     import testing.postgresql
 except ImportError:
     testing = None
-
-
-try:
-    from cheroot import wsgi
-    from wsgidav.wsgidav_app import WsgiDAVApp
-except ImportError:
-    WsgiDAVApp = None
 
 import astropy.time
 import sqlalchemy
@@ -94,7 +83,6 @@ from lsst.daf.butler.registry import (
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath
-from lsst.resources.http import _is_webdav_endpoint
 from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
 from lsst.utils import doImport
 from lsst.utils.introspection import get_full_type_name
@@ -1870,175 +1858,6 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
             shutil.rmtree(self.root, ignore_errors=True)
 
         super().tearDown()
-
-
-@unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
-class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
-    """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
-    a local in-memory SqlRegistry.
-    """
-
-    configFile = os.path.join(TESTDIR, "config/basic/butler-webdavstore.yaml")
-    fullConfigKey = None
-    validationCanFail = True
-
-    serverName = "localhost"
-    """Name of the server that will be used in the tests.
-    """
-
-    portNumber = 8080
-    """Port on which the webdav server listens. Automatically chosen
-    at setUpClass via the _getfreeport() method
-    """
-
-    root = "butlerRoot/"
-    """Root repository directory expected to be used in case useTempRoot=False.
-    Otherwise the root is set to a 20 characters long randomly generated string
-    during set-up.
-    """
-
-    datastoreStr = [f"datastore={root}"]
-    """Contains all expected root locations in a format expected to be
-    returned by Butler stringification.
-    """
-
-    datastoreName = ["FileDatastore@https://{serverName}/{root}"]
-    """The expected format of the WebdavDatastore string."""
-
-    registryStr = "/gen3.sqlite3"
-    """Expected format of the Registry string."""
-
-    serverThread = None
-    """Thread in which the local webdav server will run"""
-
-    stopWebdavServer = False
-    """This flag will cause the webdav server to
-    gracefully shut down when True
-    """
-
-    def genRoot(self):
-        """Returns a random string of len 20 to serve as a root
-        name for the temporary bucket repo.
-
-        This is equivalent to tempfile.mkdtemp as this is what self.root
-        becomes when useTempRoot is True.
-        """
-        rndstr = "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
-        return rndstr + "/"
-
-    @classmethod
-    def setUpClass(cls):
-        # Do the same as inherited class
-        cls.storageClassFactory = StorageClassFactory()
-        cls.storageClassFactory.addFromConfig(cls.configFile)
-
-        cls.portNumber = cls._getfreeport()
-        # Run a local webdav server on which tests will be run
-        cls.serverThread = Thread(
-            target=cls._serveWebdav, args=(cls, cls.portNumber, lambda: cls.stopWebdavServer), daemon=True
-        )
-        cls.serverThread.start()
-        # Wait for it to start
-        time.sleep(3)
-
-    @classmethod
-    def tearDownClass(cls):
-        # Ask for graceful shut down of the webdav server
-        cls.stopWebdavServer = True
-        # Wait for the thread to exit
-        cls.serverThread.join()
-        super().tearDownClass()
-
-    def setUp(self):
-        config = Config(self.configFile)
-
-        if self.useTempRoot:
-            self.root = self.genRoot()
-        self.rooturi = f"http://{self.serverName}:{self.portNumber}/{self.root}"
-        config.update({"datastore": {"datastore": {"root": self.rooturi}}})
-
-        # need local folder to store registry database
-        self.reg_dir = makeTestTempDir(TESTDIR)
-        config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
-
-        self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"FileDatastore@{self.rooturi}"]
-
-        if not _is_webdav_endpoint(self.rooturi):
-            raise OSError("Webdav server not running properly: cannot run tests.")
-
-        Butler.makeRepo(self.rooturi, config=config, forceConfigRoot=False)
-        self.tmpConfigFile = posixpath.join(self.rooturi, "butler.yaml")
-
-    def tearDown(self):
-        # Clear temporary directory
-        ResourcePath(self.rooturi).remove()
-        ResourcePath(self.rooturi).session.close()
-
-        if self.reg_dir is not None and os.path.exists(self.reg_dir):
-            shutil.rmtree(self.reg_dir, ignore_errors=True)
-
-        if self.useTempRoot and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
-
-        super().tearDown()
-
-    def _serveWebdav(self, port: int, stopWebdavServer):
-        """Starts a local webdav-compatible HTTP server,
-        Listening on http://localhost:port
-        This server only runs when this test class is instantiated,
-        and then shuts down. Must be started is a separate thread.
-
-        Parameters
-        ----------
-        port : `int`
-           The port number on which the server should listen
-        """
-        root_path = gettempdir()
-
-        config = {
-            "host": "0.0.0.0",
-            "port": port,
-            "provider_mapping": {"/": root_path},
-            "http_authenticator": {"domain_controller": None},
-            "simple_dc": {"user_mapping": {"*": True}},
-            "verbose": 0,
-        }
-        app = WsgiDAVApp(config)
-
-        server_args = {
-            "bind_addr": (config["host"], config["port"]),
-            "wsgi_app": app,
-        }
-        server = wsgi.Server(**server_args)
-        server.prepare()
-
-        try:
-            # Start the actual server in a separate thread
-            t = Thread(target=server.serve, daemon=True)
-            t.start()
-            # watch stopWebdavServer, and gracefully
-            # shut down the server when True
-            while True:
-                if stopWebdavServer():
-                    break
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("Caught Ctrl-C, shutting down...")
-        finally:
-            server.stop()
-            t.join()
-
-    def _getfreeport():
-        """
-        Determines a free port using sockets.
-        """
-        free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        free_socket.bind(("127.0.0.1", 0))
-        free_socket.listen()
-        port = free_socket.getsockname()[1]
-        free_socket.close()
-        return port
 
 
 class PosixDatastoreTransfers(unittest.TestCase):
