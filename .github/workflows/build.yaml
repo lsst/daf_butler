@@ -60,11 +60,6 @@ jobs:
         run: |
           conda install -y -q cryptography
 
-      - name: Install WebDAV packages for testing
-        shell: bash -l {0}
-        run: |
-          pip install cheroot wsgidav
-
       - name: Install dependencies
         shell: bash -l {0}
         run: |
