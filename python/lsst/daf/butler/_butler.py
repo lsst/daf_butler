@@ -961,8 +961,7 @@ class Butler(LimitedButler):
                         if (
                             dimensionName == "visit"
                             and "visit_system_membership" in self.registry.dimensions
-                            and "visit_system"
-                            in self.registry.dimensions["instrument"].metadata  # type: ignore
+                            and "visit_system" in self.registry.dimensions["instrument"].metadata
                         ):
                             instrument_records = list(
                                 self.registry.queryDimensionRecords(
