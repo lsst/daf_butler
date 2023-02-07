@@ -487,9 +487,9 @@ class Butler(LimitedButler):
         # Strip obscore configuration, if it is present, before writing config
         # to a file, obscore config will be stored in registry.
         config_to_write = config
-        if ("registry", "managers", "obscore") in config:
+        if (obscore_config_key := ("registry", "managers", "obscore", "config")) in config:
             config_to_write = config.copy()
-            del config_to_write["registry", "managers", "obscore", "config"]
+            del config_to_write[obscore_config_key]
         config_to_write.dumpToUri(configURI, overwrite=overwrite)
 
         # Create Registry and populate tables
@@ -961,8 +961,7 @@ class Butler(LimitedButler):
                         if (
                             dimensionName == "visit"
                             and "visit_system_membership" in self.registry.dimensions
-                            and "visit_system"
-                            in self.registry.dimensions["instrument"].metadata  # type: ignore
+                            and "visit_system" in self.registry.dimensions["instrument"].metadata
                         ):
                             instrument_records = list(
                                 self.registry.queryDimensionRecords(

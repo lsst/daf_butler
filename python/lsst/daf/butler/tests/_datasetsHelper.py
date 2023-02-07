@@ -179,7 +179,7 @@ class MultiDetectorFormatter(YamlFormatter):
         data = super()._fromBytes(serializedDataset)
         if self.dataId is None:
             raise RuntimeError("This formatter requires a dataId")
-        if "detector" not in self.dataId:  # type: ignore[comparison-overlap]
+        if "detector" not in self.dataId:
             raise RuntimeError("This formatter requires detector to be present in dataId")
         key = f"detector{self.dataId['detector']}"
         assert pytype is not None

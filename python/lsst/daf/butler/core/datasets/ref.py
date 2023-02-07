@@ -481,7 +481,7 @@ class DatasetRef:
         # __contains__ can take an object of any type, it seems hard-coded to
         # assume it will  return False if the type doesn't match the key type
         # of the Mapping.
-        if "instrument" in self.dataId:  # type: ignore
+        if "instrument" in self.dataId:
             names = tuple(n.clone(dataId={"instrument": self.dataId["instrument"]}) for n in names) + names
 
         return names
