@@ -62,7 +62,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from functools import partial, wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
 import click
@@ -723,7 +723,7 @@ class MWOptionDecorator:
     def name(self) -> str:
         """Get the name that will be passed to the command function for this
         option."""
-        return self._name
+        return cast(str, self._name)
 
     def opts(self) -> list[str]:
         """Get the flags that will be used for this option on the command
@@ -807,11 +807,12 @@ class MWCommand(click.Command):
         captured_args = []
         for param in param_order:
             if isinstance(param, click.Option):
+                param_name = cast(str, param.name)
                 if param.multiple:
-                    val = opts[param.name][next_idx[param.name]]
-                    next_idx[param.name] += 1
+                    val = opts[param_name][next_idx[param_name]]
+                    next_idx[param_name] += 1
                 else:
-                    val = opts[param.name]
+                    val = opts[param_name]
                 if param.is_flag:
                     # Bool options store their True flags in opts and their
                     # False flags in secondary_opts.
@@ -824,7 +825,8 @@ class MWCommand(click.Command):
                     captured_args.append(max(param.opts, key=len))
                     captured_args.append(val)
             elif isinstance(param, click.Argument):
-                if (opt := opts[param.name]) is not None:
+                param_name = cast(str, param.name)
+                if (opt := opts[param_name]) is not None:
                     captured_args.append(opt)
             else:
                 assert False  # All parameters should be an Option or an Argument.
@@ -992,7 +994,7 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
             # Remove leading dashes: they are not used for option names in the
             # yaml file.
             if option in [opt.lstrip("-") for opt in param.opts]:
-                return param.name
+                return cast(str, param.name)
         raise RuntimeError(f"'{option}' is not a valid option for {ctx.info_name}")
 
     ctx.default_map = ctx.default_map or {}
@@ -1013,9 +1015,7 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
                 ctx=ctx,
             )
         # Override the defaults for this subcommand
-        # mypy: (this is declared Mapping not MutableMapping so must be
-        # ignored)
-        ctx.default_map.update(overrides)  # type: ignore[attr-defined]
+        ctx.default_map.update(overrides)
     return
 
 

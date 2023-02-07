@@ -72,8 +72,8 @@ app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-GLOBAL_READWRITE_BUTLER = None
-GLOBAL_READONLY_BUTLER = None
+GLOBAL_READWRITE_BUTLER: Butler | None = None
+GLOBAL_READONLY_BUTLER: Butler | None = None
 
 
 def _make_global_butler() -> None:
