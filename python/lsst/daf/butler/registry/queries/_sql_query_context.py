@@ -48,6 +48,7 @@ from lsst.daf.relation import (
 )
 
 from ...core import ColumnTypeInfo, LogicalColumn, TimespanDatabaseRepresentation, is_timespan_column
+from ..nameShrinker import NameShrinker
 from ._query_context import QueryContext
 from .butler_sql_engine import ButlerSqlEngine
 
@@ -77,7 +78,9 @@ class SqlQueryContext(QueryContext):
         row_chunk_size: int = 1000,
     ):
         super().__init__()
-        self.sql_engine = ButlerSqlEngine(column_types=column_types)
+        self.sql_engine = ButlerSqlEngine(
+            column_types=column_types, name_shrinker=NameShrinker(db.dialect.max_identifier_length)
+        )
         self._row_chunk_size = max(row_chunk_size, db.get_constant_rows_max())
         self._db = db
         self._exit_stack: ExitStack | None = None
@@ -291,7 +294,7 @@ class SqlQueryContext(QueryContext):
         """
         sql_executable = self.sql_engine.to_executable(source)
         rows: iteration.RowIterable = _SqlRowIterable(
-            self, sql_executable, _SqlRowTransformer(source.columns, self.sql_engine.column_types)
+            self, sql_executable, _SqlRowTransformer(source.columns, self.sql_engine)
         )
         if materialize_as is not None:
             rows = rows.materialized()
@@ -319,7 +322,7 @@ class SqlQueryContext(QueryContext):
         """
         iterable = self.iteration_engine.execute(source)
         table_spec = self.column_types.make_relation_table_spec(source.columns)
-        row_transformer = _SqlRowTransformer(source.columns, self.sql_engine.column_types)
+        row_transformer = _SqlRowTransformer(source.columns, self.sql_engine)
         sql_rows = []
         iterator = iter(iterable)
         # Iterate over the first chunk of rows and transform them to hold only
@@ -470,19 +473,22 @@ class _SqlRowTransformer:
     columns : `Iterable` [ `ColumnTag` ]
         Set of columns to handle.  Rows must have at least these columns, but
         may have more.
-    column_types : `ColumnTypeInfo`
-        Information about column types that can vary with registry
-        configuration.
+    engine : `ButlerSqlEngine`
+        Relation engine; used to transform column tags into SQL identifiers and
+        obtain column type information.
     """
 
-    def __init__(self, columns: Iterable[ColumnTag], column_types: ColumnTypeInfo):
-        self._scalar_columns = set(columns)
-        self._timespan_columns: dict[ColumnTag, type[TimespanDatabaseRepresentation]] = {}
-        self._timespan_columns.update(
-            {tag: column_types.timespan_cls for tag in columns if is_timespan_column(tag)}
-        )
-        self._scalar_columns.difference_update(self._timespan_columns.keys())
-        self._has_no_columns = not columns
+    def __init__(self, columns: Iterable[ColumnTag], engine: ButlerSqlEngine):
+        self._scalar_columns: list[tuple[str, ColumnTag]] = []
+        self._timespan_columns: list[tuple[str, ColumnTag, type[TimespanDatabaseRepresentation]]] = []
+        for tag in columns:
+            if is_timespan_column(tag):
+                self._timespan_columns.append(
+                    (engine.get_identifier(tag), tag, engine.column_types.timespan_cls)
+                )
+            else:
+                self._scalar_columns.append((engine.get_identifier(tag), tag))
+        self._has_no_columns = not (self._scalar_columns or self._timespan_columns)
 
     __slots__ = ("_scalar_columns", "_timespan_columns", "_has_no_columns")
 
@@ -502,9 +508,9 @@ class _SqlRowTransformer:
             Mapping with `ColumnTag` keys and `Timespan` objects for timespan
             columns.
         """
-        relation_row = {tag: sql_row[tag.qualified_name] for tag in self._scalar_columns}
-        for tag, db_repr_cls in self._timespan_columns.items():
-            relation_row[tag] = db_repr_cls.extract(sql_row, name=tag.qualified_name)
+        relation_row = {tag: sql_row[identifier] for identifier, tag in self._scalar_columns}
+        for identifier, tag, db_repr_cls in self._timespan_columns:
+            relation_row[tag] = db_repr_cls.extract(sql_row, name=identifier)
         return relation_row
 
     def relation_to_sql(self, relation_row: Mapping[ColumnTag, Any]) -> dict[str, Any]:
@@ -523,9 +529,9 @@ class _SqlRowTransformer:
             Mapping with `str` keys and possibly-unpacked values for timespan
             columns.
         """
-        sql_row = {tag.qualified_name: relation_row[tag] for tag in self._scalar_columns}
-        for tag, db_repr_cls in self._timespan_columns.items():
-            db_repr_cls.update(relation_row[tag], result=sql_row, name=tag.qualified_name)
+        sql_row = {identifier: relation_row[tag] for identifier, tag in self._scalar_columns}
+        for identifier, tag, db_repr_cls in self._timespan_columns:
+            db_repr_cls.update(relation_row[tag], result=sql_row, name=identifier)
         if self._has_no_columns:
             sql_row["IGNORED"] = None
         return sql_row

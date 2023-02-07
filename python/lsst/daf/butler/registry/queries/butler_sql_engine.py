@@ -38,6 +38,7 @@ from ...core import (
     ddl,
     is_timespan_column,
 )
+from ..nameShrinker import NameShrinker
 from .find_first_dataset import FindFirstDataset
 
 
@@ -50,6 +51,11 @@ class ButlerSqlEngine(sql.Engine[LogicalColumn]):
     column_types: ColumnTypeInfo
     """Struct containing information about column types that depend on registry
     configuration.
+    """
+
+    name_shrinker: NameShrinker
+    """Object used to shrink the SQL identifiers that represent a ColumnTag to
+    fit within the database's limit (`NameShrinker`).
     """
 
     def __str__(self) -> str:
@@ -81,6 +87,10 @@ class ButlerSqlEngine(sql.Engine[LogicalColumn]):
             case _:
                 return super()._append_unary_to_select(operation, target)
 
+    def get_identifier(self, tag: ColumnTag) -> str:
+        # Docstring inherited.
+        return self.name_shrinker.shrink(super().get_identifier(tag))
+
     def extract_mapping(
         self, tags: Iterable[ColumnTag], sql_columns: sqlalchemy.sql.ColumnCollection
     ) -> dict[ColumnTag, LogicalColumn]:
@@ -90,10 +100,10 @@ class ButlerSqlEngine(sql.Engine[LogicalColumn]):
         for tag in tags:
             if is_timespan_column(tag):
                 result[tag] = self.column_types.timespan_cls.from_columns(
-                    sql_columns, name=tag.qualified_name
+                    sql_columns, name=self.get_identifier(tag)
                 )
             else:
-                result[tag] = sql_columns[tag.qualified_name]
+                result[tag] = sql_columns[self.get_identifier(tag)]
         return result
 
     def select_items(
@@ -108,11 +118,13 @@ class ButlerSqlEngine(sql.Engine[LogicalColumn]):
         for tag, logical_column in items:
             if is_timespan_column(tag):
                 select_columns.extend(
-                    cast(TimespanDatabaseRepresentation, logical_column).flatten(name=tag.qualified_name)
+                    cast(TimespanDatabaseRepresentation, logical_column).flatten(
+                        name=self.get_identifier(tag)
+                    )
                 )
             else:
                 select_columns.append(
-                    cast(sqlalchemy.sql.ColumnElement, logical_column).label(tag.qualified_name)
+                    cast(sqlalchemy.sql.ColumnElement, logical_column).label(self.get_identifier(tag))
                 )
         select_columns.extend(extra)
         self.handle_empty_columns(select_columns)
@@ -125,10 +137,10 @@ class ButlerSqlEngine(sql.Engine[LogicalColumn]):
         for tag in tags:
             if is_timespan_column(tag):
                 select_columns.extend(
-                    self.column_types.timespan_cls.fromLiteral(None).flatten(name=tag.qualified_name)
+                    self.column_types.timespan_cls.fromLiteral(None).flatten(name=self.get_identifier(tag))
                 )
             else:
-                select_columns.append(sqlalchemy.sql.literal(None).label(tag.qualified_name))
+                select_columns.append(sqlalchemy.sql.literal(None).label(self.get_identifier(tag)))
         self.handle_empty_columns(select_columns)
         return sqlalchemy.sql.select(*select_columns).where(sqlalchemy.sql.literal(False))
 
