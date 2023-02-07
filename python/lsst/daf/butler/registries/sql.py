@@ -198,7 +198,7 @@ class SqlRegistry(Registry):
         config.replaceRoot(butlerRoot)
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(
-            str(config.connectionString),
+            config.connectionString.render_as_string(hide_password=False),
             origin=config.get("origin", 0),
             namespace=config.get("namespace"),
             writeable=writeable,
