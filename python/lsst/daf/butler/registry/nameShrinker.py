@@ -23,7 +23,6 @@ from __future__ import annotations
 __all__ = ["NameShrinker"]
 
 import hashlib
-from typing import Dict
 
 
 class NameShrinker:
@@ -46,7 +45,8 @@ class NameShrinker:
     def __init__(self, maxLength: int, hashSize: int = 4):
         self.maxLength = maxLength
         self.hashSize = hashSize
-        self._names: Dict[str, str] = {}
+        self._by_shrunk: dict[str, str] = {}
+        self._by_original: dict[str, str] = {}
 
     def shrink(self, original: str) -> str:
         """Shrink a name and remember the mapping between the original name and
@@ -54,12 +54,15 @@ class NameShrinker:
         """
         if len(original) <= self.maxLength:
             return original
+        if original in self._by_original:
+            return self._by_original[original]
         message = hashlib.blake2b(digest_size=self.hashSize)
         message.update(original.encode("ascii"))
         trunc = self.maxLength - 2 * self.hashSize - 1
         shrunk = f"{original[:trunc]}_{message.digest().hex()}"
         assert len(shrunk) == self.maxLength
-        self._names[shrunk] = original
+        self._by_shrunk[shrunk] = original
+        self._by_original[original] = shrunk
         return shrunk
 
     def expand(self, shrunk: str) -> str:
@@ -69,4 +72,4 @@ class NameShrinker:
         If the given name was not passed to `shrink` or was not modified by
         it, it is returned unmodified.
         """
-        return self._names.get(shrunk, shrunk)
+        return self._by_shrunk.get(shrunk, shrunk)
