@@ -343,7 +343,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # noted above.
         summary = self._skypix_overlap_tables.summary
         check_sql = (
-            sqlalchemy.sql.select([summary.columns.skypix_system, summary.columns.skypix_level])
+            sqlalchemy.sql.select(summary.columns.skypix_system, summary.columns.skypix_level)
             .select_from(summary)
             .where(
                 sqlalchemy.sql.not_(

@@ -28,6 +28,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type
 import psycopg2
 import sqlalchemy
 import sqlalchemy.dialects.postgresql
+from sqlalchemy import sql
 
 from ...core import Timespan, TimespanDatabaseRepresentation, ddl, time_utils
 from ...core.named import NamedValueAbstractSet
@@ -81,7 +82,8 @@ class PostgresqlDatabase(Database):
             except (AttributeError, KeyError) as err:
                 raise RuntimeError("Only the psycopg2 driver for PostgreSQL is supported.") from err
             if namespace is None:
-                namespace = connection.execute("SELECT current_schema();").scalar()
+                query = sql.select(sql.func.current_schema())
+                namespace = connection.execute(query).scalar()
             query = "SELECT COUNT(*) FROM pg_extension WHERE extname='btree_gist';"
             if not connection.execute(sqlalchemy.text(query)).scalar():
                 raise RuntimeError(

@@ -461,7 +461,8 @@ class Database(ABC):
             try:
                 yield table
             finally:
-                table.drop(connection)
+                with self._transaction():
+                    table.drop(connection)
                 self._temp_tables.remove(table.key)
 
     @contextmanager
@@ -1158,7 +1159,8 @@ class Database(ABC):
                 )
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, metadata))
-        table.create(connection)
+        with self._transaction():
+            table.create(connection)
         return table
 
     @classmethod
