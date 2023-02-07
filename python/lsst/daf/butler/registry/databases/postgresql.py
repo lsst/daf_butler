@@ -93,7 +93,7 @@ class PostgresqlDatabase(Database):
         self.namespace = namespace
         self.dbname = dsn.get("dbname")
         self._writeable = writeable
-        self._shrinker = NameShrinker(connection.engine.dialect.max_identifier_length)
+        self._shrinker = NameShrinker(self.dialect.max_identifier_length)
 
     @classmethod
     def makeEngine(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Engine:
