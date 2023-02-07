@@ -475,13 +475,12 @@ class SqlRegistry(Registry):
         ).values()
         if not filtered_collections:
             return None
-        tail_collections: list[CollectionRecord] = []
         if timespan is None:
-            for n, collection_record in enumerate(filtered_collections):
-                if collection_record.type is CollectionType.CALIBRATION:
-                    tail_collections.extend(filtered_collections[n:])
-                    del filtered_collections[n:]
-                    break
+            filtered_collections = [
+                collection_record
+                for collection_record in filtered_collections
+                if collection_record.type is not CollectionType.CALIBRATION
+            ]
         if filtered_collections:
             requested_columns = {"dataset_id", "run", "collection"}
             with backend.context() as context:
@@ -502,15 +501,6 @@ class SqlRegistry(Registry):
         else:
             rows = []
         if not rows:
-            if tail_collections:
-                msg = (
-                    f"Cannot search for dataset '{parent_dataset_type.name}' in CALIBRATION collection "
-                    f"{tail_collections[0].name} without an input timespan."
-                )
-                if len(tail_collections) > 1:
-                    remainder_names = [", ".join(c.name for c in tail_collections[1:])]
-                    msg += f"  This also blocks searching collections [{remainder_names}] that follow it."
-                raise TypeError(msg)
             return None
         elif len(rows) == 1:
             best_row = rows[0]

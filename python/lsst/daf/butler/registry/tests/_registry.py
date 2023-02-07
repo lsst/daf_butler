@@ -475,23 +475,20 @@ class RegistryTests(ABC):
                 timespan=timespan,
             ),
         )
-        # If we try to search those same collections without a timespan, the
-        # first one works, since the CALIBRATION collection is irrelevant after
-        # the datast is found in the first collection.  But the second one
-        # should raise.
+        # If we try to search those same collections without a timespan, it
+        # should still work, since the CALIBRATION collection is ignored.
         self.assertEqual(
             bias1,
             registry.findDataset(
                 "bias", instrument="Cam1", detector=2, collections=["empty", "imported_g", "Cam1/calib"]
             ),
         )
-        with self.assertRaises(TypeError):
-            self.assertEqual(
-                bias2,
-                registry.findDataset(
-                    "bias", instrument="Cam1", detector=2, collections=["empty", "Cam1/calib", "imported_g"]
-                ),
-            )
+        self.assertEqual(
+            bias1,
+            registry.findDataset(
+                "bias", instrument="Cam1", detector=2, collections=["empty", "Cam1/calib", "imported_g"]
+            ),
+        )
 
     def testRemoveDatasetTypeSuccess(self):
         """Test that Registry.removeDatasetType works when there are no
