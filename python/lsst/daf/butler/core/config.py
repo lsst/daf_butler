@@ -25,7 +25,6 @@ from __future__ import annotations
 
 __all__ = ("Config", "ConfigSubset")
 
-import collections
 import copy
 import io
 import json
@@ -33,15 +32,17 @@ import logging
 import os
 import pprint
 import sys
+from collections import defaultdict
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import IO, Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
+from typing import IO, TYPE_CHECKING, Any, ClassVar
 
 import yaml
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImport
 from yaml.representer import Representer
 
-yaml.add_representer(collections.defaultdict, Representer.represent_dict)
+yaml.add_representer(defaultdict, Representer.represent_dict)
 
 
 # Config module logger
@@ -50,19 +51,22 @@ log = logging.getLogger(__name__)
 # PATH-like environment variable to use for defaults.
 CONFIG_PATH = "DAF_BUTLER_CONFIG_PATH"
 
-try:
-    yamlLoader = yaml.CSafeLoader
-except AttributeError:
-    # Not all installations have the C library
-    # (but assume for mypy's sake that they're the same)
-    yamlLoader = yaml.SafeLoader  # type: ignore
+if TYPE_CHECKING:
+    yamlLoader = yaml.SafeLoader
+else:
+    try:
+        yamlLoader = yaml.CSafeLoader
+    except AttributeError:
+        # Not all installations have the C library
+        # (but assume for mypy's sake that they're the same)
+        yamlLoader = yaml.SafeLoader
 
 
 def _doUpdate(d, u):
-    if not isinstance(u, collections.abc.Mapping) or not isinstance(d, collections.abc.MutableMapping):
+    if not isinstance(u, Mapping) or not isinstance(d, MutableMapping):
         raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
     for k, v in u.items():
-        if isinstance(v, collections.abc.Mapping):
+        if isinstance(v, Mapping):
             d[k] = _doUpdate(d.get(k, {}), v)
         else:
             d[k] = v
@@ -76,7 +80,7 @@ def _checkNextItem(k, d, create, must_be_dict):
     if d is None:
         # We have gone past the end of the hierarchy
         pass
-    elif not must_be_dict and isinstance(d, collections.abc.Sequence):
+    elif not must_be_dict and isinstance(d, Sequence):
         # Check for Sequence first because for lists
         # __contains__ checks whether value is found in list
         # not whether the index exists in list. When we traverse
@@ -118,7 +122,7 @@ class Loader(yamlLoader):
     See https://davidchall.github.io/yaml-includes.html
     """
 
-    def __init__(self, stream):
+    def __init__(self, stream: Any):  # types-PyYAML annotates 'stream' with a private type
         super().__init__(stream)
         # if this is a string and not a stream we may well lack a name
         try:
@@ -128,8 +132,8 @@ class Loader(yamlLoader):
             self._root = ResourcePath("no-file.yaml")
         Loader.add_constructor("!include", Loader.include)
 
-    def include(self, node):
-        result: Union[List[Any], Dict[str, Any]]
+    def include(self, node: yaml.Node) -> list[Any] | dict[str, Any]:
+        result: list[Any] | dict[str, Any]
         if isinstance(node, yaml.ScalarNode):
             return self.extractFile(self.construct_scalar(node))
 
@@ -142,6 +146,8 @@ class Loader(yamlLoader):
         elif isinstance(node, yaml.MappingNode):
             result = {}
             for k, v in self.construct_mapping(node).items():
+                if not isinstance(k, str):
+                    raise TypeError(f"Expected only strings in YAML mapping; got {k!r} of type {type(k)}.")
                 result[k] = self.extractFile(v)
             return result
 
@@ -172,7 +178,7 @@ class Loader(yamlLoader):
         return yaml.load(stream, Loader)
 
 
-class Config(collections.abc.MutableMapping):
+class Config(MutableMapping):
     r"""Implements a datatype that is used by `Butler` for configuration.
 
     It is essentially a `dict` with key/value pairs, including nested dicts
@@ -238,9 +244,9 @@ class Config(collections.abc.MutableMapping):
     """Package to search for default configuration data.  The resources
     themselves will be within a ``configs`` resource hierarchy."""
 
-    def __init__(self, other=None):
-        self._data: Dict[str, Any] = {}
-        self.configFile = None
+    def __init__(self, other: ResourcePathExpression | Config | Mapping[str, Any] | None = None):
+        self._data: dict[str, Any] = {}
+        self.configFile: ResourcePath | None = None
 
         if other is None:
             return
@@ -251,7 +257,7 @@ class Config(collections.abc.MutableMapping):
             # fail. Safer to use update().
             self.update(other._data)
             self.configFile = other.configFile
-        elif isinstance(other, (dict, collections.abc.Mapping)):
+        elif isinstance(other, (dict, Mapping)):
             # In most cases we have a dict, and it's more efficient
             # to check for a dict instance before checking the generic mapping.
             self.update(other)
@@ -535,7 +541,7 @@ class Config(collections.abc.MutableMapping):
             if temp:
                 hierarchy = [h.replace(temp, d) for h in hierarchy]
             return hierarchy
-        elif isinstance(key, collections.abc.Iterable):
+        elif isinstance(key, Iterable):
             return list(key)
         else:
             # Not sure what this is so try it anyway
@@ -632,7 +638,7 @@ class Config(collections.abc.MutableMapping):
 
         # In most cases we have a dict, and it's more efficient
         # to check for a dict instance before checking the generic mapping.
-        if isinstance(data, (dict, collections.abc.Mapping)):
+        if isinstance(data, (dict, Mapping)):
             data = Config(data)
             # Ensure that child configs inherit the parent internal delimiter
             if self._D != Config._D:
@@ -712,7 +718,7 @@ class Config(collections.abc.MutableMapping):
         other : `dict` or `Config`
             Source of configuration:
         """
-        if not isinstance(other, collections.abc.Mapping):
+        if not isinstance(other, Mapping):
             raise TypeError(f"Can only merge a Mapping into a Config, not {type(other)}")
 
         # Convert the supplied mapping to a Config for consistency
@@ -721,7 +727,7 @@ class Config(collections.abc.MutableMapping):
         otherCopy.update(self)
         self._data = otherCopy._data
 
-    def nameTuples(self, topLevelOnly=False):
+    def nameTuples(self, topLevelOnly: bool = False) -> list[tuple[str, ...]]:
         """Get tuples representing the name hierarchies of all keys.
 
         The tuples returned from this method are guaranteed to be usable
@@ -742,21 +748,21 @@ class Config(collections.abc.MutableMapping):
         if topLevelOnly:
             return list((k,) for k in self)
 
-        def getKeysAsTuples(d, keys, base):
-            if isinstance(d, collections.abc.Sequence):
-                theseKeys = range(len(d))
+        def getKeysAsTuples(
+            d: Mapping[str, Any] | Sequence[str], keys: list[tuple[str, ...]], base: tuple[str, ...] | None
+        ) -> None:
+            if isinstance(d, Sequence):
+                theseKeys: Iterable[Any] = range(len(d))
             else:
                 theseKeys = d.keys()
             for key in theseKeys:
                 val = d[key]
                 levelKey = base + (key,) if base is not None else (key,)
                 keys.append(levelKey)
-                if isinstance(val, (collections.abc.Mapping, collections.abc.Sequence)) and not isinstance(
-                    val, str
-                ):
+                if isinstance(val, (Mapping, Sequence)) and not isinstance(val, str):
                     getKeysAsTuples(val, keys, levelKey)
 
-        keys: List[Tuple[str, ...]] = []
+        keys: list[tuple[str, ...]] = []
         getKeysAsTuples(self._data, keys, None)
         return keys
 
@@ -855,7 +861,7 @@ class Config(collections.abc.MutableMapping):
         val = self.get(name)
         if isinstance(val, str):
             val = [val]
-        elif not isinstance(val, collections.abc.Sequence):
+        elif not isinstance(val, Sequence):
             val = [val]
         return val
 
@@ -872,7 +878,7 @@ class Config(collections.abc.MutableMapping):
     #######
     # i/o #
 
-    def dump(self, output: Optional[IO] = None, format: str = "yaml") -> Optional[str]:
+    def dump(self, output: IO | None = None, format: str = "yaml") -> str | None:
         """Write the config to an output stream.
 
         Parameters
@@ -1108,7 +1114,7 @@ class ConfigSubset(Config):
         the local file system or URIs, `lsst.resources.ResourcePath`.
     """
 
-    component: ClassVar[Optional[str]] = None
+    component: ClassVar[str | None] = None
     """Component to use from supplied config. Can be None. If specified the
     key is not required. Can be a full dot-separated path to a component.
     """
@@ -1117,7 +1123,7 @@ class ConfigSubset(Config):
     """Keys that are required to be specified in the configuration.
     """
 
-    defaultConfigFile: ClassVar[Optional[str]] = None
+    defaultConfigFile: ClassVar[str | None] = None
     """Name of the file containing defaults for this config class.
     """
 
@@ -1206,7 +1212,7 @@ class ConfigSubset(Config):
             self.validate()
 
     @classmethod
-    def defaultSearchPaths(cls):
+    def defaultSearchPaths(cls) -> list[ResourcePath | str]:
         """Read environment to determine search paths to use.
 
         Global defaults, at lowest priority, are found in the ``config``
@@ -1231,7 +1237,7 @@ class ConfigSubset(Config):
         # We can pick up defaults from multiple search paths
         # We fill defaults by using the butler config path and then
         # the config path environment variable in reverse order.
-        defaultsPaths: List[Union[str, ResourcePath]] = []
+        defaultsPaths: list[str | ResourcePath] = []
 
         if CONFIG_PATH in os.environ:
             externalPaths = os.environ[CONFIG_PATH].split(os.pathsep)

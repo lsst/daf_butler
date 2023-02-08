@@ -475,23 +475,20 @@ class RegistryTests(ABC):
                 timespan=timespan,
             ),
         )
-        # If we try to search those same collections without a timespan, the
-        # first one works, since the CALIBRATION collection is irrelevant after
-        # the datast is found in the first collection.  But the second one
-        # should raise.
+        # If we try to search those same collections without a timespan, it
+        # should still work, since the CALIBRATION collection is ignored.
         self.assertEqual(
             bias1,
             registry.findDataset(
                 "bias", instrument="Cam1", detector=2, collections=["empty", "imported_g", "Cam1/calib"]
             ),
         )
-        with self.assertRaises(TypeError):
-            self.assertEqual(
-                bias2,
-                registry.findDataset(
-                    "bias", instrument="Cam1", detector=2, collections=["empty", "Cam1/calib", "imported_g"]
-                ),
-            )
+        self.assertEqual(
+            bias1,
+            registry.findDataset(
+                "bias", instrument="Cam1", detector=2, collections=["empty", "Cam1/calib", "imported_g"]
+            ),
+        )
 
     def testRemoveDatasetTypeSuccess(self):
         """Test that Registry.removeDatasetType works when there are no
@@ -3167,4 +3164,34 @@ class RegistryTests(ABC):
                 .limit(5)
             ],
             [73, 72, 71, 70, 65],
+        )
+
+    def test_long_query_names(self) -> None:
+        """Test that queries involving very long names are handled correctly.
+
+        This is especially important for PostgreSQL, which truncates symbols
+        longer than 64 chars, but it's worth testing for all DBs.
+        """
+        registry = self.makeRegistry()
+        name = "abcd" * 17
+        registry.registerDatasetType(
+            DatasetType(
+                name,
+                dimensions=(),
+                storageClass="Exposure",
+                universe=registry.dimensions,
+            )
+        )
+        # Need to search more than one collection actually containing a
+        # matching dataset to avoid optimizations that sidestep bugs due to
+        # truncation by making findFirst=True a no-op.
+        run1 = "run1"
+        registry.registerRun(run1)
+        run2 = "run2"
+        registry.registerRun(run2)
+        (ref1,) = registry.insertDatasets(name, [DataCoordinate.makeEmpty(registry.dimensions)], run1)
+        registry.insertDatasets(name, [DataCoordinate.makeEmpty(registry.dimensions)], run2)
+        self.assertEqual(
+            set(registry.queryDatasets(name, collections=[run1, run2], findFirst=True)),
+            {ref1},
         )

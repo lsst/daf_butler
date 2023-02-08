@@ -115,13 +115,8 @@ class CliLogTestBase:
         subTest: Callable
         assertNotIn: Callable
 
-    lsstLogHandlerId = None
-
     def setUp(self) -> None:
         self.runner = LogCliRunner()
-
-    def tearDown(self) -> None:
-        self.lsstLogHandlerId = None
 
     class PythonLogger:
         """Keeps track of log level of a component and number of handlers

@@ -477,10 +477,6 @@ class DatasetRef:
         # to include the instrument name in the hierarchy.
         names: Tuple[LookupKey, ...] = self.datasetType._lookupNames()
 
-        # mypy doesn't think this could return True, because even though
-        # __contains__ can take an object of any type, it seems hard-coded to
-        # assume it will  return False if the type doesn't match the key type
-        # of the Mapping.
         if "instrument" in self.dataId:
             names = tuple(n.clone(dataId={"instrument": self.dataId["instrument"]}) for n in names) + names
 
