@@ -675,7 +675,7 @@ class Database(ABC):
             raise ReadOnlyDatabaseError(f"Cannot create tables in read-only database {self}.")
         self._metadata = sqlalchemy.MetaData(schema=self.namespace)
         try:
-            with self._session() as connection:
+            with self._transaction() as (_, connection):
                 context = StaticTablesContext(self, connection)
                 if create and context._tableNames:
                     # Looks like database is already initalized, to avoid
@@ -688,8 +688,7 @@ class Database(ABC):
                 if create:
                     if self.namespace is not None:
                         if self.namespace not in context._inspector.get_schema_names():
-                            with self.transaction():
-                                connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
+                            connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
                     # In our tables we have columns that make use of sqlalchemy
                     # Sequence objects. There is currently a bug in sqlalchemy
                     # that causes a deprecation warning to be thrown on a
@@ -698,7 +697,7 @@ class Database(ABC):
                     # deprecation warnings when tables are created.
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
-                        self._metadata.create_all(self._engine)
+                        self._metadata.create_all(connection)
                     # call all initializer methods sequentially
                     for init in context._initializers:
                         init(self)

@@ -211,6 +211,8 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         return value
 
 
+# TODO: sqlalchemy 2 has internal support for UUID:
+# https://docs.sqlalchemy.org/en/20/core/type_basics.html#sqlalchemy.types.Uuid
 class GUID(sqlalchemy.TypeDecorator):
     """Platform-independent GUID type.
 
@@ -249,8 +251,13 @@ class GUID(sqlalchemy.TypeDecorator):
         else:
             return "%.32x" % value.int
 
-    def process_result_value(self, value: Optional[str], dialect: sqlalchemy.Dialect) -> Optional[uuid.UUID]:
+    def process_result_value(
+        self, value: str | uuid.UUID | None, dialect: sqlalchemy.Dialect
+    ) -> Optional[uuid.UUID]:
         if value is None:
+            return value
+        elif isinstance(value, uuid.UUID):
+            # sqlalchemy 2 converts to UUID internally
             return value
         else:
             return uuid.UUID(hex=value)
