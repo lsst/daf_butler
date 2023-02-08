@@ -1163,6 +1163,20 @@ def _numpy_style_arrays_to_arrow_arrays(
                 val = []
         else:
             val = np_style_arrays[name]
-        arrow_arrays.append(pa.array(val, type=schema.field(name).type))
+
+        try:
+            arrow_arrays.append(pa.array(val, type=schema.field(name).type))
+        except pa.ArrowNotImplementedError as err:
+            # Check if val is big-endian.
+            if (np.little_endian and val.dtype.byteorder == ">") or (
+                not np.little_endian and val.dtype.byteorder == "="
+            ):
+                # We need to convert the array to little-endian.
+                val2 = val.byteswap()
+                val2.dtype = val2.dtype.newbyteorder("<")
+                arrow_arrays.append(pa.array(val2, type=schema.field(name).type))
+            else:
+                # This failed for some other reason so raise the exception.
+                raise err
 
     return arrow_arrays

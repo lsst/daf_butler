@@ -79,13 +79,15 @@ from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def _makeSimpleNumpyTable(include_multidim=False):
+def _makeSimpleNumpyTable(include_multidim=False, include_bigendian=False):
     """Make a simple numpy table with random data.
 
     Parameters
     ----------
     include_multidim : `bool`
         Include multi-dimensional columns.
+    include_bigendian : `bool`
+        Include big-endian columns.
 
     Returns
     -------
@@ -113,6 +115,9 @@ def _makeSimpleNumpyTable(include_multidim=False):
             ]
         )
 
+    if include_bigendian:
+        dtype.extend([("a_bigendian", ">f8"), ("f_bigendian", ">i8")])
+
     data = np.zeros(nrow, dtype=dtype)
     data["index"][:] = np.arange(nrow)
     data["a"] = np.random.randn(nrow)
@@ -127,6 +132,10 @@ def _makeSimpleNumpyTable(include_multidim=False):
         data["d1"] = np.random.randn(data["d1"].size).reshape(data["d1"].shape)
         data["d2"] = np.arange(data["d2"].size).reshape(data["d2"].shape)
         data["d3"] = np.asfortranarray(np.random.randn(data["d3"].size).reshape(data["d3"].shape))
+
+    if include_bigendian:
+        data["a_bigendian"][:] = data["a"]
+        data["f_bigendian"][:] = data["f"]
 
     return data
 
@@ -187,7 +196,7 @@ def _makeMultiIndexDataFrame():
     return df
 
 
-def _makeSimpleAstropyTable(include_multidim=False, include_masked=False):
+def _makeSimpleAstropyTable(include_multidim=False, include_masked=False, include_bigendian=False):
     """Make an astropy table for testing.
 
     Parameters
@@ -196,13 +205,15 @@ def _makeSimpleAstropyTable(include_multidim=False, include_masked=False):
         Include multi-dimensional columns.
     include_masked : `bool`
         Include masked columns.
+    include_bigendian : `bool`
+        Include big-endian columns.
 
     Returns
     -------
     astropyTable : `astropy.table.Table`
         The test table.
     """
-    data = _makeSimpleNumpyTable(include_multidim=include_multidim)
+    data = _makeSimpleNumpyTable(include_multidim=include_multidim, include_bigendian=include_bigendian)
     # Add a couple of units.
     table = atable.Table(data)
     table["a"].unit = units.degree
@@ -693,6 +704,14 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
 
+    def testAstropyTableBigEndian(self):
+        tab1 = _makeSimpleAstropyTable(include_bigendian=True)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+        # Read the whole Table.
+        tab2 = self.butler.get(self.datasetType, dataId={})
+        self._checkAstropyTableEquality(tab1, tab2, has_bigendian=True)
+
     def testAstropyTableWithMetadata(self):
         tab1 = _makeSimpleAstropyTable(include_multidim=True)
 
@@ -895,7 +914,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
         self.assertEqual(schema2, schema)
 
-    def _checkAstropyTableEquality(self, table1, table2, skip_units=False):
+    def _checkAstropyTableEquality(self, table1, table2, skip_units=False, has_bigendian=False):
         """Check if two astropy tables have the same columns/values.
 
         Parameters
@@ -903,8 +922,15 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         table1 : `astropy.table.Table`
         table2 : `astropy.table.Table`
         skip_units : `bool`
+        has_bigendian : `bool`
         """
-        self.assertEqual(table1.dtype, table2.dtype)
+        if not has_bigendian:
+            self.assertEqual(table1.dtype, table2.dtype)
+        else:
+            for name in table1.dtype.names:
+                # Only check type matches, force to little-endian.
+                self.assertEqual(table1.dtype[name].newbyteorder(">"), table2.dtype[name].newbyteorder(">"))
+
         self.assertEqual(table1.meta, table2.meta)
         if not skip_units:
             for name in table1.columns:
@@ -1013,6 +1039,14 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
+
+    def testNumpyTableBigEndian(self):
+        tab1 = _makeSimpleNumpyTable(include_bigendian=True)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+        # Read the whole Table.
+        tab2 = self.butler.get(self.datasetType, dataId={})
+        self._checkNumpyTableEquality(tab1, tab2, has_bigendian=True)
 
     def testArrowNumpySchema(self):
         tab1 = _makeSimpleNumpyTable(include_multidim=True)
@@ -1126,17 +1160,22 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
 
         self.assertEqual(schema2, schema)
 
-    def _checkNumpyTableEquality(self, table1, table2):
+    def _checkNumpyTableEquality(self, table1, table2, has_bigendian=False):
         """Check if two numpy tables have the same columns/values
 
         Parameters
         ----------
         table1 : `numpy.ndarray`
         table2 : `numpy.ndarray`
+        has_bigendian : `bool`
         """
         self.assertEqual(table1.dtype.names, table2.dtype.names)
         for name in table1.dtype.names:
-            self.assertEqual(table1.dtype[name], table2.dtype[name])
+            if not has_bigendian:
+                self.assertEqual(table1.dtype[name], table2.dtype[name])
+            else:
+                # Only check type matches, force to little-endian.
+                self.assertEqual(table1.dtype[name].newbyteorder(">"), table2.dtype[name].newbyteorder(">"))
         self.assertTrue(np.all(table1 == table2))
 
 
