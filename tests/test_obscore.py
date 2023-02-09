@@ -516,9 +516,9 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
         engine = sqlalchemy.engine.create_engine(postgresql.url())
         with engine.begin() as connection:
             try:
-                connection.execute(sqlalchemy.text("CREATE EXTENSION pg_sphere;"))
-            except sqlalchemy.exc.OperationalError:
-                raise unittest.SkipTest("pg_sphere extension does not exist")
+                connection.execute(sqlalchemy.text("CREATE EXTENSION pg_sphere"))
+            except sqlalchemy.exc.DatabaseError as exc:
+                raise unittest.SkipTest(f"pg_sphere extension does not exist: {exc}")
 
     def make_obscore_config(
         self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
