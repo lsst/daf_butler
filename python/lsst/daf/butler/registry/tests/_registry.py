@@ -52,6 +52,7 @@ from ...core import (
     DatasetType,
     DimensionGraph,
     NamedValueSet,
+    SkyPixDimension,
     StorageClass,
     Timespan,
     ddl,
@@ -3194,4 +3195,156 @@ class RegistryTests(ABC):
         self.assertEqual(
             set(registry.queryDatasets(name, collections=[run1, run2], findFirst=True)),
             {ref1},
+        )
+
+    def test_skypix_constraint_queries(self) -> None:
+        """Test queries spatially constrained by a skypix data ID."""
+        registry = self.makeRegistry()
+        self.loadData(registry, "hsc-rc2-subset.yaml")
+        patch_regions = {
+            (data_id["tract"], data_id["patch"]): data_id.region
+            for data_id in registry.queryDataIds(["patch"]).expanded()
+        }
+        skypix_dimension: SkyPixDimension = registry.dimensions["htm11"]
+        # This check ensures the test doesn't become trivial due to a config
+        # change; if it does, just pick a different HTML level.
+        self.assertNotEqual(skypix_dimension, registry.dimensions.commonSkyPix)
+        # Gather all skypix IDs that definitely overlap at least one of these
+        # patches.
+        relevant_skypix_ids = lsst.sphgeom.RangeSet()
+        for patch_key, patch_region in patch_regions.items():
+            relevant_skypix_ids |= skypix_dimension.pixelization.interior(patch_region)
+        # Look for a "nontrivial" skypix_id that overlaps at least one patch
+        # and does not overlap at least one other patch.
+        for skypix_id in itertools.chain.from_iterable(
+            range(begin, end) for begin, end in relevant_skypix_ids
+        ):
+            skypix_region = skypix_dimension.pixelization.pixel(skypix_id)
+            overlapping_patches = {
+                patch_key
+                for patch_key, patch_region in patch_regions.items()
+                if not patch_region.isDisjointFrom(skypix_region)
+            }
+            if overlapping_patches and overlapping_patches != patch_regions.keys():
+                break
+        else:
+            raise RuntimeError("Could not find usable skypix ID for this dimension configuration.")
+        self.assertEqual(
+            {
+                (data_id["tract"], data_id["patch"])
+                for data_id in registry.queryDataIds(
+                    ["patch"],
+                    dataId={skypix_dimension.name: skypix_id},
+                )
+            },
+            overlapping_patches,
+        )
+
+    def test_spatial_constraint_queries(self) -> None:
+        """Test queries in which one spatial dimension in the constraint (data
+        ID or ``where`` string) constrains a different spatial dimension in the
+        query result columns.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "hsc-rc2-subset.yaml")
+        patch_regions = {
+            (data_id["tract"], data_id["patch"]): data_id.region
+            for data_id in registry.queryDataIds(["patch"]).expanded()
+        }
+        observation_regions = {
+            (data_id["visit"], data_id["detector"]): data_id.region
+            for data_id in registry.queryDataIds(["visit", "detector"]).expanded()
+        }
+        all_combos = {
+            (patch_key, observation_key)
+            for patch_key, observation_key in itertools.product(patch_regions, observation_regions)
+        }
+        overlapping_combos = {
+            (patch_key, observation_key)
+            for patch_key, observation_key in all_combos
+            if not patch_regions[patch_key].isDisjointFrom(observation_regions[observation_key])
+        }
+        # Check a direct spatial join with no constraint first.
+        self.assertEqual(
+            {
+                ((data_id["tract"], data_id["patch"]), (data_id["visit"], data_id["detector"]))
+                for data_id in registry.queryDataIds(["patch", "visit", "detector"])
+            },
+            overlapping_combos,
+        )
+        overlaps_by_patch: defaultdict[tuple[int, int], set[tuple[str, str]]] = defaultdict(set)
+        overlaps_by_observation: defaultdict[tuple[int, int], set[tuple[str, str]]] = defaultdict(set)
+        for patch_key, observation_key in overlapping_combos:
+            overlaps_by_patch[patch_key].add(observation_key)
+            overlaps_by_observation[observation_key].add(patch_key)
+        # Find patches and observations that overlap at least one of the other
+        # but not all of the other.
+        nontrivial_patch = next(
+            iter(
+                patch_key
+                for patch_key, observation_keys in overlaps_by_patch.items()
+                if observation_keys and observation_keys != observation_regions.keys()
+            )
+        )
+        nontrivial_observation = next(
+            iter(
+                observation_key
+                for observation_key, patch_keys in overlaps_by_observation.items()
+                if patch_keys and patch_keys != patch_regions.keys()
+            )
+        )
+        # Use the nontrivial patches and observations as constraints on the
+        # other dimensions in various ways, first via a 'where' expression.
+        # It's better in general to us 'bind' instead of f-strings, but these
+        # all integers so there are no quoting concerns.
+        self.assertEqual(
+            {
+                (data_id["visit"], data_id["detector"])
+                for data_id in registry.queryDataIds(
+                    ["visit", "detector"],
+                    where=f"tract={nontrivial_patch[0]} AND patch={nontrivial_patch[1]}",
+                    skymap="hsc_rings_v1",
+                )
+            },
+            overlaps_by_patch[nontrivial_patch],
+        )
+        self.assertEqual(
+            {
+                (data_id["tract"], data_id["patch"])
+                for data_id in registry.queryDataIds(
+                    ["patch"],
+                    where=f"visit={nontrivial_observation[0]} AND detector={nontrivial_observation[1]}",
+                    instrument="HSC",
+                )
+            },
+            overlaps_by_observation[nontrivial_observation],
+        )
+        # and then via the dataId argument.
+        self.assertEqual(
+            {
+                (data_id["visit"], data_id["detector"])
+                for data_id in registry.queryDataIds(
+                    ["visit", "detector"],
+                    dataId={
+                        "tract": nontrivial_patch[0],
+                        "patch": nontrivial_patch[1],
+                    },
+                    skymap="hsc_rings_v1",
+                )
+            },
+            overlaps_by_patch[nontrivial_patch],
+        )
+        self.assertEqual(
+            {
+                (data_id["tract"], data_id["patch"])
+                for data_id in registry.queryDataIds(
+                    ["patch"],
+                    dataId={
+                        "visit": nontrivial_observation[0],
+                        "detector": nontrivial_observation[1],
+                    },
+                    instrument="HSC",
+                )
+            },
+            overlaps_by_observation[nontrivial_observation],
         )

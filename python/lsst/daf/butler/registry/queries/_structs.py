@@ -513,7 +513,14 @@ class QuerySummary:
         result rows, and hence could be provided by postprocessors.
         """
         tags: set[ColumnTag] = set(DimensionKeyColumnTag.generate(self.requested.names))
-        tags.update(DimensionKeyColumnTag.generate(self.where.data_id.graph.names))
+        tags.update(
+            DimensionKeyColumnTag.generate(
+                dimension.name
+                for dimension in self.where.data_id.graph
+                if dimension == self.requested.universe.commonSkyPix
+                or not isinstance(dimension, SkyPixDimension)
+            )
+        )
         for dataset_type in self.datasets:
             tags.update(DimensionKeyColumnTag.generate(dataset_type.dimensions.names))
         if self.where.expression_predicate is not None:
