@@ -229,6 +229,8 @@ class QueryBuilder:
         if self.summary.order_by is not None:
             columns_required.update(self.summary.order_by.columns_required)
         columns_required.update(DimensionKeyColumnTag.generate(self.summary.requested.names))
+        if self.summary.universe.commonSkyPix in self.summary.spatial:
+            columns_required.add(DimensionKeyColumnTag(self.summary.universe.commonSkyPix.name))
         if joinMissing:
             self.relation = self._backend.make_dimension_relation(
                 self.summary.dimensions,
