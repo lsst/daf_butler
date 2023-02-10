@@ -28,7 +28,7 @@ from typing import Any
 
 import astropy.time
 from lsst.daf.relation import ColumnExpression, ColumnTag, Predicate, SortTerm
-from lsst.sphgeom import Region
+from lsst.sphgeom import IntersectionRegion, Region
 from lsst.utils.classes import cached_getter, immutable
 
 from ...core import (
@@ -90,13 +90,9 @@ class QueryWhereClause:
             A data ID identifying dimensions known in advance.  If not
             provided, will be set to an empty data ID.
         region : `lsst.sphgeom.Region`, optional
-            A spatial constraint that all rows must overlap.  If `None` and
-            ``data_id`` is an expanded data ID, ``data_id.region`` will be used
-            to construct one.
+            A spatial constraint that all rows must overlap.
         timespan : `Timespan`, optional
-            A temporal constraint that all rows must overlap.  If `None` and
-            ``data_id`` is an expanded data ID, ``data_id.timespan`` will be
-            used to construct one.
+            A temporal constraint that all rows must overlap.
         defaults : `DataCoordinate`, optional
             A data ID containing default for governor dimensions.
         dataset_type_name : `str` or `None`, optional
@@ -113,11 +109,6 @@ class QueryWhereClause:
         where : `QueryWhereClause`
             An object representing the WHERE clause for a query.
         """
-        if data_id is not None and data_id.hasRecords():
-            if region is None and data_id.region is not None:
-                region = data_id.region
-            if timespan is None and data_id.timespan is not None:
-                timespan = data_id.timespan
         if data_id is None:
             data_id = DataCoordinate.makeEmpty(dimensions.universe)
         if defaults is None:
@@ -349,12 +340,9 @@ class QuerySummary:
     expression : `str`, optional
         A user-provided string WHERE expression.
     region : `lsst.sphgeom.Region`, optional
-        If `None` and ``data_id`` is an expanded data ID, ``data_id.region``
-        will be used to construct one.
+        A spatial constraint that all rows must overlap.
     timespan : `Timespan`, optional
-        A temporal constraint that all rows must overlap.  If `None` and
-        ``data_id`` is an expanded data ID, ``data_id.timespan`` will be used
-        to construct one.
+        A temporal constraint that all rows must overlap.
     bind : `Mapping` [ `str`, `object` ], optional
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
@@ -411,7 +399,7 @@ class QuerySummary:
         )
         self.order_by = None if order_by is None else OrderByClause.parse_general(order_by, requested)
         self.limit = limit
-        self.columns_required, self.dimensions = self._compute_columns_required()
+        self.columns_required, self.dimensions, self.region, self.timespan = self._compute_columns_required()
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -442,6 +430,24 @@ class QuerySummary:
     """All dimensions in the query in any form (`DimensionGraph`).
     """
 
+    region: Region | None
+    """Region that bounds all query results (`lsst.sphgeom.Region`).
+
+    While `QueryWhereClause.region` and the ``region`` constructor argument
+    represent an external region given directly by the caller, this represents
+    the region actually used directly as a constraint on the query results,
+    which can also come from the data ID passed by the caller.
+    """
+
+    timespan: Timespan | None
+    """Timespan that bounds all query results (`Timespan`).
+
+    While `QueryWhereClause.timespan` and the ``timespan`` constructor argument
+    represent an external timespan given directly by the caller, this
+    represents the timespan actually used directly as a constraint on the query
+    results, which can also come from the data ID passed by the caller.
+    """
+
     columns_required: Set[ColumnTag]
     """All columns that must be included directly in the query.
 
@@ -454,57 +460,9 @@ class QuerySummary:
         """All known dimensions (`DimensionUniverse`)."""
         return self.requested.universe
 
-    @property
-    @cached_getter
-    def spatial(self) -> NamedValueAbstractSet[DimensionElement]:
-        """Dimension elements whose regions and skypix IDs should be included
-        in the query (`NamedValueAbstractSet` of `DimensionElement`).
-        """
-        # An element may participate spatially in the query if:
-        # - it's the most precise spatial element for its system in the
-        #   requested dimensions (i.e. in `self.requested.spatial`);
-        # - it isn't also given at query construction time.
-        result: NamedValueSet[DimensionElement] = NamedValueSet()
-        for family in self.dimensions.spatial:
-            element = family.choose(self.dimensions.elements)
-            assert isinstance(element, DimensionElement)
-            if element not in self.where.data_id.graph.elements:
-                result.add(element)
-        if len(result) == 1:
-            # There's no spatial join, but there might be a WHERE filter based
-            # on a given region.
-            if self.where.data_id.graph.spatial:
-                # We can only perform those filters against SkyPix dimensions,
-                # so if what we have isn't one, add the common SkyPix dimension
-                # to the query; the element we have will be joined to that.
-                (element,) = result
-                if not isinstance(element, SkyPixDimension):
-                    result.add(self.universe.commonSkyPix)
-            else:
-                # There is no spatial join or filter in this query.  Even
-                # if this element might be associated with spatial
-                # information, we don't need it for this query.
-                return NamedValueSet().freeze()
-        return result.freeze()
-
-    @property
-    @cached_getter
-    def temporal(self) -> NamedValueAbstractSet[DimensionElement]:
-        """Dimension elements whose timespans should be included in the
-        query (`NamedValueSet` of `DimensionElement`).
-        """
-        if len(self.dimensions.temporal) > 1:
-            # We don't actually have multiple temporal families in our current
-            # dimension configuration, so this limitation should be harmless.
-            raise NotImplementedError("Queries that should involve temporal joins are not yet supported.")
-        result = NamedValueSet[DimensionElement]()
-        if self.where.expression_predicate is not None:
-            for tag in DimensionRecordColumnTag.filter_from(self.where.expression_predicate.columns_required):
-                if tag.column == "timespan":
-                    result.add(self.requested.universe[tag.element])
-        return result.freeze()
-
-    def _compute_columns_required(self) -> tuple[set[ColumnTag], DimensionGraph]:
+    def _compute_columns_required(
+        self,
+    ) -> tuple[set[ColumnTag], DimensionGraph, Region | None, Timespan | None]:
         """Compute the columns that must be provided by the relations joined
         into this query in order to obtain the right *set* of result rows in
         the right order.
@@ -513,24 +471,50 @@ class QuerySummary:
         result rows, and hence could be provided by postprocessors.
         """
         tags: set[ColumnTag] = set(DimensionKeyColumnTag.generate(self.requested.names))
-        tags.update(
-            DimensionKeyColumnTag.generate(
-                dimension.name
-                for dimension in self.where.data_id.graph
-                if dimension == self.requested.universe.commonSkyPix
-                or not isinstance(dimension, SkyPixDimension)
-            )
-        )
         for dataset_type in self.datasets:
             tags.update(DimensionKeyColumnTag.generate(dataset_type.dimensions.names))
         if self.where.expression_predicate is not None:
             tags.update(self.where.expression_predicate.columns_required)
         if self.order_by is not None:
             tags.update(self.order_by.columns_required)
+        region = self.where.region
+        for dimension in self.where.data_id.graph:
+            dimension_tag = DimensionKeyColumnTag(dimension.name)
+            if dimension_tag in tags:
+                continue
+            if dimension == self.universe.commonSkyPix or not isinstance(dimension, SkyPixDimension):
+                # If a dimension in the data ID is available from dimension
+                # tables or dimension spatial-join tables in the database,
+                # include it in the set of dimensions whose tables should be
+                # joined.  This makes these data ID constraints work just like
+                # simple 'where' constraints, which is good.
+                tags.add(dimension_tag)
+            else:
+                # This is a SkyPixDimension other than the common one.  If it's
+                # not already present in the query (e.g. from a dataset join),
+                # this is a pure spatial constraint, which we can only apply by
+                # modifying the 'region' for the query.  That will also require
+                # that we join in the common skypix dimension.
+                pixel = dimension.pixelization.pixel(self.where.data_id[dimension])
+                if region is None:
+                    region = pixel
+                else:
+                    region = IntersectionRegion(region, pixel)
         # Make sure the dimension keys are expanded self-consistently in what
         # we return by passing them through DimensionGraph.
         dimensions = DimensionGraph(
             self.universe, names={tag.dimension for tag in DimensionKeyColumnTag.filter_from(tags)}
         )
+        # If we have a region constraint, ensure region columns and the common
+        # skypix dimension are included.
+        missing_common_skypix = False
+        if region is not None:
+            for family in dimensions.spatial:
+                element = family.choose(dimensions.elements)
+                tags.add(DimensionRecordColumnTag(element.name, "region"))
+                if not isinstance(element, SkyPixDimension) and self.universe.commonSkyPix not in dimensions:
+                    missing_common_skypix = True
+        if missing_common_skypix:
+            dimensions = dimensions.union(self.universe.commonSkyPix.graph)
         tags.update(DimensionKeyColumnTag.generate(dimensions.names))
-        return (tags, dimensions)
+        return (tags, dimensions, region, self.where.timespan)
