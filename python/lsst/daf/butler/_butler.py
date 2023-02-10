@@ -2053,6 +2053,8 @@ class Butler(LimitedButler):
                 raise TypeError("At least one of 'filename' or 'format' must be provided.")
             else:
                 _, format = os.path.splitext(filename)
+                if not format:
+                    raise ValueError("Please specify a file extension to determine export format.")
         elif filename is None:
             filename = f"export.{format}"
         if directory is not None:
