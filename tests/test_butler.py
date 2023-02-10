@@ -1191,6 +1191,11 @@ class FileDatastoreButlerTests(ButlerTests):
             with exportButler.export(filename="dump", directory=".") as export:
                 pass
 
+        # Test that unknown format is not allowed.
+        with self.assertRaises(ValueError):
+            with exportButler.export(filename="dump.fits", directory=".") as export:
+                pass
+
         # Test that the repo actually has at least one dataset.
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)

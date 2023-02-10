@@ -2055,11 +2055,15 @@ class Butler(LimitedButler):
                 _, format = os.path.splitext(filename)
                 if not format:
                     raise ValueError("Please specify a file extension to determine export format.")
+                format = format[1:]  # Strip leading ".""
         elif filename is None:
             filename = f"export.{format}"
         if directory is not None:
             filename = os.path.join(directory, filename)
-        BackendClass = get_class_of(self._config["repo_transfer_formats"][format]["export"])
+        formats = self._config["repo_transfer_formats"]
+        if format not in formats:
+            raise ValueError(f"Unknown export format {format!r}, allowed: {','.join(formats.keys())}")
+        BackendClass = get_class_of(formats[format, "export"])
         with open(filename, "w") as stream:
             backend = BackendClass(stream, universe=self.registry.dimensions)
             try:
