@@ -44,7 +44,6 @@ class DeferredDatasetHandle:
         component: Optional[str] = None,
         parameters: Optional[dict] = None,
         storageClass: str | StorageClass | None = None,
-        **kwargs: dict,
     ) -> Any:
         """Retrieves the dataset pointed to by this handle
 
@@ -68,10 +67,6 @@ class DeferredDatasetHandle:
             class specified when this object was created. Specifying a
             read `StorageClass` can force a different type to be returned.
             This type must be compatible with the original type.
-        **kwargs
-            This argument is deprecated and only exists to support legacy
-            gen2 butler code during migration. It is completely ignored
-            and will be removed in the future.
 
         Returns
         -------

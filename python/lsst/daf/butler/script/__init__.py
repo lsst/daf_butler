@@ -29,7 +29,6 @@ from .configValidate import configValidate
 from .createRepo import createRepo
 from .exportCalibs import exportCalibs
 from .ingest_files import ingest_files
-from .pruneCollection import pruneCollection  # depends on QueryDatasets
 from .queryCollections import queryCollections
 from .queryDataIds import queryDataIds
 from .queryDatasets import QueryDatasets
