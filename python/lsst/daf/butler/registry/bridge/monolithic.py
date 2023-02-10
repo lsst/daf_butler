@@ -215,7 +215,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Helper closure to generate the common join+where clause.
         def join_records(
             select: sqlalchemy.sql.Select, location_table: sqlalchemy.schema.Table
-        ) -> sqlalchemy.sql.FromClause:
+        ) -> sqlalchemy.sql.Select:
             # mypy needs to be sure
             assert isinstance(records_table, ByNameOpaqueTableStorage)
             return select.select_from(

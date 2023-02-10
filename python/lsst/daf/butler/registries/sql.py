@@ -306,7 +306,7 @@ class SqlRegistry(Registry):
         """
         self._managers.opaque[tableName].insert(*data)
 
-    def fetchOpaqueData(self, tableName: str, **where: Any) -> Iterator[dict]:
+    def fetchOpaqueData(self, tableName: str, **where: Any) -> Iterator[Mapping[str, Any]]:
         """Retrieve records from an opaque table.
 
         Parameters

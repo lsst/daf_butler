@@ -27,7 +27,7 @@ from __future__ import annotations
 __all__ = ["OpaqueTableStorageManager", "OpaqueTableStorage"]
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Optional
 
 from ...core.ddl import TableSpec
 from ._database import Database, StaticTablesContext
@@ -68,7 +68,7 @@ class OpaqueTableStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def fetch(self, **where: Any) -> Iterator[dict]:
+    def fetch(self, **where: Any) -> Iterator[Mapping[str, Any]]:
         """Retrieve records from an opaque table.
 
         Parameters

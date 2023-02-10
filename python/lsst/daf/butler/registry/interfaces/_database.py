@@ -46,6 +46,7 @@ from typing import (
     Tuple,
     Type,
     Union,
+    cast,
     final,
 )
 
@@ -57,7 +58,9 @@ from ...core.named import NamedValueAbstractSet
 from .._exceptions import ConflictingDefinitionError
 
 
-def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: List[Dict[str, Any]]) -> None:
+# TODO: method is called with list[ReflectedColumn] in SA 2, and
+# ReflectedColumn does not exist in 1.4.
+def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: list) -> None:
     """Test that the definition of a table in a `ddl.TableSpec` and from
     database introspection are consistent.
 
@@ -829,7 +832,7 @@ class Database(ABC):
         column : `sqlalchemy.schema.Column`
             SQLAlchemy representation of the field.
         """
-        args = [spec.name, spec.getSizedColumnType()]
+        args = []
         if spec.autoincrement:
             # Generate a sequence to use for auto incrementing for databases
             # that do not support it natively.  This will be ignored by
@@ -841,6 +844,8 @@ class Database(ABC):
             )
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
         return sqlalchemy.schema.Column(
+            spec.name,
+            spec.getSizedColumnType(),
             *args,
             nullable=spec.nullable,
             primary_key=spec.primaryKey,
@@ -951,7 +956,9 @@ class Database(ABC):
         `ensureTableExists`, `getExistingTable`, and `declareStaticTables`.
         """
         name = self._mangleTableName(name)
-        args = [self._convertFieldSpec(name, fieldSpec, metadata) for fieldSpec in spec.fields]
+        args: list[sqlalchemy.schema.SchemaItem] = [
+            self._convertFieldSpec(name, fieldSpec, metadata) for fieldSpec in spec.fields
+        ]
 
         # Add any column constraints
         for fieldSpec in spec.fields:
@@ -991,7 +998,7 @@ class Database(ABC):
         args.extend(self._convertExclusionConstraintSpec(name, excl, metadata) for excl in spec.exclusion)
 
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
-        return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwargs)
+        return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info={"spec": spec}, **kwargs)
 
     def ensureTableExists(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
         """Ensure that a table with the given name and specification exists,
@@ -1102,7 +1109,7 @@ class Database(ABC):
                 )
         else:
             inspector = sqlalchemy.inspect(
-                self._engine if self._session_connection is None else self._session_connection
+                self._engine if self._session_connection is None else self._session_connection, raiseerr=True
             )
             if name in inspector.get_table_names(schema=self.namespace):
                 _checkExistingTableDefinition(name, spec, inspector.get_columns(name, schema=self.namespace))
@@ -1474,7 +1481,7 @@ class Database(ABC):
                             names = select.selected_columns.keys()
                         else:
                             names = select.columns.keys()
-                    connection.execute(table.insert().from_select(names, select))
+                    connection.execute(table.insert().from_select(list(names), select))
                 else:
                     connection.execute(table.insert(), rows)
                 return None
@@ -1655,7 +1662,7 @@ class Database(ABC):
                     rowcount += connection.execute(newsql).rowcount
             return rowcount
 
-    def deleteWhere(self, table: sqlalchemy.schema.Table, where: sqlalchemy.sql.ClauseElement) -> int:
+    def deleteWhere(self, table: sqlalchemy.schema.Table, where: sqlalchemy.sql.ColumnElement) -> int:
         """Delete rows from a table with pre-constructed WHERE clause.
 
         Parameters
@@ -1739,7 +1746,10 @@ class Database(ABC):
 
     @contextmanager
     def query(
-        self, sql: sqlalchemy.sql.expression.SelectBase, *args: Any, **kwargs: Any
+        self,
+        sql: sqlalchemy.sql.expression.Executable | sqlalchemy.sql.expression.SelectBase,
+        *args: Any,
+        **kwargs: Any,
     ) -> Iterator[sqlalchemy.engine.CursorResult]:
         """Run a SELECT query against the database.
 
@@ -1764,7 +1774,9 @@ class Database(ABC):
             connection = self._engine.connect()
         else:
             connection = self._session_connection
-        result = connection.execute(sql, *args, **kwargs)
+        # TODO: SelectBase is not good for execute(), but it used everywhere,
+        # e.g. in daf_relation. We should switch to Executable at some point.
+        result = connection.execute(cast(sqlalchemy.sql.expression.Executable, sql), *args, **kwargs)
         try:
             yield result
         finally:

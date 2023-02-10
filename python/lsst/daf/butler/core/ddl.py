@@ -224,7 +224,7 @@ class GUID(sqlalchemy.TypeDecorator):
 
     cache_ok = True
 
-    def load_dialect_impl(self, dialect: sqlalchemy.Dialect) -> sqlalchemy.TypeEngine:
+    def load_dialect_impl(self, dialect: sqlalchemy.Dialect) -> sqlalchemy.types.TypeEngine:
         if dialect.name == "postgresql":
             return dialect.type_descriptor(UUID())
         else:
@@ -412,7 +412,7 @@ class FieldSpec:
                 return True
         return False
 
-    def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine:
+    def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine | type:
         """Return a sized version of the column type.
 
         Utilizes either (or neither) of ``self.length`` and ``self.nbytes``.

@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["PostgresqlDatabase"]
 
 from contextlib import closing, contextmanager
-from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type, Union
+from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type, Union, cast
 
 import psycopg2
 import sqlalchemy
@@ -76,7 +76,8 @@ class PostgresqlDatabase(Database):
     ):
         super().__init__(origin=origin, engine=engine, namespace=namespace)
         with engine.connect() as connection:
-            dbapi = connection.connection
+            # `Any` to make mypy ignore the line below, can't use type: ignore
+            dbapi: Any = connection.connection
             try:
                 dsn = dbapi.get_dsn_parameters()
             except (AttributeError, KeyError) as err:
@@ -84,8 +85,8 @@ class PostgresqlDatabase(Database):
             if namespace is None:
                 query = sql.select(sql.func.current_schema())
                 namespace = connection.execute(query).scalar()
-            query = "SELECT COUNT(*) FROM pg_extension WHERE extname='btree_gist';"
-            if not connection.execute(sqlalchemy.text(query)).scalar():
+            query_text = "SELECT COUNT(*) FROM pg_extension WHERE extname='btree_gist';"
+            if not connection.execute(sqlalchemy.text(query_text)).scalar():
                 raise RuntimeError(
                     "The Butler PostgreSQL backend requires the btree_gist extension. "
                     "As extensions are enabled per-database, this may require an administrator to run "
@@ -199,7 +200,7 @@ class PostgresqlDatabase(Database):
         metadata: sqlalchemy.MetaData,
     ) -> sqlalchemy.schema.Constraint:
         # Docstring inherited.
-        args = []
+        args: list[tuple[sqlalchemy.schema.Column, str]] = []
         names = ["excl"]
         for item in spec:
             if isinstance(item, str):
@@ -427,7 +428,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
                 sqlalchemy.sql.func.upper(self.column) <= other,
             )
         else:
-            return self.column << other.column
+            return cast(sqlalchemy.sql.ColumnElement, self.column << other.column)
 
     def __gt__(
         self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
@@ -440,7 +441,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
                 sqlalchemy.sql.func.lower(self.column) > other,
             )
         else:
-            return self.column >> other.column
+            return cast(sqlalchemy.sql.ColumnElement, self.column >> other.column)
 
     def overlaps(
         self, other: _RangeTimespanRepresentation | sqlalchemy.sql.ColumnElement
