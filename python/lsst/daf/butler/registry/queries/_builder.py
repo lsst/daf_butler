@@ -200,15 +200,6 @@ class QueryBuilder:
                     preferred_engine=self._context.iteration_engine,
                     transfer=True,
                 )
-        if self.summary.timespan is not None:
-            for element in categorized_columns.filter_timespan_dimension_elements():
-                self.relation = self.relation.with_rows_satisfying(
-                    self._context.make_timespan_overlap_predicate(
-                        DimensionRecordColumnTag(element, "timespan"), self.summary.timespan
-                    ),
-                    preferred_engine=self._context.preferred_engine,
-                    require_preferred_engine=True,
-                )
 
     def finish(self, joinMissing: bool = True) -> Query:
         """Finish query constructing, returning a new `Query` instance.

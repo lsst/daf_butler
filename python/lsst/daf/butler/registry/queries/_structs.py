@@ -42,7 +42,6 @@ from ...core import (
     NamedValueAbstractSet,
     NamedValueSet,
     SkyPixDimension,
-    Timespan,
 )
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
@@ -69,7 +68,6 @@ class QueryWhereClause:
         bind: Mapping[str, Any] | None = None,
         data_id: DataCoordinate | None = None,
         region: Region | None = None,
-        timespan: Timespan | None = None,
         defaults: DataCoordinate | None = None,
         dataset_type_name: str | None = None,
         allow_orphans: bool = False,
@@ -91,8 +89,6 @@ class QueryWhereClause:
             provided, will be set to an empty data ID.
         region : `lsst.sphgeom.Region`, optional
             A spatial constraint that all rows must overlap.
-        timespan : `Timespan`, optional
-            A temporal constraint that all rows must overlap.
         defaults : `DataCoordinate`, optional
             A data ID containing default for governor dimensions.
         dataset_type_name : `str` or `None`, optional
@@ -126,7 +122,6 @@ class QueryWhereClause:
             expression_predicate,
             data_id,
             region=region,
-            timespan=timespan,
             governor_constraints=governor_constraints,
         )
 
@@ -143,11 +138,6 @@ class QueryWhereClause:
     region: Region | None
     """A spatial region that all result rows must overlap
     (`lsst.sphgeom.Region` or `None`).
-    """
-
-    timespan: Timespan | None
-    """A temporal constraint that all result rows must overlap
-    (`Timespan` or `None`).
     """
 
     governor_constraints: Mapping[str, Set[str]]
@@ -372,7 +362,6 @@ class QuerySummary:
         data_id: DataCoordinate | None = None,
         expression: str = "",
         region: Region | None = None,
-        timespan: Timespan | None = None,
         bind: Mapping[str, Any] | None = None,
         defaults: DataCoordinate | None = None,
         datasets: Iterable[DatasetType] = (),
@@ -392,14 +381,13 @@ class QuerySummary:
             bind=bind,
             data_id=data_id,
             region=region,
-            timespan=timespan,
             defaults=defaults,
             dataset_type_name=dataset_type_name,
             allow_orphans=not check,
         )
         self.order_by = None if order_by is None else OrderByClause.parse_general(order_by, requested)
         self.limit = limit
-        self.columns_required, self.dimensions, self.region, self.timespan = self._compute_columns_required()
+        self.columns_required, self.dimensions, self.region = self._compute_columns_required()
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -439,15 +427,6 @@ class QuerySummary:
     which can also come from the data ID passed by the caller.
     """
 
-    timespan: Timespan | None
-    """Timespan that bounds all query results (`Timespan`).
-
-    While `QueryWhereClause.timespan` and the ``timespan`` constructor argument
-    represent an external timespan given directly by the caller, this
-    represents the timespan actually used directly as a constraint on the query
-    results, which can also come from the data ID passed by the caller.
-    """
-
     columns_required: Set[ColumnTag]
     """All columns that must be included directly in the query.
 
@@ -462,7 +441,7 @@ class QuerySummary:
 
     def _compute_columns_required(
         self,
-    ) -> tuple[set[ColumnTag], DimensionGraph, Region | None, Timespan | None]:
+    ) -> tuple[set[ColumnTag], DimensionGraph, Region | None]:
         """Compute the columns that must be provided by the relations joined
         into this query in order to obtain the right *set* of result rows in
         the right order.
@@ -517,4 +496,4 @@ class QuerySummary:
         if missing_common_skypix:
             dimensions = dimensions.union(self.universe.commonSkyPix.graph)
         tags.update(DimensionKeyColumnTag.generate(dimensions.names))
-        return (tags, dimensions, region, self.where.timespan)
+        return (tags, dimensions, region)
