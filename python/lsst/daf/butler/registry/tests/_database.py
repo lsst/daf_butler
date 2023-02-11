@@ -144,8 +144,9 @@ class DatabaseTests(ABC):
         context-manager boilerplate that is usefully verbose in production code
         but just noise in tests.
         """
-        with database.query(executable) as result:
-            return result.fetchall()
+        with database.transaction():
+            with database.query(executable) as result:
+                return result.fetchall()
 
     def query_scalar(self, database: Database, executable: sqlalchemy.sql.expression.SelectBase) -> Any:
         """Run a SELECT query that yields a single column and row against the
@@ -1137,13 +1138,13 @@ class DatabaseTests(ABC):
             values.columns["b"], values.columns["s"], values.columns["r"]
         )
         self.assertCountEqual(
-            [dict(row) for row in self.query_list(new_db, select_values_alone)],
+            [row._mapping for row in self.query_list(new_db, select_values_alone)],
             values_data,
         )
         select_values_joined = sqlalchemy.sql.select(
             values.columns["s"].label("name"), static.b.columns["value"].label("value")
         ).select_from(values.join(static.b, onclause=static.b.columns["id"] == values.columns["b"]))
         self.assertCountEqual(
-            [dict(row) for row in self.query_list(new_db, select_values_joined)],
+            [row._mapping for row in self.query_list(new_db, select_values_joined)],
             [{"value": 11, "name": "b1"}, {"value": 13, "name": "b3"}],
         )

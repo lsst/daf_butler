@@ -27,7 +27,7 @@ opaque tables for `Registry`.
 __all__ = ["ByNameOpaqueTableStorage", "ByNameOpaqueTableStorageManager"]
 
 import itertools
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, Iterator, List, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, Iterator, List, Mapping, Optional
 
 import sqlalchemy
 
@@ -77,7 +77,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         # the database itself providing any rollback functionality.
         self._db.insert(self._table, *data)
 
-    def fetch(self, **where: Any) -> Iterator[dict]:
+    def fetch(self, **where: Any) -> Iterator[Mapping[str, Any]]:
         # Docstring inherited from OpaqueTableStorage.
 
         def _batch_in_clause(
@@ -92,7 +92,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
                 in_clause = column.in_(values[iposn : iposn + in_limit])
                 yield in_clause
 
-        def _batch_in_clauses(**where: Any) -> Iterator[sqlalchemy.sql.expression.ClauseElement]:
+        def _batch_in_clauses(**where: Any) -> Iterator[sqlalchemy.sql.expression.ColumnElement]:
             """Generate a sequence of WHERE clauses with a limited number of
             items in IN clauses.
             """

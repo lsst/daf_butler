@@ -138,7 +138,7 @@ class CollectionSummaryManager:
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
-        tables: CollectionSummaryTables[sqlalchemy.sql.Table],
+        tables: CollectionSummaryTables[sqlalchemy.schema.Table],
     ):
         self._db = db
         self._collections = collections
@@ -265,7 +265,7 @@ class CollectionSummaryManager:
             self._tables.datasetType.columns[self._collectionKeyName].label(self._collectionKeyName),
             self._tables.datasetType.columns.dataset_type_id.label("dataset_type_id"),
         ]
-        fromClause = self._tables.datasetType
+        fromClause: sqlalchemy.sql.expression.FromClause = self._tables.datasetType
         for dimension, table in self._tables.dimensions.items():
             columns.append(table.columns[dimension.name].label(dimension.name))
             fromClause = fromClause.join(

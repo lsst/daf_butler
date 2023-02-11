@@ -211,6 +211,8 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         return value
 
 
+# TODO: sqlalchemy 2 has internal support for UUID:
+# https://docs.sqlalchemy.org/en/20/core/type_basics.html#sqlalchemy.types.Uuid
 class GUID(sqlalchemy.TypeDecorator):
     """Platform-independent GUID type.
 
@@ -222,7 +224,7 @@ class GUID(sqlalchemy.TypeDecorator):
 
     cache_ok = True
 
-    def load_dialect_impl(self, dialect: sqlalchemy.Dialect) -> sqlalchemy.TypeEngine:
+    def load_dialect_impl(self, dialect: sqlalchemy.Dialect) -> sqlalchemy.types.TypeEngine:
         if dialect.name == "postgresql":
             return dialect.type_descriptor(UUID())
         else:
@@ -249,8 +251,13 @@ class GUID(sqlalchemy.TypeDecorator):
         else:
             return "%.32x" % value.int
 
-    def process_result_value(self, value: Optional[str], dialect: sqlalchemy.Dialect) -> Optional[uuid.UUID]:
+    def process_result_value(
+        self, value: str | uuid.UUID | None, dialect: sqlalchemy.Dialect
+    ) -> Optional[uuid.UUID]:
         if value is None:
+            return value
+        elif isinstance(value, uuid.UUID):
+            # sqlalchemy 2 converts to UUID internally
             return value
         else:
             return uuid.UUID(hex=value)
@@ -405,7 +412,7 @@ class FieldSpec:
                 return True
         return False
 
-    def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine:
+    def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine | type:
         """Return a sized version of the column type.
 
         Utilizes either (or neither) of ``self.length`` and ``self.nbytes``.

@@ -25,7 +25,7 @@ __all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Optional, Type
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Type
 
 from lsst.resources import ResourcePath
 
@@ -65,7 +65,7 @@ class StoredDatastoreItemInfo:
         raise NotImplementedError("The base class does not know how to locate an item in a datastore.")
 
     @classmethod
-    def from_record(cls: Type[StoredDatastoreItemInfo], record: Dict[str, Any]) -> StoredDatastoreItemInfo:
+    def from_record(cls: Type[StoredDatastoreItemInfo], record: Mapping[str, Any]) -> StoredDatastoreItemInfo:
         """Create instance from database record.
 
         Parameters
@@ -217,7 +217,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         return location
 
     @classmethod
-    def from_record(cls: Type[StoredFileInfo], record: Dict[str, Any]) -> StoredFileInfo:
+    def from_record(cls: Type[StoredFileInfo], record: Mapping[str, Any]) -> StoredFileInfo:
         """Create instance from database record.
 
         Parameters

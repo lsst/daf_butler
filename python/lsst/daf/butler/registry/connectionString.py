@@ -125,12 +125,6 @@ class ConnectionStringFactory:
             pass
         else:
             # only assign auth when *no* errors were raised
-            if hasattr(conStr, "set"):
-                # for SQLAlchemy >= 1.4
-                conStr = conStr.set(username=auth[0], password=auth[1])
-            else:
-                # SQLAlchemy 1.3 or earlier, mutate in place
-                conStr.username = auth[0]
-                conStr.password = auth[1]
+            conStr = conStr.set(username=auth[0], password=auth[1])
 
         return conStr

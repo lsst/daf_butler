@@ -25,7 +25,7 @@ __all__ = ("SqlQueryContext",)
 import itertools
 from collections.abc import Iterable, Iterator, Mapping, Set
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import sqlalchemy
 from lsst.daf.relation import (
@@ -121,7 +121,7 @@ class SqlQueryContext(QueryContext):
                 relation, extra_columns=[sqlalchemy.sql.func.count()]
             )
             with self._db.query(sql_executable) as sql_result:
-                return sql_result.scalar()
+                return cast(int, sql_result.scalar_one())
         elif (rows := relation.payload) is not None:
             assert isinstance(
                 rows, iteration.MaterializedRowIterable
@@ -459,9 +459,11 @@ class _SqlRowIterable(iteration.RowIterable):
         with self._context._db.query(self._sql_executable) as sql_result:
             raw_rows = sql_result.mappings()
             if self._context._exit_stack is None:
-                raw_rows = raw_rows.fetchall()
-        for sql_row in raw_rows:
-            yield self._row_transformer.sql_to_relation(sql_row)
+                for sql_row in raw_rows.fetchall():
+                    yield self._row_transformer.sql_to_relation(sql_row)
+            else:
+                for sql_row in raw_rows:
+                    yield self._row_transformer.sql_to_relation(sql_row)
 
 
 class _SqlRowTransformer:

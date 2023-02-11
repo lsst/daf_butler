@@ -129,8 +129,8 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         # Docstring inherited from ButlerAttributeManager.
         sql = sqlalchemy.sql.select(sqlalchemy.sql.func.count()).select_from(self._table)
         with self._db.query(sql) as sql_result:
-            row = sql_result.fetchone()
-        return row[0] == 0
+            count = sql_result.scalar()
+        return count == 0
 
     @classmethod
     def currentVersion(cls) -> Optional[VersionTuple]:

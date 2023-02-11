@@ -28,7 +28,7 @@ __all__ = [
 
 import hashlib
 from abc import ABC, abstractmethod
-from typing import Iterable, NamedTuple, Optional
+from typing import Iterable, NamedTuple, Optional, cast
 
 import sqlalchemy
 
@@ -181,7 +181,7 @@ class VersionedExtension(ABC):
             for fkConstr in table.foreign_key_constraints:
                 # for foreign key we include only one side of relations into
                 # digest, other side could be managed by different extension
-                fkReps = ["FK", fkConstr.name] + [fk.column.name for fk in fkConstr.elements]
+                fkReps = ["FK", cast(str, fkConstr.name)] + [fk.column.name for fk in fkConstr.elements]
                 fkRep = ",".join(fkReps)
                 schemaReps += [fkRep]
             # sort everything to keep it stable

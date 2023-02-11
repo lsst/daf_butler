@@ -57,7 +57,11 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
         for regConf, fileName in zip(regConfigs, self.configFiles):
             conStr = conStrFactory.fromConfig(regConf)
             with self.subTest(confFile=fileName):
-                self.assertEqual(str(conStr), regConf["expected"], "test connection string built from config")
+                self.assertEqual(
+                    conStr.render_as_string(hide_password=False),
+                    regConf["expected"],
+                    "test connection string built from config",
+                )
 
     def testRelVsAbsPath(self):
         """Tests that relative and absolute paths are preserved."""
