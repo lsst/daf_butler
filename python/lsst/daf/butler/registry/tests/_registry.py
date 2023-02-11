@@ -3212,7 +3212,7 @@ class RegistryTests(ABC):
         # Gather all skypix IDs that definitely overlap at least one of these
         # patches.
         relevant_skypix_ids = lsst.sphgeom.RangeSet()
-        for patch_key, patch_region in patch_regions.items():
+        for patch_region in patch_regions.values():
             relevant_skypix_ids |= skypix_dimension.pixelization.interior(patch_region)
         # Look for a "nontrivial" skypix_id that overlaps at least one patch
         # and does not overlap at least one other patch.

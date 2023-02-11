@@ -22,9 +22,10 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import Any, cast
+import itertools
+from typing import Any
 
-from lsst.daf.relation import ColumnExpression, ColumnTag, Diagnostics, Predicate, Relation
+from lsst.daf.relation import ColumnExpression, ColumnTag, Diagnostics, Relation
 
 from ...core import (
     ColumnCategorization,
@@ -127,9 +128,7 @@ class QueryBuilder:
             collections,
             governor_constraints=self._governor_constraints,
             rejections=rejections,
-            allow_calibration_collections=(
-                not findFirst and not (self.summary.temporal or self.summary.dimensions.temporal)
-            ),
+            allow_calibration_collections=(not findFirst and not self.summary.dimensions.temporal),
         )
         columns_requested = {"dataset_id", "run", "ingest_date"} if isResult else frozenset()
         if not collection_records:
@@ -168,41 +167,39 @@ class QueryBuilder:
             `ColumnTag` type.
         """
         # Append WHERE clause terms from predicates.
-        predicate: Predicate = Predicate.literal(True)
         if self.summary.where.expression_predicate is not None:
-            predicate = predicate.logical_and(self.summary.where.expression_predicate)
+            self.relation = self.relation.with_rows_satisfying(
+                self.summary.where.expression_predicate,
+                preferred_engine=self._context.preferred_engine,
+                require_preferred_engine=True,
+            )
         if self.summary.where.data_id:
             known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.dimensions)
             known_data_id = self.summary.where.data_id.subset(known_dimensions)
-            predicate = predicate.logical_and(self._context.make_data_coordinate_predicate(known_data_id))
-        if self.summary.where.region is not None:
+            self.relation = self.relation.with_rows_satisfying(
+                self._context.make_data_coordinate_predicate(known_data_id),
+                preferred_engine=self._context.preferred_engine,
+                require_preferred_engine=True,
+            )
+        if self.summary.region is not None:
             for skypix_dimension in categorized_columns.filter_skypix(self._backend.universe):
-                if skypix_dimension not in self.summary.where.data_id.graph:
-                    predicate = predicate.logical_and(
-                        self._context.make_spatial_region_skypix_predicate(
-                            skypix_dimension,
-                            self.summary.where.region,
-                        )
-                    )
+                self.relation = self.relation.with_rows_satisfying(
+                    self._context.make_spatial_region_skypix_predicate(
+                        skypix_dimension,
+                        self.summary.region,
+                    ),
+                    preferred_engine=self._context.preferred_engine,
+                    require_preferred_engine=True,
+                )
             for element in categorized_columns.filter_spatial_region_dimension_elements():
-                if element not in self.summary.where.data_id.graph.names:
-                    predicate = predicate.logical_and(
-                        self._context.make_spatial_region_overlap_predicate(
-                            ColumnExpression.reference(DimensionRecordColumnTag(element, "region")),
-                            ColumnExpression.literal(self.summary.where.region),
-                        )
-                    )
-        if self.summary.where.timespan is not None:
-            for element in categorized_columns.filter_timespan_dimension_elements():
-                if element not in self.summary.where.data_id.graph.names:
-                    predicate = predicate.logical_and(
-                        self._context.make_timespan_overlap_predicate(
-                            DimensionRecordColumnTag(element, "timespan"), self.summary.where.timespan
-                        )
-                    )
-        self.relation = self.relation.with_rows_satisfying(
-            predicate, preferred_engine=self._context.preferred_engine, require_preferred_engine=True
-        )
+                self.relation = self.relation.with_rows_satisfying(
+                    self._context.make_spatial_region_overlap_predicate(
+                        ColumnExpression.reference(DimensionRecordColumnTag(element, "region")),
+                        ColumnExpression.literal(self.summary.region),
+                    ),
+                    preferred_engine=self._context.iteration_engine,
+                    transfer=True,
+                )
 
     def finish(self, joinMissing: bool = True) -> Query:
         """Finish query constructing, returning a new `Query` instance.
@@ -223,28 +220,24 @@ class QueryBuilder:
             A `Query` object that can be executed and used to interpret result
             rows.
         """
-        columns_required: set[ColumnTag] = set()
-        if self.summary.where.expression_predicate is not None:
-            columns_required.update(self.summary.where.expression_predicate.columns_required)
-        if self.summary.order_by is not None:
-            columns_required.update(self.summary.order_by.columns_required)
-        columns_required.update(DimensionKeyColumnTag.generate(self.summary.requested.names))
-        if self.summary.universe.commonSkyPix in self.summary.spatial:
-            columns_required.add(DimensionKeyColumnTag(self.summary.universe.commonSkyPix.name))
         if joinMissing:
+            spatial_joins = []
+            for family1, family2 in itertools.combinations(self.summary.dimensions.spatial, 2):
+                spatial_joins.append(
+                    (
+                        family1.choose(self.summary.dimensions.elements).name,
+                        family2.choose(self.summary.dimensions.elements).name,
+                    )
+                )
             self.relation = self._backend.make_dimension_relation(
                 self.summary.dimensions,
-                columns=columns_required,
+                columns=self.summary.columns_required,
                 context=self._context,
-                spatial_joins=(
-                    [cast(tuple[str, str], tuple(self.summary.spatial.names))]
-                    if len(self.summary.spatial) == 2
-                    else []
-                ),
+                spatial_joins=spatial_joins,
                 initial_relation=self.relation,
                 governor_constraints=self._governor_constraints,
             )
-        categorized_columns = ColumnCategorization.from_iterable(columns_required)
+        categorized_columns = ColumnCategorization.from_iterable(self.relation.columns)
         self._addWhereClause(categorized_columns)
         query = Query(
             self.summary.dimensions,
