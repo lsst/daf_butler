@@ -1185,6 +1185,17 @@ class FileDatastoreButlerTests(ButlerTests):
         """This test does an export to a temp directory and an import back
         into a new temp directory repo. It does not assume a posix datastore"""
         exportButler = self.runPutGetTest(storageClass, "test_metric")
+
+        # Test that we must have a file extension.
+        with self.assertRaises(ValueError):
+            with exportButler.export(filename="dump", directory=".") as export:
+                pass
+
+        # Test that unknown format is not allowed.
+        with self.assertRaises(ValueError):
+            with exportButler.export(filename="dump.fits", directory=".") as export:
+                pass
+
         # Test that the repo actually has at least one dataset.
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
