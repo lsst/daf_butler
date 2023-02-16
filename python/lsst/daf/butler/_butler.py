@@ -96,6 +96,7 @@ from .registry import (
     ConflictingDefinitionError,
     DataIdError,
     DatasetIdGenEnum,
+    MissingDatasetTypeError,
     Registry,
     RegistryConfig,
     RegistryDefaults,
@@ -296,6 +297,12 @@ class Butler(LimitedButler):
                 log.error(f"Failed to instantiate Butler from config {self._config.configFile}.")
                 raise
 
+        # For execution butler the datastore needs a special
+        # dependency-inversion trick. This is not used by regular butler,
+        # but we do not have a way to distinguish regular butler from execution
+        # butler.
+        self.datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
+
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
 
@@ -306,6 +313,13 @@ class Butler(LimitedButler):
     interface has been fully retired; it should only be used in transitional
     code.
     """
+
+    def _retrieve_dataset_type(self, name: str) -> DatasetType | None:
+        """Return DatasetType defined in registry given dataset type name."""
+        try:
+            return self.registry.getDatasetType(name)
+        except MissingDatasetTypeError:
+            return None
 
     @classmethod
     def get_repo_uri(cls, label: str) -> ResourcePath:

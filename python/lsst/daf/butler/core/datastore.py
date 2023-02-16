@@ -1201,3 +1201,22 @@ class Datastore(metaclass=ABCMeta):
             Exported datastore records indexed by datastore name.
         """
         raise NotImplementedError()
+
+    def set_retrieve_dataset_type_method(self, method: Callable[[str], DatasetType | None] | None) -> None:
+        """Specify a method that can be used by datastore to retrieve
+        registry-defined dataset type.
+
+        Parameters
+        ----------
+        method : `~collections.abc.Callable` | `None`
+            Method that takes a name of the dataset type and returns a
+            corresponding `DatasetType` instance as defined in Registry. If
+            dataset type name is not known to registry `None` is returned.
+
+        Notes
+        -----
+        This method si only needed for a Datastore supporting a "trusted" mode
+        when it does not have an access to datastore records and needs to
+        guess dataset location based on its stored dataset type.
+        """
+        pass

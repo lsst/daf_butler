@@ -66,11 +66,18 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.datasetTypeOutput = DatasetType("test_ds_output", graph, storageClass)
         self.datasetTypeOutput2 = DatasetType("test_ds_output2", graph, storageClass)
         self.datasetTypeExtra = DatasetType("test_ds_extra", graph, storageClass)
-        self.butler.registry.registerDatasetType(self.datasetTypeInit)
-        self.butler.registry.registerDatasetType(self.datasetTypeInput)
-        self.butler.registry.registerDatasetType(self.datasetTypeOutput)
-        self.butler.registry.registerDatasetType(self.datasetTypeOutput2)
-        self.butler.registry.registerDatasetType(self.datasetTypeExtra)
+
+        self.dataset_types: dict[str, DatasetType] = {}
+        dataset_types = (
+            self.datasetTypeInit,
+            self.datasetTypeInput,
+            self.datasetTypeOutput,
+            self.datasetTypeOutput2,
+            self.datasetTypeExtra,
+        )
+        for dataset_type in dataset_types:
+            self.butler.registry.registerDatasetType(dataset_type)
+            self.dataset_types[dataset_type.name] = dataset_type
 
         dataIds = [
             self.butler.registry.expandDataId(dict(instrument="Cam1", detector=detector_id))
@@ -128,7 +135,9 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for initialize factory method"""
 
         quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+        qbb = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+        )
         self._test_factory(qbb)
 
     def test_from_predicted(self) -> None:
@@ -141,6 +150,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             predicted_outputs=[ref.getCheckedId() for ref in self.output_refs],
             dimensions=self.universe,
             datastore_records=datastore_records,
+            dataset_types=self.dataset_types,
         )
         self._test_factory(qbb)
 
@@ -159,7 +169,9 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for getDirect/putDirect methods"""
 
         quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+        qbb = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+        )
 
         # Verify all input data are readable.
         for ref in self.input_refs:
@@ -191,7 +203,9 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for getDirectDeferred method"""
 
         quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+        qbb = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+        )
 
         # get some input data
         input_refs = self.input_refs[:2]
@@ -215,7 +229,9 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for datasetExistsDirect method"""
 
         quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+        qbb = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+        )
 
         # get some input data
         input_refs = self.input_refs[:2]
@@ -238,7 +254,9 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for markInputUnused method"""
 
         quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+        qbb = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+        )
 
         # get some input data
         for ref in self.input_refs:
@@ -260,7 +278,9 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for pruneDatasets methods"""
 
         quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+        qbb = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+        )
 
         # Write all expected outputs.
         for ref in self.output_refs:
@@ -303,7 +323,9 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for extract_provenance_data method"""
 
         quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+        qbb = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
+        )
 
         # read/store everything
         for ref in self.input_refs:
@@ -341,10 +363,14 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test for collect_and_transfer method"""
 
         quantum1 = self.make_quantum(1)
-        qbb1 = QuantumBackedButler.initialize(config=self.config, quantum=quantum1, dimensions=self.universe)
+        qbb1 = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum1, dimensions=self.universe, dataset_types=self.dataset_types
+        )
 
         quantum2 = self.make_quantum(2)
-        qbb2 = QuantumBackedButler.initialize(config=self.config, quantum=quantum2, dimensions=self.universe)
+        qbb2 = QuantumBackedButler.initialize(
+            config=self.config, quantum=quantum2, dimensions=self.universe, dataset_types=self.dataset_types
+        )
 
         # read/store everything
         for ref in self.input_refs:

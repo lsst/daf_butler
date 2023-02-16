@@ -38,6 +38,7 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetRef,
     DatasetRefURIs,
+    DatasetType,
     DatasetTypeNotSupportedError,
     Datastore,
     DatastoreCacheManager,
@@ -453,12 +454,28 @@ class DatastoreTests(DatastoreTestsBase):
 
             # Check for compatible storage class
             if sc_name in ("StructuredDataNoComponents", "StructuredData"):
+                # Make new dataset ref with compatible storage class.
+                ref_comp = ref.overrideStorageClass("StructuredDataDictJson")
+
+                # Without `set_retrieve_dataset_type_method` it will fail to
+                # find correct file.
+                self.assertFalse(datastore.exists(ref_comp))
+                with self.assertRaises(FileNotFoundError):
+                    datastore.get(ref_comp)
+                with self.assertRaises(FileNotFoundError):
+                    datastore.get(ref, storageClass="StructuredDataDictJson")
+
+                # need a special method to generate stored dataset type
+                def _stored_dataset_type(name: str) -> DatasetType:
+                    if name == ref.datasetType.name:
+                        return ref.datasetType
+                    raise ValueError(f"Unexpected dataset type name {ref.datasetType.name}")
+
+                datastore.set_retrieve_dataset_type_method(_stored_dataset_type)
+
                 # Storage class override with original dataset ref
                 metrics_as_dict = datastore.get(ref, storageClass="StructuredDataDictJson")
                 self.assertIsInstance(metrics_as_dict, dict)
-
-                # Make new dataset ref with compatible storage class.
-                ref_comp = ref.overrideStorageClass("StructuredDataDictJson")
 
                 # get() should return a dict now
                 metrics_as_dict = datastore.get(ref_comp)
@@ -466,6 +483,8 @@ class DatastoreTests(DatastoreTestsBase):
 
                 # exists() should work as well
                 self.assertTrue(datastore.exists(ref_comp))
+
+                datastore.set_retrieve_dataset_type_method(None)
 
     def testDisassembly(self):
         """Test disassembly within datastore."""
