@@ -26,7 +26,7 @@ __all__ = ("removeDatasetType",)
 from .._butler import Butler
 
 
-def removeDatasetType(repo: str, dataset_type_name: str) -> None:
+def removeDatasetType(repo: str, dataset_type_name: tuple[str, ...]) -> None:
     """Remove the named dataset type definition.
 
     Parameters

@@ -595,7 +595,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def removeDatasetType(self, name: str | tuple([str, ...])) -> None:
+    def removeDatasetType(self, name: str | tuple[str, ...]) -> None:
         """Remove the named `DatasetType` from the registry.
 
         .. warning::
@@ -607,9 +607,9 @@ class Registry(ABC):
 
         Parameters
         ----------
-        name : `str` or `tuple([str, ...])`
+        name : `str` or `tuple[str, ...]`
             Name of the type to be removed or tuple containing a list of type
-            names to be removed.
+            names to be removed. Wildcards are allowed.
 
         Raises
         ------

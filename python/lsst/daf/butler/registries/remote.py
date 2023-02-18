@@ -301,7 +301,7 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def removeDatasetType(self, name: str | tuple([str, ...])) -> None:
+    def removeDatasetType(self, name: str | tuple[str, ...]) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 

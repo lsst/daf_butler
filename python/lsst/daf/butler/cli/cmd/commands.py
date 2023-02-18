@@ -451,9 +451,9 @@ def query_dataset_types(*args: Any, **kwargs: Any) -> None:
 
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
-@click.argument("dataset-type-name", nargs=1)
+@click.argument("dataset-type-name", nargs=-1)
 def remove_dataset_type(*args: Any, **kwargs: Any) -> None:
-    """Remove a dataset type definition from a repository."""
+    """Remove the dataset type definitions from a repository."""
     script.removeDatasetType(*args, **kwargs)
 
 

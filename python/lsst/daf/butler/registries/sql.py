@@ -415,7 +415,7 @@ class SqlRegistry(Registry):
         _, inserted = self._managers.datasets.register(datasetType)
         return inserted
 
-    def removeDatasetType(self, name: str | tuple([str, ...])) -> None:
+    def removeDatasetType(self, name: str | tuple[str, ...]) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
 
         for datasetTypeExpression in ensure_iterable(name):
@@ -425,7 +425,7 @@ class SqlRegistry(Registry):
             else:
                 for datasetType in datasetTypes:
                     self._managers.datasets.remove(datasetType.name)
-                    _LOG.info("Removed %r", datasetType.name)
+                    _LOG.info("Removed dataset type %r", datasetType.name)
 
     def getDatasetType(self, name: str) -> DatasetType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
