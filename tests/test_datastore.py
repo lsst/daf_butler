@@ -348,7 +348,7 @@ class DatastoreTests(DatastoreTestsBase):
         metrics = makeExampleMetrics()
 
         i = 0
-        for sc_name in ("StructuredData", "StructuredComposite"):
+        for sc_name in ("StructuredDataNoComponents", "StructuredData", "StructuredComposite"):
             i += 1
             datasetTypeName = f"test_metric{i}"  # Different dataset type name each time.
 
@@ -408,8 +408,9 @@ class DatastoreTests(DatastoreTestsBase):
             with self.assertRaises(FileNotFoundError):
                 datastore.get(ref)
 
-            with self.assertRaises(FileNotFoundError):
-                datastore.get(ref.makeComponentRef("data"))
+            if sc_name != "StructuredDataNoComponents":
+                with self.assertRaises(FileNotFoundError):
+                    datastore.get(ref.makeComponentRef("data"))
 
             # URI should fail unless we ask for prediction
             with self.assertRaises(FileNotFoundError):
@@ -438,16 +439,33 @@ class DatastoreTests(DatastoreTestsBase):
             self.assertTrue(datastore.exists(ref))
 
             # Get a component
-            comp = "data"
-            compRef = ref.makeComponentRef(comp)
-            output = datastore.get(compRef)
-            self.assertEqual(output, getattr(metrics, comp))
+            if sc_name != "StructuredDataNoComponents":
+                comp = "data"
+                compRef = ref.makeComponentRef(comp)
+                output = datastore.get(compRef)
+                self.assertEqual(output, getattr(metrics, comp))
 
             # Get the URI -- if we trust this should work even without
             # enabling prediction.
             primaryURI2, componentURIs2 = datastore.getURIs(ref)
             self.assertEqual(primaryURI2, primaryURI)
             self.assertEqual(componentURIs2, componentURIs)
+
+            # Check for compatible storage class
+            if sc_name in ("StructuredDataNoComponents", "StructuredData"):
+                # Storage class override with original dataset ref
+                metrics_as_dict = datastore.get(ref, storageClass="StructuredDataDictJson")
+                self.assertIsInstance(metrics_as_dict, dict)
+
+                # Make new dataset ref with compatible storage class.
+                ref_comp = ref.overrideStorageClass("StructuredDataDictJson")
+
+                # get() should return a dict now
+                metrics_as_dict = datastore.get(ref_comp)
+                self.assertIsInstance(metrics_as_dict, dict)
+
+                # exists() should work as well
+                self.assertTrue(datastore.exists(ref_comp))
 
     def testDisassembly(self):
         """Test disassembly within datastore."""
