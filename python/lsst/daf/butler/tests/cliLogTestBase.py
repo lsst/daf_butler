@@ -151,7 +151,9 @@ class CliLogTestBase:
             result = cmd()
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-        self.assertEqual(pyRoot.logger.level, logging.WARNING)
+        # The test environment may have changed the python root logger
+        # so we can not assume it will be WARNING.
+        self.assertEqual(pyRoot.logger.level, logging.getLogger().getEffectiveLevel())
         self.assertEqual(pyLsstRoot.logger.level, logging.INFO)
         self.assertEqual(pyButler.logger.level, pyButler.initialLevel)
         if lsstLog is not None:
