@@ -549,6 +549,27 @@ class DataCoordinateTestCase(unittest.TestCase):
                     if data_id.hasRecords():
                         self.assertEqual(data_id.records, read_data_id.records)
 
+    def test_record_attributes(self):
+        """Test that dimension records are available as attributes on expanded
+        data coordinates.
+        """
+        for n in range(5):
+            dimensions = self.randomDimensionSubset()
+            dataIds = self.randomDataIds(n=1).subset(dimensions)
+            split = self.splitByStateFlags(dataIds)
+            for data_id in split.expanded:
+                for element in data_id.graph.elements:
+                    self.assertIs(getattr(data_id, element.name), data_id.records[element.name])
+                    self.assertIn(element.name, dir(data_id))
+                with self.assertRaisesRegex(AttributeError, "^not_a_dimension_name$"):
+                    getattr(data_id, "not_a_dimension_name")
+            for data_id in itertools.chain(split.minimal, split.complete):
+                for element in data_id.graph.elements:
+                    with self.assertRaisesRegex(AttributeError, "only available on expanded DataCoordinates"):
+                        getattr(data_id, element.name)
+                with self.assertRaisesRegex(AttributeError, "^not_a_dimension_name$"):
+                    getattr(data_id, "not_a_dimension_name")
+
     def testEquality(self):
         """Test that different `DataCoordinate` instances with different state
         flags can be compared with each other and other mappings.
@@ -738,6 +759,7 @@ class DataCoordinateTestCase(unittest.TestCase):
             self.assertIsNotNone(dataId.timespan)
             self.assertEqual(dataId.graph.temporal.names, {"observation_timespans"})
             self.assertEqual(dataId.timespan, dataId.records["visit"].timespan)
+            self.assertEqual(dataId.timespan, dataId.visit.timespan)
         # Also test the case for non-temporal DataIds.
         for dataId in self.randomDataIds(n=4).subset(
             DimensionGraph(self.allDataIds.universe, names=["patch"])
