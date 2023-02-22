@@ -156,6 +156,10 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
        between simple `dict` data IDs work, and hence using a `DataCoordinate`
        instance for at least one operand in any data ID comparison is strongly
        recommended.
+
+    See also
+    --------
+    :ref:`lsst.daf.butler-dimensions_data_ids`
     """
 
     __slots__ = ()
@@ -946,6 +950,16 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         # Docstring inherited from DataCoordinate.
         assert False
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_BasicTupleDataCoordinate, (self._graph, self._values))
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self.graph.elements.names:
+            raise AttributeError(
+                f"Dimension record attribute {name!r} is only available on expanded DataCoordinates."
+            )
+        raise AttributeError(name)
+
 
 class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
     """A `DataCoordinate` implementation that can hold `DimensionRecord`.
@@ -1045,3 +1059,17 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
     def _record(self, name: str) -> Optional[DimensionRecord]:
         # Docstring inherited from DataCoordinate.
         return self._records[name]
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_ExpandedTupleDataCoordinate, (self._graph, self._values, self._records))
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return self._record(name)
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def __dir__(self) -> list[str]:
+        result = list(super().__dir__())
+        result.extend(self.graph.elements.names)
+        return result
