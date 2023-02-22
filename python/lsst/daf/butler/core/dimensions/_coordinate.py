@@ -946,6 +946,9 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         # Docstring inherited from DataCoordinate.
         assert False
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_BasicTupleDataCoordinate, (self._graph, self._values))
+
 
 class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
     """A `DataCoordinate` implementation that can hold `DimensionRecord`.
@@ -1045,3 +1048,6 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
     def _record(self, name: str) -> Optional[DimensionRecord]:
         # Docstring inherited from DataCoordinate.
         return self._records[name]
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_ExpandedTupleDataCoordinate, (self._graph, self._values, self._records))

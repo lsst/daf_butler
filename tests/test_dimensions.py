@@ -533,6 +533,22 @@ class DataCoordinateTestCase(unittest.TestCase):
                     self.assertEqual(dataId.graph.dimensions, dataId.full.keys())
                     self.assertEqual(list(dataId.full.values()), [dataId[k] for k in dataId.graph.dimensions])
 
+    def test_pickle(self):
+        for n in range(5):
+            dimensions = self.randomDimensionSubset()
+            dataIds = self.randomDataIds(n=1).subset(dimensions)
+            split = self.splitByStateFlags(dataIds)
+            for data_id in split.chain():
+                s = pickle.dumps(data_id)
+                read_data_id = pickle.loads(s)
+                self.assertEqual(data_id, read_data_id)
+                self.assertEqual(data_id.hasFull(), read_data_id.hasFull())
+                self.assertEqual(data_id.hasRecords(), read_data_id.hasRecords())
+                if data_id.hasFull():
+                    self.assertEqual(data_id.full, read_data_id.full)
+                    if data_id.hasRecords():
+                        self.assertEqual(data_id.records, read_data_id.records)
+
     def testEquality(self):
         """Test that different `DataCoordinate` instances with different state
         flags can be compared with each other and other mappings.
