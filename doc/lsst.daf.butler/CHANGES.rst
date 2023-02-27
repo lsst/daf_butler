@@ -1,3 +1,21 @@
+Butler v24.1.0 2023-01-13
+=========================
+
+API Changes
+-----------
+
+- ``DimensionUniverse`` now has a ``isCompatibleWith()`` method to check if two universes are compatible with each other.
+  The initial test is very basic but can be improved later. (`DM-35082 <https://jira.lsstcorp.org/browse/DM-35082>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Rework transaction and connection management for compatibility with transaction-level connection pooling on the server.
+
+  Butler clients still hold long-lived connections, via delegation to SQLAlchemy's connection pooling, which can handle disconnections transparently most of the time.  But we now wrap all temporary table usage and cursor iteration in transactions. (`DM-37249 <https://jira.lsstcorp.org/browse/DM-37249>`_)
+
+
 Butler v24.0.0 2022-08-26
 =========================
 
