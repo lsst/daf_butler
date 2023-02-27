@@ -172,7 +172,6 @@ class CliLog:
         if not log_tty:
             logging.basicConfig(force=True, handlers=[logging.NullHandler()])
         elif longlog:
-
             # Want to create our own Formatter so that we can get high
             # precision timestamps. This requires we attach our own
             # default stream handler.

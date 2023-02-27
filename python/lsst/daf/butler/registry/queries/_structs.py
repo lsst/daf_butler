@@ -267,7 +267,6 @@ class OrderByClause:
     """
 
     def __init__(self, order_by: Iterable[str], graph: DimensionGraph):
-
         self.order_by_columns = []
         for name in order_by:
             if not name or name == "-":
@@ -309,7 +308,6 @@ class ElementOrderByClause:
     """
 
     def __init__(self, order_by: Iterable[str], element: DimensionElement):
-
         self.order_by_columns = []
         for name in order_by:
             if not name or name == "-":

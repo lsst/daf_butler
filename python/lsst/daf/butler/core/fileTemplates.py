@@ -470,7 +470,6 @@ class FileTemplate:
         output = ""
 
         for literal, field_name, format_spec, conversion in parts:
-
             if field_name == "component":
                 usedComponent = True
 

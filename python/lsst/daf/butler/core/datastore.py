@@ -210,7 +210,6 @@ class DatasetRefURIs(abc.Sequence):
         primaryURI: Optional[ResourcePath] = None,
         componentURIs: Optional[Dict[str, ResourcePath]] = None,
     ):
-
         self.primaryURI = primaryURI
         """The URI to the primary artifact associated with this dataset. If the
         dataset was disassembled within the datastore this may be `None`.

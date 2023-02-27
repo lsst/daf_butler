@@ -59,7 +59,6 @@ from ..utils import MWOptionDecorator, MWPath, split_commas, split_kv, unwrap, y
 
 
 class CollectionTypeCallback:
-
     collectionTypes = tuple(collectionType.name for collectionType in CollectionType.all())
 
     @staticmethod

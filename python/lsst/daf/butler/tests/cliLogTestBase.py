@@ -70,7 +70,6 @@ def command_log_settings_test(
     expected_lsstbutler_level,
     expected_lsstx_level,
 ):
-
     LogLevel = namedtuple("LogLevel", ("expected", "actual", "name"))
 
     logLevels = [

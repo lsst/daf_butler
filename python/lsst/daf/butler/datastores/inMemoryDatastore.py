@@ -338,7 +338,6 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         # Different storage classes implies a component request
         if readStorageClass != writeStorageClass:
-
             if component is None:
                 raise ValueError(
                     "Storage class inconsistency ({} vs {}) but no"
