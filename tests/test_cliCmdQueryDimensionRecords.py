@@ -48,7 +48,6 @@ timespan_columns = "" if minversion(astropy, "5.1") else " [2]"
 
 
 class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
-
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDimensionRecords"
 
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
@@ -159,7 +158,6 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
     def testCollection(self):
-
         butler = Butler(self.root, run="foo")
 
         # try replacing the testRepo's butler with the one with the "foo" run.

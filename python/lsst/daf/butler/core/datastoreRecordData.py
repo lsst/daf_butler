@@ -39,7 +39,6 @@ from .dimensions import DimensionUniverse
 from .storedFileInfo import StoredDatastoreItemInfo
 
 if TYPE_CHECKING:
-
     from ..registry import Registry
 
 _Record = Dict[str, Any]

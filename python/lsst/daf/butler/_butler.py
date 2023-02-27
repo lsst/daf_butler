@@ -1954,7 +1954,6 @@ class Butler(LimitedButler):
                 groupedData[ref.datasetType][ref.dataId] = (dataset, resolvedRefs)
 
             if existingRefs:
-
                 if len(dataset.refs) != len(existingRefs):
                     # Keeping track of partially pre-existing datasets is hard
                     # and should generally never happen. For now don't allow

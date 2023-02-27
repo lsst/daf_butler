@@ -159,7 +159,6 @@ def extract_datasets_from_table(
     refs_by_file = defaultdict(list)
     n_dataset_refs = 0
     for row in table:
-
         # Convert the row to a dataId, remembering to extract the
         # path column.
         dataId = dict(row)

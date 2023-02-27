@@ -34,7 +34,6 @@ from numpy import array
 
 
 class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
-
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDatasetTypes"
 
     @staticmethod

@@ -627,7 +627,6 @@ class FileDatastore(GenericBaseDatastore):
 
         fileGetInfo = []
         for location, storedFileInfo in fileLocations:
-
             # The storage class used to write the file
             writeStorageClass = storedFileInfo.storageClass
 
@@ -1294,7 +1293,6 @@ class FileDatastore(GenericBaseDatastore):
                     location_updated = True
 
                 with uri.as_local() as local_uri:
-
                     can_be_cached = False
                     if uri != local_uri:
                         # URI was remote and file was downloaded
@@ -1741,7 +1739,6 @@ class FileDatastore(GenericBaseDatastore):
         uris = DatasetRefURIs()
 
         if self.composites.shouldBeDisassembled(ref):
-
             for component, _ in ref.datasetType.storageClass.components.items():
                 comp_ref = ref.makeComponentRef(component)
                 comp_location, _ = self._determine_put_formatter_location(comp_ref)
@@ -1751,7 +1748,6 @@ class FileDatastore(GenericBaseDatastore):
                 uris.componentURIs[component] = ResourcePath(comp_location.uri.geturl() + "#predicted")
 
         else:
-
             location, _ = self._determine_put_formatter_location(ref)
 
             # Add the "#predicted" URI fragment to indicate this is a guess
@@ -1776,7 +1772,6 @@ class FileDatastore(GenericBaseDatastore):
         missing_refs = (ref for ref in refs if ref.id not in records_keys)
 
         for ref in missing_refs:
-
             # if this has never been written then we have to guess
             if not predict:
                 if not allow_missing:
@@ -2048,7 +2043,6 @@ class FileDatastore(GenericBaseDatastore):
             )
 
         elif isDisassembledReadOnlyComponent:
-
             compositeStorageClass = ref.datasetType.parentStorageClass
             if compositeStorageClass is None:
                 raise RuntimeError(
@@ -2357,7 +2351,6 @@ class FileDatastore(GenericBaseDatastore):
                 )
 
                 for ref, info in trashed:
-
                     # Mypy needs to know this is not the base class
                     assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
 
@@ -2371,7 +2364,6 @@ class FileDatastore(GenericBaseDatastore):
                 artifacts_to_keep = set(path_map)
 
             for ref, info in trashed:
-
                 # Should not happen for this implementation but need
                 # to keep mypy happy.
                 assert info is not None, f"Internal logic error in emptyTrash with ref {ref}."

@@ -107,7 +107,6 @@ class LoggingTestCase(unittest.TestCase):
                     self.assertIn("...", str(cm.exception))
 
     def testRecordsFormatting(self):
-
         self.log.setLevel(logging.DEBUG)
         self.log.debug("debug message")
         self.log.warning("warning message")
@@ -185,7 +184,6 @@ class LoggingTestCase(unittest.TestCase):
             records.append({})
 
     def testExceptionInfo(self):
-
         self.log.setLevel(logging.DEBUG)
         try:
             raise RuntimeError("A problem has been encountered.")

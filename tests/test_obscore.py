@@ -356,7 +356,6 @@ class ObsCoreTests:
 
         for collections, count in test_data:
             for do_import in (False, True):
-
                 registry = self.make_registry(collections)
                 self._insert_datasets(registry, do_import)
 

@@ -681,7 +681,6 @@ class QueryBuilder:
             return order_by_columns
 
         for order_by_column in self.summary.order_by.order_by_columns:
-
             column: sqlalchemy.sql.ColumnElement
             if order_by_column.column is None:
                 # dimension name, it has to be in SELECT list already, only

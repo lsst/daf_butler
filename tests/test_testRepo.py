@@ -52,7 +52,6 @@ class ButlerTestRepoTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testMakeTestRepo(self):
-
         dataIds = {
             "instrument": ["DummyCam"],
             "physical_filter": ["d-r"],
