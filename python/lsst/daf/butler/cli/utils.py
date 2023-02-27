@@ -881,7 +881,6 @@ class MWCtxObj:
     """
 
     def __init__(self):
-
         self.args = None
 
     @staticmethod

@@ -302,7 +302,6 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
 
 
 class ButlerCLI(LoaderCLI):
-
     localCmdPkg = "lsst.daf.butler.cli.cmd"
 
     pluginEnvVar = "DAF_BUTLER_PLUGINS"

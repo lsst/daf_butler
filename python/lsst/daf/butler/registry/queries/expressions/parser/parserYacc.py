@@ -234,7 +234,6 @@ class ParserYacc:
     """
 
     def __init__(self, idMap=None, **kwargs):
-
         kw = dict(write_tables=0, debug=False)
         kw.update(kwargs)
 

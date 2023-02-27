@@ -485,7 +485,6 @@ class RegistryTests(ABC):
         # Test for non-unique IDs, they can be re-imported multiple times.
         for run, idGenMode in ((2, DatasetIdGenEnum.DATAID_TYPE), (4, DatasetIdGenEnum.DATAID_TYPE_RUN)):
             with self.subTest(idGenMode=idGenMode):
-
                 # Use integer dataset ID to force UUID calculation in _import
                 ref = DatasetRef(datasetTypeBias, dataIdBias1, id=0, run=f"run{run}")
                 (ref1,) = registry._importDatasets([ref], idGenerationMode=idGenMode)
@@ -2232,7 +2231,6 @@ class RegistryTests(ABC):
         self.assertGreater(len(datasets), 0)
 
     def testIngestTimeQuery(self):
-
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         dt0 = datetime.utcnow()
@@ -2515,7 +2513,6 @@ class RegistryTests(ABC):
                 ["nonexistent"],
             ),
         ]:
-
             self.assertFalse(query.any(execute=False, exact=False))
             self.assertFalse(query.any(execute=True, exact=False))
             self.assertFalse(query.any(execute=True, exact=True))
