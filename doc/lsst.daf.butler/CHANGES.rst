@@ -1,3 +1,95 @@
+Butler v25.0.0 2023-02-27
+=========================
+
+New Features
+------------
+
+- * Added ``StorageClass.is_type`` method to compare a type with that of the storage class itelf.
+  * Added keys, values, items, and iterator for ``StorageClassFactory``. (`DM-29835 <https://jira.lsstcorp.org/browse/DM-29835>`_)
+- Updated parquet backend to use Arrow Tables natively, and add converters to and from pandas DataFrames, Astropy Tables, and Numpy structured arrays. (`DM-34874 <https://jira.lsstcorp.org/browse/DM-34874>`_)
+- ``Butler.transfer_from()`` can now copy dimension records as well as datasets.
+  This significantly enhances the usability of this method when transferring between disconnected Butlers.
+  The ``butler transfer-datasets`` command will transfer dimension records by default but this can be disabled with the ``--no-transfer-dimensions`` option (which can be more efficient if you know that the destination Butler contains all the records). (`DM-34887 <https://jira.lsstcorp.org/browse/DM-34887>`_)
+- ``butler query-data-ids`` will now determine default dimensions to use if a dataset type and collection is specified.
+  The logical AND of all supplied dataset types will be used.
+  Additionally, if no results are returned a reason will now be given in many cases. (`DM-35391 <https://jira.lsstcorp.org/browse/DM-35391>`_)
+- Added ``DataFrameDelegate`` to allow DataFrames to be used with ``lsst.pipe.base.InMemoryDatasetHandle``. (`DM-35803 <https://jira.lsstcorp.org/browse/DM-35803>`_)
+- Add ``StorageClass.findStorageClass`` method to find a storage class from a python type. (`DM-35815 <https://jira.lsstcorp.org/browse/DM-35815>`_)
+- The optional dependencies of ``lsst-resources`` can be requested as optional dependencies of ``lsst-daf-butler`` and will be passed down to the underlying package.
+  This allows callers of ``lsst.daf.butler`` to specify the type of resources they want to be able to access without being aware of the role of ``lsst.resources`` as an implementation detail. (`DM-35886 <https://jira.lsstcorp.org/browse/DM-35886>`_)
+- Requires Python 3.10 or greater for better type annotation support. (`DM-36174 <https://jira.lsstcorp.org/browse/DM-36174>`_)
+- Bind values in Registry queries can now specify list/tuple of numbers for identifiers appearing on the right-hand side of ``IN`` expression. (`DM-36325 <https://jira.lsstcorp.org/browse/DM-36325>`_)
+- It is now possible to override the python type returned by ``butler.get()`` (if the types are compatible with each other) by using the new ``readStorageClass`` parameter.
+  Deferred dataset handles can also be overridden.
+
+  For example, to return an `astropy.table.Table` from something that usually returns an ``lsst.afw.table.Catalog`` you would do:
+
+  .. code-block:: python
+
+      table = butler.getDirect(ref, readStorageClass="AstropyTable")
+
+  Any parameters given to the ``get()`` must still refer to the native storage class. (`DM-4551 <https://jira.lsstcorp.org/browse/DM-4551>`_)
+
+
+API Changes
+-----------
+
+- Deprecate support for accessing data repositories with integer dataset IDs, and disable creation of new data repositories with integer dataset IDs, as per `RFC-854 <https://jira.lsstcorp.org/browse/RFC-854>`_. (`DM-35063 <https://jira.lsstcorp.org/browse/DM-35063>`_)
+- ``DimensionUniverse`` now has a ``isCompatibleWith()`` method to check if two universes are compatible with each other.
+  The initial test is very basic but can be improved later. (`DM-35082 <https://jira.lsstcorp.org/browse/DM-35082>`_)
+- Deprecated support for components in `Registry.query*` methods, per `RFC-879 <https://jira.lsstcorp.org/browse/RFC-879>`_. (`DM-36312 <https://jira.lsstcorp.org/browse/DM-36312>`_)
+- Multiple minor API changes to query methods from `RFC-878 <https://jira.lsstcorp.org/browse/RFC-878>`_ and `RFC-879 <https://jira.lsstcorp.org/browse/RFC-879>_`.
+
+  This includes:
+
+  - ``CollectionSearch`` is deprecated in favor of ``Sequence[str]`` and the new ``CollectionWildcard`` class.
+  - ``queryDatasetTypes`` and ``queryCollections`` now return `~collections.abc.Iterable` (representing an unspecified in-memory collection) and `~collections.abc.Sequence`, respectively, rather than iterators.
+  - ``DataCoordinateQueryResults.findDatasets`` now raises ``MissingDatasetTypeError`` when the given dataset type is not registered.
+  - Passing regular expressions and other patterns as dataset types to ``queryDataIds`` and ``queryDimensionRecords`` is deprecated.
+  - Passing unregistered dataset types ``queryDataIds`` and ``queryDimensionRecords`` is deprecated; in the future this will raise ``MissingDatasetTypeError`` instead of returning no query results.
+  - Query result class ``explain_no_results`` now returns `~collections.abc.Iterable` instead of `~collections.abc.Iterator`. (`DM-36313 <https://jira.lsstcorp.org/browse/DM-36313>`_)
+- A method has been added to ``DatasetRef`` and ``DatasetType``, named ``overrideStorageClass``, to allow a new object to be created that has a different storage class associated with it. (`DM-4551 <https://jira.lsstcorp.org/browse/DM-4551>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed a bug in the parquet reader where a single string column name would be interpreted as an iterable. (`DM-35803 <https://jira.lsstcorp.org/browse/DM-35803>`_)
+- Fixed bug in ``elements`` argument to various export methods that prevented it from doing anything. (`DM-36111 <https://jira.lsstcorp.org/browse/DM-36111>`_)
+- A bug has been fixed in ``DatastoreCacheManager`` that triggered if two processes try to cache the same dataset simultaneously. (`DM-36412 <https://jira.lsstcorp.org/browse/DM-36412>`_)
+- Fixed bug in pandas ``dataframe`` to arrow conversion that would crash with some pandas object data types. (`DM-36775 <https://jira.lsstcorp.org/browse/DM-36775>`_)
+- Fixed bug in pandas ``dataframe`` to arrow conversion that would crash with partially nulled string columns. (`DM-36795 <https://jira.lsstcorp.org/browse/DM-36795>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- For command-line options that split on commas, it is now possible to specify parts of the string not to split by using ``[]`` to indicate comma-separated list content. (`DM-35917 <https://jira.lsstcorp.org/browse/DM-35917>`_)
+- Moved the typing workaround for the built-in `Ellipsis` (`...`) singleton to ``lsst.utils``. (`DM-36108 <https://jira.lsstcorp.org/browse/DM-36108>`_)
+- Now define regions for data IDs with multiple spatial dimensions to the intersection of those dimensions' regions. (`DM-36111 <https://jira.lsstcorp.org/browse/DM-36111>`_)
+- Added support for in-memory datastore to roll back a call to ``datastore.trash()``.
+  This required that the ``bridge.moveToTrash()`` method now takes an additional ``transaction`` parameter (that can be `None`). (`DM-36172 <https://jira.lsstcorp.org/browse/DM-36172>`_)
+- Restructured internal Registry query system methods to share code better and prepare for more meaningful changes. (`DM-36174 <https://jira.lsstcorp.org/browse/DM-36174>`_)
+- Removed unnecessary table-locking in dimension record insertion.
+
+  Prior to this change, we used explicit full-table locks to guard against a race condition that wasn't actually possible, which could lead to deadlocks in rare cases involving insertion of governor dimension records. (`DM-36326 <https://jira.lsstcorp.org/browse/DM-36326>`_)
+- Chained Datastore can now support "move" transfer mode for ingest.
+  Files are copied to each child datastore unless only one child datastore is accepting the incoming files, in which case "move" is used. (`DM-36410 <https://jira.lsstcorp.org/browse/DM-36410>`_)
+- ``DatastoreCacheManager`` can now use an environment variable, ``$DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET``, to specify a cache directory to use if no explicit directory has been specified by configuration or by the ``$DAF_BUTLER_CACHE_DIRECTORY`` environment variable.
+  Additionally, a ``DatastoreCacheManager.set_fallback_cache_directory_if_unset()`` class method has been added that will set this environment variable with a suitable value.
+  This is useful for multiprocessing where each forked or spawned subprocess needs to share the same cache directory. (`DM-36412 <https://jira.lsstcorp.org/browse/DM-36412>`_)
+- Added support for ``ChainedDatastore.export()``. (`DM-36517 <https://jira.lsstcorp.org/browse/DM-36517>`_)
+- Reworked transaction and connection management for compatibility with transaction-level connection pooling on the server.
+
+  Butler clients still hold long-lived connections, via delegation to SQLAlchemy's connection pooling, which can handle disconnections transparently most of the time.  But we now wrap all temporary table usage and cursor iteration in transactions. (`DM-37249 <https://jira.lsstcorp.org/browse/DM-37249>`_)
+
+
+An API Removal or Deprecation
+-----------------------------
+
+- Removed deprecated filterLabel exposure component access. (`DM-27811 <https://jira.lsstcorp.org/browse/DM-27811>`_)
+
+
 Butler v24.0.0 2022-08-26
 =========================
 

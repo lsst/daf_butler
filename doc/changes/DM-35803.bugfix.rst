@@ -1,1 +1,0 @@
-Fix a bug in the parquet reader where a single string column name would be interpreted as an iterable.

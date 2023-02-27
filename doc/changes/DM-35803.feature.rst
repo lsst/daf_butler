@@ -1,1 +1,0 @@
-Added ``DataFrameDelegate`` to allow DataFrames to be used with ``lsst.pipe.base.InMemoryDatasetHandle``.
