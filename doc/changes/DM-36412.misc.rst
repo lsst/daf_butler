@@ -1,3 +1,0 @@
-``DatastoreCacheManager`` can now use an environment variable, ``$DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET``, to specify a cache directory to use if no explicit directory has been specified by configuration or by the ``$DAF_BUTLER_CACHE_DIRECTORY`` environment variable.
-Additionally, a ``DatastoreCacheManager.set_fallback_cache_directory_if_unset()`` class method has been added that will set this environment variable with a suitable value.
-This is useful for multiprocessing where each forked or spwaned subprocess needs to share the same cache directory.
