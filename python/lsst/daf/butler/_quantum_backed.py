@@ -38,6 +38,7 @@ from .core import (
     Config,
     DatasetId,
     DatasetRef,
+    DatasetType,
     Datastore,
     DatastoreRecordData,
     DimensionUniverse,
@@ -153,6 +154,7 @@ class QuantumBackedButler(LimitedButler):
         dimensions: DimensionUniverse,
         datastore: Datastore,
         storageClasses: StorageClassFactory,
+        dataset_types: Mapping[str, DatasetType] | None = None,
     ):
         self._dimensions = dimensions
         self._predicted_inputs = set(predicted_inputs)
@@ -163,6 +165,10 @@ class QuantumBackedButler(LimitedButler):
         self._actual_output_refs: Set[DatasetRef] = set()
         self.datastore = datastore
         self.storageClasses = storageClasses
+        self._dataset_types: Mapping[str, DatasetType] = {}
+        if dataset_types is not None:
+            self._dataset_types = dataset_types
+        self.datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
 
     @classmethod
     def initialize(
@@ -174,6 +180,7 @@ class QuantumBackedButler(LimitedButler):
         OpaqueManagerClass: Type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
         BridgeManagerClass: Type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
         search_paths: Optional[List[str]] = None,
+        dataset_types: Mapping[str, DatasetType] | None = None,
     ) -> QuantumBackedButler:
         """Construct a new `QuantumBackedButler` from repository configuration
         and helper types.
@@ -200,6 +207,8 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
+        dataset_types: `Mapping` [`str`, `DatasetType`], optional
+            Mapping of the dataset type name to its registry definition.
         """
         predicted_inputs = [
             ref.getCheckedId() for ref in itertools.chain.from_iterable(quantum.inputs.values())
@@ -218,6 +227,7 @@ class QuantumBackedButler(LimitedButler):
             OpaqueManagerClass=OpaqueManagerClass,
             BridgeManagerClass=BridgeManagerClass,
             search_paths=search_paths,
+            dataset_types=dataset_types,
         )
 
     @classmethod
@@ -232,6 +242,7 @@ class QuantumBackedButler(LimitedButler):
         OpaqueManagerClass: Type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
         BridgeManagerClass: Type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
         search_paths: Optional[List[str]] = None,
+        dataset_types: Mapping[str, DatasetType] | None = None,
     ) -> QuantumBackedButler:
         """Construct a new `QuantumBackedButler` from sets of input and output
         dataset IDs.
@@ -261,6 +272,8 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
+        dataset_types: `Mapping` [`str`, `DatasetType`], optional
+            Mapping of the dataset type name to its registry definition.
         """
         return cls._initialize(
             config=config,
@@ -272,6 +285,7 @@ class QuantumBackedButler(LimitedButler):
             OpaqueManagerClass=OpaqueManagerClass,
             BridgeManagerClass=BridgeManagerClass,
             search_paths=search_paths,
+            dataset_types=dataset_types,
         )
 
     @classmethod
@@ -287,6 +301,7 @@ class QuantumBackedButler(LimitedButler):
         OpaqueManagerClass: Type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
         BridgeManagerClass: Type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
         search_paths: Optional[List[str]] = None,
+        dataset_types: Mapping[str, DatasetType] | None = None,
     ) -> QuantumBackedButler:
         """Internal method with common implementation used by `initialize` and
         `for_output`.
@@ -315,6 +330,8 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
+        dataset_types: `Mapping` [`str`, `DatasetType`]
+            Mapping of the dataset type name to its registry definition.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
         if "root" in butler_config:
@@ -342,7 +359,18 @@ class QuantumBackedButler(LimitedButler):
             datastore.import_records(datastore_records)
         storageClasses = StorageClassFactory()
         storageClasses.addFromConfig(butler_config)
-        return cls(predicted_inputs, predicted_outputs, dimensions, datastore, storageClasses=storageClasses)
+        return cls(
+            predicted_inputs,
+            predicted_outputs,
+            dimensions,
+            datastore,
+            storageClasses=storageClasses,
+            dataset_types=dataset_types,
+        )
+
+    def _retrieve_dataset_type(self, name: str) -> DatasetType | None:
+        """Return DatasetType defined in registry given dataset type name."""
+        return self._dataset_types.get(name)
 
     def isWriteable(self) -> bool:
         # Docstring inherited.

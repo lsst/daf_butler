@@ -27,6 +27,7 @@ __all__ = ("FileDatastore",)
 import hashlib
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -180,6 +181,11 @@ class FileDatastore(GenericBaseDatastore):
     defaultConfigFile = "datastores/fileDatastore.yaml"
     """Path to configuration defaults. Accessed within the ``config`` resource
     or relative to a search path. Can be None if no defaults specified.
+    """
+
+    _retrieve_dataset_method: Callable[[str], DatasetType | None] | None = None
+    """Callable that is used in trusted mode to retrieve registry definition
+    of a named dataset type.
     """
 
     @classmethod
@@ -591,6 +597,9 @@ class FileDatastore(GenericBaseDatastore):
             Parameters needed to retrieve each file.
         """
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
+
+        # For trusted mode need to reset storage class.
+        ref = self._cast_storage_class(ref)
 
         # Get file metadata and internal metadata
         fileLocations = self._get_dataset_locations_info(ref)
@@ -1348,7 +1357,7 @@ class FileDatastore(GenericBaseDatastore):
                         self.cacheManager.move_to_cache(local_uri, cache_ref)
 
         return self._post_process_get(
-            result, getInfo.readStorageClass, getInfo.assemblerParams, isComponent=isComponent
+            result, ref.datasetType.storageClass, getInfo.assemblerParams, isComponent=isComponent
         )
 
     def knows(self, ref: DatasetRef) -> bool:
@@ -1645,6 +1654,7 @@ class FileDatastore(GenericBaseDatastore):
         compute node could remove the file from the object store even
         though it is present in the local cache.
         """
+        ref = self._cast_storage_class(ref)
         fileLocations = self._get_dataset_locations_info(ref)
 
         # if we are being asked to trust that registry might not be correct
@@ -2890,3 +2900,25 @@ class FileDatastore(GenericBaseDatastore):
 
         record_data = DatastoreRecordData(records=records)
         return {self.name: record_data}
+
+    def set_retrieve_dataset_type_method(self, method: Callable[[str], DatasetType | None] | None) -> None:
+        # Docstring inherited from the base class.
+        self._retrieve_dataset_method = method
+
+    def _cast_storage_class(self, ref: DatasetRef) -> DatasetRef:
+        """Update dataset reference to use the storage class from registry.
+
+        This does nothing for regular datastores, and is only enabled for
+        trusted mode where we need to use registry definition of storage class
+        for some datastore methods. `set_retrieve_dataset_type_method` has to
+        be called beforehand.
+        """
+        if self.trustGetRequest:
+            if self._retrieve_dataset_method is None:
+                # We could raise an exception here but unit tests do not define
+                # this method.
+                return ref
+            dataset_type = self._retrieve_dataset_method(ref.datasetType.name)
+            if dataset_type is not None:
+                ref = ref.overrideStorageClass(dataset_type.storageClass)
+        return ref
