@@ -1215,7 +1215,7 @@ class Datastore(metaclass=ABCMeta):
 
         Notes
         -----
-        This method si only needed for a Datastore supporting a "trusted" mode
+        This method is only needed for a Datastore supporting a "trusted" mode
         when it does not have an access to datastore records and needs to
         guess dataset location based on its stored dataset type.
         """

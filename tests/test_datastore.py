@@ -452,7 +452,7 @@ class DatastoreTests(DatastoreTestsBase):
             self.assertEqual(primaryURI2, primaryURI)
             self.assertEqual(componentURIs2, componentURIs)
 
-            # Check for compatible storage class
+            # Check for compatible storage class.
             if sc_name in ("StructuredDataNoComponents", "StructuredData"):
                 # Make new dataset ref with compatible storage class.
                 ref_comp = ref.overrideStorageClass("StructuredDataDictJson")
@@ -465,7 +465,7 @@ class DatastoreTests(DatastoreTestsBase):
                 with self.assertRaises(FileNotFoundError):
                     datastore.get(ref, storageClass="StructuredDataDictJson")
 
-                # need a special method to generate stored dataset type
+                # Need a special method to generate stored dataset type.
                 def _stored_dataset_type(name: str) -> DatasetType:
                     if name == ref.datasetType.name:
                         return ref.datasetType
@@ -473,15 +473,15 @@ class DatastoreTests(DatastoreTestsBase):
 
                 datastore.set_retrieve_dataset_type_method(_stored_dataset_type)
 
-                # Storage class override with original dataset ref
+                # Storage class override with original dataset ref.
                 metrics_as_dict = datastore.get(ref, storageClass="StructuredDataDictJson")
                 self.assertIsInstance(metrics_as_dict, dict)
 
-                # get() should return a dict now
+                # get() should return a dict now.
                 metrics_as_dict = datastore.get(ref_comp)
                 self.assertIsInstance(metrics_as_dict, dict)
 
-                # exists() should work as well
+                # exists() should work as well.
                 self.assertTrue(datastore.exists(ref_comp))
 
                 datastore.set_retrieve_dataset_type_method(None)
