@@ -344,7 +344,7 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         result of a join on `SkyPixDimension` columns in SQL.
 
         Parameters
-        ---------
+        ----------
         dimension : `SkyPixDimension`
             Dimension whose key column is being constrained.
         region : `lsst.sphgeom.Region`
@@ -383,7 +383,7 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         columns in SQL.
 
         Parameters
-        ---------
+        ----------
         lhs : `lsst.daf.relation.column_expressions.ColumnExpression`
             Expression for one spatial region.
         rhs : `lsst.daf.relation.column_expressions.ColumnExpression`
@@ -426,7 +426,7 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         """Transform a set of data IDs into a relation.
 
         Parameters
-        ---------
+        ----------
         data_ids : `~collections.abc.Set` [ `DataCoordinate` ]
             Data IDs to upload.  All must have at least the dimensions given,
             but may have more.

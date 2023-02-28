@@ -430,7 +430,7 @@ class DatasetRecordStorage(ABC):
             relation engines for this query.
 
         Returns
-        ------
+        -------
         relation : `~lsst.daf.relation.Relation`
             Representation of the query.
         """

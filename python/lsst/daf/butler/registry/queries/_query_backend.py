@@ -433,7 +433,8 @@ class QueryBackend(Generic[_C]):
         columns : `~collections.abc.Set` [ `str` ]
             Columns to include in the relation.  See `Query.find_datasets` for
             details.
-        Results
+
+        Returns
         -------
         relation : `lsst.daf.relation.Relation`
             Relation representing a dataset query.
@@ -469,7 +470,7 @@ class QueryBackend(Generic[_C]):
             Another relation to join with the query for datasets in all
             collections before filtering out out shadowed datasets.
 
-        Results
+        Returns
         -------
         relation : `lsst.daf.relation.Relation`
             Relation representing a find-first dataset search.
@@ -525,7 +526,7 @@ class QueryBackend(Generic[_C]):
         context : `QueryContext`
             Context that manages per-query state.
 
-        Results
+        Returns
         -------
         relation : `lsst.daf.relation.Relation`
             Relation with the requested columns and no rows.
@@ -594,7 +595,7 @@ class QueryBackend(Generic[_C]):
             or are guaranteed to be added in the future. This is a mapping from
             governor dimension name to sets of values that dimension may take.
 
-        Results
+        Returns
         -------
         relation : `lsst.daf.relation.Relation`
             Relation containing the given dimension columns and constraints.
