@@ -1,2 +1,0 @@
-The optional dependencies of ``lsst-resources`` can be requested as optional dependencies of ``lsst-daf-butler`` and will be passed down to the underlying package.
-This allows callers of ``lsst.daf.butler`` to specify the type of resources they want to be able to access without being aware of the role of ``lsst.resources`` as an implementation detail.

@@ -1,2 +1,0 @@
-Add support for in-memory datastore to roll back a call to ``datastore.trash()``.
-This required that the ``bridge.moveToTrash()`` method now takes an additional ``transaction`` parameter (that can be `None`).

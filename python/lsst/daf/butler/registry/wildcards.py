@@ -311,6 +311,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
 
             Duplicate entries will be removed (preserving the first appearance
             of each collection name).
+
         Returns
         -------
         collections : `CollectionSearch`

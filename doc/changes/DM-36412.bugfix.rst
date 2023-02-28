@@ -1,1 +1,0 @@
-A bug has been fixed in ``DatastoreCacheManager`` that triggered if two processes try to cache the same dataset simultaneously.
