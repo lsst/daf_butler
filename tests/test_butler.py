@@ -592,7 +592,6 @@ class ButlerTests(ButlerPutGetTests):
         self.runPutGetTest(storageClass, "test_metric")
 
     def testCompositePutGetConcrete(self):
-
         storageClass = self.storageClassFactory.getStorageClass("StructuredCompositeReadCompNoDisassembly")
         butler = self.runPutGetTest(storageClass, "test_metric")
 
@@ -2196,7 +2195,6 @@ class PosixDatastoreTransfers(unittest.TestCase):
             if purge:
                 # Remove records for a fraction.
                 if index == 1:
-
                     # For one of these delete the file as well.
                     # This allows the "missing" code to filter the
                     # file out.

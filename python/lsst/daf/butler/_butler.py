@@ -961,8 +961,7 @@ class Butler(LimitedButler):
                         if (
                             dimensionName == "visit"
                             and "visit_system_membership" in self.registry.dimensions
-                            and "visit_system"
-                            in self.registry.dimensions["instrument"].metadata  # type: ignore
+                            and "visit_system" in self.registry.dimensions["instrument"].metadata
                         ):
                             instrument_records = list(
                                 self.registry.queryDimensionRecords(
@@ -1954,7 +1953,6 @@ class Butler(LimitedButler):
                 groupedData[ref.datasetType][ref.dataId] = (dataset, resolvedRefs)
 
             if existingRefs:
-
                 if len(dataset.refs) != len(existingRefs):
                     # Keeping track of partially pre-existing datasets is hard
                     # and should generally never happen. For now don't allow

@@ -134,7 +134,6 @@ def expectedFilesystemDatastoreTables(root: ResourcePath):
 
 
 class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
-
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
 

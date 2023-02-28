@@ -26,7 +26,6 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class CreateTest(CliCmdTestBase, unittest.TestCase):
-
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.createRepo"
 
     @staticmethod

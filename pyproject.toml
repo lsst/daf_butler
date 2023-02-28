@@ -22,11 +22,11 @@ keywords = ["lsst"]
 dependencies = [
     "astropy >=4.0",
     "pyyaml >=5.1",
-    "sqlalchemy >= 1.4",
+    "sqlalchemy >= 1.4,<2.0",
     "click >= 7.0",
-    "lsst-sphgeom",
-    "lsst-utils",
-    "lsst-resources",
+    "lsst-sphgeom >=25.0,<25.100",
+    "lsst-utils >=25.0,<25.100",
+    "lsst-resources >=25.0,>25.100",
     "deprecated >= 1.2",
     "pydantic",
 ]

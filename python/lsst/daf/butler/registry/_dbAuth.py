@@ -191,7 +191,6 @@ class DbAuth:
             raise DbAuthError("Missing database parameter")
 
         for authDict in self.authList:
-
             # Check for mandatory entries
             if "url" not in authDict:
                 raise DbAuthError("Missing URL in DbAuth configuration")

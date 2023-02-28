@@ -37,7 +37,6 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
-
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def setUp(self):
@@ -88,7 +87,6 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
     def assertIngest(self, table, options):
         runner = LogCliRunner()
         with runner.isolated_filesystem():
-
             table_file = os.path.join(self.root2, f"table_{self.id()}.csv")
             table.write(table_file)
 
