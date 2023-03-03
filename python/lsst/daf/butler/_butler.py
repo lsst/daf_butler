@@ -1673,7 +1673,15 @@ class Butler(LimitedButler):
         TypeError
             Raised if no collections were provided.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+        # A resolved ref may be given that is not known to this butler.
+        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
+            ref = self.registry.getDataset(datasetRefOrType.id)
+            if ref is None:
+                raise LookupError(
+                    f"Resolved DatasetRef with id {datasetRefOrType.id} " "is not known to registry."
+                )
+        else:
+            ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return self.datastore.exists(ref)
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
