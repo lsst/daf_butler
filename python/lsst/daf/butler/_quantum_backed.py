@@ -37,7 +37,6 @@ from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from .core import (
     Config,
-    DataId,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -396,23 +395,17 @@ class QuantumBackedButler(LimitedButler):
 
     def get(
         self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        dataId: DataId | None = None,
+        ref: DatasetRef,
+        /,
         *,
         parameters: dict[str, Any] | None = None,
-        collections: Any = None,
         storageClass: StorageClass | str | None = None,
-        **kwargs: Any,
     ) -> Any:
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         try:
             obj = super().get(
                 ref,
-                dataId,
-                collections=collections,
                 parameters=parameters,
                 storageClass=storageClass,
-                **kwargs,
             )
         except (LookupError, FileNotFoundError, IOError):
             self._unavailable_inputs.add(ref.getCheckedId())
@@ -441,15 +434,12 @@ class QuantumBackedButler(LimitedButler):
 
     def getDeferred(
         self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        dataId: DataId | None = None,
+        ref: DatasetRef,
+        /,
         *,
         parameters: dict[str, Any] | None = None,
-        collections: Any = None,
         storageClass: str | StorageClass | None = None,
-        **kwargs: Any,
     ) -> DeferredDatasetHandle:
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         if ref.id in self._predicted_inputs:
             # Unfortunately, we can't do this after the handle succeeds in
             # loading, so it's conceivable here that we're marking an input

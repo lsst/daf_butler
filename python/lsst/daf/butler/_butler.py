@@ -1335,6 +1335,7 @@ class Butler(LimitedButler):
     def getDeferred(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         parameters: Union[dict, None] = None,
@@ -1393,6 +1394,7 @@ class Butler(LimitedButler):
     def get(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         parameters: Optional[Dict[str, Any]] = None,

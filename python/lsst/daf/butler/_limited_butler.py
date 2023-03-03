@@ -32,9 +32,7 @@ from deprecated.sphinx import deprecated
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from .core import (
     AmbiguousDatasetError,
-    DataId,
     DatasetRef,
-    DatasetType,
     Datastore,
     DimensionUniverse,
     StorageClass,
@@ -95,107 +93,29 @@ class LimitedButler(ABC):
         """
         raise NotImplementedError()
 
-    def _findDatasetRef(
-        self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        dataId: DataId | None = None,
-        *,
-        collections: Any = None,
-        allowUnresolved: bool = False,
-        **kwargs: Any,
-    ) -> DatasetRef:
-        """Convert the standard get parameters to a `DatasetRef`
-
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            Either a dataset reference, a dataset type, or the name of
-            a dataset type.
-            For the default implementation of a `LimitedButler`, the only
-            acceptable parameter is a resolved `DatasetRef`.
-        dataId : `dict` or `DataCoordinate`
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument.
-        collections : Any, optional
-            Collections to be searched, overriding ``self.collections``.
-            Can be any of the types supported by the ``collections`` argument
-            to butler construction. Not used in a `LimitedButler`.
-        allowUnresolved : `bool`, optional
-            If `True`, return an unresolved `DatasetRef` if finding a resolved
-            one in the `Registry` fails.  Defaults to `False`.
-            For `LimitedButler` must always be `False`.
-        **kwargs
-            Additional keyword arguments used to augment or construct a
-            `DataCoordinate`.  See `DataCoordinate.standardize`
-            parameters. Not used in a `LimitedButler`.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A resolved `DatasetRef`.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if an unresolved `DatasetRef` is passed as an input.
-        ValueError
-            Raised if an unresolved `DatasetRef` is passed as an input.
-
-        Notes
-        -----
-        Should be subclassed if a Butler needs to do a query using the
-        dataId and collections parameters.
-        """
-        if allowUnresolved:
-            raise ValueError("For LimitedButler allowUnresolved must always be False.")
-        if not isinstance(datasetRefOrType, DatasetRef):
-            raise ValueError("A LimitedButler can only retrieve datasets associated with a DatasetRef.")
-        if datasetRefOrType.id is None:
-            raise AmbiguousDatasetError(
-                f"Dataset of type {datasetRefOrType.datasetType.name} with "
-                f"data ID {datasetRefOrType.dataId} is not resolved."
-            )
-        return datasetRefOrType
-
     def get(
         self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        dataId: DataId | None = None,
+        ref: DatasetRef,
+        /,
         *,
         parameters: dict[str, Any] | None = None,
-        collections: Any = None,
         storageClass: StorageClass | str | None = None,
-        **kwargs: Any,
     ) -> Any:
         """Retrieve a stored dataset.
 
         Parameters
         ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            Either a dataset reference, a dataset type, or the name of
-            a dataset type.
-            For the default implementation of a `LimitedButler`, the only
-            acceptable parameter is a resolved `DatasetRef`.
-        dataId : `dict` or `DataCoordinate`
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument.
+        ref: `DatasetRef`
+            A resolved `DatasetRef` directly associated with a dataset.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
-        collections : Any, optional
-            Collections to be searched, overriding ``self.collections``.
-            Can be any of the types supported by the ``collections`` argument
-            to butler construction. Not used in a `LimitedButler`.
         storageClass : `StorageClass` or `str`, optional
             The storage class to be used to override the Python type
             returned by this method. By default the returned type matches
             the dataset type definition for this dataset. Specifying a
             read `StorageClass` can force a different type to be returned.
             This type must be compatible with the original type.
-        **kwargs
-            Additional keyword arguments used to augment or construct a
-            `DataCoordinate`.  See `DataCoordinate.standardize`
-            parameters. Not used in a `LimitedButler`.
 
         Returns
         -------
@@ -204,18 +124,17 @@ class LimitedButler(ABC):
 
         Raises
         ------
-        LookupError
-            Raised if no matching dataset exists in the `Registry`.
-        TypeError
-            Raised if no collections were provided.
+        AmbiguousDatasetError
+            Raised if the supplied `DatasetRef` is unresolved.
 
         Notes
         -----
         In a `LimitedButler` the only allowable way to specify a dataset is
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
-        log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+        log.debug("Butler get: %s, parameters=%s, storageClass: %s", ref, parameters, storageClass)
+        if ref.id is None:
+            raise AmbiguousDatasetError(f"Dataset {ref} is not resolved.")
         return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     @deprecated(
@@ -307,45 +226,29 @@ class LimitedButler(ABC):
 
     def getDeferred(
         self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        dataId: DataId | None = None,
+        ref: DatasetRef,
+        /,
         *,
         parameters: dict[str, Any] | None = None,
-        collections: Any = None,
         storageClass: str | StorageClass | None = None,
-        **kwargs: Any,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
         after an immediate registry lookup.
 
         Parameters
         ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            Either a dataset reference, a dataset type, or the name of
-            a dataset type.
+        ref : `DatasetRef`
             For the default implementation of a `LimitedButler`, the only
             acceptable parameter is a resolved `DatasetRef`.
-        dataId : `dict` or `DataCoordinate`, optional
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument. Not used in a
-            `LimitedButler`.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
-        collections : Any, optional
-            Collections to be searched, overriding ``self.collections``.
-            Can be any of the types supported by the ``collections`` argument
-            to butler construction. Not used in a `LimitedButler`.
         storageClass : `StorageClass` or `str`, optional
             The storage class to be used to override the Python type
             returned by this method. By default the returned type matches
             the dataset type definition for this dataset. Specifying a
             read `StorageClass` can force a different type to be returned.
             This type must be compatible with the original type.
-        **kwargs
-            Additional keyword arguments used to augment or construct a
-            `DataId`.  See `DataId` parameters. Not used in a `LimitedButler`.
 
         Returns
         -------
@@ -356,15 +259,14 @@ class LimitedButler(ABC):
         ------
         AmbiguousDatasetError
             Raised if an unresolved `DatasetRef` is passed as an input.
-        ValueError
-            Raised if an unresolved `DatasetRef` is passed as an input.
 
         Notes
         -----
         In a `LimitedButler` the only allowable way to specify a dataset is
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+        if ref.id is None:
+            raise AmbiguousDatasetError(f"Dataset {ref} is not resolved.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def datasetExistsDirect(self, ref: DatasetRef) -> bool:
