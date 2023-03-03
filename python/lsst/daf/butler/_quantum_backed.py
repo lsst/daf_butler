@@ -29,6 +29,7 @@ import uuid
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Type, Union
 
+from deprecated.sphinx import deprecated
 from pydantic import BaseModel
 
 from ._butlerConfig import ButlerConfig
@@ -36,6 +37,7 @@ from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from .core import (
     Config,
+    DataId,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -376,6 +378,12 @@ class QuantumBackedButler(LimitedButler):
         # Docstring inherited.
         return True
 
+    @deprecated(
+        reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
+        " Please use Butler.get(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def getDirect(
         self,
         ref: DatasetRef,
@@ -384,8 +392,28 @@ class QuantumBackedButler(LimitedButler):
         storageClass: str | StorageClass | None = None,
     ) -> Any:
         # Docstring inherited.
+        return self.get(ref, parameters=parameters, storageClass=storageClass)
+
+    def get(
+        self,
+        datasetRefOrType: DatasetRef | DatasetType | str,
+        dataId: DataId | None = None,
+        *,
+        parameters: dict[str, Any] | None = None,
+        collections: Any = None,
+        storageClass: StorageClass | str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         try:
-            obj = super().getDirect(ref, parameters=parameters, storageClass=storageClass)
+            obj = super().get(
+                ref,
+                dataId,
+                collections=collections,
+                parameters=parameters,
+                storageClass=storageClass,
+                **kwargs,
+            )
         except (LookupError, FileNotFoundError, IOError):
             self._unavailable_inputs.add(ref.getCheckedId())
             raise
@@ -395,6 +423,12 @@ class QuantumBackedButler(LimitedButler):
             self._available_inputs.add(ref.id)
         return obj
 
+    @deprecated(
+        reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
+        "Please use Butler.getDeferred(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def getDirectDeferred(
         self,
         ref: DatasetRef,
@@ -403,12 +437,25 @@ class QuantumBackedButler(LimitedButler):
         storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         # Docstring inherited.
+        return self.getDeferred(ref, parameters=parameters, storageClass=storageClass)
+
+    def getDeferred(
+        self,
+        datasetRefOrType: DatasetRef | DatasetType | str,
+        dataId: DataId | None = None,
+        *,
+        parameters: dict[str, Any] | None = None,
+        collections: Any = None,
+        storageClass: str | StorageClass | None = None,
+        **kwargs: Any,
+    ) -> DeferredDatasetHandle:
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         if ref.id in self._predicted_inputs:
             # Unfortunately, we can't do this after the handle succeeds in
             # loading, so it's conceivable here that we're marking an input
             # as "actual" even when it's not even available.
             self._actual_inputs.add(ref.id)
-        return super().getDirectDeferred(ref, parameters=parameters, storageClass=storageClass)
+        return super().getDeferred(ref, parameters=parameters, storageClass=storageClass)
 
     def datasetExistsDirect(self, ref: DatasetRef) -> bool:
         # Docstring inherited.

@@ -58,6 +58,7 @@ from typing import (
     Union,
 )
 
+from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_class_of
@@ -1072,6 +1073,8 @@ class Butler(LimitedButler):
         -------
         ref : `DatasetRef`
             A reference to the dataset identified by the given arguments.
+            This can be the same dataset reference as given if it was
+            resolved.
 
         Raises
         ------
@@ -1087,6 +1090,9 @@ class Butler(LimitedButler):
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, for_put=False, **kwargs)
         if isinstance(datasetRefOrType, DatasetRef):
             idNumber = datasetRefOrType.id
+            # This is a resolved ref, return it immediately.
+            if idNumber:
+                return datasetRefOrType
         else:
             idNumber = None
         timespan: Optional[Timespan] = None
@@ -1244,6 +1250,12 @@ class Butler(LimitedButler):
 
         return ref
 
+    @deprecated(
+        reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
+        " Please use Butler.get(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def getDirect(
         self,
         ref: DatasetRef,
@@ -1252,10 +1264,6 @@ class Butler(LimitedButler):
         storageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Any:
         """Retrieve a stored dataset.
-
-        Unlike `Butler.get`, this method allows datasets outside the Butler's
-        collection to be read as long as the `DatasetRef` that identifies them
-        can be obtained separately.
 
         Parameters
         ----------
@@ -1278,6 +1286,12 @@ class Butler(LimitedButler):
         """
         return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
+    @deprecated(
+        reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
+        "Please use Butler.getDeferred(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def getDirectDeferred(
         self,
         ref: DatasetRef,
@@ -1393,6 +1407,8 @@ class Butler(LimitedButler):
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
+            If a resolved `DatasetRef`, the associated dataset
+            is returned directly without additional querying.
         dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
@@ -1422,9 +1438,6 @@ class Butler(LimitedButler):
 
         Raises
         ------
-        ValueError
-            Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry.
         LookupError
             Raised if no matching dataset exists in the `Registry`.
         TypeError
@@ -1442,7 +1455,7 @@ class Butler(LimitedButler):
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self.getDirect(ref, parameters=parameters, storageClass=storageClass)
+        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getURIs(
         self,
