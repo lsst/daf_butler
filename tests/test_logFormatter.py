@@ -64,7 +64,7 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         log.warning("A WARNING message")
 
         ref = self.butler.put(handler.records, self.datasetType)
-        records = self.butler.getDirect(ref)
+        records = self.butler.get(ref)
 
         self.assertEqual(records, handler.records)
         self.assertEqual(len(records), 2)
