@@ -149,6 +149,99 @@ class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertIn("No results", result.output)
 
+    def testRemoveDatasetTypes(self):
+        self.maxDiff = None
+        datasetName = "test"
+        instrumentDimension = "instrument"
+        visitDimension = "visit"
+        storageClassName = "StructuredDataDict"
+        runner = LogCliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["create", "here"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            for name in (
+                datasetName,
+                "testA",
+                "testB",
+                "testC",
+                "testD",
+                "other",
+                "another",
+                "option",
+                "option2",
+                "placeholder",
+            ):
+                # Create the dataset type.
+                result = runner.invoke(
+                    cli,
+                    [
+                        "register-dataset-type",
+                        "here",
+                        name,
+                        storageClassName,
+                        instrumentDimension,
+                        visitDimension,
+                    ],
+                )
+
+            # Check wildcard / literal combination.
+            result = runner.invoke(cli, ["remove-dataset-type", "here", "*other", "testA"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertDatasetTypes(
+                runner,
+                "*",
+                (
+                    "option",
+                    "option2",
+                    "placeholder",
+                    "test",
+                    "testB",
+                    "testC",
+                    "testD",
+                ),
+            )
+
+            # Check literal / literal combination.
+            result = runner.invoke(cli, ["remove-dataset-type", "here", "option", "testB"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertDatasetTypes(
+                runner,
+                "*",
+                (
+                    "option2",
+                    "placeholder",
+                    "test",
+                    "testC",
+                    "testD",
+                ),
+            )
+
+            # Check wildcard.
+            result = runner.invoke(cli, ["remove-dataset-type", "here", "test*"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertDatasetTypes(
+                runner,
+                "*",
+                (
+                    "option2",
+                    "placeholder",
+                ),
+            )
+
+            # Check literal.
+            result = runner.invoke(cli, ["remove-dataset-type", "here", "option2"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertDatasetTypes(runner, "*", ("placeholder",))
+
+    def assertDatasetTypes(self, runner: LogCliRunner, query: str, expected: tuple[str, ...]) -> None:
+        result = runner.invoke(cli, ["query-dataset-types", "here", query])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        expected = AstropyTable(
+            (expected,),
+            names=("name",),
+        )
+        self.assertAstropyTablesEqual(readTable(result.output), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

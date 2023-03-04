@@ -79,6 +79,7 @@ from lsst.daf.butler.registry import (
     ConflictingDefinitionError,
     DataIdValueError,
     MissingCollectionError,
+    OrphanedRecordError,
 )
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
@@ -1266,6 +1267,10 @@ class FileDatastoreButlerTests(ButlerTests):
         ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
         uri1 = butler.getURI(ref1, collections=[run1])
         uri2 = butler.getURI(ref2, collections=[run2])
+
+        with self.assertRaises(OrphanedRecordError):
+            butler.registry.removeDatasetType(datasetType.name)
+
         # Remove from both runs with different values for unstore.
         butler.removeRuns([run1], unstore=True)
         butler.removeRuns([run2], unstore=False)
@@ -1281,6 +1286,14 @@ class FileDatastoreButlerTests(ButlerTests):
         # one we forgot should still be around.
         self.assertFalse(uri1.exists())
         self.assertTrue(uri2.exists())
+
+        # Now that the collections have been pruned we can remove the
+        # dataset type
+        butler.registry.removeDatasetType(datasetType.name)
+
+        with self.assertLogs("lsst.daf.butler.registries", "INFO") as cm:
+            butler.registry.removeDatasetType(tuple(["test*", "test*"]))
+        self.assertIn("not defined", "\n".join(cm.output))
 
 
 class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
