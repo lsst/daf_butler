@@ -60,8 +60,46 @@ class LimitedButler(ABC):
         """Return `True` if this `Butler` supports write operations."""
         raise NotImplementedError()
 
+    @deprecated(
+        reason="Butler.put() now behaves like Butler.putDirect() when given a DatasetRef."
+        " Please use Butler.put(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
+    def putDirect(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
+        """Store a dataset that already has a UUID and ``RUN`` collection.
+
+        Parameters
+        ----------
+        obj : `object`
+            The dataset.
+        ref : `DatasetRef`
+            Resolved reference for a not-yet-stored dataset.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            The same as the given, for convenience and symmetry with
+            `Butler.put`.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler is read-only.
+        AmbiguousDatasetError
+            Raised if ``ref.id is None``, i.e. the reference is unresolved.
+
+        Notes
+        -----
+        Whether this method inserts the given dataset into a ``Registry`` is
+        implementation defined (some `LimitedButler` subclasses do not have a
+        `Registry`), but it always adds the dataset to a `Datastore`, and the
+        given ``ref.id`` and ``ref.run`` are always preserved.
+        """
+        return self.put(obj, ref)
+
     @abstractmethod
-    def putDirect(self, obj: Any, ref: DatasetRef) -> DatasetRef:
+    def put(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
         """Store a dataset that already has a UUID and ``RUN`` collection.
 
         Parameters

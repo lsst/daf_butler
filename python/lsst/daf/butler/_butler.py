@@ -1149,22 +1149,24 @@ class Butler(LimitedButler):
         return ref
 
     @transactional
-    def putDirect(self, obj: Any, ref: DatasetRef) -> DatasetRef:
+    @deprecated(
+        reason="Butler.put() now behaves like Butler.putDirect() when given a DatasetRef."
+        " Please use Butler.put(). Be aware that you may need to adjust your usage if you"
+        " were relying on the run parameter to determine the run."
+        " Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
+    def putDirect(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
         # Docstring inherited.
-        (imported_ref,) = self.registry._importDatasets(
-            [ref],
-            expand=True,
-        )
-        if imported_ref.id != ref.getCheckedId():
-            raise RuntimeError("This registry configuration does not support putDirect.")
-        self.datastore.put(obj, ref)
-        return ref
+        return self.put(obj, ref)
 
     @transactional
     def put(
         self,
         obj: Any,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         run: Optional[str] = None,
@@ -1178,18 +1180,19 @@ class Butler(LimitedButler):
             The dataset.
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` is provided, ``dataId`` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
+            Otherwise the `DatasetType` or name thereof. If a fully resolved
+            `DatasetRef` is given the run and ID are used directly.
         dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the second argument.
         run : `str`, optional
             The name of the run the dataset should be added to, overriding
-            ``self.run``.
+            ``self.run``. Not used if a resolved `DatasetRef` is provided.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
-            parameters.
+            parameters. Not used if a resolve `DatasetRef` is provided.
 
         Returns
         -------
@@ -1202,6 +1205,18 @@ class Butler(LimitedButler):
         TypeError
             Raised if the butler is read-only or if no run has been provided.
         """
+        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
+            # This is a direct put of predefined DatasetRef.
+            log.debug("Butler put direct: %s", datasetRefOrType)
+            (imported_ref,) = self.registry._importDatasets(
+                [datasetRefOrType],
+                expand=True,
+            )
+            if imported_ref.id != datasetRefOrType.getCheckedId():
+                raise RuntimeError("This registry configuration does not support direct put of ref.")
+            self.datastore.put(obj, datasetRefOrType)
+            return datasetRefOrType
+
         log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
@@ -1462,6 +1477,7 @@ class Butler(LimitedButler):
     def getURIs(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         predict: bool = False,
@@ -1518,6 +1534,7 @@ class Butler(LimitedButler):
     def getURI(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         predict: bool = False,

@@ -466,7 +466,7 @@ class QuantumBackedButler(LimitedButler):
         # Docstring inherited.
         return self._dimensions
 
-    def putDirect(self, obj: Any, ref: DatasetRef) -> DatasetRef:
+    def put(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
         # Docstring inherited.
         if ref.id not in self._predicted_outputs:
             raise RuntimeError("Cannot `put` dataset that was not predicted as an output.")
