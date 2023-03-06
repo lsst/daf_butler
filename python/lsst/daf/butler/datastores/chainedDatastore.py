@@ -924,7 +924,7 @@ class ChainedDatastore(Datastore):
         # pass a StorageClass, but the constraint dispatches on DatasetType).
         # So we pessimistically check if any datastore would need an expanded
         # data ID for this transfer mode.
-        return any(datastore.needs_expanded_data_ids(transfer) for datastore in self.datastores)
+        return any(datastore.needs_expanded_data_ids(transfer, entity) for datastore in self.datastores)
 
     def import_records(self, data: Mapping[str, DatastoreRecordData]) -> None:
         # Docstring inherited from the base class.
