@@ -481,7 +481,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
 
 @deprecated(
-    "Integer dataset IDs are deprecated in favor of UUIDs; support will be removed after v26. "
+    "Integer dataset IDs are deprecated in favor of UUIDs; support will be removed after v25. "
     "Please migrate or re-create this data repository.",
     version="v25.0",
     category=FutureWarning,
