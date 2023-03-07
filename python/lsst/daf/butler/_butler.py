@@ -2260,9 +2260,11 @@ class Butler(LimitedButler):
             )
             source_refs = [ref for ref, exists in dataset_existence.items() if exists]
             filtered_count = len(source_refs)
+            n_missing = original_count - filtered_count
             log.verbose(
-                "%d datasets removed because the artifact does not exist. Now have %d.",
-                original_count - filtered_count,
+                "%d dataset%s removed because the artifact does not exist. Now have %d.",
+                n_missing,
+                "" if n_missing == 1 else "s",
                 filtered_count,
             )
 
