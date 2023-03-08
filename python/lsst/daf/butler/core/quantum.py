@@ -77,7 +77,7 @@ def _reconstructDatasetRef(
 class SerializedQuantum(BaseModel):
     """Simplified model of a `Quantum` suitable for serialization."""
 
-    taskName: str
+    taskName: str | None
     dataId: Optional[SerializedDataCoordinate]
     datasetTypeMapping: Mapping[str, SerializedDatasetType]
     initInputs: Mapping[str, Tuple[SerializedDatasetRef, List[int]]]
@@ -90,7 +90,7 @@ class SerializedQuantum(BaseModel):
     def direct(
         cls,
         *,
-        taskName: str,
+        taskName: str | None,
         dataId: Optional[Dict],
         datasetTypeMapping: Mapping[str, Dict],
         initInputs: Mapping[str, Tuple[Dict, List[int]]],
@@ -629,5 +629,5 @@ class DimensionRecordsAccumulator:
             self.mapping[record] = mappingValue
         return mappingValue[0]
 
-    def makeSerializedDimensionRecordMapping(self) -> Mapping[int, SerializedDimensionRecord]:
+    def makeSerializedDimensionRecordMapping(self) -> dict[int, SerializedDimensionRecord]:
         return {id_: serializeRef for id_, serializeRef in self.mapping.values()}
