@@ -100,7 +100,7 @@ def _construct_cache_path(root: ResourcePath, ref: DatasetRef, extension: str) -
     return root.join(f"{ref.id}{component}{extension}")
 
 
-def _parse_cache_name(cached_location: str) -> Dict[str, Optional[str]]:
+def _parse_cache_name(cached_location: str) -> Dict[str, str | uuid.UUID | None]:
     """For a given cache name, return its component parts.
 
     Changes to ``_construct_cache_path()`` should be reflected here.
@@ -124,7 +124,7 @@ def _parse_cache_name(cached_location: str) -> Dict[str, Optional[str]]:
     ext = "." + root_ext.pop(0) if root_ext else None
 
     parts = root.split("_")
-    id_ = parts.pop(0)
+    id_ = uuid.UUID(parts.pop(0))
     component = parts.pop(0) if parts else None
     return {"id": id_, "component": component, "extension": ext}
 
@@ -237,7 +237,12 @@ class CacheRegistry(BaseModel):
 
     # An private marker to indicate that pop() should raise if no default
     # is given.
-    __marker = _MarkerEntry(name="marker", size=0, ref=0, ctime=datetime.datetime.utcfromtimestamp(0))
+    __marker = _MarkerEntry(
+        name="marker",
+        size=0,
+        ref=uuid.UUID("{00000000-0000-0000-0000-000000000000}"),
+        ctime=datetime.datetime.utcfromtimestamp(0),
+    )
 
     def pop(self, key: str, default: Optional[CacheEntry] = __marker) -> Optional[CacheEntry]:
         # The marker for dict.pop is not the same as our marker.
