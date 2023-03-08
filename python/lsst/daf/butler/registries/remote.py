@@ -63,14 +63,7 @@ from ..core.serverModels import (
     QueryDatasetsModel,
     QueryDimensionRecordsModel,
 )
-from ..registry import (
-    CollectionSearch,
-    CollectionSummary,
-    CollectionType,
-    Registry,
-    RegistryConfig,
-    RegistryDefaults,
-)
+from ..registry import CollectionSummary, CollectionType, Registry, RegistryConfig, RegistryDefaults
 from ..registry.interfaces import DatasetIdFactory, DatasetIdGenEnum
 
 if TYPE_CHECKING:
@@ -269,13 +262,13 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def getCollectionChain(self, parent: str) -> CollectionSearch:
+    def getCollectionChain(self, parent: str) -> tuple[str, ...]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         path = f"registry/collection/chain/{parent}"
         response = self._client.get(self._get_url(path))
         response.raise_for_status()
         chain = response.json()
-        return CollectionSearch.parse_obj(chain)
+        return tuple(chain)
 
     def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
