@@ -28,6 +28,7 @@ import tempfile
 import time
 import unittest
 import unittest.mock
+import uuid
 from collections import UserDict
 from dataclasses import dataclass
 
@@ -325,7 +326,7 @@ class DatastoreTests(DatastoreTestsBase):
                 datastore.put(metrics, ref)
 
         # These should raise
-        ref = self.makeDatasetRef("metrics", dimensions, storageClass, dataId, id=10000)
+        ref = self.makeDatasetRef("metrics", dimensions, storageClass, dataId, id=uuid.uuid4())
         with self.assertRaises(FileNotFoundError):
             # non-existing file
             datastore.get(ref)

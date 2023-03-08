@@ -30,6 +30,7 @@ __all__ = (
 )
 
 import os
+import uuid
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -50,9 +51,6 @@ if TYPE_CHECKING:
 
 class DatasetTestHelper:
     """Helper methods for Datasets"""
-
-    id: int = 0
-    """Instance self.id should be reset in setUp."""
 
     def makeDatasetRef(
         self,
@@ -92,8 +90,7 @@ class DatasetTestHelper:
         )
 
         if id is None:
-            self.id += 1
-            id = self.id
+            id = uuid.uuid4()
         if run is None:
             run = "dummy"
         return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)
@@ -103,7 +100,7 @@ class DatastoreTestHelper:
     """Helper methods for Datastore tests"""
 
     root: str
-    id: int
+    id: DatasetId
     config: Config
     datastoreType: type[Datastore]
     configFile: str
@@ -114,7 +111,7 @@ class DatastoreTestHelper:
 
         # Need to keep ID for each datasetRef since we have no butler
         # for these tests
-        self.id = 1
+        self.id = uuid.uuid4()
 
         self.config = configClass(self.configFile)
 
