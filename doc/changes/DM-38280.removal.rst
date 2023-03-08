@@ -1,0 +1,2 @@
+Support for integer dataset IDs in registry has now been removed.
+All dataset IDs must now be `uuid.UUID`.

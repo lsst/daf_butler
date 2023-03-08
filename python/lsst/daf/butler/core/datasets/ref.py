@@ -56,7 +56,7 @@ class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
     # DO NOT change order in the Union, pydantic is sensitive to that!
-    id: Optional[Union[uuid.UUID, PositiveInt]] = None
+    id: uuid.UUID | None = None
     datasetType: Optional[SerializedDatasetType] = None
     dataId: Optional[SerializedDataCoordinate] = None
     run: Optional[StrictStr] = None
@@ -114,9 +114,8 @@ class SerializedDatasetRef(BaseModel):
         return node
 
 
-DatasetId = Union[int, uuid.UUID]
-"""A type-annotation alias for dataset ID which could be either integer or
-UUID.
+DatasetId = uuid.UUID
+"""A type-annotation alias for dataset ID providing typing flexibility.
 """
 
 

@@ -22,6 +22,7 @@
 import copy
 import pickle
 import unittest
+import uuid
 
 from lsst.daf.butler import (
     DataCoordinate,
@@ -536,13 +537,14 @@ class DatasetRefTestCase(unittest.TestCase):
             DatasetRef(self.datasetType, {"instrument": "DummyCam"})
         # Constructing a resolved ref should preserve run as well as everything
         # else.
-        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=run)
+        id_ = uuid.uuid4()
+        ref = DatasetRef(self.datasetType, self.dataId, id=id_, run=run)
         self.assertEqual(ref.datasetType, self.datasetType)
         self.assertEqual(
             ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe), msg=ref.dataId
         )
         self.assertIsInstance(ref.dataId, DataCoordinate)
-        self.assertEqual(ref.id, 1)
+        self.assertEqual(ref.id, id_)
         self.assertEqual(ref.run, run)
 
     def testSorting(self):
@@ -559,11 +561,11 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(sort, [ref1, ref2, ref3], msg=f"Got order: {[r.dataId for r in sort]}")
 
         # Now include a run
-        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b", id=2)
+        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b", id=uuid.uuid4())
         self.assertEqual(ref1.run, "b")
-        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b", id=2)
-        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=4), run="a", id=1)
-        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=104), run="c", id=3)
+        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b", id=uuid.uuid4())
+        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=4), run="a", id=uuid.uuid4())
+        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=104), run="c", id=uuid.uuid4())
 
         # This will sort them on run before visit
         sort = sorted([ref3, ref1, ref2, ref4])
@@ -574,7 +576,8 @@ class DatasetRefTestCase(unittest.TestCase):
             sort = sorted(["z", ref1, "c"])
 
     def testResolving(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
+        id_ = uuid.uuid4()
+        ref = DatasetRef(self.datasetType, self.dataId, id=id_, run="somerun")
         unresolvedRef = ref.unresolved()
         self.assertIsNotNone(ref.id)
         self.assertIsNone(unresolvedRef.id)
@@ -583,7 +586,7 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref.unresolved(), unresolvedRef)
         self.assertEqual(ref.datasetType, unresolvedRef.datasetType)
         self.assertEqual(ref.dataId, unresolvedRef.dataId)
-        reresolvedRef = unresolvedRef.resolved(id=1, run="somerun")
+        reresolvedRef = unresolvedRef.resolved(id=id_, run="somerun")
         self.assertEqual(ref, reresolvedRef)
         self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
         self.assertIsNotNone(reresolvedRef.run)
@@ -591,7 +594,7 @@ class DatasetRefTestCase(unittest.TestCase):
     def testOverrideStorageClass(self):
         storageA = StorageClass("test_a", pytype=list)
 
-        ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
 
         ref_new = ref.overrideStorageClass(storageA)
         self.assertNotEqual(ref, ref_new)
@@ -605,12 +608,12 @@ class DatasetRefTestCase(unittest.TestCase):
             ref_new.overrideStorageClass(incompatible_sc)
 
     def testPickle(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
         s = pickle.dumps(ref)
         self.assertEqual(pickle.loads(s), ref)
 
     def testJson(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
         s = ref.to_json()
         self.assertEqual(DatasetRef.from_json(s, universe=self.universe), ref)
 
