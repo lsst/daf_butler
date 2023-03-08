@@ -38,6 +38,7 @@ import contextlib
 import logging
 import numbers
 import os
+import uuid
 from collections import defaultdict
 from typing import (
     Any,
@@ -1496,7 +1497,7 @@ class Butler(LimitedButler):
                     raise TypeError("Cannot predict location with run=None.")
             # Lie about ID, because we can't guess it, and only
             # Datastore.getURIs() will ever see it (and it doesn't use it).
-            ref = ref.resolved(id=0, run=run)
+            ref = ref.resolved(id=uuid.UUID("{00000000-0000-0000-0000-000000000000}"), run=run)
         return self.datastore.getURIs(ref, predict)
 
     def getURI(
