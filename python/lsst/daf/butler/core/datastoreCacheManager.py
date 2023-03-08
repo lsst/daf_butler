@@ -100,7 +100,7 @@ def _construct_cache_path(root: ResourcePath, ref: DatasetRef, extension: str) -
     return root.join(f"{ref.id}{component}{extension}")
 
 
-def _parse_cache_name(cached_location: str) -> Dict[str, str | uuid.UUID | None]:
+def _parse_cache_name(cached_location: str) -> tuple[uuid.UUID, str | None, str | None]:
     """For a given cache name, return its component parts.
 
     Changes to ``_construct_cache_path()`` should be reflected here.
@@ -112,11 +112,12 @@ def _parse_cache_name(cached_location: str) -> Dict[str, str | uuid.UUID | None]
 
     Returns
     -------
-    parsed : `dict` of `str`, `str`
-        Parsed components of the file. These include:
-        - "id": The dataset ID,
-        - "component": The name of the component (can be `None`),
-        - "extension": File extension (can be `None`).
+    id : `uuid.UUID`
+        The dataset ID.
+    component : `str` or `None`
+        The name of the component, if present.
+    extension: `str` or `None`
+        The file extension, if present.
     """
     # Assume first dot is the extension and so allow .fits.gz
     root_ext = cached_location.split(".", maxsplit=1)
@@ -126,7 +127,7 @@ def _parse_cache_name(cached_location: str) -> Dict[str, str | uuid.UUID | None]
     parts = root.split("_")
     id_ = uuid.UUID(parts.pop(0))
     component = parts.pop(0) if parts else None
-    return {"id": id_, "component": component, "extension": ext}
+    return id_, component, ext
 
 
 class CacheEntry(BaseModel):
@@ -161,14 +162,14 @@ class CacheEntry(BaseModel):
         file_in_cache = file.relative_to(root)
         if file_in_cache is None:
             raise ValueError(f"Supplied file {file} is not inside root {root}")
-        parts = _parse_cache_name(file_in_cache)
+        id_, component, _ = _parse_cache_name(file_in_cache)
 
         stat = os.stat(file.ospath)
         return cls(
             name=file_in_cache,
             size=stat.st_size,
-            ref=parts["id"],
-            component=parts["component"],
+            ref=id_,
+            component=component,
             ctime=datetime.datetime.utcfromtimestamp(stat.st_ctime),
         )
 
