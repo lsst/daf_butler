@@ -101,7 +101,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         self._static = static
         self._summaries = summaries
         self._byName: dict[str, ByDimensionsDatasetRecordStorage] = {}
-        self._byId: dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
+        self._byId: dict[int, ByDimensionsDatasetRecordStorage] = {}
 
     @classmethod
     def initialize(
@@ -176,7 +176,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         byName: dict[str, ByDimensionsDatasetRecordStorage] = {}
-        byId: dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
+        byId: dict[int, ByDimensionsDatasetRecordStorage] = {}
         c = self._static.dataset_type.columns
         with self._db.query(self._static.dataset_type.select()) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
