@@ -1,6 +1,9 @@
 Butler v25.0.0 2023-02-27
 =========================
 
+This is the last release that can access data repositories using integer dataset IDs.
+Please either recreate these repositories or convert them to use UUIDs using `the butler migrate tooling <https://github.com/lsst-dm/daf_butler_migrate>`_.
+
 New Features
 ------------
 
