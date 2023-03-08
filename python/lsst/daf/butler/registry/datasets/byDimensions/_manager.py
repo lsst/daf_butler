@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-__all__ = (
-    "ByDimensionsDatasetRecordStorageManager",
-    "ByDimensionsDatasetRecordStorageManagerUUID",
-)
+__all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 
 import logging
 import warnings
@@ -11,7 +8,6 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
-from deprecated.sphinx import deprecated
 from lsst.utils.ellipsis import Ellipsis
 
 from ....core import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
@@ -19,11 +15,7 @@ from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, DatasetTypeError, OrphanedRecordError
 from ...interfaces import DatasetIdGenEnum, DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple
 from ...wildcards import DatasetTypeWildcard
-from ._storage import (
-    ByDimensionsDatasetRecordStorage,
-    ByDimensionsDatasetRecordStorageInt,
-    ByDimensionsDatasetRecordStorageUUID,
-)
+from ._storage import ByDimensionsDatasetRecordStorage, ByDimensionsDatasetRecordStorageUUID
 from .summaries import CollectionSummaryManager
 from .tables import (
     addDatasetForeignKey,
@@ -478,29 +470,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     _idColumnType: type
     """Type of dataset column used to store dataset ID."""
-
-
-@deprecated(
-    "Integer dataset IDs are deprecated in favor of UUIDs; support will be removed after v25. "
-    "Please migrate or re-create this data repository.",
-    version="v25.0",
-    category=FutureWarning,
-)
-class ByDimensionsDatasetRecordStorageManager(ByDimensionsDatasetRecordStorageManagerBase):
-    """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
-    auto-incremental integer for dataset primary key.
-    """
-
-    _version: VersionTuple = _VERSION_INT
-    _recordStorageType: type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageInt
-    _autoincrement: bool = True
-    _idColumnType: type = sqlalchemy.BigInteger
-
-    @classmethod
-    def supportsIdGenerationMode(cls, mode: DatasetIdGenEnum) -> bool:
-        # Docstring inherited from DatasetRecordStorageManager.
-        # MyPy seems confused about enum value types here.
-        return mode is mode.UNIQUE  # type: ignore
 
 
 class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStorageManagerBase):

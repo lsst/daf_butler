@@ -29,7 +29,6 @@ from collections.abc import Iterable, Iterator, Sequence, Set
 from typing import TYPE_CHECKING
 
 import sqlalchemy
-from deprecated.sphinx import deprecated
 from lsst.daf.relation import Relation, sql
 
 from ....core import (
@@ -45,7 +44,7 @@ from ....core import (
 )
 from ..._collection_summary import CollectionSummary
 from ..._collectionType import CollectionType
-from ..._exceptions import CollectionTypeError, ConflictingDefinitionError, UnsupportedIdGeneratorError
+from ..._exceptions import CollectionTypeError, ConflictingDefinitionError
 from ...interfaces import DatasetIdFactory, DatasetIdGenEnum, DatasetRecordStorage
 from ...queries import SqlQueryContext
 from .tables import makeTagTableSpec
@@ -58,7 +57,7 @@ if TYPE_CHECKING:
 
 class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     """Dataset record storage implementation paired with
-    `ByDimensionsDatasetRecordStorageManager`; see that class for more
+    `ByDimensionsDatasetRecordStorageManagerUUID`; see that class for more
     information.
 
     Instances of this class should never be constructed directly; use
@@ -547,119 +546,6 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},
             graph=self.datasetType.dimensions,
         )
-
-
-@deprecated(
-    "Integer dataset IDs are deprecated in favor of UUIDs; support will be removed after v25. "
-    "Please migrate or re-create this data repository.",
-    version="v25.0",
-    category=FutureWarning,
-)
-class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
-    """Implementation of ByDimensionsDatasetRecordStorage which uses integer
-    auto-incremented column for dataset IDs.
-    """
-
-    def insert(
-        self,
-        run: RunRecord,
-        dataIds: Iterable[DataCoordinate],
-        idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-    ) -> Iterator[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorage.
-
-        # We only support UNIQUE mode for integer dataset IDs
-        if idMode != DatasetIdGenEnum.UNIQUE:
-            raise UnsupportedIdGeneratorError("Only UNIQUE mode can be used with integer dataset IDs.")
-
-        # Transform a possibly-single-pass iterable into a list.
-        dataIdList = list(dataIds)
-        yield from self._insert(run, dataIdList)
-
-    def import_(
-        self,
-        run: RunRecord,
-        datasets: Iterable[DatasetRef],
-        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-        reuseIds: bool = False,
-    ) -> Iterator[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorage.
-
-        # We only support UNIQUE mode for integer dataset IDs
-        if idGenerationMode != DatasetIdGenEnum.UNIQUE:
-            raise UnsupportedIdGeneratorError("Only UNIQUE mode can be used with integer dataset IDs.")
-
-        # Make a list of dataIds and optionally dataset IDs.
-        dataIdList: list[DataCoordinate] = []
-        datasetIdList: list[int] = []
-        for dataset in datasets:
-            dataIdList.append(dataset.dataId)
-
-            # We only accept integer dataset IDs, but also allow None.
-            datasetId = dataset.id
-            if datasetId is None:
-                # if reuseIds is set then all IDs must be known
-                if reuseIds:
-                    raise TypeError("All dataset IDs must be known if `reuseIds` is set")
-            elif isinstance(datasetId, int):
-                if reuseIds:
-                    datasetIdList.append(datasetId)
-            else:
-                raise TypeError(f"Unsupported type of dataset ID: {type(datasetId)}")
-
-        yield from self._insert(run, dataIdList, datasetIdList)
-
-    def _insert(
-        self, run: RunRecord, dataIdList: list[DataCoordinate], datasetIdList: list[int] | None = None
-    ) -> Iterator[DatasetRef]:
-        """Common part of implementation of `insert` and `import_` methods."""
-
-        # Remember any governor dimension values we see.
-        summary = CollectionSummary()
-        summary.add_data_ids(self.datasetType, dataIdList)
-
-        staticRow = {
-            "dataset_type_id": self._dataset_type_id,
-            self._runKeyColumn: run.key,
-        }
-        with self._db.transaction():
-            # Insert into the static dataset table, generating autoincrement
-            # dataset_id values.
-            if datasetIdList:
-                # reuse existing IDs
-                rows = [dict(staticRow, id=datasetId) for datasetId in datasetIdList]
-                self._db.insert(self._static.dataset, *rows)
-            else:
-                # use auto-incremented IDs
-                datasetIdList = self._db.insert(
-                    self._static.dataset, *([staticRow] * len(dataIdList)), returnIds=True
-                )
-                assert datasetIdList is not None
-            # Update the summary tables for this collection in case this is the
-            # first time this dataset type or these governor values will be
-            # inserted there.
-            self._summaries.update(run, [self._dataset_type_id], summary)
-            # Combine the generated dataset_id values and data ID fields to
-            # form rows to be inserted into the tags table.
-            protoTagsRow = {
-                "dataset_type_id": self._dataset_type_id,
-                self._collections.getCollectionForeignKeyName(): run.key,
-            }
-            tagsRows = [
-                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
-                for dataId, dataset_id in zip(dataIdList, datasetIdList)
-            ]
-            # Insert those rows into the tags table.  This is where we'll
-            # get any unique constraint violations.
-            self._db.insert(self._tags, *tagsRows)
-
-        for dataId, datasetId in zip(dataIdList, datasetIdList):
-            yield DatasetRef(
-                datasetType=self.datasetType,
-                dataId=dataId,
-                id=datasetId,
-                run=run.name,
-            )
 
 
 class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
