@@ -1,5 +1,17 @@
 datastore:
   cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
+  datastore_constraints:
+    # Set up constraints for the transfer test such that everything
+    # will be accepted somewhere.
+    - constraints:
+        reject:
+          - random_data
+    - constraints:
+        reject:
+          - random_data
+    - constraints:
+        reject:
+          - random_data_2
   datastores:
     - !include inMemoryDatastore.yaml
     - !include posixDatastore.yaml

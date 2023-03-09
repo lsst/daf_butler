@@ -1047,26 +1047,40 @@ class ChainedDatastore(Datastore):
         all_accepted = set()
         nsuccess = 0
         for source_child in source_datastores:
+            # If we are reading from a chained datastore, it's possible that
+            # only a subset of the datastores know about the dataset. We can't
+            # ask the receiving datastore to copy it when it doesn't exist
+            # so we have to filter again based on what the source datastore
+            # understands.
+            known_to_source = source_child.knows_these([ref for ref in refs])
+
+            # Need to know that there is a possibility that some of these
+            # datasets exist but are unknown to the source datastore if
+            # trust is enabled.
+            if getattr(source_child, "trustGetRequest", False):
+                unknown = [ref for ref, known in known_to_source.items() if not known]
+                existence = source_child.mexists(unknown, artifact_existence)
+                for ref, exists in existence.items():
+                    known_to_source[ref] = exists
+
             # Try to transfer from each source datastore to each child
             # datastore. Have to make sure we don't transfer something
             # we've already transferred to this destination on later passes.
-            if not nsuccess:
-                # No transfers succeeded yet so still have to try all of them.
-                these_refs = refs
-                these_local = local_refs
-            else:
-                # Filter the initial list based on the datasets we have
-                # not yet transferred.
-                these_refs = []
-                these_local = []
-                for ref, local_ref in zip(refs, local_refs):
-                    if local_ref in remaining_refs:
-                        these_refs.append(ref)
-                        these_local.append(local_ref)
+
+            # Filter the initial list based on the datasets we have
+            # not yet transferred.
+            these_refs = []
+            these_local = []
+            for ref, local_ref in zip(refs, local_refs):
+                if local_ref in remaining_refs and known_to_source[ref]:
+                    these_refs.append(ref)
+                    these_local.append(local_ref)
+                else:
+                    log.debug("Skipping dataset transfer as not in source: %s", ref)
 
             if not these_refs:
-                # Already transferred all datasets.
-                break
+                # Already transferred all datasets known to this datastore.
+                continue
 
             for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
                 if constraints is not None:
@@ -1076,6 +1090,8 @@ class ChainedDatastore(Datastore):
                         if constraints.isAcceptable(local_ref):
                             filtered_refs.append(ref)
                             filtered_local.append(local_ref)
+                        else:
+                            log.debug("Rejecting ref by constraints: %s", local_ref)
                 else:
                     filtered_refs = [ref for ref in these_refs]
                     filtered_local = [ref for ref in these_local]
