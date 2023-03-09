@@ -1,0 +1,2 @@
+``Butler.transfer_from()`` can now be used in conjunction with a ``ChainedDatastore``.
+Additionally, datastore constraints are now respected.
