@@ -2415,13 +2415,22 @@ class Butler(LimitedButler):
 
             # Ask the datastore to transfer. The datastore has to check that
             # the source datastore is compatible with the target datastore.
-            self.datastore.transfer_from(
+            accepted, rejected = self.datastore.transfer_from(
                 source_butler.datastore,
                 source_refs,
                 local_refs=transferred_refs,
                 transfer=transfer,
                 artifact_existence=artifact_existence,
             )
+            if rejected:
+                # For now, accept the registry entries but not the files.
+                log.warning(
+                    "%d datasets were rejected and %d accepted for dataset type %s in run %r.",
+                    len(rejected),
+                    len(accepted),
+                    datasetType,
+                    run,
+                )
 
         return transferred_refs
 
