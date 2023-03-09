@@ -1933,7 +1933,12 @@ class PosixDatastoreTransfers(unittest.TestCase):
                         # For a chained datastore we need to remove
                         # files in each chain.
                         for datastore in datastores:
-                            primary, uris = datastore.getURIs(ref)
+                            # The file might not be known to the datastore
+                            # if constraints are used.
+                            try:
+                                primary, uris = datastore.getURIs(ref)
+                            except FileNotFoundError:
+                                continue
                             if primary:
                                 if primary.scheme != "mem":
                                     primary.remove()
