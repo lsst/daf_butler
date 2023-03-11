@@ -26,12 +26,14 @@ from __future__ import annotations
 __all__ = ["ObsCoreTableManager"]
 
 from abc import abstractmethod
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Iterable, Type
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Type
 
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
+    from lsst.sphgeom import Region
+
     from ...core import DatasetRef, DimensionUniverse
     from ..queries import SqlQueryContext
     from ._collections import CollectionRecord
@@ -188,5 +190,30 @@ class ObsCoreTableManager(VersionedExtension):
 
         When configuration parameter ``collection_type`` is not "TAGGED", this
         method should return immediately.
+        """
+        raise NotImplementedError()
+
+    def update_exposure_regions(self, instrument: str, region_data: Iterable[tuple[int, int, Region]]) -> int:
+        """Update existing exposure records with spatial region data.
+
+        Parameters
+        ----------
+        instrument : `str`
+            Instrument name.
+        region_data : `Iterable`[`tuple`[`int`, `int`, `~lsst.sphgeom.Region`]]
+            Sequence of tuples, each tuple contains three values - exposure ID,
+            detector ID, and corresponding region.
+
+        Returns
+        -------
+        count : `int`
+            Actual number of records updated.
+
+        Notes
+        -----
+        This method is needed to update obscore records for raw exposures which
+        are ingested before their corresponding visits are defined. Exposure
+        records added when visit are already defined will get their regions
+        from their matching visits automatically.
         """
         raise NotImplementedError()

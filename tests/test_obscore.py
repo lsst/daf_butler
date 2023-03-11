@@ -25,26 +25,33 @@ import tempfile
 import unittest
 import warnings
 from abc import abstractmethod
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Any, cast
 
 import astropy.time
 import sqlalchemy
 from lsst.daf.butler import (
     CollectionType,
     Config,
+    DataCoordinate,
     DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     StorageClassFactory,
 )
+from lsst.daf.butler.registries.sql import SqlRegistry
 from lsst.daf.butler.registry import Registry, RegistryConfig
-from lsst.daf.butler.registry.obscore import DatasetTypeConfig, ObsCoreConfig, ObsCoreSchema
+from lsst.daf.butler.registry.obscore import (
+    DatasetTypeConfig,
+    ObsCoreConfig,
+    ObsCoreLiveTableManager,
+    ObsCoreSchema,
+)
 from lsst.daf.butler.registry.obscore._schema import _STATIC_COLUMNS
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 from lsst.sphgeom import Box, ConvexPolygon, LonLat, UnitVector3d
 
 try:
-    import testing.postgresql
+    import testing.postgresql  # type: ignore
 except ImportError:
     testing = None
 
@@ -54,8 +61,10 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 class ObsCoreTests:
     """Base class for testing obscore manager functionality."""
 
+    root: str
+
     def make_registry(
-        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+        self, collections: list[str] | None = None, collection_type: str | None = None
     ) -> Registry:
         """Create new empty Registry."""
         config = self.make_registry_config(collections, collection_type)
@@ -65,7 +74,7 @@ class ObsCoreTests:
 
     @abstractmethod
     def make_registry_config(
-        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+        self, collections: list[str] | None = None, collection_type: str | None = None
     ) -> RegistryConfig:
         """Make Registry configuration."""
         raise NotImplementedError()
@@ -122,6 +131,8 @@ class ObsCoreTests:
                 },
             )
 
+        # map visit and detector to region
+        self.regions: dict[tuple[int, int], ConvexPolygon] = {}
         for visit in (1, 2, 3, 4):
             for detector in (1, 2, 3, 4):
                 lon = visit * 90 - 88
@@ -143,6 +154,7 @@ class ObsCoreTests:
                         "region": region,
                     },
                 )
+                self.regions[(visit, detector)] = region
 
         # Visit 9 has non-polygon region
         for detector in (1, 2, 3, 4):
@@ -162,7 +174,7 @@ class ObsCoreTests:
         storage_class_factory = StorageClassFactory()
         storage_class = storage_class_factory.getStorageClass("StructuredDataDict")
 
-        self.dataset_types: Dict[str, DatasetType] = {}
+        self.dataset_types: dict[str, DatasetType] = {}
 
         dimensions = registry.dimensions.extract(["instrument", "physical_filter", "detector", "exposure"])
         self.dataset_types["raw"] = DatasetType("raw", dimensions, storage_class)
@@ -195,7 +207,7 @@ class ObsCoreTests:
         registry.registerCollection("tagged", CollectionType.TAGGED)
 
     def make_obscore_config(
-        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+        self, collections: list[str] | None = None, collection_type: str | None = None
     ) -> Config:
         """Make configuration for obscore manager."""
         obscore_config = Config(os.path.join(TESTDIR, "config", "basic", "obscore.yaml"))
@@ -211,18 +223,19 @@ class ObsCoreTests:
         """Insert or import one dataset into a specified run collection."""
         data_id = {"instrument": "DummyCam", "physical_filter": "d-r"}
         data_id.update(kwargs)
+        coordinate = DataCoordinate.standardize(data_id, universe=registry.dimensions)
         if do_import:
             ds_type = self.dataset_types[dataset_type]
             dataset_id = registry.datasetIdFactory.makeDatasetId(
-                run, ds_type, data_id, DatasetIdGenEnum.UNIQUE
+                run, ds_type, coordinate, DatasetIdGenEnum.UNIQUE
             )
-            ref = DatasetRef(ds_type, data_id, id=dataset_id, run=run)
+            ref = DatasetRef(ds_type, coordinate, id=dataset_id, run=run)
             [ref] = registry._importDatasets([ref])
         else:
             [ref] = registry.insertDatasets(dataset_type, [data_id], run=run)
         return ref
 
-    def _insert_datasets(self, registry: Registry, do_import: bool = False) -> List[DatasetRef]:
+    def _insert_datasets(self, registry: Registry, do_import: bool = False) -> list[DatasetRef]:
         """Inset a small bunch of datasets into every run collection."""
         return [
             self._insert_dataset(registry, "run1", "raw", detector=1, exposure=1, do_import=do_import),
@@ -237,8 +250,9 @@ class ObsCoreTests:
 
     def _obscore_select(self, registry: Registry) -> list:
         """Select all rows from obscore table."""
-        db = registry._db
-        table = registry._managers.obscore.table
+        db = cast(SqlRegistry, registry)._db
+        assert registry.obsCoreTableManager is not None
+        table = cast(ObsCoreLiveTableManager, registry.obsCoreTableManager).table
         with db.query(table.select()) as results:
             return results.fetchall()
 
@@ -416,7 +430,7 @@ class ObsCoreTests:
         rows = self._obscore_select(registry)
         self.assertEqual(len(rows), 0)
 
-    def test_region_type_warning(self, count: int = 1) -> None:
+    def test_region_type_warning(self) -> None:
         """Test that non-polygon region generates one or more warnings."""
 
         collections = None
@@ -424,12 +438,64 @@ class ObsCoreTests:
 
         with warnings.catch_warnings(record=True) as warning_records:
             self._insert_dataset(registry, "run2", "calexp", detector=2, visit=9)
-            self.assertEqual(len(warning_records), count)
+            self.assertEqual(len(warning_records), 1)
             for record in warning_records:
                 self.assertRegex(
                     str(record.message),
-                    "Unexpected region type for obscore dataset.*lsst.sphgeom._sphgeom.Box.*",
+                    "Unexpected region type: .*lsst.sphgeom._sphgeom.Box.*",
                 )
+
+    def test_update_exposure_region(self) -> None:
+        """Test for update_exposure_regions method."""
+
+        registry = self.make_registry(["run1"])
+        obscore = registry.obsCoreTableManager
+        assert obscore is not None
+
+        # Exposure 4 is not associated with any visit.
+        for detector in (1, 2, 3, 4):
+            self._insert_dataset(registry, "run1", "raw", detector=detector, exposure=4)
+
+        # All spatial columns should be None
+        rows = self._obscore_select(registry)
+        self.assertEqual(len(rows), 4)
+        for row in rows:
+            self.assertIsNone(row.s_ra)
+            self.assertIsNone(row.s_dec)
+            self.assertIsNone(row.s_region)
+
+        # Assign Region from visit 4
+        count = obscore.update_exposure_regions(
+            "DummyCam", [(4, 1, self.regions[(4, 1)]), (4, 2, self.regions[(4, 2)])]
+        )
+        self.assertEqual(count, 2)
+
+        rows = self._obscore_select(registry)
+        self.assertEqual(len(rows), 4)
+        for row in rows:
+            if row.lsst_detector in (1, 2):
+                self.assertIsNotNone(row.s_ra)
+                self.assertIsNotNone(row.s_dec)
+                self.assertIsNotNone(row.s_region)
+            else:
+                self.assertIsNone(row.s_ra)
+                self.assertIsNone(row.s_dec)
+                self.assertIsNone(row.s_region)
+
+    if TYPE_CHECKING:
+        # This is a mixin class, some methods from unittest.TestCase declared
+        # here to silence mypy.
+        def assertEqual(self, first: Any, second: Any, msg: str | None = None) -> None:
+            ...
+
+        def assertIsNone(self, obj: Any, msg: str | None = None) -> None:
+            ...
+
+        def assertIsNotNone(self, obj: Any, msg: str | None = None) -> None:
+            ...
+
+        def assertRegex(self, text: Any, expected_regex: Any, msg: str | None = None) -> None:
+            ...
 
 
 class SQLiteObsCoreTest(ObsCoreTests, unittest.TestCase):
@@ -442,7 +508,7 @@ class SQLiteObsCoreTest(ObsCoreTests, unittest.TestCase):
         removeTestTempDir(self.root)
 
     def make_registry_config(
-        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+        self, collections: list[str] | None = None, collection_type: str | None = None
     ) -> RegistryConfig:
         # docstring inherited from a base class
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
@@ -491,7 +557,7 @@ class PostgresObsCoreTest(ObsCoreTests, unittest.TestCase):
         self.server = self.postgresql()
 
     def make_registry_config(
-        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+        self, collections: list[str] | None = None, collection_type: str | None = None
     ) -> RegistryConfig:
         # docstring inherited from a base class
         self.count += 1
@@ -521,7 +587,7 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
                 raise unittest.SkipTest(f"pg_sphere extension does not exist: {exc}")
 
     def make_obscore_config(
-        self, collections: Optional[List[str]] = None, collection_type: Optional[str] = None
+        self, collections: list[str] | None = None, collection_type: str | None = None
     ) -> Config:
         """Make configuration for obscore manager."""
         obscore_config = super().make_obscore_config(collections, collection_type)
@@ -547,8 +613,9 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
         rows = self._obscore_select(registry)
         self.assertEqual(len(rows), 6)
 
-        db = registry._db
-        table = registry._managers.obscore.table
+        db = cast(SqlRegistry, registry)._db
+        assert registry.obsCoreTableManager is not None
+        table = cast(ObsCoreLiveTableManager, registry.obsCoreTableManager).table
 
         # It's not easy to generate spatial queries in sqlalchemy, use plain
         # text queries for testing.
@@ -572,11 +639,6 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
         query = f"SELECT * FROM {table.key} WHERE '(272d,3d)'::spoint @ pgs_region"
         with db.query(sqlalchemy.text(query)) as results:
             self.assertEqual(len(list(results)), 2)
-
-    def test_region_type_warning(self) -> None:
-        """Test that non-polygon region generates a warning"""
-        # pgsphere plugin adds one more warning
-        super().test_region_type_warning(2)
 
 
 if __name__ == "__main__":

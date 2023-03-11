@@ -23,18 +23,16 @@ from __future__ import annotations
 
 __all__ = ["PgSphereObsCorePlugin"]
 
-import warnings
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
 import sqlalchemy
-from lsst.daf.butler import DatasetId
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
 from sqlalchemy.dialects.postgresql.base import ischema_names
 from sqlalchemy.types import UserDefinedType
 
 from ...core import ddl
-from ._spatial import MissingDatabaseError, RegionTypeWarning, SpatialObsCorePlugin
+from ._spatial import MissingDatabaseError, RegionTypeError, SpatialObsCorePlugin
 
 if TYPE_CHECKING:
     from ..interfaces import Database
@@ -162,7 +160,7 @@ class PgSphereObsCorePlugin(SpatialObsCorePlugin):
         table_spec.indexes.add(ddl.IndexSpec(self._region_column_name, postgresql_using="gist"))
         table_spec.indexes.add(ddl.IndexSpec(self._position_column_name, postgresql_using="gist"))
 
-    def make_records(self, dataset_id: DatasetId, region: Optional[Region]) -> Optional[Record]:
+    def make_records(self, region: Optional[Region]) -> Optional[Record]:
         # docstring inherited.
 
         if region is None:
@@ -177,9 +175,6 @@ class PgSphereObsCorePlugin(SpatialObsCorePlugin):
             poly_points = [LonLat(vertex) for vertex in region.getVertices()]
             record[self._region_column_name] = poly_points
         else:
-            warnings.warn(
-                f"Unexpected region type for obscore dataset {dataset_id}: {type(region)}",
-                category=RegionTypeWarning,
-            )
+            raise RegionTypeError(f"Unexpected region type: {type(region)}")
 
         return record

@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = ["ExposureRegionFactory", "Record", "RecordFactory"]
 
 import logging
+import warnings
 from abc import abstractmethod
 from collections.abc import Collection, Mapping
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
@@ -33,6 +34,7 @@ import astropy.time
 from lsst.daf.butler import DataCoordinate, DatasetRef, Dimension, DimensionRecord, DimensionUniverse
 
 from ._config import ExtraColumnConfig, ExtraColumnType, ObsCoreConfig
+from ._spatial import RegionTypeError, RegionTypeWarning
 
 if TYPE_CHECKING:
     from lsst.sphgeom import Region
@@ -76,7 +78,7 @@ class ExposureRegionFactory:
         raise NotImplementedError()
 
 
-Record = Dict[str, Any]
+Record = dict[str, Any]
 
 
 class RecordFactory:
@@ -148,7 +150,7 @@ class RecordFactory:
         # _LOG.debug("New record, dataId=%s", dataId.full)
         # _LOG.debug("New record, records=%s", dataId.records)
 
-        record: Dict[str, str | int | float | UUID | None]
+        record: dict[str, str | int | float | UUID | None]
 
         # We need all columns filled, to simplify logic below just pre-fill
         # everything with None.
@@ -189,11 +191,15 @@ class RecordFactory:
                 self._visit_records(dimension_record, record)
 
         # ask each plugin for its values to add to a record.
-        for plugin in self.spatial_plugins:
-            assert ref.id is not None, "Dataset ID must be defined"
-            plugin_record = plugin.make_records(ref.id, region)
-            if plugin_record is not None:
-                record.update(plugin_record)
+        try:
+            plugin_records = self.make_spatial_records(region)
+        except RegionTypeError as exc:
+            warnings.warn(
+                f"Failed to convert region for obscore dataset {ref.id}: {exc}",
+                category=RegionTypeWarning,
+            )
+        else:
+            record.update(plugin_records)
 
         if self.band in dataId:
             em_range = None
@@ -243,6 +249,32 @@ class RecordFactory:
                 # Just a static value.
                 record[key] = column_value
 
+        return record
+
+    def make_spatial_records(self, region: Region | None) -> Record:
+        """Make spatial records for a given region.
+
+        Parameters
+        ----------
+        region : `~lsst.sphgeom.Region` or `None`
+            Spacial region to convert to record.
+
+        Return
+        ------
+        record : `dict`
+            Record items.
+
+        Raises
+        ------
+        RegionTypeError
+            Raised if type of the region is not supported.
+        """
+        record = Record()
+        # ask each plugin for its values to add to a record.
+        for plugin in self.spatial_plugins:
+            plugin_record = plugin.make_records(region)
+            if plugin_record is not None:
+                record.update(plugin_record)
         return record
 
     def _exposure_records(self, dimension_record: DimensionRecord, record: Dict[str, Any]) -> None:

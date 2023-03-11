@@ -32,6 +32,9 @@ dataset_types:
     access_format: image/fits
     datalink_url_fmt: "https://data.lsst.cloud/api/datalink/links?ID=butler%3A//dp02/{id}"
 extra_columns:
+  lsst_exposure:
+    template: "{exposure}"
+    type: "int"
   lsst_visit:
     template: "{visit}"
     type: "int"

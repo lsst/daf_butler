@@ -23,16 +23,14 @@ from __future__ import annotations
 
 __all__ = ["DefaultSpatialObsCorePlugin"]
 
-import warnings
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Optional
 
 import sqlalchemy
-from lsst.daf.butler import DatasetId
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
 
 from ...core import ddl
-from ._spatial import RegionTypeWarning, SpatialObsCorePlugin
+from ._spatial import RegionTypeError, SpatialObsCorePlugin
 
 if TYPE_CHECKING:
     from ..interfaces import Database
@@ -71,7 +69,7 @@ class DefaultSpatialObsCorePlugin(SpatialObsCorePlugin):
         # docstring inherited.
         table_spec.fields.update(_COLUMNS)
 
-    def make_records(self, dataset_id: DatasetId, region: Optional[Region]) -> Optional[Record]:
+    def make_records(self, region: Optional[Region]) -> Optional[Record]:
         # docstring inherited.
 
         if region is None:
@@ -96,9 +94,6 @@ class DefaultSpatialObsCorePlugin(SpatialObsCorePlugin):
                 ]
             record["s_region"] = " ".join(poly)
         else:
-            warnings.warn(
-                f"Unexpected region type for obscore dataset {dataset_id}: {type(region)}",
-                category=RegionTypeWarning,
-            )
+            raise RegionTypeError(f"Unexpected region type: {type(region)}")
 
         return record
