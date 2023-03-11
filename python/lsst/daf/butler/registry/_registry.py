@@ -72,7 +72,7 @@ from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionR
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
-    from .interfaces import CollectionRecord, DatastoreRegistryBridgeManager
+    from .interfaces import CollectionRecord, DatastoreRegistryBridgeManager, ObsCoreTableManager
 
 _LOG = logging.getLogger(__name__)
 
@@ -1672,6 +1672,16 @@ class Registry(ABC):
             Raised when ``collections`` expression is invalid.
         """
         raise NotImplementedError()
+
+    @property
+    def obsCoreTableManager(self) -> ObsCoreTableManager | None:
+        """ObsCore manager instance for this registry (`ObsCoreTableManager`
+        or `None`).
+
+        ObsCore manager may not be implemented for all registry backend, or
+        may not be enabled for many repositories.
+        """
+        return None
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).
