@@ -248,14 +248,6 @@ class ObsCoreTests:
             self._insert_dataset(registry, "run6", "raw", detector=1, exposure=4, do_import=do_import),
         ]
 
-    def _obscore_select(self, registry: Registry) -> list:
-        """Select all rows from obscore table."""
-        db = cast(SqlRegistry, registry)._db
-        assert registry.obsCoreTableManager is not None
-        table = cast(ObsCoreLiveTableManager, registry.obsCoreTableManager).table
-        with db.query(table.select()) as results:
-            return results.fetchall()
-
     def test_config_errors(self):
         """Test for handling various configuration problems."""
 
@@ -371,64 +363,80 @@ class ObsCoreTests:
         for collections, count in test_data:
             for do_import in (False, True):
                 registry = self.make_registry(collections)
+                obscore = registry.obsCoreTableManager
+                assert obscore is not None
                 self._insert_datasets(registry, do_import)
 
-                rows = self._obscore_select(registry)
-                self.assertEqual(len(rows), count)
+                with obscore.query() as result:
+                    rows = list(result)
+                    self.assertEqual(len(rows), count)
 
     def test_drop_datasets(self):
         """Test for dropping datasets after obscore insert."""
 
         collections = None
         registry = self.make_registry(collections)
+        obscore = registry.obsCoreTableManager
+        assert obscore is not None
         refs = self._insert_datasets(registry)
 
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 6)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 6)
 
         # drop single dataset
         registry.removeDatasets(ref for ref in refs if ref.run == "run1")
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 5)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 5)
 
         # drop whole run collection
         registry.removeCollection("run6")
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 4)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 4)
 
     def test_associate(self):
         """Test for associating datasets to TAGGED collection."""
 
         collections = ["tagged"]
         registry = self.make_registry(collections, "TAGGED")
+        obscore = registry.obsCoreTableManager
+        assert obscore is not None
         refs = self._insert_datasets(registry)
 
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 0)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 0)
 
         # Associate datasets that are already in obscore, changes nothing.
         registry.associate("tagged", (ref for ref in refs if ref.run == "run1"))
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 1)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 1)
 
         # Associate datasets that are not in obscore
         registry.associate("tagged", (ref for ref in refs if ref.run == "run3"))
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 2)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 2)
 
         # Disassociate them
         registry.disassociate("tagged", (ref for ref in refs if ref.run == "run3"))
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 1)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 1)
 
         # Non-associated dataset, should be OK and not throw.
         registry.disassociate("tagged", (ref for ref in refs if ref.run == "run2"))
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 1)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 1)
 
         registry.disassociate("tagged", (ref for ref in refs if ref.run == "run1"))
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 0)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 0)
 
     def test_region_type_warning(self) -> None:
         """Test that non-polygon region generates one or more warnings."""
@@ -457,12 +465,13 @@ class ObsCoreTests:
             self._insert_dataset(registry, "run1", "raw", detector=detector, exposure=4)
 
         # All spatial columns should be None
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 4)
-        for row in rows:
-            self.assertIsNone(row.s_ra)
-            self.assertIsNone(row.s_dec)
-            self.assertIsNone(row.s_region)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 4)
+            for row in rows:
+                self.assertIsNone(row.s_ra)
+                self.assertIsNone(row.s_dec)
+                self.assertIsNone(row.s_region)
 
         # Assign Region from visit 4
         count = obscore.update_exposure_regions(
@@ -470,17 +479,18 @@ class ObsCoreTests:
         )
         self.assertEqual(count, 2)
 
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 4)
-        for row in rows:
-            if row.lsst_detector in (1, 2):
-                self.assertIsNotNone(row.s_ra)
-                self.assertIsNotNone(row.s_dec)
-                self.assertIsNotNone(row.s_region)
-            else:
-                self.assertIsNone(row.s_ra)
-                self.assertIsNone(row.s_dec)
-                self.assertIsNone(row.s_region)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 4)
+            for row in rows:
+                if row.lsst_detector in (1, 2):
+                    self.assertIsNotNone(row.s_ra)
+                    self.assertIsNotNone(row.s_dec)
+                    self.assertIsNotNone(row.s_region)
+                else:
+                    self.assertIsNone(row.s_ra)
+                    self.assertIsNone(row.s_dec)
+                    self.assertIsNone(row.s_region)
 
     if TYPE_CHECKING:
         # This is a mixin class, some methods from unittest.TestCase declared
@@ -607,11 +617,14 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
 
         collections = None
         registry = self.make_registry(collections)
+        obscore = registry.obsCoreTableManager
+        assert obscore is not None
         self._insert_datasets(registry)
 
         # select everything
-        rows = self._obscore_select(registry)
-        self.assertEqual(len(rows), 6)
+        with obscore.query() as result:
+            rows = list(result)
+            self.assertEqual(len(rows), 6)
 
         db = cast(SqlRegistry, registry)._db
         assert registry.obsCoreTableManager is not None
