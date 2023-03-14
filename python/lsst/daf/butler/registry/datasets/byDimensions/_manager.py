@@ -177,6 +177,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         byName: dict[str, ByDimensionsDatasetRecordStorage] = {}
         byId: dict[int, ByDimensionsDatasetRecordStorage] = {}
+        dataset_types: dict[int, DatasetType] = {}
         c = self._static.dataset_type.columns
         with self._db.query(self._static.dataset_type.select()) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
@@ -223,9 +224,10 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             )
             byName[datasetType.name] = storage
             byId[storage._dataset_type_id] = storage
+            dataset_types[row["id"]] = datasetType
         self._byName = byName
         self._byId = byId
-        self._summaries.refresh(lambda dataset_type_id: self._byId[dataset_type_id].datasetType)
+        self._summaries.refresh(dataset_types)
 
     def remove(self, name: str) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
