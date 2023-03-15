@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("CollectionSummaryManager",)
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, Generic, TypeVar
 
 import sqlalchemy
@@ -250,14 +250,15 @@ class CollectionSummaryManager:
         # in-memory cache.
         self.get(collection).update(summary)
 
-    def refresh(self, get_dataset_type: Callable[[int], DatasetType]) -> None:
+    def refresh(self, dataset_types: Mapping[int, DatasetType]) -> None:
         """Load all collection summary information from the database.
 
         Parameters
         ----------
-        get_dataset_type : `Callable`
-            Function that takes an `int` dataset_type_id value and returns a
-            `DatasetType` instance.
+        dataset_types : `~collections.abc.Mapping` [`int`, `DatasetType`]
+            Mapping of an `int` dataset_type_id value to `DatasetType`
+            instance. Summaries are only loaded for dataset types that appear
+            in this mapping.
         """
         # Set up the SQL query we'll use to fetch all of the summary
         # information at once.
@@ -289,21 +290,21 @@ class CollectionSummaryManager:
             collectionKey = row[self._collectionKeyName]
             # dataset_type_id should also never be None/NULL; it's in the first
             # table we joined.
-            datasetType = get_dataset_type(row["dataset_type_id"])
-            # See if we have a summary already for this collection; if not,
-            # make one.
-            summary = summaries.get(collectionKey)
-            if summary is None:
-                summary = CollectionSummary()
-                summaries[collectionKey] = summary
-            # Update the dimensions with the values in this row that aren't
-            # None/NULL (many will be in general, because these enter the query
-            # via LEFT OUTER JOIN).
-            summary.dataset_types.add(datasetType)
-            for dimension in self._tables.dimensions:
-                value = row[dimension.name]
-                if value is not None:
-                    summary.governors.setdefault(dimension.name, set()).add(value)
+            if datasetType := dataset_types.get(row["dataset_type_id"]):
+                # See if we have a summary already for this collection; if not,
+                # make one.
+                summary = summaries.get(collectionKey)
+                if summary is None:
+                    summary = CollectionSummary()
+                    summaries[collectionKey] = summary
+                # Update the dimensions with the values in this row that
+                # aren't None/NULL (many will be in general, because these
+                # enter the query via LEFT OUTER JOIN).
+                summary.dataset_types.add(datasetType)
+                for dimension in self._tables.dimensions:
+                    value = row[dimension.name]
+                    if value is not None:
+                        summary.governors.setdefault(dimension.name, set()).add(value)
         self._cache = summaries
 
     def get(self, collection: CollectionRecord) -> CollectionSummary:
