@@ -182,7 +182,3 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
     def currentVersion(cls) -> Optional[VersionTuple]:
         # Docstring inherited from VersionedExtension.
         return _VERSION
-
-    def schemaDigest(self) -> Optional[str]:
-        # Docstring inherited from VersionedExtension.
-        return self._defaultSchemaDigest([self._metaTable], self._db.dialect)

@@ -195,7 +195,3 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
     def currentVersion(cls) -> VersionTuple | None:
         # Docstring inherited from VersionedExtension.
         return _VERSION
-
-    def schemaDigest(self) -> str | None:
-        # Docstring inherited from VersionedExtension.
-        return self._defaultSchemaDigest(self._tables, self._db.dialect)

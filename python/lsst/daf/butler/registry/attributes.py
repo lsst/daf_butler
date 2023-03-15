@@ -39,10 +39,9 @@ from .interfaces import (
     VersionTuple,
 )
 
-# This manager is supposed to have super-stable schema that never changes
-# but there may be cases when we need data migration on this table so we
-# keep version for it as well.
-_VERSION = VersionTuple(1, 0, 0)
+# Schema version 1.0.1 signifies that we do not write schema digests. Writing
+# is done by the `versions` module, but table is controlled by this manager.
+_VERSION = VersionTuple(1, 0, 1)
 
 
 class DefaultButlerAttributeManager(ButlerAttributeManager):
@@ -136,7 +135,3 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
     def currentVersion(cls) -> Optional[VersionTuple]:
         # Docstring inherited from VersionedExtension.
         return _VERSION
-
-    def schemaDigest(self) -> Optional[str]:
-        # Docstring inherited from VersionedExtension.
-        return self._defaultSchemaDigest([self._table], self._db.dialect)
