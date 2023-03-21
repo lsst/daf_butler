@@ -464,7 +464,7 @@ class ObsCoreTests:
         for detector in (1, 2, 3, 4):
             self._insert_dataset(registry, "run1", "raw", detector=detector, exposure=4)
 
-        # All spatial columns should be None
+        # All spatial columns should be None.
         with obscore.query() as result:
             rows = list(result)
             self.assertEqual(len(rows), 4)
@@ -473,7 +473,7 @@ class ObsCoreTests:
                 self.assertIsNone(row.s_dec)
                 self.assertIsNone(row.s_region)
 
-        # Assign Region from visit 4
+        # Assign Region from visit 4.
         count = obscore.update_exposure_regions(
             "DummyCam", [(4, 1, self.regions[(4, 1)]), (4, 2, self.regions[(4, 2)])]
         )

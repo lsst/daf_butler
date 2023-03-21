@@ -220,7 +220,7 @@ class ObsCoreTableManager(VersionedExtension):
         -----
         This method is needed to update obscore records for raw exposures which
         are ingested before their corresponding visits are defined. Exposure
-        records added when visit are already defined will get their regions
+        records added when visit is already defined will get their regions
         from their matching visits automatically.
         """
         raise NotImplementedError()
@@ -228,7 +228,7 @@ class ObsCoreTableManager(VersionedExtension):
     @abstractmethod
     @contextmanager
     def query(self, **kwargs: Any) -> Iterator[sqlalchemy.engine.CursorResult]:
-        """Run a SELECT query against obscore table and return reslut rows.
+        """Run a SELECT query against obscore table and return result rows.
 
         Parameters
         ----------

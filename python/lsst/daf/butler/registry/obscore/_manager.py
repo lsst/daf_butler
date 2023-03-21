@@ -337,7 +337,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
     @contextmanager
     def query(self, **kwargs: Any) -> Iterator[sqlalchemy.engine.CursorResult]:
-        """Run a SELECT query against obscore table and return reslut rows.
+        """Run a SELECT query against obscore table and return result rows.
 
         Parameters
         ----------
