@@ -1029,7 +1029,7 @@ class ChainedDatastore(Datastore):
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Docstring inherited
         # mypy does not understand "type(self) is not type(source)"
-        if isinstance(source_datastore, type(self)):
+        if isinstance(source_datastore, ChainedDatastore):
             # Both the source and destination are chained datastores.
             source_datastores = tuple(source_datastore.datastores)
         else:
