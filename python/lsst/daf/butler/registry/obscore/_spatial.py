@@ -27,7 +27,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
-from lsst.daf.butler import DatasetId
 from lsst.sphgeom import Region
 from lsst.utils import doImportType
 
@@ -42,6 +41,10 @@ class MissingDatabaseError(Exception):
     """Exception raised when database is not provided but plugin implementation
     requires it.
     """
+
+
+class RegionTypeError(TypeError):
+    """Exception raised for unsupported region types."""
 
 
 class RegionTypeWarning(Warning):
@@ -103,13 +106,11 @@ class SpatialObsCorePlugin(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_records(self, dataset_id: DatasetId, region: Optional[Region]) -> Optional[Record]:
+    def make_records(self, region: Optional[Region]) -> Optional[Record]:
         """Return data for obscore records corresponding to a given region.
 
         Parameters
         ----------
-        dataset_id : `DatasetId`
-            ID of the corresponding dataset.
         region : `Region`, optional
             Spatial region, can be `None` if dataset has no associated region.
 
@@ -118,6 +119,11 @@ class SpatialObsCorePlugin(ABC):
         record : `dict` [ `str`, `Any` ] or `None`
             Data to store in the main obscore table with column values
             corresponding to a region or `None` if there is nothing to store.
+
+        Raises
+        ------
+        RegionTypeError
+            Raised if type of the region is not supported.
         """
         raise NotImplementedError()
 

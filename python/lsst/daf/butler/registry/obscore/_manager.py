@@ -26,9 +26,11 @@ __all__ = ["ObsCoreLiveTableManager"]
 import json
 import re
 import uuid
+import warnings
 from collections import defaultdict
-from collections.abc import Collection, Mapping
-from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Type, cast
+from collections.abc import Collection, Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Type, cast
 
 import sqlalchemy
 from lsst.daf.butler import Config, DataCoordinate, DatasetRef, DimensionRecordColumnTag, DimensionUniverse
@@ -40,7 +42,7 @@ from ..interfaces import ObsCoreTableManager, VersionTuple
 from ._config import ConfigCollectionType, ObsCoreManagerConfig
 from ._records import ExposureRegionFactory, Record, RecordFactory
 from ._schema import ObsCoreSchema
-from ._spatial import SpatialObsCorePlugin
+from ._spatial import RegionTypeError, RegionTypeWarning, SpatialObsCorePlugin
 
 if TYPE_CHECKING:
     from ..interfaces import (
@@ -64,7 +66,7 @@ class _ExposureRegionFactory(ExposureRegionFactory):
         self.exposure_dimensions = self.universe["exposure"].graph
         self.exposure_detector_dimensions = self.universe.extract(["exposure", "detector"])
 
-    def exposure_region(self, dataId: DataCoordinate, context: SqlQueryContext) -> Optional[Region]:
+    def exposure_region(self, dataId: DataCoordinate, context: SqlQueryContext) -> Region | None:
         # Docstring is inherited from a base class.
         # Make a relation that starts with visit_definition (mapping between
         # exposure and visit).
@@ -128,7 +130,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         self.record_factory = RecordFactory(
             config, schema, universe, spatial_plugins, exposure_region_factory
         )
-        self.tagged_collection: Optional[str] = None
+        self.tagged_collection: str | None = None
         self.run_patterns: list[re.Pattern] = []
         if config.collection_type is ConfigCollectionType.TAGGED:
             assert (
@@ -192,11 +194,11 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         return json.dumps(self.config.dict())
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersion(cls) -> VersionTuple | None:
         # Docstring inherited from base class.
         return _VERSION
 
-    def schemaDigest(self) -> Optional[str]:
+    def schemaDigest(self) -> str | None:
         # Docstring inherited from base class.
         return None
 
@@ -214,7 +216,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             # expensive. Normally references are grouped by run, if there are
             # multiple input references, they should have the same run.
             # Instead of just checking that, we group them by run again.
-            refs_by_run: Dict[str, List[DatasetRef]] = defaultdict(list)
+            refs_by_run: dict[str, list[DatasetRef]] = defaultdict(list)
             for ref in refs:
                 # Record factory will filter dataset types, but to reduce
                 # collection checks we also pre-filter it here.
@@ -224,7 +226,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
                 assert ref.run is not None, "Run cannot be None"
                 refs_by_run[ref.run].append(ref)
 
-            good_refs: List[DatasetRef] = []
+            good_refs: list[DatasetRef] = []
             for run, run_refs in refs_by_run.items():
                 if not self._check_dataset_run(run):
                     continue
@@ -273,7 +275,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
     def _populate(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
         """Populate obscore table with the data from given datasets."""
-        records: List[Record] = []
+        records: list[Record] = []
         for ref in refs:
             record = self.record_factory(ref, context)
             if record is not None:
@@ -294,3 +296,62 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
         # Try each pattern in turn.
         return any(pattern.fullmatch(run) for pattern in self.run_patterns)
+
+    def update_exposure_regions(self, instrument: str, region_data: Iterable[tuple[int, int, Region]]) -> int:
+        # Docstring inherited from base class.
+        instrument_column = self.schema.dimension_column("instrument")
+        exposure_column = self.schema.dimension_column("exposure")
+        detector_column = self.schema.dimension_column("detector")
+        if instrument_column is None or exposure_column is None or detector_column is None:
+            # Not all needed columns are in the table.
+            return 0
+
+        update_rows: list[Record] = []
+        for exposure, detector, region in region_data:
+            try:
+                record = self.record_factory.make_spatial_records(region)
+            except RegionTypeError as exc:
+                warnings.warn(
+                    f"Failed to convert region for exposure={exposure} detector={detector}: {exc}",
+                    category=RegionTypeWarning,
+                )
+                continue
+
+            record.update(
+                {
+                    "instrument_column": instrument,
+                    "exposure_column": exposure,
+                    "detector_column": detector,
+                }
+            )
+            update_rows.append(record)
+
+        where_dict: dict[str, str] = {
+            instrument_column: "instrument_column",
+            exposure_column: "exposure_column",
+            detector_column: "detector_column",
+        }
+
+        count = self.db.update(self.table, where_dict, *update_rows)
+        return count
+
+    @contextmanager
+    def query(self, **kwargs: Any) -> Iterator[sqlalchemy.engine.CursorResult]:
+        """Run a SELECT query against obscore table and return result rows.
+
+        Parameters
+        ----------
+        **kwargs
+            Restriction on values of individual obscore columns. Key is the
+            column name, value is the required value of the column. Multiple
+            restrictions are ANDed together.
+        """
+        query = self.table.select()
+        if kwargs:
+            query = query.where(
+                sqlalchemy.sql.expression.and_(
+                    *[self.table.columns[column] == value for column, value in kwargs.items()]
+                )
+            )
+        with self.db.query(query) as result:
+            yield result

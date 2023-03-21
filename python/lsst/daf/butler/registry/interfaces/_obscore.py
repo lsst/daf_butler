@@ -26,12 +26,17 @@ from __future__ import annotations
 __all__ = ["ObsCoreTableManager"]
 
 from abc import abstractmethod
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Iterable, Type
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Type
+
+import sqlalchemy
 
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
+    from lsst.sphgeom import Region
+
     from ...core import DatasetRef, DimensionUniverse
     from ..queries import SqlQueryContext
     from ._collections import CollectionRecord
@@ -92,6 +97,7 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def add_datasets(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
         """Possibly add datasets to the obscore table.
 
@@ -127,6 +133,7 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def associate(
         self, refs: Iterable[DatasetRef], collection: CollectionRecord, context: SqlQueryContext
     ) -> int:
@@ -162,6 +169,7 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def disassociate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
         """Possibly remove datasets from the obscore table.
 
@@ -188,5 +196,56 @@ class ObsCoreTableManager(VersionedExtension):
 
         When configuration parameter ``collection_type`` is not "TAGGED", this
         method should return immediately.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def update_exposure_regions(self, instrument: str, region_data: Iterable[tuple[int, int, Region]]) -> int:
+        """Update existing exposure records with spatial region data.
+
+        Parameters
+        ----------
+        instrument : `str`
+            Instrument name.
+        region_data : `Iterable`[`tuple`[`int`, `int`, `~lsst.sphgeom.Region`]]
+            Sequence of tuples, each tuple contains three values - exposure ID,
+            detector ID, and corresponding region.
+
+        Returns
+        -------
+        count : `int`
+            Actual number of records updated.
+
+        Notes
+        -----
+        This method is needed to update obscore records for raw exposures which
+        are ingested before their corresponding visits are defined. Exposure
+        records added when visit is already defined will get their regions
+        from their matching visits automatically.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    @contextmanager
+    def query(self, **kwargs: Any) -> Iterator[sqlalchemy.engine.CursorResult]:
+        """Run a SELECT query against obscore table and return result rows.
+
+        Parameters
+        ----------
+        **kwargs
+            Restriction on values of individual obscore columns. Key is the
+            column name, value is the required value of the column. Multiple
+            restrictions are ANDed together.
+
+        Returns
+        -------
+        result_context : `sqlalchemy.engine.CursorResult`
+            Context manager that returns the query result object when entered.
+            These results are invalidated when the context is exited.
+
+        Notes
+        -----
+        This method is intended mostly for tests that need to check the
+        contents of obscore table.
         """
         raise NotImplementedError()

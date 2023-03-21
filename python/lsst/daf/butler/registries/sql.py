@@ -94,7 +94,12 @@ from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
-    from ..registry.interfaces import CollectionRecord, Database, DatastoreRegistryBridgeManager
+    from ..registry.interfaces import (
+        CollectionRecord,
+        Database,
+        DatastoreRegistryBridgeManager,
+        ObsCoreTableManager,
+    )
 
 
 _LOG = logging.getLogger(__name__)
@@ -1320,6 +1325,11 @@ class SqlRegistry(Registry):
                         # timespan.
                         timespan = None
                     yield DatasetAssociation(ref=ref, collection=collection_record.name, timespan=timespan)
+
+    @property
+    def obsCoreTableManager(self) -> ObsCoreTableManager | None:
+        # Docstring inherited from lsst.daf.butler.registry.Registry
+        return self._managers.obscore
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).

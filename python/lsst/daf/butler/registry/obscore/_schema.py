@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ["ObsCoreSchema"]
 
+import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, List, Optional, Type
 
@@ -36,6 +37,10 @@ from ._spatial import SpatialObsCorePlugin
 if TYPE_CHECKING:
     from ..interfaces import DatasetRecordStorageManager
 
+
+# Regular expression to match templates in extra_columns that specify simple
+# dimensions, e.g. "{exposure}".
+_DIMENSION_TEMPLATE_RE = re.compile(r"^[{](\w+)[}]$")
 
 # List of standard columns in output file. This should include at least all
 # mandatory columns defined in ObsCore note (revision 1.1, Appendix B). Extra
@@ -138,6 +143,8 @@ class ObsCoreSchema:
         spatial_plugins: Sequence[SpatialObsCorePlugin],
         datasets: Optional[Type[DatasetRecordStorageManager]] = None,
     ):
+        self._dimension_columns: dict[str, str] = {"instrument": "instrument_name"}
+
         fields = list(_STATIC_COLUMNS)
 
         column_names = set(col.name for col in fields)
@@ -155,6 +162,11 @@ class ObsCoreSchema:
                         col_type = ddl.VALID_CONFIG_COLUMN_TYPES.get(col_value.type.name)
                         col_length = col_value.length
                         doc = col_value.doc
+                        # For columns that store dimensions remember their
+                        # column names.
+                        if match := _DIMENSION_TEMPLATE_RE.match(col_value.template):
+                            dimension = match.group(1)
+                            self._dimension_columns[dimension] = col_name
                     else:
                         # Only value is provided, guess type from Python, and
                         # use a fixed length of 255 for strings.
@@ -198,3 +210,19 @@ class ObsCoreSchema:
         `None`).
         """
         return self._dataset_fk
+
+    def dimension_column(self, dimension: str) -> str | None:
+        """Return column name for a given dimension.
+
+        Parameters
+        ----------
+        dimension : `str`
+            Dimension name, e.g. "exposure".
+
+        Returns
+        -------
+        column_name : `str` or `None`
+            Name of the column in obscore table or `None` if there is no
+            configured column for this dimension.
+        """
+        return self._dimension_columns.get(dimension)
