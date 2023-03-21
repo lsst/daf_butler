@@ -1044,6 +1044,7 @@ class ChainedDatastore(Datastore):
         else:
             remaining_refs = set(local_refs)
 
+        missing_from_source: set[DatasetRef] | None = None
         all_accepted = set()
         nsuccess = 0
         for source_child in source_datastores:
@@ -1063,6 +1064,13 @@ class ChainedDatastore(Datastore):
                 for ref, exists in existence.items():
                     known_to_source[ref] = exists
 
+            missing = {ref for ref, known in known_to_source.items() if not known}
+            if missing:
+                if missing_from_source is None:
+                    missing_from_source = missing
+                else:
+                    missing_from_source &= missing
+
             # Try to transfer from each source datastore to each child
             # datastore. Have to make sure we don't transfer something
             # we've already transferred to this destination on later passes.
@@ -1075,8 +1083,6 @@ class ChainedDatastore(Datastore):
                 if local_ref in remaining_refs and known_to_source[ref]:
                     these_refs.append(ref)
                     these_local.append(local_ref)
-                else:
-                    log.debug("Skipping dataset transfer as not in source: %s", ref)
 
             if not these_refs:
                 # Already transferred all datasets known to this datastore.
@@ -1110,6 +1116,10 @@ class ChainedDatastore(Datastore):
 
                 # Keep track of everything we have accepted.
                 all_accepted.update(accepted)
+
+        if missing_from_source:
+            for ref in missing_from_source:
+                log.warning("Asked to transfer dataset %s but no file artifacts exist for it", ref)
 
         if nsuccess == 0:
             raise TypeError(f"None of the child datastores could accept transfers from {source_datastore!r}")
