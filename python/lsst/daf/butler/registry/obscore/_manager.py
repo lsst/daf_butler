@@ -198,10 +198,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         # Docstring inherited from base class.
         return _VERSION
 
-    def schemaDigest(self) -> str | None:
-        # Docstring inherited from base class.
-        return None
-
     def add_datasets(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
         # Docstring inherited from base class.
 

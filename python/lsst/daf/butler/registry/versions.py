@@ -27,11 +27,11 @@ __all__ = [
     "MissingVersionError",
     "MissingManagerError",
     "ManagerMismatchError",
-    "DigestMismatchError",
 ]
 
 import logging
-from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional
+from collections.abc import Mapping, MutableMapping
+from typing import TYPE_CHECKING, Any
 
 from .interfaces import VersionedExtension, VersionTuple
 
@@ -72,37 +72,6 @@ class ManagerMismatchError(RuntimeError):
     pass
 
 
-class DigestMismatchError(RuntimeError):
-    """Exception raised when schema digest is not equal to stored digest."""
-
-    pass
-
-
-class VersionInfo:
-    """Representation of version information as defined by configuration.
-
-    Parameters
-    ----------
-    version : `VersionTuple`
-        Version number in parsed format.
-    digest : `str`, optional
-        Optional digest of the corresponding part of the schema definition.
-
-    Notes
-    -----
-    Schema digest is supposed to help with detecting unintentional schema
-    changes in the code without upgrading schema version. Digest is
-    constructed whom the set of table definitions and is compared to a digest
-    defined in configuration, if two digests differ it means schema was
-    changed. Intentional schema updates will need to update both configured
-    schema version and schema digest.
-    """
-
-    def __init__(self, version: VersionTuple, digest: Optional[str] = None):
-        self.version = version
-        self.digest = digest
-
-
 class ButlerVersionsManager:
     """Utility class to manage and verify schema version compatibility.
 
@@ -125,7 +94,7 @@ class ButlerVersionsManager:
             elif manager is not None:
                 # All regular managers need to support versioning mechanism.
                 _LOG.warning("extension %r does not implement VersionedExtension", name)
-        self._emptyFlag: Optional[bool] = None
+        self._emptyFlag: bool | None = None
 
     @classmethod
     def _managerConfigKey(cls, name: str) -> str:
@@ -158,22 +127,6 @@ class ButlerVersionsManager:
             Name of the key in attributes table.
         """
         return "version:" + extension.extensionName()
-
-    @classmethod
-    def _managerDigestKey(cls, extension: VersionedExtension) -> str:
-        """Return key used to store manager schema digest.
-
-        Parameters
-        ----------
-        extension : `VersionedExtension`
-            Instance of the extension.
-
-        Returns
-        -------
-        key : `str`
-            Name of the key in attributes table.
-        """
-        return "schema_digest:" + extension.extensionName()
 
     @staticmethod
     def checkCompatibility(old_version: VersionTuple, new_version: VersionTuple, update: bool) -> bool:
@@ -213,14 +166,11 @@ class ButlerVersionsManager:
         self._emptyFlag = False
 
     def storeManagersVersions(self) -> None:
-        """Store current manager versions in registry arttributes.
+        """Store current manager versions in registry attributes.
 
-        For each extension we store two records:
-
-            - record with the key "version:{fullExtensionName}" and version
-              number in its string format as a value,
-            - record with the key "schema_digest:{fullExtensionName}" and
-              schema digest as a value.
+        For each extension we store single record with a key
+        "version:{fullExtensionName}" and version number in its string format
+        as a value.
         """
         for extension in self._managers.values():
             version = extension.currentVersion()
@@ -229,12 +179,6 @@ class ButlerVersionsManager:
                 value = str(version)
                 self._attributes.set(key, value)
                 _LOG.debug("saved manager version %s=%s", key, value)
-
-            digest = extension.schemaDigest()
-            if digest is not None:
-                key = self._managerDigestKey(extension)
-                self._attributes.set(key, digest)
-                _LOG.debug("saved manager schema digest %s=%s", key, digest)
 
         self._emptyFlag = False
 

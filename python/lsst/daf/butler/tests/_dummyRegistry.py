@@ -123,10 +123,6 @@ class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
         # Docstring inherited from VersionedExtension.
         return None
 
-    def schemaDigest(self) -> str | None:
-        # Docstring inherited from VersionedExtension.
-        return None
-
 
 class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
     def __init__(
@@ -165,10 +161,6 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
 
     @classmethod
     def currentVersion(cls) -> VersionTuple | None:
-        # Docstring inherited from VersionedExtension.
-        return None
-
-    def schemaDigest(self) -> str | None:
         # Docstring inherited from VersionedExtension.
         return None
 

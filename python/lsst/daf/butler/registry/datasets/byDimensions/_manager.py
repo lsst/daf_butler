@@ -457,10 +457,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         return self._summaries.get(collection)
 
-    def schemaDigest(self) -> str | None:
-        # Docstring inherited from VersionedExtension.
-        return self._defaultSchemaDigest(self._static, self._db.dialect)
-
     _version: VersionTuple
     """Schema version for this class."""
 

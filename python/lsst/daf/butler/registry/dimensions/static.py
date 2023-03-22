@@ -276,15 +276,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from VersionedExtension.
         return _VERSION
 
-    def schemaDigest(self) -> str | None:
-        # Docstring inherited from VersionedExtension.
-        tables: list[sqlalchemy.schema.Table] = []
-        for recStorage in self._records.values():
-            tables += recStorage.digestTables()
-        for overlapStorage in self._overlaps.values():
-            tables += overlapStorage.digestTables()
-        return self._defaultSchemaDigest(tables, self._db.dialect)
-
 
 class _DimensionGraphStorage:
     """Helper object that manages saved DimensionGraph definitions.
