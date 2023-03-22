@@ -2482,7 +2482,7 @@ class FileDatastore(GenericBaseDatastore):
         local_refs: Optional[Iterable[DatasetRef]] = None,
         transfer: str = "auto",
         artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
-    ) -> None:
+    ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Docstring inherited
         if type(self) is not type(source_datastore):
             raise TypeError(
@@ -2620,8 +2620,21 @@ class FileDatastore(GenericBaseDatastore):
         # Refs that already exist
         already_present = []
 
+        # Refs that were rejected by this datastore.
+        rejected = set()
+
+        # Refs that were transferred successfully.
+        accepted = set()
+
         # Now can transfer the artifacts
         for source_ref, target_ref in zip(refs, local_refs):
+            if not self.constraints.isAcceptable(target_ref):
+                # This datastore should not be accepting this dataset.
+                rejected.add(target_ref)
+                continue
+
+            accepted.add(target_ref)
+
             if target_ref.id in target_records:
                 # Already have an artifact for this.
                 already_present.append(target_ref)
@@ -2666,6 +2679,8 @@ class FileDatastore(GenericBaseDatastore):
                 n_skipped,
                 "" if n_skipped == 1 else "s",
             )
+
+        return accepted, rejected
 
     @transactional
     def forget(self, refs: Iterable[DatasetRef]) -> None:

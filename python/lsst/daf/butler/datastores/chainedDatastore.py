@@ -924,7 +924,7 @@ class ChainedDatastore(Datastore):
         # pass a StorageClass, but the constraint dispatches on DatasetType).
         # So we pessimistically check if any datastore would need an expanded
         # data ID for this transfer mode.
-        return any(datastore.needs_expanded_data_ids(transfer) for datastore in self.datastores)
+        return any(datastore.needs_expanded_data_ids(transfer, entity) for datastore in self.datastores)
 
     def import_records(self, data: Mapping[str, DatastoreRecordData]) -> None:
         # Docstring inherited from the base class.
@@ -1018,3 +1018,110 @@ class ChainedDatastore(Datastore):
             if dataset is None:
                 raise FileNotFoundError(f"Failed to export dataset {refs[i]}.")
             yield dataset
+
+    def transfer_from(
+        self,
+        source_datastore: Datastore,
+        refs: Iterable[DatasetRef],
+        local_refs: Optional[Iterable[DatasetRef]] = None,
+        transfer: str = "auto",
+        artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
+    ) -> tuple[set[DatasetRef], set[DatasetRef]]:
+        # Docstring inherited
+        # mypy does not understand "type(self) is not type(source)"
+        if isinstance(source_datastore, ChainedDatastore):
+            # Both the source and destination are chained datastores.
+            source_datastores = tuple(source_datastore.datastores)
+        else:
+            # The source datastore is different, forward everything to the
+            # child datastores.
+            source_datastores = tuple([source_datastore])
+
+        # Need to know the set of all possible refs that could be transferred.
+        if local_refs is None:
+            remaining_refs = set(refs)
+            local_refs = refs
+        else:
+            remaining_refs = set(local_refs)
+
+        missing_from_source: set[DatasetRef] | None = None
+        all_accepted = set()
+        nsuccess = 0
+        for source_child in source_datastores:
+            # If we are reading from a chained datastore, it's possible that
+            # only a subset of the datastores know about the dataset. We can't
+            # ask the receiving datastore to copy it when it doesn't exist
+            # so we have to filter again based on what the source datastore
+            # understands.
+            known_to_source = source_child.knows_these([ref for ref in refs])
+
+            # Need to know that there is a possibility that some of these
+            # datasets exist but are unknown to the source datastore if
+            # trust is enabled.
+            if getattr(source_child, "trustGetRequest", False):
+                unknown = [ref for ref, known in known_to_source.items() if not known]
+                existence = source_child.mexists(unknown, artifact_existence)
+                for ref, exists in existence.items():
+                    known_to_source[ref] = exists
+
+            missing = {ref for ref, known in known_to_source.items() if not known}
+            if missing:
+                if missing_from_source is None:
+                    missing_from_source = missing
+                else:
+                    missing_from_source &= missing
+
+            # Try to transfer from each source datastore to each child
+            # datastore. Have to make sure we don't transfer something
+            # we've already transferred to this destination on later passes.
+
+            # Filter the initial list based on the datasets we have
+            # not yet transferred.
+            these_refs = []
+            these_local = []
+            for ref, local_ref in zip(refs, local_refs):
+                if local_ref in remaining_refs and known_to_source[ref]:
+                    these_refs.append(ref)
+                    these_local.append(local_ref)
+
+            if not these_refs:
+                # Already transferred all datasets known to this datastore.
+                continue
+
+            for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+                if constraints is not None:
+                    filtered_refs = []
+                    filtered_local = []
+                    for ref, local_ref in zip(these_refs, these_local):
+                        if constraints.isAcceptable(local_ref):
+                            filtered_refs.append(ref)
+                            filtered_local.append(local_ref)
+                        else:
+                            log.debug("Rejecting ref by constraints: %s", local_ref)
+                else:
+                    filtered_refs = [ref for ref in these_refs]
+                    filtered_local = [ref for ref in these_local]
+                try:
+                    accepted, _ = datastore.transfer_from(
+                        source_child, filtered_refs, filtered_local, transfer, artifact_existence
+                    )
+                except (TypeError, NotImplementedError):
+                    # The datastores were incompatible.
+                    continue
+                else:
+                    nsuccess += 1
+
+                # Remove the accepted datasets from those remaining.
+                remaining_refs = remaining_refs - accepted
+
+                # Keep track of everything we have accepted.
+                all_accepted.update(accepted)
+
+        if missing_from_source:
+            for ref in missing_from_source:
+                log.warning("Asked to transfer dataset %s but no file artifacts exist for it", ref)
+
+        if nsuccess == 0:
+            raise TypeError(f"None of the child datastores could accept transfers from {source_datastore!r}")
+
+        return all_accepted, remaining_refs

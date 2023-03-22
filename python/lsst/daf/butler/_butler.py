@@ -2260,9 +2260,11 @@ class Butler(LimitedButler):
             )
             source_refs = [ref for ref, exists in dataset_existence.items() if exists]
             filtered_count = len(source_refs)
+            n_missing = original_count - filtered_count
             log.verbose(
-                "%d datasets removed because the artifact does not exist. Now have %d.",
-                original_count - filtered_count,
+                "%d dataset%s removed because the artifact does not exist. Now have %d.",
+                n_missing,
+                "" if n_missing == 1 else "s",
                 filtered_count,
             )
 
@@ -2413,13 +2415,22 @@ class Butler(LimitedButler):
 
             # Ask the datastore to transfer. The datastore has to check that
             # the source datastore is compatible with the target datastore.
-            self.datastore.transfer_from(
+            accepted, rejected = self.datastore.transfer_from(
                 source_butler.datastore,
                 source_refs,
                 local_refs=transferred_refs,
                 transfer=transfer,
                 artifact_existence=artifact_existence,
             )
+            if rejected:
+                # For now, accept the registry entries but not the files.
+                log.warning(
+                    "%d datasets were rejected and %d accepted for dataset type %s in run %r.",
+                    len(rejected),
+                    len(accepted),
+                    datasetType,
+                    run,
+                )
 
         return transferred_refs
 

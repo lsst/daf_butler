@@ -2,6 +2,7 @@ datastore:
   name: SecondDatastore
   cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
   root: <butlerRoot>/butler_test_repository2
+  composites: !include composites.yaml
   records:
     table: posix_datastore_records_2
   templates:

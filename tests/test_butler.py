@@ -1798,6 +1798,14 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Setting id_gen_map should have no effect here
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
+    def _enable_trust(self, datastore) -> None:
+        if hasattr(datastore, "trustGetRequest"):
+            datastore.trustGetRequest = True
+        elif hasattr(datastore, "datastores"):
+            for datastore in datastore.datastores:
+                if hasattr(datastore, "trustGetRequest"):
+                    datastore.trustGetRequest = True
+
     def testTransferMissing(self):
         """Test transfers where datastore records are missing.
 
@@ -1809,7 +1817,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         )
 
         # Configure the source butler to allow trust.
-        self.source_butler.datastore.trustGetRequest = True
+        self._enable_trust(self.source_butler.datastore)
 
         self.assertButlerTransfers(purge=True)
 
@@ -1824,7 +1832,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         )
 
         # Configure the source butler to allow trust.
-        self.source_butler.datastore.trustGetRequest = True
+        self._enable_trust(self.source_butler.datastore)
 
         # Test disassembly.
         self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
@@ -1914,17 +1922,36 @@ class PosixDatastoreTransfers(unittest.TestCase):
                     # For one of these delete the file as well.
                     # This allows the "missing" code to filter the
                     # file out.
+                    # Access the individual datastores.
+                    datastores = []
+                    if hasattr(butler.datastore, "datastores"):
+                        datastores.extend(butler.datastore.datastores)
+                    else:
+                        datastores.append(butler.datastore)
+
                     if not deleted:
-                        primary, uris = butler.datastore.getURIs(ref)
-                        if primary:
-                            primary.remove()
-                        for uri in uris.values():
-                            uri.remove()
+                        # For a chained datastore we need to remove
+                        # files in each chain.
+                        for datastore in datastores:
+                            # The file might not be known to the datastore
+                            # if constraints are used.
+                            try:
+                                primary, uris = datastore.getURIs(ref)
+                            except FileNotFoundError:
+                                continue
+                            if primary:
+                                if primary.scheme != "mem":
+                                    primary.remove()
+                            for uri in uris.values():
+                                if uri.scheme != "mem":
+                                    uri.remove()
                         n_expected -= 1
                         deleted.add(ref)
 
                     # Remove the datastore record.
-                    butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref.id})
+                    for datastore in datastores:
+                        if hasattr(datastore, "removeStoredItemInfo"):
+                            datastore.removeStoredItemInfo(ref)
 
             if index < 2:
                 source_refs.append(ref)
@@ -1974,7 +2001,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
             )
         self.assertEqual(len(transferred), n_expected)
         log_output = ";".join(cm.output)
-        self.assertIn("found in datastore for chunk", log_output)
+
+        # A ChainedDatastore will use the in-memory datastore for mexists
+        # so we can not rely on the mexists log message.
+        self.assertIn("Number of datastore records found in source", log_output)
         self.assertIn("Creating output run", log_output)
 
         # Do the transfer twice to ensure that it will do nothing extra.
@@ -1994,7 +2024,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
             log_output = ";".join(cm.output)
             self.assertIn("no file artifacts exist", log_output)
 
-            with self.assertRaises(TypeError):
+            with self.assertRaises((TypeError, AttributeError)):
                 self.target_butler.datastore.transfer_from(self.source_butler, source_refs)
 
             with self.assertRaises(ValueError):
@@ -2019,6 +2049,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
             # use integer IDs so filter those out.
             to_transfer = [ref for ref in source_refs if ref.run == "run2"]
             self.target_butler.transfer_from(self.source_butler, to_transfer, id_gen_map=id_gen_map)
+
+
+class ChainedDatastoreTransfers(PosixDatastoreTransfers):
+    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
 
 
 if __name__ == "__main__":

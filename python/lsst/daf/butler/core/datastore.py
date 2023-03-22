@@ -742,7 +742,7 @@ class Datastore(metaclass=ABCMeta):
         local_refs: Optional[Iterable[DatasetRef]] = None,
         transfer: str = "auto",
         artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
-    ) -> None:
+    ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         """Transfer dataset artifacts from another datastore to this one.
 
         Parameters
@@ -772,6 +772,13 @@ class Datastore(metaclass=ABCMeta):
             Optional mapping of datastore artifact to existence. Updated by
             this method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
+
+        Returns
+        -------
+        accepted : `set` [`DatasetRef`]
+            The datasets that were transferred.
+        rejected : `set` [`DatasetRef`]
+            The datasets that were rejected due to a constraints violation.
 
         Raises
         ------
