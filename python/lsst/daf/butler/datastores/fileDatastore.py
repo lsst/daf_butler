@@ -2479,7 +2479,6 @@ class FileDatastore(GenericBaseDatastore):
         self,
         source_datastore: Datastore,
         refs: Iterable[DatasetRef],
-        local_refs: Optional[Iterable[DatasetRef]] = None,
         transfer: str = "auto",
         artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
@@ -2514,11 +2513,6 @@ class FileDatastore(GenericBaseDatastore):
         # We will go through the list multiple times so must convert
         # generators to lists.
         refs = list(refs)
-
-        if local_refs is None:
-            local_refs = refs
-        else:
-            local_refs = list(local_refs)
 
         # In order to handle disassembled composites the code works
         # at the records level since it can assume that internal APIs
@@ -2612,7 +2606,7 @@ class FileDatastore(GenericBaseDatastore):
                     source_records[missing].extend(dataset_records)
 
         # See if we already have these records
-        target_records = self._get_stored_records_associated_with_refs(local_refs)
+        target_records = self._get_stored_records_associated_with_refs(refs)
 
         # The artifacts to register
         artifacts = []
@@ -2627,21 +2621,21 @@ class FileDatastore(GenericBaseDatastore):
         accepted = set()
 
         # Now can transfer the artifacts
-        for source_ref, target_ref in zip(refs, local_refs):
-            if not self.constraints.isAcceptable(target_ref):
+        for ref in refs:
+            if not self.constraints.isAcceptable(ref):
                 # This datastore should not be accepting this dataset.
-                rejected.add(target_ref)
+                rejected.add(ref)
                 continue
 
-            accepted.add(target_ref)
+            accepted.add(ref)
 
-            if target_ref.id in target_records:
+            if ref.id in target_records:
                 # Already have an artifact for this.
-                already_present.append(target_ref)
+                already_present.append(ref)
                 continue
 
             # mypy needs to know these are always resolved refs
-            for info in source_records[source_ref.getCheckedId()]:
+            for info in source_records[ref.getCheckedId()]:
                 source_location = info.file_location(source_datastore.locationFactory)
                 target_location = info.file_location(self.locationFactory)
                 if source_location == target_location:
@@ -2668,7 +2662,7 @@ class FileDatastore(GenericBaseDatastore):
                         source_location.uri, transfer=transfer, overwrite=True, transaction=self._transaction
                     )
 
-                artifacts.append((target_ref, info))
+                artifacts.append((ref, info))
 
         self._register_datasets(artifacts)
 

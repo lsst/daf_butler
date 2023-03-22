@@ -739,7 +739,6 @@ class Datastore(metaclass=ABCMeta):
         self,
         source_datastore: Datastore,
         refs: Iterable[DatasetRef],
-        local_refs: Optional[Iterable[DatasetRef]] = None,
         transfer: str = "auto",
         artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
@@ -752,10 +751,6 @@ class Datastore(metaclass=ABCMeta):
             must be compatible with this datastore receiving the artifacts.
         refs : iterable of `DatasetRef`
             The datasets to transfer from the source datastore.
-        local_refs : iterable of `DatasetRef`, optional
-            The dataset refs associated with the registry associated with
-            this datastore. Can be `None` if the source and target datastore
-            are using UUIDs.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
             Choices include "move", "copy",
