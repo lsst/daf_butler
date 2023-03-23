@@ -1966,7 +1966,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
             datasetType = DatasetType(datasetTypeName, dimensions, badStorageClass)
             self.target_butler.registry.registerDatasetType(datasetType)
         with self.assertRaises(ConflictingDefinitionError) as cm:
-            self.target_butler.transfer_from(self.source_butler, source_refs, id_gen_map=id_gen_map)
+            self.target_butler.transfer_from(self.source_butler, source_refs)
         self.assertIn("dataset type differs", str(cm.exception))
 
         # And remove the bad definitions.
@@ -1975,13 +1975,11 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         # Transfer without creating dataset types should fail.
         with self.assertRaises(KeyError):
-            self.target_butler.transfer_from(self.source_butler, source_refs, id_gen_map=id_gen_map)
+            self.target_butler.transfer_from(self.source_butler, source_refs)
 
         # Transfer without creating dimensions should fail.
         with self.assertRaises(ConflictingDefinitionError) as cm:
-            self.target_butler.transfer_from(
-                self.source_butler, source_refs, id_gen_map=id_gen_map, register_dataset_types=True
-            )
+            self.target_butler.transfer_from(self.source_butler, source_refs, register_dataset_types=True)
         self.assertIn("dimension", str(cm.exception))
 
         # The failed transfer above leaves registry in an inconsistent
@@ -1995,7 +1993,6 @@ class PosixDatastoreTransfers(unittest.TestCase):
             transferred = self.target_butler.transfer_from(
                 self.source_butler,
                 source_refs,
-                id_gen_map=id_gen_map,
                 register_dataset_types=True,
                 transfer_dimensions=True,
             )
@@ -2012,9 +2009,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # dataset_id.
         if purge:
             # This should not need to register dataset types.
-            transferred = self.target_butler.transfer_from(
-                self.source_butler, source_refs, id_gen_map=id_gen_map
-            )
+            transferred = self.target_butler.transfer_from(self.source_butler, source_refs)
             self.assertEqual(len(transferred), n_expected)
 
             # Also do an explicit low-level transfer to trigger some
@@ -2048,7 +2043,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
             # Re-importing the run1 datasets can be problematic if they
             # use integer IDs so filter those out.
             to_transfer = [ref for ref in source_refs if ref.run == "run2"]
-            self.target_butler.transfer_from(self.source_butler, to_transfer, id_gen_map=id_gen_map)
+            self.target_butler.transfer_from(self.source_butler, to_transfer)
 
 
 class ChainedDatastoreTransfers(PosixDatastoreTransfers):

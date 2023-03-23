@@ -1023,7 +1023,6 @@ class ChainedDatastore(Datastore):
         self,
         source_datastore: Datastore,
         refs: Iterable[DatasetRef],
-        local_refs: Optional[Iterable[DatasetRef]] = None,
         transfer: str = "auto",
         artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
@@ -1038,11 +1037,7 @@ class ChainedDatastore(Datastore):
             source_datastores = tuple([source_datastore])
 
         # Need to know the set of all possible refs that could be transferred.
-        if local_refs is None:
-            remaining_refs = set(refs)
-            local_refs = refs
-        else:
-            remaining_refs = set(local_refs)
+        remaining_refs = set(refs)
 
         missing_from_source: set[DatasetRef] | None = None
         all_accepted = set()
@@ -1078,11 +1073,9 @@ class ChainedDatastore(Datastore):
             # Filter the initial list based on the datasets we have
             # not yet transferred.
             these_refs = []
-            these_local = []
-            for ref, local_ref in zip(refs, local_refs):
-                if local_ref in remaining_refs and known_to_source[ref]:
+            for ref in refs:
+                if ref in remaining_refs and known_to_source[ref]:
                     these_refs.append(ref)
-                    these_local.append(local_ref)
 
             if not these_refs:
                 # Already transferred all datasets known to this datastore.
@@ -1091,19 +1084,16 @@ class ChainedDatastore(Datastore):
             for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
                 if constraints is not None:
                     filtered_refs = []
-                    filtered_local = []
-                    for ref, local_ref in zip(these_refs, these_local):
-                        if constraints.isAcceptable(local_ref):
+                    for ref in these_refs:
+                        if constraints.isAcceptable(ref):
                             filtered_refs.append(ref)
-                            filtered_local.append(local_ref)
                         else:
-                            log.debug("Rejecting ref by constraints: %s", local_ref)
+                            log.debug("Rejecting ref by constraints: %s", ref)
                 else:
                     filtered_refs = [ref for ref in these_refs]
-                    filtered_local = [ref for ref in these_local]
                 try:
                     accepted, _ = datastore.transfer_from(
-                        source_child, filtered_refs, filtered_local, transfer, artifact_existence
+                        source_child, filtered_refs, transfer, artifact_existence
                     )
                 except (TypeError, NotImplementedError):
                     # The datastores were incompatible.
