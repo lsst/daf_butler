@@ -23,7 +23,8 @@ from __future__ import annotations
 
 __all__ = ("DimensionConfig",)
 
-from typing import Iterable, Iterator, Optional, Union
+from collections.abc import Iterator, Mapping, Sequence
+from typing import Any
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
@@ -95,16 +96,16 @@ class DimensionConfig(ConfigSubset):
 
     def __init__(
         self,
-        other: Union[Config, ResourcePathExpression, None] = None,
+        other: Config | ResourcePathExpression | Mapping[str, Any] | None = None,
         validate: bool = True,
-        searchPaths: Optional[Iterable[ResourcePathExpression]] = None,
+        searchPaths: Sequence[ResourcePathExpression] | None = None,
     ):
         # if argument is not None then do not load/merge defaults
         mergeDefaults = other is None
         super().__init__(other=other, validate=validate, mergeDefaults=mergeDefaults, searchPaths=searchPaths)
 
     def _updateWithConfigsFromPath(
-        self, searchPaths: Iterable[ResourcePathExpression], configFile: str
+        self, searchPaths: Sequence[str | ResourcePath], configFile: ResourcePath | str
     ) -> None:
         """Search the supplied paths reading config from first found.
 
@@ -138,7 +139,7 @@ class DimensionConfig(ConfigSubset):
             else:
                 raise FileNotFoundError(f"Could not find {configFile} in search path {searchPaths}")
 
-    def _updateWithOtherConfigFile(self, file: Union[ResourcePath, str]) -> None:
+    def _updateWithOtherConfigFile(self, file: Config | str | ResourcePath | Mapping[str, Any]) -> None:
         """Override for base class method.
 
         Parameters

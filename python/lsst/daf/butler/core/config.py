@@ -35,7 +35,7 @@ import sys
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, ClassVar
+from typing import IO, TYPE_CHECKING, Any, ClassVar, Iterator, cast
 
 import yaml
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -62,7 +62,7 @@ else:
         yamlLoader = yaml.SafeLoader
 
 
-def _doUpdate(d, u):
+def _doUpdate(d: Mapping[str, Any], u: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(u, Mapping) or not isinstance(d, MutableMapping):
         raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
     for k, v in u.items():
@@ -73,7 +73,7 @@ def _doUpdate(d, u):
     return d
 
 
-def _checkNextItem(k, d, create, must_be_dict):
+def _checkNextItem(k: str | int, d: Any, create: bool, must_be_dict: bool) -> tuple[Any, bool]:
     """See if k is in d and if it is return the new child."""
     nextVal = None
     isThere = False
@@ -122,20 +122,20 @@ class Loader(yamlLoader):
     See https://davidchall.github.io/yaml-includes.html
     """
 
-    def __init__(self, stream: Any):  # types-PyYAML annotates 'stream' with a private type
+    def __init__(self, stream: str | IO):  # types-PyYAML annotates 'stream' with a private type
         super().__init__(stream)
         # if this is a string and not a stream we may well lack a name
-        try:
+        if hasattr(stream, "name"):
             self._root = ResourcePath(stream.name)
-        except AttributeError:
+        else:
             # No choice but to assume a local filesystem
             self._root = ResourcePath("no-file.yaml")
-        Loader.add_constructor("!include", Loader.include)
+        self.add_constructor("!include", Loader.include)
 
     def include(self, node: yaml.Node) -> list[Any] | dict[str, Any]:
         result: list[Any] | dict[str, Any]
         if isinstance(node, yaml.ScalarNode):
-            return self.extractFile(self.construct_scalar(node))
+            return self.extractFile(self.construct_scalar(node))  # type: ignore[arg-type]
 
         elif isinstance(node, yaml.SequenceNode):
             result = []
@@ -155,7 +155,7 @@ class Loader(yamlLoader):
             print("Error:: unrecognised node type in !include statement", file=sys.stderr)
             raise yaml.constructor.ConstructorError
 
-    def extractFile(self, filename):
+    def extractFile(self, filename: str) -> Any:
         # It is possible for the !include to point to an explicit URI
         # instead of a relative URI, therefore we first see if it is
         # scheme-less or not. If it has a scheme we use it directly
@@ -176,6 +176,12 @@ class Loader(yamlLoader):
         stream = io.BytesIO(data)
         stream.name = fileuri.geturl()
         return yaml.load(stream, Loader)
+
+
+# Type of the key used for accessing items in configuration object. It can be
+# a single string as described below or a sequence of srtings and integer
+# indices. Indices are used to access items in sequences stored in config.
+_ConfigKey = str | Sequence[str | int]
 
 
 class Config(MutableMapping):
@@ -270,7 +276,7 @@ class Config(MutableMapping):
             # a runtime error.
             raise RuntimeError(f"A Config could not be loaded from other: {other}")
 
-    def ppprint(self):
+    def ppprint(self) -> str:
         """Return config as formatted readable string.
 
         Examples
@@ -284,19 +290,19 @@ class Config(MutableMapping):
         """
         return pprint.pformat(self._data, indent=2, width=1)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{type(self).__name__}({self._data!r})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.ppprint()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._data)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         return iter(self._data)
 
-    def copy(self):
+    def copy(self) -> Config:
         return type(self)(self)
 
     @classmethod
@@ -373,7 +379,7 @@ class Config(MutableMapping):
             raise RuntimeError(f"The Config URI does not have a supported extension: {uri}")
         self.configFile = uri
 
-    def __initFromYaml(self, stream):
+    def __initFromYaml(self, stream: IO | str | bytes) -> Config:
         """Load a YAML config from any readable stream that contains one.
 
         Parameters
@@ -394,7 +400,7 @@ class Config(MutableMapping):
         self._data = content
         return self
 
-    def __initFromJson(self, stream):
+    def __initFromJson(self, stream: IO | str | bytes) -> Config:
         """Load a JSON config from any readable stream that contains one.
 
         Parameters
@@ -417,7 +423,7 @@ class Config(MutableMapping):
         self._data = content
         return self
 
-    def _processExplicitIncludes(self):
+    def _processExplicitIncludes(self) -> None:
         """Scan through the configuration searching for the special includes.
 
         Looks for ``includeConfigs`` directive and processes the includes.
@@ -458,17 +464,11 @@ class Config(MutableMapping):
                         found = fileName
                     else:
                         for dir in searchPaths:
-                            if isinstance(dir, ResourcePath):
-                                specific = dir.join(fileName.path)
-                                # Remote resource check might be expensive
-                                if specific.exists():
-                                    found = specific
-                            else:
-                                log.warning(
-                                    "Do not understand search path entry '%s' of type %s",
-                                    dir,
-                                    type(dir).__name__,
-                                )
+                            specific = dir.join(fileName.path)
+                            # Remote resource check might be expensive
+                            if specific.exists():
+                                found = specific
+                                break
                     if not found:
                         raise RuntimeError(f"Unable to find referenced include file: {fileName}")
 
@@ -494,7 +494,7 @@ class Config(MutableMapping):
                     self[basePath] = newConfig
 
     @staticmethod
-    def _splitIntoKeys(key):
+    def _splitIntoKeys(key: _ConfigKey) -> list[str | int]:
         r"""Split the argument for get/set/in into a hierarchical list.
 
         Parameters
@@ -540,16 +540,15 @@ class Config(MutableMapping):
             hierarchy = key.split(d)
             if temp:
                 hierarchy = [h.replace(temp, d) for h in hierarchy]
-            return hierarchy
+            # Copy the list to keep mypy quiet.
+            return list(hierarchy)
         elif isinstance(key, Iterable):
             return list(key)
         else:
-            # Not sure what this is so try it anyway
-            return [
-                key,
-            ]
+            # Do not try to guess.
+            raise TypeError(f"Provided key [{key}] neither str nor iterable.")
 
-    def _getKeyHierarchy(self, name):
+    def _getKeyHierarchy(self, name: _ConfigKey) -> list[str | int]:
         """Retrieve the key hierarchy for accessing the Config.
 
         Parameters
@@ -564,15 +563,14 @@ class Config(MutableMapping):
             as a key in the Config it will be used regardless of the presence
             of any nominal delimiter.
         """
+        keys: list[str | int]
         if name in self._data:
-            keys = [
-                name,
-            ]
+            keys = [cast(str, name)]
         else:
             keys = self._splitIntoKeys(name)
         return keys
 
-    def _findInHierarchy(self, keys, create=False):
+    def _findInHierarchy(self, keys: Sequence[str | int], create: bool = False) -> tuple[list[Any], bool]:
         """Look for hierarchy of keys in Config.
 
         Parameters
@@ -593,7 +591,7 @@ class Config(MutableMapping):
             `True` if the full hierarchy exists and the final element
             in ``hierarchy`` is the value of relevant value.
         """
-        d = self._data
+        d: Any = self._data
 
         # For the first key, d must be a dict so it is a waste
         # of time to check for a sequence.
@@ -613,7 +611,7 @@ class Config(MutableMapping):
 
         return hierarchy, complete
 
-    def __getitem__(self, name):
+    def __getitem__(self, name: _ConfigKey) -> Any:
         # Override the split for the simple case where there is an exact
         # match.  This allows `Config.items()` to work via a simple
         # __iter__ implementation that returns top level keys of
@@ -623,8 +621,9 @@ class Config(MutableMapping):
         # all further cleverness.
         found_directly = False
         try:
-            data = self._data[name]
-            found_directly = True
+            if isinstance(name, str):
+                data = self._data[name]
+                found_directly = True
         except KeyError:
             pass
 
@@ -645,7 +644,7 @@ class Config(MutableMapping):
                 data._D = self._D
         return data
 
-    def __setitem__(self, name, value):
+    def __setitem__(self, name: _ConfigKey, value: Any) -> None:
         keys = self._getKeyHierarchy(name)
         last = keys.pop()
         if isinstance(value, Config):
@@ -662,12 +661,14 @@ class Config(MutableMapping):
         except TypeError:
             data[int(last)] = value
 
-    def __contains__(self, key):
+    def __contains__(self, key: Any) -> bool:
+        if not isinstance(key, str | Sequence):
+            return False
         keys = self._getKeyHierarchy(key)
         hierarchy, complete = self._findInHierarchy(keys)
         return complete
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str | Sequence[str]) -> None:
         keys = self._getKeyHierarchy(key)
         last = keys.pop()
         hierarchy, complete = self._findInHierarchy(keys)
@@ -680,7 +681,7 @@ class Config(MutableMapping):
         else:
             raise KeyError(f"{key} not found in Config")
 
-    def update(self, other):
+    def update(self, other: Mapping[str, Any]) -> None:  # type: ignore[override]
         """Update config from other `Config` or `dict`.
 
         Like `dict.update()`, but will add or modify keys in nested dicts,
@@ -705,7 +706,7 @@ class Config(MutableMapping):
         """
         _doUpdate(self._data, other)
 
-    def merge(self, other):
+    def merge(self, other: Mapping) -> None:
         """Merge another Config into this one.
 
         Like `Config.update()`, but will add keys & values from other that
@@ -766,7 +767,7 @@ class Config(MutableMapping):
         getKeysAsTuples(self._data, keys, None)
         return keys
 
-    def names(self, topLevelOnly=False, delimiter=None):
+    def names(self, topLevelOnly: bool = False, delimiter: str | None = None) -> list[str]:
         """Get a delimited name of all the keys in the hierarchy.
 
         The values returned from this method are guaranteed to be usable
@@ -840,7 +841,7 @@ class Config(MutableMapping):
         ]
         return strings
 
-    def asArray(self, name):
+    def asArray(self, name: str | Sequence[str]) -> Sequence[Any]:
         """Get a value as an array.
 
         May contain one or more elements.
@@ -865,12 +866,12 @@ class Config(MutableMapping):
             val = [val]
         return val
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, Config):
             other = other._data
         return self._data == other
 
-    def __ne__(self, other):
+    def __ne__(self, other: Any) -> bool:
         if isinstance(other, Config):
             other = other._data
         return self._data != other
@@ -947,7 +948,15 @@ class Config(MutableMapping):
         self.configFile = uri
 
     @staticmethod
-    def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True, toMerge=None):
+    def updateParameters(
+        configType: type[ConfigSubset],
+        config: Config,
+        full: Config,
+        toUpdate: dict[str, Any] | None = None,
+        toCopy: Sequence[str | Sequence[str]] | None = None,
+        overwrite: bool = True,
+        toMerge: Sequence[str | Sequence[str]] | None = None,
+    ) -> None:
         """Update specific config parameters.
 
         Allows for named parameters to be set to new values in bulk, and
@@ -1006,12 +1015,17 @@ class Config(MutableMapping):
         # If this is a parent configuration we add in the stub entry
         # so that the ConfigSubset constructor will do the right thing.
         # We check full for this since that is guaranteed to be complete.
-        if configType.component in full and configType.component not in config:
+        if (
+            configType.component is not None
+            and configType.component in full
+            and configType.component not in config
+        ):
             config[configType.component] = {}
 
         # Extract the part of the config we wish to update
         localConfig = configType(config, mergeDefaults=False, validate=False)
 
+        key: str | Sequence[str]
         if toUpdate:
             for key, value in toUpdate.items():
                 if key in localConfig and not overwrite:
@@ -1049,12 +1063,12 @@ class Config(MutableMapping):
                         localConfig[key] = localFullConfig[key]
 
         # Reattach to parent if this is a child config
-        if configType.component in config:
+        if configType.component is not None and configType.component in config:
             config[configType.component] = localConfig
         else:
             config.update(localConfig)
 
-    def toDict(self):
+    def toDict(self) -> dict[str, Any]:
         """Convert a `Config` to a standalone hierarchical `dict`.
 
         Returns
@@ -1127,7 +1141,13 @@ class ConfigSubset(Config):
     """Name of the file containing defaults for this config class.
     """
 
-    def __init__(self, other=None, validate=True, mergeDefaults=True, searchPaths=None):
+    def __init__(
+        self,
+        other: Config | ResourcePathExpression | Mapping[str, Any] | None = None,
+        validate: bool = True,
+        mergeDefaults: bool = True,
+        searchPaths: Sequence[ResourcePathExpression] | None = None,
+    ):
         # Create a blank object to receive the defaults
         # Once we have the defaults we then update with the external values
         super().__init__()
@@ -1148,7 +1168,7 @@ class ConfigSubset(Config):
                 externalConfig._data = externalConfig._data[self.component]
 
         # Default files read to create this configuration
-        self.filesRead = []
+        self.filesRead: list[ResourcePath | str] = []
 
         # Assume we are not looking up child configurations
         containerKey = None
@@ -1156,9 +1176,9 @@ class ConfigSubset(Config):
         # Sometimes we do not want to merge with defaults.
         if mergeDefaults:
             # Supplied search paths have highest priority
-            fullSearchPath = []
+            fullSearchPath: list[ResourcePath | str] = []
             if searchPaths:
-                fullSearchPath.extend(searchPaths)
+                fullSearchPath = [ResourcePath(path) for path in searchPaths]
 
             # Read default paths from environment
             fullSearchPath.extend(self.defaultSearchPaths())
@@ -1247,7 +1267,9 @@ class ConfigSubset(Config):
         defaultsPaths.append(ResourcePath(f"resource://{cls.resourcesPackage}/configs", forceDirectory=True))
         return defaultsPaths
 
-    def _updateWithConfigsFromPath(self, searchPaths, configFile):
+    def _updateWithConfigsFromPath(
+        self, searchPaths: Sequence[str | ResourcePath], configFile: ResourcePath | str
+    ) -> None:
         """Search the supplied paths, merging the configuration values.
 
         The values read will override values currently stored in the object.
@@ -1286,7 +1308,7 @@ class ConfigSubset(Config):
                 else:
                     raise ValueError(f"Unexpected search path type encountered: {pathDir!r}")
 
-    def _updateWithOtherConfigFile(self, file):
+    def _updateWithOtherConfigFile(self, file: Config | str | ResourcePath | Mapping[str, Any]) -> None:
         """Read in some defaults and update.
 
         Update the configuration by reading the supplied file as a config
@@ -1303,7 +1325,7 @@ class ConfigSubset(Config):
         externalConfig = type(self)(file, validate=False, mergeDefaults=False)
         self.update(externalConfig)
 
-    def validate(self):
+    def validate(self) -> None:
         """Check that mandatory keys are present in this configuration.
 
         Ignored if ``requiredKeys`` is empty.
