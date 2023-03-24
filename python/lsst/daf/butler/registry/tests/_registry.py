@@ -42,7 +42,7 @@ except ImportError:
     np = None
 
 import lsst.sphgeom
-from lsst.daf.relation import RelationalAlgebraError
+from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iteration, sql
 
 from ...core import (
     DataCoordinate,
@@ -3347,4 +3347,44 @@ class RegistryTests(ABC):
                 )
             },
             overlaps_by_observation[nontrivial_observation],
+        )
+
+    def test_query_projection_drop_postprocessing(self) -> None:
+        """Test that projections and deduplications on query objects can
+        drop post-query region filtering to ensure the query remains in
+        the SQL engine.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "spatial.yaml")
+
+        def pop_transfer(tree: Relation) -> Relation:
+            """If a relation tree terminates with a transfer to a new engine,
+            return the relation prior to that transfer.  If not, return the
+            original relation.
+            """
+            match tree:
+                case Transfer(target=target):
+                    return target
+                case _:
+                    return tree
+
+        # There's no public way to get a Query object yet, so we get one from a
+        # DataCoordinateQueryResults private attribute.  When a public API is
+        # available this test should use it.
+        query = registry.queryDataIds(["visit", "detector", "tract", "patch"])._query
+        # We expect this query to terminate in the iteration engine originally,
+        # because region-filtering is necessary.
+        self.assertIsInstance(pop_transfer(query.relation).engine, iteration.Engine)
+        # If we deduplicate, we usually have to do that downstream of the
+        # filtering.  That means the deduplication has to happen in the
+        # iteration engine.
+        self.assertIsInstance(pop_transfer(query.projected(unique=True).relation).engine, iteration.Engine)
+        # If we pass drop_postprocessing, we instead drop the region filtering
+        # so the deduplication can happen in SQL (though there might still be
+        # transfer to iteration at the tail of the tree that we can ignore;
+        # that's what the pop_transfer takes care of here).
+        self.assertIsInstance(
+            pop_transfer(query.projected(unique=True, drop_postprocessing=True).relation).engine,
+            sql.Engine,
         )
