@@ -468,7 +468,7 @@ class Config(MutableMapping):
                             # Remote resource check might be expensive
                             if specific.exists():
                                 found = specific
-                                # TODO: do we need `break` here?
+                                break
                     if not found:
                         raise RuntimeError(f"Unable to find referenced include file: {fileName}")
 
@@ -543,7 +543,7 @@ class Config(MutableMapping):
             # Copy the list to keep mypy quiet.
             return list(hierarchy)
         elif isinstance(key, Iterable):
-            return [k for k in key]
+            return list(key)
         else:
             # Do not try to guess.
             raise TypeError(f"Provided key [{key}] neither str nor iterable.")
