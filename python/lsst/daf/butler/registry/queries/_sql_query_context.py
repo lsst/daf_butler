@@ -266,8 +266,15 @@ class SqlQueryContext(QueryContext):
                 columns_added_here = relation.columns - target.columns
                 new_target = self.drop_invalidated_postprocessing(target, new_columns - columns_added_here)
                 if operation.columns_required <= new_columns:
-                    # This operation can stay.
-                    return relation.reapply(new_target)
+                    # This operation can stay...
+                    if new_target is target:
+                        # ...and nothing has actually changed upstream of it.
+                        return relation
+                    else:
+                        # ...but we should see if it can now be performed in
+                        # the preferred engine, since something it didn't
+                        # commute with may have been removed.
+                        return operation.apply(new_target, preferred_engine=self.preferred_engine)
                 else:
                     # This operation needs to be dropped, as we're about to
                     # project away one more more of the columns it needs.
