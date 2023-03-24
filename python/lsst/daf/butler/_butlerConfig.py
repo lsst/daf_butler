@@ -126,6 +126,7 @@ class ButlerConfig(Config):
                 localOverrides = butlerConfig
             config = configClass(localOverrides, searchPaths=searchPaths)
             # Re-attach it using the global namespace
+            assert configClass.component is not None, "Config class component cannot be None"
             self.update({configClass.component: config})
             # Remove the key from the butlerConfig since we have already
             # merged that information.

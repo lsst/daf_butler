@@ -35,7 +35,7 @@ import sys
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, ClassVar, Iterator
+from typing import IO, TYPE_CHECKING, Any, ClassVar, Iterator, cast
 
 import yaml
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -73,7 +73,7 @@ def _doUpdate(d: Mapping[str, Any], u: Mapping[str, Any]) -> Mapping[str, Any]:
     return d
 
 
-def _checkNextItem(k: str, d: Any, create: bool, must_be_dict: bool) -> tuple[Any, bool]:
+def _checkNextItem(k: str | int, d: Any, create: bool, must_be_dict: bool) -> tuple[Any, bool]:
     """See if k is in d and if it is return the new child."""
     nextVal = None
     isThere = False
@@ -176,6 +176,12 @@ class Loader(yamlLoader):
         stream = io.BytesIO(data)
         stream.name = fileuri.geturl()
         return yaml.load(stream, Loader)
+
+
+# Type of the key used for accessing items in configuration object. It can be
+# a single string as described below or a sequence of srtings and integer
+# indices. Indices are used to access items in sequences stored in config.
+_ConfigKey = str | Sequence[str | int]
 
 
 class Config(MutableMapping):
@@ -458,17 +464,11 @@ class Config(MutableMapping):
                         found = fileName
                     else:
                         for dir in searchPaths:
-                            if isinstance(dir, ResourcePath):
-                                specific = dir.join(fileName.path)
-                                # Remote resource check might be expensive
-                                if specific.exists():
-                                    found = specific
-                            else:
-                                log.warning(
-                                    "Do not understand search path entry '%s' of type %s",
-                                    dir,
-                                    type(dir).__name__,
-                                )
+                            specific = dir.join(fileName.path)
+                            # Remote resource check might be expensive
+                            if specific.exists():
+                                found = specific
+                                # TODO: do we need `break` here?
                     if not found:
                         raise RuntimeError(f"Unable to find referenced include file: {fileName}")
 
@@ -494,7 +494,7 @@ class Config(MutableMapping):
                     self[basePath] = newConfig
 
     @staticmethod
-    def _splitIntoKeys(key: str | Sequence[str]) -> list[str]:
+    def _splitIntoKeys(key: _ConfigKey) -> list[str | int]:
         r"""Split the argument for get/set/in into a hierarchical list.
 
         Parameters
@@ -540,14 +540,15 @@ class Config(MutableMapping):
             hierarchy = key.split(d)
             if temp:
                 hierarchy = [h.replace(temp, d) for h in hierarchy]
-            return hierarchy
+            # Copy the list to keep mypy quiet.
+            return list(hierarchy)
         elif isinstance(key, Iterable):
             return [k for k in key]
         else:
             # Do not try to guess.
             raise TypeError(f"Provided key [{key}] neither str nor iterable.")
 
-    def _getKeyHierarchy(self, name: str | Sequence[str]) -> list[str]:
+    def _getKeyHierarchy(self, name: _ConfigKey) -> list[str | int]:
         """Retrieve the key hierarchy for accessing the Config.
 
         Parameters
@@ -562,16 +563,14 @@ class Config(MutableMapping):
             as a key in the Config it will be used regardless of the presence
             of any nominal delimiter.
         """
-        keys: list[str]
+        keys: list[str | int]
         if name in self._data:
-            keys = [
-                name,
-            ]
+            keys = [cast(str, name)]
         else:
             keys = self._splitIntoKeys(name)
         return keys
 
-    def _findInHierarchy(self, keys: str | Sequence[str], create: bool = False) -> tuple[list[str], bool]:
+    def _findInHierarchy(self, keys: Sequence[str | int], create: bool = False) -> tuple[list[Any], bool]:
         """Look for hierarchy of keys in Config.
 
         Parameters
@@ -592,7 +591,7 @@ class Config(MutableMapping):
             `True` if the full hierarchy exists and the final element
             in ``hierarchy`` is the value of relevant value.
         """
-        d = self._data
+        d: Any = self._data
 
         # For the first key, d must be a dict so it is a waste
         # of time to check for a sequence.
@@ -612,7 +611,7 @@ class Config(MutableMapping):
 
         return hierarchy, complete
 
-    def __getitem__(self, name: str | Sequence[str]) -> Any:
+    def __getitem__(self, name: _ConfigKey) -> Any:
         # Override the split for the simple case where there is an exact
         # match.  This allows `Config.items()` to work via a simple
         # __iter__ implementation that returns top level keys of
@@ -622,8 +621,9 @@ class Config(MutableMapping):
         # all further cleverness.
         found_directly = False
         try:
-            data = self._data[name]
-            found_directly = True
+            if isinstance(name, str):
+                data = self._data[name]
+                found_directly = True
         except KeyError:
             pass
 
@@ -644,7 +644,7 @@ class Config(MutableMapping):
                 data._D = self._D
         return data
 
-    def __setitem__(self, name: str | Sequence[str], value: Any) -> None:
+    def __setitem__(self, name: _ConfigKey, value: Any) -> None:
         keys = self._getKeyHierarchy(name)
         last = keys.pop()
         if isinstance(value, Config):
@@ -661,7 +661,9 @@ class Config(MutableMapping):
         except TypeError:
             data[int(last)] = value
 
-    def __contains__(self, key: str | Sequence[str]) -> bool:
+    def __contains__(self, key: Any) -> bool:
+        if not isinstance(key, str | Sequence):
+            return False
         keys = self._getKeyHierarchy(key)
         hierarchy, complete = self._findInHierarchy(keys)
         return complete
@@ -679,7 +681,7 @@ class Config(MutableMapping):
         else:
             raise KeyError(f"{key} not found in Config")
 
-    def update(self, other: Mapping[str, Any]) -> None:
+    def update(self, other: Mapping[str, Any]) -> None:  # type: ignore[override]
         """Update config from other `Config` or `dict`.
 
         Like `dict.update()`, but will add or modify keys in nested dicts,
@@ -947,13 +949,13 @@ class Config(MutableMapping):
 
     @staticmethod
     def updateParameters(
-        configType: ConfigSubset,
+        configType: type[ConfigSubset],
         config: Config,
         full: Config,
         toUpdate: dict[str, Any] | None = None,
-        toCopy: Sequence[str] | None = None,
+        toCopy: Sequence[str | Sequence[str]] | None = None,
         overwrite: bool = True,
-        toMerge: Sequence[str] | None = None,
+        toMerge: Sequence[str | Sequence[str]] | None = None,
     ) -> None:
         """Update specific config parameters.
 
@@ -1013,12 +1015,17 @@ class Config(MutableMapping):
         # If this is a parent configuration we add in the stub entry
         # so that the ConfigSubset constructor will do the right thing.
         # We check full for this since that is guaranteed to be complete.
-        if configType.component in full and configType.component not in config:
+        if (
+            configType.component is not None
+            and configType.component in full
+            and configType.component not in config
+        ):
             config[configType.component] = {}
 
         # Extract the part of the config we wish to update
         localConfig = configType(config, mergeDefaults=False, validate=False)
 
+        key: str | Sequence[str]
         if toUpdate:
             for key, value in toUpdate.items():
                 if key in localConfig and not overwrite:
@@ -1056,7 +1063,7 @@ class Config(MutableMapping):
                         localConfig[key] = localFullConfig[key]
 
         # Reattach to parent if this is a child config
-        if configType.component in config:
+        if configType.component is not None and configType.component in config:
             config[configType.component] = localConfig
         else:
             config.update(localConfig)
@@ -1136,10 +1143,10 @@ class ConfigSubset(Config):
 
     def __init__(
         self,
-        other: Config | str | Mapping[str, Any] | None = None,
+        other: Config | ResourcePathExpression | Mapping[str, Any] | None = None,
         validate: bool = True,
         mergeDefaults: bool = True,
-        searchPaths: Sequence[str | ResourcePath] | None = None,
+        searchPaths: Sequence[ResourcePathExpression] | None = None,
     ):
         # Create a blank object to receive the defaults
         # Once we have the defaults we then update with the external values
@@ -1161,7 +1168,7 @@ class ConfigSubset(Config):
                 externalConfig._data = externalConfig._data[self.component]
 
         # Default files read to create this configuration
-        self.filesRead = []
+        self.filesRead: list[ResourcePath | str] = []
 
         # Assume we are not looking up child configurations
         containerKey = None
@@ -1169,9 +1176,9 @@ class ConfigSubset(Config):
         # Sometimes we do not want to merge with defaults.
         if mergeDefaults:
             # Supplied search paths have highest priority
-            fullSearchPath = []
+            fullSearchPath: list[ResourcePath | str] = []
             if searchPaths:
-                fullSearchPath.extend(searchPaths)
+                fullSearchPath = [ResourcePath(path) for path in searchPaths]
 
             # Read default paths from environment
             fullSearchPath.extend(self.defaultSearchPaths())
@@ -1261,7 +1268,7 @@ class ConfigSubset(Config):
         return defaultsPaths
 
     def _updateWithConfigsFromPath(
-        self, searchPaths: Sequence[str | ResourcePath], configFile: ResourcePath
+        self, searchPaths: Sequence[str | ResourcePath], configFile: ResourcePath | str
     ) -> None:
         """Search the supplied paths, merging the configuration values.
 

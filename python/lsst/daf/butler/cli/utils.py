@@ -999,6 +999,7 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
 
     ctx.default_map = ctx.default_map or {}
     cmd_name = ctx.info_name
+    assert cmd_name is not None, "command name cannot be None"
     if value:
         try:
             overrides = _read_yaml_presets(value, cmd_name)
@@ -1019,7 +1020,7 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
     return
 
 
-def _read_yaml_presets(file_uri: str, cmd_name: str | None) -> dict[str, Any]:
+def _read_yaml_presets(file_uri: str, cmd_name: str) -> dict[str, Any]:
     """Read file command line overrides from YAML config file.
 
     Parameters
