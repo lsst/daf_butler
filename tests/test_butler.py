@@ -2047,7 +2047,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
 
 class ChainedDatastoreTransfers(PosixDatastoreTransfers):
-    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
+    configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
 if __name__ == "__main__":
