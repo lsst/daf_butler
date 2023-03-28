@@ -23,9 +23,11 @@ from __future__ import annotations
 
 __all__ = ("DimensionPacker",)
 
+import warnings
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Any, Iterable, Optional, Tuple, Type, Union
 
+from deprecated.sphinx import deprecated
 from lsst.utils import doImportType
 
 from ._coordinate import DataCoordinate, DataId
@@ -47,7 +49,8 @@ class DimensionPacker(metaclass=ABCMeta):
     fixed : `DataCoordinate`
         Expanded data ID for the dimensions whose values must remain fixed
         (to these values) in all calls to `pack`, and are used in the results
-        of calls to `unpack`.  ``fixed.hasRecords()`` must return `True`.
+        of calls to `unpack`.  Subclasses are permitted to require that
+        ``fixed.hasRecords()`` return `True`.
     dimensions : `DimensionGraph`
         The dimensions of data IDs packed by this instance.
     """
@@ -125,6 +128,8 @@ class DimensionPacker(metaclass=ABCMeta):
         (`~DimensionPacker._pack` should be overridden instead).
         """
         dataId = DataCoordinate.standardize(dataId, **kwargs)
+        if dataId.subset(self.fixed.graph) != self.fixed:
+            raise ValueError(f"Data ID packer expected a data ID consistent with {self.fixed}, got {dataId}.")
         packed = self._pack(dataId)
         if returnMaxBits:
             return packed, self.maxBits
@@ -159,7 +164,7 @@ class DimensionPacker(metaclass=ABCMeta):
     (`DataCoordinate`)
 
     The packed ID values are only unique and reversible with these
-    dimensions held fixed.  ``fixed.hasRecords() is True`` is guaranteed.
+    dimensions held fixed.
     """
 
     dimensions: DimensionGraph
@@ -167,6 +172,12 @@ class DimensionPacker(metaclass=ABCMeta):
     """
 
 
+# TODO: Remove this class on DM-38687.
+@deprecated(
+    "Deprecated in favor of configurable dimension packers.  Will be removed after v27.",
+    version="v26",
+    category=FutureWarning,
+)
 class DimensionPackerFactory:
     """A factory class for `DimensionPacker` instances.
 
@@ -228,6 +239,12 @@ class DimensionPackerFactory:
         return self._cls(fixed, self._dimensions)
 
 
+# TODO: Remove this class on DM-38687.
+@deprecated(
+    "Deprecated in favor of configurable dimension packers.  Will be removed after v27.",
+    version="v26",
+    category=FutureWarning,
+)
 class DimensionPackerConstructionVisitor(DimensionConstructionVisitor):
     """Builder visitor for a single `DimensionPacker`.
 
@@ -264,8 +281,11 @@ class DimensionPackerConstructionVisitor(DimensionConstructionVisitor):
 
     def visit(self, builder: DimensionConstructionBuilder) -> None:
         # Docstring inherited from DimensionConstructionVisitor.
-        builder.packers[self.name] = DimensionPackerFactory(
-            clsName=self._clsName,
-            fixed=self._fixed,
-            dimensions=self._dimensions,
-        )
+        with warnings.catch_warnings():
+            # Don't warn when deprecated code calls other deprecated code.
+            warnings.simplefilter("ignore", FutureWarning)
+            builder.packers[self.name] = DimensionPackerFactory(
+                clsName=self._clsName,
+                fixed=self._fixed,
+                dimensions=self._dimensions,
+            )

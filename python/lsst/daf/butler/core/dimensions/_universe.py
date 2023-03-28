@@ -42,6 +42,7 @@ from typing import (
     Union,
 )
 
+from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
 
 from .._topology import TopologicalFamily, TopologicalSpace
@@ -459,6 +460,12 @@ class DimensionUniverse:
         # passed it was Dimensions; we know better.
         return result  # type: ignore
 
+    # TODO: Remove this method on DM-38687.
+    @deprecated(
+        "Deprecated in favor of configurable dimension packers.  Will be removed after v27.",
+        version="v26",
+        category=FutureWarning,
+    )
     def makePacker(self, name: str, dataId: DataCoordinate) -> DimensionPacker:
         """Make a dimension packer.
 

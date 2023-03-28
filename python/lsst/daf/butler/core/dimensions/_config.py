@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("DimensionConfig",)
 
+import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
@@ -236,6 +237,9 @@ class DimensionConfig(ConfigSubset):
                     members=members,
                 )
 
+    # TODO: remove this method and callers on DM-38687.
+    # Note that the corresponding entries in the dimensions config should
+    # not be removed at that time, because that's formally a schema migration.
     def _extractPackerVisitors(self) -> Iterator[DimensionConstructionVisitor]:
         """Process the 'packers' section of the configuration.
 
@@ -247,13 +251,16 @@ class DimensionConfig(ConfigSubset):
             Object that adds a `DinmensionPackerFactory` to an
             under-construction `DimensionUniverse`.
         """
-        for name, subconfig in self["packers"].items():
-            yield DimensionPackerConstructionVisitor(
-                name=name,
-                clsName=subconfig["cls"],
-                fixed=subconfig["fixed"],
-                dimensions=subconfig["dimensions"],
-            )
+        with warnings.catch_warnings():
+            # Don't warn when deprecated code calls other deprecated code.
+            warnings.simplefilter("ignore", FutureWarning)
+            for name, subconfig in self["packers"].items():
+                yield DimensionPackerConstructionVisitor(
+                    name=name,
+                    clsName=subconfig["cls"],
+                    fixed=subconfig["fixed"],
+                    dimensions=subconfig["dimensions"],
+                )
 
     def makeBuilder(self) -> DimensionConstructionBuilder:
         """Construct a `DinmensionConstructionBuilder`.

@@ -21,6 +21,7 @@
 
 import copy
 import itertools
+import math
 import os
 import pickle
 import unittest
@@ -37,6 +38,7 @@ from lsst.daf.butler import (
     Dimension,
     DimensionConfig,
     DimensionGraph,
+    DimensionPacker,
     DimensionUniverse,
     NamedKeyDict,
     NamedValueSet,
@@ -70,6 +72,37 @@ def loadDimensionData() -> DataCoordinateSequence:
     backend.load(datastore=None)
     dimensions = DimensionGraph(registry.dimensions, names=["visit", "detector", "tract", "patch"])
     return registry.queryDataIds(dimensions).expanded().toSequence()
+
+
+class TestDimensionPacker(DimensionPacker):
+    """A concrete `DimensionPacker` for testing its base class implementations.
+
+    This class just returns the detector ID as-is.
+    """
+
+    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGraph):
+        super().__init__(fixed, dimensions)
+        self._n_detectors = fixed.records["instrument"].detector_max
+        self._max_bits = (self._n_detectors - 1).bit_length()
+
+    @property
+    def maxBits(self) -> int:
+        # Docstring inherited from DimensionPacker.maxBits
+        return self._max_bits
+
+    def _pack(self, dataId: DataCoordinate) -> int:
+        # Docstring inherited from DimensionPacker._pack
+        return dataId["detector"]
+
+    def unpack(self, packedId: int) -> DataCoordinate:
+        # Docstring inherited from DimensionPacker.unpack
+        return DataCoordinate.standardize(
+            {
+                "instrument": self.fixed["instrument"],
+                "detector": packedId,
+            },
+            graph=self.dimensions,
+        )
 
 
 class DimensionTestCase(unittest.TestCase):
@@ -826,6 +859,21 @@ class DataCoordinateTestCase(unittest.TestCase):
         self.assertLessEqual(b - a, b)
         self.assertEqual(a ^ b, a.symmetric_difference(b))
         self.assertGreaterEqual(a ^ b, (a | b) - (a & b))
+
+    def testPackers(self):
+        (instrument_data_id,) = self.allDataIds.subset(
+            self.allDataIds.universe.extract(["instrument"])
+        ).toSet()
+        (detector_data_id,) = self.randomDataIds(n=1).subset(self.allDataIds.universe.extract(["detector"]))
+        packer = TestDimensionPacker(instrument_data_id, detector_data_id.graph)
+        packed_id, max_bits = packer.pack(detector_data_id, returnMaxBits=True)
+        self.assertEqual(packed_id, detector_data_id["detector"])
+        self.assertEqual(max_bits, packer.maxBits)
+        self.assertEqual(
+            max_bits, math.ceil(math.log2(instrument_data_id.records["instrument"].detector_max))
+        )
+        self.assertEqual(packer.pack(detector_data_id), packed_id)
+        self.assertEqual(packer.unpack(packed_id), detector_data_id)
 
 
 if __name__ == "__main__":

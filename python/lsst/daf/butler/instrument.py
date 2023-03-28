@@ -21,9 +21,17 @@
 
 __all__ = ["ObservationDimensionPacker"]
 
+# TODO: Remove this entire module on DM-38687.
+
+from deprecated.sphinx import deprecated
 from lsst.daf.butler import DataCoordinate, DimensionGraph, DimensionPacker
 
 
+@deprecated(
+    "Deprecated in favor of configurable dimension packers.  Will be removed after v27.",
+    version="v26",
+    category=FutureWarning,
+)
 class ObservationDimensionPacker(DimensionPacker):
     """A `DimensionPacker` for visit+detector or exposure+detector, given an
     instrument.
