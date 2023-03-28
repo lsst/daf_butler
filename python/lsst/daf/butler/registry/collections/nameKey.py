@@ -77,6 +77,7 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         context: StaticTablesContext,
         *,
         dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ) -> NameKeyCollectionManager:
         # Docstring inherited from CollectionManager.
         return cls(
@@ -84,6 +85,7 @@ class NameKeyCollectionManager(DefaultCollectionManager):
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
             collectionIdName="name",
             dimensions=dimensions,
+            registry_schema_version=registry_schema_version,
         )
 
     @classmethod
@@ -147,6 +149,6 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         return self._records.get(name)
 
     @classmethod
-    def currentVersion(cls) -> VersionTuple | None:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return _VERSION
+        return [_VERSION]

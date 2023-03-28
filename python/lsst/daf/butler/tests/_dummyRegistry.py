@@ -101,14 +101,17 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
 
 
 class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
-    def __init__(self) -> None:
+    def __init__(self, registry_schema_version: VersionTuple | None = None) -> None:
+        super().__init__(registry_schema_version=registry_schema_version)
         self._storages: dict[str, DummyOpaqueTableStorage] = {}
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> OpaqueTableStorageManager:
+    def initialize(
+        cls, db: Database, context: StaticTablesContext, registry_schema_version: VersionTuple | None = None
+    ) -> OpaqueTableStorageManager:
         # Docstring inherited from OpaqueTableStorageManager.
         # Not used, but needed to satisfy ABC requirement.
-        return cls()
+        return cls(registry_schema_version=registry_schema_version)
 
     def get(self, name: str) -> OpaqueTableStorage | None:
         # Docstring inherited from OpaqueTableStorageManager.
@@ -119,16 +122,25 @@ class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
         return self._storages.setdefault(name, DummyOpaqueTableStorage(name, spec))
 
     @classmethod
-    def currentVersion(cls) -> VersionTuple | None:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return None
+        return []
 
 
 class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
     def __init__(
-        self, opaque: OpaqueTableStorageManager, universe: DimensionUniverse, datasetIdColumnType: type
+        self,
+        opaque: OpaqueTableStorageManager,
+        universe: DimensionUniverse,
+        datasetIdColumnType: type,
+        registry_schema_version: VersionTuple | None = None,
     ):
-        super().__init__(opaque=opaque, universe=universe, datasetIdColumnType=datasetIdColumnType)
+        super().__init__(
+            opaque=opaque,
+            universe=universe,
+            datasetIdColumnType=datasetIdColumnType,
+            registry_schema_version=registry_schema_version,
+        )
         self._bridges: dict[str, EphemeralDatastoreRegistryBridge] = {}
 
     @classmethod
@@ -140,10 +152,16 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         opaque: OpaqueTableStorageManager,
         datasets: type[DatasetRecordStorageManager],
         universe: DimensionUniverse,
+        registry_schema_version: VersionTuple | None = None,
     ) -> DatastoreRegistryBridgeManager:
         # Docstring inherited from DatastoreRegistryBridgeManager
         # Not used, but needed to satisfy ABC requirement.
-        return cls(opaque=opaque, universe=universe, datasetIdColumnType=datasets.getIdColumnType())
+        return cls(
+            opaque=opaque,
+            universe=universe,
+            datasetIdColumnType=datasets.getIdColumnType(),
+            registry_schema_version=registry_schema_version,
+        )
 
     def refresh(self) -> None:
         # Docstring inherited from DatastoreRegistryBridgeManager
@@ -160,9 +178,9 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
                 yield name
 
     @classmethod
-    def currentVersion(cls) -> VersionTuple | None:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return None
+        return []
 
 
 class DummyRegistry:

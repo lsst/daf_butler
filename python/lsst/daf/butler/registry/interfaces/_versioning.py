@@ -22,12 +22,21 @@
 from __future__ import annotations
 
 __all__ = [
+    "IncompatibleVersionError",
     "VersionTuple",
     "VersionedExtension",
 ]
 
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Optional
+from typing import NamedTuple
+
+
+class IncompatibleVersionError(RuntimeError):
+    """Exception raised when extension implemention is not compatible with
+    schema version defined in database.
+    """
+
+    pass
 
 
 class VersionTuple(NamedTuple):
@@ -71,28 +80,66 @@ class VersionTuple(NamedTuple):
             raise ValueError(f"Invalid version  string '{versionStr}', must consist of three numbers")
         return cls(*version)
 
+    def checkCompatibility(self, registry_schema_version: VersionTuple, update: bool) -> bool:
+        """Compare implementation schema version with schema version in
+        registry.
+
+        Parameters
+        ----------
+        registry_schema_version : `VersionTuple`
+            Schema version that exists in registry or defined in a
+            configuration for a registry to be created.
+        update : `bool`
+            If True then read-write access is expected.
+
+        Returns
+        -------
+        compatible : `bool`
+            True if schema versions are compatible.
+
+        Notes
+        -----
+        This method implements default rules for checking schema compatibility:
+
+            - if major numbers differ, schemas are not compatible;
+            - otherwise, if minor versions are different then newer version can
+              read schema made by older version, but cannot write into it;
+              older version can neither read nor write into newer schema;
+            - otherwise, different patch versions are totally compatible.
+
+        Extensions that implement different versioning model will need to
+        override their `VersionedExtension.checkCompatibility` method.
+        """
+        if self.major != registry_schema_version.major:
+            # different major versions are not compatible at all
+            return False
+        if self.minor != registry_schema_version.minor:
+            # different minor versions are backward compatible for read
+            # access only
+            return self.minor > registry_schema_version.minor and not update
+        # patch difference does not matter
+        return True
+
     def __str__(self) -> str:
         """Transform version tuple into a canonical string form."""
         return f"{self.major}.{self.minor}.{self.patch}"
 
 
 class VersionedExtension(ABC):
-    """Interface for extension classes with versions."""
+    """Interface for extension classes with versions.
 
-    @classmethod
-    @abstractmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
-        """Return extension version as defined by current implementation.
+    Parameters
+    ----------
+    registry_schema_version : `VersionTuple` or `None`
+        Schema version of this extension as defined in registry. If `None`, it
+        means that registry schema was not initialized yet and the extension
+        should expect that schema version returned by `newSchemaVersion` method
+        will be used to initialize the registry database. If not `None`, it
+        is guaranteed that this version has passed compatibility check.
+    """
 
-        This method can return ``None`` if an extension does not require
-        its version to be saved or checked.
-
-        Returns
-        -------
-        version : `VersionTuple`
-            Current extension version or ``None``.
-        """
-        raise NotImplementedError()
+    def __init__(self, *, registry_schema_version: VersionTuple | None = None):
+        self._registry_schema_version = registry_schema_version
 
     @classmethod
     def extensionName(cls) -> str:
@@ -108,3 +155,110 @@ class VersionedExtension(ABC):
             Full extension name.
         """
         return f"{cls.__module__}.{cls.__name__}"
+
+    @classmethod
+    @abstractmethod
+    def currentVersions(cls) -> list[VersionTuple]:
+        """Return schema version(s) supported by this extension class.
+
+        Returns
+        -------
+        version : `list` [`VersionTuple`]
+            Schema versions for this extension. Empty list is returned if an
+            extension does not require its version to be saved or checked.
+        """
+        raise NotImplementedError()
+
+    def newSchemaVersion(self) -> VersionTuple | None:
+        """Return schema version for newly created registry.
+
+        Returns
+        -------
+        version : `VersionTuple` or `None`
+            Schema version created by this extension. `None` is returned if an
+            extension does not require its version to be saved or checked.
+
+        Notes
+        -----
+        Default implementation only forks for extensions that support single
+        schema version and it returns version obtained from `currentVersions`.
+        If `currentVersions` returns multiple version then default
+        implementation will raise an exception and the method has to be
+        reimplemented by a subclass.
+        """
+        my_versions = self.currentVersions()
+        if not my_versions:
+            return None
+        elif len(my_versions) == 1:
+            return my_versions[0]
+        raise NotImplementedError(
+            f"Extension {self.extensionName()} supports multiple schema versions, "
+            "its newSchemaVersion() method needs to be re-implemented."
+        )
+
+    @classmethod
+    def checkCompatibility(cls, registry_schema_version: VersionTuple, update: bool) -> None:
+        """Check that schema version defined in registry is compatible with
+        current implementation.
+
+        Parameters
+        ----------
+        registry_schema_version : `VersionTuple`
+            Schema version that exists in registry or defined in a
+            configuration for a registry to be created.
+        update : `bool`
+            If True then read-write access is expected.
+
+        Raises
+        ------
+        IncompatibleVersionError
+            Raised if schema version is not supported by implementation.
+
+        Notes
+        -----
+        Default implementation uses `VersionTuple.checkCompatibility` on
+        the versions returned from `currentVersions` method. Subclasses that
+        support different compatibility model will overwrite this method.
+        """
+        # Extensions that do not define current versions are compatible with
+        # anything.
+        if my_versions := cls.currentVersions():
+            # If there are multiple version supported one of them should be
+            # compatible to succeed.
+            for version in my_versions:
+                if version.checkCompatibility(registry_schema_version, update):
+                    return
+            raise IncompatibleVersionError(
+                f"Extension versions {my_versions} is not compatible with registry "
+                f"schema version {registry_schema_version} for extension {cls.extensionName()}"
+            )
+
+    @classmethod
+    def checkNewSchemaVersion(cls, schema_version: VersionTuple) -> None:
+        """Verify that requested schema version can be created by an extension.
+
+        Parameters
+        ----------
+        schema_version : `VersionTuple`
+            Schema version that this extension is asked to create.
+
+        Notes
+        -----
+        This method may be used only occasionally when a specific schema
+        version is given in a regisitry config file. This can be used with an
+        extension that supports multiple schem versions to make it create new
+        schema with a non-default version number. Default implementation
+        compares requested version with one of the version returned from
+        `currentVersions`.
+        """
+        if my_versions := cls.currentVersions():
+            # If there are multiple version supported one of them should be
+            # compatible to succeed.
+            for version in my_versions:
+                # Need to have an exact match
+                if version == schema_version:
+                    return
+            raise IncompatibleVersionError(
+                f"Extension {cls.extensionName()} cannot create schema version {schema_version}, "
+                f"supported schema versions: {my_versions}"
+            )

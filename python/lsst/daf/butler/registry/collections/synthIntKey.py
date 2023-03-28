@@ -91,8 +91,15 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         tables: CollectionTablesTuple,
         collectionIdName: str,
         dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ):
-        super().__init__(db=db, tables=tables, collectionIdName=collectionIdName, dimensions=dimensions)
+        super().__init__(
+            db=db,
+            tables=tables,
+            collectionIdName=collectionIdName,
+            dimensions=dimensions,
+            registry_schema_version=registry_schema_version,
+        )
         self._nameCache: dict[str, CollectionRecord] = {}  # indexed by collection name
 
     @classmethod
@@ -102,6 +109,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         context: StaticTablesContext,
         *,
         dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
         return cls(
@@ -109,6 +117,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
             collectionIdName="collection_id",
             dimensions=dimensions,
+            registry_schema_version=registry_schema_version,
         )
 
     @classmethod
@@ -192,6 +201,6 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         return self._nameCache.get(name)
 
     @classmethod
-    def currentVersion(cls) -> VersionTuple | None:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return _VERSION
+        return [_VERSION]

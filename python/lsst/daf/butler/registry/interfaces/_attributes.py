@@ -28,7 +28,7 @@ __all__ = [
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Iterable, Optional, Tuple
 
-from ._versioning import VersionedExtension
+from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
@@ -58,9 +58,14 @@ class ButlerAttributeManager(VersionedExtension):
     database table with a stable schema.
     """
 
+    def __init__(self, *, registry_schema_version: VersionTuple | None = None) -> None:
+        super().__init__(registry_schema_version=registry_schema_version)
+
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> ButlerAttributeManager:
+    def initialize(
+        cls, db: Database, context: StaticTablesContext, registry_schema_version: VersionTuple | None = None
+    ) -> ButlerAttributeManager:
         """Construct an instance of the manager.
 
         Parameters
@@ -71,6 +76,8 @@ class ButlerAttributeManager(VersionedExtension):
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present in a layer
             implemented with this manager.
+        registry_schema_version : `VersionTuple` or `None`
+            Schema version of this extension as defined in registry.
 
         Returns
         -------

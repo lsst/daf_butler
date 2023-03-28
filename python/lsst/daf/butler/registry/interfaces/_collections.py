@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 from ...core import DimensionUniverse, Timespan, ddl
 from .._collectionType import CollectionType
 from ..wildcards import CollectionWildcard
-from ._versioning import VersionedExtension
+from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
@@ -304,13 +304,19 @@ class CollectionManager(VersionedExtension):
     (to `Registry`) use.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, registry_schema_version: VersionTuple | None = None) -> None:
+        super().__init__(registry_schema_version=registry_schema_version)
         self._parents_by_child: defaultdict[Any, set[Any]] = defaultdict(set)
 
     @classmethod
     @abstractmethod
     def initialize(
-        cls, db: Database, context: StaticTablesContext, *, dimensions: DimensionRecordStorageManager
+        cls,
+        db: Database,
+        context: StaticTablesContext,
+        *,
+        dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ) -> CollectionManager:
         """Construct an instance of the manager.
 
@@ -324,6 +330,8 @@ class CollectionManager(VersionedExtension):
             implemented with this manager.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
+        registry_schema_version : `VersionTuple` or `None`
+            Schema version of this extension as defined in registry.
 
         Returns
         -------

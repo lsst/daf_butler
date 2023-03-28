@@ -94,8 +94,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         ],
         dimensionGraphStorage: _DimensionGraphStorage,
         universe: DimensionUniverse,
+        registry_schema_version: VersionTuple | None = None,
     ):
-        super().__init__(universe=universe)
+        super().__init__(universe=universe, registry_schema_version=registry_schema_version)
         self._db = db
         self._records = records
         self._overlaps = overlaps
@@ -103,7 +104,12 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
 
     @classmethod
     def initialize(
-        cls, db: Database, context: StaticTablesContext, *, universe: DimensionUniverse
+        cls,
+        db: Database,
+        context: StaticTablesContext,
+        *,
+        universe: DimensionUniverse,
+        registry_schema_version: VersionTuple | None = None,
     ) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
         # Start by initializing governor dimensions; those go both in the main
@@ -180,6 +186,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             universe=universe,
             overlaps=overlaps,
             dimensionGraphStorage=dimensionGraphStorage,
+            registry_schema_version=registry_schema_version,
         )
 
     def get(self, element: DimensionElement | str) -> DimensionRecordStorage | None:
@@ -272,9 +279,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         return overlaps, needs_refinement
 
     @classmethod
-    def currentVersion(cls) -> VersionTuple | None:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return _VERSION
+        return [_VERSION]
 
 
 class _DimensionGraphStorage:

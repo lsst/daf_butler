@@ -29,7 +29,7 @@ __all__ = (
 import dataclasses
 import logging
 from collections.abc import Mapping
-from typing import Any, Dict, Generic, Optional, Type, TypeVar
+from typing import Any, Generic, Optional, Type, TypeVar
 
 import sqlalchemy
 from lsst.utils import doImportType
@@ -46,6 +46,8 @@ from .interfaces import (
     ObsCoreTableManager,
     OpaqueTableStorageManager,
     StaticTablesContext,
+    VersionedExtension,
+    VersionTuple,
 )
 from .versions import ButlerVersionsManager
 
@@ -141,14 +143,16 @@ class RegistryManagerTypes(
         """
         # We only check for manager names defined in class attributes.
         # TODO: Maybe we need to check keys for unknown names/typos?
-        managers = {field.name for field in dataclasses.fields(cls)} - {"manager_configs"}
+        managers = {field.name for field in dataclasses.fields(cls)} - {"manager_configs", "schema_versions"}
         # Values of "config" sub-key, if any, indexed by manager name.
-        configs: Dict[str, Mapping] = {}
-        manager_types: Dict[str, Type] = {}
+        configs: dict[str, Mapping] = {}
+        schema_versions: dict[str, VersionTuple] = {}
+        manager_types: dict[str, Type] = {}
         for manager in managers:
             manager_config = config["managers"].get(manager)
             if isinstance(manager_config, Config):
-                # Expect "cls" and optional "config" sub-keys.
+                # Expect "cls" and optional "config" and "schema_version"
+                # sub-keys.
                 manager_config_dict = manager_config.toDict()
                 try:
                     class_name = manager_config_dict.pop("cls")
@@ -156,6 +160,11 @@ class RegistryManagerTypes(
                     raise KeyError(f"'cls' key is not defined in {manager!r} manager configuration") from None
                 if (mgr_config := manager_config_dict.pop("config", None)) is not None:
                     configs[manager] = mgr_config
+                if (mgr_version := manager_config_dict.pop("schema_version", None)) is not None:
+                    # Note that we do not check versions that come from config
+                    # for compatibility, they may be overriden later by
+                    # versions from registry.
+                    schema_versions[manager] = VersionTuple.fromString(mgr_version)
                 if manager_config_dict:
                     raise ValueError(
                         f"{manager!r} manager configuration has unexpected keys: {set(manager_config_dict)}"
@@ -172,9 +181,11 @@ class RegistryManagerTypes(
         # obscore need special care because it's the only manager which can be
         # None, and we cannot define default value for it.
         if "obscore" in manager_types:
-            return cls(**manager_types, manager_configs=configs)
+            return cls(**manager_types, manager_configs=configs, schema_versions=schema_versions)
         else:
-            return cls(**manager_types, obscore=None, manager_configs=configs)
+            return cls(
+                **manager_types, obscore=None, manager_configs=configs, schema_versions=schema_versions
+            )
 
     def makeRepo(self, database: Database, dimensionConfig: DimensionConfig) -> RegistryManagerInstances:
         """Create all persistent `Registry` state for a new, empty data
@@ -197,6 +208,13 @@ class RegistryManagerTypes(
             Struct containing instances of the types contained by ``self``,
             pointing to the new repository and backed by ``database``.
         """
+        # If schema versions were specified in the config, check that they are
+        # compatible with their managers.
+        managers = self.as_dict()
+        for manager_type, schema_version in self.schema_versions.items():
+            manager_class = managers[manager_type]
+            manager_class.checkNewSchemaVersion(schema_version)
+
         universe = DimensionUniverse(dimensionConfig)
         with database.declareStaticTables(create=True) as context:
             if self.datasets.getIdColumnType() == sqlalchemy.BigInteger:
@@ -205,10 +223,11 @@ class RegistryManagerTypes(
                     "integer dataset IDs.",
                 )
             instances = RegistryManagerInstances.initialize(database, context, types=self, universe=universe)
-            versions = instances.getVersions()
+
         # store managers and their versions in attributes table
-        versions.storeManagersConfig()
-        versions.storeManagersVersions()
+        versions = ButlerVersionsManager(instances.attributes)
+        versions.storeManagersConfig(instances.as_dict())
+
         # dump universe config as json into attributes (faster than YAML)
         json = dimensionConfig.dump(format="json")
         if json is not None:
@@ -238,13 +257,24 @@ class RegistryManagerTypes(
             pointing to the new repository and backed by ``database``.
         """
         # Create attributes manager only first, so we can use it to load the
-        # embedded dimensions configuration.
+        # embedded dimensions configuration. Note that we do not check this
+        # manager version before initializing it, it is supposed to be
+        # completely backward- and forward-compatible.
         with database.declareStaticTables(create=False) as context:
             attributes = self.attributes.initialize(database, context)
-            versions = ButlerVersionsManager(attributes, dict(attributes=attributes))
-            # verify that configured versions are compatible with schema
-            versions.checkManagersConfig()
-            versions.checkManagersVersions(database.isWriteable())
+
+        # Verify that configured classes are compatible with the ones stored
+        # in registry.
+        versions = ButlerVersionsManager(attributes)
+        versions.checkManagersConfig(self.as_dict())
+
+        # Read schema versions from registry and validate them.
+        self.schema_versions.update(versions.managerVersions())
+        for manager_type, manager_class in self.as_dict().items():
+            schema_version = self.schema_versions.get(manager_type)
+            if schema_version is not None:
+                manager_class.checkCompatibility(schema_version, database.isWriteable())
+
         # get serialized as a string from database
         dimensionsString = attributes.get(_DIMENSIONS_ATTR)
         if dimensionsString is not None:
@@ -262,19 +292,34 @@ class RegistryManagerTypes(
             obscoreString = attributes.get(_OBSCORE_ATTR)
             if obscoreString is not None:
                 self.manager_configs["obscore"] = Config.fromString(obscoreString, format="json")
+
         with database.declareStaticTables(create=False) as context:
             instances = RegistryManagerInstances.initialize(database, context, types=self, universe=universe)
-            versions = instances.getVersions()
-        # verify that configured versions are compatible with schema
-        versions.checkManagersConfig()
-        versions.checkManagersVersions(database.isWriteable())
+
         # Load content from database that we try to keep in-memory.
         instances.refresh()
         return instances
 
-    manager_configs: Dict[str, Mapping] = dataclasses.field(default_factory=dict)
+    def as_dict(self) -> Mapping[str, type[VersionedExtension]]:
+        """Return contained managers as a dictionary with manager type name as
+        a key.
+
+        Returns
+        -------
+        extensions : `Mapping` [`str`, `VersionedExtension`]
+            Maps manager type name (e.g. "datasets") to its corresponding
+            manager class. Only existing managers are returned.
+        """
+        extras = {"manager_configs", "schema_versions"}
+        managers = {f.name: getattr(self, f.name) for f in dataclasses.fields(self) if f.name not in extras}
+        return {key: value for key, value in managers.items() if value is not None}
+
+    manager_configs: dict[str, Mapping] = dataclasses.field(default_factory=dict)
     """Per-manager configuration options passed to their initialize methods.
     """
+
+    schema_versions: dict[str, VersionTuple] = dataclasses.field(default_factory=dict)
+    """Per-manager schema versions defined by configuration, optional."""
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -329,7 +374,7 @@ class RegistryManagerInstances(
             Struct containing manager instances.
         """
         dummy_table = ddl.TableSpec(fields=())
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         kwargs["column_types"] = ColumnTypeInfo(
             database.getTimespanRepresentation(),
             universe,
@@ -340,23 +385,36 @@ class RegistryManagerInstances(
             ),
             run_key_spec=types.collections.addRunForeignKey(dummy_table, primaryKey=False, nullable=False),
         )
-        kwargs["attributes"] = types.attributes.initialize(database, context)
-        kwargs["dimensions"] = types.dimensions.initialize(database, context, universe=universe)
+        schema_versions = types.schema_versions
+        kwargs["attributes"] = types.attributes.initialize(
+            database, context, registry_schema_version=schema_versions.get("attributes")
+        )
+        kwargs["dimensions"] = types.dimensions.initialize(
+            database, context, universe=universe, registry_schema_version=schema_versions.get("dimensions")
+        )
         kwargs["collections"] = types.collections.initialize(
             database,
             context,
             dimensions=kwargs["dimensions"],
+            registry_schema_version=schema_versions.get("collections"),
         )
         kwargs["datasets"] = types.datasets.initialize(
-            database, context, collections=kwargs["collections"], dimensions=kwargs["dimensions"]
+            database,
+            context,
+            collections=kwargs["collections"],
+            dimensions=kwargs["dimensions"],
+            registry_schema_version=schema_versions.get("datasets"),
         )
-        kwargs["opaque"] = types.opaque.initialize(database, context)
+        kwargs["opaque"] = types.opaque.initialize(
+            database, context, registry_schema_version=schema_versions.get("opaque")
+        )
         kwargs["datastores"] = types.datastores.initialize(
             database,
             context,
             opaque=kwargs["opaque"],
             datasets=types.datasets,
             universe=universe,
+            registry_schema_version=schema_versions.get("datastores"),
         )
         if types.obscore is not None and "obscore" in types.manager_configs:
             kwargs["obscore"] = types.obscore.initialize(
@@ -366,28 +424,26 @@ class RegistryManagerInstances(
                 config=types.manager_configs["obscore"],
                 datasets=types.datasets,
                 dimensions=kwargs["dimensions"],
+                registry_schema_version=schema_versions.get("obscore"),
             )
         else:
             kwargs["obscore"] = None
         return cls(**kwargs)
 
-    def getVersions(self) -> ButlerVersionsManager:
-        """Return an object that can report, check, and save the versions of
-        all manager objects.
+    def as_dict(self) -> Mapping[str, VersionedExtension]:
+        """Return contained managers as a dictionary with manager type name as
+        a key.
 
         Returns
         -------
-        versions : `ButlerVersionsManager`
-            Object that manages versions.
+        extensions : `Mapping` [`str`, `VersionedExtension`]
+            Maps manager type name (e.g. "datasets") to its corresponding
+            manager instance. Only existing managers are returned.
         """
-        return ButlerVersionsManager(
-            self.attributes,
-            # Can't use dataclasses.asdict here, because it tries to do some
-            # deepcopy stuff (?!) in order to find dataclasses recursively, and
-            # that doesn't work on some manager objects that definitely aren't
-            # supposed to be deep-copied anyway.
-            {f.name: getattr(self, f.name) for f in dataclasses.fields(self) if f.name != "column_types"},
-        )
+        instances = {
+            f.name: getattr(self, f.name) for f in dataclasses.fields(self) if f.name != "column_types"
+        }
+        return {key: value for key, value in instances.items() if value is not None}
 
     def refresh(self) -> None:
         """Refresh all in-memory state by querying the database or clearing

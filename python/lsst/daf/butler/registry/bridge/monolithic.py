@@ -318,8 +318,14 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         opaque: OpaqueTableStorageManager,
         universe: DimensionUniverse,
         datasetIdColumnType: type,
+        registry_schema_version: VersionTuple | None = None,
     ):
-        super().__init__(opaque=opaque, universe=universe, datasetIdColumnType=datasetIdColumnType)
+        super().__init__(
+            opaque=opaque,
+            universe=universe,
+            datasetIdColumnType=datasetIdColumnType,
+            registry_schema_version=registry_schema_version,
+        )
         self._db = db
         self._tables = tables
         self._ephemeral: Dict[str, EphemeralDatastoreRegistryBridge] = {}
@@ -333,6 +339,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         opaque: OpaqueTableStorageManager,
         datasets: Type[DatasetRecordStorageManager],
         universe: DimensionUniverse,
+        registry_schema_version: VersionTuple | None = None,
     ) -> DatastoreRegistryBridgeManager:
         # Docstring inherited from DatastoreRegistryBridge
         tables = context.addTableTuple(_makeTableSpecs(datasets))
@@ -342,6 +349,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
             opaque=opaque,
             universe=universe,
             datasetIdColumnType=datasets.getIdColumnType(),
+            registry_schema_version=registry_schema_version,
         )
 
     def refresh(self) -> None:
@@ -372,6 +380,6 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
                 yield name
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return _VERSION
+        return [_VERSION]

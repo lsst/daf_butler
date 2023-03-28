@@ -24,14 +24,13 @@ from __future__ import annotations
 __all__ = [
     "ButlerVersionsManager",
     "IncompatibleVersionError",
-    "MissingVersionError",
     "MissingManagerError",
     "ManagerMismatchError",
 ]
 
 import logging
-from collections.abc import Mapping, MutableMapping
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 from .interfaces import VersionedExtension, VersionTuple
 
@@ -40,14 +39,6 @@ if TYPE_CHECKING:
 
 
 _LOG = logging.getLogger(__name__)
-
-
-class MissingVersionError(RuntimeError):
-    """Exception raised when existing database is missing attributes with
-    version numbers.
-    """
-
-    pass
 
 
 class IncompatibleVersionError(RuntimeError):
@@ -84,16 +75,10 @@ class ButlerVersionsManager:
         "collections") to corresponding instance of manager.
     """
 
-    def __init__(self, attributes: ButlerAttributeManager, managers: Mapping[str, Any]):
+    def __init__(self, attributes: ButlerAttributeManager):
         self._attributes = attributes
-        self._managers: MutableMapping[str, VersionedExtension] = {}
-        # we only care about managers implementing VersionedExtension interface
-        for name, manager in managers.items():
-            if isinstance(manager, VersionedExtension):
-                self._managers[name] = manager
-            elif manager is not None:
-                # All regular managers need to support versioning mechanism.
-                _LOG.warning("extension %r does not implement VersionedExtension", name)
+        # Maps manager type to its class name and schema version.
+        self._cache: Mapping[str, tuple[str, VersionTuple | None]] | None = None
         self._emptyFlag: bool | None = None
 
     @classmethod
@@ -113,20 +98,43 @@ class ButlerVersionsManager:
         return f"config:registry.managers.{name}"
 
     @classmethod
-    def _managerVersionKey(cls, extension: VersionedExtension) -> str:
+    def _managerVersionKey(cls, extensionName: str) -> str:
         """Return key used to store manager version.
 
         Parameters
         ----------
-        extension : `VersionedExtension`
-            Instance of the extension.
+        extensionName : `str`
+            Extension name (e.g. its class name).
 
         Returns
         -------
         key : `str`
             Name of the key in attributes table.
         """
-        return "version:" + extension.extensionName()
+        return f"version:{extensionName}"
+
+    @property
+    def _manager_data(self) -> Mapping[str, tuple[str, VersionTuple | None]]:
+        """Retrieve per-manager type name and schema version."""
+        if not self._cache:
+            self._cache = {}
+
+            # Number of items in attributes table is small, read all of them
+            # in a single query and filter later.
+            attributes = {key: value for key, value in self._attributes.items()}
+
+            for name, value in attributes.items():
+                if name.startswith("config:registry.managers."):
+                    _, _, manager_type = name.rpartition(".")
+                    manager_class = value
+                    version_str = attributes.get(self._managerVersionKey(manager_class))
+                    if version_str is None:
+                        self._cache[manager_type] = (manager_class, None)
+                    else:
+                        version = VersionTuple.fromString(version_str)
+                        self._cache[manager_type] = (manager_class, version)
+
+        return self._cache
 
     @staticmethod
     def checkCompatibility(old_version: VersionTuple, new_version: VersionTuple, update: bool) -> bool:
@@ -151,36 +159,35 @@ class ButlerVersionsManager:
         # patch difference does not matter
         return True
 
-    def storeManagersConfig(self) -> None:
-        """Store configured extension names in attributes table.
+    def storeManagersConfig(self, managers: Mapping[str, VersionedExtension]) -> None:
+        """Store configured extension names and their versions.
 
-        For each extension we store a record with the key
-        "config:registry.managers.{name}" and fully qualified class name as a
-        value.
+        Parmeters
+        ---------
+        managers: `~collections.abc.Mapping` [`str`, `type`]
+            Collection of manager extension classes, the key is a manager type,
+            e.g. "datasets".
+
+        Notes
+        -----
+        For each extension we store two records:
+        - with the key "config:registry.managers.{name}" and fully qualified
+          class name as a value,
+        - with the key "version:{fullExtensionName}" and version number in its
+          string format as a value.
         """
-        for name, extension in self._managers.items():
+        for name, extension in managers.items():
             key = self._managerConfigKey(name)
             value = extension.extensionName()
             self._attributes.set(key, value)
             _LOG.debug("saved manager config %s=%s", key, value)
-        self._emptyFlag = False
 
-    def storeManagersVersions(self) -> None:
-        """Store current manager versions in registry attributes.
-
-        For each extension we store single record with a key
-        "version:{fullExtensionName}" and version number in its string format
-        as a value.
-        """
-        for extension in self._managers.values():
-            version = extension.currentVersion()
+            version = extension.newSchemaVersion()
             if version:
-                key = self._managerVersionKey(extension)
+                key = self._managerVersionKey(extension.extensionName())
                 value = str(version)
                 self._attributes.set(key, value)
                 _LOG.debug("saved manager version %s=%s", key, value)
-
-        self._emptyFlag = False
 
     @property
     def _attributesEmpty(self) -> bool:
@@ -195,8 +202,8 @@ class ButlerVersionsManager:
                 _LOG.warning("Attributes table is empty, schema may need an upgrade.")
         return self._emptyFlag
 
-    def checkManagersConfig(self) -> None:
-        """Compare configured manager names with stored in database.
+    def checkManagersConfig(self, managers: Mapping[str, type[VersionedExtension]]) -> None:
+        """Compare configured manager names versions with stored in database.
 
         Raises
         ------
@@ -204,21 +211,25 @@ class ButlerVersionsManager:
             Raised if manager names are different.
         MissingManagerError
             Raised if database has no stored manager name.
+        IncompatibleVersionError
+            Raised if versions are not compatible.
         """
         if self._attributesEmpty:
             return
 
+        manager_data = self._manager_data
+
         missing = []
         mismatch = []
-        for name, extension in self._managers.items():
-            key = self._managerConfigKey(name)
-            storedMgr = self._attributes.get(key)
-            _LOG.debug("found manager config %s=%s", key, storedMgr)
-            if storedMgr is None:
+        for name, extension in managers.items():
+            try:
+                manager_class, _ = manager_data[name]
+                _LOG.debug("found manager config %s=%s", name, manager_class)
+            except KeyError:
                 missing.append(name)
                 continue
-            if extension.extensionName() != storedMgr:
-                mismatch.append(f"{name}: configured {extension.extensionName()}, stored: {storedMgr}")
+            if extension.extensionName() != manager_class:
+                mismatch.append(f"{name}: configured {extension.extensionName()}, stored: {manager_class}")
         if missing:
             raise MissingManagerError("Cannot find stored configuration for managers: " + ", ".join(missing))
         if mismatch:
@@ -226,35 +237,16 @@ class ButlerVersionsManager:
                 "Configured managers do not match registry-stored names:\n" + "\n".join(missing)
             )
 
-    def checkManagersVersions(self, writeable: bool) -> None:
-        """Compare configured versions with the versions stored in database.
+    def managerVersions(self) -> Mapping[str, VersionTuple]:
+        """Return schema versions for each manager.
 
-        Parameters
-        ----------
-        writeable : `bool`
-            If ``True`` then read-write access needs to be checked.
-
-        Raises
-        ------
-        IncompatibleVersionError
-            Raised if versions are not compatible.
-        MissingVersionError
-            Raised if database has no stored version for one or more groups.
+        Returns
+        -------
+        versions : `~collections.abc.Mapping` [`str`, `VersionTuple`]
+            Mapping of managert type (e.g. "datasets") to its schema version.
         """
-        if self._attributesEmpty:
-            return
-
-        for extension in self._managers.values():
-            version = extension.currentVersion()
-            if version:
-                key = self._managerVersionKey(extension)
-                storedVersionStr = self._attributes.get(key)
-                _LOG.debug("found manager version %s=%s, current version %s", key, storedVersionStr, version)
-                if storedVersionStr is None:
-                    raise MissingVersionError(f"Failed to read version number {key}")
-                storedVersion = VersionTuple.fromString(storedVersionStr)
-                if not self.checkCompatibility(storedVersion, version, writeable):
-                    raise IncompatibleVersionError(
-                        f"Configured version {version} is not compatible with stored version "
-                        f"{storedVersion} for extension {extension.extensionName()}"
-                    )
+        versions = {}
+        for manager_type, (_, version) in self._manager_data.items():
+            if version is not None:
+                versions[manager_type] = version
+        return versions

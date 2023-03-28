@@ -56,7 +56,13 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         SQLAlchemy representation of the table that stores attributes.
     """
 
-    def __init__(self, db: Database, table: sqlalchemy.schema.Table):
+    def __init__(
+        self,
+        db: Database,
+        table: sqlalchemy.schema.Table,
+        registry_schema_version: VersionTuple | None = None,
+    ):
+        super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
         self._table = table
 
@@ -70,10 +76,12 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
     )
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> ButlerAttributeManager:
+    def initialize(
+        cls, db: Database, context: StaticTablesContext, registry_schema_version: VersionTuple | None = None
+    ) -> ButlerAttributeManager:
         # Docstring inherited from ButlerAttributeManager.
         table = context.addTable(cls._TABLE_NAME, cls._TABLE_SPEC)
-        return cls(db=db, table=table)
+        return cls(db=db, table=table, registry_schema_version=registry_schema_version)
 
     def get(self, name: str, default: Optional[str] = None) -> Optional[str]:
         # Docstring inherited from ButlerAttributeManager.
@@ -132,6 +140,6 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         return count == 0
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return _VERSION
+        return [_VERSION]
