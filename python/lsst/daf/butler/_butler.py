@@ -27,10 +27,6 @@ from __future__ import annotations
 __all__ = (
     "Butler",
     "ButlerValidationError",
-    "PruneCollectionsArgsError",
-    "PurgeWithoutUnstorePruneCollectionsError",
-    "RunWithoutPurgePruneCollectionsError",
-    "PurgeUnsupportedPruneCollectionsError",
 )
 
 import collections.abc
@@ -112,42 +108,6 @@ class ButlerValidationError(ValidationError):
     """There is a problem with the Butler configuration."""
 
     pass
-
-
-class PruneCollectionsArgsError(TypeError):
-    """Base class for errors relating to Butler.pruneCollections input
-    arguments.
-    """
-
-    pass
-
-
-class PurgeWithoutUnstorePruneCollectionsError(PruneCollectionsArgsError):
-    """Raised when purge and unstore are both required to be True, and
-    purge is True but unstore is False.
-    """
-
-    def __init__(self) -> None:
-        super().__init__("Cannot pass purge=True without unstore=True.")
-
-
-class RunWithoutPurgePruneCollectionsError(PruneCollectionsArgsError):
-    """Raised when pruning a RUN collection but purge is False."""
-
-    def __init__(self, collectionType: CollectionType):
-        self.collectionType = collectionType
-        super().__init__(f"Cannot prune RUN collection {self.collectionType.name} without purge=True.")
-
-
-class PurgeUnsupportedPruneCollectionsError(PruneCollectionsArgsError):
-    """Raised when purge is True but is not supported for the given
-    collection."""
-
-    def __init__(self, collectionType: CollectionType):
-        self.collectionType = collectionType
-        super().__init__(
-            f"Cannot prune {self.collectionType} collection {self.collectionType.name} with purge=True."
-        )
 
 
 class Butler(LimitedButler):
@@ -1741,76 +1701,6 @@ class Butler(LimitedButler):
                     self.datastore.forget(refs)
                 for name in names:
                     self.registry.removeCollection(name)
-        if unstore:
-            # Point of no return for removing artifacts
-            self.datastore.emptyTrash()
-
-    def pruneCollection(
-        self, name: str, purge: bool = False, unstore: bool = False, unlink: Optional[List[str]] = None
-    ) -> None:
-        """Remove a collection and possibly prune datasets within it.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the collection to remove.  If this is a
-            `~CollectionType.TAGGED` or `~CollectionType.CHAINED` collection,
-            datasets within the collection are not modified unless ``unstore``
-            is `True`.  If this is a `~CollectionType.RUN` collection,
-            ``purge`` and ``unstore`` must be `True`, and all datasets in it
-            are fully removed from the data repository.
-        purge : `bool`, optional
-            If `True`, permit `~CollectionType.RUN` collections to be removed,
-            fully removing datasets within them.  Requires ``unstore=True`` as
-            well as an added precaution against accidental deletion.  Must be
-            `False` (default) if the collection is not a ``RUN``.
-        unstore: `bool`, optional
-            If `True`, remove all datasets in the collection from all
-            datastores in which they appear.
-        unlink: `list` [`str`], optional
-            Before removing the given `collection` unlink it from from these
-            parent collections.
-
-        Raises
-        ------
-        TypeError
-            Raised if the butler is read-only or arguments are mutually
-            inconsistent.
-        """
-        # See pruneDatasets comments for more information about the logic here;
-        # the cases are almost the same, but here we can rely on Registry to
-        # take care everything but Datastore deletion when we remove the
-        # collection.
-        if not self.isWriteable():
-            raise TypeError("Butler is read-only.")
-        collectionType = self.registry.getCollectionType(name)
-        if purge and not unstore:
-            raise PurgeWithoutUnstorePruneCollectionsError()
-        if collectionType is CollectionType.RUN and not purge:
-            raise RunWithoutPurgePruneCollectionsError(collectionType)
-        if collectionType is not CollectionType.RUN and purge:
-            raise PurgeUnsupportedPruneCollectionsError(collectionType)
-
-        def remove(child: str, parent: str) -> None:
-            """Remove a child collection from a parent collection."""
-            # Remove child from parent.
-            chain = list(self.registry.getCollectionChain(parent))
-            try:
-                chain.remove(name)
-            except ValueError as e:
-                raise RuntimeError(f"{name} is not a child of {parent}") from e
-            self.registry.setCollectionChain(parent, chain)
-
-        with self.datastore.transaction():
-            with self.registry.transaction():
-                if unlink:
-                    for parent in unlink:
-                        remove(name, parent)
-                if unstore:
-                    refs = self.registry.queryDatasets(..., collections=name, findFirst=True)
-                    self.datastore.trash(refs)
-                self.registry.removeCollection(name)
-
         if unstore:
             # Point of no return for removing artifacts
             self.datastore.emptyTrash()

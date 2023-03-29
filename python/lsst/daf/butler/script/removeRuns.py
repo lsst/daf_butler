@@ -67,7 +67,7 @@ def _getCollectionInfo(
     Parameters
     ----------
     repo : `str`
-        The URI to the repostiory.
+        The URI to the repository.
     collection : `str`
         The collection string to search for. Same as the `expression`
         argument to `registry.queryCollections`.
@@ -115,7 +115,7 @@ def removeRuns(
     repo : `str`
         Same as the ``config`` argument to ``Butler.__init__``
     collection : `str`
-        Same as the ``name`` argument to ``Butler.pruneCollection``.
+        Same as the ``name`` argument to ``Butler.removeRuns``.
 
     Returns
     -------

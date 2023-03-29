@@ -116,7 +116,7 @@ def removeCollections(
     repo : `str`
         Same as the ``config`` argument to ``Butler.__init__``
     collection : `str`
-        Same as the ``name`` argument to ``Butler.pruneCollection``.
+        Same as the ``name`` argument to ``Registry.removeCollection``.
 
     Returns
     -------
