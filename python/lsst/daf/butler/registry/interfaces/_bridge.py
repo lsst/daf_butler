@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, ContextManager, Iterable, Optional, Set, 
 from lsst.utils.classes import immutable
 
 from ...core import DatasetId, DatasetRef
-from ._versioning import VersionedExtension
+from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
     from ...core import DatasetType, DimensionUniverse, StoredDatastoreItemInfo
@@ -286,8 +286,14 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
     """
 
     def __init__(
-        self, *, opaque: OpaqueTableStorageManager, universe: DimensionUniverse, datasetIdColumnType: type
+        self,
+        *,
+        opaque: OpaqueTableStorageManager,
+        universe: DimensionUniverse,
+        datasetIdColumnType: type,
+        registry_schema_version: VersionTuple | None = None,
     ):
+        super().__init__(registry_schema_version=registry_schema_version)
         self.opaque = opaque
         self.universe = universe
         self.datasetIdColumnType = datasetIdColumnType
@@ -302,6 +308,7 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         opaque: OpaqueTableStorageManager,
         datasets: Type[DatasetRecordStorageManager],
         universe: DimensionUniverse,
+        registry_schema_version: VersionTuple | None = None,
     ) -> DatastoreRegistryBridgeManager:
         """Construct an instance of the manager.
 
@@ -323,6 +330,8 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
             those tables.
         universe : `DimensionUniverse`
             All dimensions known to the registry.
+        registry_schema_version : `VersionTuple` or `None`
+            Schema version of this extension as defined in registry.
 
         Returns
         -------

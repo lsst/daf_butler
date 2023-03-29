@@ -119,7 +119,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         config: ObsCoreManagerConfig,
         dimensions: DimensionRecordStorageManager,
         spatial_plugins: Collection[SpatialObsCorePlugin],
+        registry_schema_version: VersionTuple | None = None,
     ):
+        super().__init__(registry_schema_version=registry_schema_version)
         self.db = db
         self.table = table
         self.schema = schema
@@ -157,6 +159,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         config: Mapping,
         datasets: Type[DatasetRecordStorageManager],
         dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ) -> ObsCoreTableManager:
         # Docstring inherited from base class.
         config_data = Config(config)
@@ -181,6 +184,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
             config=obscore_config,
             dimensions=dimensions,
             spatial_plugins=spatial_plugins,
+            registry_schema_version=registry_schema_version,
         )
 
     def config_json(self) -> str:
@@ -194,9 +198,9 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         return json.dumps(self.config.dict())
 
     @classmethod
-    def currentVersion(cls) -> VersionTuple | None:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from base class.
-        return _VERSION
+        return [_VERSION]
 
     def add_datasets(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
         # Docstring inherited from base class.

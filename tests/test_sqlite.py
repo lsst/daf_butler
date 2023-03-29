@@ -257,7 +257,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
         # dropped (DM-27373).
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
-        with self.assertRaises(sqlalchemy.exc.OperationalError):
+        with self.assertRaises(LookupError):
             Registry.fromConfig(config)
 
 

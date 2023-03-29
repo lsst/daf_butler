@@ -33,7 +33,7 @@ from lsst.daf.relation import Relation
 
 from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, Timespan, ddl
 from .._exceptions import MissingDatasetTypeError
-from ._versioning import VersionedExtension
+from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
     from .._collection_summary import CollectionSummary
@@ -449,6 +449,9 @@ class DatasetRecordStorageManager(VersionedExtension):
     records for a different `DatasetType`.
     """
 
+    def __init__(self, *, registry_schema_version: VersionTuple | None = None) -> None:
+        super().__init__(registry_schema_version=registry_schema_version)
+
     @classmethod
     @abstractmethod
     def initialize(
@@ -458,6 +461,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         """Construct an instance of the manager.
 
@@ -472,6 +476,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
+        registry_schema_version : `VersionTuple` or `None`
+            Schema version of this extension as defined in registry.
 
         Returns
         -------

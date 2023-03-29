@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Type
 
 import sqlalchemy
 
-from ._versioning import VersionedExtension
+from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
     from lsst.sphgeom import Region
@@ -48,6 +48,9 @@ if TYPE_CHECKING:
 class ObsCoreTableManager(VersionedExtension):
     """An interface for populating ObsCore tables(s)."""
 
+    def __init__(self, *, registry_schema_version: VersionTuple | None = None):
+        super().__init__(registry_schema_version=registry_schema_version)
+
     @classmethod
     @abstractmethod
     def initialize(
@@ -59,6 +62,7 @@ class ObsCoreTableManager(VersionedExtension):
         config: Mapping,
         datasets: Type[DatasetRecordStorageManager],
         dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ) -> ObsCoreTableManager:
         """Construct an instance of the manager.
 
@@ -78,6 +82,8 @@ class ObsCoreTableManager(VersionedExtension):
             Type of dataset manager.
         dimensions: `DimensionRecordStorageManager`
             Manager for Registry dimensions.
+        registry_schema_version : `VersionTuple` or `None`
+            Schema version of this extension as defined in registry.
 
         Returns
         -------

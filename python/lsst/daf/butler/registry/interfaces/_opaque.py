@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Optional
 
 from ...core.ddl import TableSpec
 from ._database import Database, StaticTablesContext
-from ._versioning import VersionedExtension
+from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
     from ...core.datastore import DatastoreTransaction
@@ -127,9 +127,14 @@ class OpaqueTableStorageManager(VersionedExtension):
     instances (each with their own opaque table) in a `ChainedDatastore`.
     """
 
+    def __init__(self, *, registry_schema_version: VersionTuple | None = None):
+        super().__init__(registry_schema_version=registry_schema_version)
+
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> OpaqueTableStorageManager:
+    def initialize(
+        cls, db: Database, context: StaticTablesContext, registry_schema_version: VersionTuple | None = None
+    ) -> OpaqueTableStorageManager:
         """Construct an instance of the manager.
 
         Parameters
@@ -140,6 +145,8 @@ class OpaqueTableStorageManager(VersionedExtension):
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present in a layer
             implemented with this manager.
+        registry_schema_version : `VersionTuple` or `None`
+            Schema version of this extension as defined in registry.
 
         Returns
         -------

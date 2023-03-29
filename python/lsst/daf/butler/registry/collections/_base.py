@@ -34,7 +34,7 @@ from lsst.utils.ellipsis import Ellipsis
 from ...core import DimensionUniverse, Timespan, TimespanDatabaseRepresentation, ddl
 from .._collectionType import CollectionType
 from .._exceptions import MissingCollectionError
-from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord
+from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord, VersionTuple
 from ..wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
@@ -323,8 +323,9 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         collectionIdName: str,
         *,
         dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ):
-        super().__init__()
+        super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
         self._tables = tables
         self._collectionIdName = collectionIdName

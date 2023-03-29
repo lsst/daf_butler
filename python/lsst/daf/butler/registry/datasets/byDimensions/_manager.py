@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 
 
 # This has to be updated on every schema change
-_VERSION_INT = VersionTuple(1, 0, 0)
 _VERSION_UUID = VersionTuple(1, 0, 0)
 
 _LOG = logging.getLogger(__name__)
@@ -94,7 +93,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
+        registry_schema_version: VersionTuple | None = None,
     ):
+        super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
         self._collections = collections
         self._dimensions = dimensions
@@ -111,6 +112,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
         specs = cls.makeStaticTableSpecs(type(collections), universe=dimensions.universe)
@@ -121,12 +123,19 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             collections=collections,
             dimensions=dimensions,
         )
-        return cls(db=db, collections=collections, dimensions=dimensions, static=static, summaries=summaries)
+        return cls(
+            db=db,
+            collections=collections,
+            dimensions=dimensions,
+            static=static,
+            summaries=summaries,
+            registry_schema_version=registry_schema_version,
+        )
 
     @classmethod
-    def currentVersion(cls) -> VersionTuple | None:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return cls._version
+        return [cls._version]
 
     @classmethod
     def makeStaticTableSpecs(

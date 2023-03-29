@@ -140,7 +140,13 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
         logical tables exist.
     """
 
-    def __init__(self, db: Database, metaTable: sqlalchemy.schema.Table):
+    def __init__(
+        self,
+        db: Database,
+        metaTable: sqlalchemy.schema.Table,
+        registry_schema_version: VersionTuple | None = None,
+    ):
+        super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
         self._metaTable = metaTable
         self._storage: Dict[str, OpaqueTableStorage] = {}
@@ -154,10 +160,12 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
     )
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> OpaqueTableStorageManager:
+    def initialize(
+        cls, db: Database, context: StaticTablesContext, registry_schema_version: VersionTuple | None = None
+    ) -> OpaqueTableStorageManager:
         # Docstring inherited from OpaqueTableStorageManager.
         metaTable = context.addTable(cls._META_TABLE_NAME, cls._META_TABLE_SPEC)
-        return cls(db=db, metaTable=metaTable)
+        return cls(db=db, metaTable=metaTable, registry_schema_version=registry_schema_version)
 
     def get(self, name: str) -> Optional[OpaqueTableStorage]:
         # Docstring inherited from OpaqueTableStorageManager.
@@ -179,6 +187,6 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
         return result
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return _VERSION
+        return [_VERSION]

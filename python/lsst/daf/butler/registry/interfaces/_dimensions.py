@@ -49,7 +49,7 @@ from ...core import (
     SkyPixDimension,
 )
 from ...core.named import NamedKeyMapping
-from ._versioning import VersionedExtension
+from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
     from .. import queries
@@ -656,13 +656,19 @@ class DimensionRecordStorageManager(VersionedExtension):
     across all layers forms the logical table for the full `Registry`.
     """
 
-    def __init__(self, *, universe: DimensionUniverse):
+    def __init__(self, *, universe: DimensionUniverse, registry_schema_version: VersionTuple | None = None):
+        super().__init__(registry_schema_version=registry_schema_version)
         self.universe = universe
 
     @classmethod
     @abstractmethod
     def initialize(
-        cls, db: Database, context: StaticTablesContext, *, universe: DimensionUniverse
+        cls,
+        db: Database,
+        context: StaticTablesContext,
+        *,
+        universe: DimensionUniverse,
+        registry_schema_version: VersionTuple | None = None,
     ) -> DimensionRecordStorageManager:
         """Construct an instance of the manager.
 
@@ -676,6 +682,8 @@ class DimensionRecordStorageManager(VersionedExtension):
             implemented with this manager.
         universe : `DimensionUniverse`
             Universe graph containing dimensions known to this `Registry`.
+        registry_schema_version : `VersionTuple` or `None`
+            Schema version of this extension as defined in registry.
 
         Returns
         -------
