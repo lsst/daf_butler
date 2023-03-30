@@ -1,0 +1,1 @@
+``Butler.get()`` and ``Butler.put()`` can now be used with resolved ``DatasetRef``.
