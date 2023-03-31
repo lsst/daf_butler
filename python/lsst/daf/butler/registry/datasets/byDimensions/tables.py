@@ -44,7 +44,7 @@ from ....core import (
     addDimensionForeignKey,
     ddl,
 )
-from ...interfaces import CollectionManager
+from ...interfaces import CollectionManager, VersionTuple
 
 DATASET_TYPE_NAME_LENGTH = 128
 
@@ -115,6 +115,7 @@ def makeStaticTableSpecs(
     universe: DimensionUniverse,
     dtype: type,
     autoincrement: bool,
+    schema_version: VersionTuple,
 ) -> StaticDatasetTablesTuple:
     """Construct all static tables used by the classes in this package.
 
@@ -137,6 +138,16 @@ def makeStaticTableSpecs(
     specs : `StaticDatasetTablesTuple`
         A named tuple containing `ddl.TableSpec` instances.
     """
+    ingest_date_type: type
+    ingest_date_default: Any = None
+    if schema_version.major > 1:
+        ingest_date_type = ddl.AstropyTimeNsecTai
+    else:
+        ingest_date_type = sqlalchemy.TIMESTAMP
+        # New code provides explicit values for ingest_data, but we keep
+        # default just to be consistent with the existing schema.
+        ingest_date_default = sqlalchemy.sql.func.now()
+
     specs = StaticDatasetTablesTuple(
         dataset_type=ddl.TableSpec(
             fields=[
@@ -219,8 +230,8 @@ def makeStaticTableSpecs(
                 ),
                 ddl.FieldSpec(
                     name="ingest_date",
-                    dtype=sqlalchemy.TIMESTAMP,
-                    default=sqlalchemy.sql.func.now(),
+                    dtype=ingest_date_type,
+                    default=ingest_date_default,
                     nullable=False,
                     doc="Time of dataset ingestion.",
                 ),
