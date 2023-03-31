@@ -79,15 +79,9 @@ class Manager2(VersionedExtension):
     def currentVersions(cls) -> list[VersionTuple]:
         return [V_1_0_0, V_2_0_0]
 
-    def newSchemaVersion(self) -> VersionTuple | None:
-        if self._registry_schema_version is None:
-            return V_1_0_0
-        elif self._registry_schema_version.major == 1:
-            return V_1_0_0
-        elif self._registry_schema_version.major == 2:
-            return V_2_0_0
-        else:
-            raise ValueError(f"Unexpected registry_schema_version: {self._registry_schema_version}")
+    @classmethod
+    def _newDefaultSchemaVersion(cls) -> VersionTuple:
+        return V_1_0_0
 
 
 class SchemaVersioningTestCase(unittest.TestCase):
@@ -191,7 +185,7 @@ class SchemaVersioningTestCase(unittest.TestCase):
             Manager2.checkCompatibility(result2, database.isWriteable())
 
             # Make manager instances using versions from registry.
-            manager0 = Manager1(registry_schema_version=versions.get("manager0"))
+            manager0 = Manager0(registry_schema_version=versions.get("manager0"))
             manager1 = Manager1(registry_schema_version=versions.get("manager1"))
             manager2 = Manager2(registry_schema_version=versions.get("manager2"))
             self.assertIsNone(manager0._registry_schema_version)
