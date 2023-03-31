@@ -336,17 +336,21 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         return count
 
     @contextmanager
-    def query(self, **kwargs: Any) -> Iterator[sqlalchemy.engine.CursorResult]:
-        """Run a SELECT query against obscore table and return result rows.
+    def query(
+        self, columns: Iterable[str | sqlalchemy.sql.expression.ColumnElement] | None = None, /, **kwargs: Any
+    ) -> Iterator[sqlalchemy.engine.CursorResult]:
+        # Docstring inherited from base class.
+        if columns is not None:
+            column_elements: list[sqlalchemy.sql.ColumnElement] = []
+            for column in columns:
+                if isinstance(column, str):
+                    column_elements.append(self.table.columns[column])
+                else:
+                    column_elements.append(column)
+            query = sqlalchemy.sql.select(*column_elements).select_from(self.table)
+        else:
+            query = self.table.select()
 
-        Parameters
-        ----------
-        **kwargs
-            Restriction on values of individual obscore columns. Key is the
-            column name, value is the required value of the column. Multiple
-            restrictions are ANDed together.
-        """
-        query = self.table.select()
         if kwargs:
             query = query.where(
                 sqlalchemy.sql.expression.and_(
