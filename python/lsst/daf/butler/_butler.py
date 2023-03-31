@@ -1657,7 +1657,7 @@ class Butler(LimitedButler):
             ref = self.registry.getDataset(datasetRefOrType.id)
             if ref is None:
                 raise LookupError(
-                    f"Resolved DatasetRef with id {datasetRefOrType.id} " "is not known to registry."
+                    f"Resolved DatasetRef with id {datasetRefOrType.id} is not known to registry."
                 )
         else:
             ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
