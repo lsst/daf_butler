@@ -371,6 +371,11 @@ class ObsCoreTests:
                     rows = list(result)
                     self.assertEqual(len(rows), count)
 
+                # Also check `query` method with COUNT(*)
+                with obscore.query([sqlalchemy.sql.func.count()]) as result:
+                    scalar = result.scalar_one()
+                    self.assertEqual(scalar, count)
+
     def test_drop_datasets(self):
         """Test for dropping datasets after obscore insert."""
 
@@ -479,7 +484,7 @@ class ObsCoreTests:
         )
         self.assertEqual(count, 2)
 
-        with obscore.query() as result:
+        with obscore.query(["s_ra", "s_dec", "s_region", "lsst_detector"]) as result:
             rows = list(result)
             self.assertEqual(len(rows), 4)
             for row in rows:

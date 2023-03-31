@@ -22,13 +22,11 @@ from __future__ import annotations
 
 __all__ = ()
 
-from collections.abc import Callable
-from typing import Any, cast
+from typing import Any
 
 import click
 
 from ... import script
-from .. import utils as cmd_utils
 from ..opt import (
     collection_argument,
     collection_type_option,
@@ -60,17 +58,12 @@ from ..utils import (
     MWOptionDecorator,
     option_section,
     printAstropyTables,
+    split_commas,
+    to_upper,
     typeStrAcceptsMultiple,
     unwrap,
     where_help,
 )
-
-# Cast the callback signatures to appease mypy since mypy thinks they
-# are too constrained.
-split_commas = cast(
-    Callable[[click.Context, click.Option | click.Parameter, Any], Any], cmd_utils.split_commas
-)
-to_upper = cast(Callable[[click.Context, click.Option | click.Parameter, Any], Any], cmd_utils.to_upper)
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."

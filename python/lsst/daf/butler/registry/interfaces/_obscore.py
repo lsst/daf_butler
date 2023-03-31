@@ -233,11 +233,17 @@ class ObsCoreTableManager(VersionedExtension):
 
     @abstractmethod
     @contextmanager
-    def query(self, **kwargs: Any) -> Iterator[sqlalchemy.engine.CursorResult]:
+    def query(
+        self, columns: Iterable[str | sqlalchemy.sql.expression.ColumnElement] | None = None, /, **kwargs: Any
+    ) -> Iterator[sqlalchemy.engine.CursorResult]:
         """Run a SELECT query against obscore table and return result rows.
 
         Parameters
         ----------
+        columns : `~collections.abc.Iterable` [`str`]
+            Columns to return from query. It is a sequence which can include
+            column names or any other column elements (e.g.
+            `sqlalchemy.sql.functions.count` function).
         **kwargs
             Restriction on values of individual obscore columns. Key is the
             column name, value is the required value of the column. Multiple
@@ -248,10 +254,5 @@ class ObsCoreTableManager(VersionedExtension):
         result_context : `sqlalchemy.engine.CursorResult`
             Context manager that returns the query result object when entered.
             These results are invalidated when the context is exited.
-
-        Notes
-        -----
-        This method is intended mostly for tests that need to check the
-        contents of obscore table.
         """
         raise NotImplementedError()
