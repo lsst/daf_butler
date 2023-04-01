@@ -248,6 +248,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 calibs=calibs,
                 dataset_type_id=row["id"],
                 collections=self._collections,
+                use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
             )
             byName[datasetType.name] = storage
             byId[storage._dataset_type_id] = storage
@@ -337,6 +338,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 calibs=calibs,
                 dataset_type_id=row["id"],
                 collections=self._collections,
+                use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
             )
             self._byName[datasetType.name] = storage
             self._byId[storage._dataset_type_id] = storage
@@ -519,3 +521,11 @@ class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStora
         # By default return 1.0.0 so that older clients can still access new
         # registries created with a default config.
         return _VERSION_UUID
+
+    def ingest_date_dtype(self) -> type:
+        """Return type of the ``ingest_date`` column."""
+        schema_version = self.newSchemaVersion()
+        if schema_version is not None and schema_version.major > 1:
+            return ddl.AstropyTimeNsecTai
+        else:
+            return sqlalchemy.TIMESTAMP

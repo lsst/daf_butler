@@ -76,6 +76,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
         tags: sqlalchemy.schema.Table,
+        use_astropy_ingest_date: bool,
         calibs: sqlalchemy.schema.Table | None,
     ):
         super().__init__(datasetType=datasetType)
@@ -87,9 +88,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._tags = tags
         self._calibs = calibs
         self._runKeyColumn = collections.getRunForeignKeyName()
-        # The ingest_date column can be one of two different types.
-        column: sqlalchemy.schema.Column = self._static.dataset.columns["ingest_date"]
-        self._use_astropy = isinstance(column.type, ddl.AstropyTimeNsecTai)
+        self._use_astropy = use_astropy_ingest_date
 
     def delete(self, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.

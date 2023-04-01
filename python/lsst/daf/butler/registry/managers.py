@@ -375,16 +375,6 @@ class RegistryManagerInstances(
         """
         dummy_table = ddl.TableSpec(fields=())
         kwargs: dict[str, Any] = {}
-        kwargs["column_types"] = ColumnTypeInfo(
-            database.getTimespanRepresentation(),
-            universe,
-            dataset_id_spec=types.datasets.addDatasetForeignKey(
-                dummy_table,
-                primaryKey=False,
-                nullable=False,
-            ),
-            run_key_spec=types.collections.addRunForeignKey(dummy_table, primaryKey=False, nullable=False),
-        )
         schema_versions = types.schema_versions
         kwargs["attributes"] = types.attributes.initialize(
             database, context, registry_schema_version=schema_versions.get("attributes")
@@ -398,13 +388,14 @@ class RegistryManagerInstances(
             dimensions=kwargs["dimensions"],
             registry_schema_version=schema_versions.get("collections"),
         )
-        kwargs["datasets"] = types.datasets.initialize(
+        datasets = types.datasets.initialize(
             database,
             context,
             collections=kwargs["collections"],
             dimensions=kwargs["dimensions"],
             registry_schema_version=schema_versions.get("datasets"),
         )
+        kwargs["datasets"] = datasets
         kwargs["opaque"] = types.opaque.initialize(
             database, context, registry_schema_version=schema_versions.get("opaque")
         )
@@ -428,6 +419,17 @@ class RegistryManagerInstances(
             )
         else:
             kwargs["obscore"] = None
+        kwargs["column_types"] = ColumnTypeInfo(
+            database.getTimespanRepresentation(),
+            universe,
+            dataset_id_spec=types.datasets.addDatasetForeignKey(
+                dummy_table,
+                primaryKey=False,
+                nullable=False,
+            ),
+            run_key_spec=types.collections.addRunForeignKey(dummy_table, primaryKey=False, nullable=False),
+            ingest_date_dtype=datasets.ingest_date_dtype(),
+        )
         return cls(**kwargs)
 
     def as_dict(self) -> Mapping[str, VersionedExtension]:

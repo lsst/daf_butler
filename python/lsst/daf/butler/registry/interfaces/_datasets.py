@@ -734,3 +734,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             this collection.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def ingest_date_dtype(self) -> type:
+        """Return type of the ``ingest_date`` column."""
+        raise NotImplementedError()

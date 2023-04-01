@@ -48,18 +48,25 @@ class FakeDatasetRecordStorageManager:
 class ConvertExpressionToPredicateTestCase(unittest.TestCase):
     """A test case for the make_string_expression_predicate function"""
 
+    ingest_date_dtype = sqlalchemy.TIMESTAMP
+    ingest_date_pytype = datetime.datetime
+    ingest_date_literal = datetime.datetime(2020, 1, 1)
+
     def setUp(self):
         self.column_types = ColumnTypeInfo(
             timespan_cls=TimespanDatabaseRepresentation.Compound,
             universe=DimensionUniverse(),
             dataset_id_spec=ddl.FieldSpec("dataset_id", dtype=ddl.GUID),
             run_key_spec=ddl.FieldSpec("run_id", dtype=sqlalchemy.BigInteger),
+            ingest_date_dtype=self.ingest_date_dtype,
         )
 
     def test_simple(self):
         """Test with a trivial expression"""
         self.assertEqual(
-            make_string_expression_predicate("1 > 0", self.column_types.universe.empty)[0],
+            make_string_expression_predicate(
+                "1 > 0", self.column_types.universe.empty, column_types=self.column_types
+            )[0],
             ColumnExpression.literal(1, dtype=int).gt(ColumnExpression.literal(0, dtype=int)),
         )
 
@@ -68,7 +75,9 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
         time_converter = time_utils.TimeConverter()
         self.assertEqual(
             make_string_expression_predicate(
-                "T'1970-01-01 00:00/tai' < T'2020-01-01 00:00/tai'", self.column_types.universe.empty
+                "T'1970-01-01 00:00/tai' < T'2020-01-01 00:00/tai'",
+                self.column_types.universe.empty,
+                column_types=self.column_types,
             )[0],
             ColumnExpression.literal(time_converter.nsec_to_astropy(0), dtype=astropy.time.Time).lt(
                 ColumnExpression.literal(
@@ -83,11 +92,12 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
             make_string_expression_predicate(
                 "ingest_date < T'2020-01-01 00:00/utc'",
                 self.column_types.universe.empty,
+                column_types=self.column_types,
                 dataset_type_name="fake",
             )[0],
-            ColumnExpression.reference(DatasetColumnTag("fake", "ingest_date"), dtype=datetime.datetime).lt(
-                ColumnExpression.literal(datetime.datetime(2020, 1, 1), dtype=datetime.datetime)
-            ),
+            ColumnExpression.reference(
+                DatasetColumnTag("fake", "ingest_date"), dtype=self.ingest_date_pytype
+            ).lt(ColumnExpression.literal(self.ingest_date_literal, dtype=self.ingest_date_pytype)),
         )
 
     def test_bind(self):
@@ -97,6 +107,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
             make_string_expression_predicate(
                 "a > b OR t in (x, y, z)",
                 self.column_types.universe.empty,
+                column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": 10, "y": 20, "z": 30},
             )[0],
             ColumnExpression.literal(1, dtype=int)
@@ -120,6 +131,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
             make_string_expression_predicate(
                 "a > b OR t in (x)",
                 self.column_types.universe.empty,
+                column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": (10, 20, 30)},
             )[0],
             ColumnExpression.literal(1, dtype=int)
@@ -143,6 +155,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
             make_string_expression_predicate(
                 "a > b OR t in (x, y)",
                 self.column_types.universe.empty,
+                column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": 10, "y": 20},
             )[0],
             ColumnExpression.literal(1, dtype=int)
@@ -163,6 +176,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
             make_string_expression_predicate(
                 "a > b OR t in (x, y)",
                 self.column_types.universe.empty,
+                column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": [10, 30], "y": 20},
             )[0],
             ColumnExpression.literal(1, dtype=int)
@@ -184,6 +198,7 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
             make_string_expression_predicate(
                 "a > b OR t in (x, y)",
                 self.column_types.universe.empty,
+                column_types=self.column_types,
                 bind={"a": 1, "b": 2, "t": 0, "x": (10, 30), "y": {20}},
             )[0],
             ColumnExpression.literal(1, dtype=int)
@@ -199,6 +214,16 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
                 ).contains(ColumnExpression.literal(0, dtype=int))
             ),
         )
+
+
+class ConvertExpressionToPredicateTestCaseAstropy(ConvertExpressionToPredicateTestCase):
+    """A test case for the make_string_expression_predicate function with
+    ingest_date defined as nanoseconds.
+    """
+
+    ingest_date_dtype = ddl.AstropyTimeNsecTai
+    ingest_date_pytype = astropy.time.Time
+    ingest_date_literal = astropy.time.Time(datetime.datetime(2020, 1, 1), scale="utc")
 
 
 class InspectionVisitorTestCase(unittest.TestCase):

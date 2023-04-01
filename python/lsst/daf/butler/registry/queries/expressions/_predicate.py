@@ -45,6 +45,7 @@ from lsst.daf.relation import (
 # syntax uses qualified names with periods to distinguish literals from
 # captures.
 from ....core import (
+    ColumnTypeInfo,
     DataCoordinate,
     DatasetColumnTag,
     Dimension,
@@ -78,6 +79,7 @@ def make_string_expression_predicate(
     string: str,
     dimensions: DimensionGraph,
     *,
+    column_types: ColumnTypeInfo,
     bind: Mapping[str, Any] | None = None,
     data_id: DataCoordinate | None = None,
     defaults: DataCoordinate | None = None,
@@ -93,6 +95,8 @@ def make_string_expression_predicate(
     dimensions : `DimensionGraph`
         The dimensions the query would include in the absence of this WHERE
         expression.
+    column_types : `ColumnTypeInfo`
+        Information about column types.
     bind : `Mapping` [ `str`, `Any` ], optional
         Literal values referenced in the expression.
     data_id : `DataCoordinate`, optional
@@ -166,7 +170,7 @@ def make_string_expression_predicate(
     for dimension_name, values in summary.dimension_constraints.items():
         if dimension_name in dimensions.universe.getGovernorDimensions().names:
             governor_constraints[dimension_name] = cast(Set[str], values)
-    converter = PredicateConversionVisitor(bind, dataset_type_name, dimensions.universe)
+    converter = PredicateConversionVisitor(bind, dataset_type_name, dimensions.universe, column_types)
     predicate = tree.visit(converter)
     return predicate, governor_constraints
 
@@ -180,10 +184,12 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
         bind: Mapping[str, Any],
         dataset_type_name: str | None,
         universe: DimensionUniverse,
+        column_types: ColumnTypeInfo,
     ):
         self.bind = bind
         self.dataset_type_name = dataset_type_name
         self.universe = universe
+        self.column_types = column_types
 
     OPERATOR_MAP = {
         "=": "__eq__",
@@ -240,6 +246,23 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
                 ColumnLiteral(dtype=astropy.time.Time) as rhs,
             ]:
                 rhs = ColumnLiteral(self.to_datetime(rhs.value), datetime.datetime)
+                return lhs.predicate_method(self.OPERATOR_MAP[operator], rhs)
+            # Allow comparisons between astropy.time.Time expressions and
+            # datetime literals/binds, by coercing the
+            # datetime literals to astropy.time.Time (in UTC scale).
+            case [
+                "=" | "!=" | "<" | ">" | "<=" | ">=",
+                ColumnLiteral(dtype=datetime.datetime) as lhs,
+                ColumnExpression(dtype=astropy.time.Time) as rhs,
+            ]:
+                lhs = ColumnLiteral(astropy.time.Time(lhs.value, scale="utc"), astropy.time.Time)
+                return lhs.predicate_method(self.OPERATOR_MAP[operator], rhs)
+            case [
+                "=" | "!=" | "<" | ">" | "<=" | ">=",
+                ColumnExpression(dtype=astropy.time.Time) as lhs,
+                ColumnLiteral(dtype=datetime.datetime) as rhs,
+            ]:
+                rhs = ColumnLiteral(astropy.time.Time(rhs.value, scale="utc"), astropy.time.Time)
                 return lhs.predicate_method(self.OPERATOR_MAP[operator], rhs)
             # Allow equality comparisons with None/NULL.  We don't have an 'IS'
             # operator.
@@ -354,7 +377,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
             case ExpressionConstant.INGEST_DATE:
                 assert self.dataset_type_name is not None
                 tag = DatasetColumnTag(self.dataset_type_name, "ingest_date")
-                return ColumnExpression.reference(tag, datetime.datetime)
+                return ColumnExpression.reference(tag, self.column_types.ingest_date_pytype)
             case ExpressionConstant.NULL:
                 return ColumnExpression.literal(None, type(None))
             case None:
