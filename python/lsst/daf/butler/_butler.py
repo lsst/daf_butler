@@ -27,10 +27,6 @@ from __future__ import annotations
 __all__ = (
     "Butler",
     "ButlerValidationError",
-    "PruneCollectionsArgsError",
-    "PurgeWithoutUnstorePruneCollectionsError",
-    "RunWithoutPurgePruneCollectionsError",
-    "PurgeUnsupportedPruneCollectionsError",
 )
 
 import collections.abc
@@ -58,6 +54,7 @@ from typing import (
     Union,
 )
 
+from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_class_of
@@ -111,42 +108,6 @@ class ButlerValidationError(ValidationError):
     """There is a problem with the Butler configuration."""
 
     pass
-
-
-class PruneCollectionsArgsError(TypeError):
-    """Base class for errors relating to Butler.pruneCollections input
-    arguments.
-    """
-
-    pass
-
-
-class PurgeWithoutUnstorePruneCollectionsError(PruneCollectionsArgsError):
-    """Raised when purge and unstore are both required to be True, and
-    purge is True but unstore is False.
-    """
-
-    def __init__(self) -> None:
-        super().__init__("Cannot pass purge=True without unstore=True.")
-
-
-class RunWithoutPurgePruneCollectionsError(PruneCollectionsArgsError):
-    """Raised when pruning a RUN collection but purge is False."""
-
-    def __init__(self, collectionType: CollectionType):
-        self.collectionType = collectionType
-        super().__init__(f"Cannot prune RUN collection {self.collectionType.name} without purge=True.")
-
-
-class PurgeUnsupportedPruneCollectionsError(PruneCollectionsArgsError):
-    """Raised when purge is True but is not supported for the given
-    collection."""
-
-    def __init__(self, collectionType: CollectionType):
-        self.collectionType = collectionType
-        super().__init__(
-            f"Cannot prune {self.collectionType} collection {self.collectionType.name} with purge=True."
-        )
 
 
 class Butler(LimitedButler):
@@ -1072,6 +1033,8 @@ class Butler(LimitedButler):
         -------
         ref : `DatasetRef`
             A reference to the dataset identified by the given arguments.
+            This can be the same dataset reference as given if it was
+            resolved.
 
         Raises
         ------
@@ -1087,6 +1050,9 @@ class Butler(LimitedButler):
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, for_put=False, **kwargs)
         if isinstance(datasetRefOrType, DatasetRef):
             idNumber = datasetRefOrType.id
+            # This is a resolved ref, return it immediately.
+            if idNumber:
+                return datasetRefOrType
         else:
             idNumber = None
         timespan: Optional[Timespan] = None
@@ -1143,22 +1109,24 @@ class Butler(LimitedButler):
         return ref
 
     @transactional
-    def putDirect(self, obj: Any, ref: DatasetRef) -> DatasetRef:
+    @deprecated(
+        reason="Butler.put() now behaves like Butler.putDirect() when given a DatasetRef."
+        " Please use Butler.put(). Be aware that you may need to adjust your usage if you"
+        " were relying on the run parameter to determine the run."
+        " Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
+    def putDirect(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
         # Docstring inherited.
-        (imported_ref,) = self.registry._importDatasets(
-            [ref],
-            expand=True,
-        )
-        if imported_ref.id != ref.getCheckedId():
-            raise RuntimeError("This registry configuration does not support putDirect.")
-        self.datastore.put(obj, ref)
-        return ref
+        return self.put(obj, ref)
 
     @transactional
     def put(
         self,
         obj: Any,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         run: Optional[str] = None,
@@ -1172,18 +1140,19 @@ class Butler(LimitedButler):
             The dataset.
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` is provided, ``dataId`` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
+            Otherwise the `DatasetType` or name thereof. If a fully resolved
+            `DatasetRef` is given the run and ID are used directly.
         dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the second argument.
         run : `str`, optional
             The name of the run the dataset should be added to, overriding
-            ``self.run``.
+            ``self.run``. Not used if a resolved `DatasetRef` is provided.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
-            parameters.
+            parameters. Not used if a resolve `DatasetRef` is provided.
 
         Returns
         -------
@@ -1196,6 +1165,18 @@ class Butler(LimitedButler):
         TypeError
             Raised if the butler is read-only or if no run has been provided.
         """
+        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
+            # This is a direct put of predefined DatasetRef.
+            log.debug("Butler put direct: %s", datasetRefOrType)
+            (imported_ref,) = self.registry._importDatasets(
+                [datasetRefOrType],
+                expand=True,
+            )
+            if imported_ref.id != datasetRefOrType.getCheckedId():
+                raise RuntimeError("This registry configuration does not support direct put of ref.")
+            self.datastore.put(obj, datasetRefOrType)
+            return datasetRefOrType
+
         log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
@@ -1244,6 +1225,12 @@ class Butler(LimitedButler):
 
         return ref
 
+    @deprecated(
+        reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
+        " Please use Butler.get(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def getDirect(
         self,
         ref: DatasetRef,
@@ -1252,10 +1239,6 @@ class Butler(LimitedButler):
         storageClass: Optional[Union[StorageClass, str]] = None,
     ) -> Any:
         """Retrieve a stored dataset.
-
-        Unlike `Butler.get`, this method allows datasets outside the Butler's
-        collection to be read as long as the `DatasetRef` that identifies them
-        can be obtained separately.
 
         Parameters
         ----------
@@ -1278,6 +1261,12 @@ class Butler(LimitedButler):
         """
         return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
+    @deprecated(
+        reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
+        "Please use Butler.getDeferred(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def getDirectDeferred(
         self,
         ref: DatasetRef,
@@ -1321,6 +1310,7 @@ class Butler(LimitedButler):
     def getDeferred(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         parameters: Union[dict, None] = None,
@@ -1379,6 +1369,7 @@ class Butler(LimitedButler):
     def get(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         parameters: Optional[Dict[str, Any]] = None,
@@ -1393,6 +1384,8 @@ class Butler(LimitedButler):
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
+            If a resolved `DatasetRef`, the associated dataset
+            is returned directly without additional querying.
         dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
@@ -1422,9 +1415,6 @@ class Butler(LimitedButler):
 
         Raises
         ------
-        ValueError
-            Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry.
         LookupError
             Raised if no matching dataset exists in the `Registry`.
         TypeError
@@ -1442,11 +1432,12 @@ class Butler(LimitedButler):
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self.getDirect(ref, parameters=parameters, storageClass=storageClass)
+        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getURIs(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         predict: bool = False,
@@ -1503,6 +1494,7 @@ class Butler(LimitedButler):
     def getURI(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        /,
         dataId: Optional[DataId] = None,
         *,
         predict: bool = False,
@@ -1660,7 +1652,15 @@ class Butler(LimitedButler):
         TypeError
             Raised if no collections were provided.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+        # A resolved ref may be given that is not known to this butler.
+        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
+            ref = self.registry.getDataset(datasetRefOrType.id)
+            if ref is None:
+                raise LookupError(
+                    f"Resolved DatasetRef with id {datasetRefOrType.id} is not known to registry."
+                )
+        else:
+            ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return self.datastore.exists(ref)
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
@@ -1701,76 +1701,6 @@ class Butler(LimitedButler):
                     self.datastore.forget(refs)
                 for name in names:
                     self.registry.removeCollection(name)
-        if unstore:
-            # Point of no return for removing artifacts
-            self.datastore.emptyTrash()
-
-    def pruneCollection(
-        self, name: str, purge: bool = False, unstore: bool = False, unlink: Optional[List[str]] = None
-    ) -> None:
-        """Remove a collection and possibly prune datasets within it.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the collection to remove.  If this is a
-            `~CollectionType.TAGGED` or `~CollectionType.CHAINED` collection,
-            datasets within the collection are not modified unless ``unstore``
-            is `True`.  If this is a `~CollectionType.RUN` collection,
-            ``purge`` and ``unstore`` must be `True`, and all datasets in it
-            are fully removed from the data repository.
-        purge : `bool`, optional
-            If `True`, permit `~CollectionType.RUN` collections to be removed,
-            fully removing datasets within them.  Requires ``unstore=True`` as
-            well as an added precaution against accidental deletion.  Must be
-            `False` (default) if the collection is not a ``RUN``.
-        unstore: `bool`, optional
-            If `True`, remove all datasets in the collection from all
-            datastores in which they appear.
-        unlink: `list` [`str`], optional
-            Before removing the given `collection` unlink it from from these
-            parent collections.
-
-        Raises
-        ------
-        TypeError
-            Raised if the butler is read-only or arguments are mutually
-            inconsistent.
-        """
-        # See pruneDatasets comments for more information about the logic here;
-        # the cases are almost the same, but here we can rely on Registry to
-        # take care everything but Datastore deletion when we remove the
-        # collection.
-        if not self.isWriteable():
-            raise TypeError("Butler is read-only.")
-        collectionType = self.registry.getCollectionType(name)
-        if purge and not unstore:
-            raise PurgeWithoutUnstorePruneCollectionsError()
-        if collectionType is CollectionType.RUN and not purge:
-            raise RunWithoutPurgePruneCollectionsError(collectionType)
-        if collectionType is not CollectionType.RUN and purge:
-            raise PurgeUnsupportedPruneCollectionsError(collectionType)
-
-        def remove(child: str, parent: str) -> None:
-            """Remove a child collection from a parent collection."""
-            # Remove child from parent.
-            chain = list(self.registry.getCollectionChain(parent))
-            try:
-                chain.remove(name)
-            except ValueError as e:
-                raise RuntimeError(f"{name} is not a child of {parent}") from e
-            self.registry.setCollectionChain(parent, chain)
-
-        with self.datastore.transaction():
-            with self.registry.transaction():
-                if unlink:
-                    for parent in unlink:
-                        remove(name, parent)
-                if unstore:
-                    refs = self.registry.queryDatasets(..., collections=name, findFirst=True)
-                    self.datastore.trash(refs)
-                self.registry.removeCollection(name)
-
         if unstore:
             # Point of no return for removing artifacts
             self.datastore.emptyTrash()

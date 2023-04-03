@@ -27,6 +27,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict, Iterable, Optional, Union
 
+from deprecated.sphinx import deprecated
+
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from .core import (
     AmbiguousDatasetError,
@@ -58,8 +60,46 @@ class LimitedButler(ABC):
         """Return `True` if this `Butler` supports write operations."""
         raise NotImplementedError()
 
+    @deprecated(
+        reason="Butler.put() now behaves like Butler.putDirect() when given a DatasetRef."
+        " Please use Butler.put(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
+    def putDirect(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
+        """Store a dataset that already has a UUID and ``RUN`` collection.
+
+        Parameters
+        ----------
+        obj : `object`
+            The dataset.
+        ref : `DatasetRef`
+            Resolved reference for a not-yet-stored dataset.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            The same as the given, for convenience and symmetry with
+            `Butler.put`.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler is read-only.
+        AmbiguousDatasetError
+            Raised if ``ref.id is None``, i.e. the reference is unresolved.
+
+        Notes
+        -----
+        Whether this method inserts the given dataset into a ``Registry`` is
+        implementation defined (some `LimitedButler` subclasses do not have a
+        `Registry`), but it always adds the dataset to a `Datastore`, and the
+        given ``ref.id`` and ``ref.run`` are always preserved.
+        """
+        return self.put(obj, ref)
+
     @abstractmethod
-    def putDirect(self, obj: Any, ref: DatasetRef) -> DatasetRef:
+    def put(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
         """Store a dataset that already has a UUID and ``RUN`` collection.
 
         Parameters
@@ -91,6 +131,56 @@ class LimitedButler(ABC):
         """
         raise NotImplementedError()
 
+    def get(
+        self,
+        ref: DatasetRef,
+        /,
+        *,
+        parameters: dict[str, Any] | None = None,
+        storageClass: StorageClass | str | None = None,
+    ) -> Any:
+        """Retrieve a stored dataset.
+
+        Parameters
+        ----------
+        ref: `DatasetRef`
+            A resolved `DatasetRef` directly associated with a dataset.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
+
+        Returns
+        -------
+        obj : `object`
+            The dataset.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if the supplied `DatasetRef` is unresolved.
+
+        Notes
+        -----
+        In a `LimitedButler` the only allowable way to specify a dataset is
+        to use a resolved `DatasetRef`. Subclasses can support more options.
+        """
+        log.debug("Butler get: %s, parameters=%s, storageClass: %s", ref, parameters, storageClass)
+        if ref.id is None:
+            raise AmbiguousDatasetError(f"Dataset {ref} is not resolved.")
+        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
+
+    @deprecated(
+        reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
+        " Please use Butler.get(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def getDirect(
         self,
         ref: DatasetRef,
@@ -99,10 +189,6 @@ class LimitedButler(ABC):
         storageClass: str | StorageClass | None = None,
     ) -> Any:
         """Retrieve a stored dataset.
-
-        Unlike `Butler.get`, this method allows datasets outside the Butler's
-        collection to be read as long as the `DatasetRef` that identifies them
-        can be obtained separately.
 
         Parameters
         ----------
@@ -130,6 +216,12 @@ class LimitedButler(ABC):
         """
         return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
+    @deprecated(
+        reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
+        "Please use Butler.getDeferred(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def getDirectDeferred(
         self,
         ref: DatasetRef,
@@ -168,6 +260,51 @@ class LimitedButler(ABC):
             raise AmbiguousDatasetError(
                 f"Dataset of type {ref.datasetType.name} with data ID {ref.dataId} is not resolved."
             )
+        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
+
+    def getDeferred(
+        self,
+        ref: DatasetRef,
+        /,
+        *,
+        parameters: dict[str, Any] | None = None,
+        storageClass: str | StorageClass | None = None,
+    ) -> DeferredDatasetHandle:
+        """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
+        after an immediate registry lookup.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            For the default implementation of a `LimitedButler`, the only
+            acceptable parameter is a resolved `DatasetRef`.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
+        storageClass : `StorageClass` or `str`, optional
+            The storage class to be used to override the Python type
+            returned by this method. By default the returned type matches
+            the dataset type definition for this dataset. Specifying a
+            read `StorageClass` can force a different type to be returned.
+            This type must be compatible with the original type.
+
+        Returns
+        -------
+        obj : `DeferredDatasetHandle`
+            A handle which can be used to retrieve a dataset at a later time.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if an unresolved `DatasetRef` is passed as an input.
+
+        Notes
+        -----
+        In a `LimitedButler` the only allowable way to specify a dataset is
+        to use a resolved `DatasetRef`. Subclasses can support more options.
+        """
+        if ref.id is None:
+            raise AmbiguousDatasetError(f"Dataset {ref} is not resolved.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def datasetExistsDirect(self, ref: DatasetRef) -> bool:

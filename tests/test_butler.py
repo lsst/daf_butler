@@ -149,7 +149,7 @@ class ButlerPutGetTests:
     def assertGetComponents(self, butler, datasetRef, components, reference, collections=None):
         datasetType = datasetRef.datasetType
         dataId = datasetRef.dataId
-        deferred = butler.getDirectDeferred(datasetRef)
+        deferred = butler.getDeferred(datasetRef)
 
         for component in components:
             compTypeName = datasetType.componentTypeName(component)
@@ -248,7 +248,7 @@ class ButlerPutGetTests:
                 self.assertIsInstance(ref, DatasetRef)
 
                 # Test getDirect
-                metricOut = butler.getDirect(ref)
+                metricOut = butler.get(ref)
                 self.assertEqual(metric, metricOut)
                 # Test get
                 metricOut = butler.get(ref.datasetType.name, dataId, collections=this_run)
@@ -263,7 +263,7 @@ class ButlerPutGetTests:
                 metricOut = butler.getDeferred(ref, collections=this_run).get()
                 self.assertEqual(metric, metricOut)
                 # and deferred direct with ref
-                metricOut = butler.getDirectDeferred(ref).get()
+                metricOut = butler.getDeferred(ref).get()
                 self.assertEqual(metric, metricOut)
 
                 # Check we can get components
@@ -330,9 +330,9 @@ class ButlerPutGetTests:
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args, collections=this_run)
-                # getDirect() should still fail.
+                # get() should still fail.
                 with self.assertRaises(FileNotFoundError):
-                    butler.getDirect(ref)
+                    butler.get(ref)
                 # Registry shouldn't be able to find it by dataset_id anymore.
                 self.assertIsNone(butler.registry.getDataset(ref.id))
 
@@ -385,7 +385,7 @@ class ButlerPutGetTests:
                 self.assertEqual(count, stop)
 
             compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
-            summary = butler.getDirect(compRef)
+            summary = butler.get(compRef)
             self.assertEqual(summary, metric.summary)
 
         # Create a Dataset type that has the same name but is inconsistent.
@@ -662,19 +662,19 @@ class ButlerTests(ButlerPutGetTests):
 
         # Specify an override.
         new_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
-        model = butler.getDirect(ref, storageClass=new_sc)
+        model = butler.get(ref, storageClass=new_sc)
         self.assertNotEqual(type(model), type(retrieved))
         self.assertIs(type(model), new_sc.pytype)
         self.assertEqual(retrieved, model)
 
         # Defer but override later.
-        deferred = butler.getDirectDeferred(ref)
+        deferred = butler.getDeferred(ref)
         model = deferred.get(storageClass=new_sc)
         self.assertIs(type(model), new_sc.pytype)
         self.assertEqual(retrieved, model)
 
         # Defer but override up front.
-        deferred = butler.getDirectDeferred(ref, storageClass=new_sc)
+        deferred = butler.getDeferred(ref, storageClass=new_sc)
         model = deferred.get()
         self.assertIs(type(model), new_sc.pytype)
         self.assertEqual(retrieved, model)
@@ -717,7 +717,7 @@ class ButlerTests(ButlerPutGetTests):
         # Put a dict and this should coerce to a MetricsExample
         test_dict = {"summary": {"a": 1}, "output": {"b": 2}}
         metric_ref = butler.put(test_dict, datasetTypeName, dataId=dataId, visit=424)
-        test_metric = butler.getDirect(metric_ref)
+        test_metric = butler.get(metric_ref)
         self.assertEqual(get_full_type_name(test_metric), "lsst.daf.butler.tests.MetricsExample")
         self.assertEqual(test_metric.summary, test_dict["summary"])
         self.assertEqual(test_metric.output, test_dict["output"])
@@ -730,17 +730,17 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(metric2_ref.datasetType, registry_type)
 
         # The get will return the type expected by registry.
-        test_metric2 = butler.getDirect(metric2_ref)
+        test_metric2 = butler.get(metric2_ref)
         self.assertEqual(get_full_type_name(test_metric2), "lsst.daf.butler.tests.MetricsExample")
 
         # Make a new DatasetRef with the compatible but different DatasetType.
         # This should now return a dict.
         new_ref = DatasetRef(this_type, metric2_ref.dataId, id=metric2_ref.id, run=metric2_ref.run)
-        test_dict2 = butler.getDirect(new_ref)
+        test_dict2 = butler.get(new_ref)
         self.assertEqual(get_full_type_name(test_dict2), "dict")
 
         # Get it again with the wrong dataset type definition using get()
-        # rather than getDirect(). This should be consistent with getDirect()
+        # rather than get(). This should be consistent with get()
         # behavior and return the type of the DatasetType.
         test_dict3 = butler.get(this_type, dataId=dataId, visit=425)
         self.assertEqual(get_full_type_name(test_dict3), "dict")
@@ -954,7 +954,7 @@ class ButlerTests(ButlerPutGetTests):
                 ref = butler.put(metric, datasetTypeName, dataId)
                 self.assertIsInstance(ref, DatasetRef)
                 # Test getDirect
-                metricOut = butler.getDirect(ref)
+                metricOut = butler.get(ref)
                 self.assertEqual(metric, metricOut)
                 # Test get
                 metricOut = butler.get(datasetTypeName, dataId)
@@ -971,7 +971,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertIsNone(butler.registry.findDataset(datasetType, dataId, collections=butler.collections))
         # Direct retrieval should not find the file in the Datastore
         with self.assertRaises(FileNotFoundError, msg=f"Check {ref} can't be retrieved directly"):
-            butler.getDirect(ref)
+            butler.get(ref)
 
     def testMakeRepo(self):
         """Test that we can write butler configuration to a new repository via

@@ -85,7 +85,7 @@ class DeferredDatasetHandle:
             storageClass = self.storageClass
 
         ref = self.ref.makeComponentRef(component) if component is not None else self.ref
-        return self.butler.getDirect(ref, parameters=mergedParameters, storageClass=storageClass)
+        return self.butler.get(ref, parameters=mergedParameters, storageClass=storageClass)
 
     @property
     def dataId(self) -> DataCoordinate:
