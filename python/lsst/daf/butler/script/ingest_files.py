@@ -108,7 +108,9 @@ def ingest_files(
     common_data_id = parse_data_id_tuple(data_id, universe)
 
     # Read the table assuming that Astropy can work out the format.
-    table = Table.read(table_file)
+    uri = ResourcePath(table_file, forceAbsolute=False)
+    with uri.as_local() as local_file:
+        table = Table.read(local_file.ospath)
 
     datasets = extract_datasets_from_table(table, common_data_id, datasetType, formatter, prefix)
 
