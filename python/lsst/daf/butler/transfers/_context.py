@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ["RepoExportContext"]
 
 from collections import defaultdict
-from typing import AbstractSet, Callable, Dict, Iterable, List, Optional, Set, Union
+from typing import TYPE_CHECKING, AbstractSet, Callable, Dict, Iterable, List, Optional, Set, Union
 
 from ..core import (
     DataCoordinate,
@@ -40,6 +40,9 @@ from ..core import (
 from ..registry import CollectionType, Registry
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ._interfaces import RepoExportBackend
+
+if TYPE_CHECKING:
+    from lsst.resources import ResourcePathExpression
 
 
 class RepoExportContext:
@@ -60,8 +63,9 @@ class RepoExportContext:
         Datastore to export from.
     backend : `RepoExportBackend`
         Implementation class for a particular export file format.
-    directory : `str`, optional
-        Directory to pass to `Datastore.export`.
+    directory : `~lsst.resources.ResourcePathExpression`, optional
+        Directory to pass to `Datastore.export`. Can be `None` to use
+        the current working directory.
     transfer : `str`, optional
         Transfer mode to pass to `Datastore.export`.
     """
@@ -72,7 +76,7 @@ class RepoExportContext:
         datastore: Datastore,
         backend: RepoExportBackend,
         *,
-        directory: Optional[str] = None,
+        directory: Optional[ResourcePathExpression] = None,
         transfer: Optional[str] = None,
     ):
         self._registry = registry

@@ -27,7 +27,7 @@ import uuid
 import warnings
 from collections import defaultdict
 from datetime import datetime
-from typing import IO, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Type
+from typing import IO, TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Type
 
 import astropy.time
 import yaml
@@ -58,6 +58,9 @@ from ..registry.interfaces import (
 )
 from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
+
+if TYPE_CHECKING:
+    from lsst.resources import ResourcePathExpression
 
 EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 2)
 """Export format version.
@@ -396,7 +399,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         self,
         datastore: Optional[Datastore],
         *,
-        directory: Optional[str] = None,
+        directory: ResourcePathExpression | None = None,
         transfer: Optional[str] = None,
         skip_dimensions: Optional[Set] = None,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
