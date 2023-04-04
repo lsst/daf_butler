@@ -162,7 +162,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         universe : `DimensionUniverse`
             Universe graph containing all dimensions known to this `Registry`.
         schema_version : `VersionTuple` or `None`
-            Version of the schema that should be crteated, if `None` then
+            Version of the schema that should be created, if `None` then
             default schema should be used.
 
         Returns

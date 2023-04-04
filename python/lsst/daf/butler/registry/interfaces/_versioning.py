@@ -180,7 +180,7 @@ class VersionedExtension(ABC):
 
         Notes
         -----
-        Extension classes which support multiple schema versions need to
+        Extension classes that support multiple schema versions need to
         override `_newDefaultSchemaVersion` method.
         """
         return self.clsNewSchemaVersion(self._registry_schema_version)
@@ -206,7 +206,7 @@ class VersionedExtension(ABC):
         Notes
         -----
         Default implementation of this method can work in simple cases. If
-        the extension only supports single schema version than that versions is
+        the extension only supports single schema version than that version is
         returned. If the extension supports multiple schema versions and
         ``schema_version`` is not `None` then ``schema_version`` is returned.
         If the extension supports multiple schema versions, but
