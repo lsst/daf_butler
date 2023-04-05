@@ -89,10 +89,10 @@ class RegistryTests(ABC):
     (`str`).
     """
 
-    datasetsManager: Optional[str] = None
-    """Name of the datasets manager class, if subclass provides value for
-    this member then it overrides name specified in default configuration
-    (`str`).
+    datasetsManager: Optional[str | dict[str, str]] = None
+    """Name or configuration dictionary of the datasets manager class, if
+    subclass provides value for this member then it overrides name specified
+    in default configuration (`str` or `dict`).
     """
 
     @classmethod
@@ -515,8 +515,12 @@ class RegistryTests(ABC):
 
     def testImportDatasetsUUID(self):
         """Test for `Registry._importDatasets` with UUID dataset ID."""
-        if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
-            self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
+        if isinstance(self.datasetsManager, str):
+            if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
+                self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
+        elif isinstance(self.datasetsManager, dict):
+            if not self.datasetsManager["cls"].endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
+                self.skipTest(f"Unexpected dataset manager {self.datasetsManager['cls']}")
 
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")

@@ -67,7 +67,10 @@ def _doUpdate(d: Mapping[str, Any], u: Mapping[str, Any]) -> Mapping[str, Any]:
         raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
     for k, v in u.items():
         if isinstance(v, Mapping):
-            d[k] = _doUpdate(d.get(k, {}), v)
+            lhs = d.get(k, {})
+            if not isinstance(lhs, Mapping):
+                lhs = {}
+            d[k] = _doUpdate(lhs, v)
         else:
             d[k] = v
     return d

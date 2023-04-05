@@ -180,19 +180,63 @@ class VersionedExtension(ABC):
 
         Notes
         -----
-        Default implementation only forks for extensions that support single
-        schema version and it returns version obtained from `currentVersions`.
-        If `currentVersions` returns multiple version then default
-        implementation will raise an exception and the method has to be
-        reimplemented by a subclass.
+        Extension classes that support multiple schema versions need to
+        override `_newDefaultSchemaVersion` method.
         """
-        my_versions = self.currentVersions()
+        return self.clsNewSchemaVersion(self._registry_schema_version)
+
+    @classmethod
+    def clsNewSchemaVersion(cls, schema_version: VersionTuple | None) -> VersionTuple | None:
+        """Class method which returns schema version to use for newly created
+        registry database.
+
+        Parameters
+        ----------
+        schema_version : `VersionTuple` or `None`
+            Configured schema version or `None` if default schema version
+            should be created. If not `None` then it is guaranteed to be
+            compatible with `currentVersions`.
+
+        Returns
+        -------
+        version : `VersionTuple` or `None`
+            Schema version created by this extension. `None` is returned if an
+            extension does not require its version to be saved or checked.
+
+        Notes
+        -----
+        Default implementation of this method can work in simple cases. If
+        the extension only supports single schema version than that version is
+        returned. If the extension supports multiple schema versions and
+        ``schema_version`` is not `None` then ``schema_version`` is returned.
+        If the extension supports multiple schema versions, but
+        ``schema_version`` is `None` it calls ``_newDefaultSchemaVersion``
+        method which needs to be reimplemented in a subsclass.
+        """
+        my_versions = cls.currentVersions()
         if not my_versions:
             return None
         elif len(my_versions) == 1:
             return my_versions[0]
+        else:
+            if schema_version is not None:
+                assert schema_version in my_versions, "Schema version must be compatible."
+                return schema_version
+            else:
+                return cls._newDefaultSchemaVersion()
+
+    @classmethod
+    def _newDefaultSchemaVersion(cls) -> VersionTuple:
+        """Return default shema version for new registry for extensions that
+        support multiple schema versions.
+
+        Notes
+        -----
+        Default implementation simply raises an exception. Managers which
+        support multiple schema versions must re-implement this method.
+        """
         raise NotImplementedError(
-            f"Extension {self.extensionName()} supports multiple schema versions, "
+            f"Extension {cls.extensionName()} supports multiple schema versions, "
             "its newSchemaVersion() method needs to be re-implemented."
         )
 

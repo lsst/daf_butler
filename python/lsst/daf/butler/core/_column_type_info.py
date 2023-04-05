@@ -24,9 +24,11 @@ from __future__ import annotations
 __all__ = ("ColumnTypeInfo", "LogicalColumn")
 
 import dataclasses
+import datetime
 from collections.abc import Iterable
 from typing import Union, cast
 
+import astropy.time
 import sqlalchemy
 from lsst.daf.relation import ColumnTag, sql
 
@@ -66,6 +68,21 @@ class ColumnTypeInfo:
     run_key_spec: ddl.FieldSpec
     """Field specification for the `~CollectionType.RUN` primary key column.
     """
+
+    ingest_date_dtype: type[ddl.AstropyTimeNsecTai] | type[sqlalchemy.TIMESTAMP]
+    """Type of the ``ingest_date`` column, can be either
+    `~lsst.daf.butler.core.ddl.AstropyTimeNsecTai` or `sqlalchemy.TIMESTAMP`.
+    """
+
+    @property
+    def ingest_date_pytype(self) -> type:
+        """Python type corresponding to ``ingest_date`` column type."""
+        if self.ingest_date_dtype is ddl.AstropyTimeNsecTai:
+            return astropy.time.Time
+        elif self.ingest_date_dtype is sqlalchemy.TIMESTAMP:
+            return datetime.datetime
+        else:
+            raise TypeError(f"Unexpected type of ingest_date_dtype: {self.ingest_date_dtype}")
 
     def make_relation_table_spec(
         self,
@@ -141,7 +158,7 @@ class ColumnTypeInfo:
                     )
                 case DatasetColumnTag(column="ingest_date"):
                     result.fields.add(
-                        ddl.FieldSpec(tag.qualified_name, dtype=sqlalchemy.TIMESTAMP, nullable=False)
+                        ddl.FieldSpec(tag.qualified_name, dtype=self.ingest_date_dtype, nullable=False)
                     )
                 case _:
                     raise TypeError(f"Unexpected column tag {tag}.")

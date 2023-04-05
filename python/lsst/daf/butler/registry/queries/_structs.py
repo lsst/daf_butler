@@ -32,6 +32,7 @@ from lsst.sphgeom import IntersectionRegion, Region
 from lsst.utils.classes import cached_getter, immutable
 
 from ...core import (
+    ColumnTypeInfo,
     DataCoordinate,
     DatasetType,
     DimensionElement,
@@ -65,6 +66,7 @@ class QueryWhereClause:
         dimensions: DimensionGraph,
         expression: str = "",
         *,
+        column_types: ColumnTypeInfo,
         bind: Mapping[str, Any] | None = None,
         data_id: DataCoordinate | None = None,
         region: Region | None = None,
@@ -81,6 +83,8 @@ class QueryWhereClause:
             of the WHERE clause.
         expression : `str`, optional
             A user-provided string expression.
+        column_types : `ColumnTypeInfo`
+            Information about column types.
         bind : `Mapping` [ `str`, `object` ], optional
             Mapping containing literal values that should be injected into the
             query expression, keyed by the identifiers they replace.
@@ -112,6 +116,7 @@ class QueryWhereClause:
         expression_predicate, governor_constraints = make_string_expression_predicate(
             expression,
             dimensions,
+            column_types=column_types,
             bind=bind,
             data_id=data_id,
             defaults=defaults,
@@ -324,6 +329,8 @@ class QuerySummary:
     requested : `DimensionGraph`
         The dimensions whose primary keys should be included in the result rows
         of the query.
+    column_types : `ColumnTypeInfo`
+        Information about column types.
     data_id : `DataCoordinate`, optional
         A fully-expanded data ID identifying dimensions known in advance.  If
         not provided, will be set to an empty data ID.
@@ -359,6 +366,7 @@ class QuerySummary:
         self,
         requested: DimensionGraph,
         *,
+        column_types: ColumnTypeInfo,
         data_id: DataCoordinate | None = None,
         expression: str = "",
         region: Region | None = None,
@@ -378,6 +386,7 @@ class QuerySummary:
         self.where = QueryWhereClause.combine(
             self.requested,
             expression=expression,
+            column_types=column_types,
             bind=bind,
             data_id=data_id,
             region=region,

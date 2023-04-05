@@ -26,8 +26,10 @@ __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 import uuid
 from collections.abc import Iterable, Iterator, Sequence, Set
+from datetime import datetime
 from typing import TYPE_CHECKING
 
+import astropy.time
 import sqlalchemy
 from lsst.daf.relation import Relation, sql
 
@@ -74,6 +76,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
         tags: sqlalchemy.schema.Table,
+        use_astropy_ingest_date: bool,
         calibs: sqlalchemy.schema.Table | None,
     ):
         super().__init__(datasetType=datasetType)
@@ -85,6 +88,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._tags = tags
         self._calibs = calibs
         self._runKeyColumn = collections.getRunForeignKeyName()
+        self._use_astropy = use_astropy_ingest_date
 
     def delete(self, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
@@ -565,6 +569,17 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
+        # Current timestamp, type depends on schema version. Use microsecond
+        # precision for astropy time to keep things consistent with
+        # TIMESTAMP(6) SQL type.
+        timestamp: datetime | astropy.time.Time
+        if self._use_astropy:
+            # Astropy `now()` precision should be the same as `utcnow()` which
+            # should mean microsecond.
+            timestamp = astropy.time.Time.now()
+        else:
+            timestamp = datetime.utcnow()
+
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
         dataIdList = []
@@ -577,6 +592,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     "id": self.idMaker.makeDatasetId(run.name, self.datasetType, dataId, idMode),
                     "dataset_type_id": self._dataset_type_id,
                     self._runKeyColumn: run.key,
+                    "ingest_date": timestamp,
                 }
             )
 
@@ -616,6 +632,14 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         reuseIds: bool = False,
     ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
+
+        # Current timestamp, type depends on schema version.
+        if self._use_astropy:
+            # Astropy `now()` precision should be the same as `utcnow()` which
+            # should mean microsecond.
+            timestamp = sqlalchemy.sql.literal(astropy.time.Time.now(), type_=ddl.AstropyTimeNsecTai)
+        else:
+            timestamp = sqlalchemy.sql.literal(datetime.utcnow())
 
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
@@ -665,6 +689,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                         tmp_tags.columns.dataset_id.label("id"),
                         tmp_tags.columns.dataset_type_id,
                         tmp_tags.columns[collFkName].label(self._runKeyColumn),
+                        timestamp.label("ingest_date"),
                     ),
                 )
 

@@ -287,5 +287,20 @@ class SqliteMemoryRegistrySynthIntKeyCollMgrUUIDTestCase(unittest.TestCase, Sqli
     )
 
 
+class SqliteMemoryRegistryAstropyIngestDateTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
+    """Tests for `Registry` backed by a SQLite in-memory database.
+
+    This test case uses version schema with ingest_date as nanoseconds instead
+    of DATETIME. This tests can be removed when/if we switch to nanoseconds as
+    default.
+    """
+
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+    datasetsManager = {
+        "cls": "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+        "schema_version": "2.0.0",
+    }
+
+
 if __name__ == "__main__":
     unittest.main()

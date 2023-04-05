@@ -1152,6 +1152,7 @@ class SqlRegistry(Registry):
             # QueryBuilder.
             summary = queries.QuerySummary(
                 requested=DimensionGraph(self.dimensions, names=dimension_names),
+                column_types=self._managers.column_types,
                 data_id=data_id,
                 expression=where,
                 bind=bind,
@@ -1207,6 +1208,7 @@ class SqlRegistry(Registry):
         )
         summary = queries.QuerySummary(
             requested=requestedDimensions,
+            column_types=self._managers.column_types,
             data_id=data_id,
             expression=where,
             bind=bind,
@@ -1250,6 +1252,7 @@ class SqlRegistry(Registry):
         )
         summary = queries.QuerySummary(
             requested=element.graph,
+            column_types=self._managers.column_types,
             data_id=data_id,
             expression=where,
             bind=bind,

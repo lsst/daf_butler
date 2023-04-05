@@ -39,6 +39,10 @@ if TYPE_CHECKING:
 
 # This has to be updated on every schema change
 _VERSION_UUID = VersionTuple(1, 0, 0)
+# Starting with 2.0.0 the `ingest_date` column type uses nanoseconds instead
+# of TIMESTAMP. The code supports both 1.0.0 and 2.0.0 for the duration of
+# client migration period.
+_VERSION_UUID_NS = VersionTuple(2, 0, 0)
 
 _LOG = logging.getLogger(__name__)
 
@@ -115,7 +119,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
-        specs = cls.makeStaticTableSpecs(type(collections), universe=dimensions.universe)
+        specs = cls.makeStaticTableSpecs(
+            type(collections), universe=dimensions.universe, schema_version=registry_schema_version
+        )
         static: StaticDatasetTablesTuple = context.addTableTuple(specs)  # type: ignore
         summaries = CollectionSummaryManager.initialize(
             db,
@@ -135,11 +141,14 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
-        return [cls._version]
+        return cls._versions
 
     @classmethod
     def makeStaticTableSpecs(
-        cls, collections: type[CollectionManager], universe: DimensionUniverse
+        cls,
+        collections: type[CollectionManager],
+        universe: DimensionUniverse,
+        schema_version: VersionTuple | None,
     ) -> StaticDatasetTablesTuple:
         """Construct all static tables used by the classes in this package.
 
@@ -152,14 +161,23 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             Manager object for the collections in this `Registry`.
         universe : `DimensionUniverse`
             Universe graph containing all dimensions known to this `Registry`.
+        schema_version : `VersionTuple` or `None`
+            Version of the schema that should be created, if `None` then
+            default schema should be used.
 
         Returns
         -------
         specs : `StaticDatasetTablesTuple`
             A named tuple containing `ddl.TableSpec` instances.
         """
+        schema_version = cls.clsNewSchemaVersion(schema_version)
+        assert schema_version is not None, "New schema version cannot be None"
         return makeStaticTableSpecs(
-            collections, universe=universe, dtype=cls.getIdColumnType(), autoincrement=cls._autoincrement
+            collections,
+            universe=universe,
+            dtype=cls.getIdColumnType(),
+            autoincrement=cls._autoincrement,
+            schema_version=schema_version,
         )
 
     @classmethod
@@ -230,6 +248,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 calibs=calibs,
                 dataset_type_id=row["id"],
                 collections=self._collections,
+                use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
             )
             byName[datasetType.name] = storage
             byId[storage._dataset_type_id] = storage
@@ -319,6 +338,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 calibs=calibs,
                 dataset_type_id=row["id"],
                 collections=self._collections,
+                use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
             )
             self._byName[datasetType.name] = storage
             self._byId[storage._dataset_type_id] = storage
@@ -466,7 +486,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         return self._summaries.get(collection)
 
-    _version: VersionTuple
+    _versions: list[VersionTuple]
     """Schema version for this class."""
 
     _recordStorageType: type[ByDimensionsDatasetRecordStorage]
@@ -484,7 +504,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStora
     UUID for dataset primary key.
     """
 
-    _version: VersionTuple = _VERSION_UUID
+    _versions: list[VersionTuple] = [_VERSION_UUID, _VERSION_UUID_NS]
     _recordStorageType: type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageUUID
     _autoincrement: bool = False
     _idColumnType: type = ddl.GUID
@@ -493,3 +513,19 @@ class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStora
     def supportsIdGenerationMode(cls, mode: DatasetIdGenEnum) -> bool:
         # Docstring inherited from DatasetRecordStorageManager.
         return True
+
+    @classmethod
+    def _newDefaultSchemaVersion(cls) -> VersionTuple:
+        # Docstring inherited from VersionedExtension.
+
+        # By default return 1.0.0 so that older clients can still access new
+        # registries created with a default config.
+        return _VERSION_UUID
+
+    def ingest_date_dtype(self) -> type:
+        """Return type of the ``ingest_date`` column."""
+        schema_version = self.newSchemaVersion()
+        if schema_version is not None and schema_version.major > 1:
+            return ddl.AstropyTimeNsecTai
+        else:
+            return sqlalchemy.TIMESTAMP
