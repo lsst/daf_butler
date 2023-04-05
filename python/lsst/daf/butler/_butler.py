@@ -31,6 +31,7 @@ __all__ = (
 
 import collections.abc
 import contextlib
+import io
 import logging
 import numbers
 import os
@@ -2110,8 +2111,10 @@ class Butler(LimitedButler):
                 )
 
         if isinstance(filename, ResourcePath):
-            with filename.open("r") as stream:
-                doImport(stream)
+            # We can not use open() here at the moment because of
+            # DM-38589 since yaml does stream.read(8192) in a loop.
+            stream = io.StringIO(filename.read().decode())
+            doImport(stream)
         else:
             doImport(filename)
 
