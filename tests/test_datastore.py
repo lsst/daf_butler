@@ -1824,8 +1824,8 @@ class DatasetRefURIsTestCase(unittest.TestCase):
         uris = DatasetRefURIs(ResourcePath("1/2/3"), {"comp": ResourcePath("a/b/c")})
         self.assertEqual(
             repr(uris),
-            f'DatasetRefURIs(ResourcePath("{os.getcwd()}/1/2/3"), '
-            f"{{'comp': ResourcePath(\"{os.getcwd()}/a/b/c\")}})",
+            f'DatasetRefURIs(ResourcePath("file://{os.getcwd()}/1/2/3"), '
+            f"{{'comp': ResourcePath(\"file://{os.getcwd()}/a/b/c\")}})",
         )
 
 
