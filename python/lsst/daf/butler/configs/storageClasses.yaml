@@ -113,6 +113,7 @@ storageClasses:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_pandas
       astropy.table.Table: astropy.table.Table.to_pandas
       numpy.ndarray: pandas.DataFrame.from_records
+      dict: pandas.DataFrame.from_records
     delegate: lsst.daf.butler.delegates.dataframe.DataFrameDelegate
     derivedComponents:
       columns: DataFrameIndex
@@ -138,6 +139,7 @@ storageClasses:
       pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_arrow
       astropy.table.Table: lsst.daf.butler.formatters.parquet.astropy_to_arrow
       numpy.ndarray: lsst.daf.butler.formatters.parquet.numpy_to_arrow
+      dict: lsst.daf.butler.formatters.parquet.numpy_dict_to_arrow
     delegate: lsst.daf.butler.delegates.arrowtable.ArrowTableDelegate
     derivedComponents:
       columns: ArrowColumnList
@@ -163,6 +165,7 @@ storageClasses:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_astropy
       pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet.pandas_to_astropy
       numpy.ndarray: lsst.daf.butler.formatters.parquet.numpy_to_astropy
+      dict: astropy.table.Table
     delegate: lsst.daf.butler.delegates.arrowastropy.ArrowAstropyDelegate
     derivedComponents:
       columns: ArrowColumnList
@@ -183,6 +186,7 @@ storageClasses:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_numpy
       pandas.core.frame.DataFrame: pandas.DataFrame.to_records
       astropy.table.Table: astropy.table.Table.as_array
+      dict: lsst.daf.butler.formatters.parquet._numpy_dict_to_numpy
     delegate: lsst.daf.butler.delegates.arrownumpy.ArrowNumpyDelegate
     derivedComponents:
       columns: ArrowColumnList
@@ -197,6 +201,21 @@ storageClasses:
       pyarrow.Schema: lsst.daf.butler.formatters.parquet.ArrowNumpySchema.from_arrow
       lsst.daf.butler.formatters.parquet.DataFrameSchema: lsst.daf.butler.formatters.parquet.DataFrameSchema.to_arrow_numpy_schema
       lsst.daf.butler.formatters.parquet.ArrowAstropySchema: lsst.daf.butler.formatters.parquet.ArrowAstropySchema.to_arrow_numpy_schema
+  ArrowNumpyDict:
+    pytype: dict
+    converters:
+      pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_numpy_dict
+      pandas.core.frame.DataFrame: lsst.daf.butler.formatters.parquet._pandas_to_numpy_dict
+      astropy.table.Table: lsst.daf.butler.formatters.parquet._astropy_to_numpy_dict
+      numpy.ndarray: lsst.daf.butler.formatters.parquet._numpy_to_numpy_dict
+    delegate: lsst.daf.butler.delegates.arrownumpydict.ArrowNumpyDictDelegate
+    derivedComponents:
+      columns: ArrowColumnList
+      rowcount: int
+      schema: ArrowNumpySchema
+    parameters:
+      - columns
+      - filters
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
   PropertySet:

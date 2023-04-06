@@ -136,6 +136,13 @@ class ParquetFormatter(Formatter):
             arrow_table = astropy_to_arrow(inMemoryDataset)
         elif isinstance(inMemoryDataset, np.ndarray):
             arrow_table = numpy_to_arrow(inMemoryDataset)
+        elif isinstance(inMemoryDataset, dict):
+            try:
+                arrow_table = numpy_dict_to_arrow(inMemoryDataset)
+            except (TypeError, AttributeError) as e:
+                raise ValueError(
+                    "Input dict for inMemoryDataset does not appear to be a dict of numpy arrays."
+                ) from e
         else:
             if hasattr(inMemoryDataset, "to_parquet"):
                 # This may be a pandas DataFrame
@@ -290,6 +297,38 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
     return numpy_dict
 
 
+def _numpy_dict_to_numpy(numpy_dict: dict[str, np.ndarray]) -> np.ndarray:
+    """Convert a dict of numpy arrays to a structured numpy array.
+
+    Parameters
+    ----------
+    numpy_dict : `dict` [`str`, `numpy.ndarray`]
+        Dict with keys as the column names, values as the arrays.
+
+    Returns
+    -------
+    array : `numpy.ndarray` (N,)
+        Numpy array table with N rows and columns names from the dict keys.
+    """
+    return arrow_to_numpy(numpy_dict_to_arrow(numpy_dict))
+
+
+def _numpy_to_numpy_dict(np_array: np.ndarray) -> dict[str, np.ndarray]:
+    """Convert a structured numpy array to a dict of numpy arrays.
+
+    Parameters
+    ----------
+    np_array : `numpy.ndarray`
+        Input numpy array with multiple fields.
+
+    Returns
+    -------
+    numpy_dict : `dict` [`str`, `numpy.ndarray`]
+        Dict with keys as the column names, values as the arrays.
+    """
+    return arrow_to_numpy_dict(numpy_to_arrow(np_array))
+
+
 def numpy_to_arrow(np_array: np.ndarray) -> pa.Table:
     """Convert a numpy array table to an arrow table.
 
@@ -410,6 +449,22 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     return arrow_table
 
 
+def _astropy_to_numpy_dict(astropy_table: atable.Table) -> dict[str, np.ndarray]:
+    """Convert an astropy table to an arrow table.
+
+    Parameters
+    ----------
+    astropy_table : `astropy.Table`
+        Input astropy table.
+
+    Returns
+    -------
+    numpy_dict : `dict` [`str`, `numpy.ndarray`]
+        Dict with keys as the column names, values as the arrays.
+    """
+    return arrow_to_numpy_dict(astropy_to_arrow(astropy_table))
+
+
 def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Table:
     """Convert a pandas dataframe to an arrow table.
 
@@ -469,6 +524,22 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
         raise ValueError("Cannot convert a multi-index dataframe to an astropy table.")
 
     return Table.from_pandas(dataframe, index=True)
+
+
+def _pandas_to_numpy_dict(dataframe: pd.DataFrame) -> dict[str, np.ndarray]:
+    """Convert a pandas dataframe to an dict of numpy arrays.
+
+    Parameters
+    ----------
+    dataframe : `pandas.DataFrame`
+        Input pandas dataframe.
+
+    Returns
+    -------
+    numpy_dict : `dict` [`str`, `numpy.ndarray`]
+        Dict with keys as the column names, values as the arrays.
+    """
+    return arrow_to_numpy_dict(pandas_to_arrow(dataframe))
 
 
 def numpy_to_astropy(np_array: np.ndarray) -> atable.Table:

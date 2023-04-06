@@ -74,6 +74,7 @@ AstropyTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
 AstropyQTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
 ArrowAstropy: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ArrowNumpy: lsst.daf.butler.formatters.parquet.ParquetFormatter
+ArrowNumpyDict: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ArrowTable: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ExtendedPsf: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 HealSparseMap: lsst.pipe.tasks.healSparseMapping.HealSparseMapFormatter

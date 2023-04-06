@@ -64,7 +64,10 @@ from lsst.daf.butler.formatters.parquet import (
     DataFrameSchema,
     ParquetFormatter,
     _append_numpy_multidim_metadata,
+    _astropy_to_numpy_dict,
+    _numpy_dict_to_numpy,
     _numpy_dtype_to_arrow_types,
+    _numpy_to_numpy_dict,
     arrow_to_astropy,
     arrow_to_numpy,
     arrow_to_numpy_dict,
@@ -581,6 +584,32 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # This test simply checks that it's readable, but definitely not
         # recommended.
 
+    @unittest.skipUnless(np is not None, "Cannot test reading as numpy dict without numpy.")
+    def testWriteSingleIndexDataFrameReadAsNumpyDict(self):
+        df1, allColumns = _makeSingleIndexDataFrame()
+
+        self.butler.put(df1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
+
+        tab2_df = pd.DataFrame.from_records(tab2, index=["index"])
+        # The column order is not maintained.
+        self.assertEqual(set(df1.columns), set(tab2_df.columns))
+        for col in df1.columns:
+            self.assertTrue(np.all(df1[col].values == tab2_df[col].values))
+
+    @unittest.skipUnless(np is not None, "Cannot test reading as numpy dict without numpy.")
+    def testWriteMultiIndexDataFrameReadAsNumpyDict(self):
+        df1 = _makeMultiIndexDataFrame()
+
+        self.butler.put(df1, self.datasetType, dataId={})
+
+        _ = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
+
+        # This is an odd duck, it doesn't really round-trip.
+        # This test simply checks that it's readable, but definitely not
+        # recommended.
+
 
 @unittest.skipUnless(pd is not None, "Cannot test InMemoryDataFrameDelegate without pandas.")
 class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
@@ -914,6 +943,18 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
         self.assertEqual(schema2, schema)
 
+    @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
+    def testWriteAstropyReadAsNumpyDict(self):
+        tab1 = _makeSimpleAstropyTable()
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
+
+        # This is tricky because it loses the units.
+        tab2_astropy = atable.Table(tab2)
+
+        self._checkAstropyTableEquality(tab1, tab2_astropy, skip_units=True)
+
     def _checkAstropyTableEquality(self, table1, table2, skip_units=False, has_bigendian=False):
         """Check if two astropy tables have the same columns/values.
 
@@ -1159,6 +1200,16 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         )
 
         self.assertEqual(schema2, schema)
+
+    def testWriteNumpyTableReadAsNumpyDict(self):
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
+        tab2_numpy = _numpy_dict_to_numpy(tab2)
+
+        self._checkNumpyTableEquality(tab1, tab2_numpy)
 
     def _checkNumpyTableEquality(self, table1, table2, has_bigendian=False):
         """Check if two numpy tables have the same columns/values
@@ -1446,6 +1497,16 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         )
         self.assertEqual(schema2, schema)
 
+    @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
+    def testWriteArrowTableReadAsNumpyDict(self):
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpyDict")
+        tab2_numpy = _numpy_dict_to_numpy(tab2)
+        self._checkNumpyTableEquality(tab1, tab2_numpy)
+
     def _checkAstropyTableEquality(self, table1, table2):
         """Check if two astropy tables have the same columns/values
 
@@ -1509,6 +1570,160 @@ class InMemoryArrowTableDelegateTestCase(ParquetFormatterArrowTableTestCase):
         # Force the name lookup to do name matching.
         storageClass._pytype = None
         self.assertEqual(storageClass.name, "ArrowTable")
+
+
+@unittest.skipUnless(np is not None, "Cannot test ParquetFormatterArrowNumpy without numpy.")
+@unittest.skipUnless(pa is not None, "Cannot test ParquetFormatterArrowNumpy without pyarrow.")
+class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
+    """Tests for ParquetFormatter, ArrowNumpyDict, using local file store."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        """Create a new butler root for each test."""
+        self.root = makeTestTempDir(TESTDIR)
+        config = Config(self.configFile)
+        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        # No dimensions in dataset type so we don't have to worry about
+        # inserting dimension data or defining data IDs.
+        self.datasetType = DatasetType(
+            "data", dimensions=(), storageClass="ArrowNumpyDict", universe=self.butler.registry.dimensions
+        )
+        self.butler.registry.registerDatasetType(self.datasetType)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def testNumpyDict(self):
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
+        dict1 = _numpy_to_numpy_dict(tab1)
+
+        self.butler.put(dict1, self.datasetType, dataId={})
+        # Read the whole table.
+        dict2 = self.butler.get(self.datasetType, dataId={})
+        self._checkNumpyDictEquality(dict1, dict2)
+        # Read the columns.
+        columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
+        self.assertEqual(len(columns2), len(dict1.keys()))
+        for i, name in enumerate(dict1.keys()):
+            self.assertIn(name, columns2)
+        # Read the rowcount.
+        rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
+        self.assertEqual(rowcount, len(dict1["a"]))
+        # Read the schema.
+        schema = self.butler.get(self.datasetType.componentTypeName("schema"), dataId={})
+        self.assertEqual(schema, ArrowNumpySchema(tab1.dtype))
+        # Read just some columns a few different ways.
+        tab3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
+        subdict = {key: dict1[key] for key in ["a", "c"]}
+        self._checkNumpyDictEquality(subdict, tab3)
+        tab4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
+        subdict = {key: dict1[key] for key in ["a"]}
+        self._checkNumpyDictEquality(subdict, tab4)
+        tab5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
+        subdict = {key: dict1[key] for key in ["index", "a"]}
+        self._checkNumpyDictEquality(subdict, tab5)
+        tab6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
+        subdict = {key: dict1[key] for key in ["ddd"]}
+        self._checkNumpyDictEquality(subdict, tab6)
+        tab7 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "a"]})
+        subdict = {key: dict1[key] for key in ["a"]}
+        self._checkNumpyDictEquality(subdict, tab7)
+        # Passing an unrecognized column should be a ValueError.
+        with self.assertRaises(ValueError):
+            self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
+
+    @unittest.skipUnless(pa is not None, "Cannot test reading as arrow without pyarrow.")
+    def testWriteNumpyDictReadAsArrowTable(self):
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
+        dict1 = _numpy_to_numpy_dict(tab1)
+
+        self.butler.put(dict1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowTable")
+
+        tab2_dict = arrow_to_numpy_dict(tab2)
+
+        self._checkNumpyDictEquality(dict1, tab2_dict)
+
+    @unittest.skipUnless(pd is not None, "Cannot test reading as a dataframe without pandas.")
+    def testWriteNumpyDictReadAsDataFrame(self):
+        tab1 = _makeSimpleNumpyTable()
+        dict1 = _numpy_to_numpy_dict(tab1)
+
+        self.butler.put(dict1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="DataFrame")
+
+        # The order of the dict may get mixed up, so we need to check column
+        # by column. We also need to do this in dataframe form because pandas
+        # changes the datatype of the string column.
+        tab1_df = pd.DataFrame(tab1)
+
+        self.assertEqual(set(tab1_df.columns), set(tab2.columns))
+        for col in tab1_df.columns:
+            self.assertTrue(np.all(tab1_df[col].values == tab2[col].values))
+
+    @unittest.skipUnless(atable is not None, "Cannot test reading as astropy without astropy.")
+    def testWriteNumpyDictReadAsAstropyTable(self):
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
+        dict1 = _numpy_to_numpy_dict(tab1)
+
+        self.butler.put(dict1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
+        tab2_dict = _astropy_to_numpy_dict(tab2)
+
+        self._checkNumpyDictEquality(dict1, tab2_dict)
+
+    def testWriteNumpyDictReadAsNumpyTable(self):
+        tab1 = _makeSimpleNumpyTable(include_multidim=True)
+        dict1 = _numpy_to_numpy_dict(tab1)
+
+        self.butler.put(dict1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpy")
+        tab2_dict = _numpy_to_numpy_dict(tab2)
+
+        self._checkNumpyDictEquality(dict1, tab2_dict)
+
+    def testWriteNumpyDictBad(self):
+        dict1 = {"a": 4, "b": np.ndarray([1])}
+        with self.assertRaises(RuntimeError):
+            self.butler.put(dict1, self.datasetType, dataId={})
+
+        dict2 = {"a": np.zeros(4), "b": np.zeros(5)}
+        with self.assertRaises(RuntimeError):
+            self.butler.put(dict2, self.datasetType, dataId={})
+
+        dict3 = {"a": [0] * 5, "b": np.zeros(5)}
+        with self.assertRaises(RuntimeError):
+            self.butler.put(dict3, self.datasetType, dataId={})
+
+    def _checkNumpyDictEquality(self, dict1, dict2):
+        """Check if two numpy dicts have the same columns/values.
+
+        Parameters
+        ----------
+        dict1 : `dict` [`str`, `np.ndarray`]
+        dict2 : `dict` [`str`, `np.ndarray`]
+        """
+        self.assertEqual(set(dict1.keys()), set(dict2.keys()))
+        for name in dict1.keys():
+            self.assertEqual(dict1[name].dtype, dict2[name].dtype)
+            self.assertTrue(np.all(dict1[name] == dict2[name]))
+
+
+@unittest.skipUnless(np is not None, "Cannot test ParquetFormatterArrowNumpy without numpy.")
+@unittest.skipUnless(pa is not None, "Cannot test ParquetFormatterArrowNumpy without pyarrow.")
+class InMemoryNumpyDictDelegateTestCase(ParquetFormatterArrowNumpyDictTestCase):
+    """Tests for InMemoryDatastore, using ArrowNumpyDictDelegate."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+
+    def testWriteNumpyDictBad(self):
+        # The sub-type checking is not done on in-memory datastore.
+        pass
 
 
 if __name__ == "__main__":
