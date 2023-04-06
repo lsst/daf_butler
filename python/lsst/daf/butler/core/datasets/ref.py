@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["AmbiguousDatasetError", "DatasetId", "DatasetRef", "SerializedDatasetRef"]
 
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 
 from lsst.utils.classes import immutable
 from pydantic import BaseModel, ConstrainedInt, StrictStr, validator
@@ -352,7 +352,7 @@ class DatasetRef:
         return cls(datasetType, dataId, id=simple.id, run=simple.run)
 
     to_json = to_json_pydantic
-    from_json = classmethod(from_json_pydantic)
+    from_json: ClassVar = classmethod(from_json_pydantic)
 
     @classmethod
     def _unpickle(

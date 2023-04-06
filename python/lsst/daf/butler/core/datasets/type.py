@@ -26,7 +26,20 @@ __all__ = ["DatasetType", "SerializedDatasetType"]
 import re
 from copy import deepcopy
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 from pydantic import BaseModel, StrictBool, StrictStr
 
@@ -717,7 +730,7 @@ class DatasetType:
         )
 
     to_json = to_json_pydantic
-    from_json = classmethod(from_json_pydantic)
+    from_json: ClassVar = classmethod(from_json_pydantic)
 
     def __reduce__(
         self,

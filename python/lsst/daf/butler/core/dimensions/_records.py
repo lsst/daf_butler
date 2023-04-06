@@ -392,7 +392,7 @@ class DimensionRecord:
         return _reconstructDimensionRecord(definition, rec)
 
     to_json = to_json_pydantic
-    from_json = classmethod(from_json_pydantic)
+    from_json: ClassVar = classmethod(from_json_pydantic)
 
     def toDict(self, splitTimespan: bool = False) -> Dict[str, Any]:
         """Return a vanilla `dict` representation of this record.

@@ -539,7 +539,7 @@ class Timespan:
         return cls(begin=None, end=None, _nsec=(nsec1, nsec2))
 
     to_json = to_json_generic
-    from_json = classmethod(from_json_generic)
+    from_json: ClassVar = classmethod(from_json_generic)
 
     @classmethod
     def to_yaml(cls, dumper: yaml.Dumper, timespan: Timespan) -> Any:
