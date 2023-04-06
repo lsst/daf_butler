@@ -1821,11 +1821,10 @@ class DatasetRefURIsTestCase(unittest.TestCase):
 
     def testRepr(self):
         """Verify __repr__ output."""
-        uris = DatasetRefURIs(ResourcePath("1/2/3"), {"comp": ResourcePath("a/b/c")})
+        uris = DatasetRefURIs(ResourcePath("/1/2/3"), {"comp": ResourcePath("/a/b/c")})
         self.assertEqual(
             repr(uris),
-            f'DatasetRefURIs(ResourcePath("file://{os.getcwd()}/1/2/3"), '
-            f"{{'comp': ResourcePath(\"file://{os.getcwd()}/a/b/c\")}})",
+            'DatasetRefURIs(ResourcePath("file:///1/2/3"), {\'comp\': ResourcePath("file:///a/b/c")})',
         )
 
 
