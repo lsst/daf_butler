@@ -28,7 +28,7 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Type
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Type
 
 from lsst.utils.classes import cached_getter
 
@@ -182,7 +182,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         return universe[simple]
 
     to_json = to_json_generic
-    from_json = classmethod(from_json_generic)
+    from_json: ClassVar = classmethod(from_json_generic)
 
     def hasTable(self) -> bool:
         """Indicate if this element is associated with a table.

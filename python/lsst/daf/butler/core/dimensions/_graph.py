@@ -29,6 +29,7 @@ from typing import (
     TYPE_CHECKING,
     AbstractSet,
     Any,
+    ClassVar,
     Dict,
     Iterable,
     Iterator,
@@ -275,7 +276,7 @@ class DimensionGraph:
         return cls(names=names.names, universe=universe)
 
     to_json = to_json_pydantic
-    from_json = classmethod(from_json_pydantic)
+    from_json: ClassVar = classmethod(from_json_pydantic)
 
     def __iter__(self) -> Iterator[Dimension]:
         """Iterate over all dimensions in the graph.

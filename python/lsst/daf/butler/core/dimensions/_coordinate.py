@@ -34,6 +34,7 @@ from typing import (
     TYPE_CHECKING,
     AbstractSet,
     Any,
+    ClassVar,
     Dict,
     Iterator,
     Literal,
@@ -749,7 +750,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return dataId
 
     to_json = to_json_pydantic
-    from_json = classmethod(from_json_pydantic)
+    from_json: ClassVar = classmethod(from_json_pydantic)
 
 
 DataId = Union[DataCoordinate, Mapping[str, Any]]
