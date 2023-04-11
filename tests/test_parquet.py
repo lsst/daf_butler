@@ -617,28 +617,6 @@ class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
-    def testMultiIndexDataFrame(self):
-        df1 = _makeMultiIndexDataFrame()
-
-        delegate = DataFrameDelegate("DataFrame")
-
-        # Read the whole DataFrame.
-        df2 = delegate.handleParameters(inMemoryDataset=df1)
-        self.assertTrue(df1.equals(df2))
-        # Read just the column descriptions.
-        columns2 = delegate.getComponent(composite=df1, componentName="columns")
-        self.assertTrue(df1.columns.equals(columns2))
-
-        # Read just some columns a few different ways.
-        with self.assertRaises(NotImplementedError) as cm:
-            delegate.handleParameters(inMemoryDataset=df1, parameters={"columns": {"filter": "g"}})
-        self.assertIn("only supports string column names", str(cm.exception))
-        with self.assertRaises(NotImplementedError) as cm:
-            delegate.handleParameters(
-                inMemoryDataset=df1, parameters={"columns": {"filter": ["r"], "column": "a"}}
-            )
-        self.assertIn("only supports string column names", str(cm.exception))
-
     def testWriteMultiIndexDataFrameReadAsAstropyTable(self):
         df1 = _makeMultiIndexDataFrame()
 
