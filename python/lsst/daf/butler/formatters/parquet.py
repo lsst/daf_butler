@@ -43,7 +43,7 @@ import collections.abc
 import itertools
 import json
 import re
-from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -895,8 +895,10 @@ def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequen
 
 
 def _standardize_multi_index_columns(
-    schema: pa.Schema, columns: Union[List[tuple], dict[str, Union[str, List[str]]]]
-) -> List[str]:
+    schema: pa.Schema,
+    columns: Any,
+    stringify: bool = True,
+) -> list[str | Sequence[Any]]:
     """Transform a dictionary/iterable index from a multi-index column list
     into a string directly understandable by PyArrow.
 
@@ -906,6 +908,8 @@ def _standardize_multi_index_columns(
         Pyarrow schema.
     columns : `list` [`tuple`] or `dict` [`str`, `str` or `list` [`str`]]
         Columns to standardize.
+    stringify : `bool`, optional
+        Should the column names be stringified?
 
     Returns
     -------
@@ -915,7 +919,7 @@ def _standardize_multi_index_columns(
     pd_index = arrow_schema_to_pandas_index(schema)
     index_level_names = tuple(pd_index.names)
 
-    names = []
+    names: list[str | Sequence[Any]] = []
 
     if isinstance(columns, list):
         for requested in columns:
@@ -924,7 +928,10 @@ def _standardize_multi_index_columns(
                     "Columns parameter for multi-index data frame must be a dictionary or list of tuples. "
                     f"Instead got a {get_full_type_name(requested)}."
                 )
-            names.append(str(requested))
+            if stringify:
+                names.append(str(requested))
+            else:
+                names.append(requested)
     else:
         if not isinstance(columns, collections.abc.Mapping):
             raise ValueError(
@@ -943,7 +950,10 @@ def _standardize_multi_index_columns(
             for i, value in enumerate(requested):
                 if value not in pd_index.levels[i]:
                     raise ValueError(f"Unrecognized value {value!r} for index {index_level_names[i]!r}.")
-            names.append(str(requested))
+            if stringify:
+                names.append(str(requested))
+            else:
+                names.append(requested)
 
     return names
 

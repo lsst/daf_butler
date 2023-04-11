@@ -317,6 +317,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # Read just the column descriptions.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertTrue(df1.columns.equals(columns2))
+        self.assertEqual(columns2.names, df1.columns.names)
         # Read the rowcount.
         rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
         self.assertEqual(rowcount, len(df1))
@@ -333,6 +334,9 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         column_list = [("g", "a"), ("r", "c")]
         df5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": column_list})
         self.assertTrue(df1.loc[:, column_list].equals(df5))
+        column_dict = {"filter": "r", "column": ["a", "b"]}
+        df6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": column_dict})
+        self.assertTrue(df1.loc[:, [("r", "a"), ("r", "b")]].equals(df6))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
@@ -616,28 +620,6 @@ class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
     """Tests for InMemoryDatastore, using DataFrameDelegate."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
-
-    def testMultiIndexDataFrame(self):
-        df1 = _makeMultiIndexDataFrame()
-
-        delegate = DataFrameDelegate("DataFrame")
-
-        # Read the whole DataFrame.
-        df2 = delegate.handleParameters(inMemoryDataset=df1)
-        self.assertTrue(df1.equals(df2))
-        # Read just the column descriptions.
-        columns2 = delegate.getComponent(composite=df1, componentName="columns")
-        self.assertTrue(df1.columns.equals(columns2))
-
-        # Read just some columns a few different ways.
-        with self.assertRaises(NotImplementedError) as cm:
-            delegate.handleParameters(inMemoryDataset=df1, parameters={"columns": {"filter": "g"}})
-        self.assertIn("only supports string column names", str(cm.exception))
-        with self.assertRaises(NotImplementedError) as cm:
-            delegate.handleParameters(
-                inMemoryDataset=df1, parameters={"columns": {"filter": ["r"], "column": "a"}}
-            )
-        self.assertIn("only supports string column names", str(cm.exception))
 
     def testWriteMultiIndexDataFrameReadAsAstropyTable(self):
         df1 = _makeMultiIndexDataFrame()
