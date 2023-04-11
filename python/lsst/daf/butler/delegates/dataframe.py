@@ -26,10 +26,13 @@ import collections.abc
 from typing import Any, Mapping, Optional
 
 import pandas
+import pyarrow as pa
 from lsst.daf.butler import StorageClassDelegate
 from lsst.daf.butler.formatters.parquet import DataFrameSchema
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
+
+from ..formatters.parquet import _standardize_multi_index_columns
 
 __all__ = ["DataFrameDelegate"]
 
@@ -104,20 +107,30 @@ class DataFrameDelegate(StorageClassDelegate):
                     "InMemoryDataset of a DataFrame only supports list/tuple of string column names"
                 )
 
-            for column in ensure_iterable(parameters["columns"]):
-                if not isinstance(column, str):
-                    raise NotImplementedError(
-                        "InMemoryDataset of a DataFrame only supports string column names."
-                    )
-                if column not in allColumns:
-                    raise ValueError(f"Unrecognized column name {column!r}.")
+            if isinstance(inMemoryDataset.columns, pandas.MultiIndex):
+                # We have a multi-index dataframe which needs special handling.
+                arrow_table = pa.Table.from_pandas(inMemoryDataset)
+                readColumns = _standardize_multi_index_columns(
+                    arrow_table.schema,
+                    parameters["columns"],
+                    stringify=False,
+                )
+            else:
+                for column in ensure_iterable(parameters["columns"]):
+                    if not isinstance(column, str):
+                        raise NotImplementedError(
+                            "InMemoryDataset of a DataFrame only supports string column names."
+                        )
+                    if column not in allColumns:
+                        raise ValueError(f"Unrecognized column name {column!r}.")
 
-            # Exclude index columns from the subset.
-            readColumns = [
-                name
-                for name in ensure_iterable(parameters["columns"])
-                if name not in inMemoryDataset.index.names
-            ]
+                # Exclude index columns from the subset.
+                readColumns = [
+                    name
+                    for name in ensure_iterable(parameters["columns"])
+                    if name not in inMemoryDataset.index.names
+                ]
+
             # Ensure uniqueness, keeping order.
             readColumns = list(dict.fromkeys(readColumns))
 
