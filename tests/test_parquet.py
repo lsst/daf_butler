@@ -317,6 +317,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # Read just the column descriptions.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertTrue(df1.columns.equals(columns2))
+        self.assertEqual(columns2.names, df1.columns.names)
         # Read the rowcount.
         rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
         self.assertEqual(rowcount, len(df1))
@@ -333,6 +334,9 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         column_list = [("g", "a"), ("r", "c")]
         df5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": column_list})
         self.assertTrue(df1.loc[:, column_list].equals(df5))
+        column_dict = {"filter": "r", "column": ["a", "b"]}
+        df6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": column_dict})
+        self.assertTrue(df1.loc[:, [("r", "a"), ("r", "b")]].equals(df6))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})

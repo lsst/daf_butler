@@ -59,7 +59,10 @@ class DataFrameDelegate(StorageClassDelegate):
             The component can not be found.
         """
         if componentName == "columns":
-            return pandas.Index(self._getAllColumns(composite))
+            if isinstance(composite.columns, pandas.MultiIndex):
+                return composite.columns
+            else:
+                return pandas.Index(self._getAllColumns(composite))
         elif componentName == "rowcount":
             return len(composite)
         elif componentName == "schema":
