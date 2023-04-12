@@ -22,7 +22,6 @@
 """Unit tests for daf_butler CLI config-dump command.
 """
 
-import os
 import unittest
 import unittest.mock
 
@@ -47,79 +46,17 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
         """Test only required parameters, and omit optional parameters."""
         self.run_test(["import", "here", "foo"], self.makeExpected(repo="here", directory="foo"))
 
-    def test_almostAll(self):
-        """Test all the parameters, except export_file which gets its own test
-        case below.
-        """
+    def test_all(self):
+        """Test all the parameters."""
         self.run_test(
-            ["import", "here", "foo", "--transfer", "symlink"],
-            self.makeExpected(repo="here", directory="foo", transfer="symlink"),
+            ["import", "here", "foo", "--transfer", "symlink", "--export-file", "file"],
+            self.makeExpected(repo="here", directory="foo", transfer="symlink", export_file="file"),
         )
 
     def test_missingArgument(self):
         """Verify the command fails if either of the positional arguments,
         REPO or DIRECTORY, is missing."""
         self.run_missing(["import", "foo"], r"Error: Missing argument ['\"]DIRECTORY['\"].")
-
-
-class ExportFileCase(CliCmdTestBase, unittest.TestCase):
-    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
-
-    @property
-    def mock(self):
-        return unittest.mock.MagicMock(side_effect=self.read_test)
-
-    didRead = None
-
-    @staticmethod
-    def defaultExpected():
-        return dict(repo=None, transfer="auto", directory=None, export_file=None, reuse_ids=False)
-
-    @staticmethod
-    def command():
-        return butler_import
-
-    @staticmethod
-    def read_test(*args, **kwargs):
-        """This gets called by the MagicMock's side effect when the MagicMock
-        is called. Our export_file argument is a File so Click will open it
-        before calling the MagicMock, and thus before it gets here. A little
-        bit is written into the file here and that is verified later.
-        """
-        print("in read_test")
-        ExportFileCase.didRead = kwargs["export_file"].read()
-
-    def test_exportFile(self):
-        """Test all the parameters, except export_file."""
-        # export_file is ANY in makeExpected because that variable is opened by
-        # click and the open handle is passed to the command function as a
-        # TestIOWrapper. It doesn't work to test it with
-        # MagicMock.assert_called_with because if a TextIOWrapper is created
-        # here it will be a different instance and not compare equal. We test
-        # that variable via the MagicMock.side_effect used in self.read_test.
-        with self.runner.isolated_filesystem():
-            with open("output.yaml", "w") as f:
-                f.write("foobarbaz")
-            self.run_test(
-                [
-                    "import",
-                    "here",
-                    "foo",
-                    "--skip-dimensions",
-                    "instrument",
-                    "-s",
-                    "detector",
-                    "--export-file",
-                    os.path.abspath("output.yaml"),
-                ],
-                self.makeExpected(
-                    repo="here",
-                    directory="foo",
-                    skip_dimensions=("instrument", "detector"),
-                    export_file=unittest.mock.ANY,
-                ),
-            )
-            self.assertEqual("foobarbaz", ExportFileCase.didRead)
 
 
 if __name__ == "__main__":

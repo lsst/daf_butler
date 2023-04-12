@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ["RepoExportBackend", "RepoImportBackend", "RepoTransferFormatConfig"]
 
 from abc import ABC, abstractmethod
-from typing import Iterable, Optional, Set
+from typing import TYPE_CHECKING, Iterable, Optional, Set
 
 from ..core import (
     ConfigSubset,
@@ -37,6 +37,9 @@ from ..core import (
 )
 from ..registry import CollectionType
 from ..registry.interfaces import CollectionRecord, DatasetIdGenEnum
+
+if TYPE_CHECKING:
+    from lsst.resources import ResourcePathExpression
 
 
 class RepoTransferFormatConfig(ConfigSubset):
@@ -150,7 +153,7 @@ class RepoImportBackend(ABC):
         self,
         datastore: Optional[Datastore],
         *,
-        directory: Optional[str] = None,
+        directory: ResourcePathExpression | None = None,
         transfer: Optional[str] = None,
         skip_dimensions: Optional[Set] = None,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
@@ -167,8 +170,8 @@ class RepoImportBackend(ABC):
         datastore : `Datastore`
             Datastore to import into.  If `None`, datasets will only be
             inserted into the `Registry` (primarily intended for tests).
-        directory : `str`, optional
-            File all dataset paths are relative to.
+        directory : `~lsst.resources.ResourcePathExpression`, optional
+            Directory all dataset paths are relative to.
         transfer : `str`, optional
             Transfer mode forwarded to `Datastore.ingest`.
         skip_dimensions : `set`, optional

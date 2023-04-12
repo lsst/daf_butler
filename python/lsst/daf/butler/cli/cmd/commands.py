@@ -96,7 +96,7 @@ def associate(**kwargs: Any) -> None:
     "datasets.  If this is not an absolute path, does not exist in the current working "
     "directory, and --dir is provided, it is assumed to be in that directory.  Defaults "
     'to "export.yaml".',
-    type=click.File(mode="r"),
+    type=str,
 )
 @click.option(
     "--skip-dimensions",
