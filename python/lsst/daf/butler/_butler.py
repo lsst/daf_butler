@@ -35,8 +35,6 @@ import io
 import logging
 import numbers
 import os
-import pathlib
-import urllib
 import uuid
 from collections import defaultdict
 from typing import (
@@ -2091,8 +2089,9 @@ class Butler(LimitedButler):
             filename = ResourcePath(f"export.{format}", forceAbsolute=False)
         if directory is not None:
             directory = ResourcePath(directory, forceDirectory=True)
-        if isinstance(filename, (str, ResourcePath, pathlib.Path, urllib.parse.ParseResult)):
-            filename = ResourcePath(filename, forceAbsolute=False)
+        # mypy doesn't think this will work but it does in python >= 3.10.
+        if isinstance(filename, ResourcePathExpression):  # type: ignore
+            filename = ResourcePath(filename, forceAbsolute=False)  # type: ignore
             if not filename.isabs() and directory is not None and not filename.exists():
                 filename = directory.join(filename)
         BackendClass = get_class_of(self._config["repo_transfer_formats"][format]["import"])
@@ -2116,7 +2115,7 @@ class Butler(LimitedButler):
             stream = io.StringIO(filename.read().decode())
             doImport(stream)
         else:
-            doImport(filename)
+            doImport(filename)  # type: ignore
 
     def transfer_from(
         self,
