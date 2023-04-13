@@ -463,12 +463,15 @@ class _SqlRowIterable(iteration.RowIterable):
         self._row_transformer = row_transformer
 
     def __iter__(self) -> Iterator[Mapping[ColumnTag, Any]]:
-        with self._context._db.query(self._sql_executable) as sql_result:
-            raw_rows = sql_result.mappings()
-            if self._context._exit_stack is None:
-                for sql_row in raw_rows.fetchall():
-                    yield self._row_transformer.sql_to_relation(sql_row)
-            else:
+        if self._context._exit_stack is None:
+            # Have to read results into memory and close database connection.
+            with self._context._db.query(self._sql_executable) as sql_result:
+                rows = sql_result.mappings().fetchall()
+            for sql_row in rows:
+                yield self._row_transformer.sql_to_relation(sql_row)
+        else:
+            with self._context._db.query(self._sql_executable) as sql_result:
+                raw_rows = sql_result.mappings()
                 for sql_row in raw_rows:
                     yield self._row_transformer.sql_to_relation(sql_row)
 
