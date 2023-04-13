@@ -26,9 +26,12 @@ from __future__ import annotations
 __all__ = ("DatasetComponent", "StorageClassDelegate")
 
 import collections.abc
+import copy
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, Mapping, Optional, Set, Tuple, Type
+
+from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
     from .storageClass import StorageClass
@@ -396,3 +399,38 @@ class StorageClassDelegate:
             from the supplied options.
         """
         raise NotImplementedError("This delegate does not support derived components")
+
+    def copy(self, inMemoryDataset: Any) -> Any:
+        """Copy the supplied python type and return the copy.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to copy.
+
+        Returns
+        -------
+        copied : `object`
+            A copy of the supplied object. Can be the same object if the
+            object is known to be read-only.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if none of the default methods for copying work.
+
+        Notes
+        -----
+        The default implementation uses `copy.deepcopy()`.
+        It is generally expected that this method is the equivalent of a deep
+        copy. Subclasses can override this method if they already know the
+        optimal approach for deep copying.
+        """
+
+        try:
+            return copy.deepcopy(inMemoryDataset)
+        except Exception as e:
+            raise NotImplementedError(
+                f"Unable to deep copy the supplied python type ({get_full_type_name(inMemoryDataset)}) "
+                f"using default methods ({e})"
+            )
