@@ -20,11 +20,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["AmbiguousDatasetError", "DatasetId", "DatasetRef", "SerializedDatasetRef"]
+__all__ = ["AmbiguousDatasetError", "DatasetId", "DatasetRef", "SerializedDatasetRef", "UnresolvedRefWarning"]
 
+import inspect
 import uuid
+import warnings
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 
+from deprecated.sphinx import deprecated
 from lsst.utils.classes import immutable
 from pydantic import BaseModel, ConstrainedInt, StrictStr, validator
 
@@ -39,6 +42,10 @@ if TYPE_CHECKING:
     from ..storageClass import StorageClass
 
 
+class UnresolvedRefWarning(FutureWarning):
+    """Warnings concerning the usage of unresolved DatasetRefs."""
+
+
 class AmbiguousDatasetError(Exception):
     """Raised when a `DatasetRef` is not resolved but should be.
 
@@ -50,6 +57,27 @@ class AmbiguousDatasetError(Exception):
 class PositiveInt(ConstrainedInt):
     ge = 0
     strict = True
+
+
+def _find_outside_stacklevel() -> int:
+    """Find the stacklevel for outside of lsst.daf.butler"""
+    stacklevel = 1
+    for i, s in enumerate(inspect.stack()):
+        module = inspect.getmodule(s.frame)
+        if module is None:
+            # Stack frames sometimes hang around so explicilty delete.
+            del s
+            continue
+        if not module.__name__.startswith("lsst.daf.butler"):
+            # 0 will be this function.
+            # 1 will be the caller
+            # and so does not need adjustment.
+            stacklevel = i
+            break
+        # Stack frames sometimes hang around so explicitly delete.
+        del s
+
+    return stacklevel
 
 
 class SerializedDatasetRef(BaseModel):
@@ -188,8 +216,16 @@ class DatasetRef:
             self.run = run
         else:
             if run is not None:
+                # This will be allowed in the future and should automatically
+                # allocate a UUID.
                 raise ValueError("'run' cannot be provided unless 'id' is.")
             self.run = None
+            warnings.warn(
+                "Support for creating unresolved refs will soon be removed. Please contact the middleware "
+                "team for advice on modifying your code to use resolved refs.",
+                category=UnresolvedRefWarning,
+                stacklevel=_find_outside_stacklevel(),
+            )
 
     def __eq__(self, other: Any) -> bool:
         try:
@@ -349,7 +385,19 @@ class DatasetRef:
             # mypy
             raise ValueError("The DataId must be specified to construct a DatasetRef")
         dataId = DataCoordinate.from_simple(simple.dataId, universe=universe)
-        return cls(datasetType, dataId, id=simple.id, run=simple.run)
+
+        # Issue our own warning that could be more explicit.
+        if simple.id is None and simple.run is None:
+            warnings.warn(
+                "Attempting to create an unresolved ref from simple form is deprecated. "
+                f"Encountered with {simple!r}.",
+                category=UnresolvedRefWarning,
+                stacklevel=_find_outside_stacklevel(),
+            )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UnresolvedRefWarning)
+            return cls(datasetType, dataId, id=simple.id, run=simple.run)
 
     to_json = to_json_pydantic
     from_json: ClassVar = classmethod(from_json_pydantic)
@@ -377,6 +425,11 @@ class DatasetRef:
         # decorator.
         return self
 
+    @deprecated(
+        "This method will soon be a no-op since it will be impossible to create an unresolved ref.",
+        version="26.0",
+        category=UnresolvedRefWarning,
+    )
     def resolved(self, id: DatasetId, run: str) -> DatasetRef:
         """Return resolved `DatasetRef`.
 
@@ -397,6 +450,12 @@ class DatasetRef:
         """
         return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, id=id, run=run, conform=False)
 
+    @deprecated(
+        "Support for unresolved refs will soon be removed. Please contact middleware developers with"
+        " advice on how to modify your code.",
+        category=UnresolvedRefWarning,
+        version="26.0",
+    )
     def unresolved(self) -> DatasetRef:
         """Return unresolved `DatasetRef`.
 
@@ -417,7 +476,10 @@ class DatasetRef:
             if ref1.unresolved() == ref2.unresolved():
                 ...
         """
-        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, conform=False)
+        # We have already warned about this so no need to warn again.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UnresolvedRefWarning)
+            return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, conform=False)
 
     def expanded(self, dataId: DataCoordinate) -> DatasetRef:
         """Return a new `DatasetRef` with the given expanded data ID.
