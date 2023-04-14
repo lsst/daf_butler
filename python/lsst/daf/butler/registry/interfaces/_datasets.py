@@ -25,13 +25,14 @@ __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage", "DatasetIdFact
 
 import enum
 import uuid
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Set
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Relation
 
-from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, Timespan, ddl
+from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, Timespan, UnresolvedRefWarning, ddl
 from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension, VersionTuple
 
@@ -167,7 +168,9 @@ class DatasetIdFactory:
         if ref.id is not None:
             return ref
         datasetId = self.makeDatasetId(run, ref.datasetType, ref.dataId, idGenerationMode)
-        resolved = ref.resolved(datasetId, run)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UnresolvedRefWarning)
+            resolved = ref.resolved(datasetId, run)
         return resolved
 
 

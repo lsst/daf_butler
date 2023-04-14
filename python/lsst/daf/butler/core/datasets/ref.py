@@ -224,7 +224,7 @@ class DatasetRef:
                 "Support for creating unresolved refs will soon be removed. Please contact the middleware "
                 "team for advice on modifying your code to use resolved refs.",
                 category=UnresolvedRefWarning,
-                stacklevel=_find_outside_stacklevel(),
+                stacklevel=2,  # _find_outside_stacklevel(),
             )
 
     def __eq__(self, other: Any) -> bool:

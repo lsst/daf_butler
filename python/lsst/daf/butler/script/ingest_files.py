@@ -23,6 +23,7 @@ from __future__ import annotations
 __all__ = ("ingest_files",)
 
 import logging
+import warnings
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
@@ -31,7 +32,7 @@ from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
 from .._butler import Butler
-from ..core import DatasetRef, FileDataset
+from ..core import DatasetRef, FileDataset, UnresolvedRefWarning
 from ..registry import DatasetIdGenEnum
 
 if TYPE_CHECKING:
@@ -170,7 +171,13 @@ def extract_datasets_from_table(
         dataId.update(common_data_id)
 
         # Create the dataset ref that is to be ingested.
-        ref = DatasetRef(datasetType, dataId)  # type: ignore
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UnresolvedRefWarning)
+            # Could create a resolved ref here but first need to consider
+            # the broader problem of Butler.ingest() taking a run parameter
+            # that is no longer guaranteed to match the run in the
+            # ref attached to the FileDataset.
+            ref = DatasetRef(datasetType, dataId)  # type: ignore
 
         # Convert path to absolute (because otherwise system will
         # assume relative to datastore root and that is almost certainly
