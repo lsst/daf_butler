@@ -21,6 +21,7 @@
 
 import json
 import unittest
+import uuid
 from typing import Iterable, Tuple
 
 from lsst.daf.butler import (
@@ -122,15 +123,20 @@ class QuantumTestCase(unittest.TestCase):
             datasetTypeNameOutput, universe.extract(("instrument", "visit")), storageClass
         )
         predictedInputs = {
-            datasetTypeInput: [DatasetRef(datasetTypeInput, dataId42), DatasetRef(datasetTypeInput, dataId43)]
+            datasetTypeInput: [
+                DatasetRef(datasetTypeInput, dataId42, run="input", id=uuid.uuid4()),
+                DatasetRef(datasetTypeInput, dataId43, run="input", id=uuid.uuid4()),
+            ]
         }
         outputs = {
             datasetTypeOutput: [
-                DatasetRef(datasetTypeOutput, dataId42),
-                DatasetRef(datasetTypeOutput, dataId43),
+                DatasetRef(datasetTypeOutput, dataId42, run="some_run", id=uuid.uuid4()),
+                DatasetRef(datasetTypeOutput, dataId43, run="other_run", id=uuid.uuid4()),
             ]
         }
-        initInputs = {datasetTypeInit: DatasetRef(datasetTypeInit, dataId42)}
+        initInputs = {
+            datasetTypeInit: DatasetRef(datasetTypeInit, dataId42, run="input_run", id=uuid.uuid4())
+        }
 
         return Quantum(taskName=taskName, inputs=predictedInputs, outputs=outputs, initInputs=initInputs), [
             datasetTypeInit,
