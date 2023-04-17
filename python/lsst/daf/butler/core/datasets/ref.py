@@ -298,7 +298,8 @@ class DatasetRef:
     dataId : `DataCoordinate`
         A mapping of dimensions that labels the Dataset within a Collection.
     id : `DatasetId`, optional
-        The unique identifier assigned when the dataset is created.
+        The unique identifier assigned when the dataset is created. If ``run``
+        is specified and ``id`` is not specified, an ID will be created.
     run : `str`, optional
         The name of the run this dataset was associated with when it was
         created.  Must be provided if ``id`` is.
@@ -309,6 +310,13 @@ class DatasetRef:
         not be created in new code, but are still supported for backwards
         compatibility.  New code should only pass `False` if it can guarantee
         that the dimensions are already consistent.
+    id_generation_mode : `DatasetIdGenEnum`
+        ID generation option. `~DatasetIdGenEnum.UNIQUE` makes a random
+        UUID4-type ID. `~DatasetIdGenEnum.DATAID_TYPE` makes a
+        deterministic UUID5-type ID based on a dataset type name and
+        ``dataId``.  `~DatasetIdGenEnum.DATAID_TYPE_RUN` makes a
+        deterministic UUID5-type ID based on a dataset type name, run
+        collection name, and ``dataId``.
 
     Raises
     ------
@@ -337,32 +345,36 @@ class DatasetRef:
         id: Optional[DatasetId] = None,
         run: Optional[str] = None,
         conform: bool = True,
+        id_generation_mode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
     ):
-        self.id = id
         self.datasetType = datasetType
         if conform:
             self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         else:
             self.dataId = dataId
-        if self.id is not None:
+        if id is not None:
             if run is None:
                 raise ValueError(
                     f"Cannot provide id without run for dataset with id={id}, "
                     f"type={datasetType}, and dataId={dataId}."
                 )
             self.run = run
+            self.id = id
         else:
             if run is not None:
-                # This will be allowed in the future and should automatically
-                # allocate a UUID.
-                raise ValueError("'run' cannot be provided unless 'id' is.")
-            self.run = None
-            warnings.warn(
-                "Support for creating unresolved refs will soon be removed. Please contact the middleware "
-                "team for advice on modifying your code to use resolved refs.",
-                category=UnresolvedRefWarning,
-                stacklevel=2,  # _find_outside_stacklevel(),
-            )
+                self.run = run
+                self.id = DatasetIdFactory().makeDatasetId(
+                    self.run, self.datasetType, self.dataId, id_generation_mode
+                )
+            else:
+                self.id = None
+                self.run = None
+                warnings.warn(
+                    "Support for creating unresolved refs will soon be removed. Please contact the "
+                    "middleware team for advice on modifying your code to use resolved refs.",
+                    category=UnresolvedRefWarning,
+                    stacklevel=2,  # _find_outside_stacklevel(),
+                )
 
     def __eq__(self, other: Any) -> bool:
         try:

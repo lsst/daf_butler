@@ -527,11 +527,16 @@ class DatasetRefTestCase(unittest.TestCase):
             ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe), msg=ref.dataId
         )
         self.assertIsInstance(ref.dataId, DataCoordinate)
-        # Constructing an unresolved ref with run and/or components should
-        # fail.
-        run = "somerun"
+
+        # Constructing a ref with an id but no run should fail.
         with self.assertRaises(ValueError):
-            DatasetRef(self.datasetType, self.dataId, run=run)
+            DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4())
+        # Constructing an unresolved ref with run and/or components should
+        # issue a ref with an id.
+        run = "somerun"
+        ref = DatasetRef(self.datasetType, self.dataId, run=run)
+        self.assertIsNotNone(ref.id)
+
         # Passing a data ID that is missing dimensions should fail.
         with self.assertRaises(KeyError):
             DatasetRef(self.datasetType, {"instrument": "DummyCam"})
