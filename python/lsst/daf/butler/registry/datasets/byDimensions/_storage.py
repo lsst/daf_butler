@@ -37,6 +37,8 @@ from ....core import (
     DataCoordinate,
     DatasetColumnTag,
     DatasetId,
+    DatasetIdFactory,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     DimensionKeyColumnTag,
@@ -47,7 +49,7 @@ from ....core import (
 from ..._collection_summary import CollectionSummary
 from ..._collectionType import CollectionType
 from ..._exceptions import CollectionTypeError, ConflictingDefinitionError
-from ...interfaces import DatasetIdFactory, DatasetIdGenEnum, DatasetRecordStorage
+from ...interfaces import DatasetRecordStorage
 from ...queries import SqlQueryContext
 from .tables import makeTagTableSpec
 

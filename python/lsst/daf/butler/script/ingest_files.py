@@ -32,8 +32,7 @@ from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
 from .._butler import Butler
-from ..core import DatasetRef, FileDataset, UnresolvedRefWarning
-from ..registry import DatasetIdGenEnum
+from ..core import DatasetIdGenEnum, DatasetRef, FileDataset, UnresolvedRefWarning
 
 if TYPE_CHECKING:
     from ..core import DatasetType, DimensionUniverse

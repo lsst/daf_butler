@@ -48,6 +48,7 @@ from ...core import (
     DataCoordinate,
     DataCoordinateSet,
     DatasetAssociation,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     DimensionGraph,
@@ -72,7 +73,7 @@ from .._exceptions import (
     MissingDatasetTypeError,
     OrphanedRecordError,
 )
-from ..interfaces import ButlerAttributeExistsError, DatasetIdGenEnum
+from ..interfaces import ButlerAttributeExistsError
 
 if TYPE_CHECKING:
     from .._registry import Registry

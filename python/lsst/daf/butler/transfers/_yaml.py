@@ -38,6 +38,7 @@ from lsst.utils.iteration import ensure_iterable
 from ..core import (
     DatasetAssociation,
     DatasetId,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     Datastore,
@@ -49,13 +50,7 @@ from ..core import (
 )
 from ..core.named import NamedValueSet
 from ..registry import CollectionType, Registry
-from ..registry.interfaces import (
-    ChainedCollectionRecord,
-    CollectionRecord,
-    DatasetIdGenEnum,
-    RunRecord,
-    VersionTuple,
-)
+from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
 from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
 

@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Iterable, Optional, Set
 from ..core import (
     ConfigSubset,
     DatasetAssociation,
+    DatasetIdGenEnum,
     DatasetType,
     Datastore,
     DimensionElement,
@@ -36,7 +37,7 @@ from ..core import (
     FileDataset,
 )
 from ..registry import CollectionType
-from ..registry.interfaces import CollectionRecord, DatasetIdGenEnum
+from ..registry.interfaces import CollectionRecord
 
 if TYPE_CHECKING:
     from lsst.resources import ResourcePathExpression
