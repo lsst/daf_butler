@@ -174,6 +174,11 @@ class DatasetIdFactory:
             data = ",".join(f"{key}={value}" for key, value in items)
             return uuid.uuid5(self.NS_UUID, data)
 
+    @deprecated(
+        "This method will soon be removed since it will be impossible to create an unresolved ref.",
+        version="26.0",
+        category=UnresolvedRefWarning,
+    )
     def resolveRef(
         self,
         ref: DatasetRef,
@@ -211,6 +216,7 @@ class DatasetIdFactory:
         if ref.id is not None:
             return ref
         datasetId = self.makeDatasetId(run, ref.datasetType, ref.dataId, idGenerationMode)
+        # Hide the warning coming from ref.resolved()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UnresolvedRefWarning)
             resolved = ref.resolved(datasetId, run)
