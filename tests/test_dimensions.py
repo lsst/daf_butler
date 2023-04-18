@@ -873,6 +873,7 @@ class DataCoordinateTestCase(unittest.TestCase):
             max_bits, math.ceil(math.log2(instrument_data_id.records["instrument"].detector_max))
         )
         self.assertEqual(packer.pack(detector_data_id), packed_id)
+        self.assertEqual(packer.pack(detector=detector_data_id["detector"]), detector_data_id["detector"])
         self.assertEqual(packer.unpack(packed_id), detector_data_id)
 
 

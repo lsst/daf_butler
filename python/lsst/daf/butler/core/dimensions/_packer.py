@@ -98,7 +98,7 @@ class DimensionPacker(metaclass=ABCMeta):
         raise NotImplementedError()
 
     def pack(
-        self, dataId: DataId, *, returnMaxBits: bool = False, **kwargs: Any
+        self, dataId: DataId | None = None, *, returnMaxBits: bool = False, **kwargs: Any
     ) -> Union[Tuple[int, int], int]:
         """Pack the given data ID into a single integer.
 
@@ -127,7 +127,9 @@ class DimensionPacker(metaclass=ABCMeta):
         Should not be overridden by derived class
         (`~DimensionPacker._pack` should be overridden instead).
         """
-        dataId = DataCoordinate.standardize(dataId, **kwargs)
+        dataId = DataCoordinate.standardize(
+            dataId, **kwargs, universe=self.fixed.universe, defaults=self.fixed
+        )
         if dataId.subset(self.fixed.graph) != self.fixed:
             raise ValueError(f"Data ID packer expected a data ID consistent with {self.fixed}, got {dataId}.")
         packed = self._pack(dataId)
