@@ -26,6 +26,7 @@ import uuid
 
 from lsst.daf.butler import (
     DataCoordinate,
+    DatasetIdFactory,
     DatasetRef,
     DatasetType,
     DimensionUniverse,
@@ -552,6 +553,9 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref.id, id_)
         self.assertEqual(ref.run, run)
 
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, run=run, id_generation_mode=42)
+
     def testSorting(self):
         """Can we sort a DatasetRef"""
         ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=1))
@@ -595,6 +599,9 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref, reresolvedRef)
         self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
         self.assertIsNotNone(reresolvedRef.run)
+
+        other_resolved = DatasetIdFactory().resolveRef(unresolvedRef, "somerun")
+        self.assertEqual(other_resolved.run, "somerun")
 
     def testOverrideStorageClass(self):
         storageA = StorageClass("test_a", pytype=list)
