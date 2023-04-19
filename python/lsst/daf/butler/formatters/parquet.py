@@ -37,6 +37,7 @@ __all__ = (
     "DataFrameSchema",
     "ArrowAstropySchema",
     "ArrowNumpySchema",
+    "compute_row_group_size",
 )
 
 import collections.abc
@@ -55,6 +56,8 @@ if TYPE_CHECKING:
     import astropy.table as atable
     import numpy as np
     import pandas as pd
+
+TARGET_ROW_GROUP_BYTES = 1_000_000_000
 
 
 class ParquetFormatter(Formatter):
@@ -163,9 +166,11 @@ class ParquetFormatter(Formatter):
                 "inMemoryDataset for ParquetFormatter."
             )
 
+        row_group_size = compute_row_group_size(arrow_table.schema)
+
         location = self.makeUpdatedLocation(self.fileDescriptor.location)
 
-        pq.write_table(arrow_table, location.path)
+        pq.write_table(arrow_table, location.path, row_group_size=row_group_size)
 
 
 def arrow_to_pandas(arrow_table: pa.Table) -> pd.DataFrame:
@@ -1263,3 +1268,61 @@ def _numpy_style_arrays_to_arrow_arrays(
                 raise err
 
     return arrow_arrays
+
+
+def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROUP_BYTES) -> int:
+    """Compute approximate row group size for a given arrow schema.
+
+    Given a schema, this routine will compute the number of rows in a row group
+    that targets the persisted size on disk (or smaller).  The exact size on
+    disk depends on the compression settings and ratios; typical binary data
+    tables will have around 15-20% compression with the pyarrow default
+    ``snappy`` compression algorithm.
+
+    Parameters
+    ----------
+    schema : `pyarrow.Schema`
+        Arrow table schema.
+    target_size : `int`, optional
+        The target size (in bytes).
+
+    Returns
+    -------
+    row_group_size : `int`
+        Number of rows per row group to hit the target size.
+    """
+    bit_width = 0
+
+    metadata = schema.metadata if schema.metadata is not None else {}
+
+    for name in schema.names:
+        t = schema.field(name).type
+
+        if t in (pa.string(), pa.binary()):
+            md_name = f"lsst::arrow::len::{name}"
+
+            if (encoded := md_name.encode("UTF-8")) in metadata:
+                # String/bytes length from header.
+                strlen = int(schema.metadata[encoded])
+            else:
+                # We don't know the string width, so guess something.
+                strlen = 10
+
+            # Assuming UTF-8 encoding, and very few wide characters.
+            t_width = 8 * strlen
+        elif isinstance(t, pa.FixedSizeListType):
+            t_width = t.list_size * t.value_type.bit_width
+        elif t == pa.null():
+            t_width = 0
+        else:
+            t_width = t.bit_width
+
+        bit_width += t_width
+
+    # Insist it is at least 1 byte wide to avoid any divide-by-zero errors.
+    if bit_width < 8:
+        bit_width = 8
+
+    byte_width = bit_width // 8
+
+    return target_size // byte_width

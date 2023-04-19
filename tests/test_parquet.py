@@ -67,12 +67,14 @@ from lsst.daf.butler.formatters.parquet import (
     _astropy_to_numpy_dict,
     _numpy_dict_to_numpy,
     _numpy_dtype_to_arrow_types,
+    _numpy_style_arrays_to_arrow_arrays,
     _numpy_to_numpy_dict,
     arrow_to_astropy,
     arrow_to_numpy,
     arrow_to_numpy_dict,
     arrow_to_pandas,
     astropy_to_arrow,
+    compute_row_group_size,
     numpy_dict_to_arrow,
     numpy_to_arrow,
     pandas_to_arrow,
@@ -1706,6 +1708,51 @@ class InMemoryNumpyDictDelegateTestCase(ParquetFormatterArrowNumpyDictTestCase):
     def testWriteNumpyDictBad(self):
         # The sub-type checking is not done on in-memory datastore.
         pass
+
+
+@unittest.skipUnless(np is not None, "Cannot test compute_row_group_size without numpy.")
+@unittest.skipUnless(pa is not None, "Cannot test compute_row_group_size without pyarrow.")
+class ComputeRowGroupSizeTestCase(unittest.TestCase):
+    """Tests for compute_row_group_size."""
+
+    def testRowGroupSizeNoMetadata(self):
+        numpyTable = _makeSimpleNumpyTable(include_multidim=True)
+
+        # We can't use the numpy_to_arrow convenience function because
+        # that adds metadata.
+        type_list = _numpy_dtype_to_arrow_types(numpyTable.dtype)
+        schema = pa.schema(type_list)
+        arrays = _numpy_style_arrays_to_arrow_arrays(
+            numpyTable.dtype,
+            len(numpyTable),
+            numpyTable,
+            schema,
+        )
+        arrowTable = pa.Table.from_arrays(arrays, schema=schema)
+
+        row_group_size = compute_row_group_size(arrowTable.schema)
+
+        self.assertGreater(row_group_size, 1_000_000)
+        self.assertLess(row_group_size, 2_000_000)
+
+    def testRowGroupSizeWithMetadata(self):
+        numpyTable = _makeSimpleNumpyTable(include_multidim=True)
+
+        arrowTable = numpy_to_arrow(numpyTable)
+
+        row_group_size = compute_row_group_size(arrowTable.schema)
+
+        self.assertGreater(row_group_size, 1_000_000)
+        self.assertLess(row_group_size, 2_000_000)
+
+    def testRowGroupSizeTinyTable(self):
+        numpyTable = np.zeros(1, dtype=[("a", np.bool_)])
+
+        arrowTable = numpy_to_arrow(numpyTable)
+
+        row_group_size = compute_row_group_size(arrowTable.schema)
+
+        self.assertGreater(row_group_size, 1_000_000)
 
 
 if __name__ == "__main__":
