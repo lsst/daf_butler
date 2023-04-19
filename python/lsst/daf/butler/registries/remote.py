@@ -40,6 +40,8 @@ from ..core import (
     DataId,
     DatasetAssociation,
     DatasetId,
+    DatasetIdFactory,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     Dimension,
@@ -64,7 +66,6 @@ from ..core.serverModels import (
     QueryDimensionRecordsModel,
 )
 from ..registry import CollectionSummary, CollectionType, Registry, RegistryConfig, RegistryDefaults
-from ..registry.interfaces import DatasetIdFactory, DatasetIdGenEnum
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig

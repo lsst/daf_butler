@@ -26,6 +26,7 @@ import uuid
 
 from lsst.daf.butler import (
     DataCoordinate,
+    DatasetIdFactory,
     DatasetRef,
     DatasetType,
     DimensionUniverse,
@@ -527,11 +528,16 @@ class DatasetRefTestCase(unittest.TestCase):
             ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe), msg=ref.dataId
         )
         self.assertIsInstance(ref.dataId, DataCoordinate)
-        # Constructing an unresolved ref with run and/or components should
-        # fail.
-        run = "somerun"
+
+        # Constructing a ref with an id but no run should fail.
         with self.assertRaises(ValueError):
-            DatasetRef(self.datasetType, self.dataId, run=run)
+            DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4())
+        # Constructing an unresolved ref with run and/or components should
+        # issue a ref with an id.
+        run = "somerun"
+        ref = DatasetRef(self.datasetType, self.dataId, run=run)
+        self.assertIsNotNone(ref.id)
+
         # Passing a data ID that is missing dimensions should fail.
         with self.assertRaises(KeyError):
             DatasetRef(self.datasetType, {"instrument": "DummyCam"})
@@ -547,6 +553,9 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref.id, id_)
         self.assertEqual(ref.run, run)
 
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, run=run, id_generation_mode=42)
+
     def testSorting(self):
         """Can we sort a DatasetRef"""
         ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=1))
@@ -561,11 +570,11 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(sort, [ref1, ref2, ref3], msg=f"Got order: {[r.dataId for r in sort]}")
 
         # Now include a run
-        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b", id=uuid.uuid4())
+        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b")
         self.assertEqual(ref1.run, "b")
-        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b", id=uuid.uuid4())
-        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=4), run="a", id=uuid.uuid4())
-        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=104), run="c", id=uuid.uuid4())
+        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b")
+        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=4), run="a")
+        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=104), run="c")
 
         # This will sort them on run before visit
         sort = sorted([ref3, ref1, ref2, ref4])
@@ -591,10 +600,13 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
         self.assertIsNotNone(reresolvedRef.run)
 
+        other_resolved = DatasetIdFactory().resolveRef(unresolvedRef, "somerun")
+        self.assertEqual(other_resolved.run, "somerun")
+
     def testOverrideStorageClass(self):
         storageA = StorageClass("test_a", pytype=list)
 
-        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
 
         ref_new = ref.overrideStorageClass(storageA)
         self.assertNotEqual(ref, ref_new)
@@ -608,12 +620,12 @@ class DatasetRefTestCase(unittest.TestCase):
             ref_new.overrideStorageClass(incompatible_sc)
 
     def testPickle(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = pickle.dumps(ref)
         self.assertEqual(pickle.loads(s), ref)
 
     def testJson(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = ref.to_json()
         self.assertEqual(DatasetRef.from_json(s, universe=self.universe), ref)
 

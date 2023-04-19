@@ -36,6 +36,7 @@ import logging
 import numbers
 import os
 import uuid
+import warnings
 from collections import defaultdict
 from typing import (
     TYPE_CHECKING,
@@ -73,6 +74,7 @@ from .core import (
     DataCoordinate,
     DataId,
     DataIdValue,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetRefURIs,
     DatasetType,
@@ -87,6 +89,7 @@ from .core import (
     StorageClass,
     StorageClassFactory,
     Timespan,
+    UnresolvedRefWarning,
     ValidationError,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
@@ -95,7 +98,6 @@ from .registry import (
     CollectionType,
     ConflictingDefinitionError,
     DataIdError,
-    DatasetIdGenEnum,
     MissingDatasetTypeError,
     Registry,
     RegistryConfig,
@@ -1088,7 +1090,9 @@ class Butler(LimitedButler):
         ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
         if ref is None:
             if allowUnresolved:
-                return DatasetRef(datasetType, dataId)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=UnresolvedRefWarning)
+                    return DatasetRef(datasetType, dataId)
             else:
                 if collections is None:
                     collections = self.registry.defaults.collections
@@ -1493,7 +1497,9 @@ class Butler(LimitedButler):
                     raise TypeError("Cannot predict location with run=None.")
             # Lie about ID, because we can't guess it, and only
             # Datastore.getURIs() will ever see it (and it doesn't use it).
-            ref = ref.resolved(id=uuid.UUID("{00000000-0000-0000-0000-000000000000}"), run=run)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=UnresolvedRefWarning)
+                ref = ref.resolved(id=uuid.UUID("{00000000-0000-0000-0000-000000000000}"), run=run)
         return self.datastore.getURIs(ref, predict)
 
     def getURI(
@@ -2409,7 +2415,10 @@ class Butler(LimitedButler):
             if "instrument" in datasetType.dimensions:
                 for instrument in instruments:
                     datasetRef = DatasetRef(
-                        datasetType, {"instrument": instrument}, conform=False  # type: ignore
+                        datasetType,
+                        {"instrument": instrument},  # type: ignore
+                        conform=False,
+                        run="validate",
                     )
                     datasetRefs.append(datasetRef)
 

@@ -21,7 +21,6 @@
 
 import os.path
 import unittest
-import uuid
 
 try:
     # Failing to import any of these should disable the tests.
@@ -122,7 +121,6 @@ class ButlerClientServerTestCase(unittest.TestCase):
         fake_ref = DatasetRef(
             dataset_type,
             dataId={"instrument": "DummyCamComp", "physical_filter": "d-r", "visit": 424},
-            id=uuid.uuid4(),
             run="missing",
         )
         locations = self.butler.registry.getDatasetLocations(fake_ref)

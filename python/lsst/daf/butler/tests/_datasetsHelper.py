@@ -89,8 +89,6 @@ class DatasetTestHelper:
             datasetTypeName, dimensions, storageClass, parentStorageClass=parentStorageClass
         )
 
-        if id is None:
-            id = uuid.uuid4()
         if run is None:
             run = "dummy"
         return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)

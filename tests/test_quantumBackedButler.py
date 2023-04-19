@@ -22,7 +22,6 @@
 import json
 import os
 import unittest
-import uuid
 from typing import cast
 
 from lsst.daf.butler import (
@@ -92,16 +91,10 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.all_input_refs = self.input_refs + self.init_inputs_refs
 
         # generate dataset refs for outputs
-        self.output_refs = [
-            DatasetRef(self.datasetTypeOutput, dataId, id=uuid.uuid4(), run="RUN") for dataId in dataIds
-        ]
-        self.output_refs2 = [
-            DatasetRef(self.datasetTypeOutput2, dataId, id=uuid.uuid4(), run="RUN") for dataId in dataIds
-        ]
+        self.output_refs = [DatasetRef(self.datasetTypeOutput, dataId, run="RUN") for dataId in dataIds]
+        self.output_refs2 = [DatasetRef(self.datasetTypeOutput2, dataId, run="RUN") for dataId in dataIds]
 
-        self.missing_refs = [
-            DatasetRef(self.datasetTypeExtra, dataId, id=uuid.uuid4(), run="RUN") for dataId in dataIds
-        ]
+        self.missing_refs = [DatasetRef(self.datasetTypeExtra, dataId, run="RUN") for dataId in dataIds]
 
     def tearDown(self) -> None:
         removeTestTempDir(self.root)

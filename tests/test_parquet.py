@@ -388,7 +388,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.butler.registry.registerDatasetType(legacy_type)
 
         data_id = {}
-        ref = DatasetRef(legacy_type, data_id, id=None)
+        ref = DatasetRef(legacy_type, data_id, run="testLegacyDataFrame")
         dataset = FileDataset(path=fname, refs=[ref], formatter=ParquetFormatter)
 
         self.butler.ingest(dataset, transfer="copy")
@@ -790,7 +790,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.butler.registry.registerDatasetType(astropy_type)
 
         data_id = {}
-        ref = DatasetRef(astropy_type, data_id, id=None)
+        ref = DatasetRef(astropy_type, data_id, run="testAstropyParquet")
         dataset = FileDataset(path=fname, refs=[ref], formatter=ParquetFormatter)
 
         self.butler.ingest(dataset, transfer="copy")

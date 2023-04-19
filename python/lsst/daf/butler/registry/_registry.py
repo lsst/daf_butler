@@ -51,6 +51,8 @@ from ..core import (
     DataId,
     DatasetAssociation,
     DatasetId,
+    DatasetIdFactory,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     Dimension,
@@ -67,7 +69,6 @@ from ._collection_summary import CollectionSummary
 from ._collectionType import CollectionType
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
-from .interfaces import DatasetIdFactory, DatasetIdGenEnum
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 
 if TYPE_CHECKING:

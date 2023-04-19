@@ -54,6 +54,8 @@ from ..core import (
     DatasetAssociation,
     DatasetColumnTag,
     DatasetId,
+    DatasetIdFactory,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     Dimension,
@@ -88,7 +90,7 @@ from ..registry import (
     RegistryDefaults,
     queries,
 )
-from ..registry.interfaces import ChainedCollectionRecord, DatasetIdFactory, DatasetIdGenEnum, RunRecord
+from ..registry.interfaces import ChainedCollectionRecord, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 

@@ -122,15 +122,18 @@ class QuantumTestCase(unittest.TestCase):
             datasetTypeNameOutput, universe.extract(("instrument", "visit")), storageClass
         )
         predictedInputs = {
-            datasetTypeInput: [DatasetRef(datasetTypeInput, dataId42), DatasetRef(datasetTypeInput, dataId43)]
+            datasetTypeInput: [
+                DatasetRef(datasetTypeInput, dataId42, run="input"),
+                DatasetRef(datasetTypeInput, dataId43, run="input"),
+            ]
         }
         outputs = {
             datasetTypeOutput: [
-                DatasetRef(datasetTypeOutput, dataId42),
-                DatasetRef(datasetTypeOutput, dataId43),
+                DatasetRef(datasetTypeOutput, dataId42, run="some_run"),
+                DatasetRef(datasetTypeOutput, dataId43, run="other_run"),
             ]
         }
-        initInputs = {datasetTypeInit: DatasetRef(datasetTypeInit, dataId42)}
+        initInputs = {datasetTypeInit: DatasetRef(datasetTypeInit, dataId42, run="input_run")}
 
         return Quantum(taskName=taskName, inputs=predictedInputs, outputs=outputs, initInputs=initInputs), [
             datasetTypeInit,

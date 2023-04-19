@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 from lsst.utils.ellipsis import Ellipsis
 
-from ....core import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
+from ....core import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType, DimensionUniverse, ddl
 from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, DatasetTypeError, OrphanedRecordError
-from ...interfaces import DatasetIdGenEnum, DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple
+from ...interfaces import DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple
 from ...wildcards import DatasetTypeWildcard
 from ._storage import ByDimensionsDatasetRecordStorage, ByDimensionsDatasetRecordStorageUUID
 from .summaries import CollectionSummaryManager

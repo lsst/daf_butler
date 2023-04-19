@@ -48,6 +48,7 @@ from ...core import (
     DataCoordinate,
     DataCoordinateSet,
     DatasetAssociation,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     DimensionGraph,
@@ -72,7 +73,7 @@ from .._exceptions import (
     MissingDatasetTypeError,
     OrphanedRecordError,
 )
-from ..interfaces import ButlerAttributeExistsError, DatasetIdGenEnum
+from ..interfaces import ButlerAttributeExistsError
 
 if TYPE_CHECKING:
     from .._registry import Registry
@@ -532,8 +533,7 @@ class RegistryTests(ABC):
         dataIdBias2 = {"instrument": "Cam1", "detector": 2}
         dataIdFlat1 = {"instrument": "Cam1", "detector": 1, "physical_filter": "Cam1-G", "band": "g"}
 
-        dataset_id = uuid.uuid4()
-        ref = DatasetRef(datasetTypeBias, dataIdBias1, id=dataset_id, run="run0")
+        ref = DatasetRef(datasetTypeBias, dataIdBias1, run="run0")
         (ref1,) = registry._importDatasets([ref])
         # UUID is used without change
         self.assertEqual(ref.id, ref1.id)
@@ -541,7 +541,7 @@ class RegistryTests(ABC):
         # All different failure modes
         refs = (
             # Importing same DatasetRef with different dataset ID is an error
-            DatasetRef(datasetTypeBias, dataIdBias1, id=uuid.uuid4(), run="run0"),
+            DatasetRef(datasetTypeBias, dataIdBias1, run="run0"),
             # Same DatasetId but different DataId
             DatasetRef(datasetTypeBias, dataIdBias2, id=ref1.id, run="run0"),
             DatasetRef(datasetTypeFlat, dataIdFlat1, id=ref1.id, run="run0"),
