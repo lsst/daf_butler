@@ -1745,6 +1745,15 @@ class ComputeRowGroupSizeTestCase(unittest.TestCase):
         self.assertGreater(row_group_size, 1_000_000)
         self.assertLess(row_group_size, 2_000_000)
 
+    def testRowGroupSizeTinyTable(self):
+        numpyTable = np.zeros(1, dtype=[("a", np.bool_)])
+
+        arrowTable = numpy_to_arrow(numpyTable)
+
+        row_group_size = compute_row_group_size(arrowTable.schema)
+
+        self.assertGreater(row_group_size, 1_000_000)
+
 
 if __name__ == "__main__":
     unittest.main()

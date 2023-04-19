@@ -1274,10 +1274,10 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
     """Compute approximate row group size for a given arrow schema.
 
     Given a schema, this routine will compute the number of rows in a row group
-    that will yield persisted size on disk of the target size or smaller.  The
-    exact size on disk depends on the compression settings and ratios; typical
-    binary data tables will have around 15-20% compression with the pyarrow
-    default ``snappy`` compression.
+    that targets the persisted size on disk (or smaller).  The exact size on
+    disk depends on the compression settings and ratios; typical binary data
+    tables will have around 15-20% compression with the pyarrow default
+    ``snappy`` compression algorithm.
 
     Parameters
     ----------
@@ -1318,6 +1318,10 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
             t_width = t.bit_width
 
         bit_width += t_width
+
+    # Insist it is at least 1 byte wide to avoid any divide-by-zero errors.
+    if bit_width < 8:
+        bit_width = 8
 
     byte_width = bit_width // 8
 
