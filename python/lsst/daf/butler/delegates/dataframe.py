@@ -26,7 +26,6 @@ import collections.abc
 from typing import Any, Mapping, Optional
 
 import pandas
-import pyarrow as pa
 from lsst.daf.butler import StorageClassDelegate
 from lsst.daf.butler.formatters.parquet import DataFrameSchema
 from lsst.utils.introspection import get_full_type_name
@@ -112,9 +111,8 @@ class DataFrameDelegate(StorageClassDelegate):
 
             if isinstance(inMemoryDataset.columns, pandas.MultiIndex):
                 # We have a multi-index dataframe which needs special handling.
-                arrow_table = pa.Table.from_pandas(inMemoryDataset)
                 readColumns = _standardize_multi_index_columns(
-                    arrow_table.schema,
+                    inMemoryDataset.columns,
                     parameters["columns"],
                     stringify=False,
                 )
