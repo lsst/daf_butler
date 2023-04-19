@@ -107,7 +107,10 @@ class ParquetFormatter(Formatter):
                                 f"Column {par_column} specified in parameters not available in parquet file."
                             )
                 else:
-                    par_columns = _standardize_multi_index_columns(schema, par_columns)
+                    par_columns = _standardize_multi_index_columns(
+                        arrow_schema_to_pandas_index(schema),
+                        par_columns,
+                    )
 
             if len(self.fileDescriptor.parameters):
                 raise ValueError(
@@ -895,7 +898,7 @@ def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequen
 
 
 def _standardize_multi_index_columns(
-    schema: pa.Schema,
+    pd_index: pd.MultiIndex,
     columns: Any,
     stringify: bool = True,
 ) -> list[str | Sequence[Any]]:
@@ -904,8 +907,8 @@ def _standardize_multi_index_columns(
 
     Parameters
     ----------
-    schema : `pyarrow.Schema`
-        Pyarrow schema.
+    pd_index : `pandas.MultiIndex`
+        Pandas multi-index.
     columns : `list` [`tuple`] or `dict` [`str`, `str` or `list` [`str`]]
         Columns to standardize.
     stringify : `bool`, optional
@@ -916,7 +919,6 @@ def _standardize_multi_index_columns(
     names : `list` [`str`]
         Stringified representation of a multi-index column name.
     """
-    pd_index = arrow_schema_to_pandas_index(schema)
     index_level_names = tuple(pd_index.names)
 
     names: list[str | Sequence[Any]] = []
