@@ -566,11 +566,11 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(sort, [ref1, ref2, ref3], msg=f"Got order: {[r.dataId for r in sort]}")
 
         # Now include a run
-        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b", id=uuid.uuid4())
+        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b")
         self.assertEqual(ref1.run, "b")
-        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b", id=uuid.uuid4())
-        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=4), run="a", id=uuid.uuid4())
-        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=104), run="c", id=uuid.uuid4())
+        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b")
+        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=4), run="a")
+        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=104), run="c")
 
         # This will sort them on run before visit
         sort = sorted([ref3, ref1, ref2, ref4])
@@ -599,7 +599,7 @@ class DatasetRefTestCase(unittest.TestCase):
     def testOverrideStorageClass(self):
         storageA = StorageClass("test_a", pytype=list)
 
-        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
 
         ref_new = ref.overrideStorageClass(storageA)
         self.assertNotEqual(ref, ref_new)
@@ -613,12 +613,12 @@ class DatasetRefTestCase(unittest.TestCase):
             ref_new.overrideStorageClass(incompatible_sc)
 
     def testPickle(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = pickle.dumps(ref)
         self.assertEqual(pickle.loads(s), ref)
 
     def testJson(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4(), run="somerun")
+        ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = ref.to_json()
         self.assertEqual(DatasetRef.from_json(s, universe=self.universe), ref)
 

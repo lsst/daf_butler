@@ -2419,7 +2419,6 @@ class Butler(LimitedButler):
                         {"instrument": instrument},  # type: ignore
                         conform=False,
                         run="validate",
-                        id=uuid.uuid4(),
                     )
                     datasetRefs.append(datasetRef)
 
