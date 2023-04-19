@@ -73,9 +73,9 @@ def _find_outside_stacklevel() -> int:
     stacklevel = 1
     for i, s in enumerate(inspect.stack()):
         module = inspect.getmodule(s.frame)
+        # Stack frames sometimes hang around so explicitly delete.
+        del s
         if module is None:
-            # Stack frames sometimes hang around so explicilty delete.
-            del s
             continue
         if not module.__name__.startswith("lsst.daf.butler"):
             # 0 will be this function.
@@ -83,8 +83,6 @@ def _find_outside_stacklevel() -> int:
             # and so does not need adjustment.
             stacklevel = i
             break
-        # Stack frames sometimes hang around so explicitly delete.
-        del s
 
     return stacklevel
 
