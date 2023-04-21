@@ -42,7 +42,8 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         self.root = makeTestTempDir(TESTDIR)
         Butler.makeRepo(self.root)
 
-        self.butler = Butler(self.root, run="testrun")
+        self.run = "testrun"
+        self.butler = Butler(self.root, run=self.run)
         self.datasetType = DatasetType(
             "test_logs", [], "ButlerLogRecords", universe=self.butler.registry.dimensions
         )
@@ -88,7 +89,7 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         handler.close()
 
         # Now ingest the file.
-        ref = DatasetRef(self.datasetType, dataId={})
+        ref = DatasetRef(self.datasetType, dataId={}, run=self.run)
         dataset = FileDataset(path=tmp.name, refs=ref)
         self.butler.ingest(dataset, transfer="move")
 

@@ -23,7 +23,6 @@ from __future__ import annotations
 __all__ = ("ingest_files",)
 
 import logging
-import warnings
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +31,7 @@ from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
 from .._butler import Butler
-from ..core import DatasetIdGenEnum, DatasetRef, FileDataset, UnresolvedRefWarning
+from ..core import DatasetIdGenEnum, DatasetRef, FileDataset
 
 if TYPE_CHECKING:
     from ..core import DatasetType, DimensionUniverse
@@ -112,17 +111,21 @@ def ingest_files(
     with uri.as_local() as local_file:
         table = Table.read(local_file.ospath)
 
-    datasets = extract_datasets_from_table(table, common_data_id, datasetType, formatter, prefix)
+    datasets = extract_datasets_from_table(
+        table, common_data_id, datasetType, run, formatter, prefix, id_gen_mode
+    )
 
-    butler.ingest(*datasets, transfer=transfer, run=run, idGenerationMode=id_gen_mode)
+    butler.ingest(*datasets, transfer=transfer)
 
 
 def extract_datasets_from_table(
     table: Table,
     common_data_id: dict,
     datasetType: DatasetType,
+    run: str,
     formatter: str | None = None,
     prefix: str | None = None,
+    id_generation_mode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
 ) -> list[FileDataset]:
     """Extract datasets from the supplied table.
 
@@ -137,13 +140,17 @@ def extract_datasets_from_table(
         a column in the table.
     datasetType : `DatasetType`
         The dataset type to be associated with the ingested data.
+    run : `str`
+        The name of the run that will be receiving these datasets.
     formatter : `str`, optional
         Fully-qualified python class name for the `Formatter` to use
         to read the ingested files. If `None` the formatter is read from
         datastore configuration based on the dataset type.
-    prefix : `str`
+    prefix : `str`, optional
         Prefix to be used for relative paths. Can be `None` for current
         working directory.
+    id_generation_mode: `DatasetIdGenEnum`, optional
+        The mode to use when creating the dataset IDs.
 
     Returns
     -------
@@ -170,13 +177,7 @@ def extract_datasets_from_table(
         dataId.update(common_data_id)
 
         # Create the dataset ref that is to be ingested.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UnresolvedRefWarning)
-            # Could create a resolved ref here but first need to consider
-            # the broader problem of Butler.ingest() taking a run parameter
-            # that is no longer guaranteed to match the run in the
-            # ref attached to the FileDataset.
-            ref = DatasetRef(datasetType, dataId)  # type: ignore
+        ref = DatasetRef(datasetType, dataId, run=run, id_generation_mode=id_generation_mode)  # type: ignore
 
         # Convert path to absolute (because otherwise system will
         # assume relative to datastore root and that is almost certainly
