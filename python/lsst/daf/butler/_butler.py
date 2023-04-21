@@ -469,11 +469,14 @@ class Butler(LimitedButler):
             configURI = root_uri
         # Strip obscore configuration, if it is present, before writing config
         # to a file, obscore config will be stored in registry.
-        config_to_write = config
         if (obscore_config_key := ("registry", "managers", "obscore", "config")) in config:
             config_to_write = config.copy()
             del config_to_write[obscore_config_key]
-        config_to_write.dumpToUri(configURI, overwrite=overwrite)
+            config_to_write.dumpToUri(configURI, overwrite=overwrite)
+            # configFile attribute is updated, need to copy it to original.
+            config.configFile = config_to_write.configFile
+        else:
+            config.dumpToUri(configURI, overwrite=overwrite)
 
         # Create Registry and populate tables
         registryConfig = RegistryConfig(config.get("registry"))
