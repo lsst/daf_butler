@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["PostgresqlDatabase"]
 
 from contextlib import closing, contextmanager
-from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type, Union, cast
+from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type, Union
 
 import psycopg2
 import sqlalchemy
@@ -428,7 +428,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
                 sqlalchemy.sql.func.upper(self.column) <= other,
             )
         else:
-            return cast(sqlalchemy.sql.ColumnElement, self.column << other.column)
+            return self.column << other.column
 
     def __gt__(
         self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
@@ -441,7 +441,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
                 sqlalchemy.sql.func.lower(self.column) > other,
             )
         else:
-            return cast(sqlalchemy.sql.ColumnElement, self.column >> other.column)
+            return self.column >> other.column
 
     def overlaps(
         self, other: _RangeTimespanRepresentation | sqlalchemy.sql.ColumnElement
