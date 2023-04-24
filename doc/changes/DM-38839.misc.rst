@@ -1,0 +1,2 @@
+Changed the default behavior for ``butler query-dataset-types`` to report the full details of the registered dataset types.
+Previously only the dataset type names were reported.
