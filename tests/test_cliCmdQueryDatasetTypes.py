@@ -54,7 +54,7 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
     def test_minimal(self):
         """Test only required parameters."""
-        self.run_test(["query-dataset-types", "here"], self.makeExpected(repo="here"))
+        self.run_test(["query-dataset-types", "here"], self.makeExpected(repo="here", verbose=True))
 
     def test_requiredMissing(self):
         """Test that if the required parameter is missing it fails"""
@@ -123,11 +123,11 @@ class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
             )
             self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
             # check not-verbose output:
-            result = runner.invoke(cli, ["query-dataset-types", "here"])
+            result = runner.invoke(cli, ["query-dataset-types", "here", "--no-verbose"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertAstropyTablesEqual(readTable(result.output), expectedNotVerbose)
             # check glob output:
-            result = runner.invoke(cli, ["query-dataset-types", "here", "t*"])
+            result = runner.invoke(cli, ["query-dataset-types", "here", "--no-verbose", "t*"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertAstropyTablesEqual(readTable(result.output), expectedNotVerbose)
             # check verbose output:
@@ -244,7 +244,7 @@ class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
             self.assertDatasetTypes(runner, "*", ("placeholder",))
 
     def assertDatasetTypes(self, runner: LogCliRunner, query: str, expected: tuple[str, ...]) -> None:
-        result = runner.invoke(cli, ["query-dataset-types", "here", query])
+        result = runner.invoke(cli, ["query-dataset-types", "here", "--no-verbose", query])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = AstropyTable(
             (expected,),
