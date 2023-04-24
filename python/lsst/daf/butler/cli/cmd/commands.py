@@ -443,7 +443,7 @@ def query_collections(*args: Any, **kwargs: Any) -> None:
     help="GLOB is one or more glob-style expressions that fully or partially identify the "
     "dataset types to return."
 )
-@verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
+@verbose_option(help="Include dataset type name, dimensions, and storage class in output.", default=True)
 @components_option()
 @options_file_option()
 def query_dataset_types(*args: Any, **kwargs: Any) -> None:
