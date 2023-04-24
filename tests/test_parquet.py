@@ -1754,6 +1754,14 @@ class ComputeRowGroupSizeTestCase(unittest.TestCase):
 
         self.assertGreater(row_group_size, 1_000_000)
 
+    @unittest.skipUnless(pd is not None, "Cannot run testRowGroupSizeDataFrameWithLists without pandas.")
+    def testRowGroupSizeDataFrameWithLists(self):
+        df = pd.DataFrame({"a": np.zeros(10), "b": [[0, 0]] * 10, "c": [[0.0, 0.0]] * 10, "d": [[]] * 10})
+        arrowTable = pandas_to_arrow(df)
+        row_group_size = compute_row_group_size(arrowTable.schema)
+
+        self.assertGreater(row_group_size, 1_000_000)
+
 
 if __name__ == "__main__":
     unittest.main()

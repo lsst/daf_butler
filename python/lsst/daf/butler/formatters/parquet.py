@@ -1311,9 +1311,19 @@ def compute_row_group_size(schema: pa.Schema, target_size: int = TARGET_ROW_GROU
             # Assuming UTF-8 encoding, and very few wide characters.
             t_width = 8 * strlen
         elif isinstance(t, pa.FixedSizeListType):
-            t_width = t.list_size * t.value_type.bit_width
+            if t.value_type == pa.null():
+                t_width = 0
+            else:
+                t_width = t.list_size * t.value_type.bit_width
         elif t == pa.null():
             t_width = 0
+        elif isinstance(t, pa.ListType):
+            if t.value_type == pa.null():
+                t_width = 0
+            else:
+                # This is a variable length list, just choose
+                # something arbitrary.
+                t_width = 10 * t.value_type.bit_width
         else:
             t_width = t.bit_width
 
