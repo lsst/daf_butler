@@ -145,13 +145,15 @@ def _makeSimpleNumpyTable(include_multidim=False, include_bigendian=False):
     return data
 
 
-def _makeSingleIndexDataFrame(include_masked=False):
+def _makeSingleIndexDataFrame(include_masked=False, include_lists=False):
     """Make a single index data frame for testing.
 
     Parameters
     ----------
     include_masked : `bool`
         Include masked columns.
+    include_lists : `bool`
+        Include list columns.
 
     Returns
     -------
@@ -171,6 +173,13 @@ def _makeSingleIndexDataFrame(include_masked=False):
         df["m2"] = pd.array(np.arange(nrow), dtype=np.float32)
         df["mstrcol"] = pd.array(np.array(["text"] * nrow))
         df.loc[1, ["m1", "m2", "mstrcol"]] = None
+
+    if include_lists:
+        nrow = len(df)
+
+        df["l1"] = [[0, 0]] * nrow
+        df["l2"] = [[0.0, 0.0]] * nrow
+        df["l3"] = [[]] * nrow
 
     allColumns = df.columns.append(pd.Index(df.index.names))
 
@@ -308,6 +317,19 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
+
+    def testSingleIndexDataFrameWithLists(self):
+        df1, allColumns = _makeSingleIndexDataFrame(include_lists=True)
+
+        self.butler.put(df1, self.datasetType, dataId={})
+        # Read the whole DataFrame.
+        df2 = self.butler.get(self.datasetType, dataId={})
+
+        # We need to check the list columns specially because they go
+        # from lists to arrays.
+        for col in ["l1", "l2", "l3"]:
+            for i in range(len(df1)):
+                self.assertTrue(np.all(df2[col].values[i] == df1[col].values[i]))
 
     def testMultiIndexDataFrame(self):
         df1 = _makeMultiIndexDataFrame()
