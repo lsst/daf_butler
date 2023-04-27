@@ -51,6 +51,7 @@ from lsst.daf.butler import (
     NamedKeyDict,
     StorageClass,
     StorageClassFactory,
+    StoredFileInfo,
 )
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler.tests import (
@@ -1896,6 +1897,39 @@ class DataIdForTestTestCase(unittest.TestCase):
         self.assertEqual(dataId["instrument"], "foo")
         self.assertNotEqual(initial_hash, hash(dataId))
         initial_hash = hash(dataId)
+
+
+class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
+    storageClassFactory = StorageClassFactory()
+
+    def test_StoredFileInfo(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
+        ref = self.makeDatasetRef("metric", DimensionUniverse().extract(()), storageClass, {}, conform=False)
+
+        record = dict(
+            storage_class="StructuredDataDict",
+            formatter="lsst.daf.butler.Formatter",
+            path="a/b/c.txt",
+            component="component",
+            dataset_id=ref.id,
+            checksum=None,
+            file_size=5,
+        )
+        info = StoredFileInfo.from_record(record)
+
+        self.assertEqual(info.dataset_id, ref.id)
+        self.assertEqual(info.to_record(), record)
+
+        ref2 = self.makeDatasetRef("metric", DimensionUniverse().extract(()), storageClass, {}, conform=False)
+        rebased = info.rebase(ref2)
+        self.assertEqual(rebased.dataset_id, ref2.id)
+        self.assertEqual(rebased.rebase(ref), info)
+
+        with self.assertRaises(TypeError):
+            rebased.update(formatter=42)
+
+        with self.assertRaises(ValueError):
+            rebased.update(something=42, new="42")
 
 
 if __name__ == "__main__":

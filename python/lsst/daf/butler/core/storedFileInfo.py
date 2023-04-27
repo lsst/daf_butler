@@ -89,6 +89,11 @@ class StoredDatastoreItemInfo:
         """Dataset ID associated with this record (`DatasetId`)"""
         raise NotImplementedError()
 
+    def update(self, **kwargs: Any) -> StoredDatastoreItemInfo:
+        """Create a new class with everything retained apart from the
+        specified values."""
+        raise NotImplementedError()
+
 
 @dataclass(frozen=True)
 class StoredFileInfo(StoredDatastoreItemInfo):
@@ -169,15 +174,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         if component is None:
             component = self.component
         dataset_id = ref.getCheckedId()
-        return StoredFileInfo(
-            dataset_id=dataset_id,
-            formatter=self.formatter,
-            path=self.path,
-            storageClass=self.storageClass,
-            component=component,
-            checksum=self.checksum,
-            file_size=self.file_size,
-        )
+        return self.update(dataset_id=dataset_id, component=component)
 
     def to_record(self) -> Dict[str, Any]:
         """Convert the supplied ref to a database record."""
@@ -234,7 +231,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         storageClass = cls.storageClassFactory.getStorageClass(record["storage_class"])
         component = record["component"] if (record["component"] and record["component"] != NULLSTR) else None
 
-        info = StoredFileInfo(
+        info = cls(
             formatter=record["formatter"],
             path=record["path"],
             storageClass=storageClass,
@@ -244,3 +241,14 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             dataset_id=record["dataset_id"],
         )
         return info
+
+    def update(self, **kwargs: Any) -> StoredFileInfo:
+        new_args = {}
+        for k in self.__slots__:
+            if k in kwargs:
+                new_args[k] = kwargs.pop(k)
+            else:
+                new_args[k] = getattr(self, k)
+        if kwargs:
+            raise ValueError(f"Unexpected keyword arguments for update: {', '.join(kwargs)}")
+        return type(self)(**new_args)
