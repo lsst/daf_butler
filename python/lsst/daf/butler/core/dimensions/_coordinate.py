@@ -45,6 +45,7 @@ from typing import (
     overload,
 )
 
+from deprecated.sphinx import deprecated
 from lsst.sphgeom import IntersectionRegion, Region
 from pydantic import BaseModel
 
@@ -649,6 +650,12 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     def pack(self, name: str, *, returnMaxBits: Literal[False]) -> int:
         ...
 
+    # TODO: Remove this method and its overloads above on DM-38687.
+    @deprecated(
+        "Deprecated in favor of configurable dimension packers.  Will be removed after v27.",
+        version="v26",
+        category=FutureWarning,
+    )
     def pack(self, name: str, *, returnMaxBits: bool = False) -> Union[Tuple[int, int], int]:
         """Pack this data ID into an integer.
 

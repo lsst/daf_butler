@@ -1058,19 +1058,6 @@ class RegistryTests(ABC):
         # with empty expression
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1).expanded().toSet()
         self.assertEqual(len(rows), 4 * 3)  # 4 exposures times 3 detectors
-        for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
-            packer1 = registry.dimensions.makePacker("visit_detector", dataId)
-            packer2 = registry.dimensions.makePacker("exposure_detector", dataId)
-            self.assertEqual(
-                packer1.unpack(packer1.pack(dataId)),
-                DataCoordinate.standardize(dataId, graph=packer1.dimensions),
-            )
-            self.assertEqual(
-                packer2.unpack(packer2.pack(dataId)),
-                DataCoordinate.standardize(dataId, graph=packer2.dimensions),
-            )
-            self.assertNotEqual(packer1.pack(dataId), packer2.pack(dataId))
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101, 110, 111))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 11))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
