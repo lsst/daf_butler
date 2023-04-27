@@ -750,12 +750,12 @@ class TimespanDatabaseRepresentation(ABC):
 
     @classmethod
     @abstractmethod
-    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Timespan | None:
+    def extract(cls, mapping: Mapping[Any, Any], name: Optional[str] = None) -> Timespan | None:
         """Extract a timespan from a dictionary that represents a database row.
 
         Parameters
         ----------
-        mapping : `Mapping` [ `str`, `Any` ]
+        mapping : `Mapping` [ `Any`, `Any` ]
             A dictionary representing a database row containing a `Timespan`
             in this representation.  Should have key(s) equal to the return
             value of `getFieldNames`.
