@@ -1049,7 +1049,10 @@ class FileDatastore(GenericBaseDatastore):
         self._register_datasets(refsAndInfos)
 
     def _calculate_ingested_datastore_name(
-        self, srcUri: ResourcePath, ref: DatasetRef, formatter: Union[Formatter, Type[Formatter]]
+        self,
+        srcUri: ResourcePath,
+        ref: DatasetRef,
+        formatter: Formatter | Type[Formatter] | None = None,
     ) -> Location:
         """Given a source URI and a DatasetRef, determine the name the
         dataset will have inside datastore.
@@ -1063,6 +1066,9 @@ class FileDatastore(GenericBaseDatastore):
             is used to determine the name within the datastore.
         formatter : `Formatter` or Formatter class.
             Formatter to use for validation. Can be a class or an instance.
+            No validation of the file extension is performed if the
+            ``formatter`` is `None`. This can be used if the caller knows
+            that the source URI and target URI will use the same formatter.
 
         Returns
         -------
@@ -1081,7 +1087,8 @@ class FileDatastore(GenericBaseDatastore):
         location.updateExtension(ext)
 
         # Ask the formatter to validate this extension
-        formatter.validateExtension(location)
+        if formatter is not None:
+            formatter.validateExtension(location)
 
         return location
 
@@ -2620,6 +2627,9 @@ class FileDatastore(GenericBaseDatastore):
         # Refs that were transferred successfully.
         accepted = set()
 
+        # Record each time we have done a "direct" transfer.
+        direct_transfers = []
+
         # Now can transfer the artifacts
         for ref in refs:
             if not self.constraints.isAcceptable(ref):
@@ -2638,20 +2648,34 @@ class FileDatastore(GenericBaseDatastore):
             for info in source_records[ref.getCheckedId()]:
                 source_location = info.file_location(source_datastore.locationFactory)
                 target_location = info.file_location(self.locationFactory)
-                if source_location == target_location:
-                    # Either the dataset is already in the target datastore
-                    # (which is how execution butler currently runs) or
-                    # it is an absolute URI.
-                    if source_location.pathInStore.isabs():
+                if source_location == target_location and not source_location.pathInStore.isabs():
+                    # Artifact is already in the target location.
+                    # (which is how execution butler currently runs)
+                    pass
+                else:
+                    if target_location.pathInStore.isabs():
                         # Just because we can see the artifact when running
                         # the transfer doesn't mean it will be generally
-                        # accessible to a user of this butler. For now warn
-                        # but assume it will be accessible.
-                        log.warning(
-                            "Transfer request for an outside-datastore artifact has been found at %s",
-                            source_location,
-                        )
-                else:
+                        # accessible to a user of this butler. Need to decide
+                        # what to do about an absolute path.
+                        if transfer == "auto":
+                            # For "auto" transfers we allow the absolute URI
+                            # to be recorded in the target datastore.
+                            direct_transfers.append(source_location)
+                        else:
+                            # The user is explicitly requesting a transfer
+                            # even for an absolute URI. This requires us to
+                            # calculate the target path.
+                            template_ref = ref
+                            if info.component:
+                                template_ref = ref.makeComponentRef(info.component)
+                            target_location = self._calculate_ingested_datastore_name(
+                                source_location.uri,
+                                template_ref,
+                            )
+
+                            info = info.update(path=target_location.pathInStore.path)
+
                     # Need to transfer it to the new location.
                     # Assume we should always overwrite. If the artifact
                     # is there this might indicate that a previous transfer
@@ -2663,6 +2687,13 @@ class FileDatastore(GenericBaseDatastore):
                     )
 
                 artifacts.append((ref, info))
+
+        if direct_transfers:
+            log.info(
+                "Transfer request for an outside-datastore artifact with absolute URI done %d time%s",
+                len(direct_transfers),
+                "" if len(direct_transfers) == 1 else "s",
+            )
 
         self._register_datasets(artifacts)
 
