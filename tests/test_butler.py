@@ -23,6 +23,7 @@
 """
 
 import gc
+import json
 import logging
 import os
 import pathlib
@@ -1786,15 +1787,17 @@ class PosixDatastoreTransfers(unittest.TestCase):
         config["registry", "managers", "datasets"] = manager
         return Butler(Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True)
 
-    def create_butlers(self, manager1, manager2):
+    def create_butlers(self, manager1=None, manager2=None):
+        default = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+        if manager1 is None:
+            manager1 = default
+        if manager2 is None:
+            manager2 = default
         self.source_butler = self.create_butler(manager1, "1")
         self.target_butler = self.create_butler(manager2, "2")
 
     def testTransferUuidToUuid(self):
-        self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-        )
+        self.create_butlers()
         # Setting id_gen_map should have no effect here
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
@@ -1811,10 +1814,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         This is how execution butler works.
         """
-        self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-        )
+        self.create_butlers()
 
         # Configure the source butler to allow trust.
         self._enable_trust(self.source_butler.datastore)
@@ -1826,16 +1826,52 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         This is how execution butler works.
         """
-        self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-        )
+        self.create_butlers()
 
         # Configure the source butler to allow trust.
         self._enable_trust(self.source_butler.datastore)
 
         # Test disassembly.
         self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
+
+    def testAbsoluteURITransferDirect(self):
+        """Test transfer using an absolute URI."""
+        self._absolute_transfer("auto")
+
+    def testAbsoluteURITransferCopy(self):
+        """Test transfer using an absolute URI."""
+        self._absolute_transfer("copy")
+
+    def _absolute_transfer(self, transfer):
+        self.create_butlers()
+
+        storageClassName = "StructuredData"
+        storageClass = self.storageClassFactory.getStorageClass(storageClassName)
+        datasetTypeName = "random_data"
+        runs = ["run1", "run2"]
+        for run in runs:
+            self.source_butler.registry.registerCollection(run, CollectionType.RUN)
+
+        dimensions = self.source_butler.registry.dimensions.extract(())
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+        self.source_butler.registry.registerDatasetType(datasetType)
+
+        metrics = makeExampleMetrics()
+        with ResourcePath.temporary_uri(suffix=".json") as temp:
+            source_refs = [DatasetRef(datasetType, {})]
+            temp.write(json.dumps(metrics.exportAsDict()).encode())
+            dataset = FileDataset(path=temp, refs=source_refs)
+            self.source_butler.ingest(dataset, transfer="direct", run="run1")
+
+            self.target_butler.transfer_from(
+                self.source_butler, dataset.refs, register_dataset_types=True, transfer=transfer
+            )
+
+            uri = self.target_butler.getURI(dataset.refs[0])
+            if transfer == "auto":
+                self.assertEqual(uri, temp)
+            else:
+                self.assertNotEqual(uri, temp)
 
     def assertButlerTransfers(self, id_gen_map=None, purge=False, storageClassName="StructuredData"):
         """Test that a run can be transferred to another butler."""

@@ -68,7 +68,7 @@ class OpaqueTableStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def fetch(self, **where: Any) -> Iterator[Mapping[str, Any]]:
+    def fetch(self, **where: Any) -> Iterator[Mapping[Any, Any]]:
         """Retrieve records from an opaque table.
 
         Parameters

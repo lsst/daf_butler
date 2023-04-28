@@ -504,7 +504,7 @@ class _SqlRowTransformer:
 
     __slots__ = ("_scalar_columns", "_timespan_columns", "_has_no_columns")
 
-    def sql_to_relation(self, sql_row: Mapping[str, Any]) -> dict[ColumnTag, Any]:
+    def sql_to_relation(self, sql_row: sqlalchemy.RowMapping) -> dict[ColumnTag, Any]:
         """Convert a result row from a SQLAlchemy result into the form expected
         by `lsst.daf.relation.iteration`.
 

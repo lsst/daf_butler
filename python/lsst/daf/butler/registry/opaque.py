@@ -27,7 +27,7 @@ opaque tables for `Registry`.
 __all__ = ["ByNameOpaqueTableStorage", "ByNameOpaqueTableStorageManager"]
 
 import itertools
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, Iterator, List, Mapping, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, Iterator, List, Optional
 
 import sqlalchemy
 
@@ -77,7 +77,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         # the database itself providing any rollback functionality.
         self._db.insert(self._table, *data)
 
-    def fetch(self, **where: Any) -> Iterator[Mapping[str, Any]]:
+    def fetch(self, **where: Any) -> Iterator[sqlalchemy.RowMapping]:
         # Docstring inherited from OpaqueTableStorage.
 
         def _batch_in_clause(
