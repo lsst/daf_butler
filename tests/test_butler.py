@@ -1786,15 +1786,17 @@ class PosixDatastoreTransfers(unittest.TestCase):
         config["registry", "managers", "datasets"] = manager
         return Butler(Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True)
 
-    def create_butlers(self, manager1, manager2):
+    def create_butlers(self, manager1=None, manager2=None):
+        default = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+        if manager1 is None:
+            manager1 = default
+        if manager2 is None:
+            manager2 = default
         self.source_butler = self.create_butler(manager1, "1")
         self.target_butler = self.create_butler(manager2, "2")
 
     def testTransferUuidToUuid(self):
-        self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-        )
+        self.create_butlers()
         # Setting id_gen_map should have no effect here
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
@@ -1811,10 +1813,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         This is how execution butler works.
         """
-        self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-        )
+        self.create_butlers()
 
         # Configure the source butler to allow trust.
         self._enable_trust(self.source_butler.datastore)
@@ -1826,10 +1825,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         This is how execution butler works.
         """
-        self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
-        )
+        self.create_butlers()
 
         # Configure the source butler to allow trust.
         self._enable_trust(self.source_butler.datastore)
