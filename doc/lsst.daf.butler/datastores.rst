@@ -78,6 +78,16 @@ The order is:
    For example ``instrument+physical_filter+visit`` would match any `DatasetType` that uses those three dimensions.
 #. The final match is against the `StorageClass` name.
 
+Datastore to Datastore Transfers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When `~lsst.daf.butler.Butler.transfer_from()` is called between two `FileDatastore` datastores, there is an optimized code path that makes it far more efficient than doing a butler export followed by an import or ingest.
+
+If the source datastore uses absolute URIs for some datasets, whether those datasets are copied/linked into the target datastore or left as direct URIs depends on the value of the ``transfer`` parameter.
+If the default transfer mode of ``"auto"`` is used the direct URI will be stored in the target identically to that used in the source datastore.
+This can be useful if you are doing a local transfer and know that the original location will always be available.
+Any other transfer mode, such as ``"copy"`` will be result in the target datastore taking ownership of the file.
+
 .. _daf_butler-datastores-memory:
 
 In-Memory Datastore
