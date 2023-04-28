@@ -23,6 +23,7 @@
 """
 
 import gc
+import json
 import logging
 import os
 import pathlib
@@ -1832,6 +1833,45 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         # Test disassembly.
         self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
+
+    def testAbsoluteURITransferDirect(self):
+        """Test transfer using an absolute URI."""
+        self._absolute_transfer("auto")
+
+    def testAbsoluteURITransferCopy(self):
+        """Test transfer using an absolute URI."""
+        self._absolute_transfer("copy")
+
+    def _absolute_transfer(self, transfer):
+        self.create_butlers()
+
+        storageClassName = "StructuredData"
+        storageClass = self.storageClassFactory.getStorageClass(storageClassName)
+        datasetTypeName = "random_data"
+        runs = ["run1", "run2"]
+        for run in runs:
+            self.source_butler.registry.registerCollection(run, CollectionType.RUN)
+
+        dimensions = self.source_butler.registry.dimensions.extract(())
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+        self.source_butler.registry.registerDatasetType(datasetType)
+
+        metrics = makeExampleMetrics()
+        with ResourcePath.temporary_uri(suffix=".json") as temp:
+            source_refs = [DatasetRef(datasetType, {})]
+            temp.write(json.dumps(metrics.exportAsDict()).encode())
+            dataset = FileDataset(path=temp, refs=source_refs)
+            self.source_butler.ingest(dataset, transfer="direct", run="run1")
+
+            self.target_butler.transfer_from(
+                self.source_butler, dataset.refs, register_dataset_types=True, transfer=transfer
+            )
+
+            uri = self.target_butler.getURI(dataset.refs[0])
+            if transfer == "auto":
+                self.assertEqual(uri, temp)
+            else:
+                self.assertNotEqual(uri, temp)
 
     def assertButlerTransfers(self, id_gen_map=None, purge=False, storageClassName="StructuredData"):
         """Test that a run can be transferred to another butler."""
