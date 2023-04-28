@@ -92,6 +92,32 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             msg, "Result has one logical row but no columns because no dimensions were requested."
         )
 
+    def testNoResultsEasy(self):
+        """Test getting no results in a way that's detectable without having
+        to execute the full query.
+        """
+        self.loadData("base.yaml", "spatial.yaml")
+        res, msg = self._queryDataIds(
+            self.root,
+            dimensions=("visit", "tract"),
+            where="instrument='Cam1' AND skymap='SkyMap1' AND visit=1 AND tract=1",
+        )
+        self.assertIsNone(res, msg)
+        self.assertIn("yields no results when applied to", msg)
+
+    def testNoResultsHard(self):
+        """Test getting no results in a way that can't be detected unless we
+        run the whole query.
+        """
+        self.loadData("base.yaml", "spatial.yaml")
+        res, msg = self._queryDataIds(
+            self.root,
+            dimensions=("visit", "tract"),
+            where="instrument='Cam1' AND skymap='SkyMap1' AND visit=1 AND tract=0 AND patch=5",
+        )
+        self.assertIsNone(res, msg)
+        self.assertIn("Post-query region filtering removed all rows", msg)
+
     def testWhere(self):
         """Test with a WHERE constraint."""
         self.loadData("base.yaml")
