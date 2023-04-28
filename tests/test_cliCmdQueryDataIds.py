@@ -70,11 +70,13 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         self.assertFalse(msg)
         self.assertAstropyTablesEqual(res, expected)
 
-    def testNull(self):
-        "Test asking for nothing."
+    def testNoDimensions(self):
+        """Test asking for no dimensions."""
         res, msg = self._queryDataIds(self.root)
         self.assertIsNone(res, msg)
-        self.assertEqual(msg, "")
+        self.assertEqual(
+            msg, "Result has one logical row but no columns because no dimensions were requested."
+        )
 
     def testWhere(self):
         """Test with a WHERE constraint."""
