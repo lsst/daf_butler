@@ -27,7 +27,8 @@ import unittest
 
 from astropy.table import Table as AstropyTable
 from lsst.daf.butler import Butler, DatasetType, script
-from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.transfers import YamlRepoImportBackend
 from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -53,88 +54,108 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        self.repo = MetricTestRepo(
-            root=self.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml")
-        )
+        self.repo = Butler.makeRepo(self.root)
 
     def tearDown(self):
         removeTestTempDir(self.root)
 
+    def loadData(self, *filenames: str) -> Butler:
+        """Load registry test data from ``TESTDIR/data/registry/<filename>``,
+        which should be a YAML import/export file.
+        """
+        butler = Butler(self.repo, writeable=True)
+        for filename in filenames:
+            with open(os.path.join(TESTDIR, "data", "registry", filename), "r") as stream:
+                # Go behind the back of the import code a bit to deal with
+                # the fact that this is just registry content with no actual
+                # files for the datastore.
+                backend = YamlRepoImportBackend(stream, butler.registry)
+                backend.register()
+                backend.load(datastore=None)
+        return butler
+
     def testDimensions(self):
         """Test getting a dimension."""
-        res, msg = self._queryDataIds(self.root, dimensions=("visit",))
+        self.loadData("base.yaml")
+        res, msg = self._queryDataIds(self.root, dimensions=("detector",))
         expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 423), ("R", "DummyCamComp", "d-r", 424))),
-            names=("band", "instrument", "physical_filter", "visit"),
+            array((("Cam1", 1), ("Cam1", 2), ("Cam1", 3), ("Cam1", 4))), names=("instrument", "detector")
         )
         self.assertFalse(msg)
         self.assertAstropyTablesEqual(res, expected)
 
-    def testNull(self):
-        "Test asking for nothing."
+    def testNoDimensions(self):
+        """Test asking for no dimensions."""
         res, msg = self._queryDataIds(self.root)
         self.assertIsNone(res, msg)
-        self.assertEqual(msg, "")
+        self.assertEqual(
+            msg, "Result has one logical row but no columns because no dimensions were requested."
+        )
+
+    def testNoResultsEasy(self):
+        """Test getting no results in a way that's detectable without having
+        to execute the full query.
+        """
+        self.loadData("base.yaml", "spatial.yaml")
+        res, msg = self._queryDataIds(
+            self.root,
+            dimensions=("visit", "tract"),
+            where="instrument='Cam1' AND skymap='SkyMap1' AND visit=1 AND tract=1",
+        )
+        self.assertIsNone(res, msg)
+        self.assertIn("yields no results when applied to", msg)
+
+    def testNoResultsHard(self):
+        """Test getting no results in a way that can't be detected unless we
+        run the whole query.
+        """
+        self.loadData("base.yaml", "spatial.yaml")
+        res, msg = self._queryDataIds(
+            self.root,
+            dimensions=("visit", "tract"),
+            where="instrument='Cam1' AND skymap='SkyMap1' AND visit=1 AND tract=0 AND patch=5",
+        )
+        self.assertIsNone(res, msg)
+        self.assertIn("Post-query region filtering removed all rows", msg)
 
     def testWhere(self):
         """Test with a WHERE constraint."""
+        self.loadData("base.yaml")
         res, msg = self._queryDataIds(
-            self.root, dimensions=("visit",), where="instrument='DummyCamComp' AND visit=423"
+            self.root, dimensions=("detector",), where="instrument='Cam1' AND detector=2"
         )
         expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 423),)),
-            names=("band", "instrument", "physical_filter", "visit"),
+            array((("Cam1", 2),)),
+            names=(
+                "instrument",
+                "detector",
+            ),
         )
         self.assertAstropyTablesEqual(res, expected)
         self.assertIsNone(msg)
 
     def testDatasetsAndCollections(self):
         """Test constraining via datasets and collections."""
-
-        # Add a dataset in a different collection
-        self.butler = Butler(self.root, run="foo")
-        self.repo.butler.registry.insertDimensionData(
-            "visit",
-            {
-                "instrument": "DummyCamComp",
-                "id": 425,
-                "name": "fourtwentyfive",
-                "physical_filter": "d-r",
-            },
-        )
-        self.repo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, run="foo")
-
-        # Verify the new dataset is not found in the "ingest/run" collection.
+        butler = self.loadData("base.yaml", "datasets-uuid.yaml")
+        # See that the data IDs returned are constrained by that collection's
+        # contents.
         res, msg = self._queryDataIds(
-            repo=self.root, dimensions=("visit",), collections=("ingest/run",), datasets="test_metric_comp"
+            repo=self.root, dimensions=("detector",), collections=("imported_g",), datasets="bias"
         )
         expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 423), ("R", "DummyCamComp", "d-r", 424))),
-            names=("band", "instrument", "physical_filter", "visit"),
+            array((("Cam1", 1), ("Cam1", 2), ("Cam1", 3))),
+            names=(
+                "instrument",
+                "detector",
+            ),
         )
         self.assertAstropyTablesEqual(res, expected)
         self.assertIsNone(msg)
 
-        # Verify the new dataset is found in the "foo" collection.
-        res, msg = self._queryDataIds(
-            repo=self.root, dimensions=("visit",), collections=("foo",), datasets="test_metric_comp"
-        )
-        expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 425),)),
-            names=("band", "instrument", "physical_filter", "visit"),
-        )
-        self.assertAstropyTablesEqual(res, expected)
-        self.assertIsNone(msg)
-
-        # Verify the new dataset is found in the "foo" collection and the
-        # dimensions are determined automatically.
+        # Check that the dimensions are inferred when not provided.
         with self.assertLogs("lsst.daf.butler.script.queryDataIds", "INFO") as cm:
-            res, msg = self._queryDataIds(repo=self.root, collections=("foo",), datasets="test_metric_comp")
+            res, msg = self._queryDataIds(repo=self.root, collections=("imported_g",), datasets="bias")
         self.assertIn("Determined dimensions", "\n".join(cm.output))
-        expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 425),)),
-            names=("band", "instrument", "physical_filter", "visit"),
-        )
         self.assertAstropyTablesEqual(res, expected)
         self.assertIsNone(msg)
 
@@ -143,17 +164,17 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             "test_metric_dimensionless",
             (),
             "StructuredDataDict",
-            universe=self.repo.butler.registry.dimensions,
+            universe=butler.registry.dimensions,
         )
-        self.repo.butler.registry.registerDatasetType(new_dataset_type)
-        res, msg = self._queryDataIds(repo=self.root, collections=("foo",), datasets=...)
+        butler.registry.registerDatasetType(new_dataset_type)
+        res, msg = self._queryDataIds(repo=self.root, collections=("imported_g",), datasets=...)
         self.assertIsNone(res)
         self.assertIn("No dimensions in common", msg)
 
         # Check that we get a reason returned if no dataset type is found.
         with self.assertWarns(FutureWarning):
             res, msg = self._queryDataIds(
-                repo=self.root, dimensions=("visit",), collections=("foo",), datasets="raw"
+                repo=self.root, dimensions=("detector",), collections=("imported_g",), datasets="raw"
             )
         self.assertIsNone(res)
         self.assertEqual(msg, "Dataset type raw is not registered.")
@@ -161,10 +182,13 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         # Check that we get a reason returned if no dataset is found in
         # collection.
         res, msg = self._queryDataIds(
-            repo=self.root, dimensions=("visit",), collections=("ingest",), datasets="test_metric_comp"
+            repo=self.root,
+            dimensions=("detector",),
+            collections=("imported_g",),
+            datasets="test_metric_dimensionless",
         )
         self.assertIsNone(res)
-        self.assertIn("No datasets of type test_metric_comp", msg)
+        self.assertIn("No datasets of type test_metric_dimensionless", msg)
 
 
 if __name__ == "__main__":

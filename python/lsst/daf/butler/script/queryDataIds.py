@@ -138,8 +138,13 @@ def queryDataIds(
         new_offset = offset if offset > 0 else None
         results = results.limit(limit, new_offset)
 
-    if results.count() > 0 and len(results.graph) > 0:
-        table = _Table(results)
-        return table.getAstropyTable(not order_by), None
+    if results.any(exact=False):
+        if results.graph:
+            table = _Table(results)
+            if not table.dataIds:
+                return None, "Post-query region filtering removed all rows, since nothing overlapped."
+            return table.getAstropyTable(not order_by), None
+        else:
+            return None, "Result has one logical row but no columns because no dimensions were requested."
     else:
         return None, "\n".join(results.explain_no_results())
