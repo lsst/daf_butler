@@ -701,7 +701,7 @@ class QueryBackend(Generic[_C]):
         just dimension relations themselves, but anything created from queries
         based on them, including datasets and query results.  It is possible to
         construct `LeafRelation` objects that don't satisfy this criteria (e.g.
-        when accepting in user-provided data IDs(, and in this case
+        when accepting in user-provided data IDs), and in this case
         higher-level guards or warnings must be provided.``
         """
         return {

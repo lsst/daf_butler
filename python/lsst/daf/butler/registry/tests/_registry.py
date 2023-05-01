@@ -3230,6 +3230,17 @@ class RegistryTests(ABC):
             },
             overlapping_patches,
         )
+        # Test that a three-way join that includes the common skypix system in
+        # the dimensions doesn't generate redundant join terms in the query.
+        full_data_ids = set(
+            registry.queryDataIds(
+                ["tract", "visit", "htm7"], skymap="hsc_rings_v1", instrument="HSC"
+            ).expanded()
+        )
+        self.assertGreater(len(full_data_ids), 0)
+        for data_id in full_data_ids:
+            self.assertFalse(data_id.records["tract"].region.isDisjointFrom(data_id.records["htm7"].region))
+            self.assertFalse(data_id.records["visit"].region.isDisjointFrom(data_id.records["htm7"].region))
 
     def test_spatial_constraint_queries(self) -> None:
         """Test queries in which one spatial dimension in the constraint (data

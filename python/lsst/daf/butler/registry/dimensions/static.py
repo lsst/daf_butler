@@ -23,7 +23,7 @@ from __future__ import annotations
 import itertools
 from collections import defaultdict
 from collections.abc import Mapping, Set
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import sqlalchemy
 from lsst.daf.relation import Relation
@@ -33,6 +33,7 @@ from ...core import (
     DatabaseTopologicalFamily,
     DimensionElement,
     DimensionGraph,
+    DimensionKeyColumnTag,
     DimensionUniverse,
     GovernorDimension,
     NamedKeyDict,
@@ -224,8 +225,14 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         element2: str,
         context: queries.SqlQueryContext,
         governor_constraints: Mapping[str, Set[str]],
+        existing_relationships: Set[frozenset[str]] = frozenset(),
     ) -> tuple[Relation, bool]:
         # Docstring inherited.
+        overlap_relationship = frozenset(
+            self.universe[element1].dimensions.names | self.universe[element2].dimensions.names
+        )
+        if overlap_relationship in existing_relationships:
+            return context.preferred_engine.make_join_identity_relation(), False
         storage1 = self[element1]
         storage2 = self[element2]
         overlaps: Relation | None = None
@@ -244,16 +251,46 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 if overlaps is None:
                     # No direct materialized overlaps; use commonSkyPix as an
                     # intermediary.
-                    common_skypix_overlap1 = db_storage1.make_spatial_join_relation(
-                        self.universe.commonSkyPix, context, governor_constraints
+                    have_overlap1_already = (
+                        frozenset(
+                            self.universe[element1].dimensions.names | {self.universe.commonSkyPix.name}
+                        )
+                        in existing_relationships
                     )
-                    common_skypix_overlap2 = db_storage2.make_spatial_join_relation(
-                        self.universe.commonSkyPix, context, governor_constraints
+                    have_overlap2_already = (
+                        frozenset(
+                            self.universe[element2].dimensions.names | {self.universe.commonSkyPix.name}
+                        )
+                        in existing_relationships
                     )
-                    assert (
-                        common_skypix_overlap1 is not None and common_skypix_overlap2 is not None
-                    ), "Overlaps with the common skypix dimension should always be available,"
-                    overlaps = common_skypix_overlap1.join(common_skypix_overlap2)
+                    overlap1 = context.preferred_engine.make_join_identity_relation()
+                    overlap2 = context.preferred_engine.make_join_identity_relation()
+                    if not have_overlap1_already:
+                        overlap1 = cast(
+                            Relation,
+                            db_storage1.make_spatial_join_relation(
+                                self.universe.commonSkyPix, context, governor_constraints
+                            ),
+                        )
+                    if not have_overlap2_already:
+                        overlap2 = cast(
+                            Relation,
+                            db_storage2.make_spatial_join_relation(
+                                self.universe.commonSkyPix, context, governor_constraints
+                            ),
+                        )
+                    overlaps = overlap1.join(overlap2)
+                    if not have_overlap1_already and not have_overlap2_already:
+                        # Drop the common skypix ID column from the overlap
+                        # relation we return, since we don't want that column
+                        # to be mistakenly equated with any other appearance of
+                        # that column, since this would mangle queries like
+                        # "join visit to tract and tract to healpix10", by
+                        # incorrectly requiring all visits and healpix10 pixels
+                        # share common skypix pixels, not just tracts.
+                        columns = set(overlaps.columns)
+                        columns.remove(DimensionKeyColumnTag(self.universe.commonSkyPix.name))
+                        overlaps = overlaps.with_only_columns(columns)
                     needs_refinement = True
             case [DatabaseDimensionRecordStorage() as db_storage, other]:
                 overlaps = db_storage.make_spatial_join_relation(other.element, context, governor_constraints)
