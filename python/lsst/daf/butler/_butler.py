@@ -75,6 +75,7 @@ from .core import (
     DataCoordinate,
     DataId,
     DataIdValue,
+    DatasetIdFactory,
     DatasetIdGenEnum,
     DatasetRef,
     DatasetRefURIs,
@@ -1862,12 +1863,10 @@ class Butler(LimitedButler):
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        if run is not None:
-            warnings.warn(
-                "All DatasetRefs to be ingested must have resolved dataset IDs. "
-                "The run from the ref will be used for ingest and the provided run will be ignored."
-            )
+
         log.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
+        if not datasets:
+            return
 
         progress = Progress("lsst.daf.butler.Butler.ingest", level=logging.DEBUG)
 
@@ -1883,19 +1882,35 @@ class Butler(LimitedButler):
             tuple[DatasetType, str], dict[DataCoordinate, FileDataset]
         ] = defaultdict(dict)
 
+        logged_resolving = False
+        used_run = False
+        default_run = run or self.run
+
         # And the nested loop that populates it:
         for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
             # Somewhere to store pre-existing refs if we have an
             # execution butler.
             existingRefs: List[DatasetRef] = []
 
+            # Any newly-resolved refs.
+            resolvedRefs: list[DatasetRef] = []
+
             dataset_run: str | None = None
             for ref in dataset.refs:
                 if ref.id is None:
-                    raise RuntimeError(
-                        f"All dataset refs must be resolved to be ingested. {ref} from "
-                        f"{dataset} was unresolved."
-                    )
+                    # Eventually this will be impossible. For now we must
+                    # resolve this ref.
+                    if default_run is None:
+                        raise ValueError("Unresolved DatasetRef used for ingest but no run specified.")
+                    expanded_dataId = self.registry.expandDataId(ref.dataId)
+                    if not logged_resolving:
+                        log.info("ingest() given unresolved refs. Resolving them into run %r", default_run)
+                        logged_resolving = True
+                    resolved = DatasetIdFactory().resolveRef(ref, default_run, idGenerationMode)
+                    ref = resolved.expanded(expanded_dataId)
+                    resolvedRefs.append(ref)
+                    used_run = True
+
                 if dataset_run is None:
                     dataset_run = ref.run
                 elif dataset_run != ref.run:
@@ -1962,8 +1977,26 @@ class Butler(LimitedButler):
 
                 # Store expanded form in the original FileDataset.
                 dataset.refs = existingRefs
+            elif resolvedRefs:
+                if len(dataset.refs) != len(resolvedRefs):
+                    raise ConflictingDefinitionError(
+                        f"For dataset {dataset.path} some DatasetRef were "
+                        "resolved and others were not. This is not supported."
+                    )
+                dataset.refs = resolvedRefs
+
+                # These datasets have to be registered.
+                self.registry._importDatasets(resolvedRefs)
             else:
                 groupedData[group_key].append(dataset)
+
+        if not used_run and run is not None:
+            warnings.warn(
+                "All DatasetRefs to be ingested had resolved dataset IDs. The value given to the "
+                f"'run' parameter ({run!r}) was not used and the parameter will be removed in the future.",
+                category=FutureWarning,
+                stacklevel=3,  # Take into account the @transactional decorator.
+            )
 
         # Now we can bulk-insert into Registry for each DatasetType.
         for (datasetType, this_run), grouped_datasets in progress.iter_item_chunks(

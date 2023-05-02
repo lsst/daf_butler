@@ -887,6 +887,10 @@ class ButlerTests(ButlerPutGetTests):
         multi2b = butler.get(datasetTypeName, dataId2)
         self.assertEqual(multi2, multi2b)
 
+        # Ensure we can ingest 0 datasets
+        datasets = []
+        butler.ingest(*datasets)
+
     def testPickle(self):
         """Test pickle support."""
         butler = Butler(self.tmpConfigFile, run=self.default_run)
