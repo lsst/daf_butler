@@ -815,6 +815,7 @@ class DimensionRecordStorageManager(VersionedExtension):
         element2: str,
         context: queries.SqlQueryContext,
         governor_constraints: Mapping[str, Set[str]],
+        existing_relationships: Set[frozenset[str]] = frozenset(),
     ) -> tuple[Relation, bool]:
         """Create a relation that represents the spatial join between two
         dimension elements.
@@ -832,6 +833,13 @@ class DimensionRecordStorageManager(VersionedExtension):
                 optional
             Constraints imposed by other aspects of the query on governor
             dimensions.
+        existing_relationships : `~collections.abc.Set` [ `frozenset` [ `str` \
+                ] ], optional
+            Relationships between dimensions that are already present in the
+            relation the result will be joined to.  Spatial join relations
+            that duplicate these relationships will not be included in the
+            result, which may cause an identity relation to be returned if
+            a spatial relationship has already been established.
 
         Returns
         -------

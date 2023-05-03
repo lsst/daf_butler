@@ -193,18 +193,30 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         relation = context.make_initial_relation(initial_relation)
 
         if initial_dimension_relationships is None:
-            initial_dimension_relationships = self.extract_dimension_relationships(relation)
+            relationships = self.extract_dimension_relationships(relation)
+        else:
+            relationships = set(initial_dimension_relationships)
 
         # Make a mutable copy of the columns argument.
         columns_required = set(columns)
+
+        # Sort spatial joins to put those involving the commonSkyPix dimension
+        # first, since those join subqueries might get reused in implementing
+        # other joins later.
+        spatial_joins = list(spatial_joins)
+        spatial_joins.sort(key=lambda j: self.universe.commonSkyPix.name not in j)
 
         # Next we'll handle spatial joins, since those can require refinement
         # predicates that will need region columns to be included in the
         # relations we'll join.
         predicate: Predicate = Predicate.literal(True)
         for element1, element2 in spatial_joins:
-            overlaps, needs_refinement = self._managers.dimensions.make_spatial_join_relation(
-                element1, element2, context=context, governor_constraints=governor_constraints
+            (overlaps, needs_refinement) = self._managers.dimensions.make_spatial_join_relation(
+                element1,
+                element2,
+                context=context,
+                governor_constraints=governor_constraints,
+                existing_relationships=relationships,
             )
             if needs_refinement:
                 predicate = predicate.logical_and(
@@ -216,6 +228,9 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                 columns_required.add(DimensionRecordColumnTag(element1, "region"))
                 columns_required.add(DimensionRecordColumnTag(element2, "region"))
             relation = relation.join(overlaps)
+            relationships.add(
+                frozenset(self.universe[element1].dimensions.names | self.universe[element2].dimensions.names)
+            )
 
         # All skypix columns need to come from either the initial_relation or a
         # spatial join, since we need all dimension key columns present in the
@@ -267,7 +282,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
             #   relationship.
             if columns_still_needed or (
                 (element.alwaysJoin or element.implied)
-                and frozenset(element.dimensions.names) not in initial_dimension_relationships
+                and frozenset(element.dimensions.names) not in relationships
             ):
                 storage = self._managers.dimensions[element]
                 relation = storage.join(relation, default_join, context)
