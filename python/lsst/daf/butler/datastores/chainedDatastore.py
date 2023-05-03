@@ -411,7 +411,9 @@ class ChainedDatastore(Datastore):
         npermanent = 0
         nephemeral = 0
         for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
-            if constraints is not None and not constraints.isAcceptable(ref):
+            if (
+                constraints is not None and not constraints.isAcceptable(ref)
+            ) or not datastore.constraints.isAcceptable(ref):
                 log.debug("Datastore %s skipping put via configuration for ref %s", datastore.name, ref)
                 continue
 
@@ -570,7 +572,11 @@ class ChainedDatastore(Datastore):
             if not missing_refs:
                 break
             for datastore in self.datastores:
-                got_uris = datastore.getManyURIs(missing_refs, p, allow_missing=True)
+                try:
+                    got_uris = datastore.getManyURIs(missing_refs, p, allow_missing=True)
+                except NotImplementedError:
+                    # some datastores may not implement generating URIs
+                    continue
                 missing_refs -= got_uris.keys()
                 uris.update(got_uris)
                 if not missing_refs:
@@ -745,7 +751,11 @@ class ChainedDatastore(Datastore):
                 # caching datastore since using an on-disk local
                 # cache is exactly what we should be doing.
                 continue
-            datastore_refs = {ref for ref in pending if datastore.exists(ref)}
+            try:
+                datastore_refs = {ref for ref in pending if datastore.exists(ref)}
+            except NotImplementedError:
+                # Some datastores may not support retrieving artifacts
+                continue
 
             if datastore_refs:
                 grouped_by_datastore[number] = datastore_refs
