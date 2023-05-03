@@ -71,6 +71,7 @@ from .._exceptions import (
     InconsistentDataIdError,
     MissingCollectionError,
     MissingDatasetTypeError,
+    NoDefaultCollectionError,
     OrphanedRecordError,
 )
 from ..interfaces import ButlerAttributeExistsError
@@ -3390,3 +3391,51 @@ class RegistryTests(ABC):
             pop_transfer(query.projected(unique=True, drop_postprocessing=True).relation).engine,
             sql.Engine,
         )
+
+    def test_query_empty_collections(self) -> None:
+        """Test for registry query methods with empty collections. The methods
+        should return empty result set (or None when applicable) and provide
+        "doomed" diagnostics.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+
+        # Tests for registry.findDataset()
+        with self.assertRaises(NoDefaultCollectionError):
+            registry.findDataset("bias", instrument="Cam1", detector=1)
+        self.assertIsNotNone(registry.findDataset("bias", instrument="Cam1", detector=1, collections=...))
+        self.assertIsNone(registry.findDataset("bias", instrument="Cam1", detector=1, collections=[]))
+
+        # Tests for registry.queryDatasets()
+        with self.assertRaises(NoDefaultCollectionError):
+            registry.queryDatasets("bias")
+        self.assertTrue(list(registry.queryDatasets("bias", collections=...)))
+
+        result = registry.queryDatasets("bias", collections=[])
+        self.assertEqual(len(list(result)), 0)
+        messages = list(result.explain_no_results())
+        self.assertTrue(messages)
+        self.assertTrue(any("because collection list is empty" in message for message in messages))
+
+        # Tests for registry.queryDataIds()
+        with self.assertRaises(NoDefaultCollectionError):
+            registry.queryDataIds("detector", datasets="bias")
+        self.assertTrue(list(registry.queryDataIds("detector", datasets="bias", collections=...)))
+
+        result = registry.queryDataIds("detector", datasets="bias", collections=[])
+        self.assertEqual(len(list(result)), 0)
+        messages = list(result.explain_no_results())
+        self.assertTrue(messages)
+        self.assertTrue(any("because collection list is empty" in message for message in messages))
+
+        # Tests for registry.queryDimensionRecords()
+        with self.assertRaises(NoDefaultCollectionError):
+            registry.queryDimensionRecords("detector", datasets="bias")
+        self.assertTrue(list(registry.queryDimensionRecords("detector", datasets="bias", collections=...)))
+
+        result = registry.queryDimensionRecords("detector", datasets="bias", collections=[])
+        self.assertEqual(len(list(result)), 0)
+        messages = list(result.explain_no_results())
+        self.assertTrue(messages)
+        self.assertTrue(any("because collection list is empty" in message for message in messages))

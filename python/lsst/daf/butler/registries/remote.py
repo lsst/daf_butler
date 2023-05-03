@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Sequence, Se
 import httpx
 from lsst.daf.butler import __version__
 from lsst.resources import ResourcePath, ResourcePathExpression
+from lsst.utils.ellipsis import Ellipsis
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
@@ -69,6 +70,7 @@ from ..registry import CollectionSummary, CollectionType, Registry, RegistryConf
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
+    from ..registry._registry import CollectionArgType
     from ..registry.interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
 
@@ -335,7 +337,7 @@ class RemoteRegistry(Registry):
         datasetType: DatasetType | str,
         dataId: DataId | None = None,
         *,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         timespan: Timespan | None = None,
         **kwargs: Any,
     ) -> DatasetRef | None:
@@ -524,7 +526,7 @@ class RemoteRegistry(Registry):
         self,
         datasetType: Any,
         *,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         dimensions: Iterable[Dimension | str] | None = None,
         dataId: DataId | None = None,
         where: str = "",
@@ -538,12 +540,13 @@ class RemoteRegistry(Registry):
         if dimensions is not None:
             dimensions = [str(d) for d in ensure_iterable(dimensions)]
 
+        collections_param: ExpressionQueryParameter | None = None
         if collections is not None:
-            collections = ExpressionQueryParameter.from_expression(collections)
+            collections_param = ExpressionQueryParameter.from_expression(collections)
 
         parameters = QueryDatasetsModel(
             datasetType=ExpressionQueryParameter.from_expression(datasetType),
-            collections=collections,
+            collections=collections_param,
             dimensions=dimensions,
             dataId=self._simplify_dataId(dataId),
             where=where,
@@ -572,7 +575,7 @@ class RemoteRegistry(Registry):
         *,
         dataId: DataId | None = None,
         datasets: Any = None,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         where: str = "",
         components: bool | None = None,
         bind: Mapping[str, Any] | None = None,
@@ -582,15 +585,16 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         cleaned_dimensions = [str(d) for d in ensure_iterable(dimensions)]
 
+        collections_param: ExpressionQueryParameter | None = None
         if collections is not None:
-            collections = ExpressionQueryParameter.from_expression(collections)
+            collections_param = ExpressionQueryParameter.from_expression(collections)
         if datasets is not None:
             datasets = DatasetsQueryParameter.from_expression(datasets)
 
         parameters = QueryDataIdsModel(
             dimensions=cleaned_dimensions,
             dataId=self._simplify_dataId(dataId),
-            collections=collections,
+            collections=collections_param,
             datasets=datasets,
             where=where,
             components=components,
@@ -621,7 +625,7 @@ class RemoteRegistry(Registry):
         *,
         dataId: DataId | None = None,
         datasets: Any = None,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         where: str = "",
         components: bool | None = None,
         bind: Mapping[str, Any] | None = None,
@@ -629,15 +633,16 @@ class RemoteRegistry(Registry):
         **kwargs: Any,
     ) -> Iterator[DimensionRecord]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
+        collections_param: ExpressionQueryParameter | None = None
         if collections is not None:
-            collections = ExpressionQueryParameter.from_expression(collections)
+            collections_param = ExpressionQueryParameter.from_expression(collections)
         if datasets is not None:
             datasets = DatasetsQueryParameter.from_expression(datasets)
 
         parameters = QueryDimensionRecordsModel(
             dataId=self._simplify_dataId(dataId),
             datasets=datasets,
-            collections=collections,
+            collections=collections_param,
             where=where,
             components=components,
             bind=bind,
@@ -661,7 +666,7 @@ class RemoteRegistry(Registry):
     def queryDatasetAssociations(
         self,
         datasetType: str | DatasetType,
-        collections: Any = ...,
+        collections: CollectionArgType | None = Ellipsis,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,

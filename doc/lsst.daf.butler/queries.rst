@@ -44,7 +44,7 @@ Arguments that specify one or more collections are similar to those for dataset 
  - `str` values (the full collection name);
  - `str` values using glob wildcard syntax which will be converted to `re.Pattern`;
  - `re.Pattern` values (matched to the collection name, via `~re.Pattern.fullmatch`);
- - iterables of any of the above;
+ - iterables of any of the above, empty collection cannot match anything, methods always return an empty result set in this case;
  - the special value "``...``", which matches all collections;
 
 Collection expressions are processed by the `~registry.wildcards.CollectionWildcard` class.

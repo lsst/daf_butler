@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from astropy.table import Table as AstropyTable
+from lsst.utils.ellipsis import Ellipsis, EllipsisType
 
 from .._butler import Butler, DataCoordinate
 from ..cli.utils import sortAstropyTable
@@ -128,8 +129,11 @@ def queryDataIds(
         dimensions = set(graph.names)
         _LOG.info("Determined dimensions %s from datasets option %s", dimensions, datasets)
 
+    query_collections: Iterable[str] | EllipsisType | None = None
+    if datasets:
+        query_collections = collections if collections else Ellipsis
     results = butler.registry.queryDataIds(
-        dimensions, datasets=datasets, where=where, collections=collections
+        dimensions, datasets=datasets, where=where, collections=query_collections
     )
 
     if order_by:
