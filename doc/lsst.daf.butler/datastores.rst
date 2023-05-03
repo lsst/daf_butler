@@ -112,3 +112,20 @@ The only constraint is that all the datasets in registry are associated with at 
 
 `~datastores.chainedDatastore.ChainedDatastore` has a ``datastores`` key that contains a list of datastore configurations that can match the ``datastore`` contents from other datastores.
 Additionally, a `~datastores.chainedDatastore.ChainedDatastore` can also support ``constraints`` definitions.
+
+Sasquatch Datastore
+===================
+
+The `lsst.analysis.tools` package implements a special kind of datastore to facilitate  uploading `~lsst.analysis.tools.interface.MetricMeasurementBundle`\ s to a Sasquatch instance.
+This `~lsst.analysis.tools.interface.datastore.SasquatchDatastore` is currently write only and is meant to aid dispatching `~lsst.analysis.tools.interface.MetricMeasurementBundle`\ s anytime such a dataset is put with the butler.
+Often times this datastore will be used in conjunction with both a `datastores.chainedDatastore.ChainedDatastore` and a `datastores.fileDatastore.FileDatastore`.
+In such a setup, the `~lsst.analysis.tools.interface.MetricMeasurementBundle` will be uploaded to the Sasquatch database, and then persisted to a file based location the butler can retrieve from.
+
+The supported configurations are
+
+**restProxyUrl**
+    The url where a http rest api based kafka proxy to the Sasquatch database can be found.
+**accessToken**
+    An access token that is used to authenticate to the rest api server.
+**namespace**
+    The namespace within a Sasquatch database where metrics will be uploaded.
