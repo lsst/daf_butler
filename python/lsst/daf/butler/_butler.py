@@ -62,6 +62,7 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
+from sqlalchemy.exc import IntegrityError
 
 from ._butlerConfig import ButlerConfig
 from ._butlerRepoIndex import ButlerRepoIndex
@@ -74,6 +75,7 @@ from .core import (
     DataCoordinate,
     DataId,
     DataIdValue,
+    DatasetIdFactory,
     DatasetIdGenEnum,
     DatasetRef,
     DatasetRefURIs,
@@ -1807,22 +1809,21 @@ class Butler(LimitedButler):
         datasets : `FileDataset`
             Each positional argument is a struct containing information about
             a file to be ingested, including its URI (either absolute or
-            relative to the datastore root, if applicable), a `DatasetRef`,
-            and optionally a formatter class or its fully-qualified string
-            name.  If a formatter is not provided, the formatter that would be
-            used for `put` is assumed.  On successful return, all
-            `FileDataset.ref` attributes will have their `DatasetRef.id`
-            attribute populated and all `FileDataset.formatter` attributes will
-            be set to the formatter class used.  `FileDataset.path` attributes
-            may be modified to put paths in whatever the datastore considers a
-            standardized form.
+            relative to the datastore root, if applicable), a resolved
+            `DatasetRef`, and optionally a formatter class or its
+            fully-qualified string name.  If a formatter is not provided, the
+            formatter that would be used for `put` is assumed.  On successful
+            all `FileDataset.formatter` attributes will be set to the formatter
+            class used.  `FileDataset.path` attributes may be modified to put
+            paths in whatever the datastore considers a standardized form.
         transfer : `str`, optional
             If not `None`, must be one of 'auto', 'move', 'copy', 'direct',
             'split', 'hardlink', 'relsymlink' or 'symlink', indicating how to
             transfer the file.
         run : `str`, optional
             The name of the run ingested datasets should be added to,
-            overriding ``self.run``.
+            overriding ``self.run``. This parameter is now deprecated since
+            the run is encoded in the ``FileDataset``.
         idGenerationMode : `DatasetIdGenEnum`, optional
             Specifies option for generating dataset IDs. By default unique IDs
             are generated for each inserted dataset.
@@ -1862,44 +1863,97 @@ class Butler(LimitedButler):
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
+
+        log.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
+        if not datasets:
+            return
+
         progress = Progress("lsst.daf.butler.Butler.ingest", level=logging.DEBUG)
-        # Reorganize the inputs so they're grouped by DatasetType and then
-        # data ID.  We also include a list of DatasetRefs for each FileDataset
-        # to hold the resolved DatasetRefs returned by the Registry, before
-        # it's safe to swap them into FileDataset.refs.
-        # Some type annotation aliases to make that clearer:
-        GroupForType = Dict[DataCoordinate, Tuple[FileDataset, List[DatasetRef]]]
-        GroupedData = MutableMapping[DatasetType, GroupForType]
-        # The actual data structure:
-        groupedData: GroupedData = defaultdict(dict)
+
+        # We need to reorganize all the inputs so that they are grouped
+        # by dataset type and run. Multiple refs in a single FileDataset
+        # are required to share the run and dataset type.
+        GroupedData = MutableMapping[tuple[DatasetType, str], list[FileDataset]]
+        groupedData: GroupedData = defaultdict(list)
+
+        # Track DataIDs that are being ingested so we can spot issues early
+        # with duplication. Retain previous FileDataset so we can report it.
+        groupedDataIds: MutableMapping[
+            tuple[DatasetType, str], dict[DataCoordinate, FileDataset]
+        ] = defaultdict(dict)
+
+        logged_resolving = False
+        used_run = False
+        default_run = run or self.run
+
         # And the nested loop that populates it:
         for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
-            # This list intentionally shared across the inner loop, since it's
-            # associated with `dataset`.
-            resolvedRefs: List[DatasetRef] = []
-
             # Somewhere to store pre-existing refs if we have an
             # execution butler.
             existingRefs: List[DatasetRef] = []
 
+            # Any newly-resolved refs.
+            resolvedRefs: list[DatasetRef] = []
+
+            dataset_run: str | None = None
             for ref in dataset.refs:
-                if ref.dataId in groupedData[ref.datasetType]:
+                if ref.id is None:
+                    # Eventually this will be impossible. For now we must
+                    # resolve this ref.
+                    if default_run is None:
+                        raise ValueError("Unresolved DatasetRef used for ingest but no run specified.")
+                    expanded_dataId = self.registry.expandDataId(ref.dataId)
+                    if not logged_resolving:
+                        log.info("ingest() given unresolved refs. Resolving them into run %r", default_run)
+                        logged_resolving = True
+                    resolved = DatasetIdFactory().resolveRef(ref, default_run, idGenerationMode)
+                    ref = resolved.expanded(expanded_dataId)
+                    resolvedRefs.append(ref)
+                    used_run = True
+
+                if dataset_run is None:
+                    dataset_run = ref.run
+                elif dataset_run != ref.run:
+                    raise ConflictingDefinitionError(
+                        f"Refs in {dataset} have different runs and we currently require one run per file."
+                    )
+
+                assert ref.run is not None  # For mypy
+                group_key = (ref.datasetType, ref.run)
+
+                if ref.dataId in groupedDataIds[group_key]:
                     raise ConflictingDefinitionError(
                         f"Ingest conflict. Dataset {dataset.path} has same"
                         " DataId as other ingest dataset"
-                        f" {groupedData[ref.datasetType][ref.dataId][0].path} "
+                        f" {groupedDataIds[group_key][ref.dataId].path} "
                         f" ({ref.dataId})"
                     )
                 if self._allow_put_of_predefined_dataset:
                     existing_ref = self.registry.findDataset(
-                        ref.datasetType, dataId=ref.dataId, collections=run
+                        ref.datasetType, dataId=ref.dataId, collections=ref.run
                     )
                     if existing_ref:
+                        if existing_ref.id != ref.id:
+                            raise ConflictingDefinitionError(
+                                f"Registry has registered dataset {existing_ref!r} which has differing ID "
+                                f"from that being ingested ({ref!r})."
+                            )
                         if self.datastore.knows(existing_ref):
                             raise ConflictingDefinitionError(
                                 f"Dataset associated with path {dataset.path}"
                                 f" already exists as {existing_ref}."
                             )
+                        # Datastore will need expanded data coordinate
+                        # so this has to be attached to the FileDataset
+                        # if necessary.
+                        if not ref.dataId.hasRecords():
+                            expanded_dataId = self.registry.expandDataId(ref.dataId)
+                            existing_ref = existing_ref.expanded(expanded_dataId)
+                        else:
+                            # Both refs are identical but we want to
+                            # keep the expanded one.
+                            existing_ref = ref
+
                         # Store this ref elsewhere since it already exists
                         # and we do not want to remake it but we do want
                         # to store it in the datastore.
@@ -1909,7 +1963,7 @@ class Butler(LimitedButler):
                         # iterating.
                         continue
 
-                groupedData[ref.datasetType][ref.dataId] = (dataset, resolvedRefs)
+                groupedDataIds[group_key][ref.dataId] = dataset
 
             if existingRefs:
                 if len(dataset.refs) != len(existingRefs):
@@ -1921,35 +1975,65 @@ class Butler(LimitedButler):
                         " in registry but others do not. This is not supported."
                     )
 
-                # Attach the resolved refs if we found them.
+                # Store expanded form in the original FileDataset.
                 dataset.refs = existingRefs
-
-        # Now we can bulk-insert into Registry for each DatasetType.
-        for datasetType, groupForType in progress.iter_item_chunks(
-            groupedData.items(), desc="Bulk-inserting datasets by type"
-        ):
-            refs = self.registry.insertDatasets(
-                datasetType,
-                dataIds=groupForType.keys(),
-                run=run,
-                expand=self.datastore.needs_expanded_data_ids(transfer, datasetType),
-                idGenerationMode=idGenerationMode,
-            )
-            # Append those resolved DatasetRefs to the new lists we set up for
-            # them.
-            for ref, (_, resolvedRefs) in zip(refs, groupForType.values()):
-                resolvedRefs.append(ref)
-
-        # Go back to the original FileDatasets to replace their refs with the
-        # new resolved ones.
-        for groupForType in progress.iter_chunks(
-            groupedData.values(), desc="Reassociating resolved dataset refs with files"
-        ):
-            for dataset, resolvedRefs in groupForType.values():
+            elif resolvedRefs:
+                if len(dataset.refs) != len(resolvedRefs):
+                    raise ConflictingDefinitionError(
+                        f"For dataset {dataset.path} some DatasetRef were "
+                        "resolved and others were not. This is not supported."
+                    )
                 dataset.refs = resolvedRefs
 
+                # These datasets have to be registered.
+                self.registry._importDatasets(resolvedRefs)
+            else:
+                groupedData[group_key].append(dataset)
+
+        if not used_run and run is not None:
+            warnings.warn(
+                "All DatasetRefs to be ingested had resolved dataset IDs. The value given to the "
+                f"'run' parameter ({run!r}) was not used and the parameter will be removed in the future.",
+                category=FutureWarning,
+                stacklevel=3,  # Take into account the @transactional decorator.
+            )
+
+        # Now we can bulk-insert into Registry for each DatasetType.
+        for (datasetType, this_run), grouped_datasets in progress.iter_item_chunks(
+            groupedData.items(), desc="Bulk-inserting datasets by type"
+        ):
+            refs_to_import = []
+            for dataset in grouped_datasets:
+                refs_to_import.extend(dataset.refs)
+
+            n_refs = len(refs_to_import)
+            log.verbose(
+                "Importing %d ref%s of dataset type %r into run %r",
+                n_refs,
+                "" if n_refs == 1 else "s",
+                datasetType.name,
+                this_run,
+            )
+
+            # Import the refs and expand the DataCoordinates since we can't
+            # guarantee that they are expanded and Datastore will need
+            # the records.
+            imported_refs = self.registry._importDatasets(refs_to_import, expand=True)
+            assert set(imported_refs) == set(refs_to_import)
+
+            # Replace all the refs in the FileDataset with expanded versions.
+            for dataset in grouped_datasets:
+                new_refs = [imported_refs.pop(0) for _ in dataset.refs]
+                dataset.refs = new_refs
+
         # Bulk-insert everything into Datastore.
-        self.datastore.ingest(*datasets, transfer=transfer, record_validation_info=record_validation_info)
+        # We do not know if any of the registry entries already existed
+        # (_importDatasets only complains if they exist but differ) so
+        # we have to catch IntegrityError explicitly.
+        try:
+            self.datastore.ingest(*datasets, transfer=transfer, record_validation_info=record_validation_info)
+        except IntegrityError as e:
+            raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}")
 
     @contextlib.contextmanager
     def export(

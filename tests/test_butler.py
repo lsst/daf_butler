@@ -781,7 +781,7 @@ class ButlerTests(ButlerPutGetTests):
             metricFile = os.path.join(dataRoot, f"{detector_name}.yaml")
             dataId = {"instrument": "DummyCamComp", "visit": 423, "detector": detector}
             # Create a DatasetRef for ingest
-            refIn = DatasetRef(datasetType, dataId, id=None)
+            refIn = DatasetRef(datasetType, dataId, run=self.default_run)
 
             datasets.append(FileDataset(path=metricFile, refs=[refIn], formatter=formatter))
 
@@ -806,7 +806,7 @@ class ButlerTests(ButlerPutGetTests):
             detector_name = f"detector_{detector}"
             dataId = {"instrument": "DummyCamComp", "visit": 424, "detector": detector}
             # Create a DatasetRef for ingest
-            refs.append(DatasetRef(datasetType, dataId, id=None))
+            refs.append(DatasetRef(datasetType, dataId, run=self.default_run))
 
         # Test "move" transfer to ensure that the files themselves
         # have disappeared following ingest.
@@ -816,7 +816,43 @@ class ButlerTests(ButlerPutGetTests):
             datasets = []
             datasets.append(FileDataset(path=tempFile, refs=refs, formatter=MultiDetectorFormatter))
 
+            # For first ingest use copy.
+            butler.ingest(*datasets, transfer="copy", record_validation_info=False)
+
+            # Now try to ingest again in "execution butler" mode where
+            # the registry entries exist but the datastore does not have
+            # the files. We also need to strip the dimension records to ensure
+            # that they will be re-added by the ingest.
+            ref = datasets[0].refs[0]
+            datasets[0].refs = [
+                butler.registry.findDataset(ref.datasetType, dataId=ref.dataId, collections=ref.run)
+                for ref in datasets[0].refs
+            ]
+            all_refs = []
+            for dataset in datasets:
+                refs = []
+                for ref in dataset.refs:
+                    # Create a dict from the dataId to drop the records.
+                    new_data_id = {str(k): v for k, v in ref.dataId.items()}
+                    new_ref = butler.registry.findDataset(ref.datasetType, **new_data_id, collections=ref.run)
+                    self.assertFalse(new_ref.dataId.hasRecords())
+                    refs.append(new_ref)
+                dataset.refs = refs
+                all_refs.extend(dataset.refs)
+            butler.pruneDatasets(all_refs, disassociate=False, unstore=True, purge=False)
+
+            butler._allow_put_of_predefined_dataset = True
+
+            # Use move mode to test that the file is deleted. Also
+            # disable recording of file size.
             butler.ingest(*datasets, transfer="move", record_validation_info=False)
+
+            # Check that every ref now has records.
+            for dataset in datasets:
+                for ref in dataset.refs:
+                    self.assertTrue(ref.dataId.hasRecords())
+
+            # Ensure that the file has disappeared.
             self.assertFalse(tempFile.exists())
 
         # Check that the datastore recorded no file size.
@@ -850,6 +886,10 @@ class ButlerTests(ButlerPutGetTests):
         self.assertTrue(butler.datasetExists(datasetTypeName, dataId2))
         multi2b = butler.get(datasetTypeName, dataId2)
         self.assertEqual(multi2, multi2b)
+
+        # Ensure we can ingest 0 datasets
+        datasets = []
+        butler.ingest(*datasets)
 
     def testPickle(self):
         """Test pickle support."""
@@ -1848,9 +1888,8 @@ class PosixDatastoreTransfers(unittest.TestCase):
         storageClassName = "StructuredData"
         storageClass = self.storageClassFactory.getStorageClass(storageClassName)
         datasetTypeName = "random_data"
-        runs = ["run1", "run2"]
-        for run in runs:
-            self.source_butler.registry.registerCollection(run, CollectionType.RUN)
+        run = "run1"
+        self.source_butler.registry.registerCollection(run, CollectionType.RUN)
 
         dimensions = self.source_butler.registry.dimensions.extract(())
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
@@ -1858,10 +1897,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         metrics = makeExampleMetrics()
         with ResourcePath.temporary_uri(suffix=".json") as temp:
-            source_refs = [DatasetRef(datasetType, {})]
+            source_refs = [DatasetRef(datasetType, {}, run=run)]
             temp.write(json.dumps(metrics.exportAsDict()).encode())
             dataset = FileDataset(path=temp, refs=source_refs)
-            self.source_butler.ingest(dataset, transfer="direct", run="run1")
+            self.source_butler.ingest(dataset, transfer="direct")
 
             self.target_butler.transfer_from(
                 self.source_butler, dataset.refs, register_dataset_types=True, transfer=transfer

@@ -86,6 +86,16 @@ class RegistryDefaults:
         self._infer = infer
         self._kwargs = kwargs
 
+    def __repr__(self) -> str:
+        collections = f"collections={self.collections!r}" if self.collections else ""
+        run = f"run={self.run!r}" if self.run else ""
+        if self._kwargs:
+            kwargs = ", ".join([f"{k}={v!r}" for k, v in self._kwargs.items()])
+        else:
+            kwargs = ""
+        args = ", ".join([arg for arg in (collections, run, kwargs) if arg])
+        return f"{type(self).__name__}({args})"
+
     def finish(self, registry: Registry) -> None:
         """Validate the defaults struct and standardize its data ID.
 

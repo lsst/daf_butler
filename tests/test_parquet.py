@@ -276,7 +276,8 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
-        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        self.run = "test_run"
+        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run=self.run)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -410,7 +411,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.butler.registry.registerDatasetType(legacy_type)
 
         data_id = {}
-        ref = DatasetRef(legacy_type, data_id, run="testLegacyDataFrame")
+        ref = DatasetRef(legacy_type, data_id, run=self.run)
         dataset = FileDataset(path=fname, refs=[ref], formatter=ParquetFormatter)
 
         self.butler.ingest(dataset, transfer="copy")
@@ -695,7 +696,8 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
-        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        self.run = "test_run"
+        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run=self.run)
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -812,7 +814,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.butler.registry.registerDatasetType(astropy_type)
 
         data_id = {}
-        ref = DatasetRef(astropy_type, data_id, run="testAstropyParquet")
+        ref = DatasetRef(astropy_type, data_id, run=self.run)
         dataset = FileDataset(path=fname, refs=[ref], formatter=ParquetFormatter)
 
         self.butler.ingest(dataset, transfer="copy")

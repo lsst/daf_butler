@@ -590,6 +590,17 @@ class SimpleButlerTestCase(unittest.TestCase):
         self.assertIsNone(butler3.registry.defaults.run, None)
         self.assertEqual(butler3.registry.defaults.dataId.byName(), {"instrument": "Cam2"})
 
+        # Check that repr() does not fail.
+        defaults = RegistryDefaults(collections=["imported_g"], run="test")
+        r = repr(defaults)
+        self.assertIn("collections=('imported_g',)", r)
+        self.assertIn("run='test'", r)
+
+        defaults = RegistryDefaults(run="test", instrument="DummyCam", skypix="pix")
+        r = repr(defaults)
+        self.assertIn("skypix='pix'", r)
+        self.assertIn("instrument='DummyCam'", r)
+
     def testJson(self):
         """Test JSON serialization mediated by registry."""
         butler = self.makeButler(writeable=True)

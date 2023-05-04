@@ -541,9 +541,12 @@ class DatasetRef:
 
         # Issue our own warning that could be more explicit.
         if simple.id is None and simple.run is None:
+            dstr = ""
+            if simple.datasetType is None:
+                dstr = f" (datasetType={datasetType.name!r})"
             warnings.warn(
                 "Attempting to create an unresolved ref from simple form is deprecated. "
-                f"Encountered with {simple!r}.",
+                f"Encountered with {simple!r}{dstr}.",
                 category=UnresolvedRefWarning,
                 stacklevel=_find_outside_stacklevel(),
             )
