@@ -52,6 +52,11 @@ class PythonType3:
     pass
 
 
+class NotCopyable:
+    def __deepcopy__(self, memo=None):
+        raise RuntimeError("Can not be copied.")
+
+
 class StorageClassFactoryTestCase(unittest.TestCase):
     """Tests of the storage class infrastructure."""
 
@@ -91,6 +96,16 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         # Ensure that we have a delegate
         self.assertIsInstance(scc.delegate(), StorageClassDelegate)
+
+        # Check that delegate copy() works.
+        list1 = [1, 2, 3]
+        list2 = scc.delegate().copy(list1)
+        self.assertEqual(list1, list2)
+        list2.append(4)
+        self.assertNotEqual(list1, list2)
+
+        with self.assertRaises(NotImplementedError):
+            scc.delegate().copy(NotCopyable())
 
         # Check we can create a storageClass using the name of an importable
         # type.

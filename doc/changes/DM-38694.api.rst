@@ -1,0 +1,2 @@
+Added ``StorageClassDelegate.copy()`` method.
+By default this method calls `copy.deepcopy()` but subclasses can override as needed.
