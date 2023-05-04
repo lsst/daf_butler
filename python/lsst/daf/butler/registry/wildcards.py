@@ -490,6 +490,11 @@ class CollectionWildcard:
             )
         return self.strings
 
+    def empty(self) -> bool:
+        """Return true if both ``strings`` and ``patterns`` are empty."""
+        # bool(Ellipsis) is True
+        return not self.strings and not self.patterns
+
     def __str__(self) -> str:
         if self.patterns is Ellipsis:
             return "..."

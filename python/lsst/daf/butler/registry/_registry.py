@@ -25,6 +25,7 @@ __all__ = ("Registry",)
 
 import contextlib
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,
@@ -44,6 +45,7 @@ from typing import (
 
 from lsst.resources import ResourcePathExpression
 from lsst.utils import doImportType
+from lsst.utils.ellipsis import Ellipsis, EllipsisType
 
 from ..core import (
     Config,
@@ -70,12 +72,16 @@ from ._collectionType import CollectionType
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
+from .wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
     from .interfaces import CollectionRecord, DatastoreRegistryBridgeManager, ObsCoreTableManager
 
 _LOG = logging.getLogger(__name__)
+
+# TYpe alias for `collections` arguments.
+CollectionArgType = str | re.Pattern | Iterable[str | re.Pattern] | EllipsisType | CollectionWildcard
 
 
 class Registry(ABC):
@@ -674,7 +680,7 @@ class Registry(ABC):
         datasetType: Union[DatasetType, str],
         dataId: Optional[DataId] = None,
         *,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         timespan: Optional[Timespan] = None,
         **kwargs: Any,
     ) -> Optional[DatasetRef]:
@@ -1316,7 +1322,7 @@ class Registry(ABC):
         self,
         datasetType: Any,
         *,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
         dataId: Optional[DataId] = None,
         where: str = "",
@@ -1437,7 +1443,7 @@ class Registry(ABC):
         *,
         dataId: Optional[DataId] = None,
         datasets: Any = None,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
@@ -1543,7 +1549,7 @@ class Registry(ABC):
         *,
         dataId: Optional[DataId] = None,
         datasets: Any = None,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
@@ -1624,7 +1630,7 @@ class Registry(ABC):
     def queryDatasetAssociations(
         self,
         datasetType: Union[str, DatasetType],
-        collections: Any = ...,
+        collections: CollectionArgType | None = Ellipsis,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,

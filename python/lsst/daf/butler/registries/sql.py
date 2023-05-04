@@ -45,6 +45,7 @@ from typing import (
 import sqlalchemy
 from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
+from lsst.utils.ellipsis import Ellipsis
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
@@ -96,6 +97,7 @@ from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
+    from ..registry._registry import CollectionArgType
     from ..registry.interfaces import (
         CollectionRecord,
         Database,
@@ -452,7 +454,7 @@ class SqlRegistry(Registry):
         datasetType: Union[DatasetType, str],
         dataId: Optional[DataId] = None,
         *,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         timespan: Optional[Timespan] = None,
         **kwargs: Any,
     ) -> Optional[DatasetRef]:
@@ -465,6 +467,8 @@ class SqlRegistry(Registry):
             collections = self.defaults.collections
         backend = queries.SqlQueryBackend(self._db, self._managers)
         collection_wildcard = CollectionWildcard.from_expression(collections, require_ordered=True)
+        if collection_wildcard.empty():
+            return None
         matched_collections = backend.resolve_collection_wildcard(collection_wildcard)
         parent_dataset_type, components = backend.resolve_single_dataset_type_wildcard(
             datasetType, components_deprecated=False
@@ -1037,7 +1041,7 @@ class SqlRegistry(Registry):
     def _standardize_query_dataset_args(
         self,
         datasets: Any,
-        collections: Any,
+        collections: CollectionArgType | None,
         components: bool | None,
         mode: Literal["find_first"] | Literal["find_all"] | Literal["constrain"] = "constrain",
         *,
@@ -1091,16 +1095,17 @@ class SqlRegistry(Registry):
             Processed collection expression.
         """
         composition: dict[DatasetType, list[str | None]] = {}
+        collection_wildcard: CollectionWildcard | None = None
         if datasets is not None:
-            if not collections:
+            if collections is None:
                 if not self.defaults.collections:
                     raise NoDefaultCollectionError("No collections, and no registry default collections.")
-                collections = self.defaults.collections
+                collection_wildcard = CollectionWildcard.from_expression(self.defaults.collections)
             else:
-                collections = CollectionWildcard.from_expression(collections)
-                if mode == "find_first" and collections.patterns:
+                collection_wildcard = CollectionWildcard.from_expression(collections)
+                if mode == "find_first" and collection_wildcard.patterns:
                     raise TypeError(
-                        f"Collection pattern(s) {collections.patterns} not allowed in this context."
+                        f"Collection pattern(s) {collection_wildcard.patterns} not allowed in this context."
                     )
             missing: list[str] = []
             composition = self._managers.datasets.resolve_wildcard(
@@ -1115,14 +1120,16 @@ class SqlRegistry(Registry):
                 )
             doomed_by.extend(f"Dataset type {name} is not registered." for name in missing)
         elif collections:
+            # I think this check should actually be `collections is not None`,
+            # but it looks like some CLI scripts use empty tuple as default.
             raise ArgumentError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
-        return composition, collections
+        return composition, collection_wildcard
 
     def queryDatasets(
         self,
         datasetType: Any,
         *,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
         dataId: Optional[DataId] = None,
         where: str = "",
@@ -1135,13 +1142,16 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
-        dataset_composition, collections = self._standardize_query_dataset_args(
+        dataset_composition, collection_wildcard = self._standardize_query_dataset_args(
             datasetType,
             collections,
             components,
             mode="find_first" if findFirst else "find_all",
             doomed_by=doomed_by,
         )
+        if collection_wildcard is not None and collection_wildcard.empty():
+            doomed_by.append("No datasets can be found because collection list is empty.")
+            return queries.ChainedDatasetQueryResults([], doomed_by=doomed_by)
         parent_results: list[queries.ParentDatasetQueryResults] = []
         for parent_dataset_type, components_for_parent in dataset_composition.items():
             # The full set of dimensions in the query is the combination of
@@ -1168,7 +1178,7 @@ class SqlRegistry(Registry):
             # only if we need to findFirst.  Note that if any of the
             # collections are actually wildcard expressions, and
             # findFirst=True, this will raise TypeError for us.
-            builder.joinDataset(parent_dataset_type, collections, isResult=True, findFirst=findFirst)
+            builder.joinDataset(parent_dataset_type, collection_wildcard, isResult=True, findFirst=findFirst)
             query = builder.finish()
             parent_results.append(
                 queries.ParentDatasetQueryResults(
@@ -1193,7 +1203,7 @@ class SqlRegistry(Registry):
         *,
         dataId: Optional[DataId] = None,
         datasets: Any = None,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
@@ -1205,9 +1215,11 @@ class SqlRegistry(Registry):
         requestedDimensions = self.dimensions.extract(dimensions)
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
-        dataset_composition, collections = self._standardize_query_dataset_args(
+        dataset_composition, collection_wildcard = self._standardize_query_dataset_args(
             datasets, collections, components, doomed_by=doomed_by
         )
+        if collection_wildcard is not None and collection_wildcard.empty():
+            doomed_by.append("No data coordinates can be found because collection list is empty.")
         summary = queries.QuerySummary(
             requested=requestedDimensions,
             column_types=self._managers.column_types,
@@ -1220,7 +1232,7 @@ class SqlRegistry(Registry):
         )
         builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
         for datasetType in dataset_composition.keys():
-            builder.joinDataset(datasetType, collections, isResult=False)
+            builder.joinDataset(datasetType, collection_wildcard, isResult=False)
         query = builder.finish()
 
         return queries.DataCoordinateQueryResults(query)
@@ -1231,7 +1243,7 @@ class SqlRegistry(Registry):
         *,
         dataId: Optional[DataId] = None,
         datasets: Any = None,
-        collections: Any = None,
+        collections: CollectionArgType | None = None,
         where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
@@ -1249,9 +1261,11 @@ class SqlRegistry(Registry):
                 ) from e
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
-        dataset_composition, collections = self._standardize_query_dataset_args(
+        dataset_composition, collection_wildcard = self._standardize_query_dataset_args(
             datasets, collections, components, doomed_by=doomed_by
         )
+        if collection_wildcard is not None and collection_wildcard.empty():
+            doomed_by.append("No dimension records can be found because collection list is empty.")
         summary = queries.QuerySummary(
             requested=element.graph,
             column_types=self._managers.column_types,
@@ -1264,14 +1278,14 @@ class SqlRegistry(Registry):
         )
         builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
         for datasetType in dataset_composition.keys():
-            builder.joinDataset(datasetType, collections, isResult=False)
+            builder.joinDataset(datasetType, collection_wildcard, isResult=False)
         query = builder.finish().with_record_columns(element)
         return queries.DatabaseDimensionRecordQueryResults(query, element)
 
     def queryDatasetAssociations(
         self,
         datasetType: Union[str, DatasetType],
-        collections: Any = ...,
+        collections: CollectionArgType | None = Ellipsis,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
@@ -1284,13 +1298,13 @@ class SqlRegistry(Registry):
                     "and no defaults from registry construction."
                 )
             collections = self.defaults.collections
-        collections = CollectionWildcard.from_expression(collections)
+        collection_wildcard = CollectionWildcard.from_expression(collections)
         backend = queries.SqlQueryBackend(self._db, self._managers)
         parent_dataset_type, _ = backend.resolve_single_dataset_type_wildcard(datasetType, components=False)
         timespan_tag = DatasetColumnTag(parent_dataset_type.name, "timespan")
         collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
         for parent_collection_record in backend.resolve_collection_wildcard(
-            collections,
+            collection_wildcard,
             collection_types=frozenset(collectionTypes),
             flatten_chains=flattenChains,
         ):
