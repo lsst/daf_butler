@@ -29,6 +29,7 @@ import builtins
 import copy
 import itertools
 import logging
+from collections.abc import Callable
 from typing import (
     Any,
     Collection,
@@ -131,7 +132,7 @@ class StorageClass:
 
         # Version of converters where the python types have been
         # Do not try to import anything until needed.
-        self._converters_by_type: Optional[Dict[Type, Type]] = None
+        self._converters_by_type: dict[type, Callable[[Any], Any]] | None = None
 
         self.name = name
 
@@ -192,8 +193,7 @@ class StorageClass:
         """Return the type converters supported by this `StorageClass`."""
         return self._converters
 
-    @property
-    def converters_by_type(self) -> Dict[Type, Type]:
+    def _get_converters_by_type(self) -> dict[type, Callable[[Any], Any]]:
         """Return the type converters as python types."""
         if self._converters_by_type is None:
             self._converters_by_type = {}
@@ -520,7 +520,7 @@ class StorageClass:
             # Storage classes have different names but the same python type.
             return True
 
-        for candidate_type in self.converters_by_type:
+        for candidate_type in self._get_converters_by_type():
             if issubclass(other_pytype, candidate_type):
                 return True
         return False
@@ -554,7 +554,7 @@ class StorageClass:
             return incorrect
 
         # Check each registered converter.
-        for candidate_type, converter in self.converters_by_type.items():
+        for candidate_type, converter in self._get_converters_by_type().items():
             if isinstance(incorrect, candidate_type):
                 try:
                     return converter(incorrect)
