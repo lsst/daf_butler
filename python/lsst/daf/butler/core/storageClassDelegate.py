@@ -25,7 +25,6 @@ from __future__ import annotations
 
 __all__ = ("DatasetComponent", "StorageClassDelegate")
 
-import collections.abc
 import copy
 import logging
 from dataclasses import dataclass
@@ -178,36 +177,6 @@ class StorageClassDelegate:
                 raise ValueError(f"Unhandled components during assembly ({failed})")
 
         return obj
-
-    def getValidComponents(self, composite: Any) -> Dict[str, Any]:
-        """Extract all non-None components from a composite.
-
-        Parameters
-        ----------
-        composite : `object`
-            Composite from which to extract components.
-
-        Returns
-        -------
-        comps : `dict`
-            Non-None components extracted from the composite, indexed by the
-            component name as derived from the
-            `StorageClassDelegate.storageClass`.
-        """
-        components = {}
-        if self.storageClass.isComposite():
-            for c in self.storageClass.components:
-                if isinstance(composite, collections.abc.Mapping):
-                    comp = composite[c]
-                else:
-                    try:
-                        comp = self.getComponent(composite, c)
-                    except AttributeError:
-                        pass
-                    else:
-                        if comp is not None:
-                            components[c] = comp
-        return components
 
     def getComponent(self, composite: Any, componentName: str) -> Any:
         """Attempt to retrieve component from composite object by heuristic.
