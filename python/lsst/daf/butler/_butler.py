@@ -1813,9 +1813,10 @@ class Butler(LimitedButler):
             `DatasetRef`, and optionally a formatter class or its
             fully-qualified string name.  If a formatter is not provided, the
             formatter that would be used for `put` is assumed.  On successful
-            all `FileDataset.formatter` attributes will be set to the formatter
-            class used.  `FileDataset.path` attributes may be modified to put
-            paths in whatever the datastore considers a standardized form.
+            ingest all `FileDataset.formatter` attributes will be set to the
+            formatter class used. `FileDataset.path` attributes may be modified
+            to put paths in whatever the datastore considers a standardized
+            form.
         transfer : `str`, optional
             If not `None`, must be one of 'auto', 'move', 'copy', 'direct',
             'split', 'hardlink', 'relsymlink' or 'symlink', indicating how to
