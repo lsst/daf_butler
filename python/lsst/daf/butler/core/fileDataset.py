@@ -68,6 +68,9 @@ class FileDataset:
         self.path = path if isinstance(path, str) else ResourcePath(path, forceAbsolute=False)
         if isinstance(refs, DatasetRef):
             refs = [refs]
+        runs = {ref.run for ref in refs}
+        if len(runs) != 1:
+            raise ValueError(f"Supplied refs must all share the same run. Got: {runs}")
         self.refs = refs
         self.formatter = formatter
 
