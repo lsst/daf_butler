@@ -2015,9 +2015,11 @@ class Butler(LimitedButler):
             assert set(imported_refs) == set(refs_to_import)
 
             # Replace all the refs in the FileDataset with expanded versions.
+            # Pull them off in the order we put them on the list.
             for dataset in grouped_datasets:
-                new_refs = [imported_refs.pop(0) for _ in dataset.refs]
-                dataset.refs = new_refs
+                n_dataset_refs = len(dataset.refs)
+                dataset.refs = imported_refs[:n_dataset_refs]
+                del imported_refs[:n_dataset_refs]
 
         # Bulk-insert everything into Datastore.
         # We do not know if any of the registry entries already existed
