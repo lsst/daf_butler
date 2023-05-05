@@ -1896,7 +1896,6 @@ class Butler(LimitedButler):
             # Any newly-resolved refs.
             resolvedRefs: list[DatasetRef] = []
 
-            dataset_run: str | None = None
             for ref in dataset.refs:
                 if ref.id is None:
                     # Eventually this will be impossible. For now we must
@@ -1911,13 +1910,6 @@ class Butler(LimitedButler):
                     ref = resolved.expanded(expanded_dataId)
                     resolvedRefs.append(ref)
                     used_run = True
-
-                if dataset_run is None:
-                    dataset_run = ref.run
-                elif dataset_run != ref.run:
-                    raise ConflictingDefinitionError(
-                        f"Refs in {dataset} have different runs and we currently require one run per file."
-                    )
 
                 assert ref.run is not None  # For mypy
                 group_key = (ref.datasetType, ref.run)
