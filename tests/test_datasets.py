@@ -30,6 +30,7 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     DimensionUniverse,
+    FileDataset,
     StorageClass,
     StorageClassFactory,
 )
@@ -628,6 +629,15 @@ class DatasetRefTestCase(unittest.TestCase):
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = ref.to_json()
         self.assertEqual(DatasetRef.from_json(s, universe=self.universe), ref)
+
+    def testFileDataset(self):
+        ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
+        file_dataset = FileDataset(path="something.yaml", refs=ref)
+        self.assertEqual(file_dataset.refs, [ref])
+
+        ref2 = DatasetRef(self.datasetType, self.dataId, run="somerun2")
+        with self.assertRaises(ValueError):
+            FileDataset(path="other.yaml", refs=[ref, ref2])
 
 
 if __name__ == "__main__":

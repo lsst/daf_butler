@@ -1813,9 +1813,10 @@ class Butler(LimitedButler):
             `DatasetRef`, and optionally a formatter class or its
             fully-qualified string name.  If a formatter is not provided, the
             formatter that would be used for `put` is assumed.  On successful
-            all `FileDataset.formatter` attributes will be set to the formatter
-            class used.  `FileDataset.path` attributes may be modified to put
-            paths in whatever the datastore considers a standardized form.
+            ingest all `FileDataset.formatter` attributes will be set to the
+            formatter class used. `FileDataset.path` attributes may be modified
+            to put paths in whatever the datastore considers a standardized
+            form.
         transfer : `str`, optional
             If not `None`, must be one of 'auto', 'move', 'copy', 'direct',
             'split', 'hardlink', 'relsymlink' or 'symlink', indicating how to
@@ -1895,7 +1896,6 @@ class Butler(LimitedButler):
             # Any newly-resolved refs.
             resolvedRefs: list[DatasetRef] = []
 
-            dataset_run: str | None = None
             for ref in dataset.refs:
                 if ref.id is None:
                     # Eventually this will be impossible. For now we must
@@ -1910,13 +1910,6 @@ class Butler(LimitedButler):
                     ref = resolved.expanded(expanded_dataId)
                     resolvedRefs.append(ref)
                     used_run = True
-
-                if dataset_run is None:
-                    dataset_run = ref.run
-                elif dataset_run != ref.run:
-                    raise ConflictingDefinitionError(
-                        f"Refs in {dataset} have different runs and we currently require one run per file."
-                    )
 
                 assert ref.run is not None  # For mypy
                 group_key = (ref.datasetType, ref.run)
@@ -2022,9 +2015,11 @@ class Butler(LimitedButler):
             assert set(imported_refs) == set(refs_to_import)
 
             # Replace all the refs in the FileDataset with expanded versions.
+            # Pull them off in the order we put them on the list.
             for dataset in grouped_datasets:
-                new_refs = [imported_refs.pop(0) for _ in dataset.refs]
-                dataset.refs = new_refs
+                n_dataset_refs = len(dataset.refs)
+                dataset.refs = imported_refs[:n_dataset_refs]
+                del imported_refs[:n_dataset_refs]
 
         # Bulk-insert everything into Datastore.
         # We do not know if any of the registry entries already existed
