@@ -26,9 +26,9 @@ from __future__ import annotations
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
 import builtins
-import copy
 import itertools
 import logging
+from collections import ChainMap
 from collections.abc import (
     Callable,
     Collection,
@@ -173,21 +173,21 @@ class StorageClass:
             self._delegateClassName = None
 
     @property
-    def components(self) -> dict[str, StorageClass]:
+    def components(self) -> Mapping[str, StorageClass]:
         """Return the components associated with this `StorageClass`."""
         return self._components
 
     @property
-    def derivedComponents(self) -> dict[str, StorageClass]:
+    def derivedComponents(self) -> Mapping[str, StorageClass]:
         """Return derived components associated with `StorageClass`."""
         return self._derivedComponents
 
     @property
-    def converters(self) -> dict[str, str]:
+    def converters(self) -> Mapping[str, str]:
         """Return the type converters supported by this `StorageClass`."""
         return self._converters
 
-    def _get_converters_by_type(self) -> dict[type, Callable[[Any], Any]]:
+    def _get_converters_by_type(self) -> Mapping[type, Callable[[Any], Any]]:
         """Return the type converters as python types."""
         if self._converters_by_type is None:
             self._converters_by_type = {}
@@ -206,7 +206,7 @@ class StorageClass:
                             self.name,
                             e,
                         )
-                        del self.converters[candidate_type_str]
+                        del self._converters[candidate_type_str]
                         continue
 
                 try:
@@ -220,7 +220,7 @@ class StorageClass:
                         candidate_type_str,
                         e,
                     )
-                    del self.converters[candidate_type_str]
+                    del self._converters[candidate_type_str]
                     continue
                 if not callable(converter):
                     # doImportType is annotated to return a Type but in actual
@@ -235,7 +235,7 @@ class StorageClass:
                         self.name,
                         candidate_type_str,
                     )
-                    del self.converters[candidate_type_str]
+                    del self._converters[candidate_type_str]
                     continue
                 self._converters_by_type[candidate_type] = converter
         return self._converters_by_type
@@ -280,9 +280,7 @@ class StorageClass:
         comp : `dict` of [`str`, `StorageClass`]
             The component name to storage class mapping.
         """
-        components = copy.copy(self.components)
-        components.update(self.derivedComponents)
-        return components
+        return ChainMap(self._components, self._derivedComponents)
 
     def delegate(self) -> StorageClassDelegate:
         """Return an instance of a storage class delegate.
@@ -743,7 +741,7 @@ StorageClasses
             storageClassKwargs = {k: info[k] for k in ("pytype", "delegate", "parameters") if k in info}
 
             if "converters" in info:
-                storageClassKwargs["converters"] = info["converters"].todict()
+                storageClassKwargs["converters"] = info["converters"].toDict()
 
             for compName in ("components", "derivedComponents"):
                 if compName not in info:
