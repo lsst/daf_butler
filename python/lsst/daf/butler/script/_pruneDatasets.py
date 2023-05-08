@@ -154,7 +154,7 @@ def pruneDatasets(
     purge_run : `str`
         Completely remove datasets from the ``Registry``. Note that current
         implementation accepts any RUN-type collection, but will remove
-        datasets from all collections.
+        datasets from all collections in ``collections`` if it is non-empty.
     dry_run : `bool`
         Get results for what would be removed but do not remove.
     confirm : `bool`
