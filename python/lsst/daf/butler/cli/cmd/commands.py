@@ -244,9 +244,10 @@ purge_option = MWOptionDecorator(
     "purge_run",
     help=unwrap(
         """Completely remove the dataset from the given RUN in the Registry. May not be used with
-                --disassociate. Note, this may remove provenance information from datasets other than those
-                provided, and should be used with extreme care. RUN has to provided for backward
-                compatibility, but datasets will be removed from any RUN-type collections."""
+                --disassociate. Implies --unstore. Note, this may remove provenance information from
+                datasets other than those provided, and should be used with extreme care.
+                RUN has to provided for backward compatibility, but datasets will be removed from
+                any RUN-type collections."""
     ),
     metavar="RUN",
 )
