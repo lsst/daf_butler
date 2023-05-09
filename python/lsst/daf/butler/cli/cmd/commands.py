@@ -219,7 +219,7 @@ pruneDatasets_errPurgeAndDisassociate = unwrap(
 )
 pruneDatasets_errQuietWithDryRun = "Can not use --quiet and --dry-run together."
 pruneDatasets_errNoCollectionRestriction = unwrap(
-    """Must indicate collections from which to prune datasets by passing COLLETION arguments (select all
+    """Must indicate collections from which to prune datasets by passing COLLECTION arguments (select all
     collections by passing '*', or consider using 'butler prune-collections'), by using --purge to pass a run
     collection, or by using --disassociate to select a tagged collection."""
 )
@@ -244,9 +244,11 @@ purge_option = MWOptionDecorator(
     "purge_run",
     help=unwrap(
         """Completely remove the dataset from the given RUN in the Registry. May not be used with
-                --disassociate. Note, this may remove provenance information from datasets other than those
-                provided, and should be used with extreme care. RUN has to provided for backward
-                compatibility, but datasets will be removed from any RUN-type collections."""
+                --disassociate. Implies --unstore. Note, this may remove provenance information from
+                datasets other than those provided, and should be used with extreme care.
+                RUN has to be provided for backward compatibility, but is used only if COLLECTIONS is
+                not provided. Otherwise, datasets will be removed from
+                any RUN-type collections in COLLECTIONS."""
     ),
     metavar="RUN",
 )
