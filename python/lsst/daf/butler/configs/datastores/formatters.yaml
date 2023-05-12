@@ -84,4 +84,4 @@ SpectractorSpectrum: lsst.atmospec.formatters.SpectractorSpectrumFormatter
 SpectractorImage: lsst.atmospec.formatters.SpectractorImageFormatter
 ScarletModelData: lsst.daf.butler.formatters.json.JsonFormatter
 MetricMeasurementBundle: lsst.daf.butler.formatters.json.JsonFormatter
-MultipleCellCoadd: lsst.daf.butler.formatters.pickle.PickleFormatter
+MultipleCellCoadd: lsst.cell_coadds.CellCoaddFitsFormatter
