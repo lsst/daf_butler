@@ -1563,15 +1563,20 @@ class FileDatastore(GenericBaseDatastore):
         existence : `dict` of [`DatasetRef`, `bool`]
             Mapping from dataset to boolean indicating existence.
         """
-        # Need a mapping of dataset_id to dataset ref since the API
-        # works with dataset_id
-        id_to_ref = {ref.getCheckedId(): ref for ref in refs}
+        # Make a mapping from refs with the internal storage class to the given
+        # refs that may have a different one.  We'll use the internal refs
+        # throughout this method and convert back at the very end.
+        internal_ref_to_input_ref = {self._cast_storage_class(ref): ref for ref in refs}
+
+        # Need a mapping of dataset_id to (internal) dataset ref since some
+        # internal APIs work with dataset_id.
+        id_to_ref = {ref.getCheckedId(): ref for ref in internal_ref_to_input_ref}
 
         # Set of all IDs we are checking for.
         requested_ids = set(id_to_ref.keys())
 
         # The records themselves. Could be missing some entries.
-        records = self._get_stored_records_associated_with_refs(refs)
+        records = self._get_stored_records_associated_with_refs(id_to_ref.values())
 
         dataset_existence = self._process_mexists_records(
             id_to_ref, records, True, artifact_existence=artifact_existence
@@ -1588,7 +1593,10 @@ class FileDatastore(GenericBaseDatastore):
                 )
             )
 
-        return dataset_existence
+        return {
+            internal_ref_to_input_ref[internal_ref]: existence
+            for internal_ref, existence in dataset_existence.items()
+        }
 
     def _mexists_check_expected(
         self, refs: Sequence[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
