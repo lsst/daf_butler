@@ -1108,7 +1108,9 @@ class FileDatastore(GenericBaseDatastore):
             Information describing the artifact written to the datastore.
         """
         # May need to coerce the in memory dataset to the correct
-        # python type.
+        # python type, but first we need to make sure the storage class
+        # reflects the one defined in the data repository.
+        ref = self._cast_storage_class(ref)
         inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
 
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
