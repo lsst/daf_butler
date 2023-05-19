@@ -209,12 +209,12 @@ class Butler(LimitedButler):
 
     def __init__(
         self,
-        config: Union[Config, str, None] = None,
+        config: Union[Config, ResourcePathExpression, None] = None,
         *,
         butler: Optional[Butler] = None,
         collections: Any = None,
         run: Optional[str] = None,
-        searchPaths: Optional[List[str]] = None,
+        searchPaths: Optional[Sequence[ResourcePathExpression]] = None,
         writeable: Optional[bool] = None,
         inferDefaults: bool = True,
         **kwargs: str,
@@ -243,7 +243,6 @@ class Butler(LimitedButler):
                 else:
                     aliases = "(no known aliases)"
                 raise FileNotFoundError(f"{e} {aliases}") from e
-            self._config = ButlerConfig(config, searchPaths=searchPaths)
             try:
                 if "root" in self._config:
                     butlerRoot = self._config["root"]

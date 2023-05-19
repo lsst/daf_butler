@@ -38,7 +38,21 @@ from ..registry import CollectionType
 from ..tests import MetricsExample, addDatasetType
 
 if TYPE_CHECKING:
+    import unittest
+
     from lsst.daf.butler import DatasetType
+
+    class TestCaseMixin(unittest.TestCase):
+        """Base class for mixin test classes that use TestCase methods."""
+
+        pass
+
+else:
+
+    class TestCaseMixin:
+        """Do-nothing definition of mixin base class for regular execution."""
+
+        pass
 
 
 def makeTestTempDir(default_base: str) -> str:

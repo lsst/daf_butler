@@ -25,7 +25,7 @@ import tempfile
 import unittest
 import warnings
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, cast
+from typing import cast
 
 import astropy.time
 import sqlalchemy
@@ -47,7 +47,7 @@ from lsst.daf.butler.registry.obscore import (
     ObsCoreSchema,
 )
 from lsst.daf.butler.registry.obscore._schema import _STATIC_COLUMNS
-from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
 from lsst.sphgeom import Box, ConvexPolygon, LonLat, UnitVector3d
 
 try:
@@ -58,7 +58,7 @@ except ImportError:
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-class ObsCoreTests:
+class ObsCoreTests(TestCaseMixin):
     """Base class for testing obscore manager functionality."""
 
     root: str
@@ -496,21 +496,6 @@ class ObsCoreTests:
                     self.assertIsNone(row.s_ra)
                     self.assertIsNone(row.s_dec)
                     self.assertIsNone(row.s_region)
-
-    if TYPE_CHECKING:
-        # This is a mixin class, some methods from unittest.TestCase declared
-        # here to silence mypy.
-        def assertEqual(self, first: Any, second: Any, msg: str | None = None) -> None:
-            ...
-
-        def assertIsNone(self, obj: Any, msg: str | None = None) -> None:
-            ...
-
-        def assertIsNotNone(self, obj: Any, msg: str | None = None) -> None:
-            ...
-
-        def assertRegex(self, text: Any, expected_regex: Any, msg: str | None = None) -> None:
-            ...
 
 
 class SQLiteObsCoreTest(ObsCoreTests, unittest.TestCase):
