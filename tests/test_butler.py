@@ -418,18 +418,19 @@ class ButlerPutGetTests(TestCaseMixin):
         )
 
         # Getting with a dataset type that does not match registry fails
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "Supplied dataset type .* inconsistent with registry"):
             butler.get(inconsistentDatasetType, dataId)
 
         # Combining a DatasetRef with a dataId should fail
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "DatasetRef given, cannot use dataId as well"):
             butler.get(ref, dataId)
-        # Getting with an explicit ref should fail if the id doesn't match
-        with self.assertRaises(ValueError):
+        # Getting with an explicit ref should fail if the id doesn't match.
+        # Here, again, actual error is DatasetRef constructor.
+        with self.assertRaisesRegex(ValueError, "Cannot provide id without run for dataset"):
             butler.get(DatasetRef(ref.datasetType, ref.dataId, id=uuid.UUID(int=101)))
 
         # Getting a dataset with unknown parameters should fail
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(KeyError, "Parameter 'unsupported' not understood"):
             butler.get(ref, parameters={"unsupported": True})
 
         # Check we have a collection
@@ -445,14 +446,18 @@ class ButlerPutGetTests(TestCaseMixin):
         ref = butler.put(metric, refIn)
 
         # Repeat put will fail.
-        with self.assertRaises(ConflictingDefinitionError):
+        with self.assertRaisesRegex(
+            ConflictingDefinitionError, "A database constraint failure was triggered"
+        ):
             butler.put(metric, refIn)
 
         # Remove the datastore entry.
         butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
 
         # Put will still fail
-        with self.assertRaises(ConflictingDefinitionError):
+        with self.assertRaisesRegex(
+            ConflictingDefinitionError, "A database constraint failure was triggered"
+        ):
             butler.put(metric, refIn)
 
         # Allow the put to succeed
@@ -462,7 +467,7 @@ class ButlerPutGetTests(TestCaseMixin):
 
         # A second put will still fail but with a different exception
         # than before.
-        with self.assertRaises(ConflictingDefinitionError):
+        with self.assertRaisesRegex(ConflictingDefinitionError, "Dataset associated .* already exists"):
             butler.put(metric, refIn)
 
         # Reset the flag to avoid confusion
