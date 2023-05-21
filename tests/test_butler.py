@@ -238,9 +238,6 @@ class ButlerPutGetTests(TestCaseMixin):
         metric = makeExampleMetrics()
         dataId = registry.expandDataId({"instrument": "DummyCamComp", "visit": 423})
 
-        # Create an (unresolved for now) DatasetRef for put
-        refIn = DatasetRef(datasetType, dataId, id=None)
-
         # Put with a preexisting id should fail (actually this is not put()
         # that fails here but construction of DatasetRef without run).
         with self.assertRaisesRegex(ValueError, "Cannot provide id without run for dataset"):
@@ -253,8 +250,9 @@ class ButlerPutGetTests(TestCaseMixin):
         expected_collections = {run}
 
         counter = 0
+        ref = DatasetRef(datasetType, dataId, id=uuid.UUID(int=1), run="put_run_1")
         args = tuple[DatasetRef] | tuple[str | DatasetType, DataCoordinate]
-        for args in ((refIn,), (datasetTypeName, dataId), (datasetType, dataId)):
+        for args in ((ref,), (datasetTypeName, dataId), (datasetType, dataId)):
             # Since we are using subTest we can get cascading failures
             # here with the first attempt failing and the others failing
             # immediately because the dataset already exists. Work around
@@ -364,6 +362,9 @@ class ButlerPutGetTests(TestCaseMixin):
                 butler.registry.removeCollection(this_run)
                 expected_collections.remove(this_run)
 
+        # Create DatasetRef for put using default run.
+        refIn = DatasetRef(datasetType, dataId, id=uuid.UUID(int=1), run=butler.run)
+
         # Put the dataset again, since the last thing we did was remove it
         # and we want to use the default collection.
         ref = butler.put(metric, refIn)
@@ -425,9 +426,8 @@ class ButlerPutGetTests(TestCaseMixin):
         with self.assertRaisesRegex(ValueError, "DatasetRef given, cannot use dataId as well"):
             butler.get(ref, dataId)
         # Getting with an explicit ref should fail if the id doesn't match.
-        # Here, again, actual error is DatasetRef constructor.
-        with self.assertRaisesRegex(ValueError, "Cannot provide id without run for dataset"):
-            butler.get(DatasetRef(ref.datasetType, ref.dataId, id=uuid.UUID(int=101)))
+        with self.assertRaises(FileNotFoundError):
+            butler.get(DatasetRef(ref.datasetType, ref.dataId, id=uuid.UUID(int=101), run=butler.run))
 
         # Getting a dataset with unknown parameters should fail
         with self.assertRaisesRegex(KeyError, "Parameter 'unsupported' not understood"):
@@ -441,37 +441,50 @@ class ButlerPutGetTests(TestCaseMixin):
         # already had a component removed
         butler.pruneDatasets([ref], unstore=True, purge=True)
 
-        # Check that we can configure a butler to accept a put even
-        # if it already has the dataset in registry.
-        ref = butler.put(metric, refIn)
+        def _put_after_prune_test(*args: Any) -> DatasetRef:
+            """Check that we can configure a butler to accept a put even
+            if it already has the dataset in registry. Parameters can be
+            anything accepted by Butler.put, e.g. DatasetRef or
+            DatasetType+DataId.
+            """
+            ref = butler.put(metric, *args)
 
-        # Repeat put will fail.
-        with self.assertRaisesRegex(
-            ConflictingDefinitionError, "A database constraint failure was triggered"
-        ):
-            butler.put(metric, refIn)
+            # Repeat put will fail.
+            with self.assertRaisesRegex(
+                ConflictingDefinitionError, "A database constraint failure was triggered"
+            ):
+                butler.put(metric, *args)
 
-        # Remove the datastore entry.
-        butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
+            # Remove the datastore entry.
+            butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
 
-        # Put will still fail
-        with self.assertRaisesRegex(
-            ConflictingDefinitionError, "A database constraint failure was triggered"
-        ):
-            butler.put(metric, refIn)
+            # Put will still fail
+            with self.assertRaisesRegex(
+                ConflictingDefinitionError, "A database constraint failure was triggered"
+            ):
+                butler.put(metric, *args)
 
-        # Allow the put to succeed
-        butler._allow_put_of_predefined_dataset = True
-        ref2 = butler.put(metric, refIn)
-        self.assertEqual(ref2.id, ref.id)
+            # Allow the put to succeed
+            butler._allow_put_of_predefined_dataset = True
+            ref2 = butler.put(metric, *args)
+            self.assertEqual(ref2.id, ref.id)
 
-        # A second put will still fail but with a different exception
-        # than before.
-        with self.assertRaisesRegex(ConflictingDefinitionError, "Dataset associated .* already exists"):
-            butler.put(metric, refIn)
+            # A second put will still fail but with a different exception
+            # than before.
+            with self.assertRaisesRegex(ConflictingDefinitionError, "Dataset associated .* already exists"):
+                butler.put(metric, *args)
 
-        # Reset the flag to avoid confusion
-        butler._allow_put_of_predefined_dataset = False
+            # Reset the flag to avoid confusion
+            butler._allow_put_of_predefined_dataset = False
+
+            return ref
+
+        # Check for "unresolved" dataset type + dataId combination.
+        ref = _put_after_prune_test(datasetType, dataId)
+        butler.pruneDatasets([ref], unstore=True, purge=True)
+
+        # Check for unresolved dataset ref.
+        _put_after_prune_test(refIn)
 
         # Leave the dataset in place since some downstream tests require
         # something to be present
