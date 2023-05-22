@@ -37,6 +37,7 @@ import numbers
 import os
 import warnings
 from collections import defaultdict
+from enum import Flag, auto
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -109,6 +110,19 @@ if TYPE_CHECKING:
     from .transfers import RepoImportBackend
 
 log = getLogger(__name__)
+
+
+class DatasetExistence(Flag):
+    Unknown = 0
+    RegistryKnows = auto()
+    DatastoreKnows = auto()
+    ArtifactExists = auto()
+    ArtifactNotChecked = auto()
+    Exists = RegistryKnows | DatastoreKnows | ArtifactExists
+    PartialCheck = RegistryKnows | DatastoreKnows | ArtifactNotChecked
+
+    def __bool__(self) -> bool:
+        return self.value == self.Exists.value or self.value == self.PartialCheck.value
 
 
 class ButlerValidationError(ValidationError):
@@ -1596,6 +1610,77 @@ class Butler(LimitedButler):
             preserve_path=preserve_path,
             overwrite=overwrite,
         )
+
+    def exists(
+        self,
+        datasetRefOrType: DatasetRef | DatasetType | str,
+        /,
+        dataId: DataId | None = None,
+        *,
+        full_check: bool = True,
+        collections: Any = None,
+        **kwargs: Any,
+    ) -> DatasetExistence:
+        """Indicate whether a dataset is known to Butler registry and
+        datastore.
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+            If a resolved `DatasetRef`, the associated dataset
+            is returned directly without additional querying.
+        dataId : `dict` or `DataCoordinate`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        full_check : `bool`, optional
+            If `True`, an additional check will be made for dataset artifact
+            existence. This will involve additional overhead due to the need
+            to query an external system. If `False` registry and datastore
+            will solely be asked if they know about the dataset but no
+            check for the artifact will be performed.
+        collections : Any, optional
+            Collections to be searched, overriding ``self.collections``.
+            Can be any of the types supported by the ``collections`` argument
+            to butler construction.
+        **kwargs
+            Additional keyword arguments used to augment or construct a
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
+
+        Returns
+        -------
+        existence : `DatasetExistence`
+            Object indicating whether the dataset is known to registry and
+            datastore. Evaluates to `True` if the dataset is present and known
+            to both.
+        """
+        existence = DatasetExistence.Unknown
+
+        if not isinstance(datasetRefOrType, DatasetRef):
+            try:
+                ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+            except LookupError:
+                return existence
+            existence |= DatasetExistence.RegistryKnows
+        else:
+            registry_ref = self.registry.getDataset(datasetRefOrType.getCheckedId())
+            if registry_ref is not None:
+                existence |= DatasetExistence.RegistryKnows
+            ref = datasetRefOrType
+
+        if self.datastore.knows(ref):
+            existence |= DatasetExistence.DatastoreKnows
+
+        if full_check:
+            if self.datastore.exists(ref):
+                existence |= DatasetExistence.ArtifactExists
+        else:
+            existence |= DatasetExistence.ArtifactNotChecked
+
+        return existence
 
     def datasetExists(
         self,
