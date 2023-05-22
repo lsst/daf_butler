@@ -442,10 +442,9 @@ class ButlerPutGetTests(TestCaseMixin):
         butler.pruneDatasets([ref], unstore=True, purge=True)
 
         def _put_after_prune_test(*args: Any) -> DatasetRef:
-            """Check that we can configure a butler to accept a put even
-            if it already has the dataset in registry. Parameters can be
-            anything accepted by Butler.put, e.g. DatasetRef or
-            DatasetType+DataId.
+            """Check that put() fails when registry has existing dataset.
+            Parameters can be anything accepted by Butler.put, e.g. DatasetRef
+            or (DatasetType, DataId).
             """
             ref = butler.put(metric, *args)
 
@@ -463,19 +462,6 @@ class ButlerPutGetTests(TestCaseMixin):
                 ConflictingDefinitionError, "A database constraint failure was triggered"
             ):
                 butler.put(metric, *args)
-
-            # Allow the put to succeed
-            butler._allow_put_of_predefined_dataset = True
-            ref2 = butler.put(metric, *args)
-            self.assertEqual(ref2.id, ref.id)
-
-            # A second put will still fail but with a different exception
-            # than before.
-            with self.assertRaisesRegex(ConflictingDefinitionError, "Dataset associated .* already exists"):
-                butler.put(metric, *args)
-
-            # Reset the flag to avoid confusion
-            butler._allow_put_of_predefined_dataset = False
 
             return ref
 
@@ -894,8 +880,6 @@ class ButlerTests(ButlerPutGetTests):
                 dataset.refs = refs
                 all_refs.extend(dataset.refs)
             butler.pruneDatasets(all_refs, disassociate=False, unstore=True, purge=False)
-
-            butler._allow_put_of_predefined_dataset = True
 
             # Use move mode to test that the file is deleted. Also
             # disable recording of file size.

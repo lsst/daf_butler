@@ -230,7 +230,6 @@ class Butler(LimitedButler):
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
-            self._allow_put_of_predefined_dataset = butler._allow_put_of_predefined_dataset
         else:
             # Can only look for strings in the known repos list.
             if isinstance(config, str) and config in self.get_known_repos():
@@ -258,9 +257,6 @@ class Butler(LimitedButler):
                 )
                 self.storageClasses = StorageClassFactory()
                 self.storageClasses.addFromConfig(self._config)
-                self._allow_put_of_predefined_dataset = self._config.get(
-                    "allow_put_of_predefined_dataset", False
-                )
             except Exception:
                 # Failures here usually mean that configuration is incomplete,
                 # just issue an error message which includes config file URI.
@@ -1202,38 +1198,7 @@ class Butler(LimitedButler):
 
         # Add Registry Dataset entry.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
-
-        # For an execution butler the datasets will be pre-defined.
-        # If the butler is configured that way datasets should only be inserted
-        # if they do not already exist in registry. Trying and catching
-        # ConflictingDefinitionError will not work because the transaction
-        # will be corrupted. Instead, in this mode always check first.
-        ref = None
-        ref_is_predefined = False
-        if self._allow_put_of_predefined_dataset:
-            # Get the matching ref for this run.
-            ref = self.registry.findDataset(datasetType, collections=run, dataId=dataId)
-
-            if ref:
-                # Must be expanded form for datastore templating
-                dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions)
-                ref = ref.expanded(dataId)
-                ref_is_predefined = True
-
-        if not ref:
-            (ref,) = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
-
-        # If the ref is predefined it is possible that the datastore also
-        # has the record. Asking datastore to put it again will result in
-        # the artifact being recreated, overwriting previous, then will cause
-        # a failure in writing the record which will cause the artifact
-        # to be removed. Much safer to ask first before attempting to
-        # overwrite. Race conditions should not be an issue for the
-        # execution butler environment.
-        if ref_is_predefined:
-            if self.datastore.knows(ref):
-                raise ConflictingDefinitionError(f"Dataset associated {ref} already exists.")
-
+        (ref,) = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
         self.datastore.put(obj, ref)
 
         return ref
@@ -1749,12 +1714,6 @@ class Butler(LimitedButler):
                         f"Cannot disassociate from collection '{tag}' "
                         f"of non-TAGGED type {collectionType.name}."
                     )
-        # For an execution butler we want to keep existing UUIDs for the
-        # datasets, for that we need to keep them in the collections but
-        # remove from datastore.
-        if self._allow_put_of_predefined_dataset and purge:
-            purge = False
-            disassociate = False
         # Transform possibly-single-pass iterable into something we can iterate
         # over multiple times.
         refs = list(refs)
@@ -1920,40 +1879,6 @@ class Butler(LimitedButler):
                         f" {groupedDataIds[group_key][ref.dataId].path} "
                         f" ({ref.dataId})"
                     )
-                if self._allow_put_of_predefined_dataset:
-                    existing_ref = self.registry.findDataset(
-                        ref.datasetType, dataId=ref.dataId, collections=ref.run
-                    )
-                    if existing_ref:
-                        if existing_ref.id != ref.id:
-                            raise ConflictingDefinitionError(
-                                f"Registry has registered dataset {existing_ref!r} which has differing ID "
-                                f"from that being ingested ({ref!r})."
-                            )
-                        if self.datastore.knows(existing_ref):
-                            raise ConflictingDefinitionError(
-                                f"Dataset associated with path {dataset.path}"
-                                f" already exists as {existing_ref}."
-                            )
-                        # Datastore will need expanded data coordinate
-                        # so this has to be attached to the FileDataset
-                        # if necessary.
-                        if not ref.dataId.hasRecords():
-                            expanded_dataId = self.registry.expandDataId(ref.dataId)
-                            existing_ref = existing_ref.expanded(expanded_dataId)
-                        else:
-                            # Both refs are identical but we want to
-                            # keep the expanded one.
-                            existing_ref = ref
-
-                        # Store this ref elsewhere since it already exists
-                        # and we do not want to remake it but we do want
-                        # to store it in the datastore.
-                        existingRefs.append(existing_ref)
-
-                        # Nothing else to do until we have finished
-                        # iterating.
-                        continue
 
                 groupedDataIds[group_key][ref.dataId] = dataset
 
@@ -2621,7 +2546,3 @@ class Butler(LimitedButler):
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
     """
-
-    _allow_put_of_predefined_dataset: bool
-    """Allow a put to succeed even if there is already a registry entry for it
-    but not a datastore record. (`bool`)."""
