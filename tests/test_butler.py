@@ -441,36 +441,37 @@ class ButlerPutGetTests(TestCaseMixin):
         # already had a component removed
         butler.pruneDatasets([ref], unstore=True, purge=True)
 
-        def _put_after_prune_test(*args: Any) -> DatasetRef:
-            """Check that put() fails when registry has existing dataset.
-            Parameters can be anything accepted by Butler.put, e.g. DatasetRef
-            or (DatasetType, DataId).
-            """
-            ref = butler.put(metric, *args)
+        # Check that duplicate put fails.
+        ref = butler.put(metric, datasetType, dataId)
 
-            # Repeat put will fail.
-            with self.assertRaisesRegex(
-                ConflictingDefinitionError, "A database constraint failure was triggered"
-            ):
-                butler.put(metric, *args)
+        # Repeat put will fail.
+        with self.assertRaisesRegex(
+            ConflictingDefinitionError, "A database constraint failure was triggered"
+        ):
+            butler.put(metric, datasetType, dataId)
 
-            # Remove the datastore entry.
-            butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
+        # Remove the datastore entry.
+        butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
 
-            # Put will still fail
-            with self.assertRaisesRegex(
-                ConflictingDefinitionError, "A database constraint failure was triggered"
-            ):
-                butler.put(metric, *args)
+        # Put will still fail
+        with self.assertRaisesRegex(
+            ConflictingDefinitionError, "A database constraint failure was triggered"
+        ):
+            butler.put(metric, datasetType, dataId)
 
-            return ref
-
-        # Check for "unresolved" dataset type + dataId combination.
-        ref = _put_after_prune_test(datasetType, dataId)
+        # Repeat the same sequence with resolved ref.
         butler.pruneDatasets([ref], unstore=True, purge=True)
+        ref = butler.put(metric, refIn)
 
-        # Check for unresolved dataset ref.
-        _put_after_prune_test(refIn)
+        # Repeat put will fail.
+        with self.assertRaisesRegex(ConflictingDefinitionError, "Datastore already contains dataset"):
+            butler.put(metric, refIn)
+
+        # Remove the datastore entry.
+        butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
+
+        # In case of resolved ref this write will succeed.
+        ref = butler.put(metric, refIn)
 
         # Leave the dataset in place since some downstream tests require
         # something to be present

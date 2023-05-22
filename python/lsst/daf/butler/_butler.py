@@ -1177,21 +1177,31 @@ class Butler(LimitedButler):
         if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
             # This is a direct put of predefined DatasetRef.
             log.debug("Butler put direct: %s", datasetRefOrType)
+            # _importDatasets ignores existing dataset ref and just returns an
+            # original ref.
             (imported_ref,) = self.registry._importDatasets(
                 [datasetRefOrType],
                 expand=True,
             )
             if imported_ref.id != datasetRefOrType.getCheckedId():
                 raise RuntimeError("This registry configuration does not support direct put of ref.")
-            self.datastore.put(obj, datasetRefOrType)
+            # Before trying to write to the datastore check that it does not
+            # know this dataset. This is prone to races, of course.
+            if self.datastore.knows(datasetRefOrType):
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {datasetRefOrType}")
+            # Try to write dataset to the datastore, if it fails due to a race
+            # with another write, the content of stored data may be
+            # unpredictable.
+            try:
+                self.datastore.put(obj, datasetRefOrType)
+            except IntegrityError as e:
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}")
             return datasetRefOrType
 
         log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
-        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
-            raise ValueError("DatasetRef must not be in registry, must have None id")
 
         # Handle dimension records in dataId
         dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
