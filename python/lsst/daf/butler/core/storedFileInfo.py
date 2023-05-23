@@ -173,7 +173,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         component = ref.datasetType.component()
         if component is None:
             component = self.component
-        dataset_id = ref.getCheckedId()
+        dataset_id = ref.id
         return self.update(dataset_id=dataset_id, component=component)
 
     def to_record(self) -> Dict[str, Any]:

@@ -232,16 +232,11 @@ class ButlerPutGetTests(TestCaseMixin):
         # tag when looking up datasets.
         run = self.default_run
         butler, datasetType = self.create_butler(run, storageClass, datasetTypeName)
-        registry = butler.registry
+        assert butler.run is not None
 
         # Create and store a dataset
         metric = makeExampleMetrics()
-        dataId = registry.expandDataId({"instrument": "DummyCamComp", "visit": 423})
-
-        # Put with a preexisting id should fail (actually this is not put()
-        # that fails here but construction of DatasetRef without run).
-        with self.assertRaisesRegex(ValueError, "Cannot provide id without run for dataset"):
-            butler.put(metric, DatasetRef(datasetType, dataId, id=uuid.UUID(int=100)))
+        dataId = butler.registry.expandDataId({"instrument": "DummyCamComp", "visit": 423})
 
         # Put and remove the dataset once as a DatasetRef, once as a dataId,
         # and once with a DatasetType
@@ -354,7 +349,6 @@ class ButlerPutGetTests(TestCaseMixin):
                 with self.assertRaises(FileNotFoundError):
                     butler.get(ref)
                 # Registry shouldn't be able to find it by dataset_id anymore.
-                assert ref.id is not None
                 self.assertIsNone(butler.registry.getDataset(ref.id))
 
                 # Do explicit registry removal since we know they are
@@ -1464,9 +1458,9 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
             butler.datasetExists(ref1.datasetType, ref1.dataId, collections=run1)
 
         # Put data back.
-        ref1 = butler.put(metric, ref1.unresolved(), run=run1)
-        ref2 = butler.put(metric, ref2.unresolved(), run=run2)
-        ref3 = butler.put(metric, ref3.unresolved(), run=run1)
+        ref1 = butler.put(metric, ref1, run=run1)
+        ref2 = butler.put(metric, ref2, run=run2)
+        ref3 = butler.put(metric, ref3, run=run1)
 
         # Check that in normal mode, deleting the record will lead to
         # trash not touching the file.
@@ -2077,7 +2071,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
             if index < 2:
                 source_refs.append(ref)
             if ref not in deleted:
-                new_metric = butler.get(ref.unresolved(), collections=run)
+                new_metric = butler.get(ref, collections=run)
                 self.assertEqual(new_metric, metric)
 
         # Create some bad dataset types to ensure we check for inconsistent
@@ -2151,9 +2145,8 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Now try to get the same refs from the new butler.
         for ref in source_refs:
             if ref not in deleted:
-                unresolved_ref = ref.unresolved()
-                new_metric = self.target_butler.get(unresolved_ref, collections=ref.run)
-                old_metric = self.source_butler.get(unresolved_ref, collections=ref.run)
+                new_metric = self.target_butler.get(ref, collections=ref.run)
+                old_metric = self.source_butler.get(ref, collections=ref.run)
                 self.assertEqual(new_metric, old_metric)
 
         # Now prune run2 collection and create instead a CHAINED collection.

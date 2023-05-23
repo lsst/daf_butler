@@ -147,7 +147,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         rows : `list` [ `dict` ]
             List of dictionaries, with "datastoreName" and "dataset_id" keys.
         """
-        return [{"datastore_name": self.datastoreName, "dataset_id": ref.getCheckedId()} for ref in refs]
+        return [{"datastore_name": self.datastoreName, "dataset_id": ref.id} for ref in refs]
 
     def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
@@ -175,7 +175,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
-        byId = {ref.getCheckedId(): ref for ref in refs}
+        byId = {ref.id: ref for ref in refs}
         sql = (
             sqlalchemy.sql.select(self._tables.dataset_location.columns.dataset_id)
             .select_from(self._tables.dataset_location)
@@ -369,7 +369,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         sql = (
             sqlalchemy.sql.select(self._tables.dataset_location.columns.datastore_name)
             .select_from(self._tables.dataset_location)
-            .where(self._tables.dataset_location.columns.dataset_id == ref.getCheckedId())
+            .where(self._tables.dataset_location.columns.dataset_id == ref.id)
         )
         with self._db.query(sql) as sql_result:
             sql_rows = sql_result.mappings().fetchall()

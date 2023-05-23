@@ -91,7 +91,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         method returns unresolved DatasetRef, for round-trip-safe repos it
         returns unchanged ref.
         """
-        return ref if self.datasetsIdType is uuid.UUID else ref.unresolved()
+        return ref
 
     def testReadBackwardsCompatibility(self):
         """Test that we can read an export file written by a previous version

@@ -180,15 +180,11 @@ class InMemoryDatastore(GenericBaseDatastore):
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredMemoryItemInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore.
         for ref, info in zip(refs, infos):
-            if ref.id is None:
-                raise RuntimeError(f"Can not store unresolved DatasetRef {ref}")
             self.records[ref.id] = info
             self.related.setdefault(info.parentID, set()).add(ref.id)
 
     def getStoredItemInfo(self, ref: DatasetIdRef) -> StoredMemoryItemInfo:
         # Docstring inherited from GenericBaseDatastore.
-        if ref.id is None:
-            raise RuntimeError(f"Can not retrieve unresolved DatasetRef {ref}")
         return self.records[ref.id]
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredMemoryItemInfo]:
@@ -200,8 +196,6 @@ class InMemoryDatastore(GenericBaseDatastore):
         # If a component has been removed previously then we can sometimes
         # be asked to remove it again. Other datastores ignore this
         # so also ignore here
-        if ref.id is None:
-            raise RuntimeError(f"Can not remove unresolved DatasetRef {ref}")
         if ref.id not in self.records:
             return
         record = self.records[ref.id]
@@ -391,10 +385,6 @@ class InMemoryDatastore(GenericBaseDatastore):
         allow `ChainedDatastore` to put to multiple datastores without
         requiring that every datastore accepts the dataset.
         """
-
-        if ref.id is None:
-            raise RuntimeError(f"Can not store unresolved DatasetRef {ref}")
-
         # May need to coerce the in memory dataset to the correct
         # python type, otherwise parameters may not work.
         inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
@@ -408,7 +398,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # expire it. Instead of storing a filename here, we include the
         # ID of this datasetRef so we can find it from components.
         itemInfo = StoredMemoryItemInfo(
-            time.time(), ref.datasetType.storageClass, parentID=ref.id, dataset_id=ref.getCheckedId()
+            time.time(), ref.datasetType.storageClass, parentID=ref.id, dataset_id=ref.id
         )
 
         # We have to register this content with registry.

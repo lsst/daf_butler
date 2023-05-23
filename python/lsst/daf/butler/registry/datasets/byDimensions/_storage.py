@@ -24,7 +24,6 @@ from __future__ import annotations
 
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
-import uuid
 from collections.abc import Iterable, Iterator, Sequence, Set
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -99,7 +98,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._db.delete(
             self._static.dataset,
             ["id"],
-            *[{"id": dataset.getCheckedId()} for dataset in datasets],
+            *[{"id": dataset.id} for dataset in datasets],
         )
 
     def associate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
@@ -116,7 +115,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         rows = []
         summary = CollectionSummary()
         for dataset in summary.add_datasets_generator(datasets):
-            row = dict(protoRow, dataset_id=dataset.getCheckedId())
+            row = dict(protoRow, dataset_id=dataset.id)
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
             rows.append(row)
@@ -136,7 +135,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
         rows = [
             {
-                "dataset_id": dataset.getCheckedId(),
+                "dataset_id": dataset.id,
                 self._collections.getCollectionForeignKeyName(): collection.key,
             }
             for dataset in datasets
@@ -194,7 +193,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         )
         summary = CollectionSummary()
         for dataset in summary.add_datasets_generator(datasets):
-            row = dict(protoRow, dataset_id=dataset.getCheckedId())
+            row = dict(protoRow, dataset_id=dataset.id)
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
             TimespanReprClass.update(timespan, result=row)
@@ -630,8 +629,6 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         self,
         run: RunRecord,
         datasets: Iterable[DatasetRef],
-        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-        reuseIds: bool = False,
     ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
@@ -648,14 +645,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         dataIds = {}
         summary = CollectionSummary()
         for dataset in summary.add_datasets_generator(datasets):
-            # Ignore unknown ID types, normally all IDs have the same type but
-            # this code supports mixed types or missing IDs.
-            datasetId = dataset.id if isinstance(dataset.id, uuid.UUID) else None
-            if datasetId is None:
-                datasetId = self.idMaker.makeDatasetId(
-                    run.name, self.datasetType, dataset.dataId, idGenerationMode
-                )
-            dataIds[datasetId] = dataset.dataId
+            dataIds[dataset.id] = dataset.dataId
 
         # We'll insert all new rows into a temporary table
         tableSpec = makeTagTableSpec(self.datasetType, type(self._collections), ddl.GUID, constraints=False)

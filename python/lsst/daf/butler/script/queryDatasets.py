@@ -21,7 +21,6 @@
 from __future__ import annotations
 
 import dataclasses
-import uuid
 from collections import defaultdict
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
@@ -84,13 +83,6 @@ class _Table:
         table : `astropy.table._Table`
             The table with the provided column names and rows.
         """
-
-        def _id_type(datasetRef: DatasetRef) -> type[str] | type[np.int64]:
-            if isinstance(datasetRef.id, uuid.UUID):
-                return str
-            else:
-                return np.int64
-
         # Should never happen; adding a dataset should be the action that
         # causes a _Table to be created.
         if not self.datasetRefs:
@@ -104,11 +96,10 @@ class _Table:
         # constructor of Table does not work this out on its own and sorting
         # will not work properly without.
         typeMap = {float: np.float64, int: np.int64}
-        idType = _id_type(refInfo.datasetRef)
         columnTypes = [
             None,
             None,
-            idType,
+            str,
             *[typeMap.get(type(value)) for value in refInfo.datasetRef.dataId.full.values()],
         ]
         if refInfo.uri:
@@ -120,7 +111,7 @@ class _Table:
             row = [
                 datasetTypeName,
                 refInfo.datasetRef.run,
-                str(refInfo.datasetRef.id) if idType is str else refInfo.datasetRef.id,
+                str(refInfo.datasetRef.id),
                 *[value for value in refInfo.datasetRef.dataId.full.values()],
             ]
             if refInfo.uri:

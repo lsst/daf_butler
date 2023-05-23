@@ -575,5 +575,4 @@ class DatastoreMock:
         """A mock of `Datastore.get` that just returns the integer dataset ID
         value and parameters it was given.
         """
-        assert ref.id is not None
         return (ref.id, parameters)

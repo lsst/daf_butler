@@ -58,7 +58,7 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
-        self._datasetIds.update(ref.getCheckedId() for ref in refs)
+        self._datasetIds.update(ref.id for ref in refs)
 
     def forget(self, refs: Iterable[DatasetIdRef]) -> None:
         self._datasetIds.difference_update(ref.id for ref in refs)
@@ -66,7 +66,7 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
     def _rollbackMoveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
         """Rollback a moveToTrash call."""
         for ref in refs:
-            self._trashedIds.remove(ref.getCheckedId())
+            self._trashedIds.remove(ref.id)
 
     def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: Optional[DatastoreTransaction]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
@@ -74,14 +74,14 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
             raise RuntimeError("Must be called with a defined transaction.")
         ref_list = list(refs)
         with transaction.undoWith(f"Trash {len(ref_list)} datasets", self._rollbackMoveToTrash, ref_list):
-            self._trashedIds.update(ref.getCheckedId() for ref in ref_list)
+            self._trashedIds.update(ref.id for ref in ref_list)
 
     def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
         yield from (ref for ref in refs if ref in self)
 
     def __contains__(self, ref: DatasetIdRef) -> bool:
-        return ref.getCheckedId() in self._datasetIds and ref.getCheckedId() not in self._trashedIds
+        return ref.id in self._datasetIds and ref.id not in self._trashedIds
 
     @contextmanager
     def emptyTrash(

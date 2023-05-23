@@ -556,11 +556,12 @@ class RegistryTests(ABC):
         # Test for non-unique IDs, they can be re-imported multiple times.
         for run, idGenMode in ((2, DatasetIdGenEnum.DATAID_TYPE), (4, DatasetIdGenEnum.DATAID_TYPE_RUN)):
             with self.subTest(idGenMode=idGenMode):
-                # Use integer dataset ID to force UUID calculation in _import
-                ref = DatasetRef(datasetTypeBias, dataIdBias1, id=0, run=f"run{run}")
-                (ref1,) = registry._importDatasets([ref], idGenerationMode=idGenMode)
+                # Make dataset ref with reproducible dataset ID.
+                ref = DatasetRef(datasetTypeBias, dataIdBias1, run=f"run{run}", id_generation_mode=idGenMode)
+                (ref1,) = registry._importDatasets([ref])
                 self.assertIsInstance(ref1.id, uuid.UUID)
                 self.assertEqual(ref1.id.version, 5)
+                self.assertEqual(ref1.id, ref.id)
 
                 # Importing it again is OK
                 (ref2,) = registry._importDatasets([ref1])
@@ -571,14 +572,16 @@ class RegistryTests(ABC):
                 with self.assertRaises(ConflictingDefinitionError):
                     registry._importDatasets([ref])
 
-                ref = DatasetRef(datasetTypeBias, dataIdBias1, id=0, run=f"run{run+1}")
+                ref = DatasetRef(
+                    datasetTypeBias, dataIdBias1, run=f"run{run+1}", id_generation_mode=idGenMode
+                )
                 if idGenMode is DatasetIdGenEnum.DATAID_TYPE:
                     # Cannot import same DATAID_TYPE ref into a new run
                     with self.assertRaises(ConflictingDefinitionError):
-                        (ref2,) = registry._importDatasets([ref], idGenerationMode=idGenMode)
+                        (ref2,) = registry._importDatasets([ref])
                 else:
                     # DATAID_TYPE_RUN ref can be imported into a new run
-                    (ref2,) = registry._importDatasets([ref], idGenerationMode=idGenMode)
+                    (ref2,) = registry._importDatasets([ref])
 
     def testDatasetTypeComponentQueries(self):
         """Test component options when querying for dataset types.
@@ -727,9 +730,8 @@ class RegistryTests(ABC):
                     collections=collection,
                 )
             )
-        self.assertEqual(
-            {ref.unresolved() for ref in childRefs2}, {DatasetRef(childType, dataId) for dataId in dataIds}
-        )
+        self.assertEqual({ref.datasetType for ref in childRefs2}, {childType})
+        self.assertEqual({ref.dataId for ref in childRefs2}, set(dataIds))
 
     def testCollections(self):
         """Tests for registry methods that manage collections."""
