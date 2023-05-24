@@ -1680,6 +1680,65 @@ class Butler(LimitedButler):
 
         return existence
 
+    def exists_many(
+        self,
+        refs: Iterable[DatasetRef],
+        /,
+        *,
+        full_check: bool = True,
+    ) -> dict[DatasetRef, DatasetExistence]:
+        """Indicate whether multiple datasets are known to Butler registry and
+        datastore.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+        full_check : `bool`, optional
+            If `True`, an additional check will be made for dataset artifact
+            existence. This will involve additional overhead due to the need
+            to query an external system. If `False` registry and datastore
+            will solely be asked if they know about the dataset but no
+            check for the artifact will be performed.
+
+        Returns
+        -------
+        existence : dict of [`DatasetRef`, `DatasetExistence`]
+            Mapping from the original dataset to an enum indicating the
+            status of the dataset in registry and datastore.
+            Each value evaluates to `True` if the dataset is present and known
+            to both.
+        """
+        existence = {ref: DatasetExistence.Unknown for ref in refs}
+
+        # Registry does not have a bulk API to check for a ref.
+        for ref in refs:
+            registry_ref = self.registry.getDataset(ref.getCheckedId())
+            if registry_ref is not None:
+                existence[ref] |= DatasetExistence.RegistryKnows
+
+        # Ask datastore if it knows about these refs.
+        knows = self.datastore.knows_these(refs)
+        for ref, known in knows.items():
+            if known:
+                existence[ref] |= DatasetExistence.DatastoreKnows
+
+        if full_check:
+            mexists = self.datastore.mexists(refs)
+            for ref, exists in mexists.items():
+                if exists:
+                    existence[ref] |= DatasetExistence.ArtifactExists
+        else:
+            for ref in existence.keys():
+                existence[ref] |= DatasetExistence.ArtifactNotChecked
+
+        return existence
+
+    @deprecated(
+        reason="Butler.datasetExists() has been replaced by Butler.exists(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def datasetExists(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
