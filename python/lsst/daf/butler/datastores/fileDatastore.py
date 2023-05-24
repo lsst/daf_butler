@@ -598,6 +598,9 @@ class FileDatastore(GenericBaseDatastore):
         """
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
+        # The storage class we want to use eventually
+        refStorageClass = ref.datasetType.storageClass
+
         # For trusted mode need to reset storage class.
         ref = self._cast_storage_class(ref)
 
@@ -608,9 +611,6 @@ class FileDatastore(GenericBaseDatastore):
                 raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
             # Assume the dataset is where we think it should be
             fileLocations = self._get_expected_dataset_locations_info(ref)
-
-        # The storage class we want to use eventually
-        refStorageClass = ref.datasetType.storageClass
 
         if len(fileLocations) > 1:
             disassembled = True
