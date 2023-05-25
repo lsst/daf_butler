@@ -20,7 +20,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-import warnings
 from collections.abc import Iterable
 from typing import TextIO
 
@@ -33,7 +32,6 @@ def butlerImport(
     export_file: str | TextIO | None,
     transfer: str | None,
     skip_dimensions: Iterable[str] | None,
-    reuse_ids: bool,
 ) -> None:
     """Import data into a butler repository.
 
@@ -54,15 +52,7 @@ def butlerImport(
         The external data transfer type.
     skip_dimensions : `list`, or `None`
         Dimensions that should be skipped.
-    reuse_ids : `bool`
-        If `True` forces re-use of imported dataset IDs for integer IDs.
     """
-    if reuse_ids:
-        warnings.warn(
-            "--reuse-ids option is deprecated and will be prohibited after v26.",
-            FutureWarning,
-        )
-
     butler = Butler(repo, writeable=True)
 
     if skip_dimensions is not None:

@@ -1309,7 +1309,6 @@ class FileDatastoreButlerTests(ButlerTests):
                         directory=exportDir,
                         transfer="auto",
                         skip_dimensions=None,
-                        reuse_ids=False,
                     )
                 importButler = Butler(importDir, run=self.default_run)
                 for ref in datasets:
