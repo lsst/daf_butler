@@ -2988,19 +2988,12 @@ class FileDatastore(GenericBaseDatastore):
         self._retrieve_dataset_method = method
 
     def _cast_storage_class(self, ref: DatasetRef) -> DatasetRef:
-        """Update dataset reference to use the storage class from registry.
-
-        This does nothing for regular datastores, and is only enabled for
-        trusted mode where we need to use registry definition of storage class
-        for some datastore methods. `set_retrieve_dataset_type_method` has to
-        be called beforehand.
-        """
-        if self.trustGetRequest:
-            if self._retrieve_dataset_method is None:
-                # We could raise an exception here but unit tests do not define
-                # this method.
-                return ref
-            dataset_type = self._retrieve_dataset_method(ref.datasetType.name)
-            if dataset_type is not None:
-                ref = ref.overrideStorageClass(dataset_type.storageClass)
+        """Update dataset reference to use the storage class from registry."""
+        if self._retrieve_dataset_method is None:
+            # We could raise an exception here but unit tests do not define
+            # this method.
+            return ref
+        dataset_type = self._retrieve_dataset_method(ref.datasetType.name)
+        if dataset_type is not None:
+            ref = ref.overrideStorageClass(dataset_type.storageClass)
         return ref
