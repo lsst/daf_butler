@@ -149,7 +149,6 @@ class DatasetIdFactory:
 class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
-    # DO NOT change order in the Union, pydantic is sensitive to that!
     id: uuid.UUID
     datasetType: Optional[SerializedDatasetType] = None
     dataId: Optional[SerializedDataCoordinate] = None
@@ -187,9 +186,14 @@ class SerializedDatasetRef(BaseModel):
     ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.
 
+        Notes
+        -----
         This differs from the pydantic "construct" method in that the arguments
         are explicitly what the model requires, and it will recurse through
         members, constructing them from their corresponding `direct` methods.
+
+        The ``id`` parameter is a string representation of dataset ID, it is
+        converted to UUID by this method.
 
         This method should only be called when the inputs are trusted.
         """
@@ -226,12 +230,12 @@ class DatasetRef:
         The `DatasetType` for this Dataset.
     dataId : `DataCoordinate`
         A mapping of dimensions that labels the Dataset within a Collection.
-    id : `DatasetId`, optional
-        The unique identifier assigned when the dataset is created. If ``id``
-        is not specified, a new unique ID will be created.
     run : `str`
         The name of the run this dataset was associated with when it was
         created.
+    id : `DatasetId`, optional
+        The unique identifier assigned when the dataset is created. If ``id``
+        is not specified, a new unique ID will be created.
     conform : `bool`, optional
         If `True` (default), call `DataCoordinate.standardize` to ensure that
         the data ID's dimensions are consistent with the dataset type's.
@@ -270,8 +274,8 @@ class DatasetRef:
         self,
         datasetType: DatasetType,
         dataId: DataCoordinate,
-        *,
         run: str,
+        *,
         id: Optional[DatasetId] = None,
         conform: bool = True,
         id_generation_mode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
@@ -308,12 +312,12 @@ class DatasetRef:
         # DataCoordinate's __repr__ - while adhering to the guidelines for
         # __repr__ - is much harder to users to read, while its __str__ just
         # produces a dict that can also be passed to DatasetRef's constructor.
-        return f"DatasetRef({self.datasetType!r}, {self.dataId!s}, id={self.id}, run={self.run!r})"
+        return f"DatasetRef({self.datasetType!r}, {self.dataId!s}, run={self.run!r}, id={self.id})"
 
     def __str__(self) -> str:
         s = (
-            f"{self.datasetType.name}@{self.dataId!s}, sc={self.datasetType.storageClass_name}]"
-            f" (id={self.id})"
+            f"{self.datasetType.name}@{self.dataId!s} [sc={self.datasetType.storageClass_name}]"
+            f" (run={self.run} id={self.id})"
         )
         return s
 
@@ -349,12 +353,11 @@ class DatasetRef:
             The object converted to a dictionary.
         """
         if minimal:
-            # The only thing needed to uniquely define a DatasetRef
-            # is its id so that can be used directly if it is
-            # resolved and if it is not a component DatasetRef.
-            # Store is in a dict to allow us to easily add the planned
-            # origin information later without having to support
-            # an int and dict in simple form.
+            # The only thing needed to uniquely define a DatasetRef is its id
+            # so that can be used directly if it is not a component DatasetRef.
+            # Store is in a dict to allow us to easily add the planned origin
+            # information later without having to support an int and dict in
+            # simple form.
             simple: Dict[str, Any] = {"id": self.id}
             if self.isComponent():
                 # We can still be a little minimalist with a component
@@ -362,17 +365,12 @@ class DatasetRef:
                 simple["component"] = self.datasetType.component()
             return SerializedDatasetRef(**simple)
 
-        # Convert to a dict form
-        as_dict: Dict[str, Any] = {
-            "datasetType": self.datasetType.to_simple(minimal=minimal),
-            "dataId": self.dataId.to_simple(),
-        }
-
-        # Only include the id entry if it is defined
-        as_dict["run"] = self.run
-        as_dict["id"] = self.id
-
-        return SerializedDatasetRef(**as_dict)
+        return SerializedDatasetRef(
+            datasetType=self.datasetType.to_simple(minimal=minimal),
+            dataId=self.dataId.to_simple(),
+            run=self.run,
+            id=self.id,
+        )
 
     @classmethod
     def from_simple(
@@ -446,13 +444,13 @@ class DatasetRef:
         dataId = DataCoordinate.from_simple(simple.dataId, universe=universe)
 
         # Check that simple ref is resolved.
-        if simple.id is None or simple.run is None:
+        if simple.run is None:
             dstr = ""
             if simple.datasetType is None:
                 dstr = f" (datasetType={datasetType.name!r})"
             raise ValueError(
-                "Attempting to create an unresolved ref from simple form is deprecated. "
-                f"Encountered with {simple!r}{dstr}.",
+                "Run collection name is missing from serialized representation. "
+                f"Encountered with {simple!r}{dstr}."
             )
 
         return cls(datasetType, dataId, id=simple.id, run=simple.run)

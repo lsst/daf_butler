@@ -1050,7 +1050,7 @@ class Butler(LimitedButler):
         ------
         LookupError
             Raised if no matching dataset exists in the `Registry` (and
-            ``predict is False``).
+            ``predict`` is `False`).
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
             differs from the one found in the registry.
@@ -1059,6 +1059,8 @@ class Butler(LimitedButler):
         """
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, for_put=False, **kwargs)
         if isinstance(datasetRefOrType, DatasetRef):
+            if collections is not None:
+                warnings.warn("Collections should not be specified with DatasetRef", stacklevel=2)
             return datasetRefOrType
         timespan: Optional[Timespan] = None
 
@@ -1170,14 +1172,13 @@ class Butler(LimitedButler):
         if isinstance(datasetRefOrType, DatasetRef):
             # This is a direct put of predefined DatasetRef.
             log.debug("Butler put direct: %s", datasetRefOrType)
-            # _importDatasets ignores existing dataset ref and just returns an
-            # original ref.
-            (imported_ref,) = self.registry._importDatasets(
-                [datasetRefOrType],
-                expand=True,
-            )
-            if imported_ref.id != datasetRefOrType.id:
-                raise RuntimeError("This registry configuration does not support direct put of ref.")
+            if run is not None:
+                warnings.warn("Run collection is not used for DatasetRef")
+            # If registry already has a dataset with the same dataset ID,
+            # dataset type and DataId, then _importDatasets will do nothing and
+            # just return an original ref. We have to raise in this case, there
+            # is a datastore check below for that.
+            self.registry._importDatasets([datasetRefOrType], expand=True)
             # Before trying to write to the datastore check that it does not
             # know this dataset. This is prone to races, of course.
             if self.datastore.knows(datasetRefOrType):
@@ -1276,7 +1277,15 @@ class Butler(LimitedButler):
         -------
         obj : `DeferredDatasetHandle`
             A handle which can be used to retrieve a dataset at a later time.
+
+        Raises
+        ------
+        LookupError
+            Raised if no matching dataset exists in the `Registry`.
         """
+        # Check thad dataset actuall exists.
+        if not self.datastore.exists(ref):
+            raise LookupError(f"Dataset reference {ref} does not exist.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
@@ -1334,6 +1343,8 @@ class Butler(LimitedButler):
         TypeError
             Raised if no collections were provided.
         """
+        if isinstance(datasetRefOrType, DatasetRef) and not self.datastore.exists(datasetRefOrType):
+            raise LookupError(f"Dataset reference {datasetRefOrType} does not exist.")
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
@@ -1832,9 +1843,6 @@ class Butler(LimitedButler):
             # execution butler.
             existingRefs: List[DatasetRef] = []
 
-            # Any newly-resolved refs.
-            resolvedRefs: list[DatasetRef] = []
-
             for ref in dataset.refs:
                 assert ref.run is not None  # For mypy
                 group_key = (ref.datasetType, ref.run)
@@ -1861,16 +1869,6 @@ class Butler(LimitedButler):
 
                 # Store expanded form in the original FileDataset.
                 dataset.refs = existingRefs
-            elif resolvedRefs:
-                if len(dataset.refs) != len(resolvedRefs):
-                    raise ConflictingDefinitionError(
-                        f"For dataset {dataset.path} some DatasetRef were "
-                        "resolved and others were not. This is not supported."
-                    )
-                dataset.refs = resolvedRefs
-
-                # These datasets have to be registered.
-                self.registry._importDatasets(resolvedRefs)
             else:
                 groupedData[group_key].append(dataset)
 

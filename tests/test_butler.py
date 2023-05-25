@@ -435,7 +435,7 @@ class ButlerPutGetTests(TestCaseMixin):
         # already had a component removed
         butler.pruneDatasets([ref], unstore=True, purge=True)
 
-        # Check that duplicate put fails.
+        # Add the same ref again, so we can check that duplicate put fails.
         ref = butler.put(metric, datasetType, dataId)
 
         # Repeat put will fail.
@@ -2070,7 +2070,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
             if index < 2:
                 source_refs.append(ref)
             if ref not in deleted:
-                new_metric = butler.get(ref, collections=run)
+                new_metric = butler.get(ref)
                 self.assertEqual(new_metric, metric)
 
         # Create some bad dataset types to ensure we check for inconsistent
@@ -2144,8 +2144,8 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Now try to get the same refs from the new butler.
         for ref in source_refs:
             if ref not in deleted:
-                new_metric = self.target_butler.get(ref, collections=ref.run)
-                old_metric = self.source_butler.get(ref, collections=ref.run)
+                new_metric = self.target_butler.get(ref)
+                old_metric = self.source_butler.get(ref)
                 self.assertEqual(new_metric, old_metric)
 
         # Now prune run2 collection and create instead a CHAINED collection.
