@@ -88,6 +88,7 @@ from ..registry import (
     OrphanedRecordError,
     Registry,
     RegistryConfig,
+    RegistryConsistencyError,
     RegistryDefaults,
     queries,
 )
@@ -671,6 +672,13 @@ class SqlRegistry(Registry):
                 "and dataset type already exists, but it may also mean a "
                 "dimension row is missing."
             ) from err
+        # Check that imported dataset IDs match the input
+        for imported_ref, input_ref in zip(refs, datasets):
+            if imported_ref.id != input_ref.id:
+                raise RegistryConsistencyError(
+                    "Imported dataset ID differs from input dataset ID, "
+                    f"input ref: {input_ref}, imported ref: {imported_ref}"
+                )
         return refs
 
     def getDataset(self, id: DatasetId) -> Optional[DatasetRef]:

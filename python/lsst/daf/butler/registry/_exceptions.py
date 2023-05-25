@@ -37,6 +37,7 @@ __all__ = (
     "MissingSpatialOverlapError",
     "NoDefaultCollectionError",
     "OrphanedRecordError",
+    "RegistryConsistencyError",
     "RegistryError",
     "UnsupportedIdGeneratorError",
     "UserExpressionError",
@@ -151,4 +152,10 @@ class UnsupportedIdGeneratorError(ValueError):
 class MissingSpatialOverlapError(RegistryError):
     """Exception raised when a spatial overlap relationship needed by a query
     has not been precomputed and cannot be computed on-the-fly.
+    """
+
+
+class RegistryConsistencyError(RegistryError):
+    """Exception raised when an internal registry consistency check fails,
+    usually means bug in the Regitry itself.
     """
