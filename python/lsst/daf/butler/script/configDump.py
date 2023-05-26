@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import IO
 
 from .._butlerConfig import ButlerConfig
+from .._butlerRepoIndex import ButlerRepoIndex
 
 
 def configDump(repo: str, subset: str, searchpath: str, outfile: IO) -> None:
@@ -49,7 +50,8 @@ def configDump(repo: str, subset: str, searchpath: str, outfile: IO) -> None:
     AttributeError
         If there is an issue dumping the configuration.
     """
-    config = ButlerConfig(repo, searchPaths=searchpath)
+    repo_path = ButlerRepoIndex.get_repo_uri(repo, repo)
+    config = ButlerConfig(repo_path, searchPaths=searchpath)
     if subset is not None:
         try:
             config = config[subset]

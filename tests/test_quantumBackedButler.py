@@ -22,6 +22,7 @@
 import json
 import os
 import unittest
+import unittest.mock
 from typing import cast
 
 from lsst.daf.butler import (
@@ -38,6 +39,7 @@ from lsst.daf.butler import (
     StorageClass,
 )
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+from lsst.resources import ResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -132,6 +134,27 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
         )
         self._test_factory(qbb)
+
+    def test_initialize_repo_index(self) -> None:
+        """Test for initialize using config file and repo index."""
+
+        # store config to a file
+        self.config.dumpToUri(self.root)
+
+        butler_index = Config()
+        butler_index["label"] = self.root
+        with ResourcePath.temporary_uri(suffix=".yaml") as index_path:
+            butler_index.dumpToUri(index_path)
+
+            with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(index_path)}):
+                quantum = self.make_quantum()
+                qbb = QuantumBackedButler.initialize(
+                    config="label",
+                    quantum=quantum,
+                    dimensions=self.universe,
+                    dataset_types=self.dataset_types,
+                )
+                self._test_factory(qbb)
 
     def test_from_predicted(self) -> None:
         """Test for from_predicted factory method"""

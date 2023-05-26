@@ -30,9 +30,11 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Type, Union
 
 from deprecated.sphinx import deprecated
+from lsst.resources import ResourcePathExpression
 from pydantic import BaseModel
 
 from ._butlerConfig import ButlerConfig
+from ._butlerRepoIndex import ButlerRepoIndex
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from .core import (
@@ -174,7 +176,7 @@ class QuantumBackedButler(LimitedButler):
     @classmethod
     def initialize(
         cls,
-        config: Union[Config, str],
+        config: Union[Config, ResourcePathExpression],
         quantum: Quantum,
         dimensions: DimensionUniverse,
         filename: str = ":memory:",
@@ -188,7 +190,7 @@ class QuantumBackedButler(LimitedButler):
 
         Parameters
         ----------
-        config : `Config` or `str`
+        config : `Config` or `~lsst.resources.ResourcePathExpression`
             A butler repository root, configuration filename, or configuration
             instance.
         quantum : `Quantum`
@@ -230,7 +232,7 @@ class QuantumBackedButler(LimitedButler):
     @classmethod
     def from_predicted(
         cls,
-        config: Union[Config, str],
+        config: Union[Config, ResourcePathExpression],
         predicted_inputs: Iterable[DatasetId],
         predicted_outputs: Iterable[DatasetId],
         dimensions: DimensionUniverse,
@@ -246,7 +248,7 @@ class QuantumBackedButler(LimitedButler):
 
         Parameters
         ----------
-        config : `Config` or `str`
+        config : `Config` or `~lsst.resources.ResourcePathExpression`
             A butler repository root, configuration filename, or configuration
             instance.
         predicted_inputs : `~collections.abc.Iterable` [`DatasetId`]
@@ -289,7 +291,7 @@ class QuantumBackedButler(LimitedButler):
     def _initialize(
         cls,
         *,
-        config: Union[Config, str],
+        config: Union[Config, ResourcePathExpression],
         predicted_inputs: Iterable[DatasetId],
         predicted_outputs: Iterable[DatasetId],
         dimensions: DimensionUniverse,
@@ -305,7 +307,7 @@ class QuantumBackedButler(LimitedButler):
 
         Parameters
         ----------
-        config : `Config` or `str`
+        config : `Config` or `~lsst.resources.ResourcePathExpression`
             A butler repository root, configuration filename, or configuration
             instance.
         predicted_inputs : `~collections.abc.Iterable` [`DatasetId`]
@@ -330,6 +332,8 @@ class QuantumBackedButler(LimitedButler):
         dataset_types: `Mapping` [`str`, `DatasetType`]
             Mapping of the dataset type name to its registry definition.
         """
+        if isinstance(config, str):
+            config = ButlerRepoIndex.get_repo_uri(config, config)
         butler_config = ButlerConfig(config, searchPaths=search_paths)
         if "root" in butler_config:
             butler_root = butler_config["root"]

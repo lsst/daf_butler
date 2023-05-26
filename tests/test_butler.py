@@ -590,6 +590,7 @@ class ButlerTests(ButlerPutGetTests):
                         Butler("not_there", writeable=False)
                     with self.assertRaises(KeyError) as cm:
                         Butler.get_repo_uri("missing")
+                    self.assertEqual(Butler.get_repo_uri("missing", "missing"), ResourcePath("missing"))
                     self.assertIn("not known to", str(cm.exception))
         with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
             with self.assertRaises(FileNotFoundError):
@@ -598,6 +599,7 @@ class ButlerTests(ButlerPutGetTests):
         with self.assertRaises(KeyError) as cm:
             # No environment variable set.
             Butler.get_repo_uri("label")
+        self.assertEqual(Butler.get_repo_uri("label", "/path"), ResourcePath("/path"))
         self.assertIn("No repository index defined", str(cm.exception))
         with self.assertRaisesRegex(FileNotFoundError, "no known aliases"):
             # No aliases registered.
