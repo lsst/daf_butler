@@ -98,6 +98,7 @@ from .registry import (
     ConflictingDefinitionError,
     DataIdError,
     MissingDatasetTypeError,
+    NoDefaultCollectionError,
     Registry,
     RegistryConfig,
     RegistryDefaults,
@@ -1657,17 +1658,17 @@ class Butler(LimitedButler):
         """
         existence = DatasetExistence.Unknown
 
-        if not isinstance(datasetRefOrType, DatasetRef):
-            try:
-                ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-            except LookupError:
-                return existence
-            existence |= DatasetExistence.RegistryKnows
-        else:
+        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id:
             registry_ref = self.registry.getDataset(datasetRefOrType.getCheckedId())
             if registry_ref is not None:
                 existence |= DatasetExistence.RegistryKnows
             ref = datasetRefOrType
+        else:
+            try:
+                ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+            except (LookupError, TypeError, NoDefaultCollectionError):
+                return existence
+            existence |= DatasetExistence.RegistryKnows
 
         if self.datastore.knows(ref):
             existence |= DatasetExistence.DatastoreKnows
@@ -1774,7 +1775,7 @@ class Butler(LimitedButler):
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
             differs from the one found in the registry.
-        TypeError
+        NoDefaultCollectionError
             Raised if no collections were provided.
         """
         # A resolved ref may be given that is not known to this butler.

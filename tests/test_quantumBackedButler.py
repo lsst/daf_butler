@@ -242,7 +242,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.assertEqual(qbb._unavailable_inputs, set(ref.id for ref in self.missing_refs))
 
     def test_datasetExistsDirect(self) -> None:
-        """Test for datasetExistsDirect method"""
+        """Test for dataset existence method"""
 
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
@@ -252,13 +252,13 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         # get some input data
         input_refs = self.input_refs[:2]
         for ref in input_refs:
-            exists = qbb.datasetExistsDirect(ref)
+            exists = qbb.stored(ref)
             self.assertTrue(exists)
         for ref in self.init_inputs_refs:
-            exists = qbb.datasetExistsDirect(ref)
+            exists = qbb.stored(ref)
             self.assertTrue(exists)
         for ref in self.missing_refs:
-            exists = qbb.datasetExistsDirect(ref)
+            exists = qbb.stored(ref)
             self.assertFalse(exists)
 
         # _available_inputs is not
@@ -318,22 +318,22 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         # Disassociate only.
         ref = self.output_refs[0]
         qbb.pruneDatasets([ref], disassociate=False, unstore=True, purge=False)
-        self.assertFalse(qbb.datasetExistsDirect(ref))
+        self.assertFalse(qbb.stored(ref))
         with self.assertRaises(FileNotFoundError):
             data = qbb.get(ref)
 
         # can store it again
         qbb.put({"data": cast(int, ref.dataId["detector"]) ** 2}, ref)
-        self.assertTrue(qbb.datasetExistsDirect(ref))
+        self.assertTrue(qbb.stored(ref))
 
         # Purge completely.
         ref = self.output_refs[1]
         qbb.pruneDatasets([ref], disassociate=True, unstore=True, purge=True)
-        self.assertFalse(qbb.datasetExistsDirect(ref))
+        self.assertFalse(qbb.stored(ref))
         with self.assertRaises(FileNotFoundError):
             data = qbb.get(ref)
         qbb.put({"data": cast(int, ref.dataId["detector"]) ** 2}, ref)
-        self.assertTrue(qbb.datasetExistsDirect(ref))
+        self.assertTrue(qbb.stored(ref))
 
     def test_extract_provenance_data(self) -> None:
         """Test for extract_provenance_data method"""

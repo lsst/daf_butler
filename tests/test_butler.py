@@ -342,8 +342,7 @@ class ButlerPutGetTests(TestCaseMixin):
                 # Now remove the dataset completely.
                 butler.pruneDatasets([ref], purge=True, unstore=True)
                 # Lookup with original args should still fail.
-                with self.assertRaises(LookupError):
-                    butler.datasetExists(*args, collections=this_run)
+                self.assertFalse(butler.exists(*args, collections=this_run))
                 # get() should still fail.
                 with self.assertRaises(FileNotFoundError):
                     butler.get(ref)
@@ -501,14 +500,13 @@ class ButlerPutGetTests(TestCaseMixin):
         with self.assertRaises(CollectionError):
             butler.put(metric, datasetType, dataId)
         # Dataset should exist.
-        self.assertTrue(butler.datasetExists(datasetType, dataId, collections=[run]))
+        self.assertTrue(butler.exists(datasetType, dataId, collections=[run]))
         # We should be able to get the dataset back, but with and without
         # a deferred dataset handle.
         self.assertEqual(metric, butler.get(datasetType, dataId, collections=[run]))
         self.assertEqual(metric, butler.getDeferred(datasetType, dataId, collections=[run]).get())
         # Trying to find the dataset without any collection is a TypeError.
-        with self.assertRaises(CollectionError):
-            butler.datasetExists(datasetType, dataId)
+        self.assertFalse(butler.exists(datasetType, dataId))
         with self.assertRaises(CollectionError):
             butler.get(datasetType, dataId)
         # Associate the dataset with a different collection.
@@ -517,7 +515,7 @@ class ButlerPutGetTests(TestCaseMixin):
         # Deleting the dataset from the new collection should make it findable
         # in the original collection.
         butler.pruneDatasets([ref], tags=["tagged"])
-        self.assertTrue(butler.datasetExists(datasetType, dataId, collections=[run]))
+        self.assertTrue(butler.exists(datasetType, dataId, collections=[run]))
 
 
 class ButlerTests(ButlerPutGetTests):
@@ -916,8 +914,8 @@ class ButlerTests(ButlerPutGetTests):
         # that uses an InMemoryDatastore since in-memory can not ingest
         # files.
         butler.pruneDatasets([datasets[0].refs[0]], unstore=True, disassociate=False)
-        self.assertFalse(butler.datasetExists(datasetTypeName, dataId1))
-        self.assertTrue(butler.datasetExists(datasetTypeName, dataId2))
+        self.assertFalse(butler.exists(datasetTypeName, dataId1))
+        self.assertTrue(butler.exists(datasetTypeName, dataId2))
         multi2b = butler.get(datasetTypeName, dataId2)
         self.assertEqual(multi2, multi2b)
 
@@ -1316,7 +1314,7 @@ class FileDatastoreButlerTests(ButlerTests):
                     with self.subTest(ref=ref):
                         # Test for existence by passing in the DatasetType and
                         # data ID separately, to avoid lookup by dataset_id.
-                        self.assertTrue(importButler.datasetExists(ref.datasetType, ref.dataId))
+                        self.assertTrue(importButler.exists(ref.datasetType, ref.dataId))
                 self.assertEqual(
                     list(importButler.registry.queryDimensionRecords("skymap")),
                     [importButler.registry.dimensions["skymap"].RecordClass(**skymapRecord)],
@@ -1454,8 +1452,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Simple prune.
         butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
-        with self.assertRaises(LookupError):
-            butler.datasetExists(ref1.datasetType, ref1.dataId, collections=run1)
+        self.assertFalse(butler.exists(ref1.datasetType, ref1.dataId, collections=run1))
 
         # Put data back.
         ref1 = butler.put(metric, ref1, run=run1)
