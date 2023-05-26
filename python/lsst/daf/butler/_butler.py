@@ -1084,7 +1084,7 @@ class Butler(LimitedButler):
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, for_put=False, **kwargs)
         if isinstance(datasetRefOrType, DatasetRef):
             if collections is not None:
-                warnings.warn("Collections should not be specified with DatasetRef", stacklevel=2)
+                warnings.warn("Collections should not be specified with DatasetRef", stacklevel=3)
             return datasetRefOrType
         timespan: Optional[Timespan] = None
 
@@ -1197,7 +1197,7 @@ class Butler(LimitedButler):
             # This is a direct put of predefined DatasetRef.
             log.debug("Butler put direct: %s", datasetRefOrType)
             if run is not None:
-                warnings.warn("Run collection is not used for DatasetRef")
+                warnings.warn("Run collection is not used for DatasetRef", stacklevel=3)
             # If registry already has a dataset with the same dataset ID,
             # dataset type and DataId, then _importDatasets will do nothing and
             # just return an original ref. We have to raise in this case, there
