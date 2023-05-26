@@ -25,12 +25,11 @@ __all__ = ["ObsCoreLiveTableManager"]
 
 import json
 import re
-import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Type, cast
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 from lsst.daf.butler import Config, DataCoordinate, DatasetRef, DimensionRecordColumnTag, DimensionUniverse
@@ -157,7 +156,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         *,
         universe: DimensionUniverse,
         config: Mapping,
-        datasets: Type[DatasetRecordStorageManager],
+        datasets: type[DatasetRecordStorageManager],
         dimensions: DimensionRecordStorageManager,
         registry_schema_version: VersionTuple | None = None,
     ) -> ObsCoreTableManager:
@@ -263,7 +262,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         count = 0
         if collection.name == self.tagged_collection:
             # Sorting may improve performance
-            dataset_ids = sorted(cast(uuid.UUID, ref.id) for ref in refs)
+            dataset_ids = sorted(ref.id for ref in refs)
             if dataset_ids:
                 fk_field = self.schema.dataset_fk
                 assert fk_field is not None, "Cannot be None by construction"

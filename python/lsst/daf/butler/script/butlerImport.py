@@ -32,7 +32,6 @@ def butlerImport(
     export_file: str | TextIO | None,
     transfer: str | None,
     skip_dimensions: Iterable[str] | None,
-    reuse_ids: bool,
 ) -> None:
     """Import data into a butler repository.
 
@@ -53,8 +52,6 @@ def butlerImport(
         The external data transfer type.
     skip_dimensions : `list`, or `None`
         Dimensions that should be skipped.
-    reuse_ids : `bool`
-        If `True` forces re-use of imported dataset IDs for integer IDs.
     """
     butler = Butler(repo, writeable=True)
 
@@ -67,5 +64,4 @@ def butlerImport(
         transfer=transfer,
         format="yaml",
         skip_dimensions=skip_dimensions,
-        reuseIds=reuse_ids,
     )

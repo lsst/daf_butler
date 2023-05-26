@@ -35,7 +35,6 @@ import io
 import logging
 import numbers
 import os
-import uuid
 import warnings
 from collections import defaultdict
 from typing import (
@@ -69,13 +68,11 @@ from ._butlerRepoIndex import ButlerRepoIndex
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from .core import (
-    AmbiguousDatasetError,
     Config,
     ConfigSubset,
     DataCoordinate,
     DataId,
     DataIdValue,
-    DatasetIdFactory,
     DatasetIdGenEnum,
     DatasetRef,
     DatasetRefURIs,
@@ -91,7 +88,6 @@ from .core import (
     StorageClass,
     StorageClassFactory,
     Timespan,
-    UnresolvedRefWarning,
     ValidationError,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
@@ -109,6 +105,8 @@ from .transfers import RepoExportContext
 
 if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol
+
+    from .transfers import RepoImportBackend
 
 log = getLogger(__name__)
 
@@ -209,12 +207,12 @@ class Butler(LimitedButler):
 
     def __init__(
         self,
-        config: Union[Config, str, None] = None,
+        config: Union[Config, ResourcePathExpression, None] = None,
         *,
         butler: Optional[Butler] = None,
         collections: Any = None,
         run: Optional[str] = None,
-        searchPaths: Optional[List[str]] = None,
+        searchPaths: Optional[Sequence[ResourcePathExpression]] = None,
         writeable: Optional[bool] = None,
         inferDefaults: bool = True,
         **kwargs: str,
@@ -230,7 +228,6 @@ class Butler(LimitedButler):
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
-            self._allow_put_of_predefined_dataset = butler._allow_put_of_predefined_dataset
         else:
             # Can only look for strings in the known repos list.
             if isinstance(config, str) and config in self.get_known_repos():
@@ -243,7 +240,6 @@ class Butler(LimitedButler):
                 else:
                     aliases = "(no known aliases)"
                 raise FileNotFoundError(f"{e} {aliases}") from e
-            self._config = ButlerConfig(config, searchPaths=searchPaths)
             try:
                 if "root" in self._config:
                     butlerRoot = self._config["root"]
@@ -259,9 +255,6 @@ class Butler(LimitedButler):
                 )
                 self.storageClasses = StorageClassFactory()
                 self.storageClasses.addFromConfig(self._config)
-                self._allow_put_of_predefined_dataset = self._config.get(
-                    "allow_put_of_predefined_dataset", False
-                )
             except Exception:
                 # Failures here usually mean that configuration is incomplete,
                 # just issue an error message which includes config file URI.
@@ -1015,7 +1008,8 @@ class Butler(LimitedButler):
         dataId: Optional[DataId] = None,
         *,
         collections: Any = None,
-        allowUnresolved: bool = False,
+        predict: bool = False,
+        run: str | None = None,
         **kwargs: Any,
     ) -> DatasetRef:
         """Shared logic for methods that start with a search for a dataset in
@@ -1034,9 +1028,13 @@ class Butler(LimitedButler):
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
             to butler construction.
-        allowUnresolved : `bool`, optional
-            If `True`, return an unresolved `DatasetRef` if finding a resolved
-            one in the `Registry` fails.  Defaults to `False`.
+        predict : `bool`, optional
+            If `True`, return a newly created `DatasetRef` with a unique
+            dataset ID if finding a reference in the `Registry` fails.
+            Defaults to `False`.
+        run : `str`, optional
+            Run collection name to use for creating `DatasetRef` for predicted
+            datasets. Only used if ``predict`` is `True`.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -1052,7 +1050,7 @@ class Butler(LimitedButler):
         ------
         LookupError
             Raised if no matching dataset exists in the `Registry` (and
-            ``allowUnresolved is False``).
+            ``predict`` is `False`).
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
             differs from the one found in the registry.
@@ -1061,12 +1059,9 @@ class Butler(LimitedButler):
         """
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, for_put=False, **kwargs)
         if isinstance(datasetRefOrType, DatasetRef):
-            idNumber = datasetRefOrType.id
-            # This is a resolved ref, return it immediately.
-            if idNumber:
-                return datasetRefOrType
-        else:
-            idNumber = None
+            if collections is not None:
+                warnings.warn("Collections should not be specified with DatasetRef", stacklevel=2)
+            return datasetRefOrType
         timespan: Optional[Timespan] = None
 
         dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
@@ -1094,10 +1089,12 @@ class Butler(LimitedButler):
         # present in the current collection.
         ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
         if ref is None:
-            if allowUnresolved:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", category=UnresolvedRefWarning)
-                    return DatasetRef(datasetType, dataId)
+            if predict:
+                if run is None:
+                    run = self.run
+                    if run is None:
+                        raise TypeError("Cannot predict dataset ID/location with run=None.")
+                return DatasetRef(datasetType, dataId, run=run)
             else:
                 if collections is None:
                     collections = self.registry.defaults.collections
@@ -1105,13 +1102,6 @@ class Butler(LimitedButler):
                     f"Dataset {datasetType.name} with data ID {dataId} "
                     f"could not be found in collections {collections}."
                 )
-        if idNumber is not None and idNumber != ref.id:
-            if collections is None:
-                collections = self.registry.defaults.collections
-            raise ValueError(
-                f"DatasetRef.id provided ({idNumber}) does not match "
-                f"id ({ref.id}) in registry in collections {collections}."
-            )
         if datasetType != ref.datasetType:
             # If they differ it is because the user explicitly specified
             # a compatible dataset type to this call rather than using the
@@ -1179,62 +1169,40 @@ class Butler(LimitedButler):
         TypeError
             Raised if the butler is read-only or if no run has been provided.
         """
-        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
+        if isinstance(datasetRefOrType, DatasetRef):
             # This is a direct put of predefined DatasetRef.
             log.debug("Butler put direct: %s", datasetRefOrType)
-            (imported_ref,) = self.registry._importDatasets(
-                [datasetRefOrType],
-                expand=True,
-            )
-            if imported_ref.id != datasetRefOrType.getCheckedId():
-                raise RuntimeError("This registry configuration does not support direct put of ref.")
-            self.datastore.put(obj, datasetRefOrType)
+            if run is not None:
+                warnings.warn("Run collection is not used for DatasetRef")
+            # If registry already has a dataset with the same dataset ID,
+            # dataset type and DataId, then _importDatasets will do nothing and
+            # just return an original ref. We have to raise in this case, there
+            # is a datastore check below for that.
+            self.registry._importDatasets([datasetRefOrType], expand=True)
+            # Before trying to write to the datastore check that it does not
+            # know this dataset. This is prone to races, of course.
+            if self.datastore.knows(datasetRefOrType):
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {datasetRefOrType}")
+            # Try to write dataset to the datastore, if it fails due to a race
+            # with another write, the content of stored data may be
+            # unpredictable.
+            try:
+                self.datastore.put(obj, datasetRefOrType)
+            except IntegrityError as e:
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}")
             return datasetRefOrType
 
         log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
-        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
-            raise ValueError("DatasetRef must not be in registry, must have None id")
 
         # Handle dimension records in dataId
         dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
 
         # Add Registry Dataset entry.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
-
-        # For an execution butler the datasets will be pre-defined.
-        # If the butler is configured that way datasets should only be inserted
-        # if they do not already exist in registry. Trying and catching
-        # ConflictingDefinitionError will not work because the transaction
-        # will be corrupted. Instead, in this mode always check first.
-        ref = None
-        ref_is_predefined = False
-        if self._allow_put_of_predefined_dataset:
-            # Get the matching ref for this run.
-            ref = self.registry.findDataset(datasetType, collections=run, dataId=dataId)
-
-            if ref:
-                # Must be expanded form for datastore templating
-                dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions)
-                ref = ref.expanded(dataId)
-                ref_is_predefined = True
-
-        if not ref:
-            (ref,) = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
-
-        # If the ref is predefined it is possible that the datastore also
-        # has the record. Asking datastore to put it again will result in
-        # the artifact being recreated, overwriting previous, then will cause
-        # a failure in writing the record which will cause the artifact
-        # to be removed. Much safer to ask first before attempting to
-        # overwrite. Race conditions should not be an issue for the
-        # execution butler environment.
-        if ref_is_predefined:
-            if self.datastore.knows(ref):
-                raise ConflictingDefinitionError(f"Dataset associated {ref} already exists.")
-
+        (ref,) = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
         self.datastore.put(obj, ref)
 
         return ref
@@ -1312,13 +1280,12 @@ class Butler(LimitedButler):
 
         Raises
         ------
-        AmbiguousDatasetError
-            Raised if ``ref.id is None``, i.e. the reference is unresolved.
+        LookupError
+            Raised if no matching dataset exists in the `Registry`.
         """
-        if ref.id is None:
-            raise AmbiguousDatasetError(
-                f"Dataset of type {ref.datasetType.name} with data ID {ref.dataId} is not resolved."
-            )
+        # Check thad dataset actuall exists.
+        if not self.datastore.exists(ref):
+            raise LookupError(f"Dataset reference {ref} does not exist.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
@@ -1369,14 +1336,15 @@ class Butler(LimitedButler):
         Raises
         ------
         LookupError
-            Raised if no matching dataset exists in the `Registry` (and
-            ``allowUnresolved is False``).
+            Raised if no matching dataset exists in the `Registry`.
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
             differs from the one found in the registry.
         TypeError
             Raised if no collections were provided.
         """
+        if isinstance(datasetRefOrType, DatasetRef) and not self.datastore.exists(datasetRefOrType):
+            raise LookupError(f"Dataset reference {datasetRefOrType} does not exist.")
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
@@ -1493,18 +1461,8 @@ class Butler(LimitedButler):
             artifact. (can be empty if there are no components).
         """
         ref = self._findDatasetRef(
-            datasetRefOrType, dataId, allowUnresolved=predict, collections=collections, **kwargs
+            datasetRefOrType, dataId, predict=predict, run=run, collections=collections, **kwargs
         )
-        if ref.id is None:  # only possible if predict is True
-            if run is None:
-                run = self.run
-                if run is None:
-                    raise TypeError("Cannot predict location with run=None.")
-            # Lie about ID, because we can't guess it, and only
-            # Datastore.getURIs() will ever see it (and it doesn't use it).
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=UnresolvedRefWarning)
-                ref = ref.resolved(id=uuid.UUID("{00000000-0000-0000-0000-000000000000}"), run=run)
         return self.datastore.getURIs(ref, predict)
 
     def getURI(
@@ -1669,7 +1627,7 @@ class Butler(LimitedButler):
             Raised if no collections were provided.
         """
         # A resolved ref may be given that is not known to this butler.
-        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
+        if isinstance(datasetRefOrType, DatasetRef):
             ref = self.registry.getDataset(datasetRefOrType.id)
             if ref is None:
                 raise LookupError(
@@ -1750,12 +1708,6 @@ class Butler(LimitedButler):
                         f"Cannot disassociate from collection '{tag}' "
                         f"of non-TAGGED type {collectionType.name}."
                     )
-        # For an execution butler we want to keep existing UUIDs for the
-        # datasets, for that we need to keep them in the collections but
-        # remove from datastore.
-        if self._allow_put_of_predefined_dataset and purge:
-            purge = False
-            disassociate = False
         # Transform possibly-single-pass iterable into something we can iterate
         # over multiple times.
         refs = list(refs)
@@ -1883,9 +1835,7 @@ class Butler(LimitedButler):
             tuple[DatasetType, str], dict[DataCoordinate, FileDataset]
         ] = defaultdict(dict)
 
-        logged_resolving = False
         used_run = False
-        default_run = run or self.run
 
         # And the nested loop that populates it:
         for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
@@ -1893,24 +1843,7 @@ class Butler(LimitedButler):
             # execution butler.
             existingRefs: List[DatasetRef] = []
 
-            # Any newly-resolved refs.
-            resolvedRefs: list[DatasetRef] = []
-
             for ref in dataset.refs:
-                if ref.id is None:
-                    # Eventually this will be impossible. For now we must
-                    # resolve this ref.
-                    if default_run is None:
-                        raise ValueError("Unresolved DatasetRef used for ingest but no run specified.")
-                    expanded_dataId = self.registry.expandDataId(ref.dataId)
-                    if not logged_resolving:
-                        log.info("ingest() given unresolved refs. Resolving them into run %r", default_run)
-                        logged_resolving = True
-                    resolved = DatasetIdFactory().resolveRef(ref, default_run, idGenerationMode)
-                    ref = resolved.expanded(expanded_dataId)
-                    resolvedRefs.append(ref)
-                    used_run = True
-
                 assert ref.run is not None  # For mypy
                 group_key = (ref.datasetType, ref.run)
 
@@ -1921,40 +1854,6 @@ class Butler(LimitedButler):
                         f" {groupedDataIds[group_key][ref.dataId].path} "
                         f" ({ref.dataId})"
                     )
-                if self._allow_put_of_predefined_dataset:
-                    existing_ref = self.registry.findDataset(
-                        ref.datasetType, dataId=ref.dataId, collections=ref.run
-                    )
-                    if existing_ref:
-                        if existing_ref.id != ref.id:
-                            raise ConflictingDefinitionError(
-                                f"Registry has registered dataset {existing_ref!r} which has differing ID "
-                                f"from that being ingested ({ref!r})."
-                            )
-                        if self.datastore.knows(existing_ref):
-                            raise ConflictingDefinitionError(
-                                f"Dataset associated with path {dataset.path}"
-                                f" already exists as {existing_ref}."
-                            )
-                        # Datastore will need expanded data coordinate
-                        # so this has to be attached to the FileDataset
-                        # if necessary.
-                        if not ref.dataId.hasRecords():
-                            expanded_dataId = self.registry.expandDataId(ref.dataId)
-                            existing_ref = existing_ref.expanded(expanded_dataId)
-                        else:
-                            # Both refs are identical but we want to
-                            # keep the expanded one.
-                            existing_ref = ref
-
-                        # Store this ref elsewhere since it already exists
-                        # and we do not want to remake it but we do want
-                        # to store it in the datastore.
-                        existingRefs.append(existing_ref)
-
-                        # Nothing else to do until we have finished
-                        # iterating.
-                        continue
 
                 groupedDataIds[group_key][ref.dataId] = dataset
 
@@ -1970,16 +1869,6 @@ class Butler(LimitedButler):
 
                 # Store expanded form in the original FileDataset.
                 dataset.refs = existingRefs
-            elif resolvedRefs:
-                if len(dataset.refs) != len(resolvedRefs):
-                    raise ConflictingDefinitionError(
-                        f"For dataset {dataset.path} some DatasetRef were "
-                        "resolved and others were not. This is not supported."
-                    )
-                dataset.refs = resolvedRefs
-
-                # These datasets have to be registered.
-                self.registry._importDatasets(resolvedRefs)
             else:
                 groupedData[group_key].append(dataset)
 
@@ -2122,8 +2011,6 @@ class Butler(LimitedButler):
         format: Optional[str] = None,
         transfer: Optional[str] = None,
         skip_dimensions: Optional[Set] = None,
-        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-        reuseIds: bool = False,
     ) -> None:
         """Import datasets into this repository that were exported from a
         different butler repository via `~lsst.daf.butler.Butler.export`.
@@ -2149,16 +2036,6 @@ class Butler(LimitedButler):
             Transfer mode passed to `~lsst.daf.butler.Datastore.ingest`.
         skip_dimensions : `set`, optional
             Names of dimensions that should be skipped and not imported.
-        idGenerationMode : `DatasetIdGenEnum`, optional
-            Specifies option for generating dataset IDs when IDs are not
-            provided or their type does not match backend type. By default
-            unique IDs are generated for each inserted dataset.
-        reuseIds : `bool`, optional
-            If `True` then forces re-use of imported dataset IDs for integer
-            IDs which are normally generated as auto-incremented; exception
-            will be raised if imported IDs clash with existing ones. This
-            option has no effect on the use of globally-unique IDs which are
-            always re-used (or generated if integer IDs are being imported).
 
         Raises
         ------
@@ -2203,10 +2080,12 @@ class Butler(LimitedButler):
                     raise FileNotFoundError(
                         f"Export file could not be found in {filename.abspath()} or {potential.abspath()}."
                     )
-        BackendClass = get_class_of(self._config["repo_transfer_formats"][format]["import"])
+        BackendClass: type[RepoImportBackend] = get_class_of(
+            self._config["repo_transfer_formats"][format]["import"]
+        )
 
         def doImport(importStream: TextIO | ResourceHandleProtocol) -> None:
-            backend = BackendClass(importStream, self.registry)
+            backend = BackendClass(importStream, self.registry)  # type: ignore[call-arg]
             backend.register()
             with self.transaction():
                 backend.load(
@@ -2214,8 +2093,6 @@ class Butler(LimitedButler):
                     directory=directory,
                     transfer=transfer,
                     skip_dimensions=skip_dimensions,
-                    idGenerationMode=idGenerationMode,
-                    reuseIds=reuseIds,
                 )
 
         if isinstance(filename, ResourcePath):
@@ -2622,7 +2499,3 @@ class Butler(LimitedButler):
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
     """
-
-    _allow_put_of_predefined_dataset: bool
-    """Allow a put to succeed even if there is already a registry entry for it
-    but not a datastore record. (`bool`)."""

@@ -211,13 +211,9 @@ class QuantumBackedButler(LimitedButler):
         dataset_types: `Mapping` [`str`, `DatasetType`], optional
             Mapping of the dataset type name to its registry definition.
         """
-        predicted_inputs = [
-            ref.getCheckedId() for ref in itertools.chain.from_iterable(quantum.inputs.values())
-        ]
-        predicted_inputs += [ref.getCheckedId() for ref in quantum.initInputs.values()]
-        predicted_outputs = [
-            ref.getCheckedId() for ref in itertools.chain.from_iterable(quantum.outputs.values())
-        ]
+        predicted_inputs = [ref.id for ref in itertools.chain.from_iterable(quantum.inputs.values())]
+        predicted_inputs += [ref.id for ref in quantum.initInputs.values()]
+        predicted_outputs = [ref.id for ref in itertools.chain.from_iterable(quantum.outputs.values())]
         return cls._initialize(
             config=config,
             predicted_inputs=predicted_inputs,
@@ -408,7 +404,7 @@ class QuantumBackedButler(LimitedButler):
                 storageClass=storageClass,
             )
         except (LookupError, FileNotFoundError, IOError):
-            self._unavailable_inputs.add(ref.getCheckedId())
+            self._unavailable_inputs.add(ref.id)
             raise
         if ref.id in self._predicted_inputs:
             # do this after delegating to super in case that raises.
@@ -459,7 +455,7 @@ class QuantumBackedButler(LimitedButler):
 
     def markInputUnused(self, ref: DatasetRef) -> None:
         # Docstring inherited.
-        self._actual_inputs.discard(ref.getCheckedId())
+        self._actual_inputs.discard(ref.id)
 
     @property
     def dimensions(self) -> DimensionUniverse:
@@ -571,7 +567,7 @@ class QuantumBackedButler(LimitedButler):
             available_inputs=self._available_inputs,
             actual_inputs=self._actual_inputs,
             predicted_outputs=self._predicted_outputs,
-            actual_outputs={ref.getCheckedId() for ref in self._actual_output_refs},
+            actual_outputs={ref.id for ref in self._actual_output_refs},
             datastore_records=provenance_records,
         )
 
@@ -678,9 +674,9 @@ class QuantumProvenanceData(BaseModel):
         summary_records: Dict[str, DatastoreRecordData] = {}
         for quantum, provenance_for_quantum in zip(quanta, provenance):
             quantum_refs_by_id = {
-                ref.getCheckedId(): ref
+                ref.id: ref
                 for ref in itertools.chain.from_iterable(quantum.outputs.values())
-                if ref.getCheckedId() in provenance_for_quantum.actual_outputs
+                if ref.id in provenance_for_quantum.actual_outputs
             }
             for ref in quantum_refs_by_id.values():
                 grouped_refs[ref.datasetType, ref.run].append(ref)

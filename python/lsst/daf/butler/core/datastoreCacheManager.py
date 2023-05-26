@@ -658,9 +658,6 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> Optional[ResourcePath]:
         # Docstring inherited
-        if ref.id is None:
-            raise ValueError(f"Can not cache a file associated with an unresolved reference ({ref})")
-
         if not self.should_be_cached(ref):
             return None
 
@@ -759,7 +756,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             refs = [refs]
 
         # Create a set of all the IDs
-        all_ids = {ref.getCheckedId() for ref in refs}
+        all_ids = {ref.id for ref in refs}
 
         keys_to_remove = []
         for key, entry in self._cache_entries.items():

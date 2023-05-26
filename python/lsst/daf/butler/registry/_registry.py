@@ -809,8 +809,6 @@ class Registry(ABC):
         self,
         datasets: Iterable[DatasetRef],
         expand: bool = True,
-        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-        reuseIds: bool = False,
     ) -> List[DatasetRef]:
         """Import one or more datasets into the `Registry`.
 
@@ -836,16 +834,6 @@ class Registry(ABC):
             necessary in general to allow datastore to generate file templates,
             but it may be disabled if the caller can guarantee this is
             unnecessary.
-        idGenerationMode : `DatasetIdGenEnum`, optional
-            Specifies option for generating dataset IDs when IDs are not
-            provided or their type does not match backend type. By default
-            unique IDs are generated for each inserted dataset.
-        reuseIds : `bool`, optional
-            If `True` then forces re-use of imported dataset IDs for integer
-            IDs which are normally generated as auto-incremented; exception
-            will be raised if imported IDs clash with existing ones. This
-            option has no effect on the use of globally-unique IDs which are
-            always re-used (or generated if integer IDs are being imported).
 
         Returns
         -------
@@ -940,8 +928,6 @@ class Registry(ABC):
         ConflictingDefinitionError
             If a Dataset with the given `DatasetRef` already exists in the
             given collection.
-        AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
         MissingCollectionError
             Raised if ``collection`` does not exist in the registry.
         CollectionTypeError

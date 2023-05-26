@@ -227,7 +227,7 @@ class RepoExportContext:
         data_ids = set()
         refs_to_export = {}
         for ref in sorted(refs):
-            dataset_id = ref.getCheckedId()
+            dataset_id = ref.id
             # The query interfaces that are often used to generate the refs
             # passed here often don't remove duplicates, so do that here for
             # convenience.

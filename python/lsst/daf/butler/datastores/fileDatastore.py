@@ -571,7 +571,7 @@ class FileDatastore(GenericBaseDatastore):
                     component=component,
                     checksum=None,
                     file_size=-1,
-                    dataset_id=ref.getCheckedId(),
+                    dataset_id=ref.id,
                 ),
             )
             for location, formatter, storageClass, component in all_info
@@ -1001,7 +1001,7 @@ class FileDatastore(GenericBaseDatastore):
             component=ref.datasetType.component(),
             file_size=size,
             checksum=checksum,
-            dataset_id=ref.getCheckedId(),
+            dataset_id=ref.id,
         )
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
@@ -1570,7 +1570,7 @@ class FileDatastore(GenericBaseDatastore):
 
         # Need a mapping of dataset_id to (internal) dataset ref since some
         # internal APIs work with dataset_id.
-        id_to_ref = {ref.getCheckedId(): ref for ref in internal_ref_to_input_ref}
+        id_to_ref = {ref.id: ref for ref in internal_ref_to_input_ref}
 
         # Set of all IDs we are checking for.
         requested_ids = set(id_to_ref.keys())
@@ -1636,7 +1636,7 @@ class FileDatastore(GenericBaseDatastore):
             id_to_ref = {}
             for missing_ref in refs:
                 expected = self._get_expected_dataset_locations_info(missing_ref)
-                dataset_id = missing_ref.getCheckedId()
+                dataset_id = missing_ref.id
                 records[dataset_id] = [info for _, info in expected]
                 id_to_ref[dataset_id] = missing_ref
 
@@ -1852,7 +1852,7 @@ class FileDatastore(GenericBaseDatastore):
                 uris[ref] = self._predict_URIs(ref)
 
         for ref in existing_refs:
-            file_infos = records[ref.getCheckedId()]
+            file_infos = records[ref.id]
             file_locations = [(i.file_location(self.locationFactory), i) for i in file_infos]
             uris[ref] = self._locations_to_URI(ref, file_locations)
 
@@ -2295,7 +2295,7 @@ class FileDatastore(GenericBaseDatastore):
                 refs = set(ref)
 
             # Determine which datasets are known to datastore directly.
-            id_to_ref = {ref.getCheckedId(): ref for ref in refs}
+            id_to_ref = {ref.id: ref for ref in refs}
             existing_ids = self._get_stored_records_associated_with_refs(refs)
             existing_refs = {id_to_ref[ref_id] for ref_id in existing_ids}
 
@@ -2426,9 +2426,6 @@ class FileDatastore(GenericBaseDatastore):
                     # Mypy needs to know this is not the base class
                     assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
 
-                    # Check for mypy
-                    assert ref.id is not None, f"Internal logic error in emptyTrash with ref {ref}/{info}"
-
                     path_map[info.path].remove(ref.id)
                     if not path_map[info.path]:
                         del path_map[info.path]
@@ -2442,9 +2439,6 @@ class FileDatastore(GenericBaseDatastore):
 
                 # Mypy needs to know this is not the base class
                 assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
-
-                # Check for mypy
-                assert ref.id is not None, f"Internal logic error in emptyTrash with ref {ref}/{info}"
 
                 if info.path in artifacts_to_keep:
                     # This is a multi-dataset artifact and we are not
@@ -2553,8 +2547,7 @@ class FileDatastore(GenericBaseDatastore):
         source_ids = set(source_records)
         log.debug("Number of datastore records found in source: %d", len(source_ids))
 
-        # The not None check is to appease mypy
-        requested_ids = set(ref.id for ref in refs if ref.id is not None)
+        requested_ids = set(ref.id for ref in refs)
         missing_ids = requested_ids - source_ids
 
         # Missing IDs can be okay if that datastore has allowed
@@ -2655,7 +2648,7 @@ class FileDatastore(GenericBaseDatastore):
                 continue
 
             # mypy needs to know these are always resolved refs
-            for info in source_records[ref.getCheckedId()]:
+            for info in source_records[ref.id]:
                 source_location = info.file_location(source_datastore.locationFactory)
                 target_location = info.file_location(self.locationFactory)
                 if source_location == target_location and not source_location.pathInStore.isabs():
@@ -2722,7 +2715,7 @@ class FileDatastore(GenericBaseDatastore):
         # Docstring inherited.
         refs = list(refs)
         self.bridge.forget(refs)
-        self._table.delete(["dataset_id"], *[{"dataset_id": ref.getCheckedId()} for ref in refs])
+        self._table.delete(["dataset_id"], *[{"dataset_id": ref.id} for ref in refs])
 
     def validateConfiguration(
         self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]], logFailures: bool = False
@@ -2940,7 +2933,7 @@ class FileDatastore(GenericBaseDatastore):
     def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
         # Docstring inherited from the base class.
         exported_refs = list(self._bridge.check(refs))
-        ids = {ref.getCheckedId() for ref in exported_refs}
+        ids = {ref.id for ref in exported_refs}
         records: defaultdict[DatasetId, defaultdict[str, List[StoredDatastoreItemInfo]]] = defaultdict(
             lambda: defaultdict(list), {id: defaultdict(list) for id in ids}
         )

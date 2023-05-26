@@ -26,7 +26,6 @@ import uuid
 
 from lsst.daf.butler import (
     DataCoordinate,
-    DatasetIdFactory,
     DatasetRef,
     DatasetType,
     DimensionUniverse,
@@ -522,26 +521,23 @@ class DatasetRefTestCase(unittest.TestCase):
 
     def testConstructor(self):
         """Test that construction preserves and validates values."""
-        # Construct an unresolved ref.
-        ref = DatasetRef(self.datasetType, self.dataId)
-        self.assertEqual(ref.datasetType, self.datasetType)
-        self.assertEqual(
-            ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe), msg=ref.dataId
-        )
-        self.assertIsInstance(ref.dataId, DataCoordinate)
-
-        # Constructing a ref with an id but no run should fail.
-        with self.assertRaises(ValueError):
+        # Constructing a ref requires a run.
+        with self.assertRaises(TypeError):
             DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4())
+
         # Constructing an unresolved ref with run and/or components should
         # issue a ref with an id.
         run = "somerun"
         ref = DatasetRef(self.datasetType, self.dataId, run=run)
+        self.assertEqual(ref.datasetType, self.datasetType)
+        self.assertEqual(
+            ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe), msg=ref.dataId
+        )
         self.assertIsNotNone(ref.id)
 
         # Passing a data ID that is missing dimensions should fail.
         with self.assertRaises(KeyError):
-            DatasetRef(self.datasetType, {"instrument": "DummyCam"})
+            DatasetRef(self.datasetType, {"instrument": "DummyCam"}, run="run")
         # Constructing a resolved ref should preserve run as well as everything
         # else.
         id_ = uuid.uuid4()
@@ -559,9 +555,10 @@ class DatasetRefTestCase(unittest.TestCase):
 
     def testSorting(self):
         """Can we sort a DatasetRef"""
-        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=1))
-        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10))
-        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=22))
+        # All refs have the same run.
+        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=1), run="run")
+        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="run")
+        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=22), run="run")
 
         # Enable detailed diff report
         self.maxDiff = None
@@ -570,7 +567,7 @@ class DatasetRefTestCase(unittest.TestCase):
         sort = sorted([ref3, ref1, ref2])
         self.assertEqual(sort, [ref1, ref2, ref3], msg=f"Got order: {[r.dataId for r in sort]}")
 
-        # Now include a run
+        # Now include different runs.
         ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b")
         self.assertEqual(ref1.run, "b")
         ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b")
@@ -584,25 +581,6 @@ class DatasetRefTestCase(unittest.TestCase):
         # Now with strings
         with self.assertRaises(TypeError):
             sort = sorted(["z", ref1, "c"])
-
-    def testResolving(self):
-        id_ = uuid.uuid4()
-        ref = DatasetRef(self.datasetType, self.dataId, id=id_, run="somerun")
-        unresolvedRef = ref.unresolved()
-        self.assertIsNotNone(ref.id)
-        self.assertIsNone(unresolvedRef.id)
-        self.assertIsNone(unresolvedRef.run)
-        self.assertNotEqual(ref, unresolvedRef)
-        self.assertEqual(ref.unresolved(), unresolvedRef)
-        self.assertEqual(ref.datasetType, unresolvedRef.datasetType)
-        self.assertEqual(ref.dataId, unresolvedRef.dataId)
-        reresolvedRef = unresolvedRef.resolved(id=id_, run="somerun")
-        self.assertEqual(ref, reresolvedRef)
-        self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
-        self.assertIsNotNone(reresolvedRef.run)
-
-        other_resolved = DatasetIdFactory().resolveRef(unresolvedRef, "somerun")
-        self.assertEqual(other_resolved.run, "somerun")
 
     def testOverrideStorageClass(self):
         storageA = StorageClass("test_a", pytype=list)

@@ -38,7 +38,6 @@ from lsst.utils.iteration import ensure_iterable
 from ..core import (
     DatasetAssociation,
     DatasetId,
-    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     Datastore,
@@ -172,7 +171,6 @@ class YamlRepoExportBackend(RepoExportBackend):
             idsByTimespan: Dict[Timespan, List[DatasetId]] = defaultdict(list)
             for association in associations:
                 assert association.timespan is not None
-                assert association.ref.id is not None
                 idsByTimespan[association.timespan].append(association.ref.id)
             self.data.append(
                 {
@@ -397,8 +395,6 @@ class YamlRepoImportBackend(RepoImportBackend):
         directory: ResourcePathExpression | None = None,
         transfer: Optional[str] = None,
         skip_dimensions: Optional[Set] = None,
-        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-        reuseIds: bool = False,
     ) -> None:
         # Docstring inherited from RepoImportBackend.load.
         for element, dimensionRecords in self.dimensions.items():
@@ -422,16 +418,14 @@ class YamlRepoImportBackend(RepoImportBackend):
             for fileDataset in records:
                 start = len(datasets)
                 datasets.extend(fileDataset.refs)
-                dataset_ids.extend(ref.id for ref in fileDataset.refs)  # type: ignore
+                dataset_ids.extend(ref.id for ref in fileDataset.refs)
                 stop = len(datasets)
                 slices.append(slice(start, stop))
             # Insert all of those DatasetRefs at once.
             # For now, we ignore the dataset_id we pulled from the file
             # and just insert without one to get a new autoincrement value.
             # Eventually (once we have origin in IDs) we'll preserve them.
-            resolvedRefs = self.registry._importDatasets(
-                datasets, idGenerationMode=idGenerationMode, reuseIds=reuseIds
-            )
+            resolvedRefs = self.registry._importDatasets(datasets)
             # Populate our dictionary that maps int dataset_id values from the
             # export file to the new DatasetRefs
             for fileId, ref in zip(dataset_ids, resolvedRefs):

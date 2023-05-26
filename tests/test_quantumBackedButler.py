@@ -139,8 +139,8 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         datastore_records = self.butler.datastore.export_records(self.all_input_refs)
         qbb = QuantumBackedButler.from_predicted(
             config=self.config,
-            predicted_inputs=[ref.getCheckedId() for ref in self.all_input_refs],
-            predicted_outputs=[ref.getCheckedId() for ref in self.output_refs],
+            predicted_inputs=[ref.id for ref in self.all_input_refs],
+            predicted_outputs=[ref.id for ref in self.output_refs],
             dimensions=self.universe,
             datastore_records=datastore_records,
             dataset_types=self.dataset_types,

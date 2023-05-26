@@ -27,16 +27,12 @@ __all__ = [
     "DatasetIdGenEnum",
     "DatasetRef",
     "SerializedDatasetRef",
-    "UnresolvedRefWarning",
 ]
 
 import enum
-import inspect
 import uuid
-import warnings
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, List, Optional, Tuple
 
-from deprecated.sphinx import deprecated
 from lsst.utils.classes import immutable
 from pydantic import BaseModel, ConstrainedInt, StrictStr, validator
 
@@ -51,10 +47,6 @@ if TYPE_CHECKING:
     from ..storageClass import StorageClass
 
 
-class UnresolvedRefWarning(FutureWarning):
-    """Warnings concerning the usage of unresolved DatasetRefs."""
-
-
 class AmbiguousDatasetError(Exception):
     """Raised when a `DatasetRef` is not resolved but should be.
 
@@ -66,25 +58,6 @@ class AmbiguousDatasetError(Exception):
 class PositiveInt(ConstrainedInt):
     ge = 0
     strict = True
-
-
-def _find_outside_stacklevel() -> int:
-    """Find the stacklevel for outside of lsst.daf.butler"""
-    stacklevel = 1
-    for i, s in enumerate(inspect.stack()):
-        module = inspect.getmodule(s.frame)
-        # Stack frames sometimes hang around so explicitly delete.
-        del s
-        if module is None:
-            continue
-        if not module.__name__.startswith("lsst.daf.butler"):
-            # 0 will be this function.
-            # 1 will be the caller
-            # and so does not need adjustment.
-            stacklevel = i
-            break
-
-    return stacklevel
 
 
 class DatasetIdGenEnum(enum.Enum):
@@ -172,60 +145,11 @@ class DatasetIdFactory:
             data = ",".join(f"{key}={value}" for key, value in items)
             return uuid.uuid5(self.NS_UUID, data)
 
-    @deprecated(
-        "This method will soon be removed since it will be impossible to create an unresolved ref.",
-        version="26.0",
-        category=UnresolvedRefWarning,
-    )
-    def resolveRef(
-        self,
-        ref: DatasetRef,
-        run: str,
-        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-    ) -> DatasetRef:
-        """Generate resolved dataset reference for predicted datasets.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Dataset ref, can be already resolved.
-        run : `str`
-            Name of the RUN collection for the dataset.
-        idGenerationMode : `DatasetIdGenEnum`
-            ID generation option. `~DatasetIdGenEnum.UNIQUE` makes a random
-            UUID4-type ID. `~DatasetIdGenEnum.DATAID_TYPE` makes a
-            deterministic UUID5-type ID based on a dataset type name and
-            ``dataId``.  `~DatasetIdGenEnum.DATAID_TYPE_RUN` makes a
-            deterministic UUID5-type ID based on a dataset type name, run
-            collection name, and ``dataId``.
-
-        Returns
-        -------
-        resolved : `DatasetRef`
-            Resolved dataset ref, if input reference is already resolved it
-            is returned without modification.
-
-        Notes
-        -----
-        This method can only be used for predicted dataset references that do
-        not exist yet in the database. It does not resolve existing dataset
-        references already stored in registry.
-        """
-        if ref.id is not None:
-            return ref
-        datasetId = self.makeDatasetId(run, ref.datasetType, ref.dataId, idGenerationMode)
-        # Hide the warning coming from ref.resolved()
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UnresolvedRefWarning)
-            resolved = ref.resolved(datasetId, run)
-        return resolved
-
 
 class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
-    # DO NOT change order in the Union, pydantic is sensitive to that!
-    id: uuid.UUID | None = None
+    id: uuid.UUID
     datasetType: Optional[SerializedDatasetType] = None
     dataId: Optional[SerializedDataCoordinate] = None
     run: Optional[StrictStr] = None
@@ -254,23 +178,28 @@ class SerializedDatasetRef(BaseModel):
     def direct(
         cls,
         *,
-        id: Optional[Union[str, int]] = None,
+        id: str,
+        run: str,
         datasetType: Optional[Dict[str, Any]] = None,
         dataId: Optional[Dict[str, Any]] = None,
-        run: str | None = None,
         component: Optional[str] = None,
     ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.
 
+        Notes
+        -----
         This differs from the pydantic "construct" method in that the arguments
         are explicitly what the model requires, and it will recurse through
         members, constructing them from their corresponding `direct` methods.
+
+        The ``id`` parameter is a string representation of dataset ID, it is
+        converted to UUID by this method.
 
         This method should only be called when the inputs are trusted.
         """
         node = SerializedDatasetRef.__new__(cls)
         setter = object.__setattr__
-        setter(node, "id", uuid.UUID(id) if isinstance(id, str) else id)
+        setter(node, "id", uuid.UUID(id))
         setter(
             node,
             "datasetType",
@@ -301,12 +230,12 @@ class DatasetRef:
         The `DatasetType` for this Dataset.
     dataId : `DataCoordinate`
         A mapping of dimensions that labels the Dataset within a Collection.
-    id : `DatasetId`, optional
-        The unique identifier assigned when the dataset is created. If ``run``
-        is specified and ``id`` is not specified, an ID will be created.
-    run : `str`, optional
+    run : `str`
         The name of the run this dataset was associated with when it was
-        created.  Must be provided if ``id`` is.
+        created.
+    id : `DatasetId`, optional
+        The unique identifier assigned when the dataset is created. If ``id``
+        is not specified, a new unique ID will be created.
     conform : `bool`, optional
         If `True` (default), call `DataCoordinate.standardize` to ensure that
         the data ID's dimensions are consistent with the dataset type's.
@@ -345,9 +274,9 @@ class DatasetRef:
         self,
         datasetType: DatasetType,
         dataId: DataCoordinate,
+        run: str,
         *,
         id: Optional[DatasetId] = None,
-        run: Optional[str] = None,
         conform: bool = True,
         id_generation_mode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
     ):
@@ -356,29 +285,13 @@ class DatasetRef:
             self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         else:
             self.dataId = dataId
+        self.run = run
         if id is not None:
-            if run is None:
-                raise ValueError(
-                    f"Cannot provide id without run for dataset with id={id}, "
-                    f"type={datasetType}, and dataId={dataId}."
-                )
-            self.run = run
             self.id = id
         else:
-            if run is not None:
-                self.run = run
-                self.id = DatasetIdFactory().makeDatasetId(
-                    self.run, self.datasetType, self.dataId, id_generation_mode
-                )
-            else:
-                self.id = None
-                self.run = None
-                warnings.warn(
-                    "Support for creating unresolved refs will soon be removed. Please contact the "
-                    "middleware team for advice on modifying your code to use resolved refs.",
-                    category=UnresolvedRefWarning,
-                    stacklevel=_find_outside_stacklevel(),
-                )
+            self.id = DatasetIdFactory().makeDatasetId(
+                self.run, self.datasetType, self.dataId, id_generation_mode
+            )
 
     def __eq__(self, other: Any) -> bool:
         try:
@@ -399,15 +312,13 @@ class DatasetRef:
         # DataCoordinate's __repr__ - while adhering to the guidelines for
         # __repr__ - is much harder to users to read, while its __str__ just
         # produces a dict that can also be passed to DatasetRef's constructor.
-        if self.id is not None:
-            return f"DatasetRef({self.datasetType!r}, {self.dataId!s}, id={self.id}, run={self.run!r})"
-        else:
-            return f"DatasetRef({self.datasetType!r}, {self.dataId!s})"
+        return f"DatasetRef({self.datasetType!r}, {self.dataId!s}, run={self.run!r}, id={self.id})"
 
     def __str__(self) -> str:
-        s = f"{self.datasetType.name}@{self.dataId!s}, sc={self.datasetType.storageClass_name}]"
-        if self.id is not None:
-            s += f" (id={self.id})"
+        s = (
+            f"{self.datasetType.name}@{self.dataId!s} [sc={self.datasetType.storageClass_name}]"
+            f" (run={self.run} id={self.id})"
+        )
         return s
 
     def __lt__(self, other: Any) -> bool:
@@ -441,13 +352,12 @@ class DatasetRef:
         simple : `dict` or `int`
             The object converted to a dictionary.
         """
-        if minimal and self.id is not None:
-            # The only thing needed to uniquely define a DatasetRef
-            # is its id so that can be used directly if it is
-            # resolved and if it is not a component DatasetRef.
-            # Store is in a dict to allow us to easily add the planned
-            # origin information later without having to support
-            # an int and dict in simple form.
+        if minimal:
+            # The only thing needed to uniquely define a DatasetRef is its id
+            # so that can be used directly if it is not a component DatasetRef.
+            # Store is in a dict to allow us to easily add the planned origin
+            # information later without having to support an int and dict in
+            # simple form.
             simple: Dict[str, Any] = {"id": self.id}
             if self.isComponent():
                 # We can still be a little minimalist with a component
@@ -455,18 +365,12 @@ class DatasetRef:
                 simple["component"] = self.datasetType.component()
             return SerializedDatasetRef(**simple)
 
-        # Convert to a dict form
-        as_dict: Dict[str, Any] = {
-            "datasetType": self.datasetType.to_simple(minimal=minimal),
-            "dataId": self.dataId.to_simple(),
-        }
-
-        # Only include the id entry if it is defined
-        if self.id is not None:
-            as_dict["run"] = self.run
-            as_dict["id"] = self.id
-
-        return SerializedDatasetRef(**as_dict)
+        return SerializedDatasetRef(
+            datasetType=self.datasetType.to_simple(minimal=minimal),
+            dataId=self.dataId.to_simple(),
+            run=self.run,
+            id=self.id,
+        )
 
     @classmethod
     def from_simple(
@@ -539,21 +443,17 @@ class DatasetRef:
             raise ValueError("The DataId must be specified to construct a DatasetRef")
         dataId = DataCoordinate.from_simple(simple.dataId, universe=universe)
 
-        # Issue our own warning that could be more explicit.
-        if simple.id is None and simple.run is None:
+        # Check that simple ref is resolved.
+        if simple.run is None:
             dstr = ""
             if simple.datasetType is None:
                 dstr = f" (datasetType={datasetType.name!r})"
-            warnings.warn(
-                "Attempting to create an unresolved ref from simple form is deprecated. "
-                f"Encountered with {simple!r}{dstr}.",
-                category=UnresolvedRefWarning,
-                stacklevel=_find_outside_stacklevel(),
+            raise ValueError(
+                "Run collection name is missing from serialized representation. "
+                f"Encountered with {simple!r}{dstr}."
             )
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UnresolvedRefWarning)
-            return cls(datasetType, dataId, id=simple.id, run=simple.run)
+        return cls(datasetType, dataId, id=simple.id, run=simple.run)
 
     to_json = to_json_pydantic
     from_json: ClassVar = classmethod(from_json_pydantic)
@@ -563,8 +463,8 @@ class DatasetRef:
         cls,
         datasetType: DatasetType,
         dataId: DataCoordinate,
-        id: Optional[DatasetId],
-        run: Optional[str],
+        id: DatasetId,
+        run: str,
     ) -> DatasetRef:
         """Create new `DatasetRef`.
 
@@ -580,62 +480,6 @@ class DatasetRef:
         # DatasetRef is recursively immutable; see note in @immutable
         # decorator.
         return self
-
-    @deprecated(
-        "This method will soon be a no-op since it will be impossible to create an unresolved ref.",
-        version="26.0",
-        category=UnresolvedRefWarning,
-    )
-    def resolved(self, id: DatasetId, run: str) -> DatasetRef:
-        """Return resolved `DatasetRef`.
-
-        This is a new `DatasetRef` with the same data ID and dataset type
-        and the given ID and run.
-
-        Parameters
-        ----------
-        id : `DatasetId`
-            The unique identifier assigned when the dataset is created.
-        run : `str`
-            The run this dataset was associated with when it was created.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A new `DatasetRef`.
-        """
-        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, id=id, run=run, conform=False)
-
-    @deprecated(
-        "Support for unresolved refs will soon be removed. Please contact middleware developers with"
-        " advice on how to modify your code.",
-        category=UnresolvedRefWarning,
-        version="26.0",
-    )
-    def unresolved(self) -> DatasetRef:
-        """Return unresolved `DatasetRef`.
-
-        This is a new `DatasetRef` with the same data ID and dataset type,
-        but no ID or run.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A new `DatasetRef`.
-
-        Notes
-        -----
-        This can be used to compare only the data ID and dataset type of a
-        pair of `DatasetRef` instances, regardless of whether either is
-        resolved::
-
-            if ref1.unresolved() == ref2.unresolved():
-                ...
-        """
-        # We have already warned about this so no need to warn again.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UnresolvedRefWarning)
-            return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, conform=False)
 
     def expanded(self, dataId: DataCoordinate) -> DatasetRef:
         """Return a new `DatasetRef` with the given expanded data ID.
@@ -718,26 +562,6 @@ class DatasetRef:
             result.setdefault(ref.datasetType, []).append(ref)
         return result
 
-    def getCheckedId(self) -> DatasetId:
-        """Return ``self.id``, or raise if it is `None`.
-
-        This trivial method exists to allow operations that would otherwise be
-        natural list comprehensions to check that the ID is not `None` as well.
-
-        Returns
-        -------
-        id : `DatasetId`
-            ``self.id`` if it is not `None`.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``ref.id`` is `None`.
-        """
-        if self.id is None:
-            raise AmbiguousDatasetError(f"ID for dataset {self} is `None`; a resolved reference is required.")
-        return self.id
-
     def makeCompositeRef(self) -> DatasetRef:
         """Create a `DatasetRef` of the composite from a component ref.
 
@@ -817,18 +641,14 @@ class DatasetRef:
     Cannot be changed after a `DatasetRef` is constructed.
     """
 
-    run: Optional[str]
+    run: str
     """The name of the run that produced the dataset.
 
-    Cannot be changed after a `DatasetRef` is constructed; use `resolved` or
-    `unresolved` to add or remove this information when creating a new
-    `DatasetRef`.
+    Cannot be changed after a `DatasetRef` is constructed.
     """
 
-    id: Optional[DatasetId]
-    """Primary key of the dataset (`DatasetId` or `None`).
+    id: DatasetId
+    """Primary key of the dataset (`DatasetId`).
 
-    Cannot be changed after a `DatasetRef` is constructed; use `resolved` or
-    `unresolved` to add or remove this information when creating a new
-    `DatasetRef`.
+    Cannot be changed after a `DatasetRef` is constructed.
     """

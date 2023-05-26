@@ -34,9 +34,7 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict(
-            repo=None, transfer="auto", directory=None, skip_dimensions=(), export_file=None, reuse_ids=False
-        )
+        return dict(repo=None, transfer="auto", directory=None, skip_dimensions=(), export_file=None)
 
     @staticmethod
     def command():

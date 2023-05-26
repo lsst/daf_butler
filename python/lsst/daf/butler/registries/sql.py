@@ -88,6 +88,7 @@ from ..registry import (
     OrphanedRecordError,
     Registry,
     RegistryConfig,
+    RegistryConsistencyError,
     RegistryDefaults,
     queries,
 )
@@ -613,8 +614,6 @@ class SqlRegistry(Registry):
         self,
         datasets: Iterable[DatasetRef],
         expand: bool = True,
-        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-        reuseIds: bool = False,
     ) -> List[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         datasets = list(datasets)
@@ -638,12 +637,6 @@ class SqlRegistry(Registry):
         if len(runs) != 1:
             raise ValueError(f"Multiple run names in input datasets: {runs}")
         run = runs.pop()
-        if run is None:
-            if self.defaults.run is None:
-                raise NoDefaultCollectionError(
-                    "No run provided to ingestDatasets, and no default from registry construction."
-                )
-            run = self.defaults.run
 
         runRecord = self._managers.collections.find(run)
         if runRecord.type is not CollectionType.RUN:
@@ -666,7 +659,7 @@ class SqlRegistry(Registry):
             ]
 
         try:
-            refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode, reuseIds))
+            refs = list(storage.import_(runRecord, expandedDatasets))
             if self._managers.obscore:
                 context = queries.SqlQueryContext(self._db, self._managers.column_types)
                 self._managers.obscore.add_datasets(refs, context)
@@ -679,6 +672,13 @@ class SqlRegistry(Registry):
                 "and dataset type already exists, but it may also mean a "
                 "dimension row is missing."
             ) from err
+        # Check that imported dataset IDs match the input
+        for imported_ref, input_ref in zip(refs, datasets):
+            if imported_ref.id != input_ref.id:
+                raise RegistryConsistencyError(
+                    "Imported dataset ID differs from input dataset ID, "
+                    f"input ref: {input_ref}, imported ref: {imported_ref}"
+                )
         return refs
 
     def getDataset(self, id: DatasetId) -> Optional[DatasetRef]:

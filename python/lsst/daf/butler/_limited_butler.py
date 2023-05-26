@@ -30,14 +30,7 @@ from typing import Any, ClassVar, Dict, Iterable, Optional, Union
 from deprecated.sphinx import deprecated
 
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from .core import (
-    AmbiguousDatasetError,
-    DatasetRef,
-    Datastore,
-    DimensionUniverse,
-    StorageClass,
-    StorageClassFactory,
-)
+from .core import DatasetRef, Datastore, DimensionUniverse, StorageClass, StorageClassFactory
 
 log = logging.getLogger(__name__)
 
@@ -86,8 +79,6 @@ class LimitedButler(ABC):
         ------
         TypeError
             Raised if the butler is read-only.
-        AmbiguousDatasetError
-            Raised if ``ref.id is None``, i.e. the reference is unresolved.
 
         Notes
         -----
@@ -119,8 +110,6 @@ class LimitedButler(ABC):
         ------
         TypeError
             Raised if the butler is read-only.
-        AmbiguousDatasetError
-            Raised if ``ref.id is None``, i.e. the reference is unresolved.
 
         Notes
         -----
@@ -171,8 +160,6 @@ class LimitedButler(ABC):
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
         log.debug("Butler get: %s, parameters=%s, storageClass: %s", ref, parameters, storageClass)
-        if ref.id is None:
-            raise AmbiguousDatasetError(f"Dataset {ref} is not resolved.")
         return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     @deprecated(
@@ -208,11 +195,6 @@ class LimitedButler(ABC):
         -------
         obj : `object`
             The dataset.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``ref.id is None``, i.e. the reference is unresolved.
         """
         return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
@@ -250,16 +232,7 @@ class LimitedButler(ABC):
         -------
         obj : `DeferredDatasetHandle`
             A handle which can be used to retrieve a dataset at a later time.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``ref.id is None``, i.e. the reference is unresolved.
         """
-        if ref.id is None:
-            raise AmbiguousDatasetError(
-                f"Dataset of type {ref.datasetType.name} with data ID {ref.dataId} is not resolved."
-            )
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
@@ -293,18 +266,11 @@ class LimitedButler(ABC):
         obj : `DeferredDatasetHandle`
             A handle which can be used to retrieve a dataset at a later time.
 
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if an unresolved `DatasetRef` is passed as an input.
-
         Notes
         -----
         In a `LimitedButler` the only allowable way to specify a dataset is
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
-        if ref.id is None:
-            raise AmbiguousDatasetError(f"Dataset {ref} is not resolved.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def datasetExistsDirect(self, ref: DatasetRef) -> bool:

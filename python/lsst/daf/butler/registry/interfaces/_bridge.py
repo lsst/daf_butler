@@ -77,19 +77,6 @@ class FakeDatasetRef:
     """Unique identifier for this dataset.
     """
 
-    def getCheckedId(self) -> DatasetId:
-        """Return ``self.id``.
-
-        This trivial method exists for compatibility with `DatasetRef`, for
-        which checking is actually done.
-
-        Returns
-        -------
-        id : `DatasetId`
-            ``self.id``.
-        """
-        return self.id
-
     @property
     def datasetType(self) -> DatasetType:
         raise AttributeError("A FakeDatasetRef can not be associated with a valid DatasetType")
@@ -122,11 +109,6 @@ class DatastoreRegistryBridge(ABC):
         ----------
         refs : `Iterable` of `DatasetIdRef`
             References to the datasets.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
         """
         raise NotImplementedError()
 
@@ -142,11 +124,6 @@ class DatastoreRegistryBridge(ABC):
         ----------
         refs : `Iterable` of `DatasetIdRef`
             References to the datasets.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
         """
         raise NotImplementedError()
 
@@ -161,11 +138,6 @@ class DatastoreRegistryBridge(ABC):
         transaction : `DatastoreTransaction` or `None`
             Transaction object. Can be `None` in some bridges or if no rollback
             is required.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
         """
         raise NotImplementedError()
 
@@ -183,11 +155,6 @@ class DatastoreRegistryBridge(ABC):
         present : `Iterable` [ `DatasetIdRef` ]
             Datasets from ``refs`` that are recorded as being in this
             datastore.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
         """
         raise NotImplementedError()
 
