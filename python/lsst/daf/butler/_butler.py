@@ -1658,8 +1658,8 @@ class Butler(LimitedButler):
         """
         existence = DatasetExistence.Unknown
 
-        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id:
-            registry_ref = self.registry.getDataset(datasetRefOrType.getCheckedId())
+        if isinstance(datasetRefOrType, DatasetRef):
+            registry_ref = self.registry.getDataset(datasetRefOrType.id)
             if registry_ref is not None:
                 existence |= DatasetExistence.RegistryKnows
             ref = datasetRefOrType
@@ -1714,7 +1714,7 @@ class Butler(LimitedButler):
 
         # Registry does not have a bulk API to check for a ref.
         for ref in refs:
-            registry_ref = self.registry.getDataset(ref.getCheckedId())
+            registry_ref = self.registry.getDataset(ref.id)
             if registry_ref is not None:
                 existence[ref] |= DatasetExistence.RegistryKnows
 
