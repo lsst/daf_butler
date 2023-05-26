@@ -257,7 +257,10 @@ class ButlerPutGetTests(TestCaseMixin):
             expected_collections.update({this_run})
 
             with self.subTest(args=args):
-                ref = butler.put(metric, *args, run=this_run)
+                kwargs: dict[str, Any] = {}
+                if not isinstance(args[0], DatasetRef):  # type: ignore
+                    kwargs["run"] = this_run
+                ref = butler.put(metric, *args, **kwargs)
                 self.assertIsInstance(ref, DatasetRef)
 
                 # Test getDirect
@@ -267,15 +270,12 @@ class ButlerPutGetTests(TestCaseMixin):
                 metricOut = butler.get(ref.datasetType.name, dataId, collections=this_run)
                 self.assertEqual(metric, metricOut)
                 # Test get with a datasetRef
-                metricOut = butler.get(ref, collections=this_run)
+                metricOut = butler.get(ref)
                 self.assertEqual(metric, metricOut)
                 # Test getDeferred with dataId
                 metricOut = butler.getDeferred(ref.datasetType.name, dataId, collections=this_run).get()
                 self.assertEqual(metric, metricOut)
-                # Test getDeferred with a datasetRef
-                metricOut = butler.getDeferred(ref, collections=this_run).get()
-                self.assertEqual(metric, metricOut)
-                # and deferred direct with ref
+                # Test getDeferred with a ref
                 metricOut = butler.getDeferred(ref).get()
                 self.assertEqual(metric, metricOut)
 
@@ -1339,8 +1339,8 @@ class FileDatastoreButlerTests(ButlerTests):
         )
         ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
         ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
-        uri1 = butler.getURI(ref1, collections=[run1])
-        uri2 = butler.getURI(ref2, collections=[run2])
+        uri1 = butler.getURI(ref1)
+        uri2 = butler.getURI(ref2)
 
         with self.assertRaises(OrphanedRecordError):
             butler.registry.removeDatasetType(datasetType.name)
@@ -1455,9 +1455,9 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         self.assertFalse(butler.exists(ref1.datasetType, ref1.dataId, collections=run1))
 
         # Put data back.
-        ref1 = butler.put(metric, ref1, run=run1)
-        ref2 = butler.put(metric, ref2, run=run2)
-        ref3 = butler.put(metric, ref3, run=run1)
+        ref1 = butler.put(metric, ref1)
+        ref2 = butler.put(metric, ref2)
+        ref3 = butler.put(metric, ref3)
 
         # Check that in normal mode, deleting the record will lead to
         # trash not touching the file.
