@@ -68,6 +68,7 @@ from lsst.daf.butler import (
     CollectionType,
     Config,
     DataCoordinate,
+    DatasetExistence,
     DatasetRef,
     DatasetType,
     FileDataset,
@@ -1450,20 +1451,117 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
         ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
 
+        many_stored = butler.stored_many([ref1, ref2, ref3])
+        for ref, stored in many_stored.items():
+            self.assertTrue(stored, f"Ref {ref} should be stored")
+
         # Simple prune.
         butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
         self.assertFalse(butler.exists(ref1.datasetType, ref1.dataId, collections=run1))
 
+        many_stored = butler.stored_many([ref1, ref2, ref3])
+        for ref, stored in many_stored.items():
+            self.assertFalse(stored, f"Ref {ref} should not be stored")
+
+        many_exists = butler.exists_many([ref1, ref2, ref3])
+        for ref, exists in many_exists.items():
+            self.assertEqual(exists, DatasetExistence.Unknown, f"Ref {ref} should not be stored")
+
         # Put data back.
-        ref1 = butler.put(metric, ref1)
+        ref1_new = butler.put(metric, ref1)
+        self.assertEqual(ref1_new, ref1)  # Reuses original ID.
         ref2 = butler.put(metric, ref2)
+
+        many_stored = butler.stored_many([ref1, ref2, ref3])
+        self.assertTrue(many_stored[ref1])
+        self.assertTrue(many_stored[ref2])
+        self.assertFalse(many_stored[ref3])
+
         ref3 = butler.put(metric, ref3)
 
+        many_exists = butler.exists_many([ref1, ref2, ref3])
+        for ref, exists in many_exists.items():
+            self.assertTrue(exists, f"Ref {ref} should not be stored")
+
+        # Clear out the datasets from registry and start again.
+        refs = [ref1, ref2, ref3]
+        butler.pruneDatasets(refs, purge=True, unstore=True)
+        for ref in refs:
+            butler.put(metric, ref)
+
+        # Test different forms of file availability.
+        # Need to be in a state where:
+        # - one ref just has registry record.
+        # - one ref has a missing file but a datastore record.
+        # - one ref has a missing datastore record but file is there.
+        # - one ref does not exist anywhere.
+        # Do not need to test a ref that has everything since that is tested
+        # above.
+        ref0 = DatasetRef(
+            datasetType,
+            DataCoordinate.standardize(
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"}, universe=butler.dimensions
+            ),
+            run=run1,
+        )
+
+        # Delete from datastore and retain in Registry.
+        butler.pruneDatasets([ref1], purge=False, unstore=True, disassociate=False)
+
+        # File has been removed.
+        uri2 = butler.datastore.getURI(ref2)
+        uri2.remove()
+
+        # Datastore has lost track.
+        butler.datastore.forget([ref3])
+
+        # First test with a standard butler.
+        exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=True)
+        self.assertEqual(exists_many[ref0], DatasetExistence.Unknown)
+        self.assertEqual(exists_many[ref1], DatasetExistence.RegistryKnows)
+        self.assertEqual(exists_many[ref2], DatasetExistence.RegistryKnows | DatasetExistence.DatastoreKnows)
+        self.assertEqual(exists_many[ref3], DatasetExistence.RegistryKnows)
+
+        exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=False)
+        self.assertEqual(exists_many[ref0], DatasetExistence.Unknown)
+        self.assertEqual(
+            exists_many[ref1], DatasetExistence.RegistryKnows | DatasetExistence.ArtifactNotChecked
+        )
+        self.assertEqual(exists_many[ref2], DatasetExistence.PartialCheck)
+        self.assertEqual(
+            exists_many[ref3], DatasetExistence.RegistryKnows | DatasetExistence.ArtifactNotChecked
+        )
+        self.assertTrue(exists_many[ref2])
+
+        # Check that per-ref query gives the same answer as many query.
+        for ref, exists in exists_many.items():
+            self.assertEqual(butler.exists(ref, full_check=False), exists)
+
+        # Test again with a trusting butler.
+        butler.datastore.trustGetRequest = True
+        exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=True)
+        self.assertEqual(exists_many[ref0], DatasetExistence.Unknown)
+        self.assertEqual(exists_many[ref1], DatasetExistence.RegistryKnows)
+        self.assertEqual(exists_many[ref2], DatasetExistence.RegistryKnows | DatasetExistence.DatastoreKnows)
+        self.assertEqual(exists_many[ref3], DatasetExistence.RegistryKnows | DatasetExistence.ArtifactExists)
+
+        # Check that per-ref query gives the same answer as many query.
+        for ref, exists in exists_many.items():
+            self.assertEqual(butler.exists(ref, full_check=True), exists)
+
+        # Remove everything and start from scratch.
+        butler.datastore.trustGetRequest = False
+        butler.pruneDatasets(refs, purge=True, unstore=True)
+        for ref in refs:
+            butler.put(metric, ref)
+
+        # These tests mess directly with the trash table and can leave the
+        # datastore in an odd state. Do them at the end.
         # Check that in normal mode, deleting the record will lead to
         # trash not touching the file.
         uri1 = butler.datastore.getURI(ref1)
         butler.datastore.bridge.moveToTrash([ref1], transaction=None)  # Update the dataset_location table
-        butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref1.id})
+        butler.datastore.forget([ref1])
         butler.datastore.trash(ref1)
         butler.datastore.emptyTrash()
         self.assertTrue(uri1.exists())
@@ -1479,7 +1577,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Remove the datastore record.
         butler.datastore.bridge.moveToTrash([ref2], transaction=None)  # Update the dataset_location table
-        butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref2.id})
+        butler.datastore.forget([ref2])
         self.assertTrue(uri2.exists())
         butler.datastore.trash([ref2, ref3])
         # Immediate removal for ref2 file

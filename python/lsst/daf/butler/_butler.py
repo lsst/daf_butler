@@ -27,6 +27,7 @@ from __future__ import annotations
 __all__ = (
     "Butler",
     "ButlerValidationError",
+    "DatasetExistence",
 )
 
 import collections.abc
@@ -1676,7 +1677,8 @@ class Butler(LimitedButler):
         if full_check:
             if self.datastore.exists(ref):
                 existence |= DatasetExistence.ArtifactExists
-        else:
+        elif existence != DatasetExistence.Unknown:
+            # Do not add this flag if we have no other idea about a dataset.
             existence |= DatasetExistence.ArtifactNotChecked
 
         return existence
@@ -1730,8 +1732,10 @@ class Butler(LimitedButler):
                 if exists:
                     existence[ref] |= DatasetExistence.ArtifactExists
         else:
+            # Do not set this flag if nothing is known about the dataset.
             for ref in existence.keys():
-                existence[ref] |= DatasetExistence.ArtifactNotChecked
+                if existence[ref] != DatasetExistence.Unknown:
+                    existence[ref] |= DatasetExistence.ArtifactNotChecked
 
         return existence
 
