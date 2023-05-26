@@ -233,7 +233,7 @@ class Butler(LimitedButler):
             if isinstance(config, str):
                 # Somehow ButlerConfig fails in some cases if config is a
                 # ResourcePath, force it back to string here.
-                config = str(self.get_repo_uri(config, config))
+                config = str(self.get_repo_uri(config, True))
             try:
                 self._config = ButlerConfig(config, searchPaths=searchPaths)
             except FileNotFoundError as e:
@@ -288,18 +288,19 @@ class Butler(LimitedButler):
             return None
 
     @classmethod
-    def get_repo_uri(cls, label: str, default: ResourcePath | str | None = None) -> ResourcePath:
+    def get_repo_uri(cls, label: str, return_label: bool = False) -> ResourcePath:
         """Look up the label in a butler repository index.
 
         Parameters
         ----------
         label : `str`
             Label of the Butler repository to look up.
-        default : `lsst.resources.ResourcePath` or `str`, optional
+        return_label : `bool`, optional
             If ``label`` cannot be found in the repository index (either
             because index is not defined or ``label`` is not in the index) and
-            ``default`` is not `None` then return its value. If not specified
-            then an exception will be raised instead.
+            ``return_label`` is `True` then return ``ResourcePath(label)``.
+            If ``return_label`` is `False` (default) then an exception will be
+            raised instead.
 
         Returns
         -------
@@ -311,14 +312,14 @@ class Butler(LimitedButler):
         ------
         KeyError
             Raised if the label is not found in the index, or if an index
-            is not defined, and ``default`` is not specified.
+            is not defined, and ``return_label`` is `False`.
 
         Notes
         -----
         See `~lsst.daf.butler.ButlerRepoIndex` for details on how the
         information is discovered.
         """
-        return ButlerRepoIndex.get_repo_uri(label, default)
+        return ButlerRepoIndex.get_repo_uri(label, return_label)
 
     @classmethod
     def get_known_repos(cls) -> Set[str]:

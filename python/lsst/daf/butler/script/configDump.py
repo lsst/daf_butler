@@ -50,7 +50,7 @@ def configDump(repo: str, subset: str, searchpath: str, outfile: IO) -> None:
     AttributeError
         If there is an issue dumping the configuration.
     """
-    repo_path = ButlerRepoIndex.get_repo_uri(repo, repo)
+    repo_path = ButlerRepoIndex.get_repo_uri(repo, True)
     config = ButlerConfig(repo_path, searchPaths=searchpath)
     if subset is not None:
         try:

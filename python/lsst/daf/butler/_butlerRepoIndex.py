@@ -137,18 +137,19 @@ class ButlerRepoIndex:
         return set(repo_index)
 
     @classmethod
-    def get_repo_uri(cls, label: str, default: ResourcePath | str | None = None) -> ResourcePath:
+    def get_repo_uri(cls, label: str, return_label: bool = False) -> ResourcePath:
         """Look up the label in a butler repository index.
 
         Parameters
         ----------
         label : `str`
             Label of the Butler repository to look up.
-        default : `lsst.resources.ResourcePath` or `str`, optional
+        return_label : `bool`, optional
             If ``label`` cannot be found in the repository index (either
             because index is not defined or ``label`` is not in the index) and
-            ``default`` is not `None` then return its value. If not specified
-            then an exception will be raised instead.
+            ``return_label`` is `True` then return ``ResourcePath(label)``.
+            If ``return_label`` is `False` (default) then an exception will be
+            raised instead.
 
         Returns
         -------
@@ -160,7 +161,7 @@ class ButlerRepoIndex:
         ------
         KeyError
             Raised if the label is not found in the index, or if an index
-            is not defined, and ``default`` is not specified.
+            is not defined, and ``return_label`` is `False`.
         FileNotFoundError
             Raised if an index is defined in the environment but it
             can not be found.
@@ -168,14 +169,14 @@ class ButlerRepoIndex:
         try:
             repo_index = cls._read_repository_index_from_environment()
         except KeyError:
-            if default is not None:
-                return ResourcePath(default)
+            if return_label:
+                return ResourcePath(label)
             raise
 
         repo_uri = repo_index.get(label)
         if repo_uri is None:
-            if default is not None:
-                return ResourcePath(default)
+            if return_label:
+                return ResourcePath(label)
             # This should not raise since it worked earlier.
             try:
                 index_uri = str(cls._get_index_uri())

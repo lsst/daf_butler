@@ -333,7 +333,7 @@ class QuantumBackedButler(LimitedButler):
             Mapping of the dataset type name to its registry definition.
         """
         if isinstance(config, str):
-            config = ButlerRepoIndex.get_repo_uri(config, config)
+            config = ButlerRepoIndex.get_repo_uri(config, True)
         butler_config = ButlerConfig(config, searchPaths=search_paths)
         if "root" in butler_config:
             butler_root = butler_config["root"]

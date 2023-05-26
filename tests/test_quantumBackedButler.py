@@ -138,7 +138,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
     def test_initialize_repo_index(self) -> None:
         """Test for initialize using config file and repo index."""
 
-        # store config to a file
+        # Store config to a file.
         self.config.dumpToUri(self.root)
 
         butler_index = Config()
