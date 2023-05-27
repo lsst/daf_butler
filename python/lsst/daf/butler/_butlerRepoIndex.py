@@ -106,7 +106,7 @@ class ButlerRepoIndex:
         """
         index_uri = os.environ.get(cls.index_env_var)
         if index_uri is None:
-            raise KeyError(f"No repository index defined in enviroment variable {cls.index_env_var}")
+            raise KeyError(f"No repository index defined in environment variable {cls.index_env_var}")
         return ResourcePath(index_uri)
 
     @classmethod
@@ -137,31 +137,46 @@ class ButlerRepoIndex:
         return set(repo_index)
 
     @classmethod
-    def get_repo_uri(cls, label: str) -> ResourcePath:
+    def get_repo_uri(cls, label: str, return_label: bool = False) -> ResourcePath:
         """Look up the label in a butler repository index.
 
         Parameters
         ----------
         label : `str`
             Label of the Butler repository to look up.
+        return_label : `bool`, optional
+            If ``label`` cannot be found in the repository index (either
+            because index is not defined or ``label`` is not in the index) and
+            ``return_label`` is `True` then return ``ResourcePath(label)``.
+            If ``return_label`` is `False` (default) then an exception will be
+            raised instead.
 
         Returns
         -------
         uri : `lsst.resources.ResourcePath`
-            URI to the Butler repository associated with the given label.
+            URI to the Butler repository associated with the given label or
+            default value if it is provided.
 
         Raises
         ------
         KeyError
             Raised if the label is not found in the index, or if an index
-            can not be found at all.
+            is not defined, and ``return_label`` is `False`.
         FileNotFoundError
             Raised if an index is defined in the environment but it
             can not be found.
         """
-        repo_index = cls._read_repository_index_from_environment()
+        try:
+            repo_index = cls._read_repository_index_from_environment()
+        except KeyError:
+            if return_label:
+                return ResourcePath(label)
+            raise
+
         repo_uri = repo_index.get(label)
         if repo_uri is None:
+            if return_label:
+                return ResourcePath(label)
             # This should not raise since it worked earlier.
             try:
                 index_uri = str(cls._get_index_uri())
