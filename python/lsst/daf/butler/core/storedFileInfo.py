@@ -252,3 +252,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         if kwargs:
             raise ValueError(f"Unexpected keyword arguments for update: {', '.join(kwargs)}")
         return type(self)(**new_args)
+
+    def __reduce__(self) -> str | tuple[Any, ...]:
+        return (self.from_record, (self.to_record(),))

@@ -2934,12 +2934,11 @@ class FileDatastore(GenericBaseDatastore):
         # Docstring inherited from the base class.
         exported_refs = list(self._bridge.check(refs))
         ids = {ref.id for ref in exported_refs}
-        records: defaultdict[DatasetId, defaultdict[str, List[StoredDatastoreItemInfo]]] = defaultdict(
-            lambda: defaultdict(list), {id: defaultdict(list) for id in ids}
-        )
+        records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {id: {} for id in ids}
         for row in self._table.fetch(dataset_id=ids):
             info: StoredDatastoreItemInfo = StoredFileInfo.from_record(row)
-            records[info.dataset_id][self._table.name].append(info)
+            dataset_records = records.setdefault(info.dataset_id, {})
+            dataset_records.setdefault(self._table.name, []).append(info)
 
         record_data = DatastoreRecordData(records=records)
         return {self.name: record_data}
