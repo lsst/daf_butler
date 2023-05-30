@@ -261,6 +261,16 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             exists = qbb.stored(ref)
             self.assertFalse(exists)
 
+        # Now do the same checks in bulk.
+        missing_set = set(self.missing_refs)
+        refs = input_refs + self.init_inputs_refs + self.missing_refs
+        stored_many = qbb.stored_many(refs)
+        for ref, stored in stored_many.items():
+            if ref in missing_set:
+                self.assertFalse(stored)
+            else:
+                self.assertTrue(stored)
+
         # _available_inputs is not
         self.assertEqual(qbb._available_inputs, set(ref.id for ref in input_refs + self.init_inputs_refs))
         self.assertEqual(qbb._actual_inputs, set())
