@@ -22,12 +22,14 @@
 from __future__ import annotations
 
 import os
+import pickle
 import shutil
 import sys
 import tempfile
 import time
 import unittest
 import unittest.mock
+import uuid
 from collections import UserDict
 from dataclasses import dataclass
 
@@ -903,6 +905,14 @@ class DatastoreTests(DatastoreTestsBase):
             for datastore_name in records:
                 record_data = records[datastore_name]
                 self.assertEqual(len(record_data.records), n_refs)
+
+                # Check that subsetting works, include non-existing dataset ID.
+                dataset_ids = {exported_refs[0].id, uuid.uuid4()}
+                subset = record_data.subset(dataset_ids)
+                assert subset is not None
+                self.assertEqual(len(subset.records), 1)
+                subset = record_data.subset({uuid.uuid4()})
+                self.assertIsNone(subset)
 
         # Use the same datastore name to import relative path.
         datastore2 = self.makeDatastore("test_datastore")
@@ -1930,6 +1940,11 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
 
         with self.assertRaises(ValueError):
             rebased.update(something=42, new="42")
+
+        # Check that pickle works on StoredFileInfo.
+        pickled_info = pickle.dumps(info)
+        unpickled_info = pickle.loads(pickled_info)
+        self.assertEqual(unpickled_info, info)
 
 
 if __name__ == "__main__":
