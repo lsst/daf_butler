@@ -1629,8 +1629,6 @@ class Butler(LimitedButler):
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-            If a resolved `DatasetRef`, the associated dataset
-            is returned directly without additional querying.
         dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
