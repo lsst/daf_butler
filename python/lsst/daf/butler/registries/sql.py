@@ -169,7 +169,7 @@ class SqlRegistry(Registry):
 
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(
-            str(config.connectionString), origin=config.get("origin", 0), namespace=config.get("namespace")
+            config.connectionString, origin=config.get("origin", 0), namespace=config.get("namespace")
         )
         managerTypes = RegistryManagerTypes.fromConfig(config)
         managers = managerTypes.makeRepo(database, dimensionConfig)
@@ -208,7 +208,7 @@ class SqlRegistry(Registry):
         config.replaceRoot(butlerRoot)
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(
-            config.connectionString.render_as_string(hide_password=False),
+            config.connectionString,
             origin=config.get("origin", 0),
             namespace=config.get("namespace"),
             writeable=writeable,

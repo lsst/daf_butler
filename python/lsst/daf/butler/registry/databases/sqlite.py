@@ -110,14 +110,18 @@ class SqliteDatabase(Database):
 
     @classmethod
     def makeEngine(
-        cls, uri: Optional[str] = None, *, filename: Optional[str] = None, writeable: bool = True
+        cls,
+        uri: str | sqlalchemy.engine.URL | None = None,
+        *,
+        filename: Optional[str] = None,
+        writeable: bool = True,
     ) -> sqlalchemy.engine.Engine:
         """Create a `sqlalchemy.engine.Engine` from a SQLAlchemy URI or
         filename.
 
         Parameters
         ----------
-        uri : `str`
+        uri : `str` or `sqlalchemy.engine.URL`, optional
             A SQLAlchemy URI connection string.
         filename : `str`
             Name of the SQLite database file, or `None` to use an in-memory
@@ -147,6 +151,9 @@ class SqliteDatabase(Database):
                 target = f"file:{filename}"
                 uri = f"sqlite:///{filename}"
         else:
+            if isinstance(uri, sqlalchemy.engine.URL):
+                # We have to parse strings anyway, so convert it to string.
+                uri = uri.render_as_string(hide_password=False)
             parsed = urllib.parse.urlparse(uri)
             queries = parsed.query.split("&")
             if "uri=true" in queries:

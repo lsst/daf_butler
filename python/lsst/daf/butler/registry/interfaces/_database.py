@@ -252,13 +252,18 @@ class Database(ABC):
 
     @classmethod
     def fromUri(
-        cls, uri: str, *, origin: int, namespace: Optional[str] = None, writeable: bool = True
+        cls,
+        uri: str | sqlalchemy.engine.URL,
+        *,
+        origin: int,
+        namespace: str | None = None,
+        writeable: bool = True,
     ) -> Database:
         """Construct a database from a SQLAlchemy URI.
 
         Parameters
         ----------
-        uri : `str`
+        uri : `str` or `sqlalchemy.engine.URL`
             A SQLAlchemy URI connection string.
         origin : `int`
             An integer ID that should be used as the default for any datasets,
@@ -283,12 +288,14 @@ class Database(ABC):
 
     @classmethod
     @abstractmethod
-    def makeEngine(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Engine:
+    def makeEngine(
+        cls, uri: str | sqlalchemy.engine.URL, *, writeable: bool = True
+    ) -> sqlalchemy.engine.Engine:
         """Create a `sqlalchemy.engine.Engine` from a SQLAlchemy URI.
 
         Parameters
         ----------
-        uri : `str`
+        uri : `str` or `sqlalchemy.engine.URL`
             A SQLAlchemy URI connection string.
         writeable : `bool`, optional
             If `True`, allow write operations on the database, including
