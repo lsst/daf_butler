@@ -27,7 +27,6 @@ from __future__ import annotations
 __all__ = (
     "Butler",
     "ButlerValidationError",
-    "DatasetExistence",
 )
 
 import collections.abc
@@ -38,7 +37,6 @@ import numbers
 import os
 import warnings
 from collections import defaultdict
-from enum import Flag, auto
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -67,6 +65,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ._butlerConfig import ButlerConfig
 from ._butlerRepoIndex import ButlerRepoIndex
+from ._dataset_existence import DatasetExistence
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from .core import (
@@ -112,19 +111,6 @@ if TYPE_CHECKING:
     from .transfers import RepoImportBackend
 
 log = getLogger(__name__)
-
-
-class DatasetExistence(Flag):
-    Unknown = 0
-    RegistryKnows = auto()
-    DatastoreKnows = auto()
-    ArtifactExists = auto()
-    ArtifactNotChecked = auto()
-    Exists = RegistryKnows | DatastoreKnows | ArtifactExists
-    PartialCheck = RegistryKnows | DatastoreKnows | ArtifactNotChecked
-
-    def __bool__(self) -> bool:
-        return self.value == self.Exists.value or self.value == self.PartialCheck.value
 
 
 class ButlerValidationError(ValidationError):
@@ -1657,29 +1643,29 @@ class Butler(LimitedButler):
             datastore. Evaluates to `True` if the dataset is present and known
             to both.
         """
-        existence = DatasetExistence.Unknown
+        existence = DatasetExistence.UNRECOGNIZED
 
         if isinstance(datasetRefOrType, DatasetRef):
             registry_ref = self.registry.getDataset(datasetRefOrType.id)
             if registry_ref is not None:
-                existence |= DatasetExistence.RegistryKnows
+                existence |= DatasetExistence.RECORDED
             ref = datasetRefOrType
         else:
             try:
                 ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
             except (LookupError, TypeError, NoDefaultCollectionError):
                 return existence
-            existence |= DatasetExistence.RegistryKnows
+            existence |= DatasetExistence.RECORDED
 
         if self.datastore.knows(ref):
-            existence |= DatasetExistence.DatastoreKnows
+            existence |= DatasetExistence.DATASTORE
 
         if full_check:
             if self.datastore.exists(ref):
-                existence |= DatasetExistence.ArtifactExists
-        elif existence != DatasetExistence.Unknown:
+                existence |= DatasetExistence._ARTIFACT
+        elif existence != DatasetExistence.UNRECOGNIZED:
             # Do not add this flag if we have no other idea about a dataset.
-            existence |= DatasetExistence.ArtifactNotChecked
+            existence |= DatasetExistence._ASSUMED
 
         return existence
 
@@ -1712,30 +1698,30 @@ class Butler(LimitedButler):
             Each value evaluates to `True` if the dataset is present and known
             to both.
         """
-        existence = {ref: DatasetExistence.Unknown for ref in refs}
+        existence = {ref: DatasetExistence.UNRECOGNIZED for ref in refs}
 
         # Registry does not have a bulk API to check for a ref.
         for ref in refs:
             registry_ref = self.registry.getDataset(ref.id)
             if registry_ref is not None:
-                existence[ref] |= DatasetExistence.RegistryKnows
+                existence[ref] |= DatasetExistence.RECORDED
 
         # Ask datastore if it knows about these refs.
         knows = self.datastore.knows_these(refs)
         for ref, known in knows.items():
             if known:
-                existence[ref] |= DatasetExistence.DatastoreKnows
+                existence[ref] |= DatasetExistence.DATASTORE
 
         if full_check:
             mexists = self.datastore.mexists(refs)
             for ref, exists in mexists.items():
                 if exists:
-                    existence[ref] |= DatasetExistence.ArtifactExists
+                    existence[ref] |= DatasetExistence._ARTIFACT
         else:
             # Do not set this flag if nothing is known about the dataset.
             for ref in existence.keys():
-                if existence[ref] != DatasetExistence.Unknown:
-                    existence[ref] |= DatasetExistence.ArtifactNotChecked
+                if existence[ref] != DatasetExistence.UNRECOGNIZED:
+                    existence[ref] |= DatasetExistence._ASSUMED
 
         return existence
 

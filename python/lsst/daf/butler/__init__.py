@@ -8,6 +8,7 @@ Data Access Butler
 from ._butler import *
 from ._butlerConfig import *
 from ._butlerRepoIndex import *
+from ._dataset_existence import *
 from ._deferredDatasetHandle import *
 from ._limited_butler import *
 from ._quantum_backed import *

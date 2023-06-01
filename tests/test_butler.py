@@ -1455,6 +1455,11 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         for ref, stored in many_stored.items():
             self.assertTrue(stored, f"Ref {ref} should be stored")
 
+        many_exists = butler.exists_many([ref1, ref2, ref3])
+        for ref, exists in many_exists.items():
+            self.assertTrue(exists, f"Checking ref {ref} exists.")
+            self.assertEqual(exists, DatasetExistence.VERIFIED, f"Ref {ref} should be stored")
+
         # Simple prune.
         butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
         self.assertFalse(butler.exists(ref1.datasetType, ref1.dataId, collections=run1))
@@ -1465,7 +1470,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         many_exists = butler.exists_many([ref1, ref2, ref3])
         for ref, exists in many_exists.items():
-            self.assertEqual(exists, DatasetExistence.Unknown, f"Ref {ref} should not be stored")
+            self.assertEqual(exists, DatasetExistence.UNRECOGNIZED, f"Ref {ref} should not be stored")
 
         # Put data back.
         ref1_new = butler.put(metric, ref1)
@@ -1517,20 +1522,16 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # First test with a standard butler.
         exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=True)
-        self.assertEqual(exists_many[ref0], DatasetExistence.Unknown)
-        self.assertEqual(exists_many[ref1], DatasetExistence.RegistryKnows)
-        self.assertEqual(exists_many[ref2], DatasetExistence.RegistryKnows | DatasetExistence.DatastoreKnows)
-        self.assertEqual(exists_many[ref3], DatasetExistence.RegistryKnows)
+        self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
+        self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
+        self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
+        self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED)
 
         exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=False)
-        self.assertEqual(exists_many[ref0], DatasetExistence.Unknown)
-        self.assertEqual(
-            exists_many[ref1], DatasetExistence.RegistryKnows | DatasetExistence.ArtifactNotChecked
-        )
-        self.assertEqual(exists_many[ref2], DatasetExistence.PartialCheck)
-        self.assertEqual(
-            exists_many[ref3], DatasetExistence.RegistryKnows | DatasetExistence.ArtifactNotChecked
-        )
+        self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
+        self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED | DatasetExistence._ASSUMED)
+        self.assertEqual(exists_many[ref2], DatasetExistence.KNOWN)
+        self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED | DatasetExistence._ASSUMED)
         self.assertTrue(exists_many[ref2])
 
         # Check that per-ref query gives the same answer as many query.
@@ -1540,10 +1541,10 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Test again with a trusting butler.
         butler.datastore.trustGetRequest = True
         exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=True)
-        self.assertEqual(exists_many[ref0], DatasetExistence.Unknown)
-        self.assertEqual(exists_many[ref1], DatasetExistence.RegistryKnows)
-        self.assertEqual(exists_many[ref2], DatasetExistence.RegistryKnows | DatasetExistence.DatastoreKnows)
-        self.assertEqual(exists_many[ref3], DatasetExistence.RegistryKnows | DatasetExistence.ArtifactExists)
+        self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
+        self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
+        self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
+        self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED | DatasetExistence._ARTIFACT)
 
         # Check that per-ref query gives the same answer as many query.
         for ref, exists in exists_many.items():
