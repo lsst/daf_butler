@@ -1601,9 +1601,9 @@ class Butler(LimitedButler):
 
     def exists(
         self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
+        dataset_ref_or_type: DatasetRef | DatasetType | str,
         /,
-        dataId: DataId | None = None,
+        data_id: DataId | None = None,
         *,
         full_check: bool = True,
         collections: Any = None,
@@ -1614,10 +1614,10 @@ class Butler(LimitedButler):
 
         Parameters
         ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+        dataset_ref_or_type : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataCoordinate`
+        data_id : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
@@ -1645,14 +1645,14 @@ class Butler(LimitedButler):
         """
         existence = DatasetExistence.UNRECOGNIZED
 
-        if isinstance(datasetRefOrType, DatasetRef):
-            registry_ref = self.registry.getDataset(datasetRefOrType.id)
+        if isinstance(dataset_ref_or_type, DatasetRef):
+            registry_ref = self.registry.getDataset(dataset_ref_or_type.id)
             if registry_ref is not None:
                 existence |= DatasetExistence.RECORDED
-            ref = datasetRefOrType
+            ref = dataset_ref_or_type
         else:
             try:
-                ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+                ref = self._findDatasetRef(dataset_ref_or_type, data_id, collections=collections, **kwargs)
             except (LookupError, TypeError, NoDefaultCollectionError):
                 return existence
             existence |= DatasetExistence.RECORDED
