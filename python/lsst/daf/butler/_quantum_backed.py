@@ -57,8 +57,6 @@ from .registry.interfaces import DatastoreRegistryBridgeManager, OpaqueTableStor
 from .registry.opaque import ByNameOpaqueTableStorageManager
 
 if TYPE_CHECKING:
-    from lsst.resources import ResourcePath
-
     from ._butler import Butler
 
 _LOG = logging.getLogger(__name__)
@@ -462,10 +460,9 @@ class QuantumBackedButler(LimitedButler):
     def stored_many(
         self,
         refs: Iterable[DatasetRef],
-        artifact_existence: Optional[dict[ResourcePath, bool]] = None,
     ) -> dict[DatasetRef, bool]:
         # Docstring inherited.
-        existence = super().stored_many(refs, artifact_existence=artifact_existence)
+        existence = super().stored_many(refs)
 
         for ref, stored in existence.items():
             if ref.id in self._predicted_inputs:

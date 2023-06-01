@@ -25,15 +25,12 @@ __all__ = ("LimitedButler",)
 
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, Optional, Union
+from typing import Any, ClassVar, Dict, Iterable, Optional, Union
 
 from deprecated.sphinx import deprecated
 
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from .core import DatasetRef, Datastore, DimensionUniverse, StorageClass, StorageClassFactory
-
-if TYPE_CHECKING:
-    from lsst.resources import ResourcePath
 
 log = logging.getLogger(__name__)
 
@@ -277,7 +274,8 @@ class LimitedButler(ABC):
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def stored(self, ref: DatasetRef) -> bool:
-        """Indicate whether the dataset is present in the Datastore.
+        """Indicate whether the dataset's artifacts are present in the
+        Datastore.
 
         Parameters
         ----------
@@ -287,34 +285,29 @@ class LimitedButler(ABC):
         Returns
         -------
         stored : `bool`
-            Whether the dataset exists in the datastore and can be retrieved.
+            Whether the dataset artifact exists in the datastore and can be
+            retrieved.
         """
         return self.datastore.exists(ref)
 
     def stored_many(
         self,
         refs: Iterable[DatasetRef],
-        artifact_existence: Optional[dict[ResourcePath, bool]] = None,
     ) -> dict[DatasetRef, bool]:
-        """Check the existence of multiple datasets at once.
+        """Check the datastore for artifact existence of multiple datasets
+        at once.
 
         Parameters
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
-        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
-            Optional mapping of datastore artifact to existence. Updated by
-            this method with details of all artifacts tested. Can be `None`
-            if the caller is not interested but can be an efficiency gain
-            if you know that this API is going to called repeatedly with
-            possibly duplicate refs.
 
         Returns
         -------
         existence : `dict` of [`DatasetRef`, `bool`]
-            Mapping from dataset to boolean indicating existence.
+            Mapping from dataset to boolean indicating artifact existence.
         """
-        return self.datastore.mexists(refs, artifact_existence)
+        return self.datastore.mexists(refs)
 
     @deprecated(
         reason="Butler.datasetExistsDirect() has been replaced by Butler.stored(). "
