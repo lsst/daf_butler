@@ -1693,7 +1693,7 @@ class Butler(LimitedButler):
         Returns
         -------
         existence : dict of [`DatasetRef`, `DatasetExistence`]
-            Mapping from the original dataset to an enum indicating the
+            Mapping from the given dataset refs to an enum indicating the
             status of the dataset in registry and datastore.
             Each value evaluates to `True` if the dataset is present and known
             to both.

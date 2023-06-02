@@ -305,7 +305,8 @@ class LimitedButler(ABC):
         Returns
         -------
         existence : `dict` of [`DatasetRef`, `bool`]
-            Mapping from dataset to boolean indicating artifact existence.
+            Mapping from given dataset refs to boolean indicating artifact
+            existence.
         """
         return self.datastore.mexists(refs)
 
