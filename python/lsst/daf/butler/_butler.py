@@ -1682,7 +1682,7 @@ class Butler(LimitedButler):
 
         return existence
 
-    def exists_many(
+    def _exists_many(
         self,
         refs: Iterable[DatasetRef],
         /,
@@ -1691,6 +1691,8 @@ class Butler(LimitedButler):
     ) -> dict[DatasetRef, DatasetExistence]:
         """Indicate whether multiple datasets are known to Butler registry and
         datastore.
+
+        This is an experimental API that may change at any moment.
 
         Parameters
         ----------
@@ -1717,6 +1719,15 @@ class Butler(LimitedButler):
         for ref in refs:
             registry_ref = self.registry.getDataset(ref.id)
             if registry_ref is not None:
+                # It is possible, albeit unlikely, that the given ref does
+                # not match the one in registry even though the UUID matches.
+                # When checking a single ref we raise, but it's impolite to
+                # do that when potentially hundreds of refs are being checked.
+                # We could change the API to only accept UUIDs and that would
+                # remove the ability to even check and remove the worry
+                # about differing storage classes. Given the ongoing discussion
+                # on refs vs UUIDs and whether to raise or have a new
+                # private flag, treat this as a private API for now.
                 existence[ref] |= DatasetExistence.RECORDED
 
         # Ask datastore if it knows about these refs.

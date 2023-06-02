@@ -1455,7 +1455,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         for ref, stored in many_stored.items():
             self.assertTrue(stored, f"Ref {ref} should be stored")
 
-        many_exists = butler.exists_many([ref1, ref2, ref3])
+        many_exists = butler._exists_many([ref1, ref2, ref3])
         for ref, exists in many_exists.items():
             self.assertTrue(exists, f"Checking ref {ref} exists.")
             self.assertEqual(exists, DatasetExistence.VERIFIED, f"Ref {ref} should be stored")
@@ -1468,7 +1468,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         for ref, stored in many_stored.items():
             self.assertFalse(stored, f"Ref {ref} should not be stored")
 
-        many_exists = butler.exists_many([ref1, ref2, ref3])
+        many_exists = butler._exists_many([ref1, ref2, ref3])
         for ref, exists in many_exists.items():
             self.assertEqual(exists, DatasetExistence.UNRECOGNIZED, f"Ref {ref} should not be stored")
 
@@ -1484,7 +1484,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         ref3 = butler.put(metric, ref3)
 
-        many_exists = butler.exists_many([ref1, ref2, ref3])
+        many_exists = butler._exists_many([ref1, ref2, ref3])
         for ref, exists in many_exists.items():
             self.assertTrue(exists, f"Ref {ref} should not be stored")
 
@@ -1521,13 +1521,13 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         butler.datastore.forget([ref3])
 
         # First test with a standard butler.
-        exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=True)
+        exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
         self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
         self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
         self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
         self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED)
 
-        exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=False)
+        exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=False)
         self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
         self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED | DatasetExistence._ASSUMED)
         self.assertEqual(exists_many[ref2], DatasetExistence.KNOWN)
@@ -1540,7 +1540,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Test again with a trusting butler.
         butler.datastore.trustGetRequest = True
-        exists_many = butler.exists_many([ref0, ref1, ref2, ref3], full_check=True)
+        exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
         self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
         self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
         self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
