@@ -1372,6 +1372,9 @@ class Registry(ABC):
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
+            Values of collection type can be expanded in some cases; see
+            :ref:`daf_butler_dimension_expressions_identifiers` for more
+            information.
         check : `bool`, optional
             If `True` (default) check the query for consistency before
             executing it.  This may reject some valid queries that resemble
@@ -1487,6 +1490,9 @@ class Registry(ABC):
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
+            Values of collection type can be expanded in some cases; see
+            :ref:`daf_butler_dimension_expressions_identifiers` for more
+            information.
         check : `bool`, optional
             If `True` (default) check the query for consistency before
             executing it.  This may reject some valid queries that resemble
@@ -1580,6 +1586,9 @@ class Registry(ABC):
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
+            Values of collection type can be expanded in some cases; see
+            :ref:`daf_butler_dimension_expressions_identifiers` for more
+            information.
         check : `bool`, optional
             If `True` (default) check the query for consistency before
             executing it.  This may reject some valid queries that resemble

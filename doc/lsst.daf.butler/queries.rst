@@ -142,6 +142,8 @@ Examples of range literals:
 * ``1..10:3`` -- equivalent to ``1,4,7,10``
 * ``-10..-1:2`` -- equivalent to ``-10,-8,-6,-4,-2``
 
+.. _daf_butler_dimension_expressions_identifiers:
+
 Identifiers
 ^^^^^^^^^^^
 
