@@ -1,0 +1,8 @@
+Added new APIs for checking dataset existence.
+
+* `~lsst.daf.butler.LimitedButler.stored()` checks whether the datastore artifact(s) exists for a single `~lsst.daf.butler.DatasetRef`.
+* `~lsst.daf.butler.LimitedButler.stored_many()` is a bulk version of `~lsst.daf.butler.LimitedButler.stored()` that can be used for many `~lsst.daf.butler.DatasetRef`.
+* `~lsst.daf.butler.Butler.exists()` checks whether registry and datastore know about a single `~lsst.daf.butler.DatasetRef` and can optionally check for artifact existence.
+  The results are returned in an `~enum.Flag` object (specifically `~lsst.daf.butler.DatasetExistence`) that evaluates to `True` if the dataset is available for retrieval.
+
+Additionally `~lsst.daf.butler.DatasetRef` now has a new method for checking whether two `~lsst.daf.butler.DatasetRef` only differ by compatible storage classes.

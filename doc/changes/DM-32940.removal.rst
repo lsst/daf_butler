@@ -1,0 +1,2 @@
+``Butler.datasetExists`` has been deprecated and will be removed in a future release.
+It has been replaced by ``Butler.stored()`` (specifically to check if the datastore has the artifact) and ``Butler.exists()`` which will check registry and datastore and optionally check whether the artifact exists.
