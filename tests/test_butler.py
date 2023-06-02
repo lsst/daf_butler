@@ -1550,6 +1550,17 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         for ref, exists in exists_many.items():
             self.assertEqual(butler.exists(ref, full_check=True), exists)
 
+        # Create a ref that surprisingly has the UUID of an existing ref
+        # but is not the same.
+        ref_bad = DatasetRef(datasetType, dataId=ref3.dataId, run=ref3.run, id=ref2.id)
+        with self.assertRaises(ValueError):
+            butler.exists(ref_bad)
+
+        # Create a ref that has a compatible storage class.
+        ref_compat = ref2.overrideStorageClass("StructuredDataDict")
+        exists = butler.exists(ref_compat)
+        self.assertEqual(exists, exists_many[ref2])
+
         # Remove everything and start from scratch.
         butler.datastore.trustGetRequest = False
         butler.pruneDatasets(refs, purge=True, unstore=True)

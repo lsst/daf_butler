@@ -1646,10 +1646,23 @@ class Butler(LimitedButler):
         existence = DatasetExistence.UNRECOGNIZED
 
         if isinstance(dataset_ref_or_type, DatasetRef):
+            ref = dataset_ref_or_type
             registry_ref = self.registry.getDataset(dataset_ref_or_type.id)
             if registry_ref is not None:
                 existence |= DatasetExistence.RECORDED
-            ref = dataset_ref_or_type
+
+                if dataset_ref_or_type != registry_ref:
+                    # This could mean that storage classes differ, so we should
+                    # check for that but use the registry ref for the rest of
+                    # the method.
+                    if registry_ref.is_compatible_with(dataset_ref_or_type):
+                        # Use the registry version from now on.
+                        ref = registry_ref
+                    else:
+                        raise ValueError(
+                            f"The ref given to exists() ({ref}) has the same dataset ID as one "
+                            f"in registry but has different incompatible values ({registry_ref})."
+                        )
         else:
             try:
                 ref = self._findDatasetRef(dataset_ref_or_type, data_id, collections=collections, **kwargs)
