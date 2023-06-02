@@ -99,7 +99,9 @@ class PostgresqlDatabase(Database):
         self._shrinker = NameShrinker(self.dialect.max_identifier_length)
 
     @classmethod
-    def makeEngine(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Engine:
+    def makeEngine(
+        cls, uri: str | sqlalchemy.engine.URL, *, writeable: bool = True
+    ) -> sqlalchemy.engine.Engine:
         return sqlalchemy.engine.create_engine(uri, pool_size=1)
 
     @classmethod
