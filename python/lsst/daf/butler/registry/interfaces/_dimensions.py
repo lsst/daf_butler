@@ -843,7 +843,7 @@ class DimensionRecordStorageManager(VersionedExtension):
 
         Returns
         -------
-        relation : ``lsst.daf.relation.Relation`
+        relation : `lsst.daf.relation.Relation`
             New relation that represents a spatial join between the two given
             elements.  Guaranteed to have key columns for all required
             dimensions of both elements.

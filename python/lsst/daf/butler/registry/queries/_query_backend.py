@@ -285,8 +285,8 @@ class QueryBackend(Generic[_C]):
             or standalone dataset types, not components.
         collections : `Sequence` [ `CollectionRecord` ]
             Sequence of collections that will be searched.
-        governor_constraints : `Mapping` [ `str`, `~collections.abc.Set` ], \
-                optional
+        governor_constraints : `~collections.abc.Mapping` [ `str`, \
+                `~collections.abc.Set` [ `str` ] ], optional
             Constraints imposed by other aspects of the query on governor
             dimensions; collections inconsistent with these constraints will be
             skipped.
@@ -578,8 +578,8 @@ class QueryBackend(Generic[_C]):
             key columns in ``initial_relation``, which are otherwise all
             considered as potential common columns for joins.  Ignored if
             ``initial_relation`` is not provided.
-        initial_dimension_relationships : `~collections.abc.Set` [ `frozenset`
-                [ `str` ] ], optional
+        initial_dimension_relationships : `~collections.abc.Set` \
+                [ `frozenset` [ `str` ] ], optional
             A set of sets of dimension names representing relationships between
             dimensions encoded in the rows of ``initial_relation``.  If not
             provided (and ``initial_relation`` is),
@@ -588,8 +588,8 @@ class QueryBackend(Generic[_C]):
         spatial_joins : `collections.abc.Iterable` [ `tuple` [ `str`, `str` ] ]
             Iterable of dimension element name pairs that should be spatially
             joined.
-        governor_constraints : `Mapping` [ `str` [ `~collections.abc.Set`
-                [ `str` ] ] ], optional
+        governor_constraints : `~collections.abc.Mapping` [ `str` \
+                [ `~collections.abc.Set` [ `str` ] ] ], optional
             Constraints on governor dimensions that are provided by other parts
             of the query that either have been included in ``initial_relation``
             or are guaranteed to be added in the future. This is a mapping from
@@ -614,8 +614,8 @@ class QueryBackend(Generic[_C]):
         dimensions : `DimensionGraph`
             Dimensions that bound the governor dimensions to consider (via
             ``dimensions.governors``, more specifically).
-        constraints : `Mapping` [ `str`,  [ `~collections.abc.Set`
-                [ `str` ] ] ]
+        constraints : `~collections.abc.Mapping` [ `str`, \
+                `~collections.abc.Set` [ `str` ] ]
             Constraints from user input to the query (e.g. from data IDs and
             string expression predicates).
         context : `QueryContext`
@@ -624,10 +624,10 @@ class QueryBackend(Generic[_C]):
 
         Returns
         -------
-        resolved : `Mapping` [ `str`,  [ `~collections.abc.Set`
-                [ `str` ] ] ]
+        resolved : `~collections.abc.Mapping` [ `str`, \
+                `~collections.abc.Set` [ `str` ] ]
             A shallow copy of ``constraints`` with keys equal to
-            ``dimensions.governors.names` and value sets constrained by the
+            ``dimensions.governors.names`` and value sets constrained by the
             Registry content if they were not already in ``constraints``.
 
         Raises
