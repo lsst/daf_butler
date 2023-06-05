@@ -29,7 +29,6 @@ from collections.abc import Iterable, Iterator, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 import sqlalchemy
-from lsst.utils.ellipsis import Ellipsis
 
 from ...core import DimensionUniverse, Timespan, TimespanDatabaseRepresentation, ddl
 from .._collectionType import CollectionType
@@ -489,7 +488,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
 
         result: list[CollectionRecord] = []
 
-        if wildcard.patterns is Ellipsis:
+        if wildcard.patterns is ...:
             for record in self._records.values():
                 result.extend(resolve_nested(record, done))
             del resolve_nested

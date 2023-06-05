@@ -29,13 +29,10 @@ import fnmatch
 import functools
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Pattern, TypeVar, Union
+from types import EllipsisType
+from typing import Any, Callable, List, Optional, Pattern, TypeVar, Union
 
 from lsst.utils.iteration import ensure_iterable
-
-if TYPE_CHECKING:
-    from lsst.utils.ellipsis import Ellipsis, EllipsisType
-
 
 _LOG = logging.getLogger(__name__)
 
@@ -97,11 +94,11 @@ def globToRegex(
         A list of regex Patterns or simple strings. Returns ``...`` if
         the provided expressions would match everything.
     """
-    if expressions is Ellipsis or expressions is None:
-        return Ellipsis
+    if expressions is ... or expressions is None:
+        return ...
     expressions = list(ensure_iterable(expressions))
     if not expressions or "*" in expressions:
-        return Ellipsis
+        return ...
 
     # List of special glob characters supported by fnmatch.
     # See: https://docs.python.org/3/library/fnmatch.html

@@ -23,8 +23,7 @@ from __future__ import annotations
 __all__ = ("transferDatasets",)
 
 import logging
-
-from lsst.utils.ellipsis import Ellipsis, EllipsisType
+from types import EllipsisType
 
 from .._butler import Butler
 from ..registry.queries import DatasetQueryResults
@@ -73,7 +72,7 @@ def transferDatasets(
     dest_butler = Butler(dest, writeable=True)
 
     dataset_type_expr = ... if not dataset_type else dataset_type
-    collections_expr: tuple[str, ...] | EllipsisType = Ellipsis if not collections else collections
+    collections_expr: tuple[str, ...] | EllipsisType = ... if not collections else collections
 
     source_refs = source_butler.registry.queryDatasets(
         datasetType=dataset_type_expr, collections=collections_expr, where=where, findFirst=find_first

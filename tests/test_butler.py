@@ -93,7 +93,6 @@ from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTe
 from lsst.resources import ResourcePath
 from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
 from lsst.utils import doImportType
-from lsst.utils.ellipsis import Ellipsis
 from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
@@ -1276,7 +1275,7 @@ class FileDatastoreButlerTests(ButlerTests):
                 pass
 
         # Test that the repo actually has at least one dataset.
-        datasets = list(exportButler.registry.queryDatasets(..., collections=Ellipsis))
+        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
         # Add a DimensionRecord that's unused by those datasets.
         skymapRecord = {"name": "example_skymap", "hash": (50).to_bytes(8, byteorder="little")}
@@ -1406,7 +1405,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         exportButler = self.runPutGetTest(storageClass, "test_metric")
         # Test that the repo actually has at least one dataset.
-        datasets = list(exportButler.registry.queryDatasets(..., collections=Ellipsis))
+        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
         uris = [exportButler.getURI(d) for d in datasets]
         assert isinstance(exportButler.datastore, FileDatastore)

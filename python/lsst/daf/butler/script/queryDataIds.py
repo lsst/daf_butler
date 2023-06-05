@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
+from types import EllipsisType
 from typing import TYPE_CHECKING
 
 import numpy as np
 from astropy.table import Table as AstropyTable
-from lsst.utils.ellipsis import Ellipsis, EllipsisType
 
 from .._butler import Butler, DataCoordinate
 from ..cli.utils import sortAstropyTable
@@ -131,7 +131,7 @@ def queryDataIds(
 
     query_collections: Iterable[str] | EllipsisType | None = None
     if datasets:
-        query_collections = collections if collections else Ellipsis
+        query_collections = collections if collections else ...
     results = butler.registry.queryDataIds(
         dimensions, datasets=datasets, where=where, collections=query_collections
     )

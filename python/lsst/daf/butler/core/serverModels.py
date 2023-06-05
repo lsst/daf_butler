@@ -98,7 +98,6 @@ class ExpressionQueryParameter(BaseModel):
             if isinstance(regexes, list):
                 expression.extend(regexes)
             else:
-                # This avoids mypy needing to import Ellipsis type
                 if self._allow_ellipsis:
                     return ...
                 raise ValueError("Expression matches everything but that is not allowed.")

@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Sequence, Se
 import httpx
 from lsst.daf.butler import __version__
 from lsst.resources import ResourcePath, ResourcePathExpression
-from lsst.utils.ellipsis import Ellipsis
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
@@ -666,7 +665,7 @@ class RemoteRegistry(Registry):
     def queryDatasetAssociations(
         self,
         datasetType: str | DatasetType,
-        collections: CollectionArgType | None = Ellipsis,
+        collections: CollectionArgType | None = ...,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
