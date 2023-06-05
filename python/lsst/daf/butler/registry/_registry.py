@@ -27,6 +27,7 @@ import contextlib
 import logging
 import re
 from abc import ABC, abstractmethod
+from types import EllipsisType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -45,7 +46,6 @@ from typing import (
 
 from lsst.resources import ResourcePathExpression
 from lsst.utils import doImportType
-from lsst.utils.ellipsis import Ellipsis, EllipsisType
 
 from ..core import (
     Config,
@@ -1616,7 +1616,7 @@ class Registry(ABC):
     def queryDatasetAssociations(
         self,
         datasetType: Union[str, DatasetType],
-        collections: CollectionArgType | None = Ellipsis,
+        collections: CollectionArgType | None = ...,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,

@@ -8,7 +8,6 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
-from lsst.utils.ellipsis import Ellipsis
 
 from ....core import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType, DimensionUniverse, ddl
 from ..._collection_summary import CollectionSummary
@@ -396,7 +395,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             elif missing is not None:
                 missing.append(name)
         already_warned = False
-        if wildcard.patterns is Ellipsis:
+        if wildcard.patterns is ...:
             if explicit_only:
                 raise TypeError(
                     "Universal wildcard '...' is not permitted for dataset types in this context."

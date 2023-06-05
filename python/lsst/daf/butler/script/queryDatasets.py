@@ -23,11 +23,11 @@ from __future__ import annotations
 import dataclasses
 from collections import defaultdict
 from collections.abc import Iterable
+from types import EllipsisType
 from typing import TYPE_CHECKING
 
 import numpy as np
 from astropy.table import Table as AstropyTable
-from lsst.utils.ellipsis import Ellipsis, EllipsisType
 
 from .._butler import Butler
 from ..cli.utils import sortAstropyTable
@@ -175,7 +175,7 @@ class QueryDatasets:
         self, glob: Iterable[str], collections: Iterable[str], where: str, find_first: bool
     ) -> None:
         datasetTypes = glob if glob else ...
-        query_collections: Iterable[str] | EllipsisType = collections if collections else Ellipsis
+        query_collections: Iterable[str] | EllipsisType = collections if collections else ...
 
         self.datasets = self.butler.registry.queryDatasets(
             datasetType=datasetTypes, collections=query_collections, where=where, findFirst=find_first

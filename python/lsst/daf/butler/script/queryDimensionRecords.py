@@ -22,10 +22,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from types import EllipsisType
 from typing import Any
 
 from astropy.table import Table
-from lsst.utils.ellipsis import Ellipsis, EllipsisType
 
 from .._butler import Butler
 from ..core import Timespan
@@ -50,7 +50,7 @@ def queryDimensionRecords(
 
     query_collections: Iterable[str] | EllipsisType | None = None
     if datasets:
-        query_collections = collections if collections else Ellipsis
+        query_collections = collections if collections else ...
     query_results = butler.registry.queryDimensionRecords(
         element, datasets=datasets, collections=query_collections, where=where, check=not no_check
     )

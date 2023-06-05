@@ -30,10 +30,10 @@ __all__ = (
 import dataclasses
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from types import EllipsisType
 from typing import Any
 
 from deprecated.sphinx import deprecated
-from lsst.utils.ellipsis import Ellipsis, EllipsisType
 from lsst.utils.iteration import ensure_iterable
 from pydantic import BaseModel
 
@@ -117,10 +117,10 @@ class CategorizedWildcard:
         """
         assert expression is not None
         # See if we were given ...; just return that if we were.
-        if expression is Ellipsis:
+        if expression is ...:
             if not allowAny:
                 raise TypeError("This expression may not be unconstrained.")
-            return Ellipsis
+            return ...
         if isinstance(expression, cls):
             # This is already a CategorizedWildcard.  Make sure it meets the
             # reqs. implied by the kwargs we got.
@@ -185,8 +185,8 @@ class CategorizedWildcard:
                     # This returns a list but we know we only passed in
                     # single value.
                     converted = globToRegex(element)
-                    if converted is Ellipsis:
-                        return Ellipsis
+                    if converted is ...:
+                        return ...
                     element = converted[0]
                     # Let regex and ... go through to the next check
                     if isinstance(element, str):
@@ -235,11 +235,11 @@ class CategorizedWildcard:
 
         for element in ensure_iterable(expression):
             retval = process(element)
-            if retval is Ellipsis:
+            if retval is ...:
                 # One of the globs matched everything
                 if not allowAny:
                     raise TypeError("This expression may not be unconstrained.")
-                return Ellipsis
+                return ...
         del process
         return self
 
@@ -331,7 +331,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
             )
         except TypeError as err:
             raise CollectionExpressionError(str(err)) from None
-        assert wildcard is not Ellipsis
+        assert wildcard is not ...
         assert not wildcard.patterns
         assert not wildcard.items
         deduplicated = []
@@ -387,7 +387,7 @@ class CollectionWildcard:
     """An an ordered list of explicitly-named collections. (`tuple` [ `str` ]).
     """
 
-    patterns: tuple[re.Pattern, ...] | EllipsisType = Ellipsis
+    patterns: tuple[re.Pattern, ...] | EllipsisType = ...
     """Regular expression patterns to match against collection names, or the
     special value ``...`` indicating all collections.
 
@@ -395,7 +395,7 @@ class CollectionWildcard:
     """
 
     def __post_init__(self) -> None:
-        if self.patterns is Ellipsis and self.strings:
+        if self.patterns is ... and self.strings:
             raise ValueError(
                 f"Collection wildcard matches any string, but still has explicit strings {self.strings}."
             )
@@ -435,14 +435,14 @@ class CollectionWildcard:
         """
         if isinstance(expression, cls):
             return expression
-        if expression is Ellipsis:
+        if expression is ...:
             return cls()
         wildcard = CategorizedWildcard.fromExpression(
             expression,
             allowAny=True,
             allowPatterns=True,
         )
-        if wildcard is Ellipsis:
+        if wildcard is ...:
             return cls()
         result = cls(
             strings=tuple(wildcard.strings),
@@ -496,7 +496,7 @@ class CollectionWildcard:
         return not self.strings and not self.patterns
 
     def __str__(self) -> str:
-        if self.patterns is Ellipsis:
+        if self.patterns is ...:
             return "..."
         else:
             terms = list(self.strings)
@@ -518,7 +518,7 @@ class DatasetTypeWildcard:
     instances.
     """
 
-    patterns: tuple[re.Pattern, ...] | EllipsisType = Ellipsis
+    patterns: tuple[re.Pattern, ...] | EllipsisType = ...
     """Regular expressions to be matched against dataset type names, or the
     special value ``...`` indicating all dataset types.
 
@@ -564,7 +564,7 @@ class DatasetTypeWildcard:
             )
         except TypeError as err:
             raise DatasetTypeExpressionError(f"Invalid dataset type expression: {expression!r}.") from err
-        if wildcard is Ellipsis:
+        if wildcard is ...:
             return cls()
         values: dict[str, DatasetType | None] = {}
         for name in wildcard.strings:
@@ -579,7 +579,7 @@ class DatasetTypeWildcard:
         return cls(values, patterns=tuple(wildcard.patterns))
 
     def __str__(self) -> str:
-        if self.patterns is Ellipsis:
+        if self.patterns is ...:
             return "..."
         else:
             terms = list(self.values.keys())

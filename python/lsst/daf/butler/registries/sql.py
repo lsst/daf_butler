@@ -45,7 +45,6 @@ from typing import (
 import sqlalchemy
 from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
-from lsst.utils.ellipsis import Ellipsis
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
@@ -1285,7 +1284,7 @@ class SqlRegistry(Registry):
     def queryDatasetAssociations(
         self,
         datasetType: Union[str, DatasetType],
-        collections: CollectionArgType | None = Ellipsis,
+        collections: CollectionArgType | None = ...,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,

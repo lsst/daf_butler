@@ -24,9 +24,8 @@ from __future__ import annotations
 __all__ = ("retrieveArtifacts",)
 
 import logging
+from types import EllipsisType
 from typing import TYPE_CHECKING
-
-from lsst.utils.ellipsis import Ellipsis, EllipsisType
 
 from .._butler import Butler
 
@@ -79,7 +78,7 @@ def retrieveArtifacts(
         The destination URIs of every transferred artifact.
     """
     query_types = dataset_type if dataset_type else ...
-    query_collections: tuple[str, ...] | EllipsisType = collections if collections else Ellipsis
+    query_collections: tuple[str, ...] | EllipsisType = collections if collections else ...
 
     butler = Butler(repo, writeable=False)
 
