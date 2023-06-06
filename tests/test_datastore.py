@@ -276,8 +276,9 @@ class DatastoreTests(DatastoreTestsBase):
             self.assertTrue(datastore.knows(ref))
             multi = datastore.knows_these([ref])
             self.assertTrue(multi[ref])
-            multi = datastore.mexists([ref])
+            multi = datastore.mexists([ref, ref2])
             self.assertTrue(multi[ref])
+            self.assertFalse(multi[ref2])
 
             # Get
             metricsOut = datastore.get(ref, parameters=None)

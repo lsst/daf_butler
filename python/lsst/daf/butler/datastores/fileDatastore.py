@@ -1525,14 +1525,54 @@ class FileDatastore(GenericBaseDatastore):
         n_chunks = 0
         for chunk in chunk_iterable(refs, chunk_size=chunk_size):
             chunk_result = self._mexists(chunk, artifact_existence)
-            if log.isEnabledFor(VERBOSE):
-                n_results = len(chunk_result)
-                n_checked += n_results
+
+            # The log message level and content depend on how many
+            # datasets we are processing.
+            n_results = len(chunk_result)
+
+            # Use verbose logging to ensure that messages can be seen
+            # easily if many refs are being checked.
+            log_threshold = VERBOSE
+            n_checked += n_results
+
+            # This sum can take some time so only do it if we know the
+            # result is going to be used.
+            n_found = 0
+            if log.isEnabledFor(log_threshold):
                 # Can treat the booleans as 0, 1 integers and sum them.
                 n_found = sum(chunk_result.values())
                 n_found_total += n_found
-                log.verbose(
-                    "Number of datasets found in datastore for chunk %d = %d/%d (running total: %d/%d)",
+
+            # We are deliberately not trying to count the number of refs
+            # provided in case it's in the millions. This means there is a
+            # situation where the number of refs exactly matches the chunk
+            # size and we will switch to the multi-chunk path even though
+            # we only have a single chunk.
+            if n_results < chunk_size and n_chunks == 0:
+                # Single chunk will be processed so we can provide more detail.
+                if n_results == 1:
+                    ref = list(chunk_result)[0]
+                    # Use debug logging to be consistent with `exists()`.
+                    log.debug(
+                        "Calling mexists() with single ref that does%s exist (%s).",
+                        "" if chunk_result[ref] else " not",
+                        ref,
+                    )
+                else:
+                    # Single chunk but multiple files. Summarize.
+                    log.log(
+                        log_threshold,
+                        "Number of datasets found in datastore: %d out of %d datasets checked.",
+                        n_found,
+                        n_checked,
+                    )
+
+            else:
+                # Use incremental verbose logging when we have multiple chunks.
+                log.log(
+                    log_threshold,
+                    "Number of datasets found in datastore for chunk %d: %d out of %d checked "
+                    "(running total from all chunks so far: %d found out of %d checked)",
                     n_chunks,
                     n_found,
                     n_results,
