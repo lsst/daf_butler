@@ -93,8 +93,9 @@ class Registry(ABC):
     The base class will look for a ``cls`` entry and call that specific
     `fromConfig()` method.
 
-    All subclasses should store `RegistryDefaults` in a ``_defaults``
-    property. No other properties are assumed shared between implementations.
+    All subclasses should store `~lsst.daf.butler.registry.RegistryDefaults` in
+    a ``_defaults`` property. No other properties are assumed shared between
+    implementations.
     """
 
     defaultConfigFile: Optional[str] = None
@@ -203,7 +204,7 @@ class Registry(ABC):
         writeable: bool = True,
         defaults: Optional[RegistryDefaults] = None,
     ) -> Registry:
-        """Create `Registry` subclass instance from `config`.
+        """Create `Registry` subclass instance from ``config``.
 
         Registry database must be initialized prior to calling this method.
 
@@ -211,11 +212,11 @@ class Registry(ABC):
         ----------
         config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
             Registry configuration
-        butlerRoot : `lsst.resources.ResourcePathExpression`, optional
+        butlerRoot : convertible to `lsst.resources.ResourcePath`, optional
             Path to the repository root this `Registry` will manage.
         writeable : `bool`, optional
             If `True` (default) create a read-write connection to the database.
-        defaults : `RegistryDefaults`, optional
+        defaults : `~lsst.daf.butler.registry.RegistryDefaults`, optional
             Default collection search path and/or output `~CollectionType.RUN`
             collection.
 
@@ -250,7 +251,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        defaults : `RegistryDefaults`, optional
+        defaults : `~lsst.daf.butler.registry.RegistryDefaults`, optional
             Default collections and data ID values for the new registry.  If
             not provided, ``self.defaults`` will be used (but future changes
             to either registry's defaults will not affect the other).
@@ -280,7 +281,7 @@ class Registry(ABC):
     @property
     def defaults(self) -> RegistryDefaults:
         """Default collection search path and/or output `~CollectionType.RUN`
-        collection (`RegistryDefaults`).
+        collection (`~lsst.daf.butler.registry.RegistryDefaults`).
 
         This is an immutable struct whose components may not be set
         individually, but the entire struct can be set by assigning to this
@@ -367,7 +368,7 @@ class Registry(ABC):
 
         Raises
         ------
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised if no collection with the given name exists.
         """
         raise NotImplementedError()
@@ -423,9 +424,9 @@ class Registry(ABC):
 
         Raises
         ------
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised if no collection with the given name exists.
-        sqlalchemy.IntegrityError
+        sqlalchemy.exc.IntegrityError
             Raised if the database rows associated with the collection are
             still referenced by some other table, such as a dataset in a
             datastore (for `~CollectionType.RUN` collections only) or a
@@ -458,15 +459,15 @@ class Registry(ABC):
 
         Returns
         -------
-        children : `Sequence` [ `str` ]
+        children : `~collections.abc.Sequence` [ `str` ]
             An ordered sequence of collection names that are searched when the
             given chained collection is searched.
 
         Raises
         ------
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised if ``parent`` does not exist in the `Registry`.
-        CollectionTypeError
+        lsst.daf.butler.registry.CollectionTypeError
             Raised if ``parent`` does not correspond to a
             `~CollectionType.CHAINED` collection.
         """
@@ -481,7 +482,7 @@ class Registry(ABC):
         parent : `str`
             Name of the chained collection.  Must have already been added via
             a call to `Registry.registerCollection`.
-        children : `Any`
+        children : collection expression
             An expression defining an ordered search of child collections,
             generally an iterable of `str`; see
             :ref:`daf_butler_collection_expressions` for more information.
@@ -491,10 +492,10 @@ class Registry(ABC):
 
         Raises
         ------
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised when any of the given collections do not exist in the
             `Registry`.
-        CollectionTypeError
+        lsst.daf.butler.registry.CollectionTypeError
             Raised if ``parent`` does not correspond to a
             `~CollectionType.CHAINED` collection.
         ValueError
@@ -560,7 +561,7 @@ class Registry(ABC):
 
         Returns
         -------
-        summary : `CollectionSummary`
+        summary : `~lsst.daf.butler.registry.CollectionSummary`
             Summary of the dataset types and governor dimension values in
             this collection.
         """
@@ -568,8 +569,7 @@ class Registry(ABC):
 
     @abstractmethod
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
-        """
-        Add a new `DatasetType` to the Registry.
+        """Add a new `DatasetType` to the Registry.
 
         It is not an error to register the same `DatasetType` twice.
 
@@ -582,7 +582,7 @@ class Registry(ABC):
         -------
         inserted : `bool`
             `True` if ``datasetType`` was inserted, `False` if an identical
-            existing `DatsetType` was found.  Note that in either case the
+            existing `DatasetType` was found.  Note that in either case the
             DatasetType is guaranteed to be defined in the Registry
             consistently with the given definition.
 
@@ -590,8 +590,8 @@ class Registry(ABC):
         ------
         ValueError
             Raised if the dimensions or storage class are invalid.
-        ConflictingDefinitionError
-            Raised if this DatasetType is already registered with a different
+        lsst.daf.butler.registry.ConflictingDefinitionError
+            Raised if this `DatasetType` is already registered with a different
             definition.
 
         Notes
@@ -614,7 +614,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        name : `str` or `tuple[str, ...]`
+        name : `str` or `tuple` [`str`]
             Name of the type to be removed or tuple containing a list of type
             names to be removed. Wildcards are allowed.
 
@@ -647,7 +647,7 @@ class Registry(ABC):
 
         Raises
         ------
-        MissingDatasetTypeError
+        lsst.daf.butler.registry.MissingDatasetTypeError
             Raised if the requested dataset type has not been registered.
 
         Notes
@@ -701,7 +701,7 @@ class Registry(ABC):
         dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
-        collections, optional.
+        collections : collection expression, optional
             An expression that fully or partially identifies the collections to
             search for the dataset; see
             :ref:`daf_butler_collection_expressions` for more information.
@@ -723,14 +723,14 @@ class Registry(ABC):
 
         Raises
         ------
-        NoDefaultCollectionError
+        lsst.daf.butler.registry.NoDefaultCollectionError
             Raised if ``collections`` is `None` and
             ``self.defaults.collections`` is `None`.
         LookupError
             Raised if one or more data ID keys are missing.
-        MissingDatasetTypeError
+        lsst.daf.butler.registry.MissingDatasetTypeError
             Raised if the dataset type does not exist.
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised if any of ``collections`` does not exist in the registry.
 
         Notes
@@ -790,16 +790,16 @@ class Registry(ABC):
 
         Raises
         ------
-        DatasetTypeError
+        lsst.daf.butler.registry.DatasetTypeError
             Raised if ``datasetType`` is not known to registry.
-        CollectionTypeError
+        lsst.daf.butler.registry.CollectionTypeError
             Raised if ``run`` collection type is not `~CollectionType.RUN`.
-        NoDefaultCollectionError
+        lsst.daf.butler.registry.NoDefaultCollectionError
             Raised if ``run`` is `None` and ``self.defaults.run`` is `None`.
-        ConflictingDefinitionError
+        lsst.daf.butler.registry.ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
             given already exists in ``run``.
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised if ``run`` does not exist in the registry.
         """
         raise NotImplementedError()
@@ -845,15 +845,15 @@ class Registry(ABC):
 
         Raises
         ------
-        NoDefaultCollectionError
+        lsst.daf.butler.registry.NoDefaultCollectionError
             Raised if ``run`` is `None` and ``self.defaults.run`` is `None`.
-        DatasetTypeError
+        lsst.daf.butler.registry.DatasetTypeError
             Raised if datasets correspond to more than one dataset type or
             dataset type is not known to registry.
-        ConflictingDefinitionError
+        lsst.daf.butler.registry.ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
             given already exists in ``run``.
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised if ``run`` does not exist in the registry.
 
         Notes
@@ -893,15 +893,15 @@ class Registry(ABC):
 
         Parameters
         ----------
-        refs : `Iterable` of `DatasetRef`
+        refs : `~collections.abc.Iterable` [`DatasetRef`]
             References to the datasets to be removed.  Must include a valid
             ``id`` attribute, and should be considered invalidated upon return.
 
         Raises
         ------
-        AmbiguousDatasetError
+        lsst.daf.butler.AmbiguousDatasetError
             Raised if any ``ref.id`` is `None`.
-        OrphanedRecordError
+        lsst.daf.butler.registry.OrphanedRecordError
             Raised if any dataset is still present in any `Datastore`.
         """
         raise NotImplementedError()
@@ -913,24 +913,24 @@ class Registry(ABC):
         If a DatasetRef with the same exact ID is already in a collection
         nothing is changed. If a `DatasetRef` with the same `DatasetType` and
         data ID but with different ID exists in the collection,
-        `ConflictingDefinitionError` is raised.
+        `~lsst.daf.butler.registry.ConflictingDefinitionError` is raised.
 
         Parameters
         ----------
         collection : `str`
             Indicates the collection the datasets should be associated with.
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             An iterable of resolved `DatasetRef` instances that already exist
             in this `Registry`.
 
         Raises
         ------
-        ConflictingDefinitionError
+        lsst.daf.butler.registry.ConflictingDefinitionError
             If a Dataset with the given `DatasetRef` already exists in the
             given collection.
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised if ``collection`` does not exist in the registry.
-        CollectionTypeError
+        lsst.daf.butler.registry.CollectionTypeError
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
@@ -947,17 +947,17 @@ class Registry(ABC):
         ----------
         collection : `str`
             The collection the datasets should no longer be associated with.
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             An iterable of resolved `DatasetRef` instances that already exist
             in this `Registry`.
 
         Raises
         ------
-        AmbiguousDatasetError
+        lsst.daf.butler.AmbiguousDatasetError
             Raised if any of the given dataset references is unresolved.
-        MissingCollectionError
+        lsst.daf.butler.registry.MissingCollectionError
             Raised if ``collection`` does not exist in the registry.
-        CollectionTypeError
+        lsst.daf.butler.registry.CollectionTypeError
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
@@ -980,13 +980,13 @@ class Registry(ABC):
 
         Raises
         ------
-        AmbiguousDatasetError
+        lsst.daf.butler.AmbiguousDatasetError
             Raised if any of the given `DatasetRef` instances is unresolved.
-        ConflictingDefinitionError
+        lsst.daf.butler.registry.ConflictingDefinitionError
             Raised if the collection already contains a different dataset with
             the same `DatasetType` and data ID and an overlapping validity
             range.
-        CollectionTypeError
+        lsst.daf.butler.registry.CollectionTypeError
             Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
             collection or if one or more datasets are of a dataset type for
             which `DatasetType.isCalibration` returns `False`.
@@ -1017,14 +1017,14 @@ class Registry(ABC):
             Datasets that overlap this range but are not contained by it will
             have their validity ranges adjusted to not overlap it, which may
             split a single dataset validity range into two.
-        dataIds : `Iterable` [ `DataId` ], optional
+        dataIds : iterable [`dict` or `DataCoordinate`], optional
             Data IDs that should be decertified within the given validity range
             If `None`, all data IDs for ``self.datasetType`` will be
             decertified.
 
         Raises
         ------
-        CollectionTypeError
+        lsst.daf.butler.registry.CollectionTypeError
             Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
             collection or if ``datasetType.isCalibration() is False``.
         """
@@ -1037,7 +1037,7 @@ class Registry(ABC):
 
         Returns
         -------
-        manager : `DatastoreRegistryBridgeManager`
+        manager : `~.interfaces.DatastoreRegistryBridgeManager`
             Object that mediates communication between this `Registry` and its
             associated datastores.
         """
@@ -1055,12 +1055,12 @@ class Registry(ABC):
 
         Returns
         -------
-        datastores : `Iterable` [ `str` ]
+        datastores : `~collections.abc.Iterable` [ `str` ]
             All the matching datastores holding this dataset.
 
         Raises
         ------
-        AmbiguousDatasetError
+        lsst.daf.butler.AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
         """
         raise NotImplementedError()
@@ -1107,7 +1107,7 @@ class Registry(ABC):
 
         Raises
         ------
-        DataIdError
+        lsst.daf.butler.registry.DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
             dimensions or values, or when a resulting data ID contains
             contradictory key-value pairs, according to dimension
@@ -1139,7 +1139,7 @@ class Registry(ABC):
         element : `DimensionElement` or `str`
             The `DimensionElement` or name thereof that identifies the table
             records will be inserted into.
-        data : `dict` or `DimensionRecord` (variadic)
+        *data : `dict` or `DimensionRecord`
             One or more records to insert.
         conform : `bool`, optional
             If `False` (`True` is default) perform no checking or conversions,
@@ -1181,7 +1181,7 @@ class Registry(ABC):
             and assume that ``element`` is a `DimensionElement` instance and
             ``data`` is a one or more `DimensionRecord` instances of the
             appropriate subclass.
-        update: `bool`, optional
+        update : `bool`, optional
             If `True` (`False` is default), update the existing record in the
             database if there is a conflict.
 
@@ -1195,7 +1195,7 @@ class Registry(ABC):
 
         Raises
         ------
-        ConflictingDefinitionError
+        lsst.daf.butler.registry.ConflictingDefinitionError
             Raised if the record exists in the database (according to primary
             key lookup) but is inconsistent with the given one.
         """
@@ -1213,7 +1213,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        expression : `Any`, optional
+        expression : dataset type expression, optional
             An expression that fully or partially identifies the dataset types
             to return, such as a `str`, `re.Pattern`, or iterable thereof.
             ``...`` can be used to return all dataset types, and is the
@@ -1237,13 +1237,13 @@ class Registry(ABC):
 
         Returns
         -------
-        dataset_types : `Iterable` [ `DatasetType`]
-            An `Iterable` of `DatasetType` instances whose names match
-            ``expression``.
+        dataset_types : `~collections.abc.Iterable` [ `DatasetType`]
+            An `~collections.abc.Iterable` of `DatasetType` instances whose
+            names match ``expression``.
 
         Raises
         ------
-        DatasetTypeExpressionError
+        lsst.daf.butler.registry.DatasetTypeExpressionError
             Raised when ``expression`` is invalid.
         """
         raise NotImplementedError()
@@ -1261,7 +1261,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        expression : `Any`, optional
+        expression : collection expression, optional
             An expression that identifies the collections to return, such as
             a `str` (for full matches or partial matches via globs),
             `re.Pattern` (for partial matches), or iterable thereof.  ``...``
@@ -1271,7 +1271,7 @@ class Registry(ABC):
             If provided, only yield collections that may contain datasets of
             this type.  This is a conservative approximation in general; it may
             yield collections that do not have any such datasets.
-        collectionTypes : `AbstractSet` [ `CollectionType` ] or \
+        collectionTypes : `~collections.abc.Set` [`CollectionType`] or \
             `CollectionType`, optional
             If provided, only yield collections of these types.
         flattenChains : `bool`, optional
@@ -1284,12 +1284,12 @@ class Registry(ABC):
 
         Returns
         -------
-        collections : `Sequence` [ `str` ]
+        collections : `~collections.abc.Sequence` [ `str` ]
             The names of collections that match ``expression``.
 
         Raises
         ------
-        CollectionExpressionError
+        lsst.daf.butler.registry.CollectionExpressionError
             Raised when ``expression`` is invalid.
 
         Notes
@@ -1323,13 +1323,13 @@ class Registry(ABC):
 
         Parameters
         ----------
-        datasetType
+        datasetType : dataset type expression
             An expression that fully or partially identifies the dataset types
             to be queried.  Allowed types include `DatasetType`, `str`,
             `re.Pattern`, and iterables thereof.  The special value ``...`` can
             be used to query all dataset types.  See
             :ref:`daf_butler_dataset_type_expressions` for more information.
-        collections: optional
+        collections : collection expression, optional
             An expression that identifies the collections to search, such as a
             `str` (for full matches or partial matches via globs), `re.Pattern`
             (for partial matches), or iterable thereof.  ``...`` can be used to
@@ -1369,9 +1369,12 @@ class Registry(ABC):
             Values other than `False` are deprecated, and only `False` will be
             supported after v26.  After v27 this argument will be removed
             entirely.
-        bind : `Mapping`, optional
+        bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
+            Values of collection type can be expanded in some cases; see
+            :ref:`daf_butler_dimension_expressions_identifiers` for more
+            information.
         check : `bool`, optional
             If `True` (default) check the query for consistency before
             executing it.  This may reject some valid queries that resemble
@@ -1385,27 +1388,27 @@ class Registry(ABC):
 
         Returns
         -------
-        refs : `queries.DatasetQueryResults`
+        refs : `.queries.DatasetQueryResults`
             Dataset references matching the given query criteria.  Nested data
             IDs are guaranteed to include values for all implied dimensions
             (i.e. `DataCoordinate.hasFull` will return `True`), but will not
             include dimension records (`DataCoordinate.hasRecords` will be
-            `False`) unless `~queries.DatasetQueryResults.expanded` is called
-            on the result object (which returns a new one).
+            `False`) unless `~.queries.DatasetQueryResults.expanded` is
+            called on the result object (which returns a new one).
 
         Raises
         ------
-        DatasetTypeExpressionError
+        lsst.daf.butler.registry.DatasetTypeExpressionError
             Raised when ``datasetType`` expression is invalid.
         TypeError
             Raised when the arguments are incompatible, such as when a
             collection wildcard is passed when ``findFirst`` is `True`, or
-            when ``collections`` is `None` and``self.defaults.collections`` is
+            when ``collections`` is `None` and ``self.defaults.collections`` is
             also `None`.
-        DataIdError
+        lsst.daf.butler.registry.DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
             dimensions or values, or when they contain inconsistent values.
-        UserExpressionError
+        lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
 
         Notes
@@ -1447,7 +1450,7 @@ class Registry(ABC):
         dataId : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints
             in the query.
-        datasets : `Any`, optional
+        datasets : dataset type expression, optional
             An expression that fully or partially identifies dataset types
             that should constrain the yielded data IDs.  For example, including
             "raw" here would constrain the yielded ``instrument``,
@@ -1458,7 +1461,7 @@ class Registry(ABC):
             `re.Pattern`) are deprecated and will be removed after the v26
             release.  See :ref:`daf_butler_dataset_type_expressions` for more
             information.
-        collections: `Any`, optional
+        collections : collection expression, optional
             An expression that identifies the collections to search for
             datasets, such as a `str` (for full matches or partial matches
             via globs), `re.Pattern` (for partial matches), or iterable
@@ -1484,9 +1487,12 @@ class Registry(ABC):
             Values other than `False` are deprecated, and only `False` will be
             supported after v26.  After v27 this argument will be removed
             entirely.
-        bind : `Mapping`, optional
+        bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
+            Values of collection type can be expanded in some cases; see
+            :ref:`daf_butler_dimension_expressions_identifiers` for more
+            information.
         check : `bool`, optional
             If `True` (default) check the query for consistency before
             executing it.  This may reject some valid queries that resemble
@@ -1500,30 +1506,31 @@ class Registry(ABC):
 
         Returns
         -------
-        dataIds : `queries.DataCoordinateQueryResults`
+        dataIds : `.queries.DataCoordinateQueryResults`
             Data IDs matching the given query parameters.  These are guaranteed
             to identify all dimensions (`DataCoordinate.hasFull` returns
             `True`), but will not contain `DimensionRecord` objects
             (`DataCoordinate.hasRecords` returns `False`).  Call
-            `DataCoordinateQueryResults.expanded` on the returned object to
-            fetch those (and consider using
-            `DataCoordinateQueryResults.materialize` on the returned object
-            first if the expected number of rows is very large).  See
-            documentation for those methods for additional information.
+            `~.queries.DataCoordinateQueryResults.expanded` on the
+            returned object to fetch those (and consider using
+            `~.queries.DataCoordinateQueryResults.materialize` on the
+            returned object first if the expected number of rows is very
+            large). See documentation for those methods for additional
+            information.
 
         Raises
         ------
-        NoDefaultCollectionError
+        lsst.daf.butler.registry.NoDefaultCollectionError
             Raised if ``collections`` is `None` and
             ``self.defaults.collections`` is `None`.
-        CollectionExpressionError
+        lsst.daf.butler.registry.CollectionExpressionError
             Raised when ``collections`` expression is invalid.
-        DataIdError
+        lsst.daf.butler.registry.DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
             dimensions or values, or when they contain inconsistent values.
-        DatasetTypeExpressionError
+        lsst.daf.butler.registry.DatasetTypeExpressionError
             Raised when ``datasetType`` expression is invalid.
-        UserExpressionError
+        lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
         """
         raise NotImplementedError()
@@ -1551,11 +1558,11 @@ class Registry(ABC):
         dataId : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints
             in the query.
-        datasets : `Any`, optional
+        datasets : dataset type expression, optional
             An expression that fully or partially identifies dataset types
             that should constrain the yielded records.  See `queryDataIds` and
             :ref:`daf_butler_dataset_type_expressions` for more information.
-        collections : `Any`, optional
+        collections : collection expression, optional
             An expression that identifies the collections to search for
             datasets, such as a `str` (for full matches  or partial matches
             via globs), `re.Pattern` (for partial matches), or iterable
@@ -1576,9 +1583,12 @@ class Registry(ABC):
             Values other than `False` are deprecated, and only `False` will be
             supported after v26.  After v27 this argument will be removed
             entirely.
-        bind : `Mapping`, optional
+        bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
+            Values of collection type can be expanded in some cases; see
+            :ref:`daf_butler_dimension_expressions_identifiers` for more
+            information.
         check : `bool`, optional
             If `True` (default) check the query for consistency before
             executing it.  This may reject some valid queries that resemble
@@ -1592,22 +1602,22 @@ class Registry(ABC):
 
         Returns
         -------
-        dataIds : `queries.DimensionRecordQueryResults`
+        dataIds : `.queries.DimensionRecordQueryResults`
             Data IDs matching the given query parameters.
 
         Raises
         ------
-        NoDefaultCollectionError
+        lsst.daf.butler.registry.NoDefaultCollectionError
             Raised if ``collections`` is `None` and
             ``self.defaults.collections`` is `None`.
-        CollectionExpressionError
+        lsst.daf.butler.registry.CollectionExpressionError
             Raised when ``collections`` expression is invalid.
-        DataIdError
+        lsst.daf.butler.registry.DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
             dimensions or values, or when they contain inconsistent values.
-        DatasetTypeExpressionError
+        lsst.daf.butler.registry.DatasetTypeExpressionError
             Raised when ``datasetType`` expression is invalid.
-        UserExpressionError
+        lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
         """
         raise NotImplementedError()
@@ -1633,7 +1643,7 @@ class Registry(ABC):
         ----------
         datasetType : `DatasetType` or `str`
             A dataset type object or the name of one.
-        collections: `Any`, optional
+        collections : collection expression, optional
             An expression that identifies the collections to search for
             datasets, such as a `str` (for full matches  or partial matches
             via globs), `re.Pattern` (for partial matches), or iterable
@@ -1642,7 +1652,7 @@ class Registry(ABC):
             find all datasets).  If not provided, ``self.default.collections``
             is used.  See :ref:`daf_butler_collection_expressions` for more
             information.
-        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+        collectionTypes : `~collections.abc.Set` [ `CollectionType` ], optional
             If provided, only yield associations from collections of these
             types.
         flattenChains : `bool`, optional
@@ -1658,17 +1668,18 @@ class Registry(ABC):
 
         Raises
         ------
-        NoDefaultCollectionError
+        lsst.daf.butler.registry.NoDefaultCollectionError
             Raised if ``collections`` is `None` and
             ``self.defaults.collections`` is `None`.
-        CollectionExpressionError
+        lsst.daf.butler.registry.CollectionExpressionError
             Raised when ``collections`` expression is invalid.
         """
         raise NotImplementedError()
 
     @property
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:
-        """ObsCore manager instance for this registry (`ObsCoreTableManager`
+        """ObsCore manager instance for this registry
+        (`~.interfaces.ObsCoreTableManager`
         or `None`).
 
         ObsCore manager may not be implemented for all registry backend, or
