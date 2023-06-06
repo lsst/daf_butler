@@ -594,12 +594,19 @@ class ButlerTests(ButlerPutGetTests):
             with self.assertRaises(FileNotFoundError):
                 Butler.get_repo_uri("label")
             self.assertEqual(Butler.get_known_repos(), set())
+
+            with self.assertRaisesRegex(FileNotFoundError, "index file not found"):
+                Butler("label")
+
+            # Check that we can create Butler when the alias file is not found.
+            butler = Butler(self.tmpConfigFile, writeable=False)
+            self.assertIsInstance(butler, Butler)
         with self.assertRaises(KeyError) as cm:
             # No environment variable set.
             Butler.get_repo_uri("label")
         self.assertEqual(Butler.get_repo_uri("label", True), ResourcePath("label"))
         self.assertIn("No repository index defined", str(cm.exception))
-        with self.assertRaisesRegex(FileNotFoundError, "no known aliases"):
+        with self.assertRaisesRegex(FileNotFoundError, "no known aliases.*No repository index"):
             # No aliases registered.
             Butler("not_there")
         self.assertEqual(Butler.get_known_repos(), set())
