@@ -85,7 +85,11 @@ class ButlerRepoIndex:
         if index_uri in cls._cache:
             return cls._cache[uri]
 
-        repo_index = Config(uri)
+        try:
+            repo_index = Config(uri)
+        except FileNotFoundError as e:
+            # More explicit error message.
+            raise FileNotFoundError(f"Butler repository index file not found at {uri}.") from e
         cls._cache[uri] = repo_index
 
         return repo_index
@@ -135,6 +139,23 @@ class ButlerRepoIndex:
         except (FileNotFoundError, KeyError):
             return set()
         return set(repo_index)
+
+    @classmethod
+    def get_failure_reason(cls) -> str:
+        """Return possible reason for failure to return repository index.
+
+        Returns
+        -------
+        reason : `str`
+            If there is a problem reading the repository index, this will
+            contain a string with an explanation. Empty string if everything
+            worked.
+        """
+        try:
+            cls._read_repository_index_from_environment()
+        except (FileNotFoundError, KeyError) as e:
+            return str(e)
+        return ""
 
     @classmethod
     def get_repo_uri(cls, label: str, return_label: bool = False) -> ResourcePath:
