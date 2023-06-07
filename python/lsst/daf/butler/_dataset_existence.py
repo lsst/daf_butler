@@ -28,7 +28,23 @@ from enum import Flag, auto
 
 class DatasetExistence(Flag):
     """Flags representing the different states that a dataset can have
-    in a Butler repository."""
+    in a Butler repository.
+
+    If a flag evaluates to `True` that will indicate that a dataset is
+    present in the Butler repository. The different states for `KNOWN`
+    and `VERIFIED` both evaluate to `True` and differ solely on whether
+    the artifact was checked to make sure it exists or not.
+
+    Some flag are combinations of other flags, so in order to determine
+    whether a dataset is present in datastore it is necessary to use logical
+    ``AND``.
+
+    .. code-block :: py
+
+        exists = DatasetExistence.VERIFIED
+        if (DatasetExistence.DATASTORE & exists) == DatasetExistence.DATASTORE:
+            # The datastore knows about this dataset.
+    """
 
     UNRECOGNIZED = 0
     """The dataset is not recognized as part of this registry or datastore.
