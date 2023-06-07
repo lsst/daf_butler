@@ -102,6 +102,18 @@ if TYPE_CHECKING:
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
+def clean_environment() -> None:
+    """Remove external environment variables that affect the tests."""
+    for k in (
+        "DAF_BUTLER_REPOSITORY_INDEX",
+        "S3_ENDPOINT_URL",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SHARED_CREDENTIALS_FILE",
+    ):
+        os.environ.pop(k, None)
+
+
 def makeExampleMetrics():
     return MetricsExample(
         {"AM1": 5.2, "AM2": 30.6},
@@ -2280,5 +2292,10 @@ class ChainedDatastoreTransfers(PosixDatastoreTransfers):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
+def setup_module(module) -> None:
+    clean_environment()
+
+
 if __name__ == "__main__":
+    clean_environment()
     unittest.main()
