@@ -472,16 +472,6 @@ class QuantumBackedButler(LimitedButler):
                     self._unavailable_inputs.add(ref.id)
         return existence
 
-    @deprecated(
-        reason="Butler.datasetExistsDirect() has been replaced by Butler.stored(). "
-        "Will be removed after v27.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def datasetExistsDirect(self, ref: DatasetRef) -> bool:
-        # Docstring inherited.
-        return self.stored(ref)
-
     def markInputUnused(self, ref: DatasetRef) -> None:
         # Docstring inherited.
         self._actual_inputs.discard(ref.id)
