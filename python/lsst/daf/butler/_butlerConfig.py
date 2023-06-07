@@ -138,7 +138,7 @@ class ButlerConfig(Config):
                         failure_reason = ButlerRepoIndex.get_failure_reason()
                         if failure_reason:
                             failure_reason = f": {failure_reason}"
-                        aliases = f"(no known aliases{failure_reason})"
+                        aliases = f"(given {original_other!r} and no known aliases{failure_reason})"
                 else:
                     aliases = f"(resolved from alias {original_other!r})"
                 errmsg = f"{e} {aliases}"
