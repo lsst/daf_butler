@@ -191,13 +191,13 @@ class ButlerRepoIndex:
             repo_index = cls._read_repository_index_from_environment()
         except KeyError:
             if return_label:
-                return ResourcePath(label)
+                return ResourcePath(label, forceAbsolute=False)
             raise
 
         repo_uri = repo_index.get(label)
         if repo_uri is None:
             if return_label:
-                return ResourcePath(label)
+                return ResourcePath(label, forceAbsolute=False)
             # This should not raise since it worked earlier.
             try:
                 index_uri = str(cls._get_index_uri())
