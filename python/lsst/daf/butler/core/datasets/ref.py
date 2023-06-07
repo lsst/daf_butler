@@ -666,10 +666,6 @@ class DatasetRef:
         be converted to the original python type. The reverse is not guaranteed
         and depends on whether bidirectional converters have been registered.
         """
-        if not isinstance(ref, DatasetRef):
-            # mypy thinks this is impossible but we need to prevent
-            # an AttributeError if possible.
-            return False  # type: ignore [unreachable]
         if self.id != ref.id:
             return False
         if self.dataId != ref.dataId:

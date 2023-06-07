@@ -592,7 +592,8 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref_new.datasetType.storageClass, storageA)
         self.assertEqual(ref_new.overrideStorageClass(ref.datasetType.storageClass), ref)
         self.assertTrue(ref.is_compatible_with(ref_new))
-        self.assertFalse(ref_new.is_compatible_with(None))
+        with self.assertRaises(AttributeError):
+            ref_new.is_compatible_with(None)
 
         # Check different code paths of incompatibility.
         ref_incompat = DatasetRef(ref.datasetType, ref.dataId, run="somerun2", id=ref.id)
