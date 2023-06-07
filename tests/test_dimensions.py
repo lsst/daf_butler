@@ -74,7 +74,7 @@ def loadDimensionData() -> DataCoordinateSequence:
     return registry.queryDataIds(dimensions).expanded().toSequence()
 
 
-class TestDimensionPacker(DimensionPacker):
+class ConcreteTestDimensionPacker(DimensionPacker):
     """A concrete `DimensionPacker` for testing its base class implementations.
 
     This class just returns the detector ID as-is.
@@ -865,7 +865,7 @@ class DataCoordinateTestCase(unittest.TestCase):
             self.allDataIds.universe.extract(["instrument"])
         ).toSet()
         (detector_data_id,) = self.randomDataIds(n=1).subset(self.allDataIds.universe.extract(["detector"]))
-        packer = TestDimensionPacker(instrument_data_id, detector_data_id.graph)
+        packer = ConcreteTestDimensionPacker(instrument_data_id, detector_data_id.graph)
         packed_id, max_bits = packer.pack(detector_data_id, returnMaxBits=True)
         self.assertEqual(packed_id, detector_data_id["detector"])
         self.assertEqual(max_bits, packer.maxBits)

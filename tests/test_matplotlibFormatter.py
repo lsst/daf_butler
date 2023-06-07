@@ -78,12 +78,11 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
             with tempfile.NamedTemporaryFile(suffix=".png") as file:
                 pyplot.gcf().savefig(file.name)
                 self.assertTrue(filecmp.cmp(local.ospath, file.name, shallow=True))
-        self.assertTrue(butler.datasetExists(ref))
+        self.assertTrue(butler.exists(ref))
         with self.assertRaises(ValueError):
             butler.get(ref)
         butler.pruneDatasets([ref], unstore=True, purge=True)
-        with self.assertRaises(LookupError):
-            butler.datasetExists(ref)
+        self.assertFalse(butler.exists(ref))
 
 
 if __name__ == "__main__":

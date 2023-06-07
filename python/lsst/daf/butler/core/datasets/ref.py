@@ -628,6 +628,52 @@ class DatasetRef:
             conform=False,
         )
 
+    def is_compatible_with(self, ref: DatasetRef) -> bool:
+        """Determine if the given `DatasetRef` is compatible with this one.
+
+        Parameters
+        ----------
+        other : `DatasetRef`
+            Dataset ref to check.
+
+        Returns
+        -------
+        is_compatible : `bool`
+            Returns `True` if the other dataset ref is either the same as this
+            or the dataset type associated with the other is compatible with
+            this one and the dataId and dataset ID match.
+
+        Notes
+        -----
+        Compatibility requires that the dataId and dataset ID match and the
+        `DatasetType` is compatible. Compatibility is defined as the storage
+        class associated with the dataset type of the other ref can be
+        converted to this storage class.
+
+        Specifically this means that if you have done:
+
+        .. code-block:: py
+
+            new_ref = ref.overrideStorageClass(sc)
+
+        and this is successful, then the guarantee is that:
+
+        .. code-block:: py
+
+            assert ref.is_compatible_with(new_ref) is True
+
+        since we know that the python type associated with the new ref can
+        be converted to the original python type. The reverse is not guaranteed
+        and depends on whether bidirectional converters have been registered.
+        """
+        if self.id != ref.id:
+            return False
+        if self.dataId != ref.dataId:
+            return False
+        if self.run != ref.run:
+            return False
+        return self.datasetType.is_compatible_with(ref.datasetType)
+
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).
 

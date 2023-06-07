@@ -447,15 +447,30 @@ class QuantumBackedButler(LimitedButler):
             self._actual_inputs.add(ref.id)
         return super().getDeferred(ref, parameters=parameters, storageClass=storageClass)
 
-    def datasetExistsDirect(self, ref: DatasetRef) -> bool:
+    def stored(self, ref: DatasetRef) -> bool:
         # Docstring inherited.
-        exists = super().datasetExistsDirect(ref)
+        stored = super().stored(ref)
         if ref.id in self._predicted_inputs:
-            if exists:
+            if stored:
                 self._available_inputs.add(ref.id)
             else:
                 self._unavailable_inputs.add(ref.id)
-        return exists
+        return stored
+
+    def stored_many(
+        self,
+        refs: Iterable[DatasetRef],
+    ) -> dict[DatasetRef, bool]:
+        # Docstring inherited.
+        existence = super().stored_many(refs)
+
+        for ref, stored in existence.items():
+            if ref.id in self._predicted_inputs:
+                if stored:
+                    self._available_inputs.add(ref.id)
+                else:
+                    self._unavailable_inputs.add(ref.id)
+        return existence
 
     def markInputUnused(self, ref: DatasetRef) -> None:
         # Docstring inherited.

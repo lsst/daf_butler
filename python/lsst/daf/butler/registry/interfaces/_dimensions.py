@@ -233,7 +233,8 @@ class DimensionRecordStorage(ABC):
 
         Returns
         -------
-        cache : `Mapping` [ `DataCoordinate`, `DimensionRecord` ] or `None`
+        cache : `~collections.abc.Mapping` \
+                [ `DataCoordinate`, `DimensionRecord` ] or `None`
             Mapping from data ID to dimension record, or `None`.
         """
         return None
@@ -310,7 +311,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
-        config : `Mapping`
+        config : `~collections.abc.Mapping`
             Extra configuration options specific to the implementation.
 
         Returns
@@ -430,7 +431,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
-        config : `Mapping`
+        config : `~collections.abc.Mapping`
             Extra configuration options specific to the implementation.
         governors : `NamedKeyMapping`
             Mapping containing all governor dimension storage implementations.
@@ -524,8 +525,8 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         context : `.queries.SqlQueryContext`
             Object that manages relation engines and database-side state
             (e.g. temporary tables) for the query.
-        governor_constraints : `Mapping` [ `str`, `~collections.abc.Set` ], \
-                optional
+        governor_constraints : `~collections.abc.Mapping` \
+                [ `str`, `~collections.abc.Set` ], optional
             Constraints imposed by other aspects of the query on governor
             dimensions.
 
@@ -620,8 +621,8 @@ class DatabaseDimensionOverlapStorage(ABC):
         context : `.queries.SqlQueryContext`
             Object that manages relation engines and database-side state
             (e.g. temporary tables) for the query.
-        governor_constraints : `Mapping` [ `str`, `~collections.abc.Set` ], \
-                optional
+        governor_constraints : `~collections.abc.Mapping` \
+                [ `str`, `~collections.abc.Set` ], optional
             Constraints imposed by other aspects of the query on governor
             dimensions; collections inconsistent with these constraints will be
             skipped.
@@ -829,8 +830,8 @@ class DimensionRecordStorageManager(VersionedExtension):
         context : `.queries.SqlQueryContext`
             Object that manages relation engines and database-side state
             (e.g. temporary tables) for the query.
-        governor_constraints : `Mapping` [ `str`, `collections.abc.Set` ], \
-                optional
+        governor_constraints : `~collections.abc.Mapping` \
+                [ `str`, `collections.abc.Set` ], optional
             Constraints imposed by other aspects of the query on governor
             dimensions.
         existing_relationships : `~collections.abc.Set` [ `frozenset` [ `str` \

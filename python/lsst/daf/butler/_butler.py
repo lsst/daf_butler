@@ -65,6 +65,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ._butlerConfig import ButlerConfig
 from ._butlerRepoIndex import ButlerRepoIndex
+from ._dataset_existence import DatasetExistence
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from .core import (
@@ -97,6 +98,7 @@ from .registry import (
     ConflictingDefinitionError,
     DataIdError,
     MissingDatasetTypeError,
+    NoDefaultCollectionError,
     Registry,
     RegistryConfig,
     RegistryDefaults,
@@ -1069,7 +1071,7 @@ class Butler(LimitedButler):
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, for_put=False, **kwargs)
         if isinstance(datasetRefOrType, DatasetRef):
             if collections is not None:
-                warnings.warn("Collections should not be specified with DatasetRef", stacklevel=2)
+                warnings.warn("Collections should not be specified with DatasetRef", stacklevel=3)
             return datasetRefOrType
         timespan: Optional[Timespan] = None
 
@@ -1182,7 +1184,7 @@ class Butler(LimitedButler):
             # This is a direct put of predefined DatasetRef.
             log.debug("Butler put direct: %s", datasetRefOrType)
             if run is not None:
-                warnings.warn("Run collection is not used for DatasetRef")
+                warnings.warn("Run collection is not used for DatasetRef", stacklevel=3)
             # If registry already has a dataset with the same dataset ID,
             # dataset type and DataId, then _importDatasets will do nothing and
             # just return an original ref. We have to raise in this case, there
@@ -1597,6 +1599,165 @@ class Butler(LimitedButler):
             overwrite=overwrite,
         )
 
+    def exists(
+        self,
+        dataset_ref_or_type: DatasetRef | DatasetType | str,
+        /,
+        data_id: DataId | None = None,
+        *,
+        full_check: bool = True,
+        collections: Any = None,
+        **kwargs: Any,
+    ) -> DatasetExistence:
+        """Indicate whether a dataset is known to Butler registry and
+        datastore.
+
+        Parameters
+        ----------
+        dataset_ref_or_type : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        data_id : `dict` or `DataCoordinate`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        full_check : `bool`, optional
+            If `True`, an additional check will be made for dataset artifact
+            existence. This will involve additional overhead due to the need
+            to query an external system. If `False` registry and datastore
+            will solely be asked if they know about the dataset but no
+            check for the artifact will be performed.
+        collections : Any, optional
+            Collections to be searched, overriding ``self.collections``.
+            Can be any of the types supported by the ``collections`` argument
+            to butler construction.
+        **kwargs
+            Additional keyword arguments used to augment or construct a
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
+
+        Returns
+        -------
+        existence : `DatasetExistence`
+            Object indicating whether the dataset is known to registry and
+            datastore. Evaluates to `True` if the dataset is present and known
+            to both.
+        """
+        existence = DatasetExistence.UNRECOGNIZED
+
+        if isinstance(dataset_ref_or_type, DatasetRef):
+            if collections is not None:
+                warnings.warn("Collections should not be specified with DatasetRef", stacklevel=2)
+            if data_id is not None:
+                warnings.warn("A DataID should not be specified with DatasetRef", stacklevel=2)
+            ref = dataset_ref_or_type
+            registry_ref = self.registry.getDataset(dataset_ref_or_type.id)
+            if registry_ref is not None:
+                existence |= DatasetExistence.RECORDED
+
+                if dataset_ref_or_type != registry_ref:
+                    # This could mean that storage classes differ, so we should
+                    # check for that but use the registry ref for the rest of
+                    # the method.
+                    if registry_ref.is_compatible_with(dataset_ref_or_type):
+                        # Use the registry version from now on.
+                        ref = registry_ref
+                    else:
+                        raise ValueError(
+                            f"The ref given to exists() ({ref}) has the same dataset ID as one "
+                            f"in registry but has different incompatible values ({registry_ref})."
+                        )
+        else:
+            try:
+                ref = self._findDatasetRef(dataset_ref_or_type, data_id, collections=collections, **kwargs)
+            except (LookupError, TypeError, NoDefaultCollectionError):
+                return existence
+            existence |= DatasetExistence.RECORDED
+
+        if self.datastore.knows(ref):
+            existence |= DatasetExistence.DATASTORE
+
+        if full_check:
+            if self.datastore.exists(ref):
+                existence |= DatasetExistence._ARTIFACT
+        elif existence != DatasetExistence.UNRECOGNIZED:
+            # Do not add this flag if we have no other idea about a dataset.
+            existence |= DatasetExistence._ASSUMED
+
+        return existence
+
+    def _exists_many(
+        self,
+        refs: Iterable[DatasetRef],
+        /,
+        *,
+        full_check: bool = True,
+    ) -> dict[DatasetRef, DatasetExistence]:
+        """Indicate whether multiple datasets are known to Butler registry and
+        datastore.
+
+        This is an experimental API that may change at any moment.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+        full_check : `bool`, optional
+            If `True`, an additional check will be made for dataset artifact
+            existence. This will involve additional overhead due to the need
+            to query an external system. If `False` registry and datastore
+            will solely be asked if they know about the dataset but no
+            check for the artifact will be performed.
+
+        Returns
+        -------
+        existence : dict of [`DatasetRef`, `DatasetExistence`]
+            Mapping from the given dataset refs to an enum indicating the
+            status of the dataset in registry and datastore.
+            Each value evaluates to `True` if the dataset is present and known
+            to both.
+        """
+        existence = {ref: DatasetExistence.UNRECOGNIZED for ref in refs}
+
+        # Registry does not have a bulk API to check for a ref.
+        for ref in refs:
+            registry_ref = self.registry.getDataset(ref.id)
+            if registry_ref is not None:
+                # It is possible, albeit unlikely, that the given ref does
+                # not match the one in registry even though the UUID matches.
+                # When checking a single ref we raise, but it's impolite to
+                # do that when potentially hundreds of refs are being checked.
+                # We could change the API to only accept UUIDs and that would
+                # remove the ability to even check and remove the worry
+                # about differing storage classes. Given the ongoing discussion
+                # on refs vs UUIDs and whether to raise or have a new
+                # private flag, treat this as a private API for now.
+                existence[ref] |= DatasetExistence.RECORDED
+
+        # Ask datastore if it knows about these refs.
+        knows = self.datastore.knows_these(refs)
+        for ref, known in knows.items():
+            if known:
+                existence[ref] |= DatasetExistence.DATASTORE
+
+        if full_check:
+            mexists = self.datastore.mexists(refs)
+            for ref, exists in mexists.items():
+                if exists:
+                    existence[ref] |= DatasetExistence._ARTIFACT
+        else:
+            # Do not set this flag if nothing is known about the dataset.
+            for ref in existence.keys():
+                if existence[ref] != DatasetExistence.UNRECOGNIZED:
+                    existence[ref] |= DatasetExistence._ASSUMED
+
+        return existence
+
+    @deprecated(
+        reason="Butler.datasetExists() has been replaced by Butler.exists(). Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def datasetExists(
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
@@ -1632,7 +1793,7 @@ class Butler(LimitedButler):
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
             differs from the one found in the registry.
-        TypeError
+        NoDefaultCollectionError
             Raised if no collections were provided.
         """
         # A resolved ref may be given that is not known to this butler.

@@ -215,12 +215,17 @@ class ButlerUtilsTestSuite(unittest.TestCase):
 
     def testUniqueButler(self):
         dataId = {"instrument": "notACam"}
-        self.butler.put(MetricsExample({"answer": 42, "question": "unknown"}), "DataType1", dataId)
-        self.assertTrue(self.butler.datasetExists("DataType1", dataId))
+        ref = self.butler.put(MetricsExample({"answer": 42, "question": "unknown"}), "DataType1", dataId)
+        self.assertTrue(self.butler.exists("DataType1", dataId))
+        self.assertTrue(self.butler.exists(ref))
 
         newButler = makeTestCollection(self.creatorButler)
-        with self.assertRaises(LookupError):
-            newButler.datasetExists("DataType1", dataId)
+
+        # Can not be found in the new default collection.
+        self.assertFalse(newButler.exists("DataType1", dataId))
+
+        # The ref does exist in the new butler though.
+        self.assertTrue(newButler.exists(ref))
 
     def testExpandUniqueId(self):
         self.assertEqual(

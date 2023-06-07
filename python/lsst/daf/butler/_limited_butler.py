@@ -273,6 +273,49 @@ class LimitedButler(ABC):
         """
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
+    def stored(self, ref: DatasetRef) -> bool:
+        """Indicate whether the dataset's artifacts are present in the
+        Datastore.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Resolved reference to a dataset.
+
+        Returns
+        -------
+        stored : `bool`
+            Whether the dataset artifact exists in the datastore and can be
+            retrieved.
+        """
+        return self.datastore.exists(ref)
+
+    def stored_many(
+        self,
+        refs: Iterable[DatasetRef],
+    ) -> dict[DatasetRef, bool]:
+        """Check the datastore for artifact existence of multiple datasets
+        at once.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from given dataset refs to boolean indicating artifact
+            existence.
+        """
+        return self.datastore.mexists(refs)
+
+    @deprecated(
+        reason="Butler.datasetExistsDirect() has been replaced by Butler.stored(). "
+        "Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
     def datasetExistsDirect(self, ref: DatasetRef) -> bool:
         """Return `True` if a dataset is actually present in the Datastore.
 
@@ -286,7 +329,7 @@ class LimitedButler(ABC):
         exists : `bool`
             Whether the dataset exists in the Datastore.
         """
-        return self.datastore.exists(ref)
+        return self.stored(ref)
 
     def markInputUnused(self, ref: DatasetRef) -> None:
         """Indicate that a predicted input was not actually used when
