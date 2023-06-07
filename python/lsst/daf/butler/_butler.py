@@ -1646,6 +1646,10 @@ class Butler(LimitedButler):
         existence = DatasetExistence.UNRECOGNIZED
 
         if isinstance(dataset_ref_or_type, DatasetRef):
+            if collections is not None:
+                warnings.warn("Collections should not be specified with DatasetRef", stacklevel=2)
+            if data_id is not None:
+                warnings.warn("A DataID should not be specified with DatasetRef", stacklevel=2)
             ref = dataset_ref_or_type
             registry_ref = self.registry.getDataset(dataset_ref_or_type.id)
             if registry_ref is not None:
