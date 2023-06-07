@@ -619,6 +619,13 @@ class ButlerTests(ButlerPutGetTests):
             with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
                 with self.assertRaisesRegex(FileNotFoundError, "(no known aliases)"):
                     Butler("label")
+        with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
+            # Now with bad contents.
+            with open(temp_file.ospath, "w") as fh:
+                print("'", file=fh)
+            with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
+                with self.assertRaisesRegex(FileNotFoundError, "(no known aliases:.*could not be read)"):
+                    Butler("label")
         with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
             with self.assertRaises(FileNotFoundError):
                 Butler.get_repo_uri("label")

@@ -90,6 +90,10 @@ class ButlerRepoIndex:
         except FileNotFoundError as e:
             # More explicit error message.
             raise FileNotFoundError(f"Butler repository index file not found at {uri}.") from e
+        except Exception as e:
+            raise RuntimeError(
+                f"Butler repository index file at {uri} could not be read: {type(e).__qualname__} {e}"
+            ) from e
         cls._cache[uri] = repo_index
 
         return repo_index
@@ -136,7 +140,7 @@ class ButlerRepoIndex:
         """
         try:
             repo_index = cls._read_repository_index_from_environment()
-        except (FileNotFoundError, KeyError):
+        except Exception:
             return set()
         return set(repo_index)
 
@@ -153,7 +157,7 @@ class ButlerRepoIndex:
         """
         try:
             cls._read_repository_index_from_environment()
-        except (FileNotFoundError, KeyError) as e:
+        except Exception as e:
             return str(e)
         return ""
 
@@ -189,7 +193,7 @@ class ButlerRepoIndex:
         """
         try:
             repo_index = cls._read_repository_index_from_environment()
-        except KeyError:
+        except Exception:
             if return_label:
                 return ResourcePath(label, forceAbsolute=False)
             raise

@@ -89,7 +89,7 @@ class ButlerConfig(Config):
                 # might not refer explicitly to a directory and we have
                 # check below to guess that.
                 other = str(ButlerRepoIndex.get_repo_uri(other, True))
-            except FileNotFoundError:
+            except Exception:
                 pass
             if other != original_other:
                 resolved_alias = True
