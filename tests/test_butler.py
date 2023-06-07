@@ -65,6 +65,7 @@ import sqlalchemy
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,
+    ButlerRepoIndex,
     CollectionType,
     Config,
     DataCoordinate,
@@ -583,7 +584,7 @@ class ButlerTests(ButlerPutGetTests):
         for suffix in (".yaml", ".json"):
             # Ensure that the content differs so that we know that
             # we aren't reusing the cache.
-            bad_label = f"s3://bucket/not_real{suffix}"
+            bad_label = f"file://bucket/not_real{suffix}"
             butler_index["bad_label"] = bad_label
             with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
                 butler_index.dumpToUri(temp_file)
@@ -598,12 +599,26 @@ class ButlerTests(ButlerPutGetTests):
                     self.assertIsInstance(butler, Butler)
                     with self.assertRaisesRegex(FileNotFoundError, "aliases:.*bad_label"):
                         Butler("not_there", writeable=False)
+                    with self.assertRaisesRegex(FileNotFoundError, "resolved from alias 'bad_label'"):
+                        Butler("bad_label")
+                    with self.assertRaises(FileNotFoundError):
+                        # Should ignore aliases.
+                        Butler(ResourcePath("label", forceAbsolute=False))
                     with self.assertRaises(KeyError) as cm:
                         Butler.get_repo_uri("missing")
                     self.assertEqual(
                         Butler.get_repo_uri("missing", True), ResourcePath("missing", forceAbsolute=False)
                     )
                     self.assertIn("not known to", str(cm.exception))
+                    # Should report no failure.
+                    self.assertEqual(ButlerRepoIndex.get_failure_reason(), "")
+        with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
+            # Now with empty configuration.
+            butler_index = Config()
+            butler_index.dumpToUri(temp_file)
+            with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
+                with self.assertRaisesRegex(FileNotFoundError, "(no known aliases)"):
+                    Butler("label")
         with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
             with self.assertRaises(FileNotFoundError):
                 Butler.get_repo_uri("label")
