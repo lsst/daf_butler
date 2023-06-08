@@ -65,6 +65,7 @@ import sqlalchemy
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,
+    ButlerRepoIndex,
     CollectionType,
     Config,
     DataCoordinate,
@@ -100,6 +101,18 @@ if TYPE_CHECKING:
     from lsst.daf.butler import Datastore, DimensionGraph, Registry, StorageClass
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
+
+
+def clean_environment() -> None:
+    """Remove external environment variables that affect the tests."""
+    for k in (
+        "DAF_BUTLER_REPOSITORY_INDEX",
+        "S3_ENDPOINT_URL",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SHARED_CREDENTIALS_FILE",
+    ):
+        os.environ.pop(k, None)
 
 
 def makeExampleMetrics():
@@ -571,7 +584,7 @@ class ButlerTests(ButlerPutGetTests):
         for suffix in (".yaml", ".json"):
             # Ensure that the content differs so that we know that
             # we aren't reusing the cache.
-            bad_label = f"s3://bucket/not_real{suffix}"
+            bad_label = f"file://bucket/not_real{suffix}"
             butler_index["bad_label"] = bad_label
             with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
                 butler_index.dumpToUri(temp_file)
@@ -586,20 +599,50 @@ class ButlerTests(ButlerPutGetTests):
                     self.assertIsInstance(butler, Butler)
                     with self.assertRaisesRegex(FileNotFoundError, "aliases:.*bad_label"):
                         Butler("not_there", writeable=False)
+                    with self.assertRaisesRegex(FileNotFoundError, "resolved from alias 'bad_label'"):
+                        Butler("bad_label")
+                    with self.assertRaises(FileNotFoundError):
+                        # Should ignore aliases.
+                        Butler(ResourcePath("label", forceAbsolute=False))
                     with self.assertRaises(KeyError) as cm:
                         Butler.get_repo_uri("missing")
-                    self.assertEqual(Butler.get_repo_uri("missing", True), ResourcePath("missing"))
+                    self.assertEqual(
+                        Butler.get_repo_uri("missing", True), ResourcePath("missing", forceAbsolute=False)
+                    )
                     self.assertIn("not known to", str(cm.exception))
+                    # Should report no failure.
+                    self.assertEqual(ButlerRepoIndex.get_failure_reason(), "")
+        with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
+            # Now with empty configuration.
+            butler_index = Config()
+            butler_index.dumpToUri(temp_file)
+            with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
+                with self.assertRaisesRegex(FileNotFoundError, "(no known aliases)"):
+                    Butler("label")
+        with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
+            # Now with bad contents.
+            with open(temp_file.ospath, "w") as fh:
+                print("'", file=fh)
+            with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
+                with self.assertRaisesRegex(FileNotFoundError, "(no known aliases:.*could not be read)"):
+                    Butler("label")
         with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
             with self.assertRaises(FileNotFoundError):
                 Butler.get_repo_uri("label")
             self.assertEqual(Butler.get_known_repos(), set())
+
+            with self.assertRaisesRegex(FileNotFoundError, "index file not found"):
+                Butler("label")
+
+            # Check that we can create Butler when the alias file is not found.
+            butler = Butler(self.tmpConfigFile, writeable=False)
+            self.assertIsInstance(butler, Butler)
         with self.assertRaises(KeyError) as cm:
             # No environment variable set.
             Butler.get_repo_uri("label")
-        self.assertEqual(Butler.get_repo_uri("label", True), ResourcePath("label"))
+        self.assertEqual(Butler.get_repo_uri("label", True), ResourcePath("label", forceAbsolute=False))
         self.assertIn("No repository index defined", str(cm.exception))
-        with self.assertRaisesRegex(FileNotFoundError, "no known aliases"):
+        with self.assertRaisesRegex(FileNotFoundError, "no known aliases.*No repository index"):
             # No aliases registered.
             Butler("not_there")
         self.assertEqual(Butler.get_known_repos(), set())
@@ -2271,5 +2314,10 @@ class ChainedDatastoreTransfers(PosixDatastoreTransfers):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
+def setup_module(module) -> None:
+    clean_environment()
+
+
 if __name__ == "__main__":
+    clean_environment()
     unittest.main()

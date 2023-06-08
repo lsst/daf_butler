@@ -26,7 +26,7 @@ __all__ = ("ButlerRepoIndex",)
 import os
 from typing import ClassVar, Dict, Set
 
-from lsst.resources import ResourcePath, ResourcePathExpression
+from lsst.resources import ResourcePath
 
 from .core import Config
 
@@ -55,13 +55,17 @@ class ButlerRepoIndex:
     """Cache of indexes. In most scenarios only one index will be found
     and the environment will not change. In tests this may not be true."""
 
+    _most_recent_failure: ClassVar[str] = ""
+    """Cache of the most recent failure when reading an index. Reset on
+    every read."""
+
     @classmethod
-    def _read_repository_index(cls, index_uri: ResourcePathExpression) -> Config:
+    def _read_repository_index(cls, index_uri: ResourcePath) -> Config:
         """Read the repository index from the supplied URI.
 
         Parameters
         ----------
-        index_uri : `lsst.resources.ResourcePathExpression`
+        index_uri : `lsst.resources.ResourcePath`
             URI of the repository index.
 
         Returns
@@ -78,15 +82,19 @@ class ButlerRepoIndex:
         -----
         Does check the cache before reading the file.
         """
-        # Force the given value to a ResourcePath so that it can be used
-        # as an index into the cache consistently.
-        uri = ResourcePath(index_uri)
-
         if index_uri in cls._cache:
-            return cls._cache[uri]
+            return cls._cache[index_uri]
 
-        repo_index = Config(uri)
-        cls._cache[uri] = repo_index
+        try:
+            repo_index = Config(index_uri)
+        except FileNotFoundError as e:
+            # More explicit error message.
+            raise FileNotFoundError(f"Butler repository index file not found at {index_uri}.") from e
+        except Exception as e:
+            raise RuntimeError(
+                f"Butler repository index file at {index_uri} could not be read: {type(e).__qualname__} {e}"
+            ) from e
+        cls._cache[index_uri] = repo_index
 
         return repo_index
 
@@ -118,8 +126,18 @@ class ButlerRepoIndex:
         repo_index : `Config`
             The index found in the environment.
         """
-        index_uri = cls._get_index_uri()
-        return cls._read_repository_index(index_uri)
+        cls._most_recent_failure = ""
+        try:
+            index_uri = cls._get_index_uri()
+        except KeyError as e:
+            cls._most_recent_failure = str(e)
+            raise
+        try:
+            repo_index = cls._read_repository_index(index_uri)
+        except Exception as e:
+            cls._most_recent_failure = str(e)
+            raise
+        return repo_index
 
     @classmethod
     def get_known_repos(cls) -> Set[str]:
@@ -132,9 +150,28 @@ class ButlerRepoIndex:
         """
         try:
             repo_index = cls._read_repository_index_from_environment()
-        except (FileNotFoundError, KeyError):
+        except Exception:
             return set()
         return set(repo_index)
+
+    @classmethod
+    def get_failure_reason(cls) -> str:
+        """Return possible reason for failure to return repository index.
+
+        Returns
+        -------
+        reason : `str`
+            If there is a problem reading the repository index, this will
+            contain a string with an explanation. Empty string if everything
+            worked.
+
+        Notes
+        -----
+        The value returned is only reliable if called immediately after a
+        failure. The most recent failure reason is reset every time an attempt
+        is made to request a label and so the reason can be out of date.
+        """
+        return cls._most_recent_failure
 
     @classmethod
     def get_repo_uri(cls, label: str, return_label: bool = False) -> ResourcePath:
@@ -168,15 +205,15 @@ class ButlerRepoIndex:
         """
         try:
             repo_index = cls._read_repository_index_from_environment()
-        except KeyError:
+        except Exception:
             if return_label:
-                return ResourcePath(label)
+                return ResourcePath(label, forceAbsolute=False)
             raise
 
         repo_uri = repo_index.get(label)
         if repo_uri is None:
             if return_label:
-                return ResourcePath(label)
+                return ResourcePath(label, forceAbsolute=False)
             # This should not raise since it worked earlier.
             try:
                 index_uri = str(cls._get_index_uri())

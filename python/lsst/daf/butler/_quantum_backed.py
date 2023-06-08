@@ -34,7 +34,6 @@ from lsst.resources import ResourcePathExpression
 from pydantic import BaseModel
 
 from ._butlerConfig import ButlerConfig
-from ._butlerRepoIndex import ButlerRepoIndex
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from .core import (
@@ -332,8 +331,6 @@ class QuantumBackedButler(LimitedButler):
         dataset_types: `Mapping` [`str`, `DatasetType`]
             Mapping of the dataset type name to its registry definition.
         """
-        if isinstance(config, str):
-            config = ButlerRepoIndex.get_repo_uri(config, True)
         butler_config = ButlerConfig(config, searchPaths=search_paths)
         if "root" in butler_config:
             butler_root = butler_config["root"]

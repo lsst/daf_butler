@@ -32,6 +32,7 @@ from typing import Optional, Sequence, Union
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
+from ._butlerRepoIndex import ButlerRepoIndex
 from .core import Config, DatastoreConfig, StorageClassConfig
 from .registry import RegistryConfig
 from .transfers import RepoTransferFormatConfig
@@ -78,6 +79,21 @@ class ButlerConfig(Config):
             self.configDir = copy.copy(other.configDir)
             return
 
+        # If a string is given it *could* be an alias that should be
+        # expanded by the repository index system.
+        original_other = other
+        resolved_alias = False
+        if isinstance(other, str):
+            try:
+                # Force back to a string because the resolved URI
+                # might not refer explicitly to a directory and we have
+                # check below to guess that.
+                other = str(ButlerRepoIndex.get_repo_uri(other, True))
+            except Exception:
+                pass
+            if other != original_other:
+                resolved_alias = True
+
         # Include ResourcePath here in case it refers to a directory.
         # Creating a ResourcePath from a ResourcePath is a no-op.
         if isinstance(other, (str, os.PathLike, ResourcePath)):
@@ -106,7 +122,29 @@ class ButlerConfig(Config):
 
         # Read the supplied config so that we can work out which other
         # defaults to use.
-        butlerConfig = Config(other)
+        try:
+            butlerConfig = Config(other)
+        except FileNotFoundError as e:
+            # No reason to talk about aliases unless we were given a
+            # string and the alias was not resolved.
+            if isinstance(original_other, str):
+                if not resolved_alias:
+                    # No alias was resolved. List known aliases if we have
+                    # them or else explain a reason why aliasing might not
+                    # have happened.
+                    if known := ButlerRepoIndex.get_known_repos():
+                        aliases = f"(given {original_other!r} and known aliases: {', '.join(known)})"
+                    else:
+                        failure_reason = ButlerRepoIndex.get_failure_reason()
+                        if failure_reason:
+                            failure_reason = f": {failure_reason}"
+                        aliases = f"(given {original_other!r} and no known aliases{failure_reason})"
+                else:
+                    aliases = f"(resolved from alias {original_other!r})"
+                errmsg = f"{e} {aliases}"
+            else:
+                errmsg = str(e)
+            raise FileNotFoundError(errmsg) from e
 
         configFile = butlerConfig.configFile
         if configFile is not None:

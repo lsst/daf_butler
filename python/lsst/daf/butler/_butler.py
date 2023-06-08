@@ -231,19 +231,7 @@ class Butler(LimitedButler):
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
         else:
-            # Can only look for strings in the known repos list.
-            if isinstance(config, str):
-                # Somehow ButlerConfig fails in some cases if config is a
-                # ResourcePath, force it back to string here.
-                config = str(self.get_repo_uri(config, True))
-            try:
-                self._config = ButlerConfig(config, searchPaths=searchPaths)
-            except FileNotFoundError as e:
-                if known := self.get_known_repos():
-                    aliases = f"(known aliases: {', '.join(known)})"
-                else:
-                    aliases = "(no known aliases)"
-                raise FileNotFoundError(f"{e} {aliases}") from e
+            self._config = ButlerConfig(config, searchPaths=searchPaths)
             try:
                 if "root" in self._config:
                     butlerRoot = self._config["root"]
