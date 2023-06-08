@@ -571,7 +571,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
         camera = DatasetType(
             "camera",
-            dimensions=butler.registry.dimensions["instrument"].graph,
+            dimensions=butler.dimensions["instrument"].graph,
             storageClass="Camera",
         )
         butler.registry.registerDatasetType(camera)
@@ -629,7 +629,7 @@ class SimpleButlerTestCase(unittest.TestCase):
 
                 # for minimal=False case also do a test without registry
                 if not minimal:
-                    from_json = type(test_item).from_json(json_str, universe=butler.registry.dimensions)
+                    from_json = type(test_item).from_json(json_str, universe=butler.dimensions)
                     self.assertEqual(from_json, test_item, msg=f"From JSON '{json_str}' using universe")
 
     def testJsonDimensionRecordsAndHtmlRepresentation(self):

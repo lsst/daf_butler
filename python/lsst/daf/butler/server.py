@@ -136,7 +136,7 @@ registry:
 @app.get("/butler/v1/universe", response_model=dict[str, Any])
 def get_dimension_universe(butler: Butler = Depends(butler_readonly_dependency)) -> DimensionConfig:
     """Allow remote client to get dimensions definition."""
-    return butler.registry.dimensions.dimensionConfig
+    return butler.dimensions.dimensionConfig
 
 
 @app.get("/butler/v1/uri/{id}", response_model=str)

@@ -729,7 +729,7 @@ class Butler(LimitedButler):
             for dimensionName in list(dataIdDict):
                 value = dataIdDict[dimensionName]
                 try:
-                    dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
+                    dimension = self.dimensions.getStaticDimensions()[dimensionName]
                 except KeyError:
                     # This is not a real dimension
                     not_dimensions[dimensionName] = value
@@ -801,7 +801,7 @@ class Butler(LimitedButler):
             # fail but they are going to fail anyway because of the
             # ambiguousness of the dataId...
             if datasetType.isCalibration():
-                for dim in self.registry.dimensions.getStaticDimensions():
+                for dim in self.dimensions.getStaticDimensions():
                     if dim.temporal:
                         candidateDimensions.add(str(dim))
 
@@ -817,7 +817,7 @@ class Butler(LimitedButler):
             # given names with records within those dimensions
             matched_dims = set()
             for dimensionName in candidateDimensions:
-                dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
+                dimension = self.dimensions.getStaticDimensions()[dimensionName]
                 fields = dimension.metadata.names | dimension.uniqueKeys.names
                 for field in not_dimensions:
                     if field in fields:
@@ -940,8 +940,8 @@ class Butler(LimitedButler):
                         # by the instrument.
                         if (
                             dimensionName == "visit"
-                            and "visit_system_membership" in self.registry.dimensions
-                            and "visit_system" in self.registry.dimensions["instrument"].metadata
+                            and "visit_system_membership" in self.dimensions
+                            and "visit_system" in self.dimensions["instrument"].metadata
                         ):
                             instrument_records = list(
                                 self.registry.queryDimensionRecords(
@@ -992,7 +992,7 @@ class Butler(LimitedButler):
                         )
 
                 # Get the primary key from the real dimension object
-                dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
+                dimension = self.dimensions.getStaticDimensions()[dimensionName]
                 if not isinstance(dimension, Dimension):
                     raise RuntimeError(
                         f"{dimension.name} is not a true dimension, and cannot be used in data IDs."
@@ -1072,7 +1072,7 @@ class Butler(LimitedButler):
             # dimensions that provide temporal information for a validity-range
             # lookup.
             dataId = DataCoordinate.standardize(
-                dataId, universe=self.registry.dimensions, defaults=self.registry.defaults.dataId, **kwargs
+                dataId, universe=self.dimensions, defaults=self.registry.defaults.dataId, **kwargs
             )
             if dataId.graph.temporal:
                 dataId = self.registry.expandDataId(dataId)
@@ -2150,7 +2150,7 @@ class Butler(LimitedButler):
             raise ValueError(f"Unknown export format {format!r}, allowed: {','.join(formats.keys())}")
         BackendClass = get_class_of(formats[format, "export"])
         with open(filename, "w") as stream:
-            backend = BackendClass(stream, universe=self.registry.dimensions)
+            backend = BackendClass(stream, universe=self.dimensions)
             try:
                 helper = RepoExportContext(
                     self.registry, self.datastore, backend=backend, directory=directory, transfer=transfer
@@ -2392,7 +2392,7 @@ class Butler(LimitedButler):
             # come from this butler's universe.
             elements = frozenset(
                 element
-                for element in self.registry.dimensions.getStaticElements()
+                for element in self.dimensions.getStaticElements()
                 if element.hasTable() and element.viewOf is None
             )
             dataIds = set(ref.dataId for ref in source_refs)

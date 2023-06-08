@@ -199,7 +199,7 @@ class ButlerPutGetTests(TestCaseMixin):
         self.assertEqual(collections, set([run]))
 
         # Create and register a DatasetType
-        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
+        dimensions = butler.dimensions.extract(["instrument", "visit"])
 
         datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
@@ -488,7 +488,7 @@ class ButlerPutGetTests(TestCaseMixin):
         # Construct a butler with no run or collection, but make it writeable.
         butler = Butler(self.tmpConfigFile, writeable=True)
         # Create and register a DatasetType
-        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
+        dimensions = butler.dimensions.extract(["instrument", "visit"])
         datasetType = self.addDatasetType(
             "example", dimensions, self.storageClassFactory.getStorageClass("StructuredData"), butler.registry
         )
@@ -820,7 +820,7 @@ class ButlerTests(ButlerPutGetTests):
         butler = Butler(self.tmpConfigFile, run=self.default_run)
 
         # Create and register a DatasetType
-        dimensions = butler.registry.dimensions.extract(["instrument", "visit", "detector"])
+        dimensions = butler.dimensions.extract(["instrument", "visit", "detector"])
 
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataDictYaml")
         datasetTypeName = "metric"
@@ -978,7 +978,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def testGetDatasetTypes(self) -> None:
         butler = Butler(self.tmpConfigFile, run=self.default_run)
-        dimensions = butler.registry.dimensions.extract(["instrument", "visit", "physical_filter"])
+        dimensions = butler.dimensions.extract(["instrument", "visit", "physical_filter"])
         dimensionEntries: list[tuple[str, list[Mapping[str, Any]]]] = [
             (
                 "instrument",
@@ -1053,7 +1053,7 @@ class ButlerTests(ButlerPutGetTests):
     def testTransaction(self) -> None:
         butler = Butler(self.tmpConfigFile, run=self.default_run)
         datasetTypeName = "test_metric"
-        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
+        dimensions = butler.dimensions.extract(["instrument", "visit"])
         dimensionEntries: tuple[tuple[str, Mapping[str, Any]], ...] = (
             ("instrument", {"instrument": "DummyCam"}),
             ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
@@ -1168,7 +1168,7 @@ class ButlerTests(ButlerPutGetTests):
             "detector", {"instrument": "DummyCamComp", "id": 1, "full_name": "det1"}
         )
 
-        dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
+        dimensions = butler.dimensions.extract(["instrument", "exposure"])
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         butler.registry.registerDatasetType(datasetType)
 
@@ -1239,7 +1239,7 @@ class FileDatastoreButlerTests(ButlerTests):
 
         # Create two almost-identical DatasetTypes (both will use default
         # template)
-        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
+        dimensions = butler.dimensions.extract(["instrument", "visit"])
         butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))
@@ -1361,7 +1361,7 @@ class FileDatastoreButlerTests(ButlerTests):
                         self.assertTrue(importButler.exists(ref.datasetType, ref.dataId))
                 self.assertEqual(
                     list(importButler.registry.queryDimensionRecords("skymap")),
-                    [importButler.registry.dimensions["skymap"].RecordClass(**skymapRecord)],
+                    [importButler.dimensions["skymap"].RecordClass(**skymapRecord)],
                 )
 
     def testRemoveRuns(self) -> None:
@@ -1377,7 +1377,7 @@ class FileDatastoreButlerTests(ButlerTests):
         butler.registry.registerRun(run2)
         # put a dataset in each
         metric = makeExampleMetrics()
-        dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
+        dimensions = butler.dimensions.extract(["instrument", "physical_filter"])
         datasetType = self.addDatasetType(
             "prune_collections_test_dataset", dimensions, storageClass, butler.registry
         )
@@ -1486,7 +1486,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # put some datasets.  ref1 and ref2 have the same data ID, and are in
         # different runs.  ref3 has a different data ID.
         metric = makeExampleMetrics()
-        dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
+        dimensions = butler.dimensions.extract(["instrument", "physical_filter"])
         datasetType = self.addDatasetType(
             "prune_collections_test_dataset", dimensions, storageClass, butler.registry
         )
@@ -2083,7 +2083,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         run = "run1"
         self.source_butler.registry.registerCollection(run, CollectionType.RUN)
 
-        dimensions = self.source_butler.registry.dimensions.extract(())
+        dimensions = self.source_butler.dimensions.extract(())
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         self.source_butler.registry.registerDatasetType(datasetType)
 
@@ -2140,7 +2140,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
             )
 
         # Create dataset types in the source butler.
-        dimensions = self.source_butler.registry.dimensions.extract(["instrument", "exposure"])
+        dimensions = self.source_butler.dimensions.extract(["instrument", "exposure"])
         for datasetTypeName in datasetTypeNames:
             datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
             self.source_butler.registry.registerDatasetType(datasetType)

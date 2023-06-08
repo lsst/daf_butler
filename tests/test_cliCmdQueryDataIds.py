@@ -164,7 +164,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             "test_metric_dimensionless",
             (),
             "StructuredDataDict",
-            universe=butler.registry.dimensions,
+            universe=butler.dimensions,
         )
         butler.registry.registerDatasetType(new_dataset_type)
         res, msg = self._queryDataIds(repo=self.root, collections=("imported_g",), datasets=...)

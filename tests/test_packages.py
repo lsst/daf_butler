@@ -43,7 +43,7 @@ class PackagesFormatterTestCase(unittest.TestCase):
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
-            "data", dimensions=(), storageClass="Packages", universe=self.butler.registry.dimensions
+            "data", dimensions=(), storageClass="Packages", universe=self.butler.dimensions
         )
         self.butler.registry.registerDatasetType(self.datasetType)
 

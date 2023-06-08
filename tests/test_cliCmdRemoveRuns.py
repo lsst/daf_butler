@@ -58,7 +58,7 @@ class RemoveCollectionTest(unittest.TestCase):
             # Add a dataset type that will have no datasets to make sure it
             # isn't printed.
             repo.butler.registry.registerDatasetType(
-                DatasetType("no_datasets", repo.butler.registry.dimensions.empty, "StructuredDataDict")
+                DatasetType("no_datasets", repo.butler.dimensions.empty, "StructuredDataDict")
             )
 
             # Execute remove-runs but say no, check for expected outputs.

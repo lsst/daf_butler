@@ -111,9 +111,9 @@ def makeTestRepo(
     # newConfig guards against location-related keywords like outfile
     newConfig = Butler.makeRepo(root, config=defaults, forceConfigRoot=False, **kwargs)
     butler = Butler(newConfig, writeable=True)
-    dimensionRecords = _makeRecords(dataIds, butler.registry.dimensions)
+    dimensionRecords = _makeRecords(dataIds, butler.dimensions)
     for dimension, records in dimensionRecords.items():
-        if butler.registry.dimensions[dimension].viewOf is None:
+        if butler.dimensions[dimension].viewOf is None:
             butler.registry.insertDimensionData(dimension, *records)
     return butler
 
@@ -435,7 +435,7 @@ def addDataIdValue(butler: Butler, dimension: str, value: str | int, **related: 
     # Example is not doctest, because it's probably unsafe to create even an
     # in-memory butler in that environment.
     try:
-        fullDimension = butler.registry.dimensions[dimension]
+        fullDimension = butler.dimensions[dimension]
     except KeyError as e:
         raise ValueError from e
     # Bad keys ignored by registry code
@@ -451,7 +451,7 @@ def addDataIdValue(butler: Butler, dimension: str, value: str | int, **related: 
     data_id.update(related)
 
     # Compute the set of all dimensions that these recursively depend on.
-    all_dimensions = butler.registry.dimensions.extract(data_id.keys())
+    all_dimensions = butler.dimensions.extract(data_id.keys())
 
     # Create dicts that will become DimensionRecords for all of these data IDs.
     # This iteration is guaranteed to be in topological order, so we can count
@@ -524,7 +524,7 @@ def addDatasetType(butler: Butler, name: str, dimensions: set[str], storageClass
     function does not need to be run for each collection.
     """
     try:
-        datasetType = DatasetType(name, dimensions, storageClass, universe=butler.registry.dimensions)
+        datasetType = DatasetType(name, dimensions, storageClass, universe=butler.dimensions)
         butler.registry.registerDatasetType(datasetType)
         return datasetType
     except KeyError as e:
