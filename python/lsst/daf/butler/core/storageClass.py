@@ -26,26 +26,21 @@ from __future__ import annotations
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
 import builtins
-import copy
 import itertools
 import logging
-from typing import (
-    Any,
+from collections import ChainMap
+from collections.abc import (
+    Callable,
     Collection,
-    Dict,
     ItemsView,
     Iterator,
     KeysView,
-    List,
     Mapping,
-    Optional,
     Sequence,
     Set,
-    Tuple,
-    Type,
-    Union,
     ValuesView,
 )
+from typing import Any
 
 from lsst.utils import doImportType
 from lsst.utils.classes import Singleton
@@ -90,24 +85,24 @@ class StorageClass:
     """
 
     _cls_name: str = "BaseStorageClass"
-    _cls_components: Optional[Dict[str, StorageClass]] = None
-    _cls_derivedComponents: Optional[Dict[str, StorageClass]] = None
-    _cls_parameters: Optional[Union[Set[str], Sequence[str]]] = None
-    _cls_delegate: Optional[str] = None
-    _cls_pytype: Optional[Union[Type, str]] = None
-    _cls_converters: Optional[Dict[str, str]] = None
-    defaultDelegate: Type = StorageClassDelegate
+    _cls_components: dict[str, StorageClass] | None = None
+    _cls_derivedComponents: dict[str, StorageClass] | None = None
+    _cls_parameters: Set[str] | Sequence[str] | None = None
+    _cls_delegate: str | None = None
+    _cls_pytype: type | str | None = None
+    _cls_converters: dict[str, str] | None = None
+    defaultDelegate: type = StorageClassDelegate
     defaultDelegateName: str = get_full_type_name(defaultDelegate)
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        pytype: Optional[Union[Type, str]] = None,
-        components: Optional[Dict[str, StorageClass]] = None,
-        derivedComponents: Optional[Dict[str, StorageClass]] = None,
-        parameters: Optional[Union[Sequence, Set]] = None,
-        delegate: Optional[str] = None,
-        converters: Optional[Dict[str, str]] = None,
+        name: str | None = None,
+        pytype: type | str | None = None,
+        components: dict[str, StorageClass] | None = None,
+        derivedComponents: dict[str, StorageClass] | None = None,
+        parameters: Sequence[str] | Set[str] | None = None,
+        delegate: str | None = None,
+        converters: dict[str, str] | None = None,
     ):
         if name is None:
             name = self._cls_name
@@ -131,14 +126,14 @@ class StorageClass:
 
         # Version of converters where the python types have been
         # Do not try to import anything until needed.
-        self._converters_by_type: Optional[Dict[Type, Type]] = None
+        self._converters_by_type: dict[type, Callable[[Any], Any]] | None = None
 
         self.name = name
 
         if pytype is None:
             pytype = object
 
-        self._pytype: Optional[Type]
+        self._pytype: type | None
         if not isinstance(pytype, str):
             # Already have a type so store it and get the name
             self._pytypeName = get_full_type_name(pytype)
@@ -162,8 +157,8 @@ class StorageClass:
         self._parameters = frozenset(parameters) if parameters is not None else frozenset()
         # if the delegate is not None also set it and clear the default
         # delegate
-        self._delegate: Optional[Type]
-        self._delegateClassName: Optional[str]
+        self._delegate: type | None
+        self._delegateClassName: str | None
         if delegate is not None:
             self._delegateClassName = delegate
             self._delegate = None
@@ -178,22 +173,21 @@ class StorageClass:
             self._delegateClassName = None
 
     @property
-    def components(self) -> Dict[str, StorageClass]:
+    def components(self) -> Mapping[str, StorageClass]:
         """Return the components associated with this `StorageClass`."""
         return self._components
 
     @property
-    def derivedComponents(self) -> Dict[str, StorageClass]:
+    def derivedComponents(self) -> Mapping[str, StorageClass]:
         """Return derived components associated with `StorageClass`."""
         return self._derivedComponents
 
     @property
-    def converters(self) -> Dict[str, str]:
+    def converters(self) -> Mapping[str, str]:
         """Return the type converters supported by this `StorageClass`."""
         return self._converters
 
-    @property
-    def converters_by_type(self) -> Dict[Type, Type]:
+    def _get_converters_by_type(self) -> Mapping[type, Callable[[Any], Any]]:
         """Return the type converters as python types."""
         if self._converters_by_type is None:
             self._converters_by_type = {}
@@ -212,7 +206,7 @@ class StorageClass:
                             self.name,
                             e,
                         )
-                        del self.converters[candidate_type_str]
+                        del self._converters[candidate_type_str]
                         continue
 
                 try:
@@ -226,7 +220,7 @@ class StorageClass:
                         candidate_type_str,
                         e,
                     )
-                    del self.converters[candidate_type_str]
+                    del self._converters[candidate_type_str]
                     continue
                 if not callable(converter):
                     # doImportType is annotated to return a Type but in actual
@@ -241,18 +235,18 @@ class StorageClass:
                         self.name,
                         candidate_type_str,
                     )
-                    del self.converters[candidate_type_str]
+                    del self._converters[candidate_type_str]
                     continue
                 self._converters_by_type[candidate_type] = converter
         return self._converters_by_type
 
     @property
-    def parameters(self) -> Set[str]:
+    def parameters(self) -> set[str]:
         """Return `set` of names of supported parameters."""
         return set(self._parameters)
 
     @property
-    def pytype(self) -> Type:
+    def pytype(self) -> type:
         """Return Python type associated with this `StorageClass`."""
         if self._pytype is not None:
             return self._pytype
@@ -265,7 +259,7 @@ class StorageClass:
         return self._pytype
 
     @property
-    def delegateClass(self) -> Optional[Type]:
+    def delegateClass(self) -> type | None:
         """Class to use to delegate type-specific actions."""
         if self._delegate is not None:
             return self._delegate
@@ -286,9 +280,7 @@ class StorageClass:
         comp : `dict` of [`str`, `StorageClass`]
             The component name to storage class mapping.
         """
-        components = copy.copy(self.components)
-        components.update(self.derivedComponents)
-        return components
+        return ChainMap(self._components, self._derivedComponents)
 
     def delegate(self) -> StorageClassDelegate:
         """Return an instance of a storage class delegate.
@@ -322,7 +314,7 @@ class StorageClass:
             return True
         return False
 
-    def _lookupNames(self) -> Tuple[LookupKey, ...]:
+    def _lookupNames(self) -> tuple[LookupKey, ...]:
         """Keys to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
@@ -334,7 +326,7 @@ class StorageClass:
         """
         return (LookupKey(name=self.name),)
 
-    def knownParameters(self) -> Set[str]:
+    def knownParameters(self) -> set[str]:
         """Return set of all parameters known to this `StorageClass`.
 
         The set includes parameters understood by components of a composite.
@@ -441,7 +433,7 @@ class StorageClass:
         """
         return isinstance(instance, self.pytype)
 
-    def is_type(self, other: Type, compare_types: bool = False) -> bool:
+    def is_type(self, other: type, compare_types: bool = False) -> bool:
         """Return Boolean indicating whether the supplied type matches
         the type in this `StorageClass`.
 
@@ -520,7 +512,7 @@ class StorageClass:
             # Storage classes have different names but the same python type.
             return True
 
-        for candidate_type in self.converters_by_type:
+        for candidate_type in self._get_converters_by_type():
             if issubclass(other_pytype, candidate_type):
                 return True
         return False
@@ -554,7 +546,7 @@ class StorageClass:
             return incorrect
 
         # Check each registered converter.
-        for candidate_type, converter in self.converters_by_type.items():
+        for candidate_type, converter in self._get_converters_by_type().items():
             if isinstance(incorrect, candidate_type):
                 try:
                     return converter(incorrect)
@@ -605,7 +597,7 @@ class StorageClass:
         return hash(self.name)
 
     def __repr__(self) -> str:
-        optionals: Dict[str, Any] = {}
+        optionals: dict[str, Any] = {}
         if self._pytypeName != "object":
             optionals["pytype"] = self._pytypeName
         if self._delegateClassName is not None:
@@ -647,9 +639,9 @@ class StorageClassFactory(metaclass=Singleton):
         is located in the ``storageClasses`` section.
     """
 
-    def __init__(self, config: Optional[Union[StorageClassConfig, str]] = None):
-        self._storageClasses: Dict[str, StorageClass] = {}
-        self._configs: List[StorageClassConfig] = []
+    def __init__(self, config: StorageClassConfig | str | None = None):
+        self._storageClasses: dict[str, StorageClass] = {}
+        self._configs: list[StorageClassConfig] = []
 
         # Always seed with the default config
         self.addFromConfig(StorageClassConfig())
@@ -673,7 +665,7 @@ StorageClasses
 {sep.join(f"{s}: {self._storageClasses[s]}" for s in self._storageClasses)}
 """
 
-    def __contains__(self, storageClassOrName: Union[StorageClass, str]) -> bool:
+    def __contains__(self, storageClassOrName: StorageClass | str) -> bool:
         """Indicate whether the storage class exists in the factory.
 
         Parameters
@@ -718,7 +710,7 @@ StorageClasses
     def items(self) -> ItemsView[str, StorageClass]:
         return self._storageClasses.items()
 
-    def addFromConfig(self, config: Union[StorageClassConfig, Config, str]) -> None:
+    def addFromConfig(self, config: StorageClassConfig | Config | str) -> None:
         """Add more `StorageClass` definitions from a config file.
 
         Parameters
@@ -786,8 +778,8 @@ StorageClasses
 
     @staticmethod
     def makeNewStorageClass(
-        name: str, baseClass: Optional[Type[StorageClass]] = StorageClass, **kwargs: Any
-    ) -> Type[StorageClass]:
+        name: str, baseClass: type[StorageClass] | None = StorageClass, **kwargs: Any
+    ) -> type[StorageClass]:
         """Create a new Python class as a subclass of `StorageClass`.
 
         Parameters
@@ -858,7 +850,7 @@ StorageClasses
         """
         return self._storageClasses[storageClassName]
 
-    def findStorageClass(self, pytype: Type, compare_types: bool = False) -> StorageClass:
+    def findStorageClass(self, pytype: type, compare_types: bool = False) -> StorageClass:
         """Find the storage class associated with this python type.
 
         Parameters
@@ -900,7 +892,7 @@ StorageClasses
 
         raise KeyError(f"Unable to find a StorageClass associated with type {get_full_type_name(pytype)!r}")
 
-    def _find_storage_class(self, pytype: Type, compare_types: bool) -> Optional[StorageClass]:
+    def _find_storage_class(self, pytype: type, compare_types: bool) -> StorageClass | None:
         """Iterate through all storage classes to find a match.
 
         Parameters
@@ -925,7 +917,7 @@ StorageClasses
                 return storageClass
         return None
 
-    def registerStorageClass(self, storageClass: StorageClass, msg: Optional[str] = None) -> None:
+    def registerStorageClass(self, storageClass: StorageClass, msg: str | None = None) -> None:
         """Store the `StorageClass` in the factory.
 
         Will be indexed by `StorageClass.name` and will return instances
