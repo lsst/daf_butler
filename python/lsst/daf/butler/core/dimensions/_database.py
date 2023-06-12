@@ -28,9 +28,9 @@ __all__ = (
     "DatabaseTopologicalFamily",
 )
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Set
 from types import MappingProxyType
-from typing import TYPE_CHECKING, AbstractSet
+from typing import TYPE_CHECKING
 
 from lsst.utils import doImportType
 from lsst.utils.classes import cached_getter
@@ -133,7 +133,7 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
         self._space = space
         self._members = tuple(members)
 
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
         return not others.isdisjoint(self._members)
 
@@ -459,7 +459,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         self._uniqueKeys = NamedValueSet(uniqueKeys).freeze()
         self._alwaysJoin = alwaysJoin
 
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
         return not (self._required.isdisjoint(others) and self._implied.isdisjoint(others))
 

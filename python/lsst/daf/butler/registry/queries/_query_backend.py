@@ -517,7 +517,7 @@ class QueryBackend(Generic[_C]):
         ----------
         dataset_type : `DatasetType`
             Dataset type being queried.
-        columns : `AbstractSet` [ `str` ]
+        columns : `~collections.abc.Set` [ `str` ]
             Dataset columns to include (dimension key columns are always
             included).  See `make_dataset_query_relation` for allowed values.
         messages : `Iterable` [ `str` ]

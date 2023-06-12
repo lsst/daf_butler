@@ -39,10 +39,11 @@ from collections.abc import (
     Mapping,
     MutableMapping,
     MutableSet,
+    Set,
     ValuesView,
 )
 from types import MappingProxyType
-from typing import AbstractSet, Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 
 class Named(Protocol):
@@ -82,10 +83,10 @@ class NamedKeyMapping(Mapping[K, V_co]):
 
     @property
     @abstractmethod
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         """Return the set of names associated with the keys, in the same order.
 
-        (`AbstractSet` [ `str` ]).
+        (`Set` [ `str` ]).
         """
         raise NotImplementedError()
 
@@ -261,7 +262,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
         return self
 
 
-class NamedValueAbstractSet(AbstractSet[K_co]):
+class NamedValueAbstractSet(Set[K_co]):
     """Custom sets with named elements.
 
     An abstract base class for custom sets whose elements are objects with
@@ -273,7 +274,7 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
 
     @property
     @abstractmethod
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         """Return set of names associated with the keys, in the same order.
 
         (`AbstractSet` [ `str` ]).
@@ -336,7 +337,7 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
     __slots__ = ("_mapping",)
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         # Docstring inherited from NamedValueAbstractSet.
         return self._mapping.keys()
 
@@ -365,13 +366,13 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
         else:
             return set(self._mapping.values()) == other
 
-    def __le__(self, other: AbstractSet[K]) -> bool:
+    def __le__(self, other: Set[K]) -> bool:
         if isinstance(other, NamedValueAbstractSet):
             return self.names <= other.names
         else:
             return set(self._mapping.values()) <= other
 
-    def __ge__(self, other: AbstractSet[K]) -> bool:
+    def __ge__(self, other: Set[K]) -> bool:
         if isinstance(other, NamedValueAbstractSet):
             return self.names >= other.names
         else:
@@ -489,10 +490,10 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
     def __repr__(self) -> str:
         return "NamedValueSet({{{}}})".format(", ".join(repr(element) for element in self))
 
-    def issubset(self, other: AbstractSet[K]) -> bool:
+    def issubset(self, other: Set[K]) -> bool:
         return self <= other
 
-    def issuperset(self, other: AbstractSet[K]) -> bool:
+    def issuperset(self, other: Set[K]) -> bool:
         return self >= other
 
     def __delitem__(self, name: str) -> None:

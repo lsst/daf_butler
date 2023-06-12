@@ -23,9 +23,9 @@ from __future__ import annotations
 
 __all__ = ("GovernorDimension",)
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Set
 from types import MappingProxyType
-from typing import TYPE_CHECKING, AbstractSet
+from typing import TYPE_CHECKING
 
 from lsst.utils import doImportType
 
@@ -205,7 +205,7 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         self._metadata = NamedValueSet(metadata).freeze()
         self._uniqueKeys = NamedValueSet(uniqueKeys).freeze()
 
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
         return False
 

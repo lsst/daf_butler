@@ -27,8 +27,8 @@ import contextlib
 import copy
 import logging
 from abc import ABCMeta, abstractmethod
-from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, AbstractSet, Any, ClassVar
+from collections.abc import Iterator, Mapping, Set
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.introspection import get_full_type_name
 
@@ -76,18 +76,18 @@ class Formatter(metaclass=ABCMeta):
     signature.
     """
 
-    unsupportedParameters: ClassVar[AbstractSet[str] | None] = frozenset()
+    unsupportedParameters: ClassVar[Set[str] | None] = frozenset()
     """Set of read parameters not understood by this `Formatter`. An empty set
     means all parameters are supported.  `None` indicates that no parameters
     are supported. These param (`frozenset`).
     """
 
-    supportedWriteParameters: ClassVar[AbstractSet[str] | None] = None
+    supportedWriteParameters: ClassVar[Set[str] | None] = None
     """Parameters understood by this formatter that can be used to control
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
 
-    supportedExtensions: ClassVar[AbstractSet[str]] = frozenset()
+    supportedExtensions: ClassVar[Set[str]] = frozenset()
     """Set of all extensions supported by this formatter.
 
     Only expected to be populated by Formatters that write files. Any extension

@@ -28,8 +28,8 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from collections.abc import Collection, Iterable, Iterator, Sequence
-from typing import AbstractSet, Any, overload
+from collections.abc import Collection, Iterable, Iterator, Sequence, Set
+from typing import Any, overload
 
 from ._coordinate import DataCoordinate
 from ._graph import DimensionGraph
@@ -428,7 +428,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
 
     def __init__(
         self,
-        dataIds: AbstractSet[DataCoordinate],
+        dataIds: Set[DataCoordinate],
         graph: DimensionGraph,
         *,
         hasFull: bool | None = None,
@@ -437,7 +437,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
     ):
         super().__init__(dataIds, graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
 
-    _dataIds: AbstractSet[DataCoordinate]
+    _dataIds: Set[DataCoordinate]
 
     __slots__ = ()
 

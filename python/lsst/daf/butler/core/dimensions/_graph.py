@@ -24,9 +24,9 @@ from __future__ import annotations
 __all__ = ["DimensionGraph", "SerializedDimensionGraph"]
 
 import itertools
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Set
 from types import MappingProxyType
-from typing import TYPE_CHECKING, AbstractSet, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.classes import cached_getter, immutable
 from pydantic import BaseModel
@@ -202,7 +202,7 @@ class DimensionGraph:
         return self
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         """Set of the names of all dimensions in the graph (`KeysView`)."""
         return self.dimensions.names
 

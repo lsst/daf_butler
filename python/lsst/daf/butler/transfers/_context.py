@@ -24,8 +24,8 @@ from __future__ import annotations
 __all__ = ["RepoExportContext"]
 
 from collections import defaultdict
-from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, AbstractSet
+from collections.abc import Callable, Iterable, Set
+from typing import TYPE_CHECKING
 
 from ..core import (
     DataCoordinate,
@@ -164,7 +164,7 @@ class RepoExportContext:
             Dimension elements whose records should be exported.  If `None`,
             records for all dimensions will be exported.
         """
-        standardized_elements: AbstractSet[DimensionElement]
+        standardized_elements: Set[DimensionElement]
         if elements is None:
             standardized_elements = frozenset(
                 element

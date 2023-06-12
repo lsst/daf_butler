@@ -22,8 +22,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, AbstractSet
+from collections.abc import Iterable, Set
+from typing import TYPE_CHECKING
 
 from .._topology import TopologicalFamily, TopologicalSpace
 from ..named import NamedValueSet
@@ -57,7 +57,7 @@ class DimensionConstructionVisitor(ABC):
         return self.name
 
     @abstractmethod
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         """Test if dependencies have already been constructed.
 
         Tests whether other entities this visitor depends on have already
@@ -65,7 +65,7 @@ class DimensionConstructionVisitor(ABC):
 
         Parameters
         ----------
-        others : `AbstractSet` [ `str` ]
+        others : `Set` [ `str` ]
             The names of other visitors that have not yet been invoked.
 
         Returns

@@ -26,9 +26,9 @@ __all__ = (
     "SkyPixSystem",
 )
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from types import MappingProxyType
-from typing import TYPE_CHECKING, AbstractSet
+from typing import TYPE_CHECKING
 
 import sqlalchemy
 from lsst.sphgeom import PixelizationABC
@@ -220,7 +220,7 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
         self._pixelizationClassName = pixelizationClassName
         self._maxLevel = maxLevel
 
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
         return False
 

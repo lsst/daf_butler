@@ -30,8 +30,8 @@ __all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDa
 
 import numbers
 from abc import abstractmethod
-from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, AbstractSet, Any, ClassVar, Literal, overload
+from collections.abc import Iterator, Mapping, Set
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, overload
 
 from deprecated.sphinx import deprecated
 from lsst.sphgeom import IntersectionRegion, Region
@@ -374,7 +374,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return self.graph.required
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         """Names of the required dimensions identified by this data ID.
 
         They are returned in the same order as `keys`
@@ -788,7 +788,7 @@ class _DataCoordinateFullView(NamedKeyMapping[Dimension, DataIdValue]):
         return self._target.graph.dimensions
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         # Docstring inherited from `NamedKeyMapping`.
         return self.keys().names
 
@@ -832,7 +832,7 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, DimensionReco
         return self._target.graph.elements
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         # Docstring inherited from `NamedKeyMapping`.
         return self.keys().names
 

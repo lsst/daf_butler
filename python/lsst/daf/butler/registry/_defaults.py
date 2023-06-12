@@ -23,8 +23,8 @@ from __future__ import annotations
 
 __all__ = ("RegistryDefaults",)
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, AbstractSet, Any
+from collections.abc import Sequence, Set
+from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import immutable
 
@@ -131,7 +131,7 @@ class RegistryDefaults:
             if summaries:
                 summary = CollectionSummary.union(*summaries)
                 for dimensionName in allGovernorDimensions.names - self._kwargs.keys():
-                    values: AbstractSet[str] = summary.governors.get(dimensionName, frozenset())
+                    values: Set[str] = summary.governors.get(dimensionName, frozenset())
                     if len(values) == 1:
                         (value,) = values
                         self._kwargs[dimensionName] = value

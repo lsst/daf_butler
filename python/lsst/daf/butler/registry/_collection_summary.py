@@ -23,8 +23,8 @@ from __future__ import annotations
 __all__ = ("CollectionSummary",)
 
 import dataclasses
-from collections.abc import Generator, Iterable, Mapping
-from typing import AbstractSet, cast
+from collections.abc import Generator, Iterable, Mapping, Set
+from typing import cast
 
 from ..core import DataCoordinate, DatasetRef, DatasetType
 from ..core.named import NamedValueSet
@@ -167,7 +167,7 @@ class CollectionSummary:
     def is_compatible_with(
         self,
         dataset_type: DatasetType,
-        dimensions: Mapping[str, AbstractSet[str]],
+        dimensions: Mapping[str, Set[str]],
         rejections: list[str] | None = None,
         name: str | None = None,
     ) -> bool:
