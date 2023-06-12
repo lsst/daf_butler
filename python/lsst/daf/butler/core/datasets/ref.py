@@ -252,12 +252,6 @@ class DatasetRef:
         deterministic UUID5-type ID based on a dataset type name, run
         collection name, and ``dataId``.
 
-    Raises
-    ------
-    ValueError
-        Raised if ``run`` is provided but ``id`` is not, or if ``id`` is
-        provided but ``run`` is not.
-
     See Also
     --------
     :ref:`daf_butler_organizing_datasets`
