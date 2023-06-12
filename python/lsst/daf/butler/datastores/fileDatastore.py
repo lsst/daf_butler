@@ -1871,7 +1871,7 @@ class FileDatastore(GenericBaseDatastore):
             # if this has never been written then we have to guess
             if not predict:
                 if not allow_missing:
-                    raise FileNotFoundError("Dataset {} not in this datastore.".format(ref))
+                    raise FileNotFoundError(f"Dataset {ref} not in this datastore.")
             else:
                 uris[ref] = self._predict_URIs(ref)
 
@@ -2907,7 +2907,7 @@ class FileDatastore(GenericBaseDatastore):
         Currently returns None if the URI is for a remote resource.
         """
         if algorithm not in hashlib.algorithms_guaranteed:
-            raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
+            raise NameError(f"The specified algorithm '{algorithm}' is not supported by hashlib")
 
         if not uri.isLocal:
             return None

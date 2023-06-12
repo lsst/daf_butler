@@ -611,7 +611,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     def should_be_cached(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:
         # Docstring inherited
-        matchName: LookupKey | str = "{} (via default)".format(entity)
+        matchName: LookupKey | str = f"{entity} (via default)"
         should_cache = self._caching_default
 
         for key in entity._lookupNames():

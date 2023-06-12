@@ -126,7 +126,7 @@ class CompositesMap:
             log.debug("%s will not be disassembled (not a composite)", entity)
             return False
 
-        matchName: LookupKey | str = "{} (via default)".format(entity)
+        matchName: LookupKey | str = f"{entity} (via default)"
         disassemble = self.config["default"]
 
         for key in entity._lookupNames():

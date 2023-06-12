@@ -123,7 +123,7 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         # Name ourselves with the timestamp the datastore
         # was created.
-        self.name = "{}@{}".format(type(self).__name__, time.time())
+        self.name = f"{type(self).__name__}@{time.time()}"
         log.debug("Creating datastore %s", self.name)
 
         # Storage of datasets, keyed by dataset_id
@@ -441,7 +441,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # if this has never been written then we have to guess
         if not self.exists(ref):
             if not predict:
-                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
+                raise FileNotFoundError(f"Dataset {ref} not in this datastore")
             name = f"{ref.datasetType.name}"
             fragment = "#predicted"
         else:

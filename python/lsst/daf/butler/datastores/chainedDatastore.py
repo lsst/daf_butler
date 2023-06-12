@@ -161,7 +161,7 @@ class ChainedDatastore(Datastore):
             datastoreClass = doImportType(fullChildConfig["cls"])
             if not issubclass(datastoreClass, Datastore):
                 raise TypeError(f"Imported child class {fullChildConfig['cls']} is not a Datastore")
-            newroot = "{}/{}_{}".format(root, datastoreClass.__qualname__, idx)
+            newroot = f"{root}/{datastoreClass.__qualname__}_{idx}"
             datastoreClass.setConfigRoot(newroot, childConfig, fullChildConfig, overwrite=overwrite)
 
             # Reattach to parent
@@ -202,9 +202,9 @@ class ChainedDatastore(Datastore):
             self._names = [d.name for d in self.datastores]
             childNames = ",".join(self.names)
         else:
-            childNames = "(empty@{})".format(time.time())
+            childNames = f"(empty@{time.time()})"
             self._names = [childNames]
-        self.name = "{}[{}]".format(type(self).__qualname__, childNames)
+        self.name = f"{type(self).__qualname__}[{childNames}]"
 
         # We declare we are ephemeral if all our child datastores declare
         # they are ephemeral
@@ -373,7 +373,7 @@ class ChainedDatastore(Datastore):
             except FileNotFoundError:
                 pass
 
-        raise FileNotFoundError("Dataset {} could not be found in any of the datastores".format(ref))
+        raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
 
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to each
@@ -645,7 +645,7 @@ class ChainedDatastore(Datastore):
             log.debug("Retrieved predicted ephemeral URI: %s", predictedEphemeralUri)
             return predictedEphemeralUri
 
-        raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
+        raise FileNotFoundError(f"Dataset {ref} not in any datastore")
 
     def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.

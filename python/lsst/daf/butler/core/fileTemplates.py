@@ -563,9 +563,7 @@ class FileTemplate:
 
         # Complain if we were meant to use a component
         if component is not None and not usedComponent:
-            raise KeyError(
-                "Component '{}' specified but template {} did not use it".format(component, self.template)
-            )
+            raise KeyError(f"Component '{component}' specified but template {self.template} did not use it")
 
         # Since this is known to be a path, normalize it in case some double
         # slashes have crept in

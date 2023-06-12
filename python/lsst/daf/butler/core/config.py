@@ -64,7 +64,7 @@ else:
 
 def _doUpdate(d: Mapping[str, Any], u: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(u, Mapping) or not isinstance(d, MutableMapping):
-        raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
+        raise RuntimeError(f"Only call update with Mapping, not {type(d)}")
     for k, v in u.items():
         if isinstance(v, Mapping):
             lhs = d.get(k, {})
