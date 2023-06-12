@@ -2571,7 +2571,7 @@ class FileDatastore(GenericBaseDatastore):
         source_ids = set(source_records)
         log.debug("Number of datastore records found in source: %d", len(source_ids))
 
-        requested_ids = set(ref.id for ref in refs)
+        requested_ids = {ref.id for ref in refs}
         missing_ids = requested_ids - source_ids
 
         # Missing IDs can be okay if that datastore has allowed

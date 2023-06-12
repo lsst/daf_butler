@@ -608,7 +608,7 @@ class SqlRegistry(Registry):
             return []
 
         # find dataset type
-        datasetTypes = set(dataset.datasetType for dataset in datasets)
+        datasetTypes = {dataset.datasetType for dataset in datasets}
         if len(datasetTypes) != 1:
             raise DatasetTypeError(f"Multiple dataset types in input datasets: {datasetTypes}")
         datasetType = datasetTypes.pop()
@@ -619,7 +619,7 @@ class SqlRegistry(Registry):
             raise DatasetTypeError(f"DatasetType '{datasetType}' has not been registered.")
 
         # find run name
-        runs = set(dataset.run for dataset in datasets)
+        runs = {dataset.run for dataset in datasets}
         if len(runs) != 1:
             raise ValueError(f"Multiple run names in input datasets: {runs}")
         run = runs.pop()

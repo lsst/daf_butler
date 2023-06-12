@@ -93,7 +93,7 @@ class DatabaseTopologicalFamily(TopologicalFamily):
 
         (`GovernorDimension`).
         """
-        governors = set(m.governor for m in self.members)
+        governors = {m.governor for m in self.members}
         if None in governors:
             raise RuntimeError(
                 f"Bad {self.space.name} family definition {self.name}: at least one member "

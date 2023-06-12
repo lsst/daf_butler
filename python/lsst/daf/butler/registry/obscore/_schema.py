@@ -147,7 +147,7 @@ class ObsCoreSchema:
 
         fields = list(_STATIC_COLUMNS)
 
-        column_names = set(col.name for col in fields)
+        column_names = {col.name for col in fields}
 
         all_configs: list[ObsCoreConfig | DatasetTypeConfig] = [config]
         if config.dataset_types:

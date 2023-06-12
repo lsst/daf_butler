@@ -294,8 +294,8 @@ class SqliteDatabase(Database):
     def _convertTableSpec(
         self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData, **kwargs: Any
     ) -> sqlalchemy.schema.Table:
-        primaryKeyFieldNames = set(field.name for field in spec.fields if field.primaryKey)
-        autoincrFieldNames = set(field.name for field in spec.fields if field.autoincrement)
+        primaryKeyFieldNames = {field.name for field in spec.fields if field.primaryKey}
+        autoincrFieldNames = {field.name for field in spec.fields if field.autoincrement}
         if len(autoincrFieldNames) > 1:
             raise RuntimeError("At most one autoincrement field per table is allowed.")
         if len(primaryKeyFieldNames) > 1 and len(autoincrFieldNames) > 0:

@@ -1608,7 +1608,7 @@ class Database(ABC):
             # Nothing to calculate since we can always use IN
             column = columns[0]
             changing_columns = [column]
-            content[column] = set(row[column] for row in rows)
+            content[column] = {row[column] for row in rows}
         else:
             for row in rows:
                 for k, v in row.items():

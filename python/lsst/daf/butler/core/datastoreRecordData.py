@@ -165,7 +165,7 @@ class DatastoreRecordData:
             """
             if not records:
                 return ""
-            classes = set(record.__class__ for record in records)
+            classes = {record.__class__ for record in records}
             assert len(classes) == 1, f"Records have to be of the same class: {classes}"
             return get_full_type_name(classes.pop())
 

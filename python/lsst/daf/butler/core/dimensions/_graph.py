@@ -125,7 +125,7 @@ class DimensionGraph:
                     # not required.
                     conformedNames = set(dimensions.names)  # type: ignore
                 except AttributeError:
-                    conformedNames = set(d.name for d in dimensions)
+                    conformedNames = {d.name for d in dimensions}
         else:
             if dimensions is not None:
                 raise TypeError("Only one of 'dimensions' and 'names' may be provided.")

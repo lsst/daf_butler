@@ -956,7 +956,7 @@ class Butler(LimitedButler):
                                     )
                                     if membership:
                                         # This record is the right answer.
-                                        records = set([rec])
+                                        records = {rec}
                                         break
 
                         # The ambiguity may have been resolved so check again.
@@ -2379,7 +2379,7 @@ class Butler(LimitedButler):
                 for element in self.dimensions.getStaticElements()
                 if element.hasTable() and element.viewOf is None
             )
-            dataIds = set(ref.dataId for ref in source_refs)
+            dataIds = {ref.dataId for ref in source_refs}
             # This logic comes from saveDataIds.
             for dataId in dataIds:
                 # Need an expanded record, if not expanded that we need a full
@@ -2506,7 +2506,7 @@ class Butler(LimitedButler):
             ignore = set()
 
         # Find all the registered instruments
-        instruments = set(record.name for record in self.registry.queryDimensionRecords("instrument"))
+        instruments = {record.name for record in self.registry.queryDimensionRecords("instrument")}
 
         # For each datasetType that has an instrument dimension, create
         # a DatasetRef for each defined instrument
@@ -2568,7 +2568,7 @@ class Butler(LimitedButler):
             # Currently only support instrument so check for that
             if key.dataId:
                 dataIdKeys = set(key.dataId)
-                if set(["instrument"]) != dataIdKeys:
+                if {"instrument"} != dataIdKeys:
                     if logFailures:
                         log.critical("Key '%s' has unsupported DataId override", key)
                     failedDataId.add(key)

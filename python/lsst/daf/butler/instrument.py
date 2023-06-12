@@ -42,10 +42,10 @@ class ObservationDimensionPacker(DimensionPacker):
         self._instrumentName = fixed["instrument"]
         record = fixed.records["instrument"]
         assert record is not None
-        if self.dimensions.required.names == set(["instrument", "visit", "detector"]):
+        if self.dimensions.required.names == {"instrument", "visit", "detector"}:
             self._observationName = "visit"
             obsMax = record.visit_max
-        elif dimensions.required.names == set(["instrument", "exposure", "detector"]):
+        elif dimensions.required.names == {"instrument", "exposure", "detector"}:
             self._observationName = "exposure"
             obsMax = record.exposure_max
         else:

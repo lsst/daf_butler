@@ -157,4 +157,4 @@ class Constraints:
             the special "all" lookup key.
         """
         all = self._accept | self._accept
-        return set(a for a in all if a.name != self.matchAllKey.name)
+        return {a for a in all if a.name != self.matchAllKey.name}

@@ -739,7 +739,7 @@ class QuantumProvenanceData(BaseModel):
             """Convert input UUIDs, which could be in string representation to
             a set of `UUID` instances.
             """
-            return set(uuid.UUID(id) if isinstance(id, str) else id for id in uuids)
+            return {uuid.UUID(id) if isinstance(id, str) else id for id in uuids}
 
         data = QuantumProvenanceData.__new__(cls)
         setter = object.__setattr__
