@@ -396,7 +396,6 @@ class StorageClassDelegate:
         copy. Subclasses can override this method if they already know the
         optimal approach for deep copying.
         """
-
         try:
             return copy.deepcopy(inMemoryDataset)
         except Exception as e:

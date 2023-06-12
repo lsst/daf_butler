@@ -92,7 +92,8 @@ class StoredDatastoreItemInfo:
 
     def update(self, **kwargs: Any) -> StoredDatastoreItemInfo:
         """Create a new class with everything retained apart from the
-        specified values."""
+        specified values.
+        """
         raise NotImplementedError()
 
 

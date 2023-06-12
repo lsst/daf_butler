@@ -62,7 +62,7 @@ class PositiveInt(ConstrainedInt):
 
 
 class DatasetIdGenEnum(enum.Enum):
-    """This enum is used to specify dataset ID generation options."""
+    """Enum used to specify dataset ID generation options."""
 
     UNIQUE = 0
     """Unique mode generates unique ID for each inserted dataset, e.g.

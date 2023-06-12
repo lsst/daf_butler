@@ -147,7 +147,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
        instance for at least one operand in any data ID comparison is strongly
        recommended.
 
-    See also
+    See Also
     --------
     :ref:`lsst.daf.butler-dimensions_data_ids`
     """

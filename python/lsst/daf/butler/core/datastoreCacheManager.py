@@ -565,7 +565,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     @classmethod
     def set_fallback_cache_directory_if_unset(cls) -> tuple[bool, str]:
-        """Defines a fallback cache directory if a fallback not set already.
+        """Define a fallback cache directory if a fallback not set already.
 
         Returns
         -------
