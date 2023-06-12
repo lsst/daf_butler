@@ -66,7 +66,7 @@ def loadDimensionData() -> DataCoordinateSequence:
     config = RegistryConfig()
     config["db"] = "sqlite://"
     registry = Registry.createFromConfig(config)
-    with open(DIMENSION_DATA_FILE, "r") as stream:
+    with open(DIMENSION_DATA_FILE) as stream:
         backend = YamlRepoImportBackend(stream, registry)
     backend.register()
     backend.load(datastore=None)

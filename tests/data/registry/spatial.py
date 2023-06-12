@@ -420,7 +420,7 @@ def write_yaml(filename: str):
             },
         ],
     }
-    with open(filename, mode="wt") as file:
+    with open(filename, mode="w") as file:
         file.write("# Spatial test data; see spatial.py for more information.\n")
         yaml.dump(document, file, sort_keys=False)
 

@@ -1345,7 +1345,7 @@ class FileDatastoreButlerTests(ButlerTests):
                 # butler command line interface "import" subcommand. Functions
                 # in the script folder are generally considered protected and
                 # should not be used as public api.
-                with open(exportFile, "r") as f:
+                with open(exportFile) as f:
                     script.butlerImport(
                         importDir,
                         export_file=f,
