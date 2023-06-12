@@ -30,22 +30,8 @@ import dataclasses
 import logging
 from abc import ABCMeta, abstractmethod
 from collections import abc, defaultdict
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    ClassVar,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    Union,
-)
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils import doImportType
 
@@ -116,14 +102,14 @@ class DatastoreTransaction:
         The parent transaction (if any)
     """
 
-    Event: ClassVar[Type] = Event
+    Event: ClassVar[type] = Event
 
-    parent: Optional[DatastoreTransaction]
+    parent: DatastoreTransaction | None
     """The parent transaction. (`DatastoreTransaction`, optional)"""
 
-    def __init__(self, parent: Optional[DatastoreTransaction] = None):
+    def __init__(self, parent: DatastoreTransaction | None = None):
         self.parent = parent
-        self._log: List[Event] = []
+        self._log: list[Event] = []
 
     def registerUndo(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> None:
         """Register event with undo function.
@@ -207,8 +193,8 @@ class DatasetRefURIs(abc.Sequence):
 
     def __init__(
         self,
-        primaryURI: Optional[ResourcePath] = None,
-        componentURIs: Optional[Dict[str, ResourcePath]] = None,
+        primaryURI: ResourcePath | None = None,
+        componentURIs: dict[str, ResourcePath] | None = None,
     ):
         self.primaryURI = primaryURI
         """The URI to the primary artifact associated with this dataset. If the
@@ -257,12 +243,12 @@ class Datastore(metaclass=ABCMeta):
         New datastore root to use to override the configuration value.
     """
 
-    defaultConfigFile: ClassVar[Optional[str]] = None
+    defaultConfigFile: ClassVar[str | None] = None
     """Path to configuration defaults. Accessed within the ``config`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
 
-    containerKey: ClassVar[Optional[str]] = None
+    containerKey: ClassVar[str | None] = None
     """Name of the key containing a list of subconfigurations that also
     need to be merged with defaults and will likely use different Python
     datastore classes (but all using DatastoreConfig).  Assumed to be a
@@ -333,8 +319,8 @@ class Datastore(metaclass=ABCMeta):
     def fromConfig(
         config: Config,
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: Optional[ResourcePathExpression] = None,
-    ) -> "Datastore":
+        butlerRoot: ResourcePathExpression | None = None,
+    ) -> Datastore:
         """Create datastore from type specified in config file.
 
         Parameters
@@ -354,13 +340,13 @@ class Datastore(metaclass=ABCMeta):
 
     def __init__(
         self,
-        config: Union[Config, str],
+        config: Config | str,
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: Optional[ResourcePathExpression] = None,
+        butlerRoot: ResourcePathExpression | None = None,
     ):
         self.config = DatastoreConfig(config)
         self.name = "ABCDataStore"
-        self._transaction: Optional[DatastoreTransaction] = None
+        self._transaction: DatastoreTransaction | None = None
 
         # All Datastores need storage classes and constraints
         self.storageClassFactory = StorageClassFactory()
@@ -376,7 +362,7 @@ class Datastore(metaclass=ABCMeta):
         return self.name
 
     @property
-    def names(self) -> Tuple[str, ...]:
+    def names(self) -> tuple[str, ...]:
         """Names associated with this datastore returned as a list.
 
         Can be different to ``name`` for a chaining datastore.
@@ -439,8 +425,8 @@ class Datastore(metaclass=ABCMeta):
         return {ref: self.knows(ref) for ref in refs}
 
     def mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
-    ) -> Dict[DatasetRef, bool]:
+        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool] | None = None
+    ) -> dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
@@ -457,7 +443,7 @@ class Datastore(metaclass=ABCMeta):
         existence : `dict` of [`DatasetRef`, `bool`]
             Mapping from dataset to boolean indicating existence.
         """
-        existence: Dict[DatasetRef, bool] = {}
+        existence: dict[DatasetRef, bool] = {}
         # Non-optimized default.
         for ref in refs:
             existence[ref] = self.exists(ref)
@@ -484,7 +470,7 @@ class Datastore(metaclass=ABCMeta):
         self,
         datasetRef: DatasetRef,
         parameters: Mapping[str, Any] | None = None,
-        storageClass: Optional[Union[StorageClass, str]] = None,
+        storageClass: StorageClass | str | None = None,
     ) -> Any:
         """Load an `InMemoryDataset` from the store.
 
@@ -522,7 +508,7 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> Optional[str]:
+    def _overrideTransferMode(self, *datasets: FileDataset, transfer: str | None = None) -> str | None:
         """Allow ingest transfer mode to be defaulted based on datasets.
 
         Parameters
@@ -551,7 +537,7 @@ class Datastore(metaclass=ABCMeta):
             return transfer
         raise RuntimeError(f"{transfer} is not allowed without specialization.")
 
-    def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> IngestPrepData:
+    def _prepIngest(self, *datasets: FileDataset, transfer: str | None = None) -> IngestPrepData:
         """Process datasets to identify which ones can be ingested.
 
         Parameters
@@ -608,7 +594,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError(f"Datastore {self} does not support direct file-based ingest.")
 
     def _finishIngest(
-        self, prepData: IngestPrepData, *, transfer: Optional[str] = None, record_validation_info: bool = True
+        self, prepData: IngestPrepData, *, transfer: str | None = None, record_validation_info: bool = True
     ) -> None:
         """Complete an ingest operation.
 
@@ -645,7 +631,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError(f"Datastore {self} does not support direct file-based ingest.")
 
     def ingest(
-        self, *datasets: FileDataset, transfer: Optional[str] = None, record_validation_info: bool = True
+        self, *datasets: FileDataset, transfer: str | None = None, record_validation_info: bool = True
     ) -> None:
         """Ingest one or more files into the datastore.
 
@@ -725,7 +711,7 @@ class Datastore(metaclass=ABCMeta):
         source_datastore: Datastore,
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
-        artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
+        artifact_existence: dict[ResourcePath, bool] | None = None,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         """Transfer dataset artifacts from another datastore to this one.
 
@@ -778,7 +764,7 @@ class Datastore(metaclass=ABCMeta):
         refs: Iterable[DatasetRef],
         predict: bool = False,
         allow_missing: bool = False,
-    ) -> Dict[DatasetRef, DatasetRefURIs]:
+    ) -> dict[DatasetRef, DatasetRefURIs]:
         """Return URIs associated with many datasets.
 
         Parameters
@@ -810,7 +796,7 @@ class Datastore(metaclass=ABCMeta):
         really there, it's assuming it is if datastore is aware of the file
         then it actually exists.
         """
-        uris: Dict[DatasetRef, DatasetRefURIs] = {}
+        uris: dict[DatasetRef, DatasetRefURIs] = {}
         missing_refs = []
         for ref in refs:
             try:
@@ -884,7 +870,7 @@ class Datastore(metaclass=ABCMeta):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> List[ResourcePath]:
+    ) -> list[ResourcePath]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -961,7 +947,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = True) -> None:
+    def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
         """Indicate to the Datastore that a Dataset can be moved to the trash.
 
         Parameters
@@ -1018,8 +1004,8 @@ class Datastore(metaclass=ABCMeta):
         self,
         refs: Iterable[DatasetRef],
         *,
-        directory: Optional[ResourcePathExpression] = None,
-        transfer: Optional[str] = "auto",
+        directory: ResourcePathExpression | None = None,
+        transfer: str | None = "auto",
     ) -> Iterable[FileDataset]:
         """Export datasets for transfer to another data repository.
 
@@ -1053,7 +1039,7 @@ class Datastore(metaclass=ABCMeta):
 
     @abstractmethod
     def validateConfiguration(
-        self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]], logFailures: bool = False
+        self, entities: Iterable[DatasetRef | DatasetType | StorageClass], logFailures: bool = False
     ) -> None:
         """Validate some of the configuration for this datastore.
 
@@ -1079,7 +1065,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def validateKey(self, lookupKey: LookupKey, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
+    def validateKey(self, lookupKey: LookupKey, entity: DatasetRef | DatasetType | StorageClass) -> None:
         """Validate a specific look up key with supplied entity.
 
         Parameters
@@ -1105,7 +1091,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def getLookupKeys(self) -> Set[LookupKey]:
+    def getLookupKeys(self) -> set[LookupKey]:
         """Return all the lookup keys relevant to this datastore.
 
         Returns
@@ -1118,8 +1104,8 @@ class Datastore(metaclass=ABCMeta):
 
     def needs_expanded_data_ids(
         self,
-        transfer: Optional[str],
-        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+        transfer: str | None,
+        entity: DatasetRef | DatasetType | StorageClass | None = None,
     ) -> bool:
         """Test whether this datastore needs expanded data IDs to ingest.
 

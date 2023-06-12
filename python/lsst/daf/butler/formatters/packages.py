@@ -22,7 +22,7 @@
 __all__ = ("PackagesFormatter",)
 
 import os.path
-from typing import Any, Optional, Type
+from typing import Any
 
 from lsst.daf.butler.formatters.file import FileFormatter
 from lsst.utils.packages import Packages
@@ -51,7 +51,7 @@ class PackagesFormatter(FileFormatter):
             raise RuntimeError(f"Requested file format '{format}' is not supported for Packages")
         return ext
 
-    def _readFile(self, path: str, pytype: Optional[Type] = None) -> Any:
+    def _readFile(self, path: str, pytype: type | None = None) -> Any:
         """Read a file from the path.
 
         Parameters
@@ -74,7 +74,7 @@ class PackagesFormatter(FileFormatter):
         assert issubclass(pytype, Packages)
         return pytype.read(path)
 
-    def _fromBytes(self, serializedDataset: Any, pytype: Optional[Type] = None) -> Any:
+    def _fromBytes(self, serializedDataset: Any, pytype: type | None = None) -> Any:
         """Read the bytes object as a python object.
 
         Parameters

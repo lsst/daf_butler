@@ -48,9 +48,10 @@ __all__ = (
 import logging
 import uuid
 from base64 import b64decode, b64encode
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from math import ceil
-from typing import TYPE_CHECKING, Any, Callable, Iterable, List, Optional, Set, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any
 
 import astropy.time
 import sqlalchemy
@@ -75,7 +76,7 @@ class SchemaValidationError(ValidationError):
     """Exceptions that indicate problems in Registry schema configuration."""
 
     @classmethod
-    def translate(cls, caught: Type[Exception], message: str) -> Callable:
+    def translate(cls, caught: type[Exception], message: str) -> Callable:
         """Return decorator to re-raise exceptions as `SchemaValidationError`.
 
         Decorated functions must be class or instance methods, with a
@@ -123,7 +124,7 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
         super().__init__(*args, length=length, **kwargs)
         self.nbytes = nbytes
 
-    def process_bind_param(self, value: Optional[bytes], dialect: sqlalchemy.engine.Dialect) -> Optional[str]:
+    def process_bind_param(self, value: bytes | None, dialect: sqlalchemy.engine.Dialect) -> str | None:
         # 'value' is native `bytes`.  We want to encode that to base64 `bytes`
         # and then ASCII `str`, because `str` is what SQLAlchemy expects for
         # String fields.
@@ -135,16 +136,14 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
             )
         return b64encode(value).decode("ascii")
 
-    def process_result_value(
-        self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
-    ) -> Optional[bytes]:
+    def process_result_value(self, value: str | None, dialect: sqlalchemy.engine.Dialect) -> bytes | None:
         # 'value' is a `str` that must be ASCII because it's base64-encoded.
         # We want to transform that to base64-encoded `bytes` and then
         # native `bytes`.
         return b64decode(value.encode("ascii")) if value is not None else None
 
     @property
-    def python_type(self) -> Type[bytes]:
+    def python_type(self) -> type[bytes]:
         return bytes
 
 
@@ -161,22 +160,18 @@ class Base64Region(Base64Bytes):
 
     cache_ok = True  # have to be set explicitly in each class
 
-    def process_bind_param(
-        self, value: Optional[Region], dialect: sqlalchemy.engine.Dialect
-    ) -> Optional[str]:
+    def process_bind_param(self, value: Region | None, dialect: sqlalchemy.engine.Dialect) -> str | None:
         if value is None:
             return None
         return super().process_bind_param(value.encode(), dialect)
 
-    def process_result_value(
-        self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
-    ) -> Optional[Region]:
+    def process_result_value(self, value: str | None, dialect: sqlalchemy.engine.Dialect) -> Region | None:
         if value is None:
             return None
         return Region.decode(super().process_result_value(value, dialect))
 
     @property
-    def python_type(self) -> Type[sphgeom.Region]:
+    def python_type(self) -> type[sphgeom.Region]:
         return sphgeom.Region
 
 
@@ -192,8 +187,8 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
     cache_ok = True
 
     def process_bind_param(
-        self, value: Optional[astropy.time.Time], dialect: sqlalchemy.engine.Dialect
-    ) -> Optional[int]:
+        self, value: astropy.time.Time | None, dialect: sqlalchemy.engine.Dialect
+    ) -> int | None:
         if value is None:
             return None
         if not isinstance(value, astropy.time.Time):
@@ -202,8 +197,8 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         return value
 
     def process_result_value(
-        self, value: Optional[int], dialect: sqlalchemy.engine.Dialect
-    ) -> Optional[astropy.time.Time]:
+        self, value: int | None, dialect: sqlalchemy.engine.Dialect
+    ) -> astropy.time.Time | None:
         # value is nanoseconds since epoch, or None
         if value is None:
             return None
@@ -230,7 +225,7 @@ class GUID(sqlalchemy.TypeDecorator):
         else:
             return dialect.type_descriptor(sqlalchemy.CHAR(32))
 
-    def process_bind_param(self, value: Any, dialect: sqlalchemy.Dialect) -> Optional[str]:
+    def process_bind_param(self, value: Any, dialect: sqlalchemy.Dialect) -> str | None:
         if value is None:
             return value
 
@@ -253,7 +248,7 @@ class GUID(sqlalchemy.TypeDecorator):
 
     def process_result_value(
         self, value: str | uuid.UUID | None, dialect: sqlalchemy.Dialect
-    ) -> Optional[uuid.UUID]:
+    ) -> uuid.UUID | None:
         if value is None:
             return value
         elif isinstance(value, uuid.UUID):
@@ -288,10 +283,10 @@ class FieldSpec:
     that defines both a Python type and a corresponding precise SQL type.
     """
 
-    length: Optional[int] = None
+    length: int | None = None
     """Length of the type in the database, for variable-length types."""
 
-    nbytes: Optional[int] = None
+    nbytes: int | None = None
     """Natural length used for hash and encoded-region columns, to be converted
     into the post-encoding length.
     """
@@ -317,7 +312,7 @@ class FieldSpec:
     with care.  See the SQLAlchemy documentation for more information.
     """
 
-    doc: Optional[str] = None
+    doc: str | None = None
     """Documentation for this field."""
 
     def __post_init__(self) -> None:
@@ -455,13 +450,13 @@ class ForeignKeySpec:
     table: str
     """Name of the target table."""
 
-    source: Tuple[str, ...]
+    source: tuple[str, ...]
     """Tuple of source table column names."""
 
-    target: Tuple[str, ...]
+    target: tuple[str, ...]
     """Tuple of target table column names."""
 
-    onDelete: Optional[str] = None
+    onDelete: str | None = None
     """SQL clause indicating how to handle deletes to the target table.
 
     If not `None` (which indicates that a constraint violation exception should
@@ -524,7 +519,7 @@ class IndexSpec:
     def __hash__(self) -> int:
         return hash(self.columns)
 
-    columns: Tuple[str, ...]
+    columns: tuple[str, ...]
     """Column names to include in the index (`Tuple` [ `str` ])."""
 
     kwargs: dict[str, Any]
@@ -565,12 +560,12 @@ class TableSpec:
         self,
         fields: Iterable[FieldSpec],
         *,
-        unique: Iterable[Tuple[str, ...]] = (),
+        unique: Iterable[tuple[str, ...]] = (),
         indexes: Iterable[IndexSpec] = (),
         foreignKeys: Iterable[ForeignKeySpec] = (),
-        exclusion: Iterable[Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...]] = (),
+        exclusion: Iterable[tuple[str | type[TimespanDatabaseRepresentation], ...]] = (),
         recycleIds: bool = True,
-        doc: Optional[str] = None,
+        doc: str | None = None,
     ):
         self.fields = NamedValueSet(fields)
         self.unique = set(unique)
@@ -583,16 +578,16 @@ class TableSpec:
     fields: NamedValueSet[FieldSpec]
     """Specifications for the columns in this table."""
 
-    unique: Set[Tuple[str, ...]]
+    unique: set[tuple[str, ...]]
     """Non-primary-key unique constraints for the table."""
 
-    indexes: Set[IndexSpec]
+    indexes: set[IndexSpec]
     """Indexes for the table."""
 
-    foreignKeys: List[ForeignKeySpec]
+    foreignKeys: list[ForeignKeySpec]
     """Foreign key constraints for the table."""
 
-    exclusion: Set[Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...]]
+    exclusion: set[tuple[str | type[TimespanDatabaseRepresentation], ...]]
     """Exclusion constraints for the table.
 
     Exclusion constraints behave mostly like unique constraints, but may
@@ -607,7 +602,7 @@ class TableSpec:
     this table.
     """
 
-    doc: Optional[str] = None
+    doc: str | None = None
     """Documentation for the table."""
 
     @classmethod

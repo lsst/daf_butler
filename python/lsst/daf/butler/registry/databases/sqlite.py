@@ -26,8 +26,9 @@ import copy
 import os
 import sqlite3
 import urllib.parse
+from collections.abc import Iterable
 from contextlib import closing
-from typing import Any, ContextManager, Iterable, List, Optional
+from typing import Any, ContextManager
 
 import sqlalchemy
 import sqlalchemy.dialects.sqlite
@@ -81,7 +82,7 @@ class SqliteDatabase(Database):
         *,
         engine: sqlalchemy.engine.Engine,
         origin: int,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         writeable: bool = True,
     ):
         super().__init__(origin=origin, engine=engine, namespace=namespace)
@@ -105,7 +106,7 @@ class SqliteDatabase(Database):
         self._writeable = writeable
 
     @classmethod
-    def makeDefaultUri(cls, root: str) -> Optional[str]:
+    def makeDefaultUri(cls, root: str) -> str | None:
         return "sqlite:///" + os.path.join(root, "gen3.sqlite3")
 
     @classmethod
@@ -113,7 +114,7 @@ class SqliteDatabase(Database):
         cls,
         uri: str | sqlalchemy.engine.URL | None = None,
         *,
-        filename: Optional[str] = None,
+        filename: str | None = None,
         writeable: bool = True,
     ) -> sqlalchemy.engine.Engine:
         """Create a `sqlalchemy.engine.Engine` from a SQLAlchemy URI or
@@ -211,7 +212,7 @@ class SqliteDatabase(Database):
         engine: sqlalchemy.engine.Engine,
         *,
         origin: int,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         writeable: bool = True,
     ) -> Database:
         return cls(engine=engine, origin=origin, writeable=writeable, namespace=namespace)
@@ -268,7 +269,7 @@ class SqliteDatabase(Database):
                 spec.dtype = sqlalchemy.Integer
         return super()._convertFieldSpec(table, spec, metadata, **kwargs)
 
-    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> List[sqlalchemy.CheckConstraint]:
+    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> list[sqlalchemy.CheckConstraint]:
         # For sqlite we force constraints on all string columns since sqlite
         # ignores everything otherwise and this leads to problems with
         # other databases.
@@ -349,7 +350,7 @@ class SqliteDatabase(Database):
         self,
         fields: NamedValueAbstractSet[ddl.FieldSpec],
         *rows: dict,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> sqlalchemy.sql.FromClause:
         # Docstring inherited.
         # While SQLite supports VALUES, it doesn't support assigning a name
@@ -369,7 +370,7 @@ class SqliteDatabase(Database):
         ]
         return sqlalchemy.sql.union_all(*selects).alias(name)
 
-    filename: Optional[str]
+    filename: str | None
     """Name of the file this database is connected to (`str` or `None`).
 
     Set to `None` for in-memory databases.

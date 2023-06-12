@@ -43,7 +43,7 @@ class DictConvertibleModel(BaseModel):
     """
 
     @classmethod
-    def from_dict(cls, content: Mapping[str, str], extra: str = "from_dict") -> "DictConvertibleModel":
+    def from_dict(cls, content: Mapping[str, str], extra: str = "from_dict") -> DictConvertibleModel:
         """Construct an instance from a `dict`.
 
         Parameters

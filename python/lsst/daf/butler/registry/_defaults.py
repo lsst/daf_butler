@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("RegistryDefaults",)
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, AbstractSet, Any, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any
 
 from lsst.utils.classes import immutable
 
@@ -75,7 +75,7 @@ class RegistryDefaults:
         checked when the defaults struct is actually attached to a `Registry`.
     """
 
-    def __init__(self, collections: Any = None, run: Optional[str] = None, infer: bool = True, **kwargs: str):
+    def __init__(self, collections: Any = None, run: str | None = None, infer: bool = True, **kwargs: str):
         if collections is None:
             if run is not None:
                 collections = (run,)
@@ -141,7 +141,7 @@ class RegistryDefaults:
     """The collections to search by default, in order (`Sequence` [ `str` ]).
     """
 
-    run: Optional[str]
+    run: str | None
     """Name of the run this butler writes outputs to by default (`str` or
     `None`).
     """

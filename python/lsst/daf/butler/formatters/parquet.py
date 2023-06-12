@@ -44,7 +44,8 @@ import collections.abc
 import itertools
 import json
 import re
-from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, cast
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -67,7 +68,7 @@ class ParquetFormatter(Formatter):
 
     extension = ".parq"
 
-    def read(self, component: Optional[str] = None) -> Any:
+    def read(self, component: str | None = None) -> Any:
         # Docstring inherited from Formatter.read.
         schema = pq.read_schema(self.fileDescriptor.location.path)
 
@@ -871,7 +872,7 @@ class ArrowNumpySchema:
         return True
 
 
-def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequence[str]]:
+def _split_multi_index_column_names(n: int, names: Iterable[str]) -> list[Sequence[str]]:
     """Split a string that represents a multi-index column.
 
     PyArrow maps Pandas' multi-index column names (which are tuples in Python)
@@ -891,7 +892,7 @@ def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequen
     column_names : `list` [`tuple` [`str`]]
         A list of multi-index column name tuples.
     """
-    column_names: List[Sequence[str]] = []
+    column_names: list[Sequence[str]] = []
 
     pattern = re.compile(r"\({}\)".format(", ".join(["'(.*)'"] * n)))
     for name in names:

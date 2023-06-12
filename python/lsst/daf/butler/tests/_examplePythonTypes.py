@@ -271,7 +271,7 @@ class MetricsExampleModel(BaseModel):
     data: list[Any] | None
 
     @classmethod
-    def from_metrics(cls, metrics: MetricsExample) -> "MetricsExampleModel":
+    def from_metrics(cls, metrics: MetricsExample) -> MetricsExampleModel:
         """Create a model based on an example."""
         return cls.parse_obj(metrics.exportAsDict())
 

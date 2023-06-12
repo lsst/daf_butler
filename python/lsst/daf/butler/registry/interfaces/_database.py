@@ -32,23 +32,9 @@ import uuid
 import warnings
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
-    Union,
-    cast,
-    final,
-)
+from typing import Any, cast, final
 
 import astropy.time
 import sqlalchemy
@@ -116,10 +102,10 @@ class StaticTablesContext:
 
     def __init__(self, db: Database, connection: sqlalchemy.engine.Connection):
         self._db = db
-        self._foreignKeys: List[Tuple[sqlalchemy.schema.Table, sqlalchemy.schema.ForeignKeyConstraint]] = []
+        self._foreignKeys: list[tuple[sqlalchemy.schema.Table, sqlalchemy.schema.ForeignKeyConstraint]] = []
         self._inspector = sqlalchemy.inspect(connection)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
-        self._initializers: List[Callable[[Database], None]] = []
+        self._initializers: list[Callable[[Database], None]] = []
 
     def addTable(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
         """Add a new table to the schema, returning its sqlalchemy
@@ -142,7 +128,7 @@ class StaticTablesContext:
             self._foreignKeys.append((table, self._db._convertForeignKeySpec(name, foreignKeySpec, metadata)))
         return table
 
-    def addTableTuple(self, specs: Tuple[ddl.TableSpec, ...]) -> Tuple[sqlalchemy.schema.Table, ...]:
+    def addTableTuple(self, specs: tuple[ddl.TableSpec, ...]) -> tuple[sqlalchemy.schema.Table, ...]:
         """Add a named tuple of tables to the schema, returning their
         SQLAlchemy representations in a named tuple of the same type.
 
@@ -223,13 +209,13 @@ class Database(ABC):
     ``_connection``.
     """
 
-    def __init__(self, *, origin: int, engine: sqlalchemy.engine.Engine, namespace: Optional[str] = None):
+    def __init__(self, *, origin: int, engine: sqlalchemy.engine.Engine, namespace: str | None = None):
         self.origin = origin
         self.namespace = namespace
         self._engine = engine
-        self._session_connection: Optional[sqlalchemy.engine.Connection] = None
-        self._metadata: Optional[sqlalchemy.schema.MetaData] = None
-        self._temp_tables: Set[str] = set()
+        self._session_connection: sqlalchemy.engine.Connection | None = None
+        self._metadata: sqlalchemy.schema.MetaData | None = None
+        self._temp_tables: set[str] = set()
 
     def __repr__(self) -> str:
         # Rather than try to reproduce all the parameters used to create
@@ -244,7 +230,7 @@ class Database(ABC):
         return f'{type(self).__name__}("{uri}")'
 
     @classmethod
-    def makeDefaultUri(cls, root: str) -> Optional[str]:
+    def makeDefaultUri(cls, root: str) -> str | None:
         """Create a default connection URI appropriate for the given root
         directory, or `None` if there can be no such default.
         """
@@ -322,7 +308,7 @@ class Database(ABC):
         engine: sqlalchemy.engine.Engine,
         *,
         origin: int,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         writeable: bool = True,
     ) -> Database:
         """Create a new `Database` from an existing `sqlalchemy.engine.Engine`.
@@ -437,7 +423,7 @@ class Database(ABC):
 
     @contextmanager
     def temporary_table(
-        self, spec: ddl.TableSpec, name: Optional[str] = None
+        self, spec: ddl.TableSpec, name: str | None = None
     ) -> Iterator[sqlalchemy.schema.Table]:
         """Return a context manager that creates and then drops a temporary
         table.
@@ -796,7 +782,7 @@ class Database(ABC):
         """
         return name
 
-    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> List[sqlalchemy.CheckConstraint]:
+    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> list[sqlalchemy.CheckConstraint]:
         """Create constraints based on this spec.
 
         Parameters
@@ -902,7 +888,7 @@ class Database(ABC):
     def _convertExclusionConstraintSpec(
         self,
         table: str,
-        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
+        spec: tuple[str | type[TimespanDatabaseRepresentation], ...],
         metadata: sqlalchemy.MetaData,
     ) -> sqlalchemy.schema.Constraint:
         """Convert a `tuple` from `ddl.TableSpec.exclusion` into a SQLAlchemy
@@ -1073,7 +1059,7 @@ class Database(ABC):
                 raise
         return table
 
-    def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
+    def getExistingTable(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table | None:
         """Obtain an existing table with the given name and specification.
 
         Parameters
@@ -1130,7 +1116,7 @@ class Database(ABC):
         self,
         connection: sqlalchemy.engine.Connection,
         spec: ddl.TableSpec,
-        name: Optional[str] = None,
+        name: str | None = None,
         **kwargs: Any,
     ) -> sqlalchemy.schema.Table:
         """Create a temporary table.
@@ -1177,7 +1163,7 @@ class Database(ABC):
         return table
 
     @classmethod
-    def getTimespanRepresentation(cls) -> Type[TimespanDatabaseRepresentation]:
+    def getTimespanRepresentation(cls) -> type[TimespanDatabaseRepresentation]:
         """Return a `type` that encapsulates the way `Timespan` objects are
         stored in this database.
 
@@ -1216,12 +1202,12 @@ class Database(ABC):
         self,
         table: sqlalchemy.schema.Table,
         *,
-        keys: Dict[str, Any],
-        compared: Optional[Dict[str, Any]] = None,
-        extra: Optional[Dict[str, Any]] = None,
-        returning: Optional[Sequence[str]] = None,
+        keys: dict[str, Any],
+        compared: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
+        returning: Sequence[str] | None = None,
         update: bool = False,
-    ) -> Tuple[Optional[Dict[str, Any]], Union[bool, Dict[str, Any]]]:
+    ) -> tuple[dict[str, Any] | None, bool | dict[str, Any]]:
         """Insert into a table as necessary to ensure database contains
         values equivalent to the given ones.
 
@@ -1277,7 +1263,7 @@ class Database(ABC):
         does in fact already exist.
         """
 
-        def check() -> Tuple[int, Optional[Dict[str, Any]], Optional[List]]:
+        def check() -> tuple[int, dict[str, Any] | None, list | None]:
             """Query for a row that matches the ``key`` argument, and compare
             to what was given by the caller.
 
@@ -1296,7 +1282,7 @@ class Database(ABC):
                 Results in the database that correspond to the columns given
                 in ``returning``, or `None` if ``returning is None``.
             """
-            toSelect: Set[str] = set()
+            toSelect: set[str] = set()
             if compared is not None:
                 toSelect.update(compared.keys())
             if returning is not None:
@@ -1328,12 +1314,12 @@ class Database(ABC):
             else:
                 inconsistencies = {}
             if returning is not None:
-                toReturn: Optional[list] = [existing[k] for k in returning]
+                toReturn: list | None = [existing[k] for k in returning]
             else:
                 toReturn = None
             return 1, inconsistencies, toReturn
 
-        def format_bad(inconsistencies: Dict[str, Any]) -> str:
+        def format_bad(inconsistencies: dict[str, Any]) -> str:
             """Format the 'bad' dictionary of existing values returned by
             ``check`` into a string suitable for an error message.
             """
@@ -1350,7 +1336,7 @@ class Database(ABC):
                 row.update(extra)
             with self.transaction():
                 inserted = bool(self.ensure(table, row))
-                inserted_or_updated: Union[bool, Dict[str, Any]]
+                inserted_or_updated: bool | dict[str, Any]
                 # Need to perform check() for this branch inside the
                 # transaction, so we roll back an insert that didn't do
                 # what we expected.  That limits the extent to which we
@@ -1421,9 +1407,9 @@ class Database(ABC):
         table: sqlalchemy.schema.Table,
         *rows: dict,
         returnIds: bool = False,
-        select: Optional[sqlalchemy.sql.expression.SelectBase] = None,
-        names: Optional[Iterable[str]] = None,
-    ) -> Optional[List[int]]:
+        select: sqlalchemy.sql.expression.SelectBase | None = None,
+        names: Iterable[str] | None = None,
+    ) -> list[int] | None:
         """Insert one or more rows into a table, optionally returning
         autoincrement primary key values.
 
@@ -1617,7 +1603,7 @@ class Database(ABC):
 
         # More efficient to use IN operator if there is only one
         # variable changing across all rows.
-        content: Dict[str, Set] = defaultdict(set)
+        content: dict[str, set] = defaultdict(set)
         if len(columns) == 1:
             # Nothing to calculate since we can always use IN
             column = columns[0]
@@ -1705,7 +1691,7 @@ class Database(ABC):
         with self._transaction() as (_, connection):
             return connection.execute(sql).rowcount
 
-    def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
+    def update(self, table: sqlalchemy.schema.Table, where: dict[str, str], *rows: dict) -> int:
         """Update one or more rows in a table.
 
         Parameters
@@ -1795,7 +1781,7 @@ class Database(ABC):
         self,
         fields: NamedValueAbstractSet[ddl.FieldSpec],
         *rows: dict,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> sqlalchemy.sql.FromClause:
         """Return a SQLAlchemy object that represents a small number of
         constant-valued rows.
@@ -1855,7 +1841,7 @@ class Database(ABC):
     primary key (`int`).
     """
 
-    namespace: Optional[str]
+    namespace: str | None
     """The schema or namespace this database instance is associated with
     (`str` or `None`).
     """

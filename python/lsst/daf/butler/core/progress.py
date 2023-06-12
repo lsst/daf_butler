@@ -25,19 +25,9 @@ __all__ = ("Progress", "ProgressBar", "ProgressHandler")
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Collection, Generator, Iterable, Iterator
 from contextlib import contextmanager
-from typing import (
-    ClassVar,
-    Collection,
-    ContextManager,
-    Generator,
-    Iterable,
-    Iterator,
-    Optional,
-    Protocol,
-    Tuple,
-    TypeVar,
-)
+from typing import ClassVar, ContextManager, Protocol, TypeVar
 
 _T = TypeVar("_T", covariant=True)
 _K = TypeVar("_K")
@@ -108,10 +98,10 @@ class Progress:
     # by pytest-xdist.  If butler codes is ever used in a real multithreaded
     # or asyncio application _and_ we want progress bars, we'll have to set
     # up per-thread handlers or similar.
-    _active_handler: ClassVar[Optional[ProgressHandler]] = None
+    _active_handler: ClassVar[ProgressHandler | None] = None
 
     @classmethod
-    def set_handler(cls, handler: Optional[ProgressHandler]) -> None:
+    def set_handler(cls, handler: ProgressHandler | None) -> None:
         """Set the (global) progress handler to the given instance.
 
         This should only be called in very high-level code that can be
@@ -161,9 +151,9 @@ class Progress:
 
     def bar(
         self,
-        iterable: Optional[Iterable[_T]] = None,
-        desc: Optional[str] = None,
-        total: Optional[int] = None,
+        iterable: Iterable[_T] | None = None,
+        desc: str | None = None,
+        total: int | None = None,
         skip_scalar: bool = True,
     ) -> ContextManager[ProgressBar[_T]]:
         """Return a new progress bar context manager.
@@ -214,8 +204,8 @@ class Progress:
     def wrap(
         self,
         iterable: Iterable[_T],
-        desc: Optional[str] = None,
-        total: Optional[int] = None,
+        desc: str | None = None,
+        total: int | None = None,
         skip_scalar: bool = True,
     ) -> Generator[_T, None, None]:
         """Iterate over an object while reporting progress.
@@ -248,8 +238,8 @@ class Progress:
     def iter_chunks(
         self,
         chunks: Collection[_V],
-        desc: Optional[str] = None,
-        total: Optional[int] = None,
+        desc: str | None = None,
+        total: int | None = None,
         skip_scalar: bool = True,
     ) -> Generator[_V, None, None]:
         """Wrap iteration over chunks of elements in a progress bar.
@@ -289,11 +279,11 @@ class Progress:
 
     def iter_item_chunks(
         self,
-        items: Collection[Tuple[_K, _V]],
-        desc: Optional[str] = None,
-        total: Optional[int] = None,
+        items: Collection[tuple[_K, _V]],
+        desc: str | None = None,
+        total: int | None = None,
         skip_scalar: bool = True,
-    ) -> Generator[Tuple[_K, _V], None, None]:
+    ) -> Generator[tuple[_K, _V], None, None]:
         """Wrap iteration over chunks of items in a progress bar.
 
         Parameters
@@ -336,7 +326,7 @@ class ProgressHandler(ABC):
 
     @abstractmethod
     def get_progress_bar(
-        self, iterable: Optional[Iterable[_T]], desc: str, total: Optional[int], level: int
+        self, iterable: Iterable[_T] | None, desc: str, total: int | None, level: int
     ) -> ContextManager[ProgressBar[_T]]:
         """Create a new progress bar.
 
@@ -373,12 +363,12 @@ class _NullProgressBar(Iterable[_T]):
         is.
     """
 
-    def __init__(self, iterable: Optional[Iterable[_T]]):
+    def __init__(self, iterable: Iterable[_T] | None):
         self._iterable = iterable
 
     @classmethod
     @contextmanager
-    def context(cls, iterable: Optional[Iterable[_T]]) -> Generator[_NullProgressBar[_T], None, None]:
+    def context(cls, iterable: Iterable[_T] | None) -> Generator[_NullProgressBar[_T], None, None]:
         """Return a trivial context manager that wraps an instance of this
         class.
 

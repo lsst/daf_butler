@@ -26,7 +26,7 @@ from __future__ import annotations
 __all__ = ("CompositesConfig", "CompositesMap")
 
 import logging
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import yaml
 
@@ -77,7 +77,7 @@ class CompositesMap:
         in lookup keys.
     """
 
-    def __init__(self, config: Union[str, ButlerConfig, CompositesConfig], *, universe: DimensionUniverse):
+    def __init__(self, config: str | ButlerConfig | CompositesConfig, *, universe: DimensionUniverse):
         if not isinstance(config, CompositesConfig):
             config = CompositesConfig(config)
         assert isinstance(config, CompositesConfig)
@@ -96,7 +96,7 @@ class CompositesMap:
         # the values
         self._lut = processLookupConfigs(disassemblyMap, universe=universe)
 
-    def shouldBeDisassembled(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
+    def shouldBeDisassembled(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:
         """Indicate whether the entity should be disassembled.
 
         Parameters
@@ -126,7 +126,7 @@ class CompositesMap:
             log.debug("%s will not be disassembled (not a composite)", entity)
             return False
 
-        matchName: Union[LookupKey, str] = "{} (via default)".format(entity)
+        matchName: LookupKey | str = "{} (via default)".format(entity)
         disassemble = self.config["default"]
 
         for key in entity._lookupNames():

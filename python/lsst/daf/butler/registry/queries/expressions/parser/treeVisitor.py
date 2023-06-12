@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ["TreeVisitor"]
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Generic, List, Optional, Tuple, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 if TYPE_CHECKING:
     import astropy.time
@@ -87,7 +87,7 @@ class TreeVisitor(Generic[T]):
         """
 
     @abstractmethod
-    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> T:
+    def visitRangeLiteral(self, start: int, stop: int, stride: int | None, node: Node) -> T:
         """Visit RangeLiteral node.
 
         Parameters
@@ -151,7 +151,7 @@ class TreeVisitor(Generic[T]):
         """
 
     @abstractmethod
-    def visitIsIn(self, lhs: T, values: List[T], not_in: bool, node: Node) -> T:
+    def visitIsIn(self, lhs: T, values: list[T], not_in: bool, node: Node) -> T:
         """Visit IsIn node.
 
         Parameters
@@ -184,7 +184,7 @@ class TreeVisitor(Generic[T]):
         """
 
     @abstractmethod
-    def visitTupleNode(self, items: Tuple[T, ...], node: Node) -> T:
+    def visitTupleNode(self, items: tuple[T, ...], node: Node) -> T:
         """Visit TupleNode node.
 
         Parameters
@@ -197,7 +197,7 @@ class TreeVisitor(Generic[T]):
             Corresponding tree node, mostly useful for diagnostics.
         """
 
-    def visitFunctionCall(self, name: str, args: List[T], node: Node) -> T:
+    def visitFunctionCall(self, name: str, args: list[T], node: Node) -> T:
         """Visit FunctionCall node.
 
         Parameters

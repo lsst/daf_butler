@@ -23,7 +23,8 @@ from __future__ import annotations
 __all__ = ("CollectionSummary",)
 
 import dataclasses
-from typing import AbstractSet, Generator, Iterable, List, Mapping, Optional, cast
+from collections.abc import Generator, Iterable, Mapping
+from typing import AbstractSet, cast
 
 from ..core import DataCoordinate, DatasetRef, DatasetType
 from ..core.named import NamedValueSet
@@ -167,8 +168,8 @@ class CollectionSummary:
         self,
         dataset_type: DatasetType,
         dimensions: Mapping[str, AbstractSet[str]],
-        rejections: Optional[List[str]] = None,
-        name: Optional[str] = None,
+        rejections: list[str] | None = None,
+        name: str | None = None,
     ) -> bool:
         """Test whether the collection summarized by this object should be
         queried for a given dataset type and governor dimension values.

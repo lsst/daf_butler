@@ -33,9 +33,9 @@ import os
 import pprint
 import sys
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, ClassVar, Iterator, cast
+from typing import IO, TYPE_CHECKING, Any, ClassVar, cast
 
 import yaml
 from lsst.resources import ResourcePath, ResourcePathExpression

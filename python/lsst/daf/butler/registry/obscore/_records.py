@@ -26,8 +26,8 @@ __all__ = ["ExposureRegionFactory", "Record", "RecordFactory"]
 import logging
 import warnings
 from abc import abstractmethod
-from collections.abc import Collection, Mapping
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
+from collections.abc import Callable, Collection, Mapping
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import astropy.time
@@ -60,7 +60,7 @@ class ExposureRegionFactory:
     """Abstract interface for a class that returns a Region for an exposure."""
 
     @abstractmethod
-    def exposure_region(self, dataId: DataCoordinate, context: SqlQueryContext) -> Optional[Region]:
+    def exposure_region(self, dataId: DataCoordinate, context: SqlQueryContext) -> Region | None:
         """Return a region for a given DataId that corresponds to an exposure.
 
         Parameters
@@ -102,7 +102,7 @@ class RecordFactory:
         schema: ObsCoreSchema,
         universe: DimensionUniverse,
         spatial_plugins: Collection[SpatialObsCorePlugin],
-        exposure_region_factory: Optional[ExposureRegionFactory] = None,
+        exposure_region_factory: ExposureRegionFactory | None = None,
     ):
         self.config = config
         self.schema = schema
@@ -116,7 +116,7 @@ class RecordFactory:
         self.visit = universe["visit"]
         self.physical_filter = cast(Dimension, universe["physical_filter"])
 
-    def __call__(self, ref: DatasetRef, context: SqlQueryContext) -> Optional[Record]:
+    def __call__(self, ref: DatasetRef, context: SqlQueryContext) -> Record | None:
         """Make an ObsCore record from a dataset.
 
         Parameters
@@ -217,7 +217,7 @@ class RecordFactory:
 
         # Dictionary to use for substitutions when formatting various
         # strings.
-        fmt_kws: Dict[str, Any] = dict(records=dataId.records)
+        fmt_kws: dict[str, Any] = dict(records=dataId.records)
         fmt_kws.update(dataId.full.byName())
         fmt_kws.update(id=ref.id)
         fmt_kws.update(run=ref.run)
@@ -277,12 +277,12 @@ class RecordFactory:
                 record.update(plugin_record)
         return record
 
-    def _exposure_records(self, dimension_record: DimensionRecord, record: Dict[str, Any]) -> None:
+    def _exposure_records(self, dimension_record: DimensionRecord, record: dict[str, Any]) -> None:
         """Extract all needed info from a visit dimension record."""
         record["t_exptime"] = dimension_record.exposure_time
         record["target_name"] = dimension_record.target_name
 
-    def _visit_records(self, dimension_record: DimensionRecord, record: Dict[str, Any]) -> None:
+    def _visit_records(self, dimension_record: DimensionRecord, record: dict[str, Any]) -> None:
         """Extract all needed info from an exposure dimension record."""
         record["t_exptime"] = dimension_record.exposure_time
         record["target_name"] = dimension_record.target_name

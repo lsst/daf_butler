@@ -23,8 +23,9 @@ from __future__ import annotations
 
 __all__ = ("GovernorDimension",)
 
+from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, AbstractSet, Iterable, Mapping, Optional
+from typing import TYPE_CHECKING, AbstractSet
 
 from lsst.utils import doImportType
 
@@ -144,7 +145,7 @@ class GovernorDimension(Dimension):
         self,
         db: Database,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
     ) -> GovernorDimensionRecordStorage:
         """Make storage record.
 

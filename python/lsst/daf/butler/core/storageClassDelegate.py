@@ -27,8 +27,9 @@ __all__ = ("DatasetComponent", "StorageClassDelegate")
 
 import copy
 import logging
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Mapping, Optional, Set, Tuple, Type
+from typing import TYPE_CHECKING, Any
 
 from lsst.utils.introspection import get_full_type_name
 
@@ -80,7 +81,7 @@ class StorageClassDelegate:
         self.storageClass = storageClass
 
     @staticmethod
-    def _attrNames(componentName: str, getter: bool = True) -> Tuple[str, ...]:
+    def _attrNames(componentName: str, getter: bool = True) -> tuple[str, ...]:
         """Return list of suitable attribute names to attempt to use.
 
         Parameters
@@ -107,7 +108,7 @@ class StorageClassDelegate:
         capitalized = f"{root}{first}{tail}"
         return (componentName, f"{root}_{componentName}", capitalized)
 
-    def assemble(self, components: Dict[str, Any], pytype: Optional[Type] = None) -> Any:
+    def assemble(self, components: dict[str, Any], pytype: type | None = None) -> Any:
         """Construct an object from components based on storageClass.
 
         This generic implementation assumes that instances of objects
@@ -218,8 +219,8 @@ class StorageClassDelegate:
         return component
 
     def disassemble(
-        self, composite: Any, subset: Optional[Iterable] = None, override: Optional[Any] = None
-    ) -> Dict[str, DatasetComponent]:
+        self, composite: Any, subset: Iterable | None = None, override: Any | None = None
+    ) -> dict[str, DatasetComponent]:
         """Disassembler a composite.
 
         This is a generic implementation of a disassembler.
@@ -301,7 +302,7 @@ class StorageClassDelegate:
 
         return components
 
-    def handleParameters(self, inMemoryDataset: Any, parameters: Optional[Mapping[str, Any]] = None) -> Any:
+    def handleParameters(self, inMemoryDataset: Any, parameters: Mapping[str, Any] | None = None) -> Any:
         """Modify the in-memory dataset using the supplied parameters.
 
         Can return a possibly new object.
@@ -338,7 +339,7 @@ class StorageClassDelegate:
         return inMemoryDataset
 
     @classmethod
-    def selectResponsibleComponent(cls, derivedComponent: str, fromComponents: Set[Optional[str]]) -> str:
+    def selectResponsibleComponent(cls, derivedComponent: str, fromComponents: set[str | None]) -> str:
         """Select the best component for calculating a derived component.
 
         Given a possible set of components to choose from, return the

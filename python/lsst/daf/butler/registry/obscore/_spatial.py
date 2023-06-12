@@ -25,7 +25,7 @@ __all__ = ["MissingDatabaseError", "RegionTypeWarning", "SpatialObsCorePlugin"]
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from lsst.sphgeom import Region
 from lsst.utils import doImportType
@@ -58,9 +58,7 @@ class SpatialObsCorePlugin(ABC):
 
     @classmethod
     @abstractmethod
-    def initialize(
-        cls, *, name: str, config: Mapping[str, Any], db: Optional[Database]
-    ) -> SpatialObsCorePlugin:
+    def initialize(cls, *, name: str, config: Mapping[str, Any], db: Database | None) -> SpatialObsCorePlugin:
         """Construct an instance of the plugin.
 
         Parameters
@@ -106,7 +104,7 @@ class SpatialObsCorePlugin(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_records(self, region: Optional[Region]) -> Optional[Record]:
+    def make_records(self, region: Region | None) -> Record | None:
         """Return data for obscore records corresponding to a given region.
 
         Parameters
@@ -129,7 +127,7 @@ class SpatialObsCorePlugin(ABC):
 
     @classmethod
     def load_plugins(
-        cls, config: Mapping[str, SpatialPluginConfig], db: Optional[Database]
+        cls, config: Mapping[str, SpatialPluginConfig], db: Database | None
     ) -> Sequence[SpatialObsCorePlugin]:
         """Load all plugins based on plugin configurations.
 

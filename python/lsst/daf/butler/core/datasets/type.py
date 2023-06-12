@@ -24,22 +24,10 @@ from __future__ import annotations
 __all__ = ["DatasetType", "SerializedDatasetType"]
 
 import re
+from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    ClassVar,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, StrictBool, StrictStr
 
@@ -53,7 +41,7 @@ if TYPE_CHECKING:
     from ..dimensions import Dimension, DimensionUniverse
 
 
-def _safeMakeMappingProxyType(data: Optional[Mapping]) -> Mapping:
+def _safeMakeMappingProxyType(data: Mapping | None) -> Mapping:
     if data is None:
         data = {}
     return MappingProxyType(data)
@@ -63,9 +51,9 @@ class SerializedDatasetType(BaseModel):
     """Simplified model of a `DatasetType` suitable for serialization."""
 
     name: StrictStr
-    storageClass: Optional[StrictStr] = None
-    dimensions: Optional[SerializedDimensionGraph] = None
-    parentStorageClass: Optional[StrictStr] = None
+    storageClass: StrictStr | None = None
+    dimensions: SerializedDimensionGraph | None = None
+    parentStorageClass: StrictStr | None = None
     isCalibration: StrictBool = False
 
     @classmethod
@@ -73,9 +61,9 @@ class SerializedDatasetType(BaseModel):
         cls,
         *,
         name: str,
-        storageClass: Optional[str] = None,
-        dimensions: Optional[Dict] = None,
-        parentStorageClass: Optional[str] = None,
+        storageClass: str | None = None,
+        dimensions: dict | None = None,
+        parentStorageClass: str | None = None,
         isCalibration: bool = False,
     ) -> SerializedDatasetType:
         """Construct a `SerializedDatasetType` directly without validators.
@@ -180,16 +168,16 @@ class DatasetType:
         compTypeName : `str`
             Name to use for component DatasetType.
         """
-        return "{}.{}".format(datasetTypeName, componentName)
+        return f"{datasetTypeName}.{componentName}"
 
     def __init__(
         self,
         name: str,
-        dimensions: Union[DimensionGraph, Iterable[Union[Dimension, str]]],
-        storageClass: Union[StorageClass, str],
-        parentStorageClass: Optional[Union[StorageClass, str]] = None,
+        dimensions: DimensionGraph | Iterable[Dimension | str],
+        storageClass: StorageClass | str,
+        parentStorageClass: StorageClass | str | None = None,
         *,
-        universe: Optional[DimensionUniverse] = None,
+        universe: DimensionUniverse | None = None,
         isCalibration: bool = False,
     ):
         if self.VALID_NAME_REGEX.match(name) is None:
@@ -206,7 +194,7 @@ class DatasetType:
             raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
         if not isinstance(storageClass, (StorageClass, str)):
             raise ValueError(f"StorageClass argument must be StorageClass or str. Got {storageClass}")
-        self._storageClass: Optional[StorageClass]
+        self._storageClass: StorageClass | None
         if isinstance(storageClass, StorageClass):
             self._storageClass = storageClass
             self._storageClassName = storageClass.name
@@ -214,8 +202,8 @@ class DatasetType:
             self._storageClass = None
             self._storageClassName = storageClass
 
-        self._parentStorageClass: Optional[StorageClass] = None
-        self._parentStorageClassName: Optional[str] = None
+        self._parentStorageClass: StorageClass | None = None
+        self._parentStorageClassName: str | None = None
         if parentStorageClass is not None:
             if not isinstance(storageClass, (StorageClass, str)):
                 raise ValueError(
@@ -380,7 +368,7 @@ class DatasetType:
         return self._storageClassName
 
     @property
-    def parentStorageClass(self) -> Optional[StorageClass]:
+    def parentStorageClass(self) -> StorageClass | None:
         """Return the storage class of the composite containing this component.
 
         Note that if DatasetType was constructed with a name of a
@@ -406,7 +394,7 @@ class DatasetType:
         return self._isCalibration
 
     @staticmethod
-    def splitDatasetTypeName(datasetTypeName: str) -> Tuple[str, Optional[str]]:
+    def splitDatasetTypeName(datasetTypeName: str) -> tuple[str, str | None]:
         """Return the root name and the component from a composite name.
 
         Parameters
@@ -434,7 +422,7 @@ class DatasetType:
             root, comp = root.split(".", maxsplit=1)
         return root, comp
 
-    def nameAndComponent(self) -> Tuple[str, Optional[str]]:
+    def nameAndComponent(self) -> tuple[str, str | None]:
         """Return the root name of this dataset type and any component.
 
         Returns
@@ -446,7 +434,7 @@ class DatasetType:
         """
         return self.splitDatasetTypeName(self.name)
 
-    def component(self) -> Optional[str]:
+    def component(self) -> str | None:
         """Return the component name (if defined).
 
         Returns
@@ -531,7 +519,7 @@ class DatasetType:
             isCalibration=self.isCalibration(),
         )
 
-    def makeAllComponentDatasetTypes(self) -> List[DatasetType]:
+    def makeAllComponentDatasetTypes(self) -> list[DatasetType]:
         """Return all component dataset types for this composite.
 
         Returns
@@ -607,7 +595,7 @@ class DatasetType:
         """
         return self.storageClass.isComposite()
 
-    def _lookupNames(self) -> Tuple[LookupKey, ...]:
+    def _lookupNames(self) -> tuple[LookupKey, ...]:
         """Return name keys to use for lookups in configurations.
 
         The names are returned in order of priority.
@@ -622,7 +610,7 @@ class DatasetType:
             composite.
         """
         rootName, componentName = self.nameAndComponent()
-        lookups: Tuple[LookupKey, ...] = (LookupKey(name=self.name),)
+        lookups: tuple[LookupKey, ...] = (LookupKey(name=self.name),)
         if componentName is not None:
             lookups = lookups + (LookupKey(name=rootName),)
 
@@ -652,7 +640,7 @@ class DatasetType:
         simple : `SerializedDatasetType`
             The object converted to a class suitable for serialization.
         """
-        as_dict: Dict[str, Any]
+        as_dict: dict[str, Any]
         if minimal:
             # Only needs the name.
             as_dict = {"name": self.name}
@@ -673,8 +661,8 @@ class DatasetType:
     def from_simple(
         cls,
         simple: SerializedDatasetType,
-        universe: Optional[DimensionUniverse] = None,
-        registry: Optional[Registry] = None,
+        universe: DimensionUniverse | None = None,
+        registry: Registry | None = None,
     ) -> DatasetType:
         """Construct a new object from the simplified form.
 
@@ -734,8 +722,8 @@ class DatasetType:
 
     def __reduce__(
         self,
-    ) -> Tuple[
-        Callable, Tuple[Type[DatasetType], Tuple[str, DimensionGraph, str, Optional[str]], Dict[str, bool]]
+    ) -> tuple[
+        Callable, tuple[type[DatasetType], tuple[str, DimensionGraph, str, str | None], dict[str, bool]]
     ]:
         """Support pickling.
 

@@ -26,21 +26,8 @@ __all__ = ["DimensionUniverse"]
 import logging
 import math
 import pickle
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Dict,
-    FrozenSet,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
@@ -98,7 +85,7 @@ class DimensionUniverse:
         called; this will be called if needed by `DimensionUniverse`.
     """
 
-    _instances: ClassVar[Dict[Tuple[int, str], DimensionUniverse]] = {}
+    _instances: ClassVar[dict[tuple[int, str], DimensionUniverse]] = {}
     """Singleton dictionary of all instances, keyed by version.
 
     For internal use only.
@@ -106,11 +93,11 @@ class DimensionUniverse:
 
     def __new__(
         cls,
-        config: Optional[Config] = None,
+        config: Config | None = None,
         *,
-        version: Optional[int] = None,
-        namespace: Optional[str] = None,
-        builder: Optional[DimensionConstructionBuilder] = None,
+        version: int | None = None,
+        namespace: str | None = None,
+        builder: DimensionConstructionBuilder | None = None,
     ) -> DimensionUniverse:
         # Try to get a version first, to look for existing instances; try to
         # do as little work as possible at this stage.
@@ -133,7 +120,7 @@ class DimensionUniverse:
             namespace = _DEFAULT_NAMESPACE
 
         # See if an equivalent instance already exists.
-        self: Optional[DimensionUniverse] = cls._instances.get((version, namespace))
+        self: DimensionUniverse | None = cls._instances.get((version, namespace))
         if self is not None:
             return self
 
@@ -247,7 +234,7 @@ class DimensionUniverse:
     def __contains__(self, name: Any) -> bool:
         return name in self._elements
 
-    def get(self, name: str, default: Optional[DimensionElement] = None) -> Optional[DimensionElement]:
+    def get(self, name: str, default: DimensionElement | None = None) -> DimensionElement | None:
         """Return the `DimensionElement` with the given name or a default.
 
         Parameters
@@ -375,7 +362,7 @@ class DimensionUniverse:
         """
         return self._dimensionIndices[name]
 
-    def expandDimensionNameSet(self, names: Set[str]) -> None:
+    def expandDimensionNameSet(self, names: set[str]) -> None:
         """Expand a set of dimension names in-place.
 
         Includes recursive dependencies.
@@ -404,7 +391,7 @@ class DimensionUniverse:
             else:
                 oldSize = len(names)
 
-    def extract(self, iterable: Iterable[Union[Dimension, str]]) -> DimensionGraph:
+    def extract(self, iterable: Iterable[Dimension | str]) -> DimensionGraph:
         """Construct graph from iterable.
 
         Constructs a `DimensionGraph` from a possibly-heterogenous iterable
@@ -433,7 +420,7 @@ class DimensionUniverse:
                 names.add(item)
         return DimensionGraph(universe=self, names=names)
 
-    def sorted(self, elements: Iterable[Union[E, str]], *, reverse: bool = False) -> List[E]:
+    def sorted(self, elements: Iterable[E | str], *, reverse: bool = False) -> list[E]:
         """Return a sorted version of the given iterable of dimension elements.
 
         The universe's sort order is topological (an element's dependencies
@@ -497,7 +484,7 @@ class DimensionUniverse:
         return math.ceil(len(self._dimensions) / 8)
 
     @classmethod
-    def _unpickle(cls, version: int, namespace: Optional[str] = None) -> DimensionUniverse:
+    def _unpickle(cls, version: int, namespace: str | None = None) -> DimensionUniverse:
         """Return an unpickled dimension universe.
 
         Callable used for unpickling.
@@ -541,7 +528,7 @@ class DimensionUniverse:
     dimensionConfig: DimensionConfig
     """The configuration used to create this Universe (`DimensionConfig`)."""
 
-    _cache: Dict[FrozenSet[str], DimensionGraph]
+    _cache: dict[frozenset[str], DimensionGraph]
 
     _dimensions: NamedValueAbstractSet[Dimension]
 
@@ -549,11 +536,11 @@ class DimensionUniverse:
 
     _topology: Mapping[TopologicalSpace, NamedValueAbstractSet[TopologicalFamily]]
 
-    _dimensionIndices: Dict[str, int]
+    _dimensionIndices: dict[str, int]
 
-    _elementIndices: Dict[str, int]
+    _elementIndices: dict[str, int]
 
-    _packers: Dict[str, DimensionPackerFactory]
+    _packers: dict[str, DimensionPackerFactory]
 
     _version: int
 

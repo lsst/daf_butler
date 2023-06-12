@@ -24,7 +24,7 @@ __all__ = ("addDimensionForeignKey",)
 
 import copy
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
 
 from lsst.utils.classes import cached_getter
 
@@ -305,7 +305,7 @@ class DimensionElementFields:
     and/or timespan (`NamedValueSet` [ `ddl.FieldSpec` ]).
     """
 
-    names: Tuple[str, ...]
+    names: tuple[str, ...]
     """The names of all fields in the specification (`tuple` [ `str` ]).
 
     This includes "region" and/or "timespan" if `element` is spatial and/or

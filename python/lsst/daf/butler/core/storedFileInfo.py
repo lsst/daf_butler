@@ -24,8 +24,9 @@ from __future__ import annotations
 __all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Type
+from typing import TYPE_CHECKING, Any
 
 from lsst.resources import ResourcePath
 
@@ -65,7 +66,7 @@ class StoredDatastoreItemInfo:
         raise NotImplementedError("The base class does not know how to locate an item in a datastore.")
 
     @classmethod
-    def from_record(cls: Type[StoredDatastoreItemInfo], record: Mapping[str, Any]) -> StoredDatastoreItemInfo:
+    def from_record(cls: type[StoredDatastoreItemInfo], record: Mapping[str, Any]) -> StoredDatastoreItemInfo:
         """Create instance from database record.
 
         Parameters
@@ -80,7 +81,7 @@ class StoredDatastoreItemInfo:
         """
         raise NotImplementedError()
 
-    def to_record(self) -> Dict[str, Any]:
+    def to_record(self) -> dict[str, Any]:
         """Convert record contents to a dictionary."""
         raise NotImplementedError()
 
@@ -108,8 +109,8 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         formatter: FormatterParameter,
         path: str,
         storageClass: StorageClass,
-        component: Optional[str],
-        checksum: Optional[str],
+        component: str | None,
+        checksum: str | None,
         file_size: int,
         dataset_id: DatasetId,
     ):
@@ -142,11 +143,11 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     storageClass: StorageClass
     """StorageClass associated with Dataset."""
 
-    component: Optional[str]
+    component: str | None
     """Component associated with this file. Can be None if the file does
     not refer to a component of a composite."""
 
-    checksum: Optional[str]
+    checksum: str | None
     """Checksum of the serialized dataset."""
 
     file_size: int
@@ -176,7 +177,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         dataset_id = ref.id
         return self.update(dataset_id=dataset_id, component=component)
 
-    def to_record(self) -> Dict[str, Any]:
+    def to_record(self) -> dict[str, Any]:
         """Convert the supplied ref to a database record."""
         component = self.component
         if component is None:
@@ -214,7 +215,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         return location
 
     @classmethod
-    def from_record(cls: Type[StoredFileInfo], record: Mapping[str, Any]) -> StoredFileInfo:
+    def from_record(cls: type[StoredFileInfo], record: Mapping[str, Any]) -> StoredFileInfo:
         """Create instance from database record.
 
         Parameters

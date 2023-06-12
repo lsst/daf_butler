@@ -41,19 +41,9 @@ import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import ItemsView, Iterable, Iterator, KeysView, ValuesView
 from random import Random
-from typing import (
-    TYPE_CHECKING,
-    Dict,
-    ItemsView,
-    Iterable,
-    Iterator,
-    KeysView,
-    List,
-    Optional,
-    Union,
-    ValuesView,
-)
+from typing import TYPE_CHECKING
 
 from lsst.resources import ResourcePath
 from pydantic import BaseModel, PrivateAttr
@@ -145,7 +135,7 @@ class CacheEntry(BaseModel):
     ref: DatasetId
     """ID of this dataset."""
 
-    component: Optional[str]
+    component: str | None
     """Component for this disassembled composite (optional)."""
 
     @classmethod
@@ -184,10 +174,10 @@ class CacheRegistry(BaseModel):
     _size: int = PrivateAttr(0)
     """Size of the cache."""
 
-    _entries: Dict[str, CacheEntry] = PrivateAttr({})
+    _entries: dict[str, CacheEntry] = PrivateAttr({})
     """Internal collection of cache entries."""
 
-    _ref_map: Dict[DatasetId, List[str]] = PrivateAttr({})
+    _ref_map: dict[DatasetId, list[str]] = PrivateAttr({})
     """Mapping of DatasetID to corresponding keys in cache registry."""
 
     @property
@@ -211,7 +201,7 @@ class CacheRegistry(BaseModel):
         self._decrement(entry)
         self._ref_map[entry.ref].remove(key)
 
-    def _decrement(self, entry: Optional[CacheEntry]) -> None:
+    def _decrement(self, entry: CacheEntry | None) -> None:
         if entry:
             self._size -= entry.size
             if self._size < 0:
@@ -245,7 +235,7 @@ class CacheRegistry(BaseModel):
         ctime=datetime.datetime.utcfromtimestamp(0),
     )
 
-    def pop(self, key: str, default: Optional[CacheEntry] = __marker) -> Optional[CacheEntry]:
+    def pop(self, key: str, default: CacheEntry | None = __marker) -> CacheEntry | None:
         # The marker for dict.pop is not the same as our marker.
         if default is self.__marker:
             entry = self._entries.pop(key)
@@ -264,7 +254,7 @@ class CacheRegistry(BaseModel):
                 keys.remove(key)
         return entry
 
-    def get_dataset_keys(self, dataset_id: Optional[DatasetId]) -> Optional[List[str]]:
+    def get_dataset_keys(self, dataset_id: DatasetId | None) -> list[str] | None:
         """Retrieve all keys associated with the given dataset ID.
 
         Parameters
@@ -316,14 +306,14 @@ class AbstractDatastoreCacheManager(ABC):
         """Return number of cached files tracked by registry."""
         return 0
 
-    def __init__(self, config: Union[str, DatastoreCacheManagerConfig], universe: DimensionUniverse):
+    def __init__(self, config: str | DatastoreCacheManagerConfig, universe: DimensionUniverse):
         if not isinstance(config, DatastoreCacheManagerConfig):
             config = DatastoreCacheManagerConfig(config)
         assert isinstance(config, DatastoreCacheManagerConfig)
         self.config = config
 
     @abstractmethod
-    def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
+    def should_be_cached(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:
         """Indicate whether the entity should be added to the cache.
 
         This is relevant when reading or writing.
@@ -344,7 +334,7 @@ class AbstractDatastoreCacheManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+    def known_to_cache(self, ref: DatasetRef, extension: str | None = None) -> bool:
         """Report if the dataset is known to the cache.
 
         Parameters
@@ -373,7 +363,7 @@ class AbstractDatastoreCacheManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> Optional[ResourcePath]:
+    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> ResourcePath | None:
         """Move a file to the cache.
 
         Move the given file into the cache, using the supplied DatasetRef
@@ -400,7 +390,7 @@ class AbstractDatastoreCacheManager(ABC):
 
     @abstractmethod
     @contextlib.contextmanager
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ResourcePath]]:
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[ResourcePath | None]:
         """Look for a dataset in the cache and return its location.
 
         Parameters
@@ -424,7 +414,7 @@ class AbstractDatastoreCacheManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def remove_from_cache(self, ref: Union[DatasetRef, Iterable[DatasetRef]]) -> None:
+    def remove_from_cache(self, ref: DatasetRef | Iterable[DatasetRef]) -> None:
         """Remove the specified datasets from the cache.
 
         It is not an error for these datasets to be missing from the cache.
@@ -473,7 +463,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     _temp_exemption_prefix = "exempt/"
     _tmpdir_prefix = "butler-cache-dir-"
 
-    def __init__(self, config: Union[str, DatastoreCacheManagerConfig], universe: DimensionUniverse):
+    def __init__(self, config: str | DatastoreCacheManagerConfig, universe: DimensionUniverse):
         super().__init__(config, universe)
 
         # Set cache directory if it pre-exists, else defer creation until
@@ -519,8 +509,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             # Force to None to avoid confusion.
             threshold = None
 
-        self._expiration_mode: Optional[str] = expiration_mode
-        self._expiration_threshold: Optional[int] = threshold
+        self._expiration_mode: str | None = expiration_mode
+        self._expiration_threshold: int | None = threshold
         if self._expiration_threshold is None and self._expiration_mode is not None:
             raise ValueError(
                 f"Cache expiration threshold must be set for expiration mode {self._expiration_mode}"
@@ -619,9 +609,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         os.environ["DAF_BUTLER_CACHE_DIRECTORY_IF_UNSET"] = cache_dir
         return (True, cache_dir)
 
-    def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
+    def should_be_cached(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:
         # Docstring inherited
-        matchName: Union[LookupKey, str] = "{} (via default)".format(entity)
+        matchName: LookupKey | str = "{} (via default)".format(entity)
         should_cache = self._caching_default
 
         for key in entity._lookupNames():
@@ -656,7 +646,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         """
         return _construct_cache_path(self.cache_directory, ref, extension)
 
-    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> Optional[ResourcePath]:
+    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> ResourcePath | None:
         # Docstring inherited
         if not self.should_be_cached(ref):
             return None
@@ -690,7 +680,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         return cached_location
 
     @contextlib.contextmanager
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ResourcePath]]:
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[ResourcePath | None]:
         # Docstring inherited
         # Short circuit this if the cache directory has not been created yet.
         if self._cache_directory is None:
@@ -719,7 +709,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             basename = cached_location.basename()
             filename = f"{random}-{basename}"
 
-            temp_location: Optional[ResourcePath] = self._temp_exempt_directory.join(filename)
+            temp_location: ResourcePath | None = self._temp_exempt_directory.join(filename)
             try:
                 if temp_location is not None:
                     temp_location.transfer_from(cached_location, transfer="hardlink")
@@ -745,7 +735,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         yield None
         return
 
-    def remove_from_cache(self, refs: Union[DatasetRef, Iterable[DatasetRef]]) -> None:
+    def remove_from_cache(self, refs: DatasetRef | Iterable[DatasetRef]) -> None:
         # Docstring inherited.
 
         # Stop early if there are no cache entries anyhow.
@@ -764,7 +754,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
                 keys_to_remove.append(key)
         self._remove_from_cache(keys_to_remove)
 
-    def _register_cache_entry(self, cached_location: ResourcePath, can_exist: bool = False) -> Optional[str]:
+    def _register_cache_entry(self, cached_location: ResourcePath, can_exist: bool = False) -> str | None:
         """Record the file in the cache registry.
 
         Parameters
@@ -831,7 +821,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             for path_in_cache in missing:
                 self._cache_entries.pop(path_in_cache, None)
 
-    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+    def known_to_cache(self, ref: DatasetRef, extension: str | None = None) -> bool:
         """Report if the dataset is known to the cache.
 
         Parameters
@@ -984,7 +974,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
         raise ValueError(f"Unrecognized cache expiration mode of {self._expiration_mode}")
 
-    def _sort_cache(self) -> List[str]:
+    def _sort_cache(self) -> list[str]:
         """Sort the cache entries by time and return the sorted keys.
 
         Returns
@@ -1020,36 +1010,36 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         in lookup keys.
     """
 
-    def __init__(self, config: Union[str, DatastoreCacheManagerConfig], universe: DimensionUniverse):
+    def __init__(self, config: str | DatastoreCacheManagerConfig, universe: DimensionUniverse):
         return
 
-    def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
+    def should_be_cached(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:
         """Indicate whether the entity should be added to the cache.
 
         Always returns `False`.
         """
         return False
 
-    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> Optional[ResourcePath]:
+    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> ResourcePath | None:
         """Move dataset to cache but always refuse and returns `None`."""
         return None
 
     @contextlib.contextmanager
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ResourcePath]]:
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[ResourcePath | None]:
         """Look for a dataset in the cache and return its location.
 
         Never finds a file.
         """
         yield None
 
-    def remove_from_cache(self, ref: Union[DatasetRef, Iterable[DatasetRef]]) -> None:
+    def remove_from_cache(self, ref: DatasetRef | Iterable[DatasetRef]) -> None:
         """Remove datasets from cache.
 
         Always does nothing.
         """
         return
 
-    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+    def known_to_cache(self, ref: DatasetRef, extension: str | None = None) -> bool:
         """Report if a dataset is known to the cache.
 
         Always returns `False`.

@@ -29,7 +29,8 @@ __all__ = (
 
 import enum
 from abc import ABC, abstractmethod
-from typing import Dict, Generic, Iterator, List, Optional, Sequence, Tuple, TypeVar
+from collections.abc import Iterator, Sequence
+from typing import Generic, TypeVar
 
 import astropy.time
 
@@ -294,7 +295,7 @@ class NormalFormExpression:
             Return value from calling ``visitor.visitOuter`` after visiting
             all other nodes.
         """
-        visitedOuterBranches: List[_U] = []
+        visitedOuterBranches: list[_U] = []
         for nodeInnerBranches in self._nodes:
             visitedInnerBranches = [visitor.visitBranch(node) for node in nodeInnerBranches]
             visitedOuterBranches.append(visitor.visitInner(visitedInnerBranches, self.form))
@@ -853,7 +854,7 @@ class LogicalBinaryOperation(TransformationWrapper):
         self._lhs = lhs
         self._operator = operator
         self._rhs = rhs
-        self._satisfiesCache: Dict[NormalForm, bool] = {}
+        self._satisfiesCache: dict[NormalForm, bool] = {}
 
     __slots__ = ("_lhs", "_operator", "_rhs", "_satisfiesCache")
 
@@ -1023,7 +1024,7 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         return Opaque(node, PrecedenceTier.TOKEN)
 
     def visitRangeLiteral(
-        self, start: int, stop: int, stride: Optional[int], node: Node
+        self, start: int, stop: int, stride: int | None, node: Node
     ) -> TransformationWrapper:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         return Opaque(node, PrecedenceTier.TOKEN)
@@ -1060,7 +1061,7 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
     def visitIsIn(
         self,
         lhs: TransformationWrapper,
-        values: List[TransformationWrapper],
+        values: list[TransformationWrapper],
         not_in: bool,
         node: Node,
     ) -> TransformationWrapper:
@@ -1071,7 +1072,7 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         # Docstring inherited from TreeVisitor.visitParens
         return expression
 
-    def visitTupleNode(self, items: Tuple[TransformationWrapper, ...], node: Node) -> TransformationWrapper:
+    def visitTupleNode(self, items: tuple[TransformationWrapper, ...], node: Node) -> TransformationWrapper:
         # Docstring inherited from TreeVisitor.visitTupleNode
         return Opaque(node, PrecedenceTier.TOKEN)
 

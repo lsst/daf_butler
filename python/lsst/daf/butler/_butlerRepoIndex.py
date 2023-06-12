@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("ButlerRepoIndex",)
 
 import os
-from typing import ClassVar, Dict, Set
+from typing import ClassVar
 
 from lsst.resources import ResourcePath
 
@@ -51,7 +51,7 @@ class ButlerRepoIndex:
     index_env_var: ClassVar[str] = "DAF_BUTLER_REPOSITORY_INDEX"
     """The name of the environment variable to read to locate the index."""
 
-    _cache: ClassVar[Dict[ResourcePath, Config]] = {}
+    _cache: ClassVar[dict[ResourcePath, Config]] = {}
     """Cache of indexes. In most scenarios only one index will be found
     and the environment will not change. In tests this may not be true."""
 
@@ -140,7 +140,7 @@ class ButlerRepoIndex:
         return repo_index
 
     @classmethod
-    def get_known_repos(cls) -> Set[str]:
+    def get_known_repos(cls) -> set[str]:
         """Retrieve the list of known repository labels.
 
         Returns

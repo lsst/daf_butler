@@ -26,7 +26,6 @@ from __future__ import annotations
 __all__ = ("BUTLER_ROOT_TAG", "replaceRoot")
 
 import os.path
-from typing import Optional
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
@@ -35,7 +34,7 @@ BUTLER_ROOT_TAG = "<butlerRoot>"
 the butler root location should be used."""
 
 
-def replaceRoot(configRoot: str, butlerRoot: Optional[ResourcePathExpression]) -> str:
+def replaceRoot(configRoot: str, butlerRoot: ResourcePathExpression | None) -> str:
     """Update a configuration root with the butler root location.
 
     No changes are made if the special root string is not found in the

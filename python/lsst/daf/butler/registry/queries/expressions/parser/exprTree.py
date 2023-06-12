@@ -51,7 +51,7 @@ __all__ = [
 #  Imports of standard modules --
 # -------------------------------
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 # -----------------------------
 #  Imports for other modules --
@@ -85,7 +85,7 @@ class Node(ABC):
         Possibly empty list of sub-nodes.
     """
 
-    def __init__(self, children: Tuple[Node, ...] | None = None):
+    def __init__(self, children: tuple[Node, ...] | None = None):
         self.children = tuple(children or ())
 
     @abstractmethod
@@ -269,7 +269,7 @@ class RangeLiteral(Node):
         stride was missing from literal.
     """
 
-    def __init__(self, start: int, stop: int, stride: Optional[int] = None):
+    def __init__(self, start: int, stop: int, stride: int | None = None):
         self.start = start
         self.stop = stop
         self.stride = stride
@@ -296,7 +296,7 @@ class IsIn(Node):
         If `True` then it is NOT IN expression, otherwise it is IN expression.
     """
 
-    def __init__(self, lhs: Node, values: List[Node], not_in: bool = False):
+    def __init__(self, lhs: Node, values: list[Node], not_in: bool = False):
         Node.__init__(self, (lhs,) + tuple(values))
         self.lhs = lhs
         self.values = values
@@ -351,7 +351,7 @@ class TupleNode(Node):
         Expressions inside parentheses.
     """
 
-    def __init__(self, items: Tuple[Node, ...]):
+    def __init__(self, items: tuple[Node, ...]):
         Node.__init__(self, items)
         self.items = items
 
@@ -376,7 +376,7 @@ class FunctionCall(Node):
         Arguments passed to function.
     """
 
-    def __init__(self, function: str, args: List[Node]):
+    def __init__(self, function: str, args: list[Node]):
         Node.__init__(self, tuple(args))
         self.name = function
         self.args = args[:]
@@ -417,7 +417,7 @@ class PointNode(Node):
         return f"POINT({self.ra}, {self.dec})"
 
 
-def function_call(function: str, args: List[Node]) -> Node:
+def function_call(function: str, args: list[Node]) -> Node:
     """Factory method for nodes representing function calls.
 
     Attributes

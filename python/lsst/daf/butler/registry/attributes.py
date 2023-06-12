@@ -26,7 +26,8 @@ attributes for `Registry`.
 
 __all__ = ["DefaultButlerAttributeManager"]
 
-from typing import ClassVar, Iterable, Optional, Tuple
+from collections.abc import Iterable
+from typing import ClassVar
 
 import sqlalchemy
 
@@ -83,7 +84,7 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         table = context.addTable(cls._TABLE_NAME, cls._TABLE_SPEC)
         return cls(db=db, table=table, registry_schema_version=registry_schema_version)
 
-    def get(self, name: str, default: Optional[str] = None) -> Optional[str]:
+    def get(self, name: str, default: str | None = None) -> str | None:
         # Docstring inherited from ButlerAttributeManager.
         sql = sqlalchemy.sql.select(self._table.columns.value).where(self._table.columns.name == name)
         with self._db.query(sql) as sql_result:
@@ -121,7 +122,7 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         numRows = self._db.delete(self._table, ["name"], {"name": name})
         return numRows > 0
 
-    def items(self) -> Iterable[Tuple[str, str]]:
+    def items(self) -> Iterable[tuple[str, str]]:
         # Docstring inherited from ButlerAttributeManager.
         sql = sqlalchemy.sql.select(
             self._table.columns.name,

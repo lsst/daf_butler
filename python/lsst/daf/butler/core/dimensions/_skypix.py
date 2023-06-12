@@ -26,8 +26,9 @@ __all__ = (
     "SkyPixSystem",
 )
 
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, AbstractSet, Dict, Mapping, Optional, Type
+from typing import TYPE_CHECKING, AbstractSet
 
 import sqlalchemy
 from lsst.sphgeom import PixelizationABC
@@ -65,18 +66,18 @@ class SkyPixSystem(TopologicalFamily):
         name: str,
         *,
         maxLevel: int,
-        PixelizationClass: Type[PixelizationABC],
+        PixelizationClass: type[PixelizationABC],
     ):
         super().__init__(name, TopologicalSpace.SPATIAL)
         self.maxLevel = maxLevel
         self.PixelizationClass = PixelizationClass
-        self._members: Dict[int, SkyPixDimension] = {}
+        self._members: dict[int, SkyPixDimension] = {}
         for level in range(maxLevel + 1):
             self._members[level] = SkyPixDimension(self, level)
 
     def choose(self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]) -> SkyPixDimension:
         # Docstring inherited from TopologicalFamily.
-        best: Optional[SkyPixDimension] = None
+        best: SkyPixDimension | None = None
         for endpoint in endpoints:
             if endpoint not in self:
                 continue
@@ -214,7 +215,7 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
     universe being static.
     """
 
-    def __init__(self, name: str, pixelizationClassName: str, maxLevel: Optional[int] = None):
+    def __init__(self, name: str, pixelizationClassName: str, maxLevel: int | None = None):
         super().__init__(name)
         self._pixelizationClassName = pixelizationClassName
         self._maxLevel = maxLevel

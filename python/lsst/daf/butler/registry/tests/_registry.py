@@ -30,8 +30,9 @@ import unittest
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
+from collections.abc import Iterator
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Iterator, Optional, Type, Union
+from typing import TYPE_CHECKING
 
 import astropy.time
 import sqlalchemy
@@ -85,13 +86,13 @@ class RegistryTests(ABC):
     generate tests for different configurations.
     """
 
-    collectionsManager: Optional[str] = None
+    collectionsManager: str | None = None
     """Name of the collections manager class, if subclass provides value for
     this member then it overrides name specified in default configuration
     (`str`).
     """
 
-    datasetsManager: Optional[str | dict[str, str]] = None
+    datasetsManager: str | dict[str, str] | None = None
     """Name or configuration dictionary of the datasets manager class, if
     subclass provides value for this member then it overrides name specified
     in default configuration (`str` or `dict`).
@@ -120,7 +121,7 @@ class RegistryTests(ABC):
         return config
 
     @abstractmethod
-    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Optional[Registry]:
+    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry | None:
         """Return the Registry instance to be tested.
 
         Parameters
@@ -1507,7 +1508,7 @@ class RegistryTests(ABC):
         unknown_type = DatasetType("not_known", dimensions=bias.dimensions, storageClass="Exposure")
 
         # Test both string name and dataset type object.
-        test_type: Union[str, DatasetType]
+        test_type: str | DatasetType
         for test_type, test_type_name in (
             (unknown_type, unknown_type.name),
             (unknown_type.name, unknown_type.name),
@@ -2139,7 +2140,7 @@ class RegistryTests(ABC):
             pass
 
         def assertLookup(
-            detector: int, timespan: Timespan, expected: Optional[Union[DatasetRef, Type[Ambiguous]]]
+            detector: int, timespan: Timespan, expected: DatasetRef | type[Ambiguous] | None
         ) -> None:
             """Local function that asserts that a bias lookup returns the given
             expected result.

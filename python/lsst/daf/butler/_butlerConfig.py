@@ -28,7 +28,7 @@ __all__ = ("ButlerConfig",)
 
 import copy
 import os
-from typing import Optional, Sequence, Union
+from collections.abc import Sequence
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
@@ -66,10 +66,10 @@ class ButlerConfig(Config):
 
     def __init__(
         self,
-        other: Optional[Union[ResourcePathExpression, Config]] = None,
+        other: ResourcePathExpression | Config | None = None,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
     ):
-        self.configDir: Optional[ResourcePath] = None
+        self.configDir: ResourcePath | None = None
 
         # If this is already a ButlerConfig we assume that defaults
         # have already been loaded.

@@ -22,7 +22,8 @@
 """Support for reading Arrow tables."""
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 import pyarrow as pa
 from lsst.daf.butler import StorageClassDelegate
@@ -66,7 +67,7 @@ class ArrowTableDelegate(StorageClassDelegate):
             f"Do not know how to retrieve component {componentName} from {get_full_type_name(composite)}"
         )
 
-    def handleParameters(self, inMemoryDataset: Any, parameters: Optional[Mapping[str, Any]] = None) -> Any:
+    def handleParameters(self, inMemoryDataset: Any, parameters: Mapping[str, Any] | None = None) -> Any:
         if not isinstance(inMemoryDataset, self._datasetType):
             raise ValueError(
                 f"inMemoryDataset must be a {get_full_type_name(self._datasetType)} and "

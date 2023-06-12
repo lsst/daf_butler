@@ -22,7 +22,7 @@
 __all__ = ("AstropyTableFormatter",)
 
 import os.path
-from typing import Any, Optional, Type
+from typing import Any
 
 from .file import FileFormatter
 
@@ -54,7 +54,7 @@ class AstropyTableFormatter(FileFormatter):
         # Other supported formats can be added here
         raise RuntimeError(f"Requested file format '{format}' is not supported for Table")
 
-    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
+    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         """Read a file from the path in a supported format format.
 
         Parameters

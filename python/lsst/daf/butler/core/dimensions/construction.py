@@ -22,7 +22,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Dict, Iterable, Optional
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, AbstractSet
 
 from .._topology import TopologicalFamily, TopologicalSpace
 from ..named import NamedValueSet
@@ -122,7 +123,7 @@ class DimensionConstructionBuilder:
         commonSkyPixName: str,
         config: DimensionConfig,
         *,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         visitors: Iterable[DimensionConstructionVisitor] = (),
     ) -> None:
         self.dimensions = NamedValueSet()
@@ -133,7 +134,7 @@ class DimensionConstructionBuilder:
         self.namespace = namespace
         self.config = config
         self.commonSkyPixName = commonSkyPixName
-        self._todo: Dict[str, DimensionConstructionVisitor] = {v.name: v for v in visitors}
+        self._todo: dict[str, DimensionConstructionVisitor] = {v.name: v for v in visitors}
 
     def add(self, visitor: DimensionConstructionVisitor) -> None:
         """Add a single visitor to the builder.
@@ -180,7 +181,7 @@ class DimensionConstructionBuilder:
     Populated at builder construction.
     """
 
-    namespace: Optional[str]
+    namespace: str | None
     """Namespace for the `DimensionUniverse` (`str`)
 
     Populated at builder construction.
@@ -208,12 +209,12 @@ class DimensionConstructionBuilder:
     set as well as `dimensions`.
     """
 
-    topology: Dict[TopologicalSpace, NamedValueSet[TopologicalFamily]]
+    topology: dict[TopologicalSpace, NamedValueSet[TopologicalFamily]]
     """Dictionary containing all `TopologicalFamily` objects
     (`dict` [ `TopologicalSpace`, `NamedValueSet` [ `TopologicalFamily` ] ] ).
     """
 
-    packers: Dict[str, DimensionPackerFactory]
+    packers: dict[str, DimensionPackerFactory]
     """Dictionary containing all `DimensionPackerFactory` objects
     (`dict` [ `str`, `DimensionPackerFactory` ] ).
     """

@@ -33,7 +33,7 @@ __all__ = [
 
 import enum
 from collections.abc import Mapping
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator
 
@@ -58,10 +58,10 @@ class ExtraColumnConfig(BaseModel):
     type: ExtraColumnType = ExtraColumnType.string
     """Column type, formatted string will be converted to this actual type."""
 
-    length: Optional[int] = None
+    length: int | None = None
     """Optional length qualifier for a column, only used for strings."""
 
-    doc: Optional[str] = None
+    doc: str | None = None
     """Documentation string for this column."""
 
 
@@ -71,33 +71,33 @@ class DatasetTypeConfig(BaseModel):
     dataproduct_type: str
     """Value for the ``dataproduct_type`` column."""
 
-    dataproduct_subtype: Optional[str] = None
+    dataproduct_subtype: str | None = None
     """Value for the ``dataproduct_subtype`` column, optional."""
 
     calib_level: int
     """Value for the ``calib_level`` column."""
 
-    o_ucd: Optional[str] = None
+    o_ucd: str | None = None
     """Value for the ``o_ucd`` column, optional."""
 
-    access_format: Optional[str] = None
+    access_format: str | None = None
     """Value for the ``access_format`` column, optional."""
 
-    obs_id_fmt: Optional[str] = None
+    obs_id_fmt: str | None = None
     """Format string for ``obs_id`` column, optional. Uses `str.format`
     syntax.
     """
 
-    datalink_url_fmt: Optional[str] = None
+    datalink_url_fmt: str | None = None
     """Format string for ``access_url`` column for DataLink."""
 
-    obs_collection: Optional[str] = None
+    obs_collection: str | None = None
     """Value for the ``obs_collection`` column, if specified it overrides
     global value in `ObsCoreConfig`."""
 
-    extra_columns: Optional[
-        Dict[str, Union[StrictFloat, StrictInt, StrictBool, StrictStr, ExtraColumnConfig]]
-    ] = None
+    extra_columns: None | (
+        dict[str, StrictFloat | StrictInt | StrictBool | StrictStr | ExtraColumnConfig]
+    ) = None
     """Description for additional columns, optional.
 
     Keys are the names of the columns, values can be literal constants with the
@@ -110,7 +110,7 @@ class SpatialPluginConfig(BaseModel):
     cls: str
     """Name of the class implementing plugin methods."""
 
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
     """Configuration object passed to plugin ``initialize()`` method."""
 
 
@@ -123,16 +123,16 @@ class ObsCoreConfig(BaseModel):
     datasets into obscore records.
     """
 
-    collections: Optional[List[str]] = None
+    collections: list[str] | None = None
     """Registry collections to include, if missing then all collections are
     used. Depending on implementation the name in the list can be either a
     full collection name or a regular expression.
     """
 
-    dataset_types: Dict[str, DatasetTypeConfig]
+    dataset_types: dict[str, DatasetTypeConfig]
     """Per-dataset type configuration, key is the dataset type name."""
 
-    obs_collection: Optional[str] = None
+    obs_collection: str | None = None
     """Value for the ``obs_collection`` column. This can be overridden in
     dataset type configuration.
     """
@@ -140,26 +140,26 @@ class ObsCoreConfig(BaseModel):
     facility_name: str
     """Value for the ``facility_name`` column."""
 
-    extra_columns: Optional[
-        Dict[str, Union[StrictFloat, StrictInt, StrictBool, StrictStr, ExtraColumnConfig]]
-    ] = None
+    extra_columns: None | (
+        dict[str, StrictFloat | StrictInt | StrictBool | StrictStr | ExtraColumnConfig]
+    ) = None
     """Description for additional columns, optional.
 
     Keys are the names of the columns, values can be literal constants with the
     values, or ExtraColumnConfig mappings."""
 
-    indices: Optional[Dict[str, Union[str, List[str]]]] = None
+    indices: dict[str, str | list[str]] | None = None
     """Description of indices, key is the index name, value is the list of
     column names or a single column name. The index name may not be used for
     an actual index.
     """
 
-    spectral_ranges: Dict[str, Tuple[float | None, float | None]] = {}
+    spectral_ranges: dict[str, tuple[float | None, float | None]] = {}
     """Maps band name or filter name to a min/max of spectral range. One or
     both ends can be specified as `None`.
     """
 
-    spatial_plugins: Dict[str, SpatialPluginConfig] = {}
+    spatial_plugins: dict[str, SpatialPluginConfig] = {}
     """Optional configuration for plugins managing spatial columns and
     indices. The key is an arbitrary name and the value is an object describing
     plugin class and its configuration options. By default there is no spatial
@@ -208,7 +208,7 @@ class ObsCoreManagerConfig(ObsCoreConfig):
         ``collection_type``.
         """
         if value is ConfigCollectionType.TAGGED:
-            collections: Optional[List[str]] = values["collections"]
+            collections: list[str] | None = values["collections"]
             if collections is None or len(collections) != 1:
                 raise ValueError("'collections' must have one element when 'collection_type' is TAGGED")
         return value

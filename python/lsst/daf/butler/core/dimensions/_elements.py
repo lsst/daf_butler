@@ -28,7 +28,7 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Type
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.classes import cached_getter
 
@@ -150,7 +150,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
 
     @classmethod
     def from_simple(
-        cls, simple: str, universe: Optional[DimensionUniverse] = None, registry: Optional[Registry] = None
+        cls, simple: str, universe: DimensionUniverse | None = None, registry: Registry | None = None
     ) -> DimensionElement:
         """Construct a new object from the simplified form.
 
@@ -199,7 +199,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
 
     @property
     @cached_getter
-    def governor(self) -> Optional[GovernorDimension]:
+    def governor(self) -> GovernorDimension | None:
         """Return the governor dimension.
 
         This is the `GovernorDimension` that is a required dependency of this
@@ -289,7 +289,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
 
     @property
     @cached_getter
-    def RecordClass(self) -> Type[DimensionRecord]:
+    def RecordClass(self) -> type[DimensionRecord]:
         """Return the record subclass for this element.
 
         The `DimensionRecord` subclass used to hold records for this element
@@ -313,7 +313,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         raise NotImplementedError()
 
     @property
-    def viewOf(self) -> Optional[str]:
+    def viewOf(self) -> str | None:
         """Name of another table this element's records are drawn from.
 
         (`str` or `None`).

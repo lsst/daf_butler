@@ -25,7 +25,6 @@ import fnmatch
 import os
 import stat
 import urllib.parse
-from typing import Dict, List, Optional, Tuple, Union
 
 import yaml
 
@@ -72,9 +71,9 @@ class DbAuth:
 
     def __init__(
         self,
-        path: Optional[str] = None,
-        envVar: Optional[str] = None,
-        authList: Optional[List[Dict[str, str]]] = None,
+        path: str | None = None,
+        envVar: str | None = None,
+        authList: list[dict[str, str]] | None = None,
     ):
         if authList is not None:
             self.authList = authList
@@ -104,12 +103,12 @@ class DbAuth:
     # for that condition.
     def getAuth(
         self,
-        dialectname: Optional[str],
-        username: Optional[str],
-        host: Optional[str],
-        port: Optional[Union[int, str]],
-        database: Optional[str],
-    ) -> Tuple[Optional[str], str]:
+        dialectname: str | None,
+        username: str | None,
+        host: str | None,
+        port: int | str | None,
+        database: str | None,
+    ) -> tuple[str | None, str]:
         """Retrieve a username and password for a database connection.
 
         This function matches elements from the database connection URL with

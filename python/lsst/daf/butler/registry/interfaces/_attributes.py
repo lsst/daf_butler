@@ -26,7 +26,8 @@ __all__ = [
 ]
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Iterable, Optional, Tuple
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from ._versioning import VersionedExtension, VersionTuple
 
@@ -87,7 +88,7 @@ class ButlerAttributeManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def get(self, name: str, default: Optional[str] = None) -> Optional[str]:
+    def get(self, name: str, default: str | None = None) -> str | None:
         """Retrieve value of a given attribute.
 
         Parameters
@@ -151,7 +152,7 @@ class ButlerAttributeManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def items(self) -> Iterable[Tuple[str, str]]:
+    def items(self) -> Iterable[tuple[str, str]]:
         """Iterate over attributes and yield their names and values.
 
         Yields

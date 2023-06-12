@@ -22,8 +22,9 @@ from __future__ import annotations
 
 __all__ = ["PostgresqlDatabase"]
 
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
-from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type, Union
+from typing import Any
 
 import psycopg2
 import sqlalchemy
@@ -71,7 +72,7 @@ class PostgresqlDatabase(Database):
         *,
         engine: sqlalchemy.engine.Engine,
         origin: int,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         writeable: bool = True,
     ):
         super().__init__(origin=origin, engine=engine, namespace=namespace)
@@ -110,7 +111,7 @@ class PostgresqlDatabase(Database):
         engine: sqlalchemy.engine.Engine,
         *,
         origin: int,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         writeable: bool = True,
     ) -> Database:
         return cls(engine=engine, origin=origin, namespace=namespace, writeable=writeable)
@@ -169,7 +170,7 @@ class PostgresqlDatabase(Database):
 
     @contextmanager
     def temporary_table(
-        self, spec: ddl.TableSpec, name: Optional[str] = None
+        self, spec: ddl.TableSpec, name: str | None = None
     ) -> Iterator[sqlalchemy.schema.Table]:
         # Docstring inherited.
         with self.transaction(for_temp_tables=True):
@@ -198,7 +199,7 @@ class PostgresqlDatabase(Database):
     def _convertExclusionConstraintSpec(
         self,
         table: str,
-        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
+        spec: tuple[str | type[TimespanDatabaseRepresentation], ...],
         metadata: sqlalchemy.MetaData,
     ) -> sqlalchemy.schema.Constraint:
         # Docstring inherited.
@@ -221,7 +222,7 @@ class PostgresqlDatabase(Database):
         self,
         connection: sqlalchemy.engine.Connection,
         spec: ddl.TableSpec,
-        name: Optional[str] = None,
+        name: str | None = None,
         **kwargs: Any,
     ) -> sqlalchemy.schema.Table:
         # Docstring inherited
@@ -234,7 +235,7 @@ class PostgresqlDatabase(Database):
         return super()._make_temporary_table(connection, spec, name, postgresql_on_commit="DROP", **kwargs)
 
     @classmethod
-    def getTimespanRepresentation(cls) -> Type[TimespanDatabaseRepresentation]:
+    def getTimespanRepresentation(cls) -> type[TimespanDatabaseRepresentation]:
         # Docstring inherited.
         return _RangeTimespanRepresentation
 
@@ -276,7 +277,7 @@ class PostgresqlDatabase(Database):
         self,
         fields: NamedValueAbstractSet[ddl.FieldSpec],
         *rows: dict,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> sqlalchemy.sql.FromClause:
         # Docstring inherited.
         return super().constant_rows(fields, *rows, name=name)
@@ -296,8 +297,8 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
     cache_ok = True
 
     def process_bind_param(
-        self, value: Optional[Timespan], dialect: sqlalchemy.engine.Dialect
-    ) -> Optional[psycopg2.extras.NumericRange]:
+        self, value: Timespan | None, dialect: sqlalchemy.engine.Dialect
+    ) -> psycopg2.extras.NumericRange | None:
         if value is None:
             return None
         if not isinstance(value, Timespan):
@@ -313,8 +314,8 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
             return psycopg2.extras.NumericRange(lower=lower, upper=upper)
 
     def process_result_value(
-        self, value: Optional[psycopg2.extras.NumericRange], dialect: sqlalchemy.engine.Dialect
-    ) -> Optional[Timespan]:
+        self, value: psycopg2.extras.NumericRange | None, dialect: sqlalchemy.engine.Dialect
+    ) -> Timespan | None:
         if value is None:
             return None
         if value.isempty:
@@ -344,8 +345,8 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
 
     @classmethod
     def makeFieldSpecs(
-        cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-    ) -> Tuple[ddl.FieldSpec, ...]:
+        cls, nullable: bool, name: str | None = None, **kwargs: Any
+    ) -> tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -360,7 +361,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         )
 
     @classmethod
-    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
+    def getFieldNames(cls, name: str | None = None) -> tuple[str, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -368,8 +369,8 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
 
     @classmethod
     def update(
-        cls, extent: Optional[Timespan], name: Optional[str] = None, result: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        cls, extent: Timespan | None, name: str | None = None, result: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -379,14 +380,14 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return result
 
     @classmethod
-    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[Timespan]:
+    def extract(cls, mapping: Mapping[str, Any], name: str | None = None) -> Timespan | None:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
         return mapping[name]
 
     @classmethod
-    def fromLiteral(cls, timespan: Optional[Timespan]) -> _RangeTimespanRepresentation:
+    def fromLiteral(cls, timespan: Timespan | None) -> _RangeTimespanRepresentation:
         # Docstring inherited.
         if timespan is None:
             return cls(column=sqlalchemy.sql.null(), name=cls.NAME)
@@ -399,7 +400,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
 
     @classmethod
     def from_columns(
-        cls, columns: sqlalchemy.sql.ColumnCollection, name: Optional[str] = None
+        cls, columns: sqlalchemy.sql.ColumnCollection, name: str | None = None
     ) -> _RangeTimespanRepresentation:
         # Docstring inherited.
         if name is None:
@@ -420,7 +421,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return sqlalchemy.sql.func.isempty(self.column)
 
     def __lt__(
-        self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: _RangeTimespanRepresentation | sqlalchemy.sql.ColumnElement
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         if isinstance(other, sqlalchemy.sql.ColumnElement):
@@ -433,7 +434,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             return self.column << other.column
 
     def __gt__(
-        self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: _RangeTimespanRepresentation | sqlalchemy.sql.ColumnElement
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         if isinstance(other, sqlalchemy.sql.ColumnElement):
@@ -454,7 +455,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return self.column.overlaps(other.column)
 
     def contains(
-        self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: _RangeTimespanRepresentation | sqlalchemy.sql.ColumnElement
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited
         if isinstance(other, _RangeTimespanRepresentation):
@@ -474,7 +475,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             sqlalchemy.sql.func.upper(self.column), sqlalchemy.sql.literal(0)
         )
 
-    def flatten(self, name: Optional[str] = None) -> tuple[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: str | None = None) -> tuple[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.
         if name is None:
             return (self.column,)

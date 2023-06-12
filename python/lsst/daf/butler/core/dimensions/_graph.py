@@ -24,22 +24,9 @@ from __future__ import annotations
 __all__ = ["DimensionGraph", "SerializedDimensionGraph"]
 
 import itertools
+from collections.abc import Iterable, Iterator, Mapping
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    AbstractSet,
-    Any,
-    ClassVar,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, AbstractSet, Any, ClassVar
 
 from lsst.utils.classes import cached_getter, immutable
 from pydantic import BaseModel
@@ -58,10 +45,10 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
 class SerializedDimensionGraph(BaseModel):
     """Simplified model of a `DimensionGraph` suitable for serialization."""
 
-    names: List[str]
+    names: list[str]
 
     @classmethod
-    def direct(cls, *, names: List[str]) -> SerializedDimensionGraph:
+    def direct(cls, *, names: list[str]) -> SerializedDimensionGraph:
         """Construct a `SerializedDimensionGraph` directly without validators.
 
         This differs from the pydantic "construct" method in that the arguments
@@ -124,11 +111,11 @@ class DimensionGraph:
     def __new__(
         cls,
         universe: DimensionUniverse,
-        dimensions: Optional[Iterable[Dimension]] = None,
-        names: Optional[Iterable[str]] = None,
+        dimensions: Iterable[Dimension] | None = None,
+        names: Iterable[str] | None = None,
         conform: bool = True,
     ) -> DimensionGraph:
-        conformedNames: Set[str]
+        conformedNames: set[str]
         if names is None:
             if dimensions is None:
                 conformedNames = set()
@@ -202,7 +189,7 @@ class DimensionGraph:
         # we want them to be lightweight.  The order here is what's convenient
         # for DataCoordinate: all required dimensions before all implied
         # dimensions.
-        self._dataCoordinateIndices: Dict[str, int] = {
+        self._dataCoordinateIndices: dict[str, int] = {
             name: i for i, name in enumerate(itertools.chain(self.required.names, self.implied.names))
         }
 
@@ -241,8 +228,8 @@ class DimensionGraph:
     def from_simple(
         cls,
         names: SerializedDimensionGraph,
-        universe: Optional[DimensionUniverse] = None,
-        registry: Optional[Registry] = None,
+        universe: DimensionUniverse | None = None,
+        registry: Registry | None = None,
     ) -> DimensionGraph:
         """Construct a new object from the simplified form.
 
@@ -292,7 +279,7 @@ class DimensionGraph:
         """
         return len(self.dimensions)
 
-    def __contains__(self, element: Union[str, DimensionElement]) -> bool:
+    def __contains__(self, element: str | DimensionElement) -> bool:
         """Return `True` if the given element or element name is in the graph.
 
         This test covers all `DimensionElement` instances in ``self.elements``,
@@ -404,7 +391,7 @@ class DimensionGraph:
 
     @property
     @cached_getter
-    def primaryKeyTraversalOrder(self) -> Tuple[DimensionElement, ...]:
+    def primaryKeyTraversalOrder(self) -> tuple[DimensionElement, ...]:
         """Return a tuple of all elements in specific order.
 
         The order allows records to be
@@ -415,7 +402,7 @@ class DimensionGraph:
         DimensionUniverse.sorted gives you), when dimension A implies
         dimension B, dimension A appears first.
         """
-        done: Set[str] = set()
+        done: set[str] = set()
         order = []
 
         def addToOrder(element: DimensionElement) -> None:

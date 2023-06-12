@@ -27,7 +27,7 @@ import datetime
 import types
 import warnings
 from collections.abc import Mapping, Set
-from typing import Any, Union, cast
+from typing import Any, cast
 
 import astropy.time
 import astropy.utils.exceptions
@@ -175,7 +175,7 @@ def make_string_expression_predicate(
     return predicate, governor_constraints
 
 
-VisitorResult = Union[Predicate, ColumnExpression, ColumnContainer]
+VisitorResult = Predicate | ColumnExpression | ColumnContainer
 
 
 class PredicateConversionVisitor(TreeVisitor[VisitorResult]):

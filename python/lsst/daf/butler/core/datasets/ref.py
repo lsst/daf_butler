@@ -31,7 +31,8 @@ __all__ = [
 
 import enum
 import uuid
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.classes import immutable
 from pydantic import BaseModel, ConstrainedInt, StrictStr, validator
@@ -150,25 +151,25 @@ class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
     id: uuid.UUID
-    datasetType: Optional[SerializedDatasetType] = None
-    dataId: Optional[SerializedDataCoordinate] = None
-    run: Optional[StrictStr] = None
-    component: Optional[StrictStr] = None
+    datasetType: SerializedDatasetType | None = None
+    dataId: SerializedDataCoordinate | None = None
+    run: StrictStr | None = None
+    component: StrictStr | None = None
 
     @validator("dataId")
-    def _check_dataId(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+    def _check_dataId(cls, v: Any, values: dict[str, Any]) -> Any:  # noqa: N805
         if (d := "datasetType") in values and values[d] is None:
             raise ValueError("Can not specify 'dataId' without specifying 'datasetType'")
         return v
 
     @validator("run")
-    def _check_run(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+    def _check_run(cls, v: Any, values: dict[str, Any]) -> Any:  # noqa: N805
         if v and (i := "id") in values and values[i] is None:
             raise ValueError("'run' cannot be provided unless 'id' is.")
         return v
 
     @validator("component")
-    def _check_component(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+    def _check_component(cls, v: Any, values: dict[str, Any]) -> Any:  # noqa: N805
         # Component should not be given if datasetType is given
         if v and (d := "datasetType") in values and values[d] is not None:
             raise ValueError(f"datasetType ({values[d]}) can not be set if component is given ({v}).")
@@ -180,9 +181,9 @@ class SerializedDatasetRef(BaseModel):
         *,
         id: str,
         run: str,
-        datasetType: Optional[Dict[str, Any]] = None,
-        dataId: Optional[Dict[str, Any]] = None,
-        component: Optional[str] = None,
+        datasetType: dict[str, Any] | None = None,
+        dataId: dict[str, Any] | None = None,
+        component: str | None = None,
     ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.
 
@@ -276,7 +277,7 @@ class DatasetRef:
         dataId: DataCoordinate,
         run: str,
         *,
-        id: Optional[DatasetId] = None,
+        id: DatasetId | None = None,
         conform: bool = True,
         id_generation_mode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
     ):
@@ -358,7 +359,7 @@ class DatasetRef:
             # Store is in a dict to allow us to easily add the planned origin
             # information later without having to support an int and dict in
             # simple form.
-            simple: Dict[str, Any] = {"id": self.id}
+            simple: dict[str, Any] = {"id": self.id}
             if self.isComponent():
                 # We can still be a little minimalist with a component
                 # but we will also need to record the datasetType component
@@ -376,9 +377,9 @@ class DatasetRef:
     def from_simple(
         cls,
         simple: SerializedDatasetRef,
-        universe: Optional[DimensionUniverse] = None,
-        registry: Optional[Registry] = None,
-        datasetType: Optional[DatasetType] = None,
+        universe: DimensionUniverse | None = None,
+        registry: Registry | None = None,
+        datasetType: DatasetType | None = None,
     ) -> DatasetRef:
         """Construct a new object from simplified form.
 
@@ -521,7 +522,7 @@ class DatasetRef:
         """
         return self.datasetType.isComposite()
 
-    def _lookupNames(self) -> Tuple[LookupKey, ...]:
+    def _lookupNames(self) -> tuple[LookupKey, ...]:
         """Name keys to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
@@ -536,7 +537,7 @@ class DatasetRef:
         """
         # Special case the instrument Dimension since we allow configs
         # to include the instrument name in the hierarchy.
-        names: Tuple[LookupKey, ...] = self.datasetType._lookupNames()
+        names: tuple[LookupKey, ...] = self.datasetType._lookupNames()
 
         if "instrument" in self.dataId:
             names = tuple(n.clone(dataId={"instrument": self.dataId["instrument"]}) for n in names) + names
@@ -544,7 +545,7 @@ class DatasetRef:
         return names
 
     @staticmethod
-    def groupByType(refs: Iterable[DatasetRef]) -> NamedKeyDict[DatasetType, List[DatasetRef]]:
+    def groupByType(refs: Iterable[DatasetRef]) -> NamedKeyDict[DatasetType, list[DatasetRef]]:
         """Group an iterable of `DatasetRef` by `DatasetType`.
 
         Parameters
@@ -557,7 +558,7 @@ class DatasetRef:
         grouped : `NamedKeyDict` [ `DatasetType`, `list` [ `DatasetRef` ] ]
             Grouped `DatasetRef` instances.
         """
-        result: NamedKeyDict[DatasetType, List[DatasetRef]] = NamedKeyDict()
+        result: NamedKeyDict[DatasetType, list[DatasetRef]] = NamedKeyDict()
         for ref in refs:
             result.setdefault(ref.datasetType, []).append(ref)
         return result

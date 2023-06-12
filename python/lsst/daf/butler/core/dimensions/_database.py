@@ -28,8 +28,9 @@ __all__ = (
     "DatabaseTopologicalFamily",
 )
 
+from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, AbstractSet, Dict, Iterable, Mapping, Optional, Set
+from typing import TYPE_CHECKING, AbstractSet
 
 from lsst.utils import doImportType
 from lsst.utils.classes import cached_getter
@@ -184,7 +185,7 @@ class DatabaseDimensionElement(DimensionElement):
         self._storage = storage
         self._implied = implied
         self._metadata = metadata
-        self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
+        self._topology: dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
 
     @property
     def name(self) -> str:
@@ -202,7 +203,7 @@ class DatabaseDimensionElement(DimensionElement):
         return self._metadata
 
     @property
-    def viewOf(self) -> Optional[str]:
+    def viewOf(self) -> str | None:
         # Docstring inherited from DimensionElement.
         # This is a bit encapsulation-breaking; these storage config values
         # are supposed to be opaque here, and just forwarded on to some
@@ -220,12 +221,12 @@ class DatabaseDimensionElement(DimensionElement):
         return MappingProxyType(self._topology)
 
     @property
-    def spatial(self) -> Optional[DatabaseTopologicalFamily]:
+    def spatial(self) -> DatabaseTopologicalFamily | None:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return self.topology.get(TopologicalSpace.SPATIAL)
 
     @property
-    def temporal(self) -> Optional[DatabaseTopologicalFamily]:
+    def temporal(self) -> DatabaseTopologicalFamily | None:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return self.topology.get(TopologicalSpace.TEMPORAL)
 
@@ -233,7 +234,7 @@ class DatabaseDimensionElement(DimensionElement):
         self,
         db: Database,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
         view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
@@ -444,8 +445,8 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         self,
         name: str,
         storage: dict,
-        required: Set[str],
-        implied: Set[str],
+        required: set[str],
+        implied: set[str],
         metadata: Iterable[ddl.FieldSpec] = (),
         uniqueKeys: Iterable[ddl.FieldSpec] = (),
         alwaysJoin: bool = False,

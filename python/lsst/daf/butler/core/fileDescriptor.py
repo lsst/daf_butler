@@ -22,7 +22,8 @@ from __future__ import annotations
 
 __all__ = ("FileDescriptor",)
 
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .location import Location
@@ -52,8 +53,8 @@ class FileDescriptor:
         self,
         location: Location,
         storageClass: StorageClass,
-        readStorageClass: Optional[StorageClass] = None,
-        parameters: Optional[Mapping[str, Any]] = None,
+        readStorageClass: StorageClass | None = None,
+        parameters: Mapping[str, Any] | None = None,
     ):
         self.location = location
         self._readStorageClass = readStorageClass
@@ -61,7 +62,7 @@ class FileDescriptor:
         self.parameters = dict(parameters) if parameters is not None else None
 
     def __repr__(self) -> str:
-        optionals: Dict[str, Any] = {}
+        optionals: dict[str, Any] = {}
         if self._readStorageClass is not None:
             optionals["readStorageClass"] = self._readStorageClass
         if self.parameters:

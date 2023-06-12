@@ -29,7 +29,7 @@ __all__ = (
 import dataclasses
 import logging
 from collections.abc import Mapping
-from typing import Any, Generic, Optional, Type, TypeVar
+from typing import Any, Generic, TypeVar
 
 import sqlalchemy
 from lsst.utils import doImportType
@@ -104,7 +104,7 @@ class _GenericRegistryManagers(
     """Manager for the interface between `Registry` and `Datastore`.
     """
 
-    obscore: Optional[_ObsCore]
+    obscore: _ObsCore | None
     """Manager for `ObsCore` table(s).
     """
 
@@ -112,13 +112,13 @@ class _GenericRegistryManagers(
 @dataclasses.dataclass(frozen=True, eq=False)
 class RegistryManagerTypes(
     _GenericRegistryManagers[
-        Type[ButlerAttributeManager],
-        Type[DimensionRecordStorageManager],
-        Type[CollectionManager],
-        Type[DatasetRecordStorageManager],
-        Type[OpaqueTableStorageManager],
-        Type[DatastoreRegistryBridgeManager],
-        Type[ObsCoreTableManager],
+        type[ButlerAttributeManager],
+        type[DimensionRecordStorageManager],
+        type[CollectionManager],
+        type[DatasetRecordStorageManager],
+        type[OpaqueTableStorageManager],
+        type[DatastoreRegistryBridgeManager],
+        type[ObsCoreTableManager],
     ]
 ):
     """A struct used to pass around the types of the manager objects that back
@@ -147,7 +147,7 @@ class RegistryManagerTypes(
         # Values of "config" sub-key, if any, indexed by manager name.
         configs: dict[str, Mapping] = {}
         schema_versions: dict[str, VersionTuple] = {}
-        manager_types: dict[str, Type] = {}
+        manager_types: dict[str, type] = {}
         for manager in managers:
             manager_config = config["managers"].get(manager)
             if isinstance(manager_config, Config):

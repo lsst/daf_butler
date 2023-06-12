@@ -27,7 +27,7 @@ from __future__ import annotations
 __all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
 
 import logging
-from typing import TYPE_CHECKING, Optional, Set, Union
+from typing import TYPE_CHECKING
 
 from .config import Config
 from .configSupport import LookupKey, processLookupConfigList
@@ -71,7 +71,7 @@ class Constraints:
     matchAllKey = LookupKey("all")
     """Configuration key associated with matching everything."""
 
-    def __init__(self, config: Optional[Union[ConstraintsConfig, str]], *, universe: DimensionUniverse):
+    def __init__(self, config: ConstraintsConfig | str | None, *, universe: DimensionUniverse):
         # Default is to accept all and reject nothing
         self._accept = set()
         self._reject = set()
@@ -98,7 +98,7 @@ class Constraints:
         rejects = ", ".join(str(k) for k in self._reject)
         return f"Accepts: {accepts}; Rejects: {rejects}"
 
-    def isAcceptable(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
+    def isAcceptable(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:
         """Check whether the supplied entity will be acceptable.
 
         Parameters
@@ -147,7 +147,7 @@ class Constraints:
 
         return False
 
-    def getLookupKeys(self) -> Set[LookupKey]:
+    def getLookupKeys(self) -> set[LookupKey]:
         """Retrieve the look up keys for all the constraints entries.
 
         Returns

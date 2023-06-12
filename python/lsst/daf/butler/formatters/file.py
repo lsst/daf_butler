@@ -27,7 +27,7 @@ __all__ = ("FileFormatter",)
 
 import dataclasses
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Type
+from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import Formatter
 
@@ -38,12 +38,12 @@ if TYPE_CHECKING:
 class FileFormatter(Formatter):
     """Interface for reading and writing files on a POSIX file system."""
 
-    extension: Optional[str] = None
+    extension: str | None = None
     """Default file extension to use for writing files. None means that no
     modifications will be made to the supplied file extension. (`str`)"""
 
     @abstractmethod
-    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
+    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         """Read a file from the path in the correct format.
 
         Parameters
@@ -82,7 +82,7 @@ class FileFormatter(Formatter):
         """
         pass
 
-    def _assembleDataset(self, data: Any, component: Optional[str] = None) -> Any:
+    def _assembleDataset(self, data: Any, component: str | None = None) -> Any:
         """Assembles and coerces the dataset, or one of its components,
         into an appropriate python type and returns it.
 
@@ -219,7 +219,7 @@ class FileFormatter(Formatter):
         inMemoryDataset = self._coerceBuiltinType(inMemoryDataset, writeStorageClass)
         return readStorageClass.coerce_type(inMemoryDataset)
 
-    def read(self, component: Optional[str] = None) -> Any:
+    def read(self, component: str | None = None) -> Any:
         """Read data from a file.
 
         Parameters
@@ -262,7 +262,7 @@ class FileFormatter(Formatter):
 
         return data
 
-    def fromBytes(self, serializedDataset: bytes, component: Optional[str] = None) -> Any:
+    def fromBytes(self, serializedDataset: bytes, component: str | None = None) -> Any:
         """Reads serialized data into a Dataset or its component.
 
         Parameters

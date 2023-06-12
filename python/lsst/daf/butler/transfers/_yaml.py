@@ -26,8 +26,9 @@ __all__ = ["YamlRepoExportBackend", "YamlRepoImportBackend"]
 import uuid
 import warnings
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from datetime import datetime
-from typing import IO, TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Type
+from typing import IO, TYPE_CHECKING, Any
 
 import astropy.time
 import yaml
@@ -73,7 +74,7 @@ def _uuid_representer(dumper: yaml.Dumper, data: uuid.UUID) -> yaml.Node:
     return dumper.represent_scalar("!uuid", str(data))
 
 
-def _uuid_constructor(loader: yaml.Loader, node: yaml.Node) -> Optional[uuid.UUID]:
+def _uuid_constructor(loader: yaml.Loader, node: yaml.Node) -> uuid.UUID | None:
     if node.value is not None:
         return uuid.UUID(hex=node.value)
     return None
@@ -95,7 +96,7 @@ class YamlRepoExportBackend(RepoExportBackend):
     def __init__(self, stream: IO, universe: DimensionUniverse):
         self.stream = stream
         self.universe = universe
-        self.data: List[Dict[str, Any]] = []
+        self.data: list[dict[str, Any]] = []
 
     def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
         # Docstring inherited from RepoExportBackend.saveDimensionData.
@@ -108,9 +109,9 @@ class YamlRepoExportBackend(RepoExportBackend):
             }
         )
 
-    def saveCollection(self, record: CollectionRecord, doc: Optional[str]) -> None:
+    def saveCollection(self, record: CollectionRecord, doc: str | None) -> None:
         # Docstring inherited from RepoExportBackend.saveCollections.
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "type": "collection",
             "collection_type": record.type.name,
             "name": record.name,
@@ -168,7 +169,7 @@ class YamlRepoExportBackend(RepoExportBackend):
                 }
             )
         elif collectionType is CollectionType.CALIBRATION:
-            idsByTimespan: Dict[Timespan, List[DatasetId]] = defaultdict(list)
+            idsByTimespan: dict[Timespan, list[DatasetId]] = defaultdict(list)
             for association in associations:
                 assert association.timespan is not None
                 idsByTimespan[association.timespan].append(association.ref.id)
@@ -237,15 +238,15 @@ class YamlRepoImportBackend(RepoImportBackend):
                     f"Cannot read repository export file with version={fileVersion} "
                     f"< {EXPORT_FORMAT_VERSION.major}.{EXPORT_FORMAT_VERSION.minor}.x required."
                 )
-        self.runs: Dict[str, Tuple[Optional[str], Timespan]] = {}
-        self.chains: Dict[str, List[str]] = {}
-        self.collections: Dict[str, CollectionType] = {}
-        self.collectionDocs: Dict[str, str] = {}
+        self.runs: dict[str, tuple[str | None, Timespan]] = {}
+        self.chains: dict[str, list[str]] = {}
+        self.collections: dict[str, CollectionType] = {}
+        self.collectionDocs: dict[str, str] = {}
         self.datasetTypes: NamedValueSet[DatasetType] = NamedValueSet()
-        self.dimensions: Mapping[DimensionElement, List[DimensionRecord]] = defaultdict(list)
-        self.tagAssociations: Dict[str, List[DatasetId]] = defaultdict(list)
-        self.calibAssociations: Dict[str, Dict[Timespan, List[DatasetId]]] = defaultdict(dict)
-        self.refsByFileId: Dict[DatasetId, DatasetRef] = {}
+        self.dimensions: Mapping[DimensionElement, list[DimensionRecord]] = defaultdict(list)
+        self.tagAssociations: dict[str, list[DatasetId]] = defaultdict(list)
+        self.calibAssociations: dict[str, dict[Timespan, list[DatasetId]]] = defaultdict(dict)
+        self.refsByFileId: dict[DatasetId, DatasetRef] = {}
         self.registry: Registry = registry
 
         universe_version = wrapper.get("universe_version", 0)
@@ -277,7 +278,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                         if isinstance(record[key], datetime):
                             record[key] = astropy.time.Time(record[key], scale="utc")
                 element = self.registry.dimensions[data["element"]]
-                RecordClass: Type[DimensionRecord] = element.RecordClass
+                RecordClass: type[DimensionRecord] = element.RecordClass
                 self.dimensions[element].extend(RecordClass(**r) for r in data["records"])
 
                 if data["element"] == "visit" and migrate_visit_system:
@@ -352,7 +353,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             else:
                 raise ValueError(f"Unexpected dictionary type: {data['type']}.")
         # key is (dataset type name, run)
-        self.datasets: Mapping[Tuple[str, str], List[FileDataset]] = defaultdict(list)
+        self.datasets: Mapping[tuple[str, str], list[FileDataset]] = defaultdict(list)
         for data in datasetData:
             datasetType = self.datasetTypes.get(data["dataset_type"])
             if datasetType is None:
@@ -390,11 +391,11 @@ class YamlRepoImportBackend(RepoImportBackend):
 
     def load(
         self,
-        datastore: Optional[Datastore],
+        datastore: Datastore | None,
         *,
         directory: ResourcePathExpression | None = None,
-        transfer: Optional[str] = None,
-        skip_dimensions: Optional[Set] = None,
+        transfer: str | None = None,
+        skip_dimensions: set | None = None,
     ) -> None:
         # Docstring inherited from RepoImportBackend.load.
         for element, dimensionRecords in self.dimensions.items():
@@ -412,8 +413,8 @@ class YamlRepoImportBackend(RepoImportBackend):
             # Make a big flattened list of all data IDs and dataset_ids, while
             # remembering slices that associate them with the FileDataset
             # instances they came from.
-            datasets: List[DatasetRef] = []
-            dataset_ids: List[DatasetId] = []
+            datasets: list[DatasetRef] = []
+            dataset_ids: list[DatasetId] = []
             slices = []
             for fileDataset in records:
                 start = len(datasets)

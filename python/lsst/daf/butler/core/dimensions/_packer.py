@@ -25,7 +25,8 @@ __all__ = ("DimensionPacker",)
 
 import warnings
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Iterable, Optional, Tuple, Type, Union
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, AbstractSet, Any
 
 from deprecated.sphinx import deprecated
 from lsst.utils import doImportType
@@ -99,7 +100,7 @@ class DimensionPacker(metaclass=ABCMeta):
 
     def pack(
         self, dataId: DataId | None = None, *, returnMaxBits: bool = False, **kwargs: Any
-    ) -> Union[Tuple[int, int], int]:
+    ) -> tuple[int, int] | int:
         """Pack the given data ID into a single integer.
 
         Parameters
@@ -210,10 +211,10 @@ class DimensionPackerFactory:
         # We defer turning these into DimensionGraph objects until first use
         # because __init__ is called before a DimensionUniverse exists, and
         # DimensionGraph instances can only be constructed afterwards.
-        self._fixed: Union[AbstractSet[str], DimensionGraph] = fixed
-        self._dimensions: Union[AbstractSet[str], DimensionGraph] = dimensions
+        self._fixed: AbstractSet[str] | DimensionGraph = fixed
+        self._dimensions: AbstractSet[str] | DimensionGraph = dimensions
         self._clsName = clsName
-        self._cls: Optional[Type[DimensionPacker]] = None
+        self._cls: type[DimensionPacker] | None = None
 
     def __call__(self, universe: DimensionUniverse, fixed: DataCoordinate) -> DimensionPacker:
         """Construct a `DimensionPacker` instance for the given fixed data ID.

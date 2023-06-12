@@ -27,8 +27,8 @@ __all__ = ("LookupKey", "processLookupConfigs", "processLookupConfigList")
 
 import logging
 import re
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Set, Union
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from .dimensions import DimensionGraph
 
@@ -67,11 +67,11 @@ class LookupKey:
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        dimensions: Optional[Iterable[Union[str, Dimension]]] = None,
-        dataId: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        dimensions: Iterable[str | Dimension] | None = None,
+        dataId: dict[str, Any] | None = None,
         *,
-        universe: Optional[DimensionUniverse] = None,
+        universe: DimensionUniverse | None = None,
     ):
         if name is None and dimensions is None:
             raise ValueError("At least one of name or dimensions must be given")
@@ -170,17 +170,17 @@ class LookupKey:
         return False
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> str | None:
         """Primary name string to use as lookup (`str`)."""
         return self._name
 
     @property
-    def dimensions(self) -> Optional[DimensionGraph]:
+    def dimensions(self) -> DimensionGraph | None:
         """Dimensions associated with lookup (`DimensionGraph`)."""
         return self._dimensions
 
     @property
-    def dataId(self) -> Optional[Dict[str, Any]]:
+    def dataId(self) -> dict[str, Any] | None:
         """Return dict of keys/values that are important for dataId lookup.
 
         (`dict` or `None`)
@@ -196,9 +196,9 @@ class LookupKey:
 
     def clone(
         self,
-        name: Optional[str] = None,
-        dimensions: Optional[DimensionGraph] = None,
-        dataId: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        dimensions: DimensionGraph | None = None,
+        dataId: dict[str, Any] | None = None,
     ) -> LookupKey:
         """Clone the object, overriding some options.
 
@@ -238,8 +238,8 @@ class LookupKey:
 
 
 def processLookupConfigs(
-    config: Config, *, allow_hierarchy: bool = False, universe: Optional[DimensionUniverse] = None
-) -> Dict[LookupKey, Union[str, Dict[str, Any]]]:
+    config: Config, *, allow_hierarchy: bool = False, universe: DimensionUniverse | None = None
+) -> dict[LookupKey, str | dict[str, Any]]:
     """Process sections of configuration relating to lookups.
 
     Can be by dataset type name, storage class name, dimensions, or values
@@ -322,8 +322,8 @@ def processLookupConfigs(
 
 
 def processLookupConfigList(
-    config: Iterable[Union[str, Mapping]], *, universe: Optional[DimensionUniverse] = None
-) -> Set[LookupKey]:
+    config: Iterable[str | Mapping], *, universe: DimensionUniverse | None = None
+) -> set[LookupKey]:
     """Process sections of configuration relating to lookups.
 
     Can be by dataset type name, storage class name, dimensions, or values

@@ -23,7 +23,8 @@ from __future__ import annotations
 __all__ = ("DatastoreRegistryBridgeManager", "DatastoreRegistryBridge", "FakeDatasetRef", "DatasetIdRef")
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ContextManager, Iterable, Optional, Set, Tuple, Type, Union
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, ContextManager
 
 from lsst.utils.classes import immutable
 
@@ -82,7 +83,7 @@ class FakeDatasetRef:
         raise AttributeError("A FakeDatasetRef can not be associated with a valid DatasetType")
 
 
-DatasetIdRef = Union[DatasetRef, FakeDatasetRef]
+DatasetIdRef = DatasetRef | FakeDatasetRef
 """A type-annotation alias that matches both `DatasetRef` and `FakeDatasetRef`.
 """
 
@@ -128,7 +129,7 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: Optional[DatastoreTransaction]) -> None:
+    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: DatastoreTransaction | None) -> None:
         """Move dataset location information to trash.
 
         Parameters
@@ -161,11 +162,11 @@ class DatastoreRegistryBridge(ABC):
     @abstractmethod
     def emptyTrash(
         self,
-        records_table: Optional[OpaqueTableStorage] = None,
-        record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
-        record_column: Optional[str] = None,
+        records_table: OpaqueTableStorage | None = None,
+        record_class: type[StoredDatastoreItemInfo] | None = None,
+        record_column: str | None = None,
     ) -> ContextManager[
-        Tuple[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]], Optional[Set[str]]]
+        tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]
     ]:
         """Retrieve all the dataset ref IDs that are in the trash
         associated for this datastore, and then remove them if the context
@@ -273,7 +274,7 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         context: StaticTablesContext,
         *,
         opaque: OpaqueTableStorageManager,
-        datasets: Type[DatasetRecordStorageManager],
+        datasets: type[DatasetRecordStorageManager],
         universe: DimensionUniverse,
         registry_schema_version: VersionTuple | None = None,
     ) -> DatastoreRegistryBridgeManager:
