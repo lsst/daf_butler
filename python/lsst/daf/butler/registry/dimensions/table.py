@@ -275,7 +275,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
         Parameters
         ----------
-        records : `Sequence` [ `DimensionRecord` ]
+        records : `~collections.abc.Sequence` [ `DimensionRecord` ]
             Records for ``self.element`` that are being inserted.
         replace : `bool`, optional
             If `True`, the given records are being inserted in a mode that may

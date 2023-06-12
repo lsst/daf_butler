@@ -160,7 +160,7 @@ class Progress:
 
         Parameters
         ----------
-        iterable : `Iterable`, optional
+        iterable : `~collections.abc.Iterable`, optional
             An arbitrary Python iterable that will be iterated over when the
             returned `ProgressBar` is.  If not provided, whether the progress
             bar is iterable is handler-defined, but it may be updated manually.
@@ -212,7 +212,7 @@ class Progress:
 
         Parameters
         ----------
-        iterable : `Iterable`
+        iterable : `~collections.abc.Iterable`
             An arbitrary Python iterable to iterate over.
         desc: `str`, optional
             A user-friendly description for this progress bar; usually appears
@@ -246,7 +246,7 @@ class Progress:
 
         Parameters
         ----------
-        chunks : `Collection`
+        chunks : `~collections.abc.Collection`
             A sized iterable whose elements are themselves both iterable and
             sized (i.e. ``len(item)`` works).  If ``total`` is not provided,
             this may not be a single-pass iteration, because an initial pass to
@@ -288,7 +288,7 @@ class Progress:
 
         Parameters
         ----------
-        items : `Iterable`
+        items : `~collections.abc.Iterable`
             A sized iterable whose elements are (key, value) tuples, where the
             values are themselves both iterable and sized (i.e. ``len(item)``
             works).  If ``total`` is not provided, this may not be a
@@ -332,7 +332,7 @@ class ProgressHandler(ABC):
 
         Parameters
         ----------
-        iterable : `Iterable` or `None`
+        iterable : `~collections.abc.Iterable` or `None`
             An arbitrary Python iterable that will be iterated over when the
             returned `ProgressBar` is.  If `None`, whether the progress bar is
             iterable is handler-defined, but it may be updated manually.
@@ -358,7 +358,7 @@ class _NullProgressBar(Iterable[_T]):
 
     Parameters
     ----------
-    iterable : `Iterable` or `None`
+    iterable : `~collections.abc.Iterable` or `None`
         An arbitrary Python iterable that will be iterated over when ``self``
         is.
     """
@@ -377,7 +377,7 @@ class _NullProgressBar(Iterable[_T]):
 
         Parameters
         ----------
-        iterable : `Iterable` or `None`
+        iterable : `~collections.abc.Iterable` or `None`
             An arbitrary Python iterable that will be iterated over when the
             returned object is.
         """

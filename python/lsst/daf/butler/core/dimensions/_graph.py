@@ -478,6 +478,6 @@ class DimensionGraph:
 
     topology: Mapping[TopologicalSpace, NamedValueAbstractSet[TopologicalFamily]]
     """Families of elements in this graph that can participate in topological
-    relationships (`Mapping` from `TopologicalSpace` to
+    relationships (`~collections.abc.Mapping` from `TopologicalSpace` to
     `NamedValueAbstractSet` of `TopologicalFamily`).
     """

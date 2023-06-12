@@ -306,7 +306,7 @@ class RegistryManagerTypes(
 
         Returns
         -------
-        extensions : `Mapping` [`str`, `VersionedExtension`]
+        extensions : `~collections.abc.Mapping` [`str`, `VersionedExtension`]
             Maps manager type name (e.g. "datasets") to its corresponding
             manager class. Only existing managers are returned.
         """
@@ -438,7 +438,7 @@ class RegistryManagerInstances(
 
         Returns
         -------
-        extensions : `Mapping` [`str`, `VersionedExtension`]
+        extensions : `~collections.abc.Mapping` [`str`, `VersionedExtension`]
             Maps manager type name (e.g. "datasets") to its corresponding
             manager instance. Only existing managers are returned.
         """

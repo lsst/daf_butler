@@ -394,7 +394,8 @@ class Database(ABC):
             outer transaction block was created with ``savepoint=True``, all
             inner blocks will be as well (regardless of the actual value
             passed).  This has no effect if this is the outermost transaction.
-        lock : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+        lock : `~collections.abc.Iterable` [ `sqlalchemy.schema.Table` ], \
+                optional
             A list of tables to lock for the duration of this transaction.
             These locks are guaranteed to prevent concurrent writes and allow
             this transaction (only) to acquire the same locks (others should
@@ -525,7 +526,8 @@ class Database(ABC):
             outer transaction block was created with ``savepoint=True``, all
             inner blocks will be as well (regardless of the actual value
             passed).  This has no effect if this is the outermost transaction.
-        lock : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+        lock : `~collections.abc.Iterable` [ `sqlalchemy.schema.Table` ], \
+                optional
             A list of tables to lock for the duration of this transaction.
             These locks are guaranteed to prevent concurrent writes and allow
             this transaction (only) to acquire the same locks (others should
@@ -588,7 +590,8 @@ class Database(ABC):
         connection : `sqlalchemy.engine.Connection`
             Database connection object. It is guaranteed that transaction is
             already in a progress for this connection.
-        tables : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+        tables : `~collections.abc.Iterable` [ `sqlalchemy.schema.Table` ], \
+                optional
             A list of tables to lock for the duration of this transaction.
             These locks are guaranteed to prevent concurrent writes and allow
             this transaction (only) to acquire the same locks (others should
@@ -1423,7 +1426,7 @@ class Database(ABC):
         select : `sqlalchemy.sql.SelectBase`, optional
             A SELECT query expression to insert rows from.  Cannot be provided
             with either ``rows`` or ``returnIds=True``.
-        names : `Iterable` [ `str` ], optional
+        names : `~collections.abc.Iterable` [ `str` ], optional
             Names of columns in ``table`` to be populated, ordered to match the
             columns returned by ``select``.  Ignored if ``select`` is `None`.
             If not provided, the columns returned by ``select`` must be named

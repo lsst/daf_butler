@@ -118,7 +118,7 @@ class Butler(LimitedButler):
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
         arguments.
-    collections : `str` or `Iterable` [ `str` ], optional
+    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
         An expression specifying the collections to be searched (in order) when
         reading datasets.
         This may be a `str` collection name or an iterable thereof.
@@ -1785,7 +1785,7 @@ class Butler(LimitedButler):
 
         Parameters
         ----------
-        names : `Iterable` [ `str` ]
+        names : `~collections.abc.Iterable` [ `str` ]
             The names of the collections to remove.
         unstore : `bool`, optional
             If `True` (default), delete datasets from all datastores in which
@@ -2596,7 +2596,7 @@ class Butler(LimitedButler):
     @property
     def collections(self) -> Sequence[str]:
         """The collections to search by default, in order
-        (`Sequence` [ `str` ]).
+        (`~collections.abc.Sequence` [ `str` ]).
 
         This is an alias for ``self.registry.defaults.collections``.  It cannot
         be set directly in isolation, but all defaults may be changed together

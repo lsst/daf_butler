@@ -133,7 +133,7 @@ class SpatialObsCorePlugin(ABC):
 
         Parameters
         ----------
-        config : `Mapping` [ `str`, `SpatialPluginConfig` ]
+        config : `~collections.abc.Mapping` [ `str`, `SpatialPluginConfig` ]
             Configuration for plugins. The key is an arbitrary name and the
             value is an object describing plugin class and its configuration
             options.

@@ -65,7 +65,7 @@ class DimensionConstructionVisitor(ABC):
 
         Parameters
         ----------
-        others : `Set` [ `str` ]
+        others : `~collections.abc.Set` [ `str` ]
             The names of other visitors that have not yet been invoked.
 
         Returns
@@ -113,7 +113,7 @@ class DimensionConstructionBuilder:
         spatial `TopologicalRelationshipEndpoint` objects.
     namespace : `str`, optional
         The namespace to assign to this universe.
-    visitors : `Iterable` [ `DimensionConstructionVisitor` ]
+    visitors : `~collections.abc.Iterable` [ `DimensionConstructionVisitor` ]
         Visitor instances to include from the start.
     """
 
@@ -151,7 +151,8 @@ class DimensionConstructionBuilder:
 
         Parameters
         ----------
-        visitors : `Iterable` [ `DimensionConstructionVisitor` ]
+        visitors : `~collections.abc.Iterable` \
+                [ `DimensionConstructionVisitor` ]
             Visitor instances to add.
         """
         self._todo.update((v.name, v) for v in visitors)

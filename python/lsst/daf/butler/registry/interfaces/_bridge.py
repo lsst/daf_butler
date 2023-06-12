@@ -108,7 +108,7 @@ class DatastoreRegistryBridge(ABC):
 
         Parameters
         ----------
-        refs : `Iterable` of `DatasetIdRef`
+        refs : `~collections.abc.Iterable` of `DatasetIdRef`
             References to the datasets.
         """
         raise NotImplementedError()
@@ -123,7 +123,7 @@ class DatastoreRegistryBridge(ABC):
 
         Parameters
         ----------
-        refs : `Iterable` of `DatasetIdRef`
+        refs : `~collections.abc.Iterable` of `DatasetIdRef`
             References to the datasets.
         """
         raise NotImplementedError()
@@ -134,7 +134,7 @@ class DatastoreRegistryBridge(ABC):
 
         Parameters
         ----------
-        refs : `Iterable` of `DatasetIdRef`
+        refs : `~collections.abc.Iterable` of `DatasetIdRef`
             References to the datasets.
         transaction : `DatastoreTransaction` or `None`
             Transaction object. Can be `None` in some bridges or if no rollback
@@ -153,7 +153,7 @@ class DatastoreRegistryBridge(ABC):
 
         Returns
         -------
-        present : `Iterable` [ `DatasetIdRef` ]
+        present : `~collections.abc.Iterable` [ `DatasetIdRef` ]
             Datasets from ``refs`` that are recorded as being in this
             datastore.
         """
@@ -354,7 +354,7 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
 
         Returns
         -------
-        datastores : `Iterable` [ `str` ]
+        datastores : `~collections.abc.Iterable` [ `str` ]
             All the matching datastores holding this dataset. Empty if the
             dataset does not exist anywhere.
 

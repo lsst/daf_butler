@@ -140,7 +140,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` or `FakeDatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` or `FakeDatasetRef` ]
             Datasets to transform.
 
         Returns

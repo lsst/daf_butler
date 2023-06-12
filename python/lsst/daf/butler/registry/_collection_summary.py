@@ -54,7 +54,7 @@ class CollectionSummary:
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to include.
 
         Yields
@@ -81,7 +81,7 @@ class CollectionSummary:
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to include.
         """
         for _ in self.add_datasets_generator(refs):
@@ -97,7 +97,7 @@ class CollectionSummary:
         ----------
         dataset_type : `DatasetType`
             Dataset type to include.
-        data_ids : `Iterable` [ `DataCoordinate` ]
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
             Data IDs to include.
 
         Yields
@@ -126,7 +126,7 @@ class CollectionSummary:
         ----------
         dataset_type : `DatasetType`
             Dataset type to include.
-        data_ids : `Iterable` [ `DataCoordinate` ]
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
             Data IDs to include.
         """
         for _ in self.add_data_ids_generator(dataset_type, data_ids):
@@ -180,7 +180,7 @@ class CollectionSummary:
             Dataset type being queried.  If this collection has no instances of
             this dataset type (or its parent dataset type, if it is a
             component), `False` will always be returned.
-        dimensions : `Mapping`
+        dimensions : `~collections.abc.Mapping`
             Bounds on the values governor dimensions can take in the query,
             usually from a WHERE expression, as a mapping from dimension name
             to a set of `str` governor dimension values.

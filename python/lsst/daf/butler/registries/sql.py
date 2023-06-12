@@ -969,7 +969,7 @@ class SqlRegistry(Registry):
         summary : `queries.QuerySummary`
             Object describing and categorizing the full set of dimensions that
             will be included in the query.
-        doomed_by : `Iterable` of `str`, optional
+        doomed_by : `~collections.abc.Iterable` of `str`, optional
             A list of diagnostic messages that indicate why the query is going
             to yield no results and should not even be executed.  If an empty
             container (default) the query will be executed unless other code

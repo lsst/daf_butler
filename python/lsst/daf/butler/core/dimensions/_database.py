@@ -123,7 +123,7 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
     ----------
     name : `str`
         Name of the family.
-    members : `Iterable` [ `str` ]
+    members : `~collections.abc.Iterable` [ `str` ]
         The names of the members of this family, ordered according to the
         priority used in `choose` (first-choice member first).
     """
@@ -418,16 +418,16 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
         that will back this element in the registry (in a "cls" key) along
         with any other construction keyword arguments (in other keys).
-    required : `Set` [ `Dimension` ]
+    required : `~collections.abc.Set` [ `Dimension` ]
         Names of dimensions whose keys define the compound primary key for this
         element's (logical) table, as well as references to their own
         tables.
-    implied : `Set` [ `Dimension` ]
+    implied : `~collections.abc.Set` [ `Dimension` ]
         Names of dimension whose keys are included in this elements's
         (logical) table as foreign keys.
-    metadata : `Iterable` [ `ddl.FieldSpec` ]
+    metadata : `~collections.abc.Iterable` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this element's table.
-    uniqueKeys : `Iterable` [ `ddl.FieldSpec` ]
+    uniqueKeys : `~collections.abc.Iterable` [ `ddl.FieldSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used

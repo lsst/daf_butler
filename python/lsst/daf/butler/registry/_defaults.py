@@ -44,7 +44,7 @@ class RegistryDefaults:
 
     Parameters
     ----------
-    collections : `str` or `Iterable` [ `str` ], optional
+    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
         An expression specifying the collections to be searched (in order) when
         reading datasets.  If a default value for a governor dimension is not
         given via ``**kwargs``, and exactly one value for that dimension
@@ -138,7 +138,8 @@ class RegistryDefaults:
         self.dataId = registry.expandDataId(self._kwargs, withDefaults=False)
 
     collections: Sequence[str]
-    """The collections to search by default, in order (`Sequence` [ `str` ]).
+    """The collections to search by default, in order
+    (`~collections.abc.Sequence` [ `str` ]).
     """
 
     run: str | None

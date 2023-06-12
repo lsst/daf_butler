@@ -75,8 +75,9 @@ class NamedKeyMapping(Mapping[K, V_co]):
     -----
     In addition to the new `names` property and `byName` method, this class
     simply redefines the type signature for `__getitem__` and `get` that would
-    otherwise be inherited from `Mapping`. That is only relevant for static
-    type checking; the actual Python runtime doesn't care about types at all.
+    otherwise be inherited from `~collections.abc.Mapping`. That is only
+    relevant for static type checking; the actual Python runtime doesn't
+    care about types at all.
     """
 
     __slots__ = ()
@@ -86,12 +87,13 @@ class NamedKeyMapping(Mapping[K, V_co]):
     def names(self) -> Set[str]:
         """Return the set of names associated with the keys, in the same order.
 
-        (`Set` [ `str` ]).
+        (`~collections.abc.Set` [ `str` ]).
         """
         raise NotImplementedError()
 
     def byName(self) -> dict[str, V_co]:
-        """Return a `Mapping` with names as keys and the ``self`` values.
+        """Return a `~collections.abc.Mapping` with names as keys and the
+        ``self`` values.
 
         Returns
         -------
@@ -277,7 +279,7 @@ class NamedValueAbstractSet(Set[K_co]):
     def names(self) -> Set[str]:
         """Return set of names associated with the keys, in the same order.
 
-        (`AbstractSet` [ `str` ]).
+        (`~collections.abc.Set` [ `str` ]).
         """
         raise NotImplementedError()
 
@@ -287,7 +289,7 @@ class NamedValueAbstractSet(Set[K_co]):
 
         Returns
         -------
-        dict : `Mapping`
+        dict : `~collections.abc.Mapping`
             A dictionary-like view with ``values() == self``.
         """
         raise NotImplementedError()
@@ -327,7 +329,7 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
 
     Parameters
     ----------
-    mapping : `Mapping` [ `str`, `object` ]
+    mapping : `~collections.abc.Mapping` [ `str`, `object` ]
         Mapping this object will provide a view of.
     """
 
@@ -389,11 +391,12 @@ class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
     """Mutable variant of `NamedValueAbstractSet`.
 
     Methods that can add new elements to the set are unchanged from their
-    `MutableSet` definitions, while those that only remove them can generally
-    accept names or element instances.  `pop` can be used in either its
-    `MutableSet` form (no arguments; an arbitrary element is returned) or its
-    `MutableMapping` form (one or two arguments for the name and optional
-    default value, respectively).  A `MutableMapping`-like `__delitem__`
+    `~collections.abc.MutableSet` definitions, while those that only remove
+    them can generally accept names or element instances.  `pop` can be used
+    in either its `~collections.abc.MutableSet` form (no arguments; an
+    arbitrary element is returned) or its `~collections.abc.MutableMapping`
+    form (one or two arguments for the name and optional default value,
+    respectively).  A `~collections.abc.MutableMapping`-like `__delitem__`
     interface is also included, which takes only names (like
     `NamedValueAbstractSet.__getitem__`).
     """
@@ -545,7 +548,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
         Parameters
         ----------
-        elements : `Iterable`
+        elements : `~collections.abc.Iterable`
             Elements to add.
         """
         for element in elements:

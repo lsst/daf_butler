@@ -741,7 +741,7 @@ class TimespanDatabaseRepresentation(ABC):
 
         Parameters
         ----------
-        mapping : `Mapping` [ `Any`, `Any` ]
+        mapping : `~collections.abc.Mapping` [ `Any`, `Any` ]
             A dictionary representing a database row containing a `Timespan`
             in this representation.  Should have key(s) equal to the return
             value of `getFieldNames`.

@@ -68,7 +68,7 @@ class DatasetRecordStorage(ABC):
         run : `RunRecord`
             The record object describing the `~CollectionType.RUN` collection
             this dataset will be associated with.
-        dataIds : `Iterable` [ `DataCoordinate` ]
+        dataIds : `~collections.abc.Iterable` [ `DataCoordinate` ]
             Expanded data IDs (`DataCoordinate` instances) for the
             datasets to be added.   The dimensions of all data IDs must be the
             same as ``self.datasetType.dimensions``.
@@ -80,7 +80,7 @@ class DatasetRecordStorage(ABC):
 
         Returns
         -------
-        datasets : `Iterable` [ `DatasetRef` ]
+        datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
             References to the inserted datasets.
         """
         raise NotImplementedError()
@@ -107,7 +107,7 @@ class DatasetRecordStorage(ABC):
 
         Returns
         -------
-        datasets : `Iterable` [ `DatasetRef` ]
+        datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
             References to the inserted or existing datasets.
 
         Notes
@@ -126,7 +126,7 @@ class DatasetRecordStorage(ABC):
 
         Parameters
         ----------
-         datasets : `Iterable` [ `DatasetRef` ]
+         datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to be deleted.  All datasets must be resolved and have
             the same `DatasetType` as ``self``.
 
@@ -146,7 +146,7 @@ class DatasetRecordStorage(ABC):
         collection : `CollectionRecord`
             The record object describing the collection.  ``collection.type``
             must be `~CollectionType.TAGGED`.
-        datasets : `Iterable` [ `DatasetRef` ]
+        datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to be associated.  All datasets must be resolved and have
             the same `DatasetType` as ``self``.
 
@@ -175,7 +175,7 @@ class DatasetRecordStorage(ABC):
         collection : `CollectionRecord`
             The record object describing the collection.  ``collection.type``
             must be `~CollectionType.TAGGED`.
-        datasets : `Iterable` [ `DatasetRef` ]
+        datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to be disassociated.  All datasets must be resolved and
             have the same `DatasetType` as ``self``.
 
@@ -202,7 +202,7 @@ class DatasetRecordStorage(ABC):
         collection : `CollectionRecord`
             The record object describing the collection.  ``collection.type``
             must be `~CollectionType.CALIBRATION`.
-        datasets : `Iterable` [ `DatasetRef` ]
+        datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to be associated.  All datasets must be resolved and have
             the same `DatasetType` as ``self``.
         timespan : `Timespan`
@@ -245,7 +245,7 @@ class DatasetRecordStorage(ABC):
             Datasets that overlap this range but are not contained by it will
             have their validity ranges adjusted to not overlap it, which may
             split a single dataset validity range into two.
-        dataIds : `Iterable` [ `DataCoordinate` ], optional
+        dataIds : `~collections.abc.Iterable` [ `DataCoordinate` ], optional
             Data IDs that should be decertified within the given validity range
             If `None`, all data IDs for ``self.datasetType`` will be
             decertified.

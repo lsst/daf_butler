@@ -192,7 +192,7 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
     ----------
     universe : `DimensionUniverse`
         All known dimensions.
-    bind : `Mapping` [ `str`, `object` ]
+    bind : `~collections.abc.Mapping` [ `str`, `object` ]
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
     """
@@ -334,7 +334,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
     graph : `DimensionGraph`
         The dimensions the query would include in the absence of this
         expression.
-    bind : `Mapping` [ `str`, `object` ]
+    bind : `~collections.abc.Mapping` [ `str`, `object` ]
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
     defaults : `DataCoordinate`

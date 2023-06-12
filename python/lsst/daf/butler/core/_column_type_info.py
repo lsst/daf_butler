@@ -95,9 +95,10 @@ class ColumnTypeInfo:
 
         Parameters
         ----------
-        columns : `Iterable` [ `ColumnTag` ]
+        columns : `~collections.abc.Iterable` [ `ColumnTag` ]
             Iterable of column identifiers.
-        unique_keys : `Iterable` [ `Iterable` [ `ColumnTag` ] ]
+        unique_keys : `~collections.abc.Iterable` \
+                [ `~collections.abc.Iterable` [ `ColumnTag` ] ]
             Unique constraints to add the table, as a nested iterable of
             (first) constraint and (second) the columns within that constraint.
 

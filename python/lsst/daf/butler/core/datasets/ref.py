@@ -550,7 +550,7 @@ class DatasetRef:
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             `DatasetRef` instances to group.
 
         Returns

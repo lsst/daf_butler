@@ -186,7 +186,7 @@ class NormalFormVisitor(Generic[_T, _U, _V]):
 
         Parameters
         ----------
-        branches : `Sequence`
+        branches : `~collections.abc.Sequence`
             Sequence of tuples, where the first element in each tuple is the
             result of a call to `visitBranch`, and the second is the `Node` on
             which `visitBranch` was called.
@@ -209,7 +209,7 @@ class NormalFormVisitor(Generic[_T, _U, _V]):
 
         Parameters
         ----------
-        branches : `Sequence`
+        branches : `~collections.abc.Sequence`
             Sequence of return values from calls to `visitInner`.
         form : `NormalForm`
             Form this expression is in.  ``form.outer`` is the operator that
@@ -233,7 +233,8 @@ class NormalFormExpression:
 
     Parameters
     ----------
-    nodes : `Sequence` [ `Sequence` [ `Node` ] ]
+    nodes : `~collections.abc.Sequence` [ `~collections.abc.Sequence` \
+            [ `Node` ] ]
         Non-AND, non-OR branches of three tree, with the AND and OR operations
         combining them represented by position in the nested sequence - the
         inner sequence is combined via ``form.inner``, and the outer sequence
@@ -525,7 +526,7 @@ class TransformationWrapper(ABC):
 
         Returns
         -------
-        operands : `Iterator` [ `TransformationWrapper` ]
+        operands : `~collections.abc.Iterator` [ `TransformationWrapper` ]
             Operands that, if combined with ``operator``, yield an expression
             equivalent to ``self``.
         """
@@ -1099,7 +1100,7 @@ class TreeReconstructionVisitor(NormalFormVisitor[Node, Node, Node]):
 
         Parameters
         ----------
-        branches : `Sequence`
+        branches : `~collections.abc.Sequence`
             Sequence of return values from calls to `visitBranch`, representing
             a visited set of operands combined in the expression by
             ``operator``.

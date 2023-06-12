@@ -210,7 +210,8 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `Mapping` [`str`, `DatasetType`], optional
+        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`], \
+                optional
             Mapping of the dataset type name to its registry definition.
         """
         predicted_inputs = [ref.id for ref in itertools.chain.from_iterable(quantum.inputs.values())]
@@ -271,7 +272,8 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `Mapping` [`str`, `DatasetType`], optional
+        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`], \
+                optional
             Mapping of the dataset type name to its registry definition.
         """
         return cls._initialize(
@@ -329,7 +331,7 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `Mapping` [`str`, `DatasetType`]
+        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`]
             Mapping of the dataset type name to its registry definition.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
@@ -664,10 +666,10 @@ class QuantumProvenanceData(BaseModel):
         butler : `Butler`
             Full butler representing the data repository to transfer datasets
             to.
-        quanta : `Iterable` [ `Quantum` ]
+        quanta : `~collections.abc.Iterable` [ `Quantum` ]
             Iterable of `Quantum` objects that carry information about
             predicted outputs.  May be a single-pass iterator.
-        provenance : `Iterable` [ `QuantumProvenanceData` ]
+        provenance : `~collections.abc.Iterable` [ `QuantumProvenanceData` ]
             Provenance and datastore data for each of the given quanta, in the
             same order.  May be a single-pass iterator.
 

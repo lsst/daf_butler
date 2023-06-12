@@ -379,7 +379,7 @@ class LimitedButler(ABC):
             datastores known to this butler.  Note that this will make it
             impossible to retrieve these datasets even via other collections.
             Datasets that are already not stored are ignored by this option.
-        tags : `Iterable` [ `str` ], optional
+        tags : `~collections.abc.Iterable` [ `str` ], optional
             `~CollectionType.TAGGED` collections to disassociate the datasets
             from.  Ignored if ``disassociate`` is `False` or ``purge`` is
             `True`.

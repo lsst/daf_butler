@@ -280,10 +280,10 @@ class QueryBackend(Generic[_C]):
 
         Parameters
         ----------
-        dataset_types : `Iterable` [ `DatasetType` ]
+        dataset_types : `~collections.abc.Iterable` [ `DatasetType` ]
             Dataset types that are being queried.  Must include only parent
             or standalone dataset types, not components.
-        collections : `Sequence` [ `CollectionRecord` ]
+        collections : `~collections.abc.Sequence` [ `CollectionRecord` ]
             Sequence of collections that will be searched.
         governor_constraints : `~collections.abc.Mapping` [ `str`, \
                 `~collections.abc.Set` [ `str` ] ], optional
@@ -331,8 +331,8 @@ class QueryBackend(Generic[_C]):
             Dataset type to be queried in the returned collections.
         collections : `CollectionWildcard`
             Expression for the collections to be queried.
-        governor_constraints : `Mapping` [ `str`, `~collections.abc.Set` ], \
-                optional
+        governor_constraints : `~collections.abc.Mapping` [ `str`, \
+                `~collections.abc.Set` ], optional
             Constraints imposed by other aspects of the query on governor
             dimensions; collections inconsistent with these constraints will be
             skipped.
@@ -425,7 +425,7 @@ class QueryBackend(Generic[_C]):
         ----------
         dataset_type : `DatasetType`
             Type for the datasets being queried.
-        collections : `Sequence` [ `CollectionRecord` ]
+        collections : `~collections.abc.Sequence` [ `CollectionRecord` ]
             Records for collections to query.  Should generally be the result
             of a call to `resolve_dataset_collections`, and must not be empty.
         context : `QueryContext`
@@ -458,7 +458,7 @@ class QueryBackend(Generic[_C]):
         ----------
         dataset_type : `DatasetType`
             Type for the datasets being search.
-        collections : `Sequence` [ `CollectionRecord` ]
+        collections : `~collections.abc.Sequence` [ `CollectionRecord` ]
             Records for collections to search.  Should generally be the result
             of a call to `resolve_dataset_collections`, and must not be empty.
         columns : `~collections.abc.Set` [ `str` ]
@@ -520,7 +520,7 @@ class QueryBackend(Generic[_C]):
         columns : `~collections.abc.Set` [ `str` ]
             Dataset columns to include (dimension key columns are always
             included).  See `make_dataset_query_relation` for allowed values.
-        messages : `Iterable` [ `str` ]
+        messages : `~collections.abc.Iterable` [ `str` ]
             Diagnostic messages that explain why the query is doomed to yield
             no rows.
         context : `QueryContext`
@@ -655,7 +655,8 @@ class QueryBackend(Generic[_C]):
 
         Returns
         -------
-        cache : `Mapping` [ `DataCoordinate`, `DimensionRecord` ] or `None`
+        cache : `~collections.abc.Mapping` [ `DataCoordinate`, \
+                `DimensionRecord` ] or `None`
             Mapping from data ID to dimension record, or `None` if this
             element's records are never cached.
         """

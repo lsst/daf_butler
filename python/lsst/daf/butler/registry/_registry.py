@@ -960,7 +960,7 @@ class Registry(ABC):
         collection : `str`
             The name of an already-registered `~CollectionType.CALIBRATION`
             collection.
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to be associated.
         timespan : `Timespan`
             The validity range for these datasets within the collection.
@@ -1074,7 +1074,8 @@ class Registry(ABC):
             Dimensions that are in ``dataId`` or ``kwargs`` but not in
             ``graph`` are silently ignored, providing a way to extract and
             ``graph`` expand a subset of a data ID.
-        records : `Mapping` [`str`, `DimensionRecord`], optional
+        records : `~collections.abc.Mapping` [`str`, `DimensionRecord`], \
+                optional
             Dimension record data to use before querying the database for that
             data, keyed by element name.
         withDefaults : `bool`, optional

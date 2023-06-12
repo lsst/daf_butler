@@ -430,7 +430,7 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         data_ids : `~collections.abc.Set` [ `DataCoordinate` ]
             Data IDs to upload.  All must have at least the dimensions given,
             but may have more.
-        dimension_names : `Iterable` [ `str` ]
+        dimension_names : `~collections.abc.Iterable` [ `str` ]
             Names of dimensions that will be the columns of the relation.
 
         Returns

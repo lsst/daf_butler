@@ -936,7 +936,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             References to the datasets being forgotten.
 
         Notes
@@ -1136,7 +1136,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        data : `Mapping` [ `str`, `DatastoreRecordData` ]
+        data : `~collections.abc.Mapping` [ `str`, `DatastoreRecordData` ]
             Datastore records indexed by datastore name.  May contain data for
             other `Datastore` instances (generally because they are chained to
             this one), which should be ignored.
@@ -1164,13 +1164,13 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetIdRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetIdRef` ]
             Datasets to save.  This may include datasets not known to this
             datastore, which should be ignored.
 
         Returns
         -------
-        data : `Mapping` [ `str`, `DatastoreRecordData` ]
+        data : `~collections.abc.Mapping` [ `str`, `DatastoreRecordData` ]
             Exported datastore records indexed by datastore name.
         """
         raise NotImplementedError()

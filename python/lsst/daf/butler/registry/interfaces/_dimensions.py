@@ -598,7 +598,7 @@ class DatabaseDimensionOverlapStorage(ABC):
 
         Returns
         -------
-        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
+        tables : `~collections.abc.Iterable` [ `sqlalchemy.schema.Table` ]
             Possibly empty set of tables for schema digest calculations.
         """
         raise NotImplementedError()

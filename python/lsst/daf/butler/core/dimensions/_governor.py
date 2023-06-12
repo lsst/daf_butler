@@ -183,9 +183,9 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         Fully qualified name of the `GovernorDimensionRecordStorage` subclass
         that will back this element in the registry (in a "cls" key) along
         with any other construction keyword arguments (in other keys).
-    metadata : `Iterable` [ `ddl.FieldSpec` ]
+    metadata : `~collections.abc.Iterable` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this element's table.
-    uniqueKeys : `Iterable` [ `ddl.FieldSpec` ]
+    uniqueKeys : `~collections.abc.Iterable` [ `ddl.FieldSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used

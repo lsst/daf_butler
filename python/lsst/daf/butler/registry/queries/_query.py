@@ -62,8 +62,8 @@ class Query:
     relation : `Relation`
         The relation tree representation of the query as a series of operations
         on tables.
-    governor_constraints : `Mapping` [ `str` [ `~collections.abc.Set`
-                [ `str` ] ] ]
+    governor_constraints : `~collections.abc.Mapping` [ `str`, \
+            `~collections.abc.Set` [ `str` ] ]
         Constraints on governor dimensions encoded in this query's relation.
         This is a mapping from governor dimension name to sets of values that
         dimension may take.
@@ -76,7 +76,8 @@ class Query:
         either have records present in ``record_caches`` or all columns present
         in ``relation``, while a specific `DimensionElement` means that element
         does.
-    record_caches : `Mapping` [ `DimensionElement`, `Mapping`
+    record_caches : `~collections.abc.Mapping` [ `DimensionElement`, \
+            `~collections.abc.Mapping`
             [ `DataCoordinate`, `DimensionRecord` ] ], optional
         Cached dimension record values, organized first by dimension element
         and then by data ID.
@@ -850,7 +851,7 @@ class Query:
 
         Returns
         -------
-        messages : `Iterable` [ `str` ]
+        messages : `~collections.abc.Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
         """
@@ -915,12 +916,13 @@ class Query:
             (this option is "sticky").
         dimensions : `DimensionGraph`, optional
             See class docs.
-        governor_constraints : `Mapping` [ `str` [ `~collections.abc.Set`
-                [ `str` ] ] ], optional
+        governor_constraints : `~collections.abc.Mapping` [ `str`, \
+                `~collections.abc.Set` [ `str` ] ], optional
             See class docs.
         has_record_columns : `bool` or `DimensionElement`, optional
             See class docs.
-        record_caches : `Mapping` [ `DimensionElement`, `Mapping`
+        record_caches : `~collections.abc.Mapping` [ `DimensionElement`, \
+                `~collections.abc.Mapping` \
                 [ `DataCoordinate`, `DimensionRecord` ] ], optional
             See class docs.
 

@@ -459,10 +459,11 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         Parameters
         ----------
-        records : `Mapping` [ `str`, `DimensionRecord` or `None` ]
+        records : `~collections.abc.Mapping` [ `str`, `DimensionRecord` or \
+                `None` ]
             A `NamedKeyMapping` with `DimensionElement` keys or a regular
-            `Mapping` with `str` (`DimensionElement` name) keys and
-            `DimensionRecord` values.  Keys must cover all elements in
+            `~collections.abc.Mapping` with `str` (`DimensionElement` name)
+            keys and `DimensionRecord` values.  Keys must cover all elements in
             ``self.graph.elements``.  Values may be `None`, but only to reflect
             actual NULL values in the database, not just records that have not
             been fetched.
@@ -972,10 +973,10 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         Data ID values, ordered to match ``graph._dataCoordinateIndices``.
         May include values for just required dimensions (which always come
         first) or all dimensions.
-    records : `Mapping` [ `str`, `DimensionRecord` or `None` ]
+    records : `~collections.abc.Mapping` [ `str`, `DimensionRecord` or `None` ]
         A `NamedKeyMapping` with `DimensionElement` keys or a regular
-        `Mapping` with `str` (`DimensionElement` name) keys and
-        `DimensionRecord` values.  Keys must cover all elements in
+        `~collections.abc.Mapping` with `str` (`DimensionElement` name) keys
+        and `DimensionRecord` values.  Keys must cover all elements in
         ``self.graph.elements``.  Values may be `None`, but only to reflect
         actual NULL values in the database, not just records that have not
         been fetched.

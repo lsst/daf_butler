@@ -120,7 +120,7 @@ class RepoExportBackend(ABC):
             The type of the collection; either `CollectionType.TAGGED` or
             `CollectionType.CALIBRATION` (as other collection types are
             exported in other ways).
-        associations : `Iterable` [ `DatasetAssociation` ]
+        associations : `~collections.abc.Iterable` [ `DatasetAssociation` ]
             Structs representing an association between this collection and
             this dataset.
         """

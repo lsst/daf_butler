@@ -380,7 +380,7 @@ class StorageClass:
 
         Parameters
         ----------
-        parameters : `Mapping`, optional
+        parameters : `~collections.abc.Mapping`, optional
             Candidate parameters. Can be `None` if no parameters have
             been provided.
         subset : `~collections.abc.Collection`, optional
@@ -391,7 +391,7 @@ class StorageClass:
 
         Returns
         -------
-        filtered : `Mapping`
+        filtered : `~collections.abc.Mapping`
             Valid parameters. Empty `dict` if none are suitable.
 
         Raises
@@ -439,7 +439,7 @@ class StorageClass:
 
         Parameters
         ----------
-        other : `Type`
+        other : `type`
             The type to be checked.
         compare_types : `bool`, optional
             If `True` the python type will be used in the comparison

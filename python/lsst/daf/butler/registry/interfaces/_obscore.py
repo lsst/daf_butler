@@ -213,7 +213,8 @@ class ObsCoreTableManager(VersionedExtension):
         ----------
         instrument : `str`
             Instrument name.
-        region_data : `Iterable`[`tuple`[`int`, `int`, `~lsst.sphgeom.Region`]]
+        region_data : `~collections.abc.Iterable` [`tuple` [`int`, `int`, \
+                `~lsst.sphgeom.Region` ]]
             Sequence of tuples, each tuple contains three values - exposure ID,
             detector ID, and corresponding region.
 

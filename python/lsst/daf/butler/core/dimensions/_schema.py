@@ -245,7 +245,7 @@ class DimensionElementFields:
     @cached_getter
     def columns(self) -> Mapping[ColumnTag, str]:
         """A mapping from `ColumnTag` to field name for all fields in this
-        element's records (`Mapping`).
+        element's records (`~collections.abc.Mapping`).
         """
         result: dict[ColumnTag, str] = {}
         for dimension_name, field_name in zip(self.element.dimensions.names, self.dimensions.names):

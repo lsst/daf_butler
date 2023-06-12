@@ -262,11 +262,11 @@ class DimensionPackerConstructionVisitor(DimensionConstructionVisitor):
         `DimensionUniverse`.
     clsName : `str`
         Fully-qualified name of a `DimensionPacker` subclass.
-    fixed : `Iterable` [ `str` ]
+    fixed : `~collections.abc.Iterable` [ `str` ]
         Names of dimensions whose values must be provided to the packer when it
         is constructed.  This will be expanded lazily into a `DimensionGraph`
         prior to `DimensionPacker` construction.
-    dimensions : `Iterable` [ `str` ]
+    dimensions : `~collections.abc.Iterable` [ `str` ]
         Names of dimensions whose values are passed to `DimensionPacker.pack`.
         This will be expanded lazily into a `DimensionGraph` prior to
         `DimensionPacker` construction.

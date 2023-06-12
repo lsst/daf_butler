@@ -88,13 +88,13 @@ class CategorizedWildcard:
             If `False` (`True` is default) raise `TypeError` if a `re.Pattern`
             is encountered, or if ``expression`` is a `CategorizedWildcard`
             with `patterns` not empty.
-        coerceUnrecognized: `Callable`, optional
+        coerceUnrecognized: `~collections.abc.Callable`, optional
             A callback that takes a single argument of arbitrary type and
             returns either a `str` - appended to `strings` - or a `tuple` of
             (`str`, `Any`) to be appended to `items`.  This will be called on
             objects of unrecognized type. Exceptions will be reraised as
             `TypeError` (and chained).
-        coerceItemValue: `Callable`, optional
+        coerceItemValue: `~collections.abc.Callable`, optional
             If provided, ``expression`` may be a mapping from `str` to any
             type that can be passed to this function; the result of that call
             will be stored instead as the value in ``self.items``.
@@ -458,7 +458,7 @@ class CollectionWildcard:
 
         Parameters
         ----------
-        names : `Iterable` [ `str` ]
+        names : `~collections.abc.Iterable` [ `str` ]
             Iterable of collection names.
 
         Returns

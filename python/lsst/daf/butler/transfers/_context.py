@@ -128,7 +128,7 @@ class RepoExportContext:
         element : `str` or `DimensionElement`
             `DimensionElement` or `str` indicating the logical table these
             records are from.
-        records : `Iterable` [ `DimensionRecord` or `dict` ]
+        records : `~collections.abc.Iterable` [ `DimensionRecord` or `dict` ]
             Records to export, as an iterable containing `DimensionRecord` or
             `dict` instances.
         """

@@ -534,15 +534,15 @@ class TableSpec:
 
     Parameters
     ----------
-    fields : `Iterable` [ `FieldSpec` ]
+    fields : `~collections.abc.Iterable` [ `FieldSpec` ]
         Specifications for the columns in this table.
-    unique : `Iterable` [ `tuple` [ `str` ] ], optional
+    unique : `~collections.abc.Iterable` [ `tuple` [ `str` ] ], optional
         Non-primary-key unique constraints for the table.
-    indexes: `Iterable` [ `IndexSpec` ], optional
+    indexes: `~collections.abc.Iterable` [ `IndexSpec` ], optional
         Indexes for the table.
-    foreignKeys : `Iterable` [ `ForeignKeySpec` ], optional
+    foreignKeys : `~collections.abc.Iterable` [ `ForeignKeySpec` ], optional
         Foreign key constraints for the table.
-    exclusion : `Iterable` [ `tuple` [ `str` or `type` ] ]
+    exclusion : `~collections.abc.Iterable` [ `tuple` [ `str` or `type` ] ]
         Special constraints that prohibit overlaps between timespans over rows
         where other columns are equal.  These take the same form as unique
         constraints, but each tuple may contain a single
