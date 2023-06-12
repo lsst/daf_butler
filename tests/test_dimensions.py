@@ -25,9 +25,9 @@ import math
 import os
 import pickle
 import unittest
+from collections.abc import Iterator
 from dataclasses import dataclass
 from random import Random
-from typing import Iterator, Optional
 
 import lsst.sphgeom
 from lsst.daf.butler import (
@@ -384,7 +384,7 @@ class SplitByStateFlags:
     values.
     """
 
-    minimal: Optional[DataCoordinateSequence] = None
+    minimal: DataCoordinateSequence | None = None
     """Data IDs that only contain values for required dimensions.
 
     `DataCoordinateSequence.hasFull()` will return `True` for this if and only
@@ -392,21 +392,21 @@ class SplitByStateFlags:
     `DataCoordinate.hasRecords()` will always return `False`.
     """
 
-    complete: Optional[DataCoordinateSequence] = None
+    complete: DataCoordinateSequence | None = None
     """Data IDs that contain values for all dimensions.
 
     `DataCoordinateSequence.hasFull()` will always `True` and
     `DataCoordinate.hasRecords()` will always return `True` for this attribute.
     """
 
-    expanded: Optional[DataCoordinateSequence] = None
+    expanded: DataCoordinateSequence | None = None
     """Data IDs that contain values for all dimensions as well as records.
 
     `DataCoordinateSequence.hasFull()` and `DataCoordinate.hasRecords()` will
     always return `True` for this attribute.
     """
 
-    def chain(self, n: Optional[int] = None) -> Iterator:
+    def chain(self, n: int | None = None) -> Iterator:
         """Iterate over the data IDs of different types.
 
         Parameters
@@ -442,7 +442,7 @@ class DataCoordinateTestCase(unittest.TestCase):
     def setUp(self):
         self.rng = Random(self.RANDOM_SEED)
 
-    def randomDataIds(self, n: int, dataIds: Optional[DataCoordinateSequence] = None):
+    def randomDataIds(self, n: int, dataIds: DataCoordinateSequence | None = None):
         """Select random data IDs from those loaded from test data.
 
         Parameters
@@ -467,7 +467,7 @@ class DataCoordinateTestCase(unittest.TestCase):
             check=False,
         )
 
-    def randomDimensionSubset(self, n: int = 3, graph: Optional[DimensionGraph] = None) -> DimensionGraph:
+    def randomDimensionSubset(self, n: int = 3, graph: DimensionGraph | None = None) -> DimensionGraph:
         """Generate a random `DimensionGraph` that has a subset of the
         dimensions in a given one.
 
@@ -493,7 +493,7 @@ class DataCoordinateTestCase(unittest.TestCase):
 
     def splitByStateFlags(
         self,
-        dataIds: Optional[DataCoordinateSequence] = None,
+        dataIds: DataCoordinateSequence | None = None,
         *,
         expanded: bool = True,
         complete: bool = True,

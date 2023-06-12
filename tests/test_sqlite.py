@@ -25,7 +25,6 @@ import stat
 import tempfile
 import unittest
 from contextlib import contextmanager
-from typing import Optional
 
 import sqlalchemy
 from lsst.daf.butler import ddl
@@ -196,7 +195,7 @@ class SqliteFileRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Registry:
+    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry:
         if share_repo_with is None:
             _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         else:
@@ -242,7 +241,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Optional[Registry]:
+    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry | None:
         if share_repo_with is not None:
             return None
         config = self.makeRegistryConfig()

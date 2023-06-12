@@ -39,7 +39,8 @@ in the future.
 
 import argparse
 import os.path
-from typing import Any, Callable, Iterable, Iterator, Optional, Union
+from collections.abc import Callable, Iterable, Iterator
+from typing import Any
 
 import lsst.daf.butler  # noqa:F401; register Time/YAML conversions.
 import numpy as np
@@ -424,7 +425,7 @@ def write_yaml(filename: str):
         yaml.dump(document, file, sort_keys=False)
 
 
-def lonlat_tuple(position: Union[LonLat, Vector3d]):
+def lonlat_tuple(position: LonLat | Vector3d):
     """Transform a `lsst.sphgeom.LonLat` or `lsst.sphgeom.Vector3d` to a
     2-tuple of `float` degrees.
     """
@@ -432,7 +433,7 @@ def lonlat_tuple(position: Union[LonLat, Vector3d]):
     return (lonlat.getLon().asDegrees(), lonlat.getLat().asDegrees())
 
 
-def make_tangent_wcs(position: Union[LonLat, Vector3d]) -> WCS:
+def make_tangent_wcs(position: LonLat | Vector3d) -> WCS:
     """Create an `astropy.WCS` that maps the sky to a tangent plane with
     degree-unit pixels at the given point.
 
@@ -531,7 +532,7 @@ def plot_hull(
         callback(indices, center, vertices)
 
 
-def polygons(label: Optional[str] = None, **kwargs: Any):
+def polygons(label: str | None = None, **kwargs: Any):
     """Return a callback for use with `plot_pixels` and `plot_hull` that plots
     polygon vertices.
 

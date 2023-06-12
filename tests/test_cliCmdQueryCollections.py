@@ -24,7 +24,6 @@
 
 import os
 import unittest
-from typing import List
 
 from astropy.table import Table
 from lsst.daf.butler import Butler, CollectionType
@@ -118,7 +117,7 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
     def setUp(self):
         self.runner = LogCliRunner()
 
-    def assertChain(self, args: List[str], expected: str):
+    def assertChain(self, args: list[str], expected: str):
         """Run collection-chain and check the expected result"""
         result = self.runner.invoke(cli, ["collection-chain", "here", *args])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))

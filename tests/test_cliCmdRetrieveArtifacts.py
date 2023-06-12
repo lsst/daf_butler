@@ -24,7 +24,6 @@
 
 import os
 import unittest
-from typing import List
 
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.cli.butler import cli
@@ -47,7 +46,7 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
         removeTestTempDir(self.root)
 
     @staticmethod
-    def find_files(root: str) -> List[ResourcePath]:
+    def find_files(root: str) -> list[ResourcePath]:
         return list(ResourcePath.findFileResources([root]))
 
     def testRetrieveAll(self):
