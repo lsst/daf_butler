@@ -214,24 +214,24 @@ class TestFileTemplates(unittest.TestCase):
         testData = (
             (
                 "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail",
-                set(["visit", "physical_filter"]),
+                {"visit", "physical_filter"},
                 set(),
-                set(["run", "datasetType"]),
+                {"run", "datasetType"},
                 set(),
             ),
             (
                 "{run}/{component:?}_{visit}",
-                set(["visit"]),
+                {"visit"},
                 set(),
-                set(["run"]),
-                set(["component"]),
+                {"run"},
+                {"component"},
             ),
             (
                 "{run}/{component:?}_{visit:?}_{physical_filter}_{instrument}_{datasetType}",
-                set(["physical_filter", "instrument"]),
-                set(["visit"]),
-                set(["run", "datasetType"]),
-                set(["component"]),
+                {"physical_filter", "instrument"},
+                {"visit"},
+                {"run", "datasetType"},
+                {"component"},
             ),
         )
         for tmplstr, mandatory, optional, special, optionalSpecial in testData:

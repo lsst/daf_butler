@@ -174,8 +174,8 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         """Test state immediately after construction."""
 
         self.assertTrue(qbb.isWriteable())
-        self.assertEqual(qbb._predicted_inputs, set(ref.id for ref in self.all_input_refs))
-        self.assertEqual(qbb._predicted_outputs, set(ref.id for ref in self.output_refs))
+        self.assertEqual(qbb._predicted_inputs, {ref.id for ref in self.all_input_refs})
+        self.assertEqual(qbb._predicted_outputs, {ref.id for ref in self.output_refs})
         self.assertEqual(qbb._available_inputs, set())
         self.assertEqual(qbb._unavailable_inputs, set())
         self.assertEqual(qbb._actual_inputs, set())
@@ -202,7 +202,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
         self.assertEqual(qbb._available_inputs, qbb._predicted_inputs)
         self.assertEqual(qbb._actual_inputs, qbb._predicted_inputs)
-        self.assertEqual(qbb._unavailable_inputs, set(ref.id for ref in self.missing_refs))
+        self.assertEqual(qbb._unavailable_inputs, {ref.id for ref in self.missing_refs})
 
         # Write all expected outputs.
         for ref in self.output_refs:
@@ -237,9 +237,9 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
                 data.get()
 
         # _avalable_inputs is not
-        self.assertEqual(qbb._available_inputs, set(ref.id for ref in input_refs + self.init_inputs_refs))
-        self.assertEqual(qbb._actual_inputs, set(ref.id for ref in input_refs + self.init_inputs_refs))
-        self.assertEqual(qbb._unavailable_inputs, set(ref.id for ref in self.missing_refs))
+        self.assertEqual(qbb._available_inputs, {ref.id for ref in input_refs + self.init_inputs_refs})
+        self.assertEqual(qbb._actual_inputs, {ref.id for ref in input_refs + self.init_inputs_refs})
+        self.assertEqual(qbb._unavailable_inputs, {ref.id for ref in self.missing_refs})
 
     def test_datasetExistsDirect(self) -> None:
         """Test for dataset existence method"""
@@ -272,7 +272,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
                 self.assertTrue(stored)
 
         # _available_inputs is not
-        self.assertEqual(qbb._available_inputs, set(ref.id for ref in input_refs + self.init_inputs_refs))
+        self.assertEqual(qbb._available_inputs, {ref.id for ref in input_refs + self.init_inputs_refs})
         self.assertEqual(qbb._actual_inputs, set())
         self.assertEqual(qbb._unavailable_inputs, set())  # this is not consistent with getDirect?
 
@@ -296,9 +296,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.assertEqual(qbb._actual_inputs, qbb._predicted_inputs)
 
         qbb.markInputUnused(self.input_refs[0])
-        self.assertEqual(
-            qbb._actual_inputs, set(ref.id for ref in self.input_refs[1:] + self.init_inputs_refs)
-        )
+        self.assertEqual(qbb._actual_inputs, {ref.id for ref in self.input_refs[1:] + self.init_inputs_refs})
 
     def test_pruneDatasets(self) -> None:
         """Test for pruneDatasets methods"""
@@ -365,11 +363,11 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         prov_json = provenance1.json()
         provenance2 = QuantumProvenanceData.direct(**json.loads(prov_json))
         for provenance in (provenance1, provenance2):
-            input_ids = set(ref.id for ref in self.input_refs + self.init_inputs_refs)
+            input_ids = {ref.id for ref in self.input_refs + self.init_inputs_refs}
             self.assertEqual(provenance.predicted_inputs, input_ids)
             self.assertEqual(provenance.available_inputs, input_ids)
             self.assertEqual(provenance.actual_inputs, input_ids)
-            output_ids = set(ref.id for ref in self.output_refs)
+            output_ids = {ref.id for ref in self.output_refs}
             self.assertEqual(provenance.predicted_outputs, output_ids)
             self.assertEqual(provenance.actual_outputs, output_ids)
             datastore_name = "FileDatastore@<butlerRoot>/datastore"
@@ -381,7 +379,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             self.assertEqual(set(datastore_records.records.keys()), {class_name})
             self.assertEqual(set(datastore_records.records[class_name].keys()), {table_name})
             self.assertEqual(
-                set(record["dataset_id"] for record in datastore_records.records[class_name][table_name]),
+                {record["dataset_id"] for record in datastore_records.records[class_name][table_name]},
                 output_ids,
             )
 

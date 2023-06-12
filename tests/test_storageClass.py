@@ -362,7 +362,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         # Try to coerce a type that is not supported.
         with self.assertRaises(TypeError):
-            sc.coerce_type(set([1, 2, 3]))
+            sc.coerce_type({1, 2, 3})
 
         # Coerce something that will fail to convert.
         with self.assertLogs(level=logging.ERROR) as cm:

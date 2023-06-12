@@ -109,7 +109,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Spot-check a few things, but the most important test is just that
         # the above does not raise.
         self.assertGreaterEqual(
-            set(record.id for record in butler.registry.queryDimensionRecords("detector", instrument="HSC")),
+            {record.id for record in butler.registry.queryDimensionRecords("detector", instrument="HSC")},
             set(range(104)),  # should have all science CCDs; may have some focus ones.
         )
         self.assertGreaterEqual(

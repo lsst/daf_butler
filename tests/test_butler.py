@@ -196,7 +196,7 @@ class ButlerPutGetTests(TestCaseMixin):
         butler = Butler(self.tmpConfigFile, run=run)
 
         collections = set(butler.registry.queryCollections())
-        self.assertEqual(collections, set([run]))
+        self.assertEqual(collections, {run})
 
         # Create and register a DatasetType
         dimensions = butler.dimensions.extract(["instrument", "visit"])
@@ -589,7 +589,7 @@ class ButlerTests(ButlerPutGetTests):
             with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
                 butler_index.dumpToUri(temp_file)
                 with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
-                    self.assertEqual(Butler.get_known_repos(), set(("label", "bad_label")))
+                    self.assertEqual(Butler.get_known_repos(), {"label", "bad_label"})
                     uri = Butler.get_repo_uri("bad_label")
                     self.assertEqual(uri, ResourcePath(bad_label))
                     uri = Butler.get_repo_uri("label")
