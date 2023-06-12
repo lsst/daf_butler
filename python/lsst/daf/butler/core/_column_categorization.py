@@ -34,6 +34,8 @@ from .dimensions import DimensionUniverse, GovernorDimension, SkyPixDimension
 
 @dataclasses.dataclass
 class ColumnCategorization:
+    """Split an iterable of ColumnTag objects by type."""
+
     dimension_keys: set[str] = dataclasses.field(default_factory=set)
     dimension_records: defaultdict[str, set[str]] = dataclasses.field(
         default_factory=lambda: defaultdict(set)
