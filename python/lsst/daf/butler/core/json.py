@@ -27,12 +27,14 @@ import json
 from typing import TYPE_CHECKING, Any, Optional, Protocol, Type
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from ..registry import Registry
     from .dimensions import DimensionUniverse
 
 
 class SupportsSimple(Protocol):
-    _serializedType: Type
+    _serializedType: Type[BaseModel]
 
     def to_simple(self, minimal: bool) -> Any:
         ...
