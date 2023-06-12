@@ -145,7 +145,7 @@ class RegistryTests(ABC):
         """
         from ...transfers import YamlRepoImportBackend
 
-        with open(os.path.join(self.getDataDir(), filename), "r") as stream:
+        with open(os.path.join(self.getDataDir(), filename)) as stream:
             backend = YamlRepoImportBackend(stream, registry)
         backend.register()
         backend.load(datastore=None)
@@ -1145,7 +1145,7 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", name="dummy_r", band="r"),
             dict(instrument="DummyCam", name="dummy_i", band="i"),
         )
-        registry.insertDimensionData("skymap", dict(name="DummyMap", hash="sha!".encode("utf8")))
+        registry.insertDimensionData("skymap", dict(name="DummyMap", hash=b"sha!"))
         for tract in range(10):
             registry.insertDimensionData("tract", dict(skymap="DummyMap", id=tract))
             registry.insertDimensionData(

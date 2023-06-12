@@ -506,7 +506,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
                     strlen = max(len(row.as_py()) for row in arrow_table[name] if row.is_valid)
                 else:
                     strlen = default_length
-                md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(strlen)
+                md[f"lsst::arrow::len::{name}".encode()] = str(strlen)
 
     arrow_table = arrow_table.replace_schema_metadata(md)
 
@@ -1051,9 +1051,9 @@ def _append_numpy_string_metadata(metadata: dict[bytes, str], name: str, dtype: 
     import numpy as np
 
     if dtype.type is np.str_:
-        metadata[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(dtype.itemsize // 4)
+        metadata[f"lsst::arrow::len::{name}".encode()] = str(dtype.itemsize // 4)
     elif dtype.type is np.bytes_:
-        metadata[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(dtype.itemsize)
+        metadata[f"lsst::arrow::len::{name}".encode()] = str(dtype.itemsize)
 
 
 def _append_numpy_multidim_metadata(metadata: dict[bytes, str], name: str, dtype: np.dtype) -> None:
@@ -1072,7 +1072,7 @@ def _append_numpy_multidim_metadata(metadata: dict[bytes, str], name: str, dtype
         Numpy dtype.
     """
     if len(dtype.shape) > 1:
-        metadata[f"lsst::arrow::shape::{name}".encode("UTF-8")] = str(dtype.shape)
+        metadata[f"lsst::arrow::shape::{name}".encode()] = str(dtype.shape)
 
 
 def _multidim_shape_from_metadata(metadata: dict[bytes, bytes], list_size: int, name: str) -> tuple[int, ...]:

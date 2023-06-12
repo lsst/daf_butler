@@ -300,7 +300,7 @@ class ButlerLogRecords(BaseModel):
         Works with one-record-per-line format JSON files and a direct
         serialization of the Pydantic model.
         """
-        with open(filename, "r") as fd:
+        with open(filename) as fd:
             return cls.from_stream(fd)
 
     @staticmethod
