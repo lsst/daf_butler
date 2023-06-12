@@ -290,7 +290,7 @@ class CliLogTestBase:
                 # There are cases where the newlines are stripped from the log
                 # output (like in Jenkins), since we can't depend on newlines
                 # in log output they are removed here from test output.
-                output = StringIO((result.stderr.decode().replace("\n", " ")))
+                output = StringIO(result.stderr.decode().replace("\n", " "))
                 startedWithTimestamp = any([timestampRegex.match(line) for line in output.readlines()])
                 output.seek(0)
                 startedWithModule = any(modulesRegex.match(line) for line in output.readlines())
