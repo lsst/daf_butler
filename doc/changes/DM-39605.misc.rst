@@ -1,0 +1,4 @@
+* Replace usage of ``Butler.registry.dimensions`` with ``Butler.dimensions``.
+* Modernize type annotations.
+* Fix some documentation problems.
+* Minor modernizations to use set notation and f-strings.
