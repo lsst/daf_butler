@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ["DefaultSpatialObsCorePlugin"]
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
@@ -59,9 +59,7 @@ class DefaultSpatialObsCorePlugin(SpatialObsCorePlugin):
         self._name = name
 
     @classmethod
-    def initialize(
-        cls, *, name: str, config: Mapping[str, Any], db: Optional[Database]
-    ) -> SpatialObsCorePlugin:
+    def initialize(cls, *, name: str, config: Mapping[str, Any], db: Database | None) -> SpatialObsCorePlugin:
         # docstring inherited.
         return cls(name=name, config=config)
 
@@ -69,7 +67,7 @@ class DefaultSpatialObsCorePlugin(SpatialObsCorePlugin):
         # docstring inherited.
         table_spec.fields.update(_COLUMNS)
 
-    def make_records(self, region: Optional[Region]) -> Optional[Record]:
+    def make_records(self, region: Region | None) -> Record | None:
         # docstring inherited.
 
         if region is None:

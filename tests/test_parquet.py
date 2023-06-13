@@ -281,7 +281,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
-            "data", dimensions=(), storageClass="DataFrame", universe=self.butler.registry.dimensions
+            "data", dimensions=(), storageClass="DataFrame", universe=self.butler.dimensions
         )
         self.butler.registry.registerDatasetType(self.datasetType)
 
@@ -406,7 +406,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
             "legacy_dataframe",
             dimensions=(),
             storageClass="DataFrame",
-            universe=self.butler.registry.dimensions,
+            universe=self.butler.dimensions,
         )
         self.butler.registry.registerDatasetType(legacy_type)
 
@@ -701,7 +701,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
-            "data", dimensions=(), storageClass="ArrowAstropy", universe=self.butler.registry.dimensions
+            "data", dimensions=(), storageClass="ArrowAstropy", universe=self.butler.dimensions
         )
         self.butler.registry.registerDatasetType(self.datasetType)
 
@@ -809,7 +809,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
             "astropy_parquet",
             dimensions=(),
             storageClass="ArrowAstropy",
-            universe=self.butler.registry.dimensions,
+            universe=self.butler.dimensions,
         )
         self.butler.registry.registerDatasetType(astropy_type)
 
@@ -1028,7 +1028,7 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
-            "data", dimensions=(), storageClass="ArrowNumpy", universe=self.butler.registry.dimensions
+            "data", dimensions=(), storageClass="ArrowNumpy", universe=self.butler.dimensions
         )
         self.butler.registry.registerDatasetType(self.datasetType)
 
@@ -1288,7 +1288,7 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
-            "data", dimensions=(), storageClass="ArrowTable", universe=self.butler.registry.dimensions
+            "data", dimensions=(), storageClass="ArrowTable", universe=self.butler.dimensions
         )
         self.butler.registry.registerDatasetType(self.datasetType)
 
@@ -1595,7 +1595,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
-            "data", dimensions=(), storageClass="ArrowNumpyDict", universe=self.butler.registry.dimensions
+            "data", dimensions=(), storageClass="ArrowNumpyDict", universe=self.butler.dimensions
         )
         self.butler.registry.registerDatasetType(self.datasetType)
 

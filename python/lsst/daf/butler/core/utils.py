@@ -29,8 +29,10 @@ import fnmatch
 import functools
 import logging
 import re
+from collections.abc import Callable
+from re import Pattern
 from types import EllipsisType
-from typing import Any, Callable, List, Optional, Pattern, TypeVar, Union
+from typing import Any, TypeVar
 
 from lsst.utils.iteration import ensure_iterable
 
@@ -55,7 +57,7 @@ def transactional(func: F) -> F:
     return inner  # type: ignore
 
 
-def stripIfNotNone(s: Optional[str]) -> Optional[str]:
+def stripIfNotNone(s: str | None) -> str | None:
     """Strip leading and trailing whitespace if the given object is not None.
 
     Parameters
@@ -74,9 +76,7 @@ def stripIfNotNone(s: Optional[str]) -> Optional[str]:
     return s
 
 
-def globToRegex(
-    expressions: Union[str, EllipsisType, None, List[str]]
-) -> Union[List[Union[str, Pattern]], EllipsisType]:
+def globToRegex(expressions: str | EllipsisType | None | list[str]) -> list[str | Pattern] | EllipsisType:
     """Translate glob-style search terms to regex.
 
     If a stand-alone '``*``' is found in ``expressions``, or expressions is
@@ -107,9 +107,9 @@ def globToRegex(
     magic = re.compile(r"[\*\?]|\[.*\]|\[!.*\]")
 
     # Try not to convert simple string to a regex.
-    results: List[Union[str, Pattern]] = []
+    results: list[str | Pattern] = []
     for e in expressions:
-        res: Union[str, Pattern]
+        res: str | Pattern
         if magic.search(e):
             res = re.compile(fnmatch.translate(e))
         else:

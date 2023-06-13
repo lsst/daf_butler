@@ -24,22 +24,24 @@ from __future__ import annotations
 __all__ = ("to_json_generic", "from_json_generic", "to_json_pydantic", "from_json_pydantic")
 
 import json
-from typing import TYPE_CHECKING, Any, Optional, Protocol, Type
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from ..registry import Registry
     from .dimensions import DimensionUniverse
 
 
 class SupportsSimple(Protocol):
-    _serializedType: Type
+    _serializedType: type[BaseModel]
 
     def to_simple(self, minimal: bool) -> Any:
         ...
 
     @classmethod
     def from_simple(
-        cls, simple: Any, universe: Optional[DimensionUniverse] = None, registry: Optional[Registry] = None
+        cls, simple: Any, universe: DimensionUniverse | None = None, registry: Registry | None = None
     ) -> SupportsSimple:
         ...
 
@@ -53,10 +55,10 @@ def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:
 
 
 def from_json_pydantic(
-    cls: Type[SupportsSimple],
+    cls: type[SupportsSimple],
     json_str: str,
-    universe: Optional[DimensionUniverse] = None,
-    registry: Optional[Registry] = None,
+    universe: DimensionUniverse | None = None,
+    registry: Registry | None = None,
 ) -> SupportsSimple:
     """Convert from JSON to a pydantic model."""
     simple = cls._serializedType.parse_raw(json_str)
@@ -89,10 +91,10 @@ def to_json_generic(self: SupportsSimple, minimal: bool = False) -> str:
 
 
 def from_json_generic(
-    cls: Type[SupportsSimple],
+    cls: type[SupportsSimple],
     json_str: str,
-    universe: Optional[DimensionUniverse] = None,
-    registry: Optional[Registry] = None,
+    universe: DimensionUniverse | None = None,
+    registry: Registry | None = None,
 ) -> SupportsSimple:
     """Return new class from JSON string.
 

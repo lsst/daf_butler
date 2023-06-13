@@ -29,7 +29,8 @@ __all__ = (
 
 import enum
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from lsst.utils.classes import immutable
 
@@ -156,11 +157,11 @@ class TopologicalRelationshipEndpoint(ABC):
         raise NotImplementedError()
 
     @property
-    def spatial(self) -> Optional[TopologicalFamily]:
+    def spatial(self) -> TopologicalFamily | None:
         """Return this endpoint's `~TopologicalSpace.SPATIAL` family."""
         return self.topology.get(TopologicalSpace.SPATIAL)
 
     @property
-    def temporal(self) -> Optional[TopologicalFamily]:
+    def temporal(self) -> TopologicalFamily | None:
         """Return this endpoint's `~TopologicalSpace.TEMPORAL` family."""
         return self.topology.get(TopologicalSpace.TEMPORAL)

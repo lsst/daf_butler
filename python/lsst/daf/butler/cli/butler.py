@@ -268,7 +268,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         commands: defaultdict[str, list[str]] = defaultdict(list)
         for pluginName in cls.getPluginList():
             try:
-                with open(pluginName, "r") as resourceFile:
+                with open(pluginName) as resourceFile:
                     resources = defaultdict(list, yaml.safe_load(resourceFile))
             except Exception as err:
                 log.warning("Error loading commands from %s, skipping. %s", pluginName, err)

@@ -28,7 +28,8 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from typing import AbstractSet, Any, Collection, Dict, Iterable, Iterator, Optional, Sequence, overload
+from collections.abc import Collection, Iterable, Iterator, Sequence, Set
+from typing import Any, overload
 
 from ._coordinate import DataCoordinate
 from ._graph import DimensionGraph
@@ -256,8 +257,8 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         dataIds: Collection[DataCoordinate],
         graph: DimensionGraph,
         *,
-        hasFull: Optional[bool] = None,
-        hasRecords: Optional[bool] = None,
+        hasFull: bool | None = None,
+        hasRecords: bool | None = None,
         check: bool = True,
     ):
         self._dataIds = dataIds
@@ -332,7 +333,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         key = DataCoordinate.standardize(key, universe=self.universe)
         return key in self._dataIds
 
-    def _subsetKwargs(self, graph: DimensionGraph) -> Dict[str, Any]:
+    def _subsetKwargs(self, graph: DimensionGraph) -> dict[str, Any]:
         """Return constructor kwargs useful for subclasses implementing subset.
 
         Parameters
@@ -347,7 +348,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
             with the appropriate values for a `subset` operation with the given
             dimensions.
         """
-        hasFull: Optional[bool]
+        hasFull: bool | None
         if graph.dimensions <= self.graph.required:
             hasFull = True
         else:
@@ -427,16 +428,16 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
 
     def __init__(
         self,
-        dataIds: AbstractSet[DataCoordinate],
+        dataIds: Set[DataCoordinate],
         graph: DimensionGraph,
         *,
-        hasFull: Optional[bool] = None,
-        hasRecords: Optional[bool] = None,
+        hasFull: bool | None = None,
+        hasRecords: bool | None = None,
         check: bool = True,
     ):
         super().__init__(dataIds, graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
 
-    _dataIds: AbstractSet[DataCoordinate]
+    _dataIds: Set[DataCoordinate]
 
     __slots__ = ()
 
@@ -683,8 +684,8 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         dataIds: Sequence[DataCoordinate],
         graph: DimensionGraph,
         *,
-        hasFull: Optional[bool] = None,
-        hasRecords: Optional[bool] = None,
+        hasFull: bool | None = None,
+        hasRecords: bool | None = None,
         check: bool = True,
     ):
         super().__init__(tuple(dataIds), graph, hasFull=hasFull, hasRecords=hasRecords, check=check)

@@ -60,7 +60,7 @@ class TestQueryRelationsTests(unittest.TestCase):
         # query system that simplify things as soon as it can spot that there
         # will be no overall results.
         data_file = os.path.normpath(os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
-        with open(data_file, "r") as stream:
+        with open(data_file) as stream:
             backend = YamlRepoImportBackend(stream, cls.registry)
         backend.register()
         backend.load(datastore=None)

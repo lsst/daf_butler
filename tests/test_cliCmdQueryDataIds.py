@@ -65,7 +65,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         """
         butler = Butler(self.repo, writeable=True)
         for filename in filenames:
-            with open(os.path.join(TESTDIR, "data", "registry", filename), "r") as stream:
+            with open(os.path.join(TESTDIR, "data", "registry", filename)) as stream:
                 # Go behind the back of the import code a bit to deal with
                 # the fact that this is just registry content with no actual
                 # files for the datastore.
@@ -164,7 +164,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             "test_metric_dimensionless",
             (),
             "StructuredDataDict",
-            universe=butler.registry.dimensions,
+            universe=butler.dimensions,
         )
         butler.registry.registerDatasetType(new_dataset_type)
         res, msg = self._queryDataIds(repo=self.root, collections=("imported_g",), datasets=...)

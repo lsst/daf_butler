@@ -482,7 +482,7 @@ class _SqlRowTransformer:
 
     Parameters
     ----------
-    columns : `Iterable` [ `ColumnTag` ]
+    columns : `~collections.abc.Iterable` [ `ColumnTag` ]
         Set of columns to handle.  Rows must have at least these columns, but
         may have more.
     engine : `ButlerSqlEngine`
@@ -510,13 +510,13 @@ class _SqlRowTransformer:
 
         Parameters
         ----------
-        sql_row : `Mapping`
+        sql_row : `~collections.abc.Mapping`
             Mapping with `str` keys and possibly-unpacked values for timespan
             columns.
 
         Returns
         -------
-        relation_row : `Mapping`
+        relation_row : `~collections.abc.Mapping`
             Mapping with `ColumnTag` keys and `Timespan` objects for timespan
             columns.
         """
@@ -531,13 +531,13 @@ class _SqlRowTransformer:
 
         Parameters
         ----------
-        relation_row : `Mapping`
+        relation_row : `~collections.abc.Mapping`
             Mapping with `ColumnTag` keys and `Timespan` objects for timespan
             columns.
 
         Returns
         -------
-        sql_row : `Mapping`
+        sql_row : `~collections.abc.Mapping`
             Mapping with `str` keys and possibly-unpacked values for timespan
             columns.
         """

@@ -23,8 +23,8 @@ from __future__ import annotations
 
 __all__ = ("RegistryDefaults",)
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, AbstractSet, Any, Optional
+from collections.abc import Sequence, Set
+from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import immutable
 
@@ -44,7 +44,7 @@ class RegistryDefaults:
 
     Parameters
     ----------
-    collections : `str` or `Iterable` [ `str` ], optional
+    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
         An expression specifying the collections to be searched (in order) when
         reading datasets.  If a default value for a governor dimension is not
         given via ``**kwargs``, and exactly one value for that dimension
@@ -75,7 +75,7 @@ class RegistryDefaults:
         checked when the defaults struct is actually attached to a `Registry`.
     """
 
-    def __init__(self, collections: Any = None, run: Optional[str] = None, infer: bool = True, **kwargs: str):
+    def __init__(self, collections: Any = None, run: str | None = None, infer: bool = True, **kwargs: str):
         if collections is None:
             if run is not None:
                 collections = (run,)
@@ -131,17 +131,18 @@ class RegistryDefaults:
             if summaries:
                 summary = CollectionSummary.union(*summaries)
                 for dimensionName in allGovernorDimensions.names - self._kwargs.keys():
-                    values: AbstractSet[str] = summary.governors.get(dimensionName, frozenset())
+                    values: Set[str] = summary.governors.get(dimensionName, frozenset())
                     if len(values) == 1:
                         (value,) = values
                         self._kwargs[dimensionName] = value
         self.dataId = registry.expandDataId(self._kwargs, withDefaults=False)
 
     collections: Sequence[str]
-    """The collections to search by default, in order (`Sequence` [ `str` ]).
+    """The collections to search by default, in order
+    (`~collections.abc.Sequence` [ `str` ]).
     """
 
-    run: Optional[str]
+    run: str | None
     """Name of the run this butler writes outputs to by default (`str` or
     `None`).
     """

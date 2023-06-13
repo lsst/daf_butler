@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ["FileDataset"]
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Union
+from typing import Any
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
@@ -38,11 +38,11 @@ class FileDataset:
 
     __slots__ = ("refs", "path", "formatter")
 
-    refs: List[DatasetRef]
+    refs: list[DatasetRef]
     """Registry information about the dataset. (`list` of `DatasetRef`).
     """
 
-    path: Union[str, ResourcePath]
+    path: str | ResourcePath
     """Path to the dataset (`lsst.resources.ResourcePath` or `str`).
 
     If the dataset was exported with ``transfer=None`` (i.e. in-place),
@@ -52,16 +52,16 @@ class FileDataset:
     to `Datastore.export`.
     """
 
-    formatter: Optional[FormatterParameter]
+    formatter: FormatterParameter | None
     """A `Formatter` class or fully-qualified name.
     """
 
     def __init__(
         self,
         path: ResourcePathExpression,
-        refs: Union[DatasetRef, List[DatasetRef]],
+        refs: DatasetRef | list[DatasetRef],
         *,
-        formatter: Optional[FormatterParameter] = None,
+        formatter: FormatterParameter | None = None,
     ):
         # Do not want to store all possible options supported by ResourcePath
         # so force a conversion for the non-str parameters.

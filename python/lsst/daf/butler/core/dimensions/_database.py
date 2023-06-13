@@ -28,8 +28,9 @@ __all__ = (
     "DatabaseTopologicalFamily",
 )
 
+from collections.abc import Iterable, Mapping, Set
 from types import MappingProxyType
-from typing import TYPE_CHECKING, AbstractSet, Dict, Iterable, Mapping, Optional, Set
+from typing import TYPE_CHECKING
 
 from lsst.utils import doImportType
 from lsst.utils.classes import cached_getter
@@ -92,7 +93,7 @@ class DatabaseTopologicalFamily(TopologicalFamily):
 
         (`GovernorDimension`).
         """
-        governors = set(m.governor for m in self.members)
+        governors = {m.governor for m in self.members}
         if None in governors:
             raise RuntimeError(
                 f"Bad {self.space.name} family definition {self.name}: at least one member "
@@ -122,7 +123,7 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
     ----------
     name : `str`
         Name of the family.
-    members : `Iterable` [ `str` ]
+    members : `~collections.abc.Iterable` [ `str` ]
         The names of the members of this family, ordered according to the
         priority used in `choose` (first-choice member first).
     """
@@ -132,7 +133,7 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
         self._space = space
         self._members = tuple(members)
 
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
         return not others.isdisjoint(self._members)
 
@@ -184,7 +185,7 @@ class DatabaseDimensionElement(DimensionElement):
         self._storage = storage
         self._implied = implied
         self._metadata = metadata
-        self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
+        self._topology: dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
 
     @property
     def name(self) -> str:
@@ -202,7 +203,7 @@ class DatabaseDimensionElement(DimensionElement):
         return self._metadata
 
     @property
-    def viewOf(self) -> Optional[str]:
+    def viewOf(self) -> str | None:
         # Docstring inherited from DimensionElement.
         # This is a bit encapsulation-breaking; these storage config values
         # are supposed to be opaque here, and just forwarded on to some
@@ -220,12 +221,12 @@ class DatabaseDimensionElement(DimensionElement):
         return MappingProxyType(self._topology)
 
     @property
-    def spatial(self) -> Optional[DatabaseTopologicalFamily]:
+    def spatial(self) -> DatabaseTopologicalFamily | None:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return self.topology.get(TopologicalSpace.SPATIAL)
 
     @property
-    def temporal(self) -> Optional[DatabaseTopologicalFamily]:
+    def temporal(self) -> DatabaseTopologicalFamily | None:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return self.topology.get(TopologicalSpace.TEMPORAL)
 
@@ -233,7 +234,7 @@ class DatabaseDimensionElement(DimensionElement):
         self,
         db: Database,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
         view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
@@ -417,16 +418,16 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
         that will back this element in the registry (in a "cls" key) along
         with any other construction keyword arguments (in other keys).
-    required : `Set` [ `Dimension` ]
+    required : `~collections.abc.Set` [ `Dimension` ]
         Names of dimensions whose keys define the compound primary key for this
         element's (logical) table, as well as references to their own
         tables.
-    implied : `Set` [ `Dimension` ]
+    implied : `~collections.abc.Set` [ `Dimension` ]
         Names of dimension whose keys are included in this elements's
         (logical) table as foreign keys.
-    metadata : `Iterable` [ `ddl.FieldSpec` ]
+    metadata : `~collections.abc.Iterable` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this element's table.
-    uniqueKeys : `Iterable` [ `ddl.FieldSpec` ]
+    uniqueKeys : `~collections.abc.Iterable` [ `ddl.FieldSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used
@@ -444,8 +445,8 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         self,
         name: str,
         storage: dict,
-        required: Set[str],
-        implied: Set[str],
+        required: set[str],
+        implied: set[str],
         metadata: Iterable[ddl.FieldSpec] = (),
         uniqueKeys: Iterable[ddl.FieldSpec] = (),
         alwaysJoin: bool = False,
@@ -458,7 +459,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         self._uniqueKeys = NamedValueSet(uniqueKeys).freeze()
         self._alwaysJoin = alwaysJoin
 
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
         return not (self._required.isdisjoint(others) and self._implied.isdisjoint(others))
 

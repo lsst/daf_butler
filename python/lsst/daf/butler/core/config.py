@@ -33,9 +33,9 @@ import os
 import pprint
 import sys
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, ClassVar, Iterator, cast
+from typing import IO, TYPE_CHECKING, Any, ClassVar, cast
 
 import yaml
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -64,7 +64,7 @@ else:
 
 def _doUpdate(d: Mapping[str, Any], u: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(u, Mapping) or not isinstance(d, MutableMapping):
-        raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
+        raise RuntimeError(f"Only call update with Mapping, not {type(d)}")
     for k, v in u.items():
         if isinstance(v, Mapping):
             lhs = d.get(k, {})
@@ -1113,7 +1113,7 @@ class ConfigSubset(Config):
 
     Parameters
     ----------
-    other : `Config` or `str` or `dict`
+    other : `Config` or `~lsst.resources.ResourcePathExpression` or `dict`
         Argument specifying the configuration information as understood
         by `Config`
     validate : `bool`, optional

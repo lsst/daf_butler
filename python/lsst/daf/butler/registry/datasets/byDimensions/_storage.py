@@ -431,7 +431,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             used to construct the new relation.
         requested_columns : `~collections.abc.Set` [ `str` ]
             Columns the relation should include.
-        collections : `Sequence` [ `tuple` [ `CollectionRecord`, `int` ] ]
+        collections : `~collections.abc.Sequence` [ `tuple` \
+                [ `CollectionRecord`, `int` ] ]
             Collections to search for the dataset and their ranks.
         context : `SqlQueryContext`
             Context that manages engines and state for the query.

@@ -312,7 +312,7 @@ class ParserLexTestCase(unittest.TestCase):
         parser = ParserYacc()
 
         for op in ("=", "!=", "<", "<=", ">", ">="):
-            tree = parser.parse("a {} 10".format(op))
+            tree = parser.parse(f"a {op} 10")
             self.assertIsInstance(tree, exprTree.BinaryOp)
             self.assertEqual(tree.op, op)
             self.assertIsInstance(tree.lhs, exprTree.Identifier)
@@ -325,7 +325,7 @@ class ParserLexTestCase(unittest.TestCase):
         parser = ParserYacc()
 
         for op in ("OR", "AND"):
-            tree = parser.parse("a {} b".format(op))
+            tree = parser.parse(f"a {op} b")
             self.assertIsInstance(tree, exprTree.BinaryOp)
             self.assertEqual(tree.op, op)
             self.assertIsInstance(tree.lhs, exprTree.Identifier)

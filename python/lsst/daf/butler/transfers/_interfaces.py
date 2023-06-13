@@ -24,7 +24,8 @@ from __future__ import annotations
 __all__ = ["RepoExportBackend", "RepoImportBackend", "RepoTransferFormatConfig"]
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Iterable, Optional, Set
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from ..core import (
     ConfigSubset,
@@ -72,7 +73,7 @@ class RepoExportBackend(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def saveCollection(self, record: CollectionRecord, doc: Optional[str]) -> None:
+    def saveCollection(self, record: CollectionRecord, doc: str | None) -> None:
         """Export a collection.
 
         This only exports the collection's own state, not its associations with
@@ -119,7 +120,7 @@ class RepoExportBackend(ABC):
             The type of the collection; either `CollectionType.TAGGED` or
             `CollectionType.CALIBRATION` (as other collection types are
             exported in other ways).
-        associations : `Iterable` [ `DatasetAssociation` ]
+        associations : `~collections.abc.Iterable` [ `DatasetAssociation` ]
             Structs representing an association between this collection and
             this dataset.
         """
@@ -151,11 +152,11 @@ class RepoImportBackend(ABC):
     @abstractmethod
     def load(
         self,
-        datastore: Optional[Datastore],
+        datastore: Datastore | None,
         *,
         directory: ResourcePathExpression | None = None,
-        transfer: Optional[str] = None,
-        skip_dimensions: Optional[Set] = None,
+        transfer: str | None = None,
+        skip_dimensions: set | None = None,
     ) -> None:
         """Import information associated with the backend into the given
         registry and datastore.

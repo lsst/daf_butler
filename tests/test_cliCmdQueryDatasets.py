@@ -238,7 +238,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 names=("type", "run", "band", "instrument", "physical_filter", "visit"),
             ),
             AstropyTable(
-                array((("alt_test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "425"))),
+                array(("alt_test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "425")),
                 names=("type", "run", "band", "instrument", "physical_filter", "visit"),
             ),
         )

@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ()  # all symbols intentionally private; for internal package use.
 
 import enum
-from typing import Optional, Tuple, cast
+from typing import cast
 
 from ....core import Dimension, DimensionElement, DimensionGraph, DimensionUniverse
 
@@ -35,7 +35,7 @@ class ExpressionConstant(enum.Enum):
     INGEST_DATE = "ingest_date"
 
 
-def categorizeConstant(name: str) -> Optional[ExpressionConstant]:
+def categorizeConstant(name: str) -> ExpressionConstant | None:
     """Categorize an identifier in a parsed expression as one of a few global
     constants.
 
@@ -56,7 +56,7 @@ def categorizeConstant(name: str) -> Optional[ExpressionConstant]:
         return None
 
 
-def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[DimensionElement, Optional[str]]:
+def categorizeElementId(universe: DimensionUniverse, name: str) -> tuple[DimensionElement, str | None]:
     """Categorize an identifier in a parsed expression as either a `Dimension`
     name (indicating the primary key for that dimension) or a non-primary-key
     column in a `DimensionElement` table.
@@ -121,7 +121,7 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[Dimensi
         return dimension, None
 
 
-def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionElement, Optional[str]]:
+def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionElement, str | None]:
     """Categorize an identifier in an ORDER BY clause.
 
     Parameters
@@ -164,7 +164,7 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionEl
       element from a graph is used.
     """
     element: DimensionElement
-    field_name: Optional[str] = None
+    field_name: str | None = None
     if name in ("timespan.begin", "timespan.end"):
         matches = [element for element in graph.elements if element.temporal]
         if len(matches) == 1:
@@ -224,7 +224,7 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionEl
     return element, field_name
 
 
-def categorizeElementOrderByName(element: DimensionElement, name: str) -> Optional[str]:
+def categorizeElementOrderByName(element: DimensionElement, name: str) -> str | None:
     """Categorize an identifier in an ORDER BY clause for a single element.
 
     Parameters
@@ -260,7 +260,7 @@ def categorizeElementOrderByName(element: DimensionElement, name: str) -> Option
     - Two special identifiers ``timespan.begin`` and ``timespan.end`` can be
       used with temporal elements.
     """
-    field_name: Optional[str] = None
+    field_name: str | None = None
     if name in ("timespan.begin", "timespan.end"):
         if element.temporal:
             field_name = name

@@ -23,8 +23,6 @@ from __future__ import annotations
 
 __all__ = ("Location", "LocationFactory")
 
-from typing import Optional, Union
-
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 
@@ -45,7 +43,7 @@ class Location:
 
     __slots__ = ("_datastoreRootUri", "_path", "_uri")
 
-    def __init__(self, datastoreRootUri: Union[None, ResourcePathExpression], path: ResourcePathExpression):
+    def __init__(self, datastoreRootUri: None | ResourcePathExpression, path: ResourcePathExpression):
         # Be careful not to force a relative local path to absolute path
         path_uri = ResourcePath(path, forceAbsolute=False)
 
@@ -71,7 +69,7 @@ class Location:
         self._path = path_uri
 
         # Internal cache of the full location as a ResourcePath
-        self._uri: Optional[ResourcePath] = None
+        self._uri: ResourcePath | None = None
 
         # Check that the resulting URI is inside the datastore
         # This can go wrong if we were given ../dir as path
@@ -144,7 +142,7 @@ class Location:
         """
         return self.uri.relativeToPathRoot
 
-    def updateExtension(self, ext: Optional[str]) -> None:
+    def updateExtension(self, ext: str | None) -> None:
         """Update the file extension associated with this `Location`.
 
         All file extensions are replaced.

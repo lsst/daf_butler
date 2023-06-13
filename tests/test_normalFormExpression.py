@@ -22,7 +22,6 @@
 
 import random
 import unittest
-from typing import List, Optional, Union
 
 import astropy.time
 from lsst.daf.butler.registry.queries.expressions.normalForm import (
@@ -88,7 +87,7 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
     def visitIsIn(
         self,
         lhs: bool,
-        values: List[bool],
+        values: list[bool],
         not_in: bool,
         node: Node,
     ) -> bool:
@@ -99,7 +98,7 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
         # Docstring inherited from TreeVisitor.visitParens
         return expression
 
-    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> bool:
+    def visitRangeLiteral(self, start: int, stop: int, stride: int | None, node: Node) -> bool:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         raise NotImplementedError()
 
@@ -110,8 +109,8 @@ class NormalFormExpressionTestCase(unittest.TestCase):
     def check(
         self,
         expression: str,
-        conjunctive: Union[str, bool] = False,
-        disjunctive: Union[str, bool] = False,
+        conjunctive: str | bool = False,
+        disjunctive: str | bool = False,
     ) -> None:
         """Compare the results of transforming an expression to normal form
         against given expected values.

@@ -28,8 +28,9 @@ __all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig", "FileTemplate
 import logging
 import os.path
 import string
+from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any
 
 from .config import Config
 from .configSupport import LookupKey, processLookupConfigs
@@ -93,8 +94,8 @@ class FileTemplates:
 
     def __init__(
         self,
-        config: Union[FileTemplatesConfig, str],
-        default: Optional[str] = None,
+        config: FileTemplatesConfig | str,
+        default: str | None = None,
         *,
         universe: DimensionUniverse,
     ):
@@ -145,7 +146,7 @@ class FileTemplates:
         return self.templates[key]
 
     def validateTemplates(
-        self, entities: Iterable[Union[DatasetType, DatasetRef, StorageClass]], logFailures: bool = False
+        self, entities: Iterable[DatasetType | DatasetRef | StorageClass], logFailures: bool = False
     ) -> None:
         """Validate the templates.
 
@@ -204,7 +205,7 @@ class FileTemplates:
                 msg = f"{len(failed)} template validation failures: {failMsg}"
             raise FileTemplateValidationError(msg)
 
-    def getLookupKeys(self) -> Set[LookupKey]:
+    def getLookupKeys(self) -> set[LookupKey]:
         """Retrieve the look up keys for all the template entries.
 
         Returns
@@ -215,8 +216,8 @@ class FileTemplates:
         return set(self.templates)
 
     def getTemplateWithMatch(
-        self, entity: Union[DatasetRef, DatasetType, StorageClass]
-    ) -> Tuple[LookupKey, FileTemplate]:
+        self, entity: DatasetRef | DatasetType | StorageClass
+    ) -> tuple[LookupKey, FileTemplate]:
         """Retrieve the `FileTemplate` associated with the dataset type.
 
         Also retrieves the lookup key that was a match for this template.
@@ -266,7 +267,7 @@ class FileTemplates:
 
         return source, template
 
-    def getTemplate(self, entity: Union[DatasetType, DatasetRef, StorageClass]) -> FileTemplate:
+    def getTemplate(self, entity: DatasetType | DatasetRef | StorageClass) -> FileTemplate:
         """Retrieve the `FileTemplate` associated with the dataset type.
 
         If the lookup name corresponds to a component the base name for
@@ -370,7 +371,7 @@ class FileTemplate:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{self.template}")'
 
-    def fields(self, optionals: bool = False, specials: bool = False, subfields: bool = False) -> Set[str]:
+    def fields(self, optionals: bool = False, specials: bool = False, subfields: bool = False) -> set[str]:
         """Return the field names used in this template.
 
         Parameters
@@ -562,9 +563,7 @@ class FileTemplate:
 
         # Complain if we were meant to use a component
         if component is not None and not usedComponent:
-            raise KeyError(
-                "Component '{}' specified but template {} did not use it".format(component, self.template)
-            )
+            raise KeyError(f"Component '{component}' specified but template {self.template} did not use it")
 
         # Since this is known to be a path, normalize it in case some double
         # slashes have crept in
@@ -576,7 +575,7 @@ class FileTemplate:
 
         return path
 
-    def validateTemplate(self, entity: Union[DatasetRef, DatasetType, StorageClass, None]) -> None:
+    def validateTemplate(self, entity: DatasetRef | DatasetType | StorageClass | None) -> None:
         """Compare the template against supplied entity that wants to use it.
 
         Parameters
@@ -701,7 +700,7 @@ class FileTemplate:
 
         return
 
-    def _determine_skypix_alias(self, entity: Union[DatasetRef, DatasetType]) -> Optional[str]:
+    def _determine_skypix_alias(self, entity: DatasetRef | DatasetType) -> str | None:
         """Return the dimension name that refers to a sky pixel.
 
         Parameters

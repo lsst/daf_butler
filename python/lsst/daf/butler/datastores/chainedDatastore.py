@@ -29,7 +29,8 @@ import itertools
 import logging
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
+from collections.abc import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import (
     Constraints,
@@ -62,7 +63,7 @@ class _IngestPrepData(Datastore.IngestPrepData):
         Pairs of `Datastore`, `IngestPrepData` for all child datastores.
     """
 
-    def __init__(self, children: List[Tuple[Datastore, Datastore.IngestPrepData, set[ResourcePath]]]):
+    def __init__(self, children: list[tuple[Datastore, Datastore.IngestPrepData, set[ResourcePath]]]):
         super().__init__(itertools.chain.from_iterable(data.refs.values() for _, data, _ in children))
         self.children = children
 
@@ -102,10 +103,10 @@ class ChainedDatastore(Datastore):
     containerKey = "datastores"
     """Key to specify where child datastores are configured."""
 
-    datastores: List[Datastore]
+    datastores: list[Datastore]
     """All the child datastores known to this datastore."""
 
-    datastoreConstraints: Sequence[Optional[Constraints]]
+    datastoreConstraints: Sequence[Constraints | None]
     """Constraints to be applied to each of the child datastores."""
 
     @classmethod
@@ -160,7 +161,7 @@ class ChainedDatastore(Datastore):
             datastoreClass = doImportType(fullChildConfig["cls"])
             if not issubclass(datastoreClass, Datastore):
                 raise TypeError(f"Imported child class {fullChildConfig['cls']} is not a Datastore")
-            newroot = "{}/{}_{}".format(root, datastoreClass.__qualname__, idx)
+            newroot = f"{root}/{datastoreClass.__qualname__}_{idx}"
             datastoreClass.setConfigRoot(newroot, childConfig, fullChildConfig, overwrite=overwrite)
 
             # Reattach to parent
@@ -178,7 +179,7 @@ class ChainedDatastore(Datastore):
 
     def __init__(
         self,
-        config: Union[Config, str],
+        config: Config | ResourcePathExpression,
         bridgeManager: DatastoreRegistryBridgeManager,
         butlerRoot: str | None = None,
     ):
@@ -201,9 +202,9 @@ class ChainedDatastore(Datastore):
             self._names = [d.name for d in self.datastores]
             childNames = ",".join(self.names)
         else:
-            childNames = "(empty@{})".format(time.time())
+            childNames = f"(empty@{time.time()})"
             self._names = [childNames]
-        self.name = "{}[{}]".format(type(self).__qualname__, childNames)
+        self.name = f"{type(self).__qualname__}[{childNames}]"
 
         # We declare we are ephemeral if all our child datastores declare
         # they are ephemeral
@@ -235,7 +236,7 @@ class ChainedDatastore(Datastore):
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
     @property
-    def names(self) -> Tuple[str, ...]:
+    def names(self) -> tuple[str, ...]:
         return tuple(self._names)
 
     def __str__(self) -> str:
@@ -276,8 +277,8 @@ class ChainedDatastore(Datastore):
         return refs_known
 
     def mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
-    ) -> Dict[DatasetRef, bool]:
+        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool] | None = None
+    ) -> dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
@@ -295,7 +296,7 @@ class ChainedDatastore(Datastore):
             Mapping from dataset to boolean indicating existence in any
             of the child datastores.
         """
-        dataset_existence: Dict[DatasetRef, bool] = {}
+        dataset_existence: dict[DatasetRef, bool] = {}
         for datastore in self.datastores:
             dataset_existence.update(datastore.mexists(refs, artifact_existence=artifact_existence))
 
@@ -327,8 +328,8 @@ class ChainedDatastore(Datastore):
     def get(
         self,
         ref: DatasetRef,
-        parameters: Optional[Mapping[str, Any]] = None,
-        storageClass: Optional[Union[StorageClass, str]] = None,
+        parameters: Mapping[str, Any] | None = None,
+        storageClass: StorageClass | str | None = None,
     ) -> Any:
         """Load an InMemoryDataset from the store.
 
@@ -372,7 +373,7 @@ class ChainedDatastore(Datastore):
             except FileNotFoundError:
                 pass
 
-        raise FileNotFoundError("Dataset {} could not be found in any of the datastores".format(ref))
+        raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
 
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to each
@@ -438,7 +439,7 @@ class ChainedDatastore(Datastore):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
-    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
+    def _overrideTransferMode(self, *datasets: Any, transfer: str | None = None) -> str | None:
         # Docstring inherited from base class.
         if transfer != "auto":
             return transfer
@@ -459,7 +460,7 @@ class ChainedDatastore(Datastore):
             f" from 'auto' in each child datastore (wanted {transfers})"
         )
 
-    def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
+    def _prepIngest(self, *datasets: FileDataset, transfer: str | None = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
         if transfer is None:
             raise NotImplementedError("ChainedDatastore does not support transfer=None.")
@@ -478,7 +479,7 @@ class ChainedDatastore(Datastore):
 
         # Filter down to just datasets the chained datastore's own
         # configuration accepts.
-        okForParent: List[FileDataset] = [
+        okForParent: list[FileDataset] = [
             dataset
             for dataset in datasets
             if isDatasetAcceptable(dataset, name=self.name, constraints=self.constraints)
@@ -486,12 +487,12 @@ class ChainedDatastore(Datastore):
 
         # Iterate over nested datastores and call _prepIngest on each.
         # Save the results to a list:
-        children: List[Tuple[Datastore, Datastore.IngestPrepData, set[ResourcePath]]] = []
+        children: list[tuple[Datastore, Datastore.IngestPrepData, set[ResourcePath]]] = []
         # ...and remember whether all of the failures are due to
         # NotImplementedError being raised.
         allFailuresAreNotImplementedError = True
         for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
-            okForChild: List[FileDataset]
+            okForChild: list[FileDataset]
             if constraints is not None:
                 okForChild = [
                     dataset
@@ -528,7 +529,7 @@ class ChainedDatastore(Datastore):
         self,
         prepData: _IngestPrepData,
         *,
-        transfer: Optional[str] = None,
+        transfer: str | None = None,
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited from Datastore._finishIngest.
@@ -558,10 +559,10 @@ class ChainedDatastore(Datastore):
         refs: Iterable[DatasetRef],
         predict: bool = False,
         allow_missing: bool = False,
-    ) -> Dict[DatasetRef, DatasetRefURIs]:
+    ) -> dict[DatasetRef, DatasetRefURIs]:
         # Docstring inherited
 
-        uris: Dict[DatasetRef, DatasetRefURIs] = {}
+        uris: dict[DatasetRef, DatasetRefURIs] = {}
         missing_refs = set(refs)
 
         # If predict is True we don't want to predict a dataset in the first
@@ -615,9 +616,9 @@ class ChainedDatastore(Datastore):
         be returned.
         """
         log.debug("Requesting URIs for %s", ref)
-        predictedUri: Optional[DatasetRefURIs] = None
-        predictedEphemeralUri: Optional[DatasetRefURIs] = None
-        firstEphemeralUri: Optional[DatasetRefURIs] = None
+        predictedUri: DatasetRefURIs | None = None
+        predictedEphemeralUri: DatasetRefURIs | None = None
+        firstEphemeralUri: DatasetRefURIs | None = None
         for datastore in self.datastores:
             if datastore.exists(ref):
                 if not datastore.isEphemeral:
@@ -644,7 +645,7 @@ class ChainedDatastore(Datastore):
             log.debug("Retrieved predicted ephemeral URI: %s", predictedEphemeralUri)
             return predictedEphemeralUri
 
-        raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
+        raise FileNotFoundError(f"Dataset {ref} not in any datastore")
 
     def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.
@@ -701,7 +702,7 @@ class ChainedDatastore(Datastore):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> List[ResourcePath]:
+    ) -> list[ResourcePath]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -743,7 +744,7 @@ class ChainedDatastore(Datastore):
         # early if some of the refs are missing, or whether files should be
         # transferred until a problem is hit. Prefer to complain up front.
         # Use the datastore integer as primary key.
-        grouped_by_datastore: Dict[int, Set[DatasetRef]] = {}
+        grouped_by_datastore: dict[int, set[DatasetRef]] = {}
 
         for number, datastore in enumerate(self.datastores):
             if datastore.isEphemeral:
@@ -768,7 +769,7 @@ class ChainedDatastore(Datastore):
             raise RuntimeError(f"Some datasets were not found in any datastores: {pending}")
 
         # Now do the transfer.
-        targets: List[ResourcePath] = []
+        targets: list[ResourcePath] = []
         for number, datastore_refs in grouped_by_datastore.items():
             targets.extend(
                 self.datastores[number].retrieveArtifacts(
@@ -807,7 +808,7 @@ class ChainedDatastore(Datastore):
         for datastore in tuple(self.datastores):
             datastore.forget(refs)
 
-    def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = True) -> None:
+    def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
         if isinstance(ref, DatasetRef):
             ref_label = str(ref)
         else:
@@ -856,7 +857,7 @@ class ChainedDatastore(Datastore):
         self.put(inMemoryDataset, ref)
 
     def validateConfiguration(
-        self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]], logFailures: bool = False
+        self, entities: Iterable[DatasetRef | DatasetType | StorageClass], logFailures: bool = False
     ) -> None:
         """Validate some of the configuration for this datastore.
 
@@ -895,7 +896,7 @@ class ChainedDatastore(Datastore):
             msg = ";\n".join(failures)
             raise DatastoreValidationError(msg)
 
-    def validateKey(self, lookupKey: LookupKey, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
+    def validateKey(self, lookupKey: LookupKey, entity: DatasetRef | DatasetType | StorageClass) -> None:
         # Docstring is inherited from base class
         failures = []
         for datastore in self.datastores:
@@ -908,7 +909,7 @@ class ChainedDatastore(Datastore):
             msg = ";\n".join(failures)
             raise DatastoreValidationError(msg)
 
-    def getLookupKeys(self) -> Set[LookupKey]:
+    def getLookupKeys(self) -> set[LookupKey]:
         # Docstring is inherited from base class
         keys = set()
         for datastore in self.datastores:
@@ -923,8 +924,8 @@ class ChainedDatastore(Datastore):
 
     def needs_expanded_data_ids(
         self,
-        transfer: Optional[str],
-        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+        transfer: str | None,
+        entity: DatasetRef | DatasetType | StorageClass | None = None,
     ) -> bool:
         # Docstring inherited.
         # We can't safely use `self.datastoreConstraints` with `entity` to
@@ -945,7 +946,7 @@ class ChainedDatastore(Datastore):
     def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
         # Docstring inherited from the base class.
 
-        all_records: Dict[str, DatastoreRecordData] = {}
+        all_records: dict[str, DatastoreRecordData] = {}
 
         # Merge all sub-datastore records into one structure
         for datastore in self.datastores:
@@ -962,8 +963,8 @@ class ChainedDatastore(Datastore):
         self,
         refs: Iterable[DatasetRef],
         *,
-        directory: Optional[ResourcePathExpression] = None,
-        transfer: Optional[str] = "auto",
+        directory: ResourcePathExpression | None = None,
+        transfer: str | None = "auto",
     ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
         if transfer == "auto" and directory is None:
@@ -1034,7 +1035,7 @@ class ChainedDatastore(Datastore):
         source_datastore: Datastore,
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
-        artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
+        artifact_existence: dict[ResourcePath, bool] | None = None,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Docstring inherited
         # mypy does not understand "type(self) is not type(source)"

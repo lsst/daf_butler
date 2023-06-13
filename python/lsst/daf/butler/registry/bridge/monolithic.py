@@ -24,8 +24,9 @@ __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegis
 
 import copy
 from collections import namedtuple
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, cast
+from typing import TYPE_CHECKING, cast
 
 import sqlalchemy
 
@@ -63,7 +64,7 @@ _TablesTuple = namedtuple(
 _VERSION = VersionTuple(0, 2, 0)
 
 
-def _makeTableSpecs(datasets: Type[DatasetRecordStorageManager]) -> _TablesTuple:
+def _makeTableSpecs(datasets: type[DatasetRecordStorageManager]) -> _TablesTuple:
     """Construct specifications for tables used by the monolithic datastore
     bridge classes.
 
@@ -132,14 +133,14 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         self._db = db
         self._tables = tables
 
-    def _refsToRows(self, refs: Iterable[DatasetIdRef]) -> List[dict]:
+    def _refsToRows(self, refs: Iterable[DatasetIdRef]) -> list[dict]:
         """Transform an iterable of `DatasetRef` or `FakeDatasetRef` objects to
         a list of dictionaries that match the schema of the tables used by this
         class.
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` or `FakeDatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` or `FakeDatasetRef` ]
             Datasets to transform.
 
         Returns
@@ -158,7 +159,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         rows = self._refsToRows(self.check(refs))
         self._db.delete(self._tables.dataset_location, ["datastore_name", "dataset_id"], *rows)
 
-    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: Optional[DatastoreTransaction]) -> None:
+    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: DatastoreTransaction | None) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         # TODO: avoid self.check() call via queries like
         #     INSERT INTO dataset_location_trash
@@ -194,12 +195,10 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
     @contextmanager
     def emptyTrash(
         self,
-        records_table: Optional[OpaqueTableStorage] = None,
-        record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
-        record_column: Optional[str] = None,
-    ) -> Iterator[
-        Tuple[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]], Optional[Set[str]]]
-    ]:
+        records_table: OpaqueTableStorage | None = None,
+        record_class: type[StoredDatastoreItemInfo] | None = None,
+        record_column: str | None = None,
+    ) -> Iterator[tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]]:
         # Docstring inherited from DatastoreRegistryBridge
 
         if records_table is None:
@@ -245,7 +244,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # that those artifacts should be retained. Can only do this check
         # if the caller provides a column name that can map to multiple
         # refs.
-        preserved: Optional[Set[str]] = None
+        preserved: set[str] | None = None
         if record_column is not None:
             # Some helper subqueries
             items_not_in_trash = join_records(
@@ -328,7 +327,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         )
         self._db = db
         self._tables = tables
-        self._ephemeral: Dict[str, EphemeralDatastoreRegistryBridge] = {}
+        self._ephemeral: dict[str, EphemeralDatastoreRegistryBridge] = {}
 
     @classmethod
     def initialize(
@@ -337,7 +336,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         context: StaticTablesContext,
         *,
         opaque: OpaqueTableStorageManager,
-        datasets: Type[DatasetRecordStorageManager],
+        datasets: type[DatasetRecordStorageManager],
         universe: DimensionUniverse,
         registry_schema_version: VersionTuple | None = None,
     ) -> DatastoreRegistryBridgeManager:

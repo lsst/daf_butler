@@ -30,8 +30,9 @@ import unittest
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
+from collections.abc import Iterator
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Iterator, Optional, Type, Union
+from typing import TYPE_CHECKING
 
 import astropy.time
 import sqlalchemy
@@ -85,13 +86,13 @@ class RegistryTests(ABC):
     generate tests for different configurations.
     """
 
-    collectionsManager: Optional[str] = None
+    collectionsManager: str | None = None
     """Name of the collections manager class, if subclass provides value for
     this member then it overrides name specified in default configuration
     (`str`).
     """
 
-    datasetsManager: Optional[str | dict[str, str]] = None
+    datasetsManager: str | dict[str, str] | None = None
     """Name or configuration dictionary of the datasets manager class, if
     subclass provides value for this member then it overrides name specified
     in default configuration (`str` or `dict`).
@@ -120,7 +121,7 @@ class RegistryTests(ABC):
         return config
 
     @abstractmethod
-    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Optional[Registry]:
+    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry | None:
         """Return the Registry instance to be tested.
 
         Parameters
@@ -144,7 +145,7 @@ class RegistryTests(ABC):
         """
         from ...transfers import YamlRepoImportBackend
 
-        with open(os.path.join(self.getDataDir(), filename), "r") as stream:
+        with open(os.path.join(self.getDataDir(), filename)) as stream:
             backend = YamlRepoImportBackend(stream, registry)
         backend.register()
         backend.load(datastore=None)
@@ -1061,36 +1062,36 @@ class RegistryTests(ABC):
         # with empty expression
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1).expanded().toSet()
         self.assertEqual(len(rows), 4 * 3)  # 4 exposures times 3 detectors
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101, 110, 111))
-        self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 11))
-        self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
+        self.assertCountEqual({dataId["exposure"] for dataId in rows}, (100, 101, 110, 111))
+        self.assertCountEqual({dataId["visit"] for dataId in rows}, (10, 11))
+        self.assertCountEqual({dataId["detector"] for dataId in rows}, (1, 2, 3))
 
         # second collection
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=tagged2).toSet()
         self.assertEqual(len(rows), 4 * 3)  # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101, 200, 201))
-        self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 20))
-        self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
+        self.assertCountEqual({dataId["exposure"] for dataId in rows}, (100, 101, 200, 201))
+        self.assertCountEqual({dataId["visit"] for dataId in rows}, (10, 20))
+        self.assertCountEqual({dataId["detector"] for dataId in rows}, (1, 2, 3, 4, 5))
 
         # with two input datasets
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=[run1, tagged2]).toSet()
         self.assertEqual(len(set(rows)), 6 * 3)  # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101, 110, 111, 200, 201))
-        self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 11, 20))
-        self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
+        self.assertCountEqual({dataId["exposure"] for dataId in rows}, (100, 101, 110, 111, 200, 201))
+        self.assertCountEqual({dataId["visit"] for dataId in rows}, (10, 11, 20))
+        self.assertCountEqual({dataId["detector"] for dataId in rows}, (1, 2, 3, 4, 5))
 
         # limit to single visit
         rows = registry.queryDataIds(
             dimensions, datasets=rawType, collections=run1, where="visit = 10", instrument="DummyCam"
         ).toSet()
         self.assertEqual(len(rows), 2 * 3)  # 2 exposures times 3 detectors
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
-        self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
-        self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
+        self.assertCountEqual({dataId["exposure"] for dataId in rows}, (100, 101))
+        self.assertCountEqual({dataId["visit"] for dataId in rows}, (10,))
+        self.assertCountEqual({dataId["detector"] for dataId in rows}, (1, 2, 3))
 
         # more limiting expression, using link names instead of Table.column
         rows = registry.queryDataIds(
@@ -1100,9 +1101,9 @@ class RegistryTests(ABC):
             where="visit = 10 and detector > 1 and 'DummyCam'=instrument",
         ).toSet()
         self.assertEqual(len(rows), 2 * 2)  # 2 exposures times 2 detectors
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
-        self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
-        self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
+        self.assertCountEqual({dataId["exposure"] for dataId in rows}, (100, 101))
+        self.assertCountEqual({dataId["visit"] for dataId in rows}, (10,))
+        self.assertCountEqual({dataId["detector"] for dataId in rows}, (2, 3))
 
         # queryDataIds with only one of `datasets` and `collections` is an
         # error.
@@ -1127,9 +1128,9 @@ class RegistryTests(ABC):
             instrument="DummyCam",
         ).toSet()
         self.assertEqual(len(rows), 2 * 3)  # 2 exposures times 3 detectors
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (110, 111))
-        self.assertCountEqual(set(dataId["visit"] for dataId in rows), (11,))
-        self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
+        self.assertCountEqual({dataId["exposure"] for dataId in rows}, (110, 111))
+        self.assertCountEqual({dataId["visit"] for dataId in rows}, (11,))
+        self.assertCountEqual({dataId["detector"] for dataId in rows}, (1, 2, 3))
 
     def testSkyMapDimensions(self):
         """Tests involving only skymap dimensions, no joins to instrument."""
@@ -1144,7 +1145,7 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", name="dummy_r", band="r"),
             dict(instrument="DummyCam", name="dummy_i", band="i"),
         )
-        registry.insertDimensionData("skymap", dict(name="DummyMap", hash="sha!".encode("utf8")))
+        registry.insertDimensionData("skymap", dict(name="DummyMap", hash=b"sha!"))
         for tract in range(10):
             registry.insertDimensionData("tract", dict(skymap="DummyMap", id=tract))
             registry.insertDimensionData(
@@ -1197,9 +1198,9 @@ class RegistryTests(ABC):
         self.assertEqual(len(rows), 3 * 4 * 2)  # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "band"))
-        self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
-        self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
-        self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i", "r"))
+        self.assertCountEqual({dataId["tract"] for dataId in rows}, (1, 3, 5))
+        self.assertCountEqual({dataId["patch"] for dataId in rows}, (2, 4, 6, 7))
+        self.assertCountEqual({dataId["band"] for dataId in rows}, ("i", "r"))
 
         # limit to 2 tracts and 2 patches
         rows = registry.queryDataIds(
@@ -1210,18 +1211,18 @@ class RegistryTests(ABC):
             skymap="DummyMap",
         ).toSet()
         self.assertEqual(len(rows), 2 * 2 * 2)  # 2 tracts x 2 patches x 2 filters
-        self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
-        self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 7))
-        self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i", "r"))
+        self.assertCountEqual({dataId["tract"] for dataId in rows}, (1, 5))
+        self.assertCountEqual({dataId["patch"] for dataId in rows}, (2, 7))
+        self.assertCountEqual({dataId["band"] for dataId in rows}, ("i", "r"))
 
         # limit to single filter
         rows = registry.queryDataIds(
             dimensions, datasets=[calexpType, mergeType], collections=run, where="band = 'i'"
         ).toSet()
         self.assertEqual(len(rows), 3 * 4 * 1)  # 4 tracts x 4 patches x 2 filters
-        self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
-        self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
-        self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i",))
+        self.assertCountEqual({dataId["tract"] for dataId in rows}, (1, 3, 5))
+        self.assertCountEqual({dataId["patch"] for dataId in rows}, (2, 4, 6, 7))
+        self.assertCountEqual({dataId["band"] for dataId in rows}, ("i",))
 
         # Specifying non-existing skymap is an exception
         with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
@@ -1507,7 +1508,7 @@ class RegistryTests(ABC):
         unknown_type = DatasetType("not_known", dimensions=bias.dimensions, storageClass="Exposure")
 
         # Test both string name and dataset type object.
-        test_type: Union[str, DatasetType]
+        test_type: str | DatasetType
         for test_type, test_type_name in (
             (unknown_type, unknown_type.name),
             (unknown_type.name, unknown_type.name),
@@ -2139,7 +2140,7 @@ class RegistryTests(ABC):
             pass
 
         def assertLookup(
-            detector: int, timespan: Timespan, expected: Optional[Union[DatasetRef, Type[Ambiguous]]]
+            detector: int, timespan: Timespan, expected: DatasetRef | type[Ambiguous] | None
         ) -> None:
             """Local function that asserts that a bias lookup returns the given
             expected result.

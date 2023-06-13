@@ -25,7 +25,7 @@ __all__ = ("JsonFormatter",)
 
 import dataclasses
 import json
-from typing import Any, Optional, Type
+from typing import Any
 
 from .file import FileFormatter
 
@@ -38,7 +38,7 @@ class JsonFormatter(FileFormatter):
     unsupportedParameters = None
     """This formatter does not support any parameters (`frozenset`)"""
 
-    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
+    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         """Read a file from the path in JSON format.
 
         Parameters
@@ -76,7 +76,7 @@ class JsonFormatter(FileFormatter):
         """
         self.fileDescriptor.location.uri.write(self._toBytes(inMemoryDataset))
 
-    def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
+    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
         """Read the bytes object as a python object.
 
         Parameters

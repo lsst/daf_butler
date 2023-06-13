@@ -206,7 +206,7 @@ class CollectionSummaryManager:
         ----------
         collection : `CollectionRecord`
             Collection whose summary should be updated.
-        dataset_type_ids : `Iterable` [ `int` ]
+        dataset_type_ids : `~collections.abc.Iterable` [ `int` ]
             Integer IDs for the dataset types to associate with this
             collection.
         summary : `CollectionSummary`

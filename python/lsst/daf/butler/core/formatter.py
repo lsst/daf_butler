@@ -27,20 +27,8 @@ import contextlib
 import copy
 import logging
 from abc import ABCMeta, abstractmethod
-from collections.abc import Mapping
-from typing import (
-    TYPE_CHECKING,
-    AbstractSet,
-    Any,
-    ClassVar,
-    Dict,
-    Iterator,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    Union,
-)
+from collections.abc import Iterator, Mapping, Set
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.introspection import get_full_type_name
 
@@ -56,7 +44,7 @@ from .storageClass import StorageClass
 log = logging.getLogger(__name__)
 
 # Define a new special type for functions that take "entity"
-Entity = Union[DatasetType, DatasetRef, StorageClass, str]
+Entity = DatasetType | DatasetRef | StorageClass | str
 
 
 if TYPE_CHECKING:
@@ -88,18 +76,18 @@ class Formatter(metaclass=ABCMeta):
     signature.
     """
 
-    unsupportedParameters: ClassVar[Optional[AbstractSet[str]]] = frozenset()
+    unsupportedParameters: ClassVar[Set[str] | None] = frozenset()
     """Set of read parameters not understood by this `Formatter`. An empty set
     means all parameters are supported.  `None` indicates that no parameters
     are supported. These param (`frozenset`).
     """
 
-    supportedWriteParameters: ClassVar[Optional[AbstractSet[str]]] = None
+    supportedWriteParameters: ClassVar[Set[str] | None] = None
     """Parameters understood by this formatter that can be used to control
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
 
-    supportedExtensions: ClassVar[AbstractSet[str]] = frozenset()
+    supportedExtensions: ClassVar[Set[str]] = frozenset()
     """Set of all extensions supported by this formatter.
 
     Only expected to be populated by Formatters that write files. Any extension
@@ -110,8 +98,8 @@ class Formatter(metaclass=ABCMeta):
         self,
         fileDescriptor: FileDescriptor,
         dataId: DataCoordinate,
-        writeParameters: Optional[Dict[str, Any]] = None,
-        writeRecipes: Optional[Dict[str, Any]] = None,
+        writeParameters: dict[str, Any] | None = None,
+        writeRecipes: dict[str, Any] | None = None,
     ):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
@@ -170,7 +158,7 @@ class Formatter(metaclass=ABCMeta):
         return {}
 
     @classmethod
-    def validateWriteRecipes(cls, recipes: Optional[Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
+    def validateWriteRecipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
         """Validate supplied recipes for this formatter.
 
         The recipes are supplemented with default values where appropriate.
@@ -207,7 +195,7 @@ class Formatter(metaclass=ABCMeta):
         return get_full_type_name(cls)
 
     @abstractmethod
-    def read(self, component: Optional[str] = None) -> Any:
+    def read(self, component: str | None = None) -> Any:
         """Read a Dataset.
 
         Parameters
@@ -256,7 +244,7 @@ class Formatter(metaclass=ABCMeta):
             pass
         return True
 
-    def fromBytes(self, serializedDataset: bytes, component: Optional[str] = None) -> object:
+    def fromBytes(self, serializedDataset: bytes, component: str | None = None) -> object:
         """Read serialized data into a Dataset or its component.
 
         Parameters
@@ -292,7 +280,7 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support writing to bytes.")
 
     @contextlib.contextmanager
-    def _updateLocation(self, location: Optional[Location]) -> Iterator[Location]:
+    def _updateLocation(self, location: Location | None) -> Iterator[Location]:
         """Temporarily replace the location associated with this formatter.
 
         Parameters
@@ -433,7 +421,7 @@ class Formatter(metaclass=ABCMeta):
         updated = self.makeUpdatedLocation(self.fileDescriptor.location)
         return updated.pathInStore.path
 
-    def segregateParameters(self, parameters: Optional[Dict[str, Any]] = None) -> Tuple[Dict, Dict]:
+    def segregateParameters(self, parameters: dict[str, Any] | None = None) -> tuple[dict, dict]:
         """Segregate the supplied parameters.
 
         This splits the parameters into those understood by the
@@ -490,7 +478,7 @@ class FormatterFactory:
     def __init__(self) -> None:
         self._mappingFactory = MappingFactory(Formatter)
 
-    def __contains__(self, key: Union[LookupKey, str]) -> bool:
+    def __contains__(self, key: LookupKey | str) -> bool:
         """Indicate whether the supplied key is present in the factory.
 
         Parameters
@@ -639,7 +627,7 @@ class FormatterFactory:
             writeParameters = copy.deepcopy(defaultParameters.get(formatter, {}))
             writeParameters.update(specificWriteParameters)
 
-            kwargs: Dict[str, Any] = {}
+            kwargs: dict[str, Any] = {}
             if writeParameters:
                 kwargs["writeParameters"] = writeParameters
 
@@ -648,7 +636,7 @@ class FormatterFactory:
 
             self.registerFormatter(key, formatter, **kwargs)
 
-    def getLookupKeys(self) -> Set[LookupKey]:
+    def getLookupKeys(self) -> set[LookupKey]:
         """Retrieve the look up keys for all the registry entries.
 
         Returns
@@ -658,7 +646,7 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type[Formatter], Dict[str, Any]]:
+    def getFormatterClassWithMatch(self, entity: Entity) -> tuple[LookupKey, type[Formatter], dict[str, Any]]:
         """Get the matching formatter class along with the registry key.
 
         Parameters
@@ -690,7 +678,7 @@ class FormatterFactory:
 
         return matchKey, formatter, formatter_kwargs
 
-    def getFormatterClass(self, entity: Entity) -> Type:
+    def getFormatterClass(self, entity: Entity) -> type:
         """Get the matching formatter class.
 
         Parameters
@@ -710,7 +698,7 @@ class FormatterFactory:
         _, formatter, _ = self.getFormatterClassWithMatch(entity)
         return formatter
 
-    def getFormatterWithMatch(self, entity: Entity, *args: Any, **kwargs: Any) -> Tuple[LookupKey, Formatter]:
+    def getFormatterWithMatch(self, entity: Entity, *args: Any, **kwargs: Any) -> tuple[LookupKey, Formatter]:
         """Get a new formatter instance along with the matching registry key.
 
         Parameters
@@ -770,7 +758,7 @@ class FormatterFactory:
 
     def registerFormatter(
         self,
-        type_: Union[LookupKey, str, StorageClass, DatasetType],
+        type_: LookupKey | str | StorageClass | DatasetType,
         formatter: str,
         *,
         overwrite: bool = False,
@@ -804,4 +792,4 @@ class FormatterFactory:
 
 
 # Type to use when allowing a Formatter or its class name
-FormatterParameter = Union[str, Type[Formatter], Formatter]
+FormatterParameter = str | type[Formatter] | Formatter

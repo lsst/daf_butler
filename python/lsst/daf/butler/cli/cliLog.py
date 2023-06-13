@@ -110,7 +110,7 @@ class CliLog:
         variable ``DAF_BUTLER_ROOT_LOGGER``. This variable can contain
         multiple default loggers separated by a ``:``.
         """
-        log_names = set(["lsst"])
+        log_names = {"lsst"}
         envvar = "DAF_BUTLER_ROOT_LOGGER"
         if envvar in os.environ:
             log_names |= set(os.environ[envvar].split(":"))

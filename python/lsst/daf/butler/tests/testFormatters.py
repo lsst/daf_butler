@@ -139,7 +139,7 @@ class MetricsExampleFormatter(Formatter):
         # uses yaml or json.
         path = self.fileDescriptor.location.path
 
-        with open(path, "r") as fd:
+        with open(path) as fd:
             if path.endswith(".yaml"):
                 data = yaml.load(fd, Loader=yaml.SafeLoader)
             elif path.endswith(".json"):
@@ -232,7 +232,7 @@ class MetricsExampleDataFormatter(Formatter):
         # This formatter can not read a subset from disk because it
         # uses yaml.
         path = self.fileDescriptor.location.path
-        with open(path, "r") as fd:
+        with open(path) as fd:
             data = yaml.load(fd, Loader=yaml.SafeLoader)
 
         # We can slice up front if required

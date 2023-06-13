@@ -25,7 +25,8 @@ __all__ = ("LimitedButler",)
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Dict, Iterable, Optional, Union
+from collections.abc import Iterable
+from typing import Any, ClassVar
 
 from deprecated.sphinx import deprecated
 
@@ -172,7 +173,7 @@ class LimitedButler(ABC):
         self,
         ref: DatasetRef,
         *,
-        parameters: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any] | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> Any:
         """Retrieve a stored dataset.
@@ -208,7 +209,7 @@ class LimitedButler(ABC):
         self,
         ref: DatasetRef,
         *,
-        parameters: Union[dict, None] = None,
+        parameters: dict[str, Any] | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
@@ -378,7 +379,7 @@ class LimitedButler(ABC):
             datastores known to this butler.  Note that this will make it
             impossible to retrieve these datasets even via other collections.
             Datasets that are already not stored are ignored by this option.
-        tags : `Iterable` [ `str` ], optional
+        tags : `~collections.abc.Iterable` [ `str` ], optional
             `~CollectionType.TAGGED` collections to disassociate the datasets
             from.  Ignored if ``disassociate`` is `False` or ``purge`` is
             `True`.

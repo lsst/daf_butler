@@ -72,7 +72,7 @@ def register_dataset_type(
 
     # mypy does not think that Tuple[str, ...] is allowed for DatasetType
     # constructor so we have to do the conversion here.
-    graph = butler.registry.dimensions.extract(dimensions)
+    graph = butler.dimensions.extract(dimensions)
 
     datasetType = DatasetType(
         dataset_type,
@@ -80,7 +80,7 @@ def register_dataset_type(
         storage_class,
         parentStorageClass=None,
         isCalibration=is_calibration,
-        universe=butler.registry.dimensions,
+        universe=butler.dimensions,
     )
 
     return butler.registry.registerDatasetType(datasetType)

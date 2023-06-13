@@ -36,25 +36,9 @@ import logging
 import numbers
 import os
 import warnings
-from collections import defaultdict
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Counter,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Set,
-    TextIO,
-    Tuple,
-    Type,
-    Union,
-)
+from collections import Counter, defaultdict
+from collections.abc import Iterable, Iterator, MutableMapping, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, TextIO
 
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -134,7 +118,7 @@ class Butler(LimitedButler):
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
         arguments.
-    collections : `str` or `Iterable` [ `str` ], optional
+    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
         An expression specifying the collections to be searched (in order) when
         reading datasets.
         This may be a `str` collection name or an iterable thereof.
@@ -209,13 +193,13 @@ class Butler(LimitedButler):
 
     def __init__(
         self,
-        config: Union[Config, ResourcePathExpression, None] = None,
+        config: Config | ResourcePathExpression | None = None,
         *,
-        butler: Optional[Butler] = None,
+        butler: Butler | None = None,
         collections: Any = None,
-        run: Optional[str] = None,
-        searchPaths: Optional[Sequence[ResourcePathExpression]] = None,
-        writeable: Optional[bool] = None,
+        run: str | None = None,
+        searchPaths: Sequence[ResourcePathExpression] | None = None,
+        writeable: bool | None = None,
         inferDefaults: bool = True,
         **kwargs: str,
     ):
@@ -312,7 +296,7 @@ class Butler(LimitedButler):
         return ButlerRepoIndex.get_repo_uri(label, return_label)
 
     @classmethod
-    def get_known_repos(cls) -> Set[str]:
+    def get_known_repos(cls) -> set[str]:
         """Retrieve the list of known repository labels.
 
         Returns
@@ -330,12 +314,12 @@ class Butler(LimitedButler):
     @staticmethod
     def makeRepo(
         root: ResourcePathExpression,
-        config: Union[Config, str, None] = None,
-        dimensionConfig: Union[Config, str, None] = None,
+        config: Config | str | None = None,
+        dimensionConfig: Config | str | None = None,
         standalone: bool = False,
-        searchPaths: Optional[List[str]] = None,
+        searchPaths: list[str] | None = None,
         forceConfigRoot: bool = True,
-        outfile: Optional[ResourcePathExpression] = None,
+        outfile: ResourcePathExpression | None = None,
         overwrite: bool = False,
     ) -> Config:
         """Create an empty data repository by adding a butler.yaml config
@@ -426,7 +410,7 @@ class Butler(LimitedButler):
         imported_class = doImportType(full["datastore", "cls"])
         if not issubclass(imported_class, Datastore):
             raise TypeError(f"Imported datastore class {full['datastore', 'cls']} is not a Datastore")
-        datastoreClass: Type[Datastore] = imported_class
+        datastoreClass: type[Datastore] = imported_class
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
         # if key exists in given config, parse it, otherwise parse the defaults
@@ -485,9 +469,9 @@ class Butler(LimitedButler):
     def _unpickle(
         cls,
         config: ButlerConfig,
-        collections: Optional[tuple[str, ...]],
-        run: Optional[str],
-        defaultDataId: Dict[str, str],
+        collections: tuple[str, ...] | None,
+        run: str | None,
+        defaultDataId: dict[str, str],
         writeable: bool,
     ) -> Butler:
         """Callable used to unpickle a Butler.
@@ -560,11 +544,11 @@ class Butler(LimitedButler):
 
     def _standardizeArgs(
         self,
-        datasetRefOrType: Union[DatasetRef, DatasetType, str],
-        dataId: Optional[DataId] = None,
+        datasetRefOrType: DatasetRef | DatasetType | str,
+        dataId: DataId | None = None,
         for_put: bool = True,
         **kwargs: Any,
-    ) -> Tuple[DatasetType, Optional[DataId]]:
+    ) -> tuple[DatasetType, DataId | None]:
         """Standardize the arguments passed to several Butler APIs.
 
         Parameters
@@ -606,8 +590,8 @@ class Butler(LimitedButler):
         returned ``dataId`` (and ``kwargs``) to `Registry` APIs, which are
         generally similarly flexible.
         """
-        externalDatasetType: Optional[DatasetType] = None
-        internalDatasetType: Optional[DatasetType] = None
+        externalDatasetType: DatasetType | None = None
+        internalDatasetType: DatasetType | None = None
         if isinstance(datasetRefOrType, DatasetRef):
             if dataId is not None or kwargs:
                 raise ValueError("DatasetRef given, cannot use dataId as well")
@@ -649,8 +633,8 @@ class Butler(LimitedButler):
         return internalDatasetType, dataId
 
     def _rewrite_data_id(
-        self, dataId: Optional[DataId], datasetType: DatasetType, **kwargs: Any
-    ) -> Tuple[Optional[DataId], Dict[str, Any]]:
+        self, dataId: DataId | None, datasetType: DatasetType, **kwargs: Any
+    ) -> tuple[DataId | None, dict[str, Any]]:
         """Rewrite a data ID taking into account dimension records.
 
         Take a Data ID and keyword args and rewrite it if necessary to
@@ -698,8 +682,8 @@ class Butler(LimitedButler):
 
         # Process dimension records that are using record information
         # rather than ids
-        newDataId: Dict[str, DataIdValue] = {}
-        byRecord: Dict[str, Dict[str, Any]] = defaultdict(dict)
+        newDataId: dict[str, DataIdValue] = {}
+        byRecord: dict[str, dict[str, Any]] = defaultdict(dict)
 
         # if all the dataId comes from keyword parameters we do not need
         # to do anything here because they can't be of the form
@@ -729,7 +713,7 @@ class Butler(LimitedButler):
             for dimensionName in list(dataIdDict):
                 value = dataIdDict[dimensionName]
                 try:
-                    dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
+                    dimension = self.dimensions.getStaticDimensions()[dimensionName]
                 except KeyError:
                     # This is not a real dimension
                     not_dimensions[dimensionName] = value
@@ -790,7 +774,7 @@ class Butler(LimitedButler):
             # match.
             mandatoryDimensions = datasetType.dimensions.names  # - provided
 
-            candidateDimensions: Set[str] = set()
+            candidateDimensions: set[str] = set()
             candidateDimensions.update(mandatoryDimensions)
 
             # For calibrations we may well be needing temporal dimensions
@@ -801,23 +785,23 @@ class Butler(LimitedButler):
             # fail but they are going to fail anyway because of the
             # ambiguousness of the dataId...
             if datasetType.isCalibration():
-                for dim in self.registry.dimensions.getStaticDimensions():
+                for dim in self.dimensions.getStaticDimensions():
                     if dim.temporal:
                         candidateDimensions.add(str(dim))
 
             # Look up table for the first association with a dimension
-            guessedAssociation: Dict[str, Dict[str, Any]] = defaultdict(dict)
+            guessedAssociation: dict[str, dict[str, Any]] = defaultdict(dict)
 
             # Keep track of whether an item is associated with multiple
             # dimensions.
             counter: Counter[str] = Counter()
-            assigned: Dict[str, Set[str]] = defaultdict(set)
+            assigned: dict[str, set[str]] = defaultdict(set)
 
             # Go through the missing dimensions and associate the
             # given names with records within those dimensions
             matched_dims = set()
             for dimensionName in candidateDimensions:
-                dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
+                dimension = self.dimensions.getStaticDimensions()[dimensionName]
                 fields = dimension.metadata.names | dimension.uniqueKeys.names
                 for field in not_dimensions:
                     if field in fields:
@@ -907,7 +891,7 @@ class Butler(LimitedButler):
                             f" record values {byRecord[dimensionName]}"
                         ) from None
                     if len(recs) == 1:
-                        errmsg: List[str] = []
+                        errmsg: list[str] = []
                         for k, v in values.items():
                             if (recval := getattr(recs[0], k)) != v:
                                 errmsg.append(f"{k}({recval} != {v})")
@@ -940,8 +924,8 @@ class Butler(LimitedButler):
                         # by the instrument.
                         if (
                             dimensionName == "visit"
-                            and "visit_system_membership" in self.registry.dimensions
-                            and "visit_system" in self.registry.dimensions["instrument"].metadata
+                            and "visit_system_membership" in self.dimensions
+                            and "visit_system" in self.dimensions["instrument"].metadata
                         ):
                             instrument_records = list(
                                 self.registry.queryDimensionRecords(
@@ -972,7 +956,7 @@ class Butler(LimitedButler):
                                     )
                                     if membership:
                                         # This record is the right answer.
-                                        records = set([rec])
+                                        records = {rec}
                                         break
 
                         # The ambiguity may have been resolved so check again.
@@ -992,7 +976,7 @@ class Butler(LimitedButler):
                         )
 
                 # Get the primary key from the real dimension object
-                dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
+                dimension = self.dimensions.getStaticDimensions()[dimensionName]
                 if not isinstance(dimension, Dimension):
                     raise RuntimeError(
                         f"{dimension.name} is not a true dimension, and cannot be used in data IDs."
@@ -1003,8 +987,8 @@ class Butler(LimitedButler):
 
     def _findDatasetRef(
         self,
-        datasetRefOrType: Union[DatasetRef, DatasetType, str],
-        dataId: Optional[DataId] = None,
+        datasetRefOrType: DatasetRef | DatasetType | str,
+        dataId: DataId | None = None,
         *,
         collections: Any = None,
         predict: bool = False,
@@ -1061,7 +1045,7 @@ class Butler(LimitedButler):
             if collections is not None:
                 warnings.warn("Collections should not be specified with DatasetRef", stacklevel=3)
             return datasetRefOrType
-        timespan: Optional[Timespan] = None
+        timespan: Timespan | None = None
 
         dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
 
@@ -1072,7 +1056,7 @@ class Butler(LimitedButler):
             # dimensions that provide temporal information for a validity-range
             # lookup.
             dataId = DataCoordinate.standardize(
-                dataId, universe=self.registry.dimensions, defaults=self.registry.defaults.dataId, **kwargs
+                dataId, universe=self.dimensions, defaults=self.registry.defaults.dataId, **kwargs
             )
             if dataId.graph.temporal:
                 dataId = self.registry.expandDataId(dataId)
@@ -1128,11 +1112,11 @@ class Butler(LimitedButler):
     def put(
         self,
         obj: Any,
-        datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        datasetRefOrType: DatasetRef | DatasetType | str,
         /,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         *,
-        run: Optional[str] = None,
+        run: str | None = None,
         **kwargs: Any,
     ) -> DatasetRef:
         """Store and register a dataset.
@@ -1216,8 +1200,8 @@ class Butler(LimitedButler):
         self,
         ref: DatasetRef,
         *,
-        parameters: Optional[Dict[str, Any]] = None,
-        storageClass: Optional[Union[StorageClass, str]] = None,
+        parameters: dict[str, Any] | None = None,
+        storageClass: StorageClass | str | None = None,
     ) -> Any:
         """Retrieve a stored dataset.
 
@@ -1252,7 +1236,7 @@ class Butler(LimitedButler):
         self,
         ref: DatasetRef,
         *,
-        parameters: Union[dict, None] = None,
+        parameters: dict | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
@@ -1289,11 +1273,11 @@ class Butler(LimitedButler):
 
     def getDeferred(
         self,
-        datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        datasetRefOrType: DatasetRef | DatasetType | str,
         /,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         *,
-        parameters: Union[dict, None] = None,
+        parameters: dict | None = None,
         collections: Any = None,
         storageClass: str | StorageClass | None = None,
         **kwargs: Any,
@@ -1349,13 +1333,13 @@ class Butler(LimitedButler):
 
     def get(
         self,
-        datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        datasetRefOrType: DatasetRef | DatasetType | str,
         /,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         *,
-        parameters: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any] | None = None,
         collections: Any = None,
-        storageClass: Optional[Union[StorageClass, str]] = None,
+        storageClass: StorageClass | str | None = None,
         **kwargs: Any,
     ) -> Any:
         """Retrieve a stored dataset.
@@ -1417,13 +1401,13 @@ class Butler(LimitedButler):
 
     def getURIs(
         self,
-        datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        datasetRefOrType: DatasetRef | DatasetType | str,
         /,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         *,
         predict: bool = False,
         collections: Any = None,
-        run: Optional[str] = None,
+        run: str | None = None,
         **kwargs: Any,
     ) -> DatasetRefURIs:
         """Returns the URIs associated with the dataset.
@@ -1466,13 +1450,13 @@ class Butler(LimitedButler):
 
     def getURI(
         self,
-        datasetRefOrType: Union[DatasetRef, DatasetType, str],
+        datasetRefOrType: DatasetRef | DatasetType | str,
         /,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         *,
         predict: bool = False,
         collections: Any = None,
-        run: Optional[str] = None,
+        run: str | None = None,
         **kwargs: Any,
     ) -> ResourcePath:
         """Return the URI to the Dataset.
@@ -1543,7 +1527,7 @@ class Butler(LimitedButler):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> List[ResourcePath]:
+    ) -> list[ResourcePath]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -1748,8 +1732,8 @@ class Butler(LimitedButler):
     )
     def datasetExists(
         self,
-        datasetRefOrType: Union[DatasetRef, DatasetType, str],
-        dataId: Optional[DataId] = None,
+        datasetRefOrType: DatasetRef | DatasetType | str,
+        dataId: DataId | None = None,
         *,
         collections: Any = None,
         **kwargs: Any,
@@ -1801,7 +1785,7 @@ class Butler(LimitedButler):
 
         Parameters
         ----------
-        names : `Iterable` [ `str` ]
+        names : `~collections.abc.Iterable` [ `str` ]
             The names of the collections to remove.
         unstore : `bool`, optional
             If `True` (default), delete datasets from all datastores in which
@@ -1819,7 +1803,7 @@ class Butler(LimitedButler):
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         names = list(names)
-        refs: List[DatasetRef] = []
+        refs: list[DatasetRef] = []
         for name in names:
             collectionType = self.registry.getCollectionType(name)
             if collectionType is not CollectionType.RUN:
@@ -1907,8 +1891,8 @@ class Butler(LimitedButler):
     def ingest(
         self,
         *datasets: FileDataset,
-        transfer: Optional[str] = "auto",
-        run: Optional[str] = None,
+        transfer: str | None = "auto",
+        run: str | None = None,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
         record_validation_info: bool = True,
     ) -> None:
@@ -1999,7 +1983,7 @@ class Butler(LimitedButler):
         for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
             # Somewhere to store pre-existing refs if we have an
             # execution butler.
-            existingRefs: List[DatasetRef] = []
+            existingRefs: list[DatasetRef] = []
 
             for ref in dataset.refs:
                 assert ref.run is not None  # For mypy
@@ -2081,10 +2065,10 @@ class Butler(LimitedButler):
     def export(
         self,
         *,
-        directory: Optional[str] = None,
-        filename: Optional[str] = None,
-        format: Optional[str] = None,
-        transfer: Optional[str] = None,
+        directory: str | None = None,
+        filename: str | None = None,
+        format: str | None = None,
+        transfer: str | None = None,
     ) -> Iterator[RepoExportContext]:
         """Export datasets from the repository represented by this `Butler`.
 
@@ -2150,7 +2134,7 @@ class Butler(LimitedButler):
             raise ValueError(f"Unknown export format {format!r}, allowed: {','.join(formats.keys())}")
         BackendClass = get_class_of(formats[format, "export"])
         with open(filename, "w") as stream:
-            backend = BackendClass(stream, universe=self.registry.dimensions)
+            backend = BackendClass(stream, universe=self.dimensions)
             try:
                 helper = RepoExportContext(
                     self.registry, self.datastore, backend=backend, directory=directory, transfer=transfer
@@ -2164,11 +2148,11 @@ class Butler(LimitedButler):
     def import_(
         self,
         *,
-        directory: Optional[ResourcePathExpression] = None,
-        filename: Union[ResourcePathExpression, TextIO, None] = None,
-        format: Optional[str] = None,
-        transfer: Optional[str] = None,
-        skip_dimensions: Optional[Set] = None,
+        directory: ResourcePathExpression | None = None,
+        filename: ResourcePathExpression | TextIO | None = None,
+        format: str | None = None,
+        transfer: str | None = None,
+        skip_dimensions: set | None = None,
     ) -> None:
         """Import datasets into this repository that were exported from a
         different butler repository via `~lsst.daf.butler.Butler.export`.
@@ -2330,7 +2314,7 @@ class Butler(LimitedButler):
         # purged, we have to ask for the (predicted) URI and check
         # existence explicitly. Execution butler is set up exactly like
         # this with no datastore records.
-        artifact_existence: Dict[ResourcePath, bool] = {}
+        artifact_existence: dict[ResourcePath, bool] = {}
         if skip_missing:
             dataset_existence = source_butler.datastore.mexists(
                 source_refs, artifact_existence=artifact_existence
@@ -2385,17 +2369,17 @@ class Butler(LimitedButler):
         else:
             log.log(VERBOSE, "All required dataset types are known to the target Butler")
 
-        dimension_records: Dict[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
+        dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
         if transfer_dimensions:
             # Collect all the dimension records for these refs.
             # All dimensions are to be copied but the list of valid dimensions
             # come from this butler's universe.
             elements = frozenset(
                 element
-                for element in self.registry.dimensions.getStaticElements()
+                for element in self.dimensions.getStaticElements()
                 if element.hasTable() and element.viewOf is None
             )
-            dataIds = set(ref.dataId for ref in source_refs)
+            dataIds = {ref.dataId for ref in source_refs}
             # This logic comes from saveDataIds.
             for dataId in dataIds:
                 # Need an expanded record, if not expanded that we need a full
@@ -2411,7 +2395,7 @@ class Butler(LimitedButler):
                     if record is not None and record.definition in elements:
                         dimension_records[record.definition].setdefault(record.dataId, record)
 
-        handled_collections: Set[str] = set()
+        handled_collections: set[str] = set()
 
         # Do all the importing in a single transaction.
         with self.transaction():
@@ -2480,7 +2464,7 @@ class Butler(LimitedButler):
     def validateConfiguration(
         self,
         logFailures: bool = False,
-        datasetTypeNames: Optional[Iterable[str]] = None,
+        datasetTypeNames: Iterable[str] | None = None,
         ignore: Iterable[str] | None = None,
     ) -> None:
         """Validate butler configuration.
@@ -2522,7 +2506,7 @@ class Butler(LimitedButler):
             ignore = set()
 
         # Find all the registered instruments
-        instruments = set(record.name for record in self.registry.queryDimensionRecords("instrument"))
+        instruments = {record.name for record in self.registry.queryDimensionRecords("instrument")}
 
         # For each datasetType that has an instrument dimension, create
         # a DatasetRef for each defined instrument
@@ -2539,7 +2523,7 @@ class Butler(LimitedButler):
                     )
                     datasetRefs.append(datasetRef)
 
-        entities: List[Union[DatasetType, DatasetRef]] = []
+        entities: list[DatasetType | DatasetRef] = []
         entities.extend(datasetTypes)
         entities.extend(datasetRefs)
 
@@ -2584,7 +2568,7 @@ class Butler(LimitedButler):
             # Currently only support instrument so check for that
             if key.dataId:
                 dataIdKeys = set(key.dataId)
-                if set(["instrument"]) != dataIdKeys:
+                if {"instrument"} != dataIdKeys:
                     if logFailures:
                         log.critical("Key '%s' has unsupported DataId override", key)
                     failedDataId.add(key)
@@ -2612,7 +2596,7 @@ class Butler(LimitedButler):
     @property
     def collections(self) -> Sequence[str]:
         """The collections to search by default, in order
-        (`Sequence` [ `str` ]).
+        (`~collections.abc.Sequence` [ `str` ]).
 
         This is an alias for ``self.registry.defaults.collections``.  It cannot
         be set directly in isolation, but all defaults may be changed together
@@ -2622,7 +2606,7 @@ class Butler(LimitedButler):
         return self.registry.defaults.collections
 
     @property
-    def run(self) -> Optional[str]:
+    def run(self) -> str | None:
         """Name of the run this butler writes outputs to by default (`str` or
         `None`).
 

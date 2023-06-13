@@ -28,20 +28,8 @@ __all__ = (
 import enum
 import warnings
 from abc import ABC, abstractmethod
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Dict,
-    Generator,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from collections.abc import Generator, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, Union
 
 import astropy.time
 import astropy.utils.exceptions
@@ -148,7 +136,7 @@ class Timespan:
         begin: TimespanBound,
         end: TimespanBound,
         padInstantaneous: bool = True,
-        _nsec: Optional[Tuple[int, int]] = None,
+        _nsec: tuple[int, int] | None = None,
     ):
         converter = TimeConverter()
         if _nsec is None:
@@ -328,7 +316,7 @@ class Timespan:
     def __reduce__(self) -> tuple:
         return (Timespan, (None, None, False, self._nsec))
 
-    def __lt__(self, other: Union[astropy.time.Time, Timespan]) -> bool:
+    def __lt__(self, other: astropy.time.Time | Timespan) -> bool:
         """Test if a Timespan's bounds are strictly less than the given time.
 
         Parameters
@@ -355,7 +343,7 @@ class Timespan:
         else:
             return self._nsec[1] <= other._nsec[0] and self._nsec[0] < other._nsec[1]
 
-    def __gt__(self, other: Union[astropy.time.Time, Timespan]) -> bool:
+    def __gt__(self, other: astropy.time.Time | Timespan) -> bool:
         """Test if a Timespan's bounds are strictly greater than given time.
 
         Parameters
@@ -406,7 +394,7 @@ class Timespan:
             return self.contains(other)
         return self._nsec[1] > other._nsec[0] and other._nsec[1] > self._nsec[0]
 
-    def contains(self, other: Union[astropy.time.Time, Timespan]) -> bool:
+    def contains(self, other: astropy.time.Time | Timespan) -> bool:
         """Test if the supplied timespan is within this one.
 
         Tests whether the intersection of this timespan with another timespan
@@ -494,7 +482,7 @@ class Timespan:
             if intersection._nsec[1] < self._nsec[1]:
                 yield Timespan(None, None, _nsec=(intersection._nsec[1], self._nsec[1]))
 
-    def to_simple(self, minimal: bool = False) -> List[int]:
+    def to_simple(self, minimal: bool = False) -> list[int]:
         """Return simple python type form suitable for serialization.
 
         Parameters
@@ -513,9 +501,9 @@ class Timespan:
     @classmethod
     def from_simple(
         cls,
-        simple: List[int],
-        universe: Optional[DimensionUniverse] = None,
-        registry: Optional[Registry] = None,
+        simple: list[int],
+        universe: DimensionUniverse | None = None,
+        registry: Registry | None = None,
     ) -> Timespan:
         """Construct a new object from simplified form.
 
@@ -564,7 +552,7 @@ class Timespan:
             )
 
     @classmethod
-    def from_yaml(cls, loader: yaml.SafeLoader, node: yaml.MappingNode) -> Optional[Timespan]:
+    def from_yaml(cls, loader: yaml.SafeLoader, node: yaml.MappingNode) -> Timespan | None:
         """Convert YAML node into _SpecialTimespanBound.
 
         Parameters
@@ -615,7 +603,7 @@ class TimespanDatabaseRepresentation(ABC):
 
     NAME: ClassVar[str] = "timespan"
 
-    Compound: ClassVar[Type[TimespanDatabaseRepresentation]]
+    Compound: ClassVar[type[TimespanDatabaseRepresentation]]
     """A concrete subclass of `TimespanDatabaseRepresentation` that simply
     uses two separate fields for the begin (inclusive) and end (exclusive)
     endpoints.
@@ -629,7 +617,7 @@ class TimespanDatabaseRepresentation(ABC):
     @classmethod
     @abstractmethod
     def makeFieldSpecs(
-        cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+        cls, nullable: bool, name: str | None = None, **kwargs: Any
     ) -> tuple[ddl.FieldSpec, ...]:
         """Make objects that reflect the fields that must be added to table.
 
@@ -662,7 +650,7 @@ class TimespanDatabaseRepresentation(ABC):
 
     @classmethod
     @abstractmethod
-    def getFieldNames(cls, name: Optional[str] = None) -> tuple[str, ...]:
+    def getFieldNames(cls, name: str | None = None) -> tuple[str, ...]:
         """Return the actual field names used by this representation.
 
         Parameters
@@ -681,7 +669,7 @@ class TimespanDatabaseRepresentation(ABC):
 
     @classmethod
     @abstractmethod
-    def fromLiteral(cls: Type[_S], timespan: Optional[Timespan]) -> _S:
+    def fromLiteral(cls: type[_S], timespan: Timespan | None) -> _S:
         """Construct a database timespan from a literal `Timespan` instance.
 
         Parameters
@@ -700,9 +688,7 @@ class TimespanDatabaseRepresentation(ABC):
 
     @classmethod
     @abstractmethod
-    def from_columns(
-        cls: Type[_S], columns: sqlalchemy.sql.ColumnCollection, name: Optional[str] = None
-    ) -> _S:
+    def from_columns(cls: type[_S], columns: sqlalchemy.sql.ColumnCollection, name: str | None = None) -> _S:
         """Construct a database timespan from the columns of a table or
         subquery.
 
@@ -725,8 +711,8 @@ class TimespanDatabaseRepresentation(ABC):
     @classmethod
     @abstractmethod
     def update(
-        cls, timespan: Optional[Timespan], name: Optional[str] = None, result: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        cls, timespan: Timespan | None, name: str | None = None, result: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Add a timespan value to a dictionary that represents a database row.
 
         Parameters
@@ -750,12 +736,12 @@ class TimespanDatabaseRepresentation(ABC):
 
     @classmethod
     @abstractmethod
-    def extract(cls, mapping: Mapping[Any, Any], name: Optional[str] = None) -> Timespan | None:
+    def extract(cls, mapping: Mapping[Any, Any], name: str | None = None) -> Timespan | None:
         """Extract a timespan from a dictionary that represents a database row.
 
         Parameters
         ----------
-        mapping : `Mapping` [ `Any`, `Any` ]
+        mapping : `~collections.abc.Mapping` [ `Any`, `Any` ]
             A dictionary representing a database row containing a `Timespan`
             in this representation.  Should have key(s) equal to the return
             value of `getFieldNames`.
@@ -809,7 +795,7 @@ class TimespanDatabaseRepresentation(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def flatten(self, name: Optional[str] = None) -> Tuple[sqlalchemy.sql.ColumnElement, ...]:
+    def flatten(self, name: str | None = None) -> tuple[sqlalchemy.sql.ColumnElement, ...]:
         """Return the actual column(s) that comprise this logical column.
 
         Parameters
@@ -838,7 +824,7 @@ class TimespanDatabaseRepresentation(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def __lt__(self: _S, other: Union[_S, sqlalchemy.sql.ColumnElement]) -> sqlalchemy.sql.ColumnElement:
+    def __lt__(self: _S, other: _S | sqlalchemy.sql.ColumnElement) -> sqlalchemy.sql.ColumnElement:
         """Return SQLAlchemy expression for testing less than.
 
         Returns a SQLAlchemy expression representing a test for whether an
@@ -864,7 +850,7 @@ class TimespanDatabaseRepresentation(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def __gt__(self: _S, other: Union[_S, sqlalchemy.sql.ColumnElement]) -> sqlalchemy.sql.ColumnElement:
+    def __gt__(self: _S, other: _S | sqlalchemy.sql.ColumnElement) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression for testing greater than.
 
         Returns a SQLAlchemy expression representing a test for whether an
@@ -911,7 +897,7 @@ class TimespanDatabaseRepresentation(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def contains(self: _S, other: Union[_S, sqlalchemy.sql.ColumnElement]) -> sqlalchemy.sql.ColumnElement:
+    def contains(self: _S, other: _S | sqlalchemy.sql.ColumnElement) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing containment.
 
         Returns a test for whether an in-database timespan contains another
@@ -1012,7 +998,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
 
     @classmethod
     def makeFieldSpecs(
-        cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+        cls, nullable: bool, name: str | None = None, **kwargs: Any
     ) -> tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
         if name is None:
@@ -1035,7 +1021,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         )
 
     @classmethod
-    def getFieldNames(cls, name: Optional[str] = None) -> tuple[str, ...]:
+    def getFieldNames(cls, name: str | None = None) -> tuple[str, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -1043,8 +1029,8 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
 
     @classmethod
     def update(
-        cls, extent: Optional[Timespan], name: Optional[str] = None, result: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        cls, extent: Timespan | None, name: str | None = None, result: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -1061,7 +1047,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return result
 
     @classmethod
-    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[Timespan]:
+    def extract(cls, mapping: Mapping[str, Any], name: str | None = None) -> Timespan | None:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -1083,7 +1069,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
 
     @classmethod
     def from_columns(
-        cls, columns: sqlalchemy.sql.ColumnCollection, name: Optional[str] = None
+        cls, columns: sqlalchemy.sql.ColumnCollection, name: str | None = None
     ) -> _CompoundTimespanDatabaseRepresentation:
         # Docstring inherited.
         if name is None:
@@ -1091,7 +1077,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return cls(nsec=(columns[f"{name}_begin"], columns[f"{name}_end"]), name=name)
 
     @classmethod
-    def fromLiteral(cls, timespan: Optional[Timespan]) -> _CompoundTimespanDatabaseRepresentation:
+    def fromLiteral(cls, timespan: Timespan | None) -> _CompoundTimespanDatabaseRepresentation:
         # Docstring inherited.
         if timespan is None:
             return cls(nsec=(sqlalchemy.sql.null(), sqlalchemy.sql.null()), name=cls.NAME)
@@ -1114,7 +1100,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return self._nsec[0] >= self._nsec[1]
 
     def __lt__(
-        self, other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: _CompoundTimespanDatabaseRepresentation | sqlalchemy.sql.ColumnElement
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         # See comments in Timespan.__lt__ for why we use these exact
@@ -1125,7 +1111,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
             return sqlalchemy.sql.and_(self._nsec[1] <= other._nsec[0], self._nsec[0] < other._nsec[1])
 
     def __gt__(
-        self, other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: _CompoundTimespanDatabaseRepresentation | sqlalchemy.sql.ColumnElement
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         # See comments in Timespan.__gt__ for why we use these exact
@@ -1144,7 +1130,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return sqlalchemy.sql.and_(self._nsec[1] > other._nsec[0], other._nsec[1] > self._nsec[0])
 
     def contains(
-        self, other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: _CompoundTimespanDatabaseRepresentation | sqlalchemy.sql.ColumnElement
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         if isinstance(other, sqlalchemy.sql.ColumnElement):
@@ -1160,7 +1146,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         # Docstring inherited.
         return sqlalchemy.sql.functions.coalesce(self._nsec[1], sqlalchemy.sql.literal(0))
 
-    def flatten(self, name: Optional[str] = None) -> Tuple[sqlalchemy.sql.ColumnElement, ...]:
+    def flatten(self, name: str | None = None) -> tuple[sqlalchemy.sql.ColumnElement, ...]:
         # Docstring inherited.
         if name is None:
             return self._nsec

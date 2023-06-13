@@ -31,11 +31,7 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from types import MappingProxyType
-from typing import (
-    AbstractSet,
-    Any,
-    Dict,
+from collections.abc import (
     ItemsView,
     Iterable,
     Iterator,
@@ -43,11 +39,11 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSet,
-    Protocol,
-    TypeVar,
-    Union,
+    Set,
     ValuesView,
 )
+from types import MappingProxyType
+from typing import Any, Protocol, TypeVar
 
 
 class Named(Protocol):
@@ -79,23 +75,25 @@ class NamedKeyMapping(Mapping[K, V_co]):
     -----
     In addition to the new `names` property and `byName` method, this class
     simply redefines the type signature for `__getitem__` and `get` that would
-    otherwise be inherited from `Mapping`. That is only relevant for static
-    type checking; the actual Python runtime doesn't care about types at all.
+    otherwise be inherited from `~collections.abc.Mapping`. That is only
+    relevant for static type checking; the actual Python runtime doesn't
+    care about types at all.
     """
 
     __slots__ = ()
 
     @property
     @abstractmethod
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         """Return the set of names associated with the keys, in the same order.
 
-        (`AbstractSet` [ `str` ]).
+        (`~collections.abc.Set` [ `str` ]).
         """
         raise NotImplementedError()
 
-    def byName(self) -> Dict[str, V_co]:
-        """Return a `Mapping` with names as keys and the ``self`` values.
+    def byName(self) -> dict[str, V_co]:
+        """Return a `~collections.abc.Mapping` with names as keys and the
+        ``self`` values.
 
         Returns
         -------
@@ -112,16 +110,16 @@ class NamedKeyMapping(Mapping[K, V_co]):
         raise NotImplementedError()
 
     @abstractmethod
-    def __getitem__(self, key: Union[str, K]) -> V_co:
+    def __getitem__(self, key: str | K) -> V_co:
         raise NotImplementedError()
 
-    def get(self, key: Union[str, K], default: Any = None) -> Any:
+    def get(self, key: str | K, default: Any = None) -> Any:
         # Delegating to super is not allowed by typing, because it doesn't
         # accept str, but we know it just delegates to __getitem__, which does.
         return super().get(key, default)  # type: ignore
 
 
-NameLookupMapping = Union[NamedKeyMapping[K, V_co], Mapping[str, V_co]]
+NameLookupMapping = NamedKeyMapping[K, V_co] | Mapping[str, V_co]
 """A type annotation alias for signatures that want to use ``mapping[s]``
 (or ``mapping.get(s)``) where ``s`` is a `str`, and don't care whether
 ``mapping.keys()`` returns named objects or direct `str` instances.
@@ -134,14 +132,14 @@ class NamedKeyMutableMapping(NamedKeyMapping[K, V], MutableMapping[K, V]):
     __slots__ = ()
 
     @abstractmethod
-    def __setitem__(self, key: Union[str, K], value: V) -> None:
+    def __setitem__(self, key: str | K, value: V) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def __delitem__(self, key: Union[str, K]) -> None:
+    def __delitem__(self, key: str | K) -> None:
         raise NotImplementedError()
 
-    def pop(self, key: Union[str, K], default: Any = None) -> Any:
+    def pop(self, key: str | K, default: Any = None) -> Any:
         # See comment in `NamedKeyMapping.get`; same logic applies here.
         return super().pop(key, default)  # type: ignore
 
@@ -182,7 +180,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
     )
 
     def __init__(self, *args: Any):
-        self._dict: Dict[K, V] = dict(*args)
+        self._dict: dict[K, V] = dict(*args)
         self._names = {key.name: key for key in self._dict}
         assert len(self._names) == len(self._dict), "Duplicate names in keys."
 
@@ -194,7 +192,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
         """
         return self._names.keys()
 
-    def byName(self) -> Dict[str, V]:
+    def byName(self) -> dict[str, V]:
         """Return a `dict` with names as keys and the ``self`` values."""
         return dict(zip(self._names.keys(), self._dict.values()))
 
@@ -210,13 +208,13 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
     def __repr__(self) -> str:
         return "NamedKeyDict({{{}}})".format(", ".join(f"{repr(k)}: {repr(v)}" for k, v in self.items()))
 
-    def __getitem__(self, key: Union[str, K]) -> V:
+    def __getitem__(self, key: str | K) -> V:
         if isinstance(key, str):
             return self._dict[self._names[key]]
         else:
             return self._dict[key]
 
-    def __setitem__(self, key: Union[str, K], value: V) -> None:
+    def __setitem__(self, key: str | K, value: V) -> None:
         if isinstance(key, str):
             self._dict[self._names[key]] = value
         else:
@@ -224,7 +222,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
             self._dict[key] = value
             self._names[key.name] = key
 
-    def __delitem__(self, key: Union[str, K]) -> None:
+    def __delitem__(self, key: str | K) -> None:
         if isinstance(key, str):
             del self._dict[self._names[key]]
             del self._names[key]
@@ -266,7 +264,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
         return self
 
 
-class NamedValueAbstractSet(AbstractSet[K_co]):
+class NamedValueAbstractSet(Set[K_co]):
     """Custom sets with named elements.
 
     An abstract base class for custom sets whose elements are objects with
@@ -278,10 +276,10 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
 
     @property
     @abstractmethod
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         """Return set of names associated with the keys, in the same order.
 
-        (`AbstractSet` [ `str` ]).
+        (`~collections.abc.Set` [ `str` ]).
         """
         raise NotImplementedError()
 
@@ -291,16 +289,16 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
 
         Returns
         -------
-        dict : `Mapping`
+        dict : `~collections.abc.Mapping`
             A dictionary-like view with ``values() == self``.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def __getitem__(self, key: Union[str, K_co]) -> K_co:
+    def __getitem__(self, key: str | K_co) -> K_co:
         raise NotImplementedError()
 
-    def get(self, key: Union[str, K_co], default: Any = None) -> Any:
+    def get(self, key: str | K_co, default: Any = None) -> Any:
         """Return the element with the given name.
 
         Returns ``default`` if no such element is present.
@@ -331,7 +329,7 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
 
     Parameters
     ----------
-    mapping : `Mapping` [ `str`, `object` ]
+    mapping : `~collections.abc.Mapping` [ `str`, `object` ]
         Mapping this object will provide a view of.
     """
 
@@ -341,7 +339,7 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
     __slots__ = ("_mapping",)
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         # Docstring inherited from NamedValueAbstractSet.
         return self._mapping.keys()
 
@@ -349,7 +347,7 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
         # Docstring inherited from NamedValueAbstractSet.
         return self._mapping
 
-    def __getitem__(self, key: Union[str, K_co]) -> K_co:
+    def __getitem__(self, key: str | K_co) -> K_co:
         if isinstance(key, str):
             return self._mapping[key]
         else:
@@ -370,13 +368,13 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
         else:
             return set(self._mapping.values()) == other
 
-    def __le__(self, other: AbstractSet[K]) -> bool:
+    def __le__(self, other: Set[K]) -> bool:
         if isinstance(other, NamedValueAbstractSet):
             return self.names <= other.names
         else:
             return set(self._mapping.values()) <= other
 
-    def __ge__(self, other: AbstractSet[K]) -> bool:
+    def __ge__(self, other: Set[K]) -> bool:
         if isinstance(other, NamedValueAbstractSet):
             return self.names >= other.names
         else:
@@ -393,11 +391,12 @@ class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
     """Mutable variant of `NamedValueAbstractSet`.
 
     Methods that can add new elements to the set are unchanged from their
-    `MutableSet` definitions, while those that only remove them can generally
-    accept names or element instances.  `pop` can be used in either its
-    `MutableSet` form (no arguments; an arbitrary element is returned) or its
-    `MutableMapping` form (one or two arguments for the name and optional
-    default value, respectively).  A `MutableMapping`-like `__delitem__`
+    `~collections.abc.MutableSet` definitions, while those that only remove
+    them can generally accept names or element instances.  `pop` can be used
+    in either its `~collections.abc.MutableSet` form (no arguments; an
+    arbitrary element is returned) or its `~collections.abc.MutableMapping`
+    form (one or two arguments for the name and optional default value,
+    respectively).  A `~collections.abc.MutableMapping`-like `__delitem__`
     interface is also included, which takes only names (like
     `NamedValueAbstractSet.__getitem__`).
     """
@@ -409,7 +408,7 @@ class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
         raise NotImplementedError()
 
     @abstractmethod
-    def remove(self, element: Union[str, K]) -> Any:
+    def remove(self, element: str | K) -> Any:
         """Remove an element from the set.
 
         Parameters
@@ -426,7 +425,7 @@ class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
         raise NotImplementedError()
 
     @abstractmethod
-    def discard(self, element: Union[str, K]) -> Any:
+    def discard(self, element: str | K) -> Any:
         """Remove an element from the set if it exists.
 
         Does nothing if no matching element is present.
@@ -494,10 +493,10 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
     def __repr__(self) -> str:
         return "NamedValueSet({{{}}})".format(", ".join(repr(element) for element in self))
 
-    def issubset(self, other: AbstractSet[K]) -> bool:
+    def issubset(self, other: Set[K]) -> bool:
         return self <= other
 
-    def issuperset(self, other: AbstractSet[K]) -> bool:
+    def issuperset(self, other: Set[K]) -> bool:
         return self >= other
 
     def __delitem__(self, name: str) -> None:
@@ -517,12 +516,12 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
         # Docstring inherited.
         self._mapping.clear()
 
-    def remove(self, element: Union[str, K]) -> Any:
+    def remove(self, element: str | K) -> Any:
         # Docstring inherited.
         k = getattr(element, "name") if not isinstance(element, str) else element
         del self._mapping[k]
 
-    def discard(self, element: Union[str, K]) -> Any:
+    def discard(self, element: str | K) -> Any:
         # Docstring inherited.
         try:
             self.remove(element)
@@ -549,7 +548,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
         Parameters
         ----------
-        elements : `Iterable`
+        elements : `~collections.abc.Iterable`
             Elements to add.
         """
         for element in elements:
@@ -578,4 +577,4 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
             self._mapping = MappingProxyType(self._mapping)  # type: ignore
         return self
 
-    _mapping: Dict[str, K]
+    _mapping: dict[str, K]

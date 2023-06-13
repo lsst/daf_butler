@@ -26,7 +26,7 @@ from __future__ import annotations
 __all__ = ("PickleFormatter",)
 
 import pickle
-from typing import Any, Optional, Type
+from typing import Any
 
 from .file import FileFormatter
 
@@ -41,7 +41,7 @@ class PickleFormatter(FileFormatter):
     unsupportedParameters = None
     """This formatter does not support any parameters"""
 
-    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
+    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         """Read a file from the path in pickle format.
 
         Parameters
@@ -81,7 +81,7 @@ class PickleFormatter(FileFormatter):
         with open(self.fileDescriptor.location.path, "wb") as fd:
             pickle.dump(inMemoryDataset, fd, protocol=-1)
 
-    def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
+    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
         """Read the bytes object as a python object.
 
         Parameters

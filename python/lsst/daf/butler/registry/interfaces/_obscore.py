@@ -28,7 +28,7 @@ __all__ = ["ObsCoreTableManager"]
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Type
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
@@ -60,7 +60,7 @@ class ObsCoreTableManager(VersionedExtension):
         *,
         universe: DimensionUniverse,
         config: Mapping,
-        datasets: Type[DatasetRecordStorageManager],
+        datasets: type[DatasetRecordStorageManager],
         dimensions: DimensionRecordStorageManager,
         registry_schema_version: VersionTuple | None = None,
     ) -> ObsCoreTableManager:
@@ -213,7 +213,8 @@ class ObsCoreTableManager(VersionedExtension):
         ----------
         instrument : `str`
             Instrument name.
-        region_data : `Iterable`[`tuple`[`int`, `int`, `~lsst.sphgeom.Region`]]
+        region_data : `~collections.abc.Iterable` [`tuple` [`int`, `int`, \
+                `~lsst.sphgeom.Region` ]]
             Sequence of tuples, each tuple contains three values - exposure ID,
             detector ID, and corresponding region.
 

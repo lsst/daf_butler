@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("DimensionRecord", "SerializedDimensionRecord")
 
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Tuple
 
 import lsst.sphgeom
 from lsst.utils.classes import immutable
@@ -40,7 +40,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._schema import DimensionElementFields
 
 
-def _reconstructDimensionRecord(definition: DimensionElement, mapping: Dict[str, Any]) -> DimensionRecord:
+def _reconstructDimensionRecord(definition: DimensionElement, mapping: dict[str, Any]) -> DimensionRecord:
     """Unpickle implementation for `DimensionRecord` subclasses.
 
     For internal use by `DimensionRecord`.
@@ -48,7 +48,7 @@ def _reconstructDimensionRecord(definition: DimensionElement, mapping: Dict[str,
     return definition.RecordClass(**mapping)
 
 
-def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionRecord]:
+def _subclassDimensionRecord(definition: DimensionElement) -> type[DimensionRecord]:
     """Create a dynamic subclass of `DimensionRecord` for the given element.
 
     For internal use by `DimensionRecord`.
@@ -69,12 +69,12 @@ class SpecificSerializedDimensionRecord(BaseModel, extra="forbid"):
     """Base model for a specific serialized record content."""
 
 
-_SIMPLE_RECORD_CLASS_CACHE: Dict[
-    Tuple[DimensionElement, DimensionUniverse], Type[SpecificSerializedDimensionRecord]
+_SIMPLE_RECORD_CLASS_CACHE: dict[
+    tuple[DimensionElement, DimensionUniverse], type[SpecificSerializedDimensionRecord]
 ] = {}
 
 
-def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSerializedDimensionRecord]:
+def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSerializedDimensionRecord]:
     from ._schema import DimensionElementFields
 
     # Cache on the definition (which hashes as the name) and the
@@ -125,7 +125,7 @@ class SerializedDimensionRecord(BaseModel):
     )
 
     # Use strict types to prevent casting
-    record: Dict[str, Union[None, StrictFloat, StrictStr, StrictBool, StrictInt, Tuple[int, int]]] = Field(
+    record: dict[str, None | StrictFloat | StrictStr | StrictBool | StrictInt | tuple[int, int]] = Field(
         ...,
         title="Dimension record keys and values.",
         example={
@@ -156,7 +156,7 @@ class SerializedDimensionRecord(BaseModel):
         cls,
         *,
         definition: str,
-        record: Dict[str, Union[None, StrictFloat, StrictStr, StrictBool, StrictInt, Tuple[int, int]]],
+        record: dict[str, None | StrictFloat | StrictStr | StrictBool | StrictInt | tuple[int, int]],
     ) -> SerializedDimensionRecord:
         """Construct a `SerializedDimensionRecord` directly without validators.
 
@@ -336,8 +336,8 @@ class DimensionRecord:
     def from_simple(
         cls,
         simple: SerializedDimensionRecord,
-        universe: Optional[DimensionUniverse] = None,
-        registry: Optional[Registry] = None,
+        universe: DimensionUniverse | None = None,
+        registry: Registry | None = None,
     ) -> DimensionRecord:
         """Construct a new object from the simplified form.
 
@@ -394,7 +394,7 @@ class DimensionRecord:
     to_json = to_json_pydantic
     from_json: ClassVar = classmethod(from_json_pydantic)
 
-    def toDict(self, splitTimespan: bool = False) -> Dict[str, Any]:
+    def toDict(self, splitTimespan: bool = False) -> dict[str, Any]:
         """Return a vanilla `dict` representation of this record.
 
         Parameters

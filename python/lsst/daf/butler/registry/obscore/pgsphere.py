@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ["PgSphereObsCorePlugin"]
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
@@ -118,9 +118,7 @@ class PgSphereObsCorePlugin(SpatialObsCorePlugin):
         self._position_column_name = config.get("position_column", "pgsphere_position")
 
     @classmethod
-    def initialize(
-        cls, *, name: str, config: Mapping[str, Any], db: Optional[Database]
-    ) -> SpatialObsCorePlugin:
+    def initialize(cls, *, name: str, config: Mapping[str, Any], db: Database | None) -> SpatialObsCorePlugin:
         # docstring inherited.
 
         if db is None:
@@ -160,7 +158,7 @@ class PgSphereObsCorePlugin(SpatialObsCorePlugin):
         table_spec.indexes.add(ddl.IndexSpec(self._region_column_name, postgresql_using="gist"))
         table_spec.indexes.add(ddl.IndexSpec(self._position_column_name, postgresql_using="gist"))
 
-    def make_records(self, region: Optional[Region]) -> Optional[Record]:
+    def make_records(self, region: Region | None) -> Record | None:
         # docstring inherited.
 
         if region is None:

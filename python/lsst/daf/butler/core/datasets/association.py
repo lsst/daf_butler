@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from ..timespan import Timespan
 from .ref import DatasetRef
@@ -46,7 +46,7 @@ class DatasetAssociation:
     """Name of a collection (`str`).
     """
 
-    timespan: Optional[Timespan]
+    timespan: Timespan | None
     """Validity range of the dataset if this is a `~CollectionType.CALIBRATION`
     collection (`Timespan` or `None`).
     """

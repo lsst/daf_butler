@@ -22,8 +22,9 @@ from __future__ import annotations
 
 __all__ = ("EphemeralDatastoreRegistryBridge",)
 
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, Tuple, Type
+from typing import TYPE_CHECKING
 
 from ...core import DatasetId
 from ..interfaces import DatasetIdRef, DatastoreRegistryBridge, FakeDatasetRef, OpaqueTableStorage
@@ -53,8 +54,8 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     def __init__(self, datastoreName: str):
         super().__init__(datastoreName)
-        self._datasetIds: Set[DatasetId] = set()
-        self._trashedIds: Set[DatasetId] = set()
+        self._datasetIds: set[DatasetId] = set()
+        self._trashedIds: set[DatasetId] = set()
 
     def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
@@ -68,7 +69,7 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         for ref in refs:
             self._trashedIds.remove(ref.id)
 
-    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: Optional[DatastoreTransaction]) -> None:
+    def moveToTrash(self, refs: Iterable[DatasetIdRef], transaction: DatastoreTransaction | None) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         if transaction is None:
             raise RuntimeError("Must be called with a defined transaction.")
@@ -86,14 +87,12 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
     @contextmanager
     def emptyTrash(
         self,
-        records_table: Optional[OpaqueTableStorage] = None,
-        record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
-        record_column: Optional[str] = None,
-    ) -> Iterator[
-        Tuple[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]], Optional[Set[str]]]
-    ]:
+        records_table: OpaqueTableStorage | None = None,
+        record_class: type[StoredDatastoreItemInfo] | None = None,
+        record_column: str | None = None,
+    ) -> Iterator[tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]]:
         # Docstring inherited from DatastoreRegistryBridge
-        matches: Iterable[Tuple[FakeDatasetRef, Optional[StoredDatastoreItemInfo]]] = ()
+        matches: Iterable[tuple[FakeDatasetRef, StoredDatastoreItemInfo | None]] = ()
         if isinstance(records_table, OpaqueTableStorage):
             if record_class is None:
                 raise ValueError("Record class must be provided if records table is given.")

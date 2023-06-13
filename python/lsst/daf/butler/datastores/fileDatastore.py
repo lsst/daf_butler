@@ -27,23 +27,9 @@ __all__ = ("FileDatastore",)
 import hashlib
 import logging
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.daf.butler import (
     CompositesMap,
@@ -100,11 +86,11 @@ class _IngestPrepData(Datastore.IngestPrepData):
 
     Parameters
     ----------
-    datasets : `list` of `FileDataset`
+    datasets : `~collections.abc.Iterable` of `FileDataset`
         Files to be ingested by this datastore.
     """
 
-    def __init__(self, datasets: List[FileDataset]):
+    def __init__(self, datasets: Iterable[FileDataset]):
         super().__init__(ref for dataset in datasets for ref in dataset.refs)
         self.datasets = datasets
 
@@ -130,7 +116,7 @@ class DatastoreFileGetInformation:
     formatterParams: Mapping[str, Any]
     """Parameters that were understood by the associated formatter."""
 
-    component: Optional[str]
+    component: str | None
     """The component to be retrieved (can be `None`)."""
 
     readStorageClass: StorageClass
@@ -158,7 +144,7 @@ class FileDatastore(GenericBaseDatastore):
         configuration.
     """
 
-    defaultConfigFile: ClassVar[Optional[str]] = None
+    defaultConfigFile: ClassVar[str | None] = None
     """Path to configuration defaults. Accessed within the ``config`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
@@ -248,7 +234,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def __init__(
         self,
-        config: Union[DatastoreConfig, str],
+        config: DatastoreConfig | ResourcePathExpression,
         bridgeManager: DatastoreRegistryBridgeManager,
         butlerRoot: str | None = None,
     ):
@@ -377,7 +363,7 @@ class FileDatastore(GenericBaseDatastore):
         records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos)]
         self._table.insert(*records, transaction=self._transaction)
 
-    def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:
+    def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
 
         # Look for the dataset_id -- there might be multiple matches
@@ -387,7 +373,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def _get_stored_records_associated_with_refs(
         self, refs: Iterable[DatasetIdRef]
-    ) -> Dict[DatasetId, List[StoredFileInfo]]:
+    ) -> dict[DatasetId, list[StoredFileInfo]]:
         """Retrieve all records associated with the provided refs.
 
         Parameters
@@ -410,9 +396,7 @@ class FileDatastore(GenericBaseDatastore):
             records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
         return records_by_ref
 
-    def _refs_associated_with_artifacts(
-        self, paths: List[Union[str, ResourcePath]]
-    ) -> Dict[str, Set[DatasetId]]:
+    def _refs_associated_with_artifacts(self, paths: list[str | ResourcePath]) -> dict[str, set[DatasetId]]:
         """Return paths and associated dataset refs.
 
         Parameters
@@ -431,7 +415,7 @@ class FileDatastore(GenericBaseDatastore):
             result[row["path"]].add(row["dataset_id"])
         return result
 
-    def _registered_refs_per_artifact(self, pathInStore: ResourcePath) -> Set[DatasetId]:
+    def _registered_refs_per_artifact(self, pathInStore: ResourcePath) -> set[DatasetId]:
         """Return all dataset refs associated with the supplied path.
 
         Parameters
@@ -452,7 +436,7 @@ class FileDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore
         self._table.delete(["dataset_id"], {"dataset_id": ref.id})
 
-    def _get_dataset_locations_info(self, ref: DatasetIdRef) -> List[Tuple[Location, StoredFileInfo]]:
+    def _get_dataset_locations_info(self, ref: DatasetIdRef) -> list[tuple[Location, StoredFileInfo]]:
         r"""Find all the `Location`\ s  of the requested dataset in the
         `Datastore` and the associated stored file information.
 
@@ -507,7 +491,7 @@ class FileDatastore(GenericBaseDatastore):
             return False
         return True
 
-    def _get_expected_dataset_locations_info(self, ref: DatasetRef) -> List[Tuple[Location, StoredFileInfo]]:
+    def _get_expected_dataset_locations_info(self, ref: DatasetRef) -> list[tuple[Location, StoredFileInfo]]:
         """Predict the location and related file information of the requested
         dataset in this datastore.
 
@@ -547,7 +531,7 @@ class FileDatastore(GenericBaseDatastore):
         # See if the ref is a composite that should be disassembled
         doDisassembly = self.composites.shouldBeDisassembled(ref)
 
-        all_info: List[Tuple[Location, Formatter, StorageClass, Optional[str]]] = []
+        all_info: list[tuple[Location, Formatter, StorageClass, str | None]] = []
 
         if doDisassembly:
             for component, componentStorage in ref.datasetType.storageClass.components.items():
@@ -578,8 +562,8 @@ class FileDatastore(GenericBaseDatastore):
         ]
 
     def _prepare_for_get(
-        self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
-    ) -> List[DatastoreFileGetInformation]:
+        self, ref: DatasetRef, parameters: Mapping[str, Any] | None = None
+    ) -> list[DatastoreFileGetInformation]:
         """Check parameters for ``get`` and obtain formatter and
         location.
 
@@ -681,7 +665,7 @@ class FileDatastore(GenericBaseDatastore):
 
         return fileGetInfo
 
-    def _prepare_for_put(self, inMemoryDataset: Any, ref: DatasetRef) -> Tuple[Location, Formatter]:
+    def _prepare_for_put(self, inMemoryDataset: Any, ref: DatasetRef) -> tuple[Location, Formatter]:
         """Check the arguments for ``put`` and obtain formatter and
         location.
 
@@ -709,7 +693,7 @@ class FileDatastore(GenericBaseDatastore):
         self._validate_put_parameters(inMemoryDataset, ref)
         return self._determine_put_formatter_location(ref)
 
-    def _determine_put_formatter_location(self, ref: DatasetRef) -> Tuple[Location, Formatter]:
+    def _determine_put_formatter_location(self, ref: DatasetRef) -> tuple[Location, Formatter]:
         """Calculate the formatter and output location to use for put.
 
         Parameters
@@ -752,7 +736,7 @@ class FileDatastore(GenericBaseDatastore):
 
         return location, formatter
 
-    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> Optional[str]:
+    def _overrideTransferMode(self, *datasets: FileDataset, transfer: str | None = None) -> str | None:
         # Docstring inherited from base class
         if transfer != "auto":
             return transfer
@@ -781,7 +765,7 @@ class FileDatastore(GenericBaseDatastore):
 
         return transfer
 
-    def _pathInStore(self, path: ResourcePathExpression) -> Optional[str]:
+    def _pathInStore(self, path: ResourcePathExpression) -> str | None:
         """Return path relative to datastore root
 
         Parameters
@@ -802,8 +786,8 @@ class FileDatastore(GenericBaseDatastore):
         return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(
-        self, path: Union[str, ResourcePath], *, transfer: Optional[str] = None
-    ) -> Union[str, ResourcePath]:
+        self, path: str | ResourcePath, *, transfer: str | None = None
+    ) -> str | ResourcePath:
         """Standardize the path of a to-be-ingested file.
 
         Parameters
@@ -871,8 +855,8 @@ class FileDatastore(GenericBaseDatastore):
         path: ResourcePathExpression,
         ref: DatasetRef,
         *,
-        formatter: Union[Formatter, Type[Formatter]],
-        transfer: Optional[str] = None,
+        formatter: Formatter | type[Formatter],
+        transfer: str | None = None,
         record_validation_info: bool = True,
     ) -> StoredFileInfo:
         """Relocate (if necessary) and extract `StoredFileInfo` from a
@@ -923,7 +907,7 @@ class FileDatastore(GenericBaseDatastore):
         # Track whether we have read the size of the source yet
         have_sized = False
 
-        tgtLocation: Optional[Location]
+        tgtLocation: Location | None
         if transfer is None or transfer == "split":
             # A relative path is assumed to be relative to the datastore
             # in this context
@@ -1004,7 +988,7 @@ class FileDatastore(GenericBaseDatastore):
             dataset_id=ref.id,
         )
 
-    def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
+    def _prepIngest(self, *datasets: FileDataset, transfer: str | None = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
         filtered = []
         for dataset in datasets:
@@ -1030,7 +1014,7 @@ class FileDatastore(GenericBaseDatastore):
         self,
         prepData: Datastore.IngestPrepData,
         *,
-        transfer: Optional[str] = None,
+        transfer: str | None = None,
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited from Datastore._finishIngest.
@@ -1052,7 +1036,7 @@ class FileDatastore(GenericBaseDatastore):
         self,
         srcUri: ResourcePath,
         ref: DatasetRef,
-        formatter: Formatter | Type[Formatter] | None = None,
+        formatter: Formatter | type[Formatter] | None = None,
     ) -> Location:
         """Given a source URI and a DatasetRef, determine the name the
         dataset will have inside datastore.
@@ -1205,7 +1189,7 @@ class FileDatastore(GenericBaseDatastore):
         getInfo: DatastoreFileGetInformation,
         ref: DatasetRef,
         isComponent: bool = False,
-        cache_ref: Optional[DatasetRef] = None,
+        cache_ref: DatasetRef | None = None,
     ) -> Any:
         """Read the artifact from datastore into in memory object.
 
@@ -1399,11 +1383,11 @@ class FileDatastore(GenericBaseDatastore):
 
     def _process_mexists_records(
         self,
-        id_to_ref: Dict[DatasetId, DatasetRef],
-        records: Dict[DatasetId, List[StoredFileInfo]],
+        id_to_ref: dict[DatasetId, DatasetRef],
+        records: dict[DatasetId, list[StoredFileInfo]],
         all_required: bool,
-        artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
-    ) -> Dict[DatasetRef, bool]:
+        artifact_existence: dict[ResourcePath, bool] | None = None,
+    ) -> dict[DatasetRef, bool]:
         """Helper function for mexists that checks the given records.
 
         Parameters
@@ -1428,12 +1412,12 @@ class FileDatastore(GenericBaseDatastore):
         """
         # The URIs to be checked and a mapping of those URIs to
         # the dataset ID.
-        uris_to_check: List[ResourcePath] = []
-        location_map: Dict[ResourcePath, DatasetId] = {}
+        uris_to_check: list[ResourcePath] = []
+        location_map: dict[ResourcePath, DatasetId] = {}
 
         location_factory = self.locationFactory
 
-        uri_existence: Dict[ResourcePath, bool] = {}
+        uri_existence: dict[ResourcePath, bool] = {}
         for ref_id, infos in records.items():
             # Key is the dataset Id, value is list of StoredItemInfo
             uris = [info.file_location(location_factory).uri for info in infos]
@@ -1468,7 +1452,7 @@ class FileDatastore(GenericBaseDatastore):
             uris_to_check = filtered_uris_to_check
 
         # Results.
-        dataset_existence: Dict[DatasetRef, bool] = {}
+        dataset_existence: dict[DatasetRef, bool] = {}
 
         uri_existence.update(ResourcePath.mexists(uris_to_check))
         for uri, exists in uri_existence.items():
@@ -1490,8 +1474,8 @@ class FileDatastore(GenericBaseDatastore):
         return dataset_existence
 
     def mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
-    ) -> Dict[DatasetRef, bool]:
+        self, refs: Iterable[DatasetRef], artifact_existence: dict[ResourcePath, bool] | None = None
+    ) -> dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
@@ -1518,7 +1502,7 @@ class FileDatastore(GenericBaseDatastore):
         still in the cache.
         """
         chunk_size = 10_000
-        dataset_existence: Dict[DatasetRef, bool] = {}
+        dataset_existence: dict[DatasetRef, bool] = {}
         log.debug("Checking for the existence of multiple artifacts in datastore in chunks of %d", chunk_size)
         n_found_total = 0
         n_checked = 0
@@ -1585,8 +1569,8 @@ class FileDatastore(GenericBaseDatastore):
         return dataset_existence
 
     def _mexists(
-        self, refs: Sequence[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
-    ) -> Dict[DatasetRef, bool]:
+        self, refs: Sequence[DatasetRef], artifact_existence: dict[ResourcePath, bool] | None = None
+    ) -> dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
@@ -1639,8 +1623,8 @@ class FileDatastore(GenericBaseDatastore):
         }
 
     def _mexists_check_expected(
-        self, refs: Sequence[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
-    ) -> Dict[DatasetRef, bool]:
+        self, refs: Sequence[DatasetRef], artifact_existence: dict[ResourcePath, bool] | None = None
+    ) -> dict[DatasetRef, bool]:
         """Check existence of refs that are not known to datastore.
 
         Parameters
@@ -1658,7 +1642,7 @@ class FileDatastore(GenericBaseDatastore):
         existence : `dict` of [`DatasetRef`, `bool`]
             Mapping from dataset to boolean indicating existence.
         """
-        dataset_existence: Dict[DatasetRef, bool] = {}
+        dataset_existence: dict[DatasetRef, bool] = {}
         if not self.trustGetRequest:
             # Must assume these do not exist
             for ref in refs:
@@ -1855,10 +1839,10 @@ class FileDatastore(GenericBaseDatastore):
         refs: Iterable[DatasetRef],
         predict: bool = False,
         allow_missing: bool = False,
-    ) -> Dict[DatasetRef, DatasetRefURIs]:
+    ) -> dict[DatasetRef, DatasetRefURIs]:
         # Docstring inherited
 
-        uris: Dict[DatasetRef, DatasetRefURIs] = {}
+        uris: dict[DatasetRef, DatasetRefURIs] = {}
 
         records = self._get_stored_records_associated_with_refs(refs)
         records_keys = records.keys()
@@ -1887,7 +1871,7 @@ class FileDatastore(GenericBaseDatastore):
             # if this has never been written then we have to guess
             if not predict:
                 if not allow_missing:
-                    raise FileNotFoundError("Dataset {} not in this datastore.".format(ref))
+                    raise FileNotFoundError(f"Dataset {ref} not in this datastore.")
             else:
                 uris[ref] = self._predict_URIs(ref)
 
@@ -1901,7 +1885,7 @@ class FileDatastore(GenericBaseDatastore):
     def _locations_to_URI(
         self,
         ref: DatasetRef,
-        file_locations: Sequence[Tuple[Location, StoredFileInfo]],
+        file_locations: Sequence[tuple[Location, StoredFileInfo]],
     ) -> DatasetRefURIs:
         """Convert one or more file locations associated with a DatasetRef
         to a DatasetRefURIs.
@@ -1973,7 +1957,7 @@ class FileDatastore(GenericBaseDatastore):
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> List[ResourcePath]:
+    ) -> list[ResourcePath]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -2011,7 +1995,7 @@ class FileDatastore(GenericBaseDatastore):
         # Source -> Destination
         # This also helps filter out duplicate DatasetRef in the request
         # that will map to the same underlying file transfer.
-        to_transfer: Dict[ResourcePath, ResourcePath] = {}
+        to_transfer: dict[ResourcePath, ResourcePath] = {}
 
         for ref in refs:
             locations = self._get_dataset_locations_info(ref)
@@ -2039,8 +2023,8 @@ class FileDatastore(GenericBaseDatastore):
     def get(
         self,
         ref: DatasetRef,
-        parameters: Optional[Mapping[str, Any]] = None,
-        storageClass: Optional[Union[StorageClass, str]] = None,
+        parameters: Mapping[str, Any] | None = None,
+        storageClass: StorageClass | str | None = None,
     ) -> Any:
         """Load an InMemoryDataset from the store.
 
@@ -2122,7 +2106,7 @@ class FileDatastore(GenericBaseDatastore):
             # assembler.
             usedParams = set()
 
-            components: Dict[str, Any] = {}
+            components: dict[str, Any] = {}
             for getInfo in allGetInfo:
                 # assemblerParams are parameters not understood by the
                 # associated formatter.
@@ -2211,7 +2195,7 @@ class FileDatastore(GenericBaseDatastore):
             # see the storage class of the derived component and those
             # parameters will have to be handled by the formatter on the
             # forwarded storage class.
-            assemblerParams: Dict[str, Any] = {}
+            assemblerParams: dict[str, Any] = {}
 
             # Need to created a new info that specifies the derived
             # component and associated storage class
@@ -2317,7 +2301,7 @@ class FileDatastore(GenericBaseDatastore):
         self._register_datasets(artifacts)
 
     @transactional
-    def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = True) -> None:
+    def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
         # At this point can safely remove these datasets from the cache
         # to avoid confusion later on. If they are not trashed later
         # the cache will simply be refilled.
@@ -2344,7 +2328,7 @@ class FileDatastore(GenericBaseDatastore):
                 # Do an explicit existence check on these refs.
                 # We only care about the artifacts at this point and not
                 # the dataset existence.
-                artifact_existence: Dict[ResourcePath, bool] = {}
+                artifact_existence: dict[ResourcePath, bool] = {}
                 _ = self.mexists(missing, artifact_existence)
                 uris = [uri for uri, exists in artifact_existence.items() if exists]
 
@@ -2531,7 +2515,7 @@ class FileDatastore(GenericBaseDatastore):
         source_datastore: Datastore,
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
-        artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
+        artifact_existence: dict[ResourcePath, bool] | None = None,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Docstring inherited
         if type(self) is not type(source_datastore):
@@ -2587,7 +2571,7 @@ class FileDatastore(GenericBaseDatastore):
         source_ids = set(source_records)
         log.debug("Number of datastore records found in source: %d", len(source_ids))
 
-        requested_ids = set(ref.id for ref in refs)
+        requested_ids = {ref.id for ref in refs}
         missing_ids = requested_ids - source_ids
 
         # Missing IDs can be okay if that datastore has allowed
@@ -2758,7 +2742,7 @@ class FileDatastore(GenericBaseDatastore):
         self._table.delete(["dataset_id"], *[{"dataset_id": ref.id} for ref in refs])
 
     def validateConfiguration(
-        self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]], logFailures: bool = False
+        self, entities: Iterable[DatasetRef | DatasetType | StorageClass], logFailures: bool = False
     ) -> None:
         """Validate some of the configuration for this datastore.
 
@@ -2807,7 +2791,7 @@ class FileDatastore(GenericBaseDatastore):
             msg = ";\n".join(messages)
             raise DatastoreValidationError(msg)
 
-    def getLookupKeys(self) -> Set[LookupKey]:
+    def getLookupKeys(self) -> set[LookupKey]:
         # Docstring is inherited from base class
         return (
             self.templates.getLookupKeys()
@@ -2815,7 +2799,7 @@ class FileDatastore(GenericBaseDatastore):
             | self.constraints.getLookupKeys()
         )
 
-    def validateKey(self, lookupKey: LookupKey, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
+    def validateKey(self, lookupKey: LookupKey, entity: DatasetRef | DatasetType | StorageClass) -> None:
         # Docstring is inherited from base class
         # The key can be valid in either formatters or templates so we can
         # only check the template if it exists
@@ -2829,8 +2813,8 @@ class FileDatastore(GenericBaseDatastore):
         self,
         refs: Iterable[DatasetRef],
         *,
-        directory: Optional[ResourcePathExpression] = None,
-        transfer: Optional[str] = "auto",
+        directory: ResourcePathExpression | None = None,
+        transfer: str | None = "auto",
     ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
         if transfer == "auto" and directory is None:
@@ -2849,7 +2833,7 @@ class FileDatastore(GenericBaseDatastore):
             transfer = None
 
         # Force the directory to be a URI object
-        directoryUri: Optional[ResourcePath] = None
+        directoryUri: ResourcePath | None = None
         if directory is not None:
             directoryUri = ResourcePath(directory, forceDirectory=True)
 
@@ -2900,9 +2884,7 @@ class FileDatastore(GenericBaseDatastore):
             yield FileDataset(refs=[ref], path=pathInStore, formatter=storedFileInfo.formatter)
 
     @staticmethod
-    def computeChecksum(
-        uri: ResourcePath, algorithm: str = "blake2b", block_size: int = 8192
-    ) -> Optional[str]:
+    def computeChecksum(uri: ResourcePath, algorithm: str = "blake2b", block_size: int = 8192) -> str | None:
         """Compute the checksum of the supplied file.
 
         Parameters
@@ -2925,7 +2907,7 @@ class FileDatastore(GenericBaseDatastore):
         Currently returns None if the URI is for a remote resource.
         """
         if algorithm not in hashlib.algorithms_guaranteed:
-            raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
+            raise NameError(f"The specified algorithm '{algorithm}' is not supported by hashlib")
 
         if not uri.isLocal:
             return None
@@ -2941,8 +2923,8 @@ class FileDatastore(GenericBaseDatastore):
 
     def needs_expanded_data_ids(
         self,
-        transfer: Optional[str],
-        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+        transfer: str | None,
+        entity: DatasetRef | DatasetType | StorageClass | None = None,
     ) -> bool:
         # Docstring inherited.
         # This _could_ also use entity to inspect whether the filename template

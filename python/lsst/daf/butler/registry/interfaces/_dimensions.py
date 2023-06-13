@@ -31,7 +31,7 @@ __all__ = (
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Mapping, Set
-from typing import TYPE_CHECKING, Any, Tuple, Union
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 from lsst.daf.relation import Join, Relation, sql
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
 
 
-OverlapSide = Union[SkyPixDimension, Tuple[DatabaseDimensionElement, str]]
+OverlapSide = SkyPixDimension | tuple[DatabaseDimensionElement, str]
 
 
 class DimensionRecordStorage(ABC):
@@ -598,7 +598,7 @@ class DatabaseDimensionOverlapStorage(ABC):
 
         Returns
         -------
-        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
+        tables : `~collections.abc.Iterable` [ `sqlalchemy.schema.Table` ]
             Possibly empty set of tables for schema digest calculations.
         """
         raise NotImplementedError()

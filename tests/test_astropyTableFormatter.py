@@ -50,7 +50,7 @@ class AstropyTableFormatterTestCase(unittest.TestCase):
 
     def testAstropyTableFormatter(self):
         butler = Butler(self.root, run="testrun")
-        datasetType = DatasetType("table", [], "AstropyTable", universe=butler.registry.dimensions)
+        datasetType = DatasetType("table", [], "AstropyTable", universe=butler.dimensions)
         butler.registry.registerDatasetType(datasetType)
         ref = butler.put(self.table, datasetType)
         uri = butler.getURI(ref)

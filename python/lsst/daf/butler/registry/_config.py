@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("RegistryConfig",)
 
-from typing import TYPE_CHECKING, Optional, Type
+from typing import TYPE_CHECKING
 
 from lsst.utils import doImportType
 
@@ -53,7 +53,7 @@ class RegistryConfig(ConfigSubset):
         conStr = ConnectionStringFactory.fromConfig(self)
         return conStr.get_backend_name()
 
-    def getDatabaseClass(self) -> Type[Database]:
+    def getDatabaseClass(self) -> type[Database]:
         """Returns the `Database` class targeted by configuration values.
 
         The appropriate class is determined by parsing the `db` key to extract
@@ -69,7 +69,7 @@ class RegistryConfig(ConfigSubset):
             raise TypeError(f"Imported database class {databaseClassName} is not a Database")
         return databaseClass
 
-    def makeDefaultDatabaseUri(self, root: str) -> Optional[str]:
+    def makeDefaultDatabaseUri(self, root: str) -> str | None:
         """Return a default 'db' URI for the registry configured here that is
         appropriate for a new empty repository with the given root.
 
@@ -86,7 +86,7 @@ class RegistryConfig(ConfigSubset):
         DatabaseClass = self.getDatabaseClass()
         return DatabaseClass.makeDefaultUri(root)
 
-    def replaceRoot(self, root: Optional[ResourcePathExpression]) -> None:
+    def replaceRoot(self, root: ResourcePathExpression | None) -> None:
         """Replace any occurrences of `BUTLER_ROOT_TAG` in the connection
         with the given root directory.
 

@@ -72,7 +72,7 @@ class DataCoordinateReader(ABC):
             required dimensions.
         records : `bool`, optional
             Whether to attach dimension records.
-        record_caches : `Mapping`, optional
+        record_caches : `~collections.abc.Mapping`, optional
             Nested mapping (outer keys are dimension elements, inner keys are
             data IDs for that element) of cached dimension records.  Ignored
             unless ``records=True``.
@@ -109,7 +109,7 @@ class DataCoordinateReader(ABC):
 
         Parameters
         ----------
-        row : `Mapping`
+        row : `~collections.abc.Mapping`
             Mapping with `ColumnTag` keys representing a query result row.
 
         Returns
@@ -186,10 +186,10 @@ class _ExpandedDataCoordinateReader(DataCoordinateReader):
     ----------
     full_reader : `_FullDataCoordinateReader`
         Reader for full data IDs that don't have records.
-    record_caches : `Mapping`
+    record_caches : `~collections.abc.Mapping`
         Nested mapping (outer keys are dimension elements, inner keys are data
         IDs for that element) of cached dimension records.
-    record_readers : `Mapping`
+    record_readers : `~collections.abc.Mapping`
         Mapping from `DimensionElement` to `DimensionRecordReaders`.  Should
         include all elements in the data coordinate's dimensions that are not
         in ``record_cache``.
@@ -236,13 +236,13 @@ class DatasetRefReader:
     full : `bool`, optional
         Whether to expect and extract implied dimensions as well as required
         dimensions.
-    translate_collection : `Callable`, optional
+    translate_collection : `~collections.abc.Callable`, optional
         Callable that returns `str` collection names given collection primary
         key values.  Optional only for registries that use names as primary
         keys, or if ``run`` is always passed to `read`.
     records : `bool`, optional
         Whether to attach dimension records to data IDs.
-    record_caches : `Mapping`, optional
+    record_caches : `~collections.abc.Mapping`, optional
         Nested mapping (outer keys are dimension element names, inner keys
         are data IDs for that element) of cached dimension records.
         Ignored unless ``records=True``.
@@ -285,7 +285,7 @@ class DatasetRefReader:
 
         Parameters
         ----------
-        row : `Mapping`
+        row : `~collections.abc.Mapping`
             Mapping with `ColumnTag` keys representing a query result row.
         run : `str`, optional
             Name of the `~CollectionType.RUN` collection; when provided the run

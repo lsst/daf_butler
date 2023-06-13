@@ -29,7 +29,8 @@ __all__ = (
 
 import enum
 from abc import ABC, abstractmethod
-from typing import Dict, Generic, Iterator, List, Optional, Sequence, Tuple, TypeVar
+from collections.abc import Iterator, Sequence
+from typing import Generic, TypeVar
 
 import astropy.time
 
@@ -185,7 +186,7 @@ class NormalFormVisitor(Generic[_T, _U, _V]):
 
         Parameters
         ----------
-        branches : `Sequence`
+        branches : `~collections.abc.Sequence`
             Sequence of tuples, where the first element in each tuple is the
             result of a call to `visitBranch`, and the second is the `Node` on
             which `visitBranch` was called.
@@ -208,7 +209,7 @@ class NormalFormVisitor(Generic[_T, _U, _V]):
 
         Parameters
         ----------
-        branches : `Sequence`
+        branches : `~collections.abc.Sequence`
             Sequence of return values from calls to `visitInner`.
         form : `NormalForm`
             Form this expression is in.  ``form.outer`` is the operator that
@@ -232,7 +233,8 @@ class NormalFormExpression:
 
     Parameters
     ----------
-    nodes : `Sequence` [ `Sequence` [ `Node` ] ]
+    nodes : `~collections.abc.Sequence` [ `~collections.abc.Sequence` \
+            [ `Node` ] ]
         Non-AND, non-OR branches of three tree, with the AND and OR operations
         combining them represented by position in the nested sequence - the
         inner sequence is combined via ``form.inner``, and the outer sequence
@@ -294,7 +296,7 @@ class NormalFormExpression:
             Return value from calling ``visitor.visitOuter`` after visiting
             all other nodes.
         """
-        visitedOuterBranches: List[_U] = []
+        visitedOuterBranches: list[_U] = []
         for nodeInnerBranches in self._nodes:
             visitedInnerBranches = [visitor.visitBranch(node) for node in nodeInnerBranches]
             visitedOuterBranches.append(visitor.visitInner(visitedInnerBranches, self.form))
@@ -524,7 +526,7 @@ class TransformationWrapper(ABC):
 
         Returns
         -------
-        operands : `Iterator` [ `TransformationWrapper` ]
+        operands : `~collections.abc.Iterator` [ `TransformationWrapper` ]
             Operands that, if combined with ``operator``, yield an expression
             equivalent to ``self``.
         """
@@ -853,7 +855,7 @@ class LogicalBinaryOperation(TransformationWrapper):
         self._lhs = lhs
         self._operator = operator
         self._rhs = rhs
-        self._satisfiesCache: Dict[NormalForm, bool] = {}
+        self._satisfiesCache: dict[NormalForm, bool] = {}
 
     __slots__ = ("_lhs", "_operator", "_rhs", "_satisfiesCache")
 
@@ -1023,7 +1025,7 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         return Opaque(node, PrecedenceTier.TOKEN)
 
     def visitRangeLiteral(
-        self, start: int, stop: int, stride: Optional[int], node: Node
+        self, start: int, stop: int, stride: int | None, node: Node
     ) -> TransformationWrapper:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         return Opaque(node, PrecedenceTier.TOKEN)
@@ -1060,7 +1062,7 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
     def visitIsIn(
         self,
         lhs: TransformationWrapper,
-        values: List[TransformationWrapper],
+        values: list[TransformationWrapper],
         not_in: bool,
         node: Node,
     ) -> TransformationWrapper:
@@ -1071,7 +1073,7 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         # Docstring inherited from TreeVisitor.visitParens
         return expression
 
-    def visitTupleNode(self, items: Tuple[TransformationWrapper, ...], node: Node) -> TransformationWrapper:
+    def visitTupleNode(self, items: tuple[TransformationWrapper, ...], node: Node) -> TransformationWrapper:
         # Docstring inherited from TreeVisitor.visitTupleNode
         return Opaque(node, PrecedenceTier.TOKEN)
 
@@ -1098,7 +1100,7 @@ class TreeReconstructionVisitor(NormalFormVisitor[Node, Node, Node]):
 
         Parameters
         ----------
-        branches : `Sequence`
+        branches : `~collections.abc.Sequence`
             Sequence of return values from calls to `visitBranch`, representing
             a visited set of operands combined in the expression by
             ``operator``.

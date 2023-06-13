@@ -24,7 +24,8 @@ from __future__ import annotations
 __all__ = ["RepoExportContext"]
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, AbstractSet, Callable, Dict, Iterable, List, Optional, Set, Union
+from collections.abc import Callable, Iterable, Set
+from typing import TYPE_CHECKING
 
 from ..core import (
     DataCoordinate,
@@ -76,20 +77,20 @@ class RepoExportContext:
         datastore: Datastore,
         backend: RepoExportBackend,
         *,
-        directory: Optional[ResourcePathExpression] = None,
-        transfer: Optional[str] = None,
+        directory: ResourcePathExpression | None = None,
+        transfer: str | None = None,
     ):
         self._registry = registry
         self._datastore = datastore
         self._backend = backend
         self._directory = directory
         self._transfer = transfer
-        self._records: Dict[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
-        self._dataset_ids: Set[DatasetId] = set()
-        self._datasets: Dict[DatasetType, Dict[str, List[FileDataset]]] = defaultdict(
+        self._records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
+        self._dataset_ids: set[DatasetId] = set()
+        self._datasets: dict[DatasetType, dict[str, list[FileDataset]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        self._collections: Dict[str, CollectionRecord] = {}
+        self._collections: dict[str, CollectionRecord] = {}
 
     def saveCollection(self, name: str) -> None:
         """Export the given collection.
@@ -117,7 +118,7 @@ class RepoExportContext:
         self._collections[name] = self._registry._get_collection_record(name)
 
     def saveDimensionData(
-        self, element: Union[str, DimensionElement], records: Iterable[Union[dict, DimensionRecord]]
+        self, element: str | DimensionElement, records: Iterable[dict | DimensionRecord]
     ) -> None:
         """Export the given dimension records associated with one or more data
         IDs.
@@ -127,7 +128,7 @@ class RepoExportContext:
         element : `str` or `DimensionElement`
             `DimensionElement` or `str` indicating the logical table these
             records are from.
-        records : `Iterable` [ `DimensionRecord` or `dict` ]
+        records : `~collections.abc.Iterable` [ `DimensionRecord` or `dict` ]
             Records to export, as an iterable containing `DimensionRecord` or
             `dict` instances.
         """
@@ -147,7 +148,7 @@ class RepoExportContext:
         self,
         dataIds: Iterable[DataCoordinate],
         *,
-        elements: Optional[Iterable[Union[str, DimensionElement]]] = None,
+        elements: Iterable[str | DimensionElement] | None = None,
     ) -> None:
         """Export the dimension records associated with one or more data IDs.
 
@@ -163,7 +164,7 @@ class RepoExportContext:
             Dimension elements whose records should be exported.  If `None`,
             records for all dimensions will be exported.
         """
-        standardized_elements: AbstractSet[DimensionElement]
+        standardized_elements: Set[DimensionElement]
         if elements is None:
             standardized_elements = frozenset(
                 element
@@ -192,8 +193,8 @@ class RepoExportContext:
         self,
         refs: Iterable[DatasetRef],
         *,
-        elements: Optional[Iterable[Union[str, DimensionElement]]] = None,
-        rewrite: Optional[Callable[[FileDataset], FileDataset]] = None,
+        elements: Iterable[str | DimensionElement] | None = None,
+        rewrite: Callable[[FileDataset], FileDataset] | None = None,
     ) -> None:
         """Export one or more datasets.
 
@@ -291,7 +292,7 @@ class RepoExportContext:
             )
         self._backend.finish()
 
-    def _computeSortedCollections(self) -> List[str]:
+    def _computeSortedCollections(self) -> list[str]:
         """Sort collections in a way that is both deterministic and safe
         for registering them in a new repo in the presence of nested chains.
 
@@ -305,8 +306,8 @@ class RepoExportContext:
         # Split collections into CHAINED and everything else, and just
         # sort "everything else" lexicographically since there are no
         # dependencies.
-        chains: Dict[str, List[str]] = {}
-        result: List[str] = []
+        chains: dict[str, list[str]] = {}
+        result: list[str] = []
         for record in self._collections.values():
             if record.type is CollectionType.CHAINED:
                 assert isinstance(record, ChainedCollectionRecord)
@@ -331,7 +332,7 @@ class RepoExportContext:
                 del chains[name]
         return result
 
-    def _computeDatasetAssociations(self) -> Dict[str, List[DatasetAssociation]]:
+    def _computeDatasetAssociations(self) -> dict[str, list[DatasetAssociation]]:
         """Return datasets-collection associations, grouped by association.
 
         This queries for all associations between exported datasets and

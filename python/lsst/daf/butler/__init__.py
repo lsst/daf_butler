@@ -16,5 +16,5 @@ from .core import *
 
 # Import the registry subpackage directly for other symbols.
 from .registry import CollectionSearch, CollectionType, Registry, RegistryConfig
-from .transfers import YamlRepoExportBackend, YamlRepoImportBackend
+from .transfers import RepoExportContext, YamlRepoExportBackend, YamlRepoImportBackend
 from .version import *

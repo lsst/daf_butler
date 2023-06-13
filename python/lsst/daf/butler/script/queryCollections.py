@@ -186,10 +186,11 @@ def queryCollections(
     repo : `str`
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
-    glob : `Iterable` [`str`]
+    glob : `~collections.abc.Iterable` [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
-    collection_type : `Iterable` [ `CollectionType` ], optional
+    collection_type : `~collections.abc.Iterable` [ `CollectionType` ], \
+            optional
         If provided, only return collections of these types.
     chains : `str`
         Must be one of "FLATTEN", "TABLE", or "TREE" (case sensitive).

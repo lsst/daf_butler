@@ -68,7 +68,7 @@ class ConnectionStringFactory:
 
         Parameters
         ----------
-        config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
+        config : `RegistryConfig`
             Registry configuration
 
         Returns

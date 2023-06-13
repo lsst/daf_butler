@@ -27,7 +27,7 @@ from __future__ import annotations
 __all__ = ("DeferredDatasetHandle",)
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ._limited_butler import LimitedButler
@@ -41,8 +41,8 @@ class DeferredDatasetHandle:
     def get(
         self,
         *,
-        component: Optional[str] = None,
-        parameters: Optional[dict] = None,
+        component: str | None = None,
+        parameters: dict | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> Any:
         """Retrieves the dataset pointed to by this handle
@@ -104,10 +104,10 @@ class DeferredDatasetHandle:
     """Reference to the dataset (`DatasetRef`).
     """
 
-    parameters: Optional[dict]
+    parameters: dict | None
     """Optional parameters that may be used to specify a subset of the dataset
     to be loaded (`dict` or `None`).
     """
 
-    storageClass: Optional[Union[str, StorageClass]] = None
+    storageClass: str | StorageClass | None = None
     """Optional storage class override that can be applied on ``get()``."""

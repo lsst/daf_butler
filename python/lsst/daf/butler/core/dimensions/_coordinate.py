@@ -30,20 +30,8 @@ __all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDa
 
 import numbers
 from abc import abstractmethod
-from typing import (
-    TYPE_CHECKING,
-    AbstractSet,
-    Any,
-    ClassVar,
-    Dict,
-    Iterator,
-    Literal,
-    Mapping,
-    Optional,
-    Tuple,
-    Union,
-    overload,
-)
+from collections.abc import Iterator, Mapping, Set
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, overload
 
 from deprecated.sphinx import deprecated
 from lsst.sphgeom import IntersectionRegion, Region
@@ -60,13 +48,13 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ...registry import Registry
     from ._universe import DimensionUniverse
 
-DataIdKey = Union[str, Dimension]
+DataIdKey = str | Dimension
 """Type annotation alias for the keys that can be used to index a
 DataCoordinate.
 """
 
 # Pydantic will cast int to str if str is first in the Union.
-DataIdValue = Union[int, str, None]
+DataIdValue = int | str | None
 """Type annotation alias for the values that can be present in a
 DataCoordinate or other data ID.
 """
@@ -75,11 +63,11 @@ DataCoordinate or other data ID.
 class SerializedDataCoordinate(BaseModel):
     """Simplified model for serializing a `DataCoordinate`."""
 
-    dataId: Dict[str, DataIdValue]
-    records: Optional[Dict[str, SerializedDimensionRecord]] = None
+    dataId: dict[str, DataIdValue]
+    records: dict[str, SerializedDimensionRecord] | None = None
 
     @classmethod
-    def direct(cls, *, dataId: Dict[str, DataIdValue], records: Dict[str, Dict]) -> SerializedDataCoordinate:
+    def direct(cls, *, dataId: dict[str, DataIdValue], records: dict[str, dict]) -> SerializedDataCoordinate:
         """Construct a `SerializedDataCoordinate` directly without validators.
 
         This differs from the pydantic "construct" method in that the arguments
@@ -102,7 +90,7 @@ class SerializedDataCoordinate(BaseModel):
         return node
 
 
-def _intersectRegions(*args: Region) -> Optional[Region]:
+def _intersectRegions(*args: Region) -> Region | None:
     """Return the intersection of several regions.
 
     For internal use by `ExpandedDataCoordinate` only.
@@ -159,7 +147,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
        instance for at least one operand in any data ID comparison is strongly
        recommended.
 
-    See also
+    See Also
     --------
     :ref:`lsst.daf.butler-dimensions_data_ids`
     """
@@ -170,11 +158,11 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
     @staticmethod
     def standardize(
-        mapping: Optional[NameLookupMapping[Dimension, DataIdValue]] = None,
+        mapping: NameLookupMapping[Dimension, DataIdValue] | None = None,
         *,
-        graph: Optional[DimensionGraph] = None,
-        universe: Optional[DimensionUniverse] = None,
-        defaults: Optional[DataCoordinate] = None,
+        graph: DimensionGraph | None = None,
+        universe: DimensionUniverse | None = None,
+        defaults: DataCoordinate | None = None,
         **kwargs: Any,
     ) -> DataCoordinate:
         """Standardize the supplied dataId.
@@ -215,7 +203,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         KeyError
             Raised if a key-value pair for a required dimension is missing.
         """
-        d: Dict[str, DataIdValue] = {}
+        d: dict[str, DataIdValue] = {}
         if isinstance(mapping, DataCoordinate):
             if graph is None:
                 if not kwargs:
@@ -288,7 +276,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return _ExpandedTupleDataCoordinate(universe.empty, (), {})
 
     @staticmethod
-    def fromRequiredValues(graph: DimensionGraph, values: Tuple[DataIdValue, ...]) -> DataCoordinate:
+    def fromRequiredValues(graph: DimensionGraph, values: tuple[DataIdValue, ...]) -> DataCoordinate:
         """Construct a `DataCoordinate` from required dimension values.
 
         This is a low-level interface with at most assertion-level checking of
@@ -316,7 +304,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return _BasicTupleDataCoordinate(graph, values)
 
     @staticmethod
-    def fromFullValues(graph: DimensionGraph, values: Tuple[DataIdValue, ...]) -> DataCoordinate:
+    def fromFullValues(graph: DimensionGraph, values: tuple[DataIdValue, ...]) -> DataCoordinate:
         """Construct a `DataCoordinate` from all dimension values.
 
         This is a low-level interface with at most assertion-level checking of
@@ -386,7 +374,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return self.graph.required
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         """Names of the required dimensions identified by this data ID.
 
         They are returned in the same order as `keys`
@@ -460,7 +448,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
     @abstractmethod
     def expanded(
-        self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
+        self, records: NameLookupMapping[DimensionElement, DimensionRecord | None]
     ) -> DataCoordinate:
         """Return a `DataCoordinate` that holds the given records.
 
@@ -471,10 +459,11 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         Parameters
         ----------
-        records : `Mapping` [ `str`, `DimensionRecord` or `None` ]
+        records : `~collections.abc.Mapping` [ `str`, `DimensionRecord` or \
+                `None` ]
             A `NamedKeyMapping` with `DimensionElement` keys or a regular
-            `Mapping` with `str` (`DimensionElement` name) keys and
-            `DimensionRecord` values.  Keys must cover all elements in
+            `~collections.abc.Mapping` with `str` (`DimensionElement` name)
+            keys and `DimensionRecord` values.  Keys must cover all elements in
             ``self.graph.elements``.  Values may be `None`, but only to reflect
             actual NULL values in the database, not just records that have not
             been fetched.
@@ -553,7 +542,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         raise NotImplementedError()
 
     @property
-    def records(self) -> NamedKeyMapping[DimensionElement, Optional[DimensionRecord]]:
+    def records(self) -> NamedKeyMapping[DimensionElement, DimensionRecord | None]:
         """Return the records.
 
         Returns a  mapping that contains `DimensionRecord` objects for all
@@ -572,7 +561,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return _DataCoordinateRecordsView(self)
 
     @abstractmethod
-    def _record(self, name: str) -> Optional[DimensionRecord]:
+    def _record(self, name: str) -> DimensionRecord | None:
         """Protected implementation hook that backs the ``records`` attribute.
 
         Parameters
@@ -590,7 +579,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         raise NotImplementedError()
 
     @property
-    def region(self) -> Optional[Region]:
+    def region(self) -> Region | None:
         """Spatial region associated with this data ID.
 
         (`lsst.sphgeom.Region` or `None`).
@@ -613,7 +602,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return _intersectRegions(*regions)
 
     @property
-    def timespan(self) -> Optional[Timespan]:
+    def timespan(self) -> Timespan | None:
         """Temporal interval associated with this data ID.
 
         (`Timespan` or `None`).
@@ -643,7 +632,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             return Timespan.intersection(*timespans)
 
     @overload
-    def pack(self, name: str, *, returnMaxBits: Literal[True]) -> Tuple[int, int]:
+    def pack(self, name: str, *, returnMaxBits: Literal[True]) -> tuple[int, int]:
         ...
 
     @overload
@@ -656,7 +645,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         version="v26",
         category=FutureWarning,
     )
-    def pack(self, name: str, *, returnMaxBits: bool = False) -> Union[Tuple[int, int], int]:
+    def pack(self, name: str, *, returnMaxBits: bool = False) -> tuple[int, int] | int:
         """Pack this data ID into an integer.
 
         Parameters
@@ -706,7 +695,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             dataId = self.full.byName()
         else:
             dataId = self.byName()
-        records: Optional[Dict[str, SerializedDimensionRecord]]
+        records: dict[str, SerializedDimensionRecord] | None
         if not minimal and self.hasRecords():
             records = {k: v.to_simple() for k, v in self.records.byName().items() if v is not None}
         else:
@@ -718,8 +707,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     def from_simple(
         cls,
         simple: SerializedDataCoordinate,
-        universe: Optional[DimensionUniverse] = None,
-        registry: Optional[Registry] = None,
+        universe: DimensionUniverse | None = None,
+        registry: Registry | None = None,
     ) -> DataCoordinate:
         """Construct a new object from the simplified form.
 
@@ -760,7 +749,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     from_json: ClassVar = classmethod(from_json_pydantic)
 
 
-DataId = Union[DataCoordinate, Mapping[str, Any]]
+DataId = DataCoordinate | Mapping[str, Any]
 """A type-annotation alias for signatures that accept both informal data ID
 dictionaries and validated `DataCoordinate` instances.
 """
@@ -800,12 +789,12 @@ class _DataCoordinateFullView(NamedKeyMapping[Dimension, DataIdValue]):
         return self._target.graph.dimensions
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         # Docstring inherited from `NamedKeyMapping`.
         return self.keys().names
 
 
-class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, Optional[DimensionRecord]]):
+class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, DimensionRecord | None]):
     """View class for `DataCoordinate.records`.
 
     Provides the default implementation for
@@ -829,7 +818,7 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, Optional[Dime
     def __str__(self) -> str:
         return "\n".join(str(v) for v in self.values())
 
-    def __getitem__(self, key: Union[DimensionElement, str]) -> Optional[DimensionRecord]:
+    def __getitem__(self, key: DimensionElement | str) -> DimensionRecord | None:
         if isinstance(key, DimensionElement):
             key = key.name
         return self._target._record(key)
@@ -844,7 +833,7 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, Optional[Dime
         return self._target.graph.elements
 
     @property
-    def names(self) -> AbstractSet[str]:
+    def names(self) -> Set[str]:
         # Docstring inherited from `NamedKeyMapping`.
         return self.keys().names
 
@@ -868,7 +857,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         or all dimensions.
     """
 
-    def __init__(self, graph: DimensionGraph, values: Tuple[DataIdValue, ...]):
+    def __init__(self, graph: DimensionGraph, values: tuple[DataIdValue, ...]):
         self._graph = graph
         self._values = values
 
@@ -934,7 +923,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         return DataCoordinate.standardize(values, graph=graph)
 
     def expanded(
-        self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
+        self, records: NameLookupMapping[DimensionElement, DimensionRecord | None]
     ) -> DataCoordinate:
         # Docstring inherited from DataCoordinate
         values = self._values
@@ -954,7 +943,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         # Docstring inherited from DataCoordinate.
         return False
 
-    def _record(self, name: str) -> Optional[DimensionRecord]:
+    def _record(self, name: str) -> DimensionRecord | None:
         # Docstring inherited from DataCoordinate.
         assert False
 
@@ -984,10 +973,10 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         Data ID values, ordered to match ``graph._dataCoordinateIndices``.
         May include values for just required dimensions (which always come
         first) or all dimensions.
-    records : `Mapping` [ `str`, `DimensionRecord` or `None` ]
+    records : `~collections.abc.Mapping` [ `str`, `DimensionRecord` or `None` ]
         A `NamedKeyMapping` with `DimensionElement` keys or a regular
-        `Mapping` with `str` (`DimensionElement` name) keys and
-        `DimensionRecord` values.  Keys must cover all elements in
+        `~collections.abc.Mapping` with `str` (`DimensionElement` name) keys
+        and `DimensionRecord` values.  Keys must cover all elements in
         ``self.graph.elements``.  Values may be `None`, but only to reflect
         actual NULL values in the database, not just records that have not
         been fetched.
@@ -996,8 +985,8 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
     def __init__(
         self,
         graph: DimensionGraph,
-        values: Tuple[DataIdValue, ...],
-        records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]],
+        values: tuple[DataIdValue, ...],
+        records: NameLookupMapping[DimensionElement, DimensionRecord | None],
     ):
         super().__init__(graph, values)
         assert super().hasFull(), "This implementation requires full dimension records."
@@ -1014,7 +1003,7 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         )
 
     def expanded(
-        self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
+        self, records: NameLookupMapping[DimensionElement, DimensionRecord | None]
     ) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
         return self
@@ -1051,7 +1040,7 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
             elements -= self.graph.elements.names
             elements -= other.graph.elements.names
             if not elements:
-                records = NamedKeyDict[DimensionElement, Optional[DimensionRecord]](self.records)
+                records = NamedKeyDict[DimensionElement, DimensionRecord | None](self.records)
                 records.update(other.records)
                 return basic.expanded(records.freeze())
         return basic
@@ -1064,7 +1053,7 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         # Docstring inherited from DataCoordinate.
         return True
 
-    def _record(self, name: str) -> Optional[DimensionRecord]:
+    def _record(self, name: str) -> DimensionRecord | None:
         # Docstring inherited from DataCoordinate.
         return self._records[name]
 

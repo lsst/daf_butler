@@ -25,7 +25,7 @@ __all__ = ["ObsCoreSchema"]
 
 import re
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, List, Optional, Type
+from typing import TYPE_CHECKING
 
 import sqlalchemy
 from lsst.daf.butler import ddl
@@ -141,15 +141,15 @@ class ObsCoreSchema:
         self,
         config: ObsCoreConfig,
         spatial_plugins: Sequence[SpatialObsCorePlugin],
-        datasets: Optional[Type[DatasetRecordStorageManager]] = None,
+        datasets: type[DatasetRecordStorageManager] | None = None,
     ):
         self._dimension_columns: dict[str, str] = {"instrument": "instrument_name"}
 
         fields = list(_STATIC_COLUMNS)
 
-        column_names = set(col.name for col in fields)
+        column_names = {col.name for col in fields}
 
-        all_configs: List[ObsCoreConfig | DatasetTypeConfig] = [config]
+        all_configs: list[ObsCoreConfig | DatasetTypeConfig] = [config]
         if config.dataset_types:
             all_configs += list(config.dataset_types.values())
         for cfg in all_configs:
@@ -157,7 +157,7 @@ class ObsCoreSchema:
                 for col_name, col_value in cfg.extra_columns.items():
                     if col_name in column_names:
                         continue
-                    doc: Optional[str] = None
+                    doc: str | None = None
                     if isinstance(col_value, ExtraColumnConfig):
                         col_type = ddl.VALID_CONFIG_COLUMN_TYPES.get(col_value.type.name)
                         col_length = col_value.length
@@ -179,7 +179,7 @@ class ObsCoreSchema:
                     fields.append(ddl.FieldSpec(name=col_name, dtype=col_type, length=col_length, doc=doc))
                     column_names.add(col_name)
 
-        indices: List[ddl.IndexSpec] = []
+        indices: list[ddl.IndexSpec] = []
         if config.indices:
             for columns in config.indices.values():
                 indices.append(ddl.IndexSpec(*ensure_iterable(columns)))
@@ -190,7 +190,7 @@ class ObsCoreSchema:
         for plugin in spatial_plugins:
             plugin.extend_table_spec(self._table_spec)
 
-        self._dataset_fk: Optional[ddl.FieldSpec] = None
+        self._dataset_fk: ddl.FieldSpec | None = None
         if datasets is not None:
             # Add FK to datasets, is also a PK for this table
             self._dataset_fk = datasets.addDatasetForeignKey(
@@ -204,7 +204,7 @@ class ObsCoreSchema:
         return self._table_spec
 
     @property
-    def dataset_fk(self) -> Optional[ddl.FieldSpec]:
+    def dataset_fk(self) -> ddl.FieldSpec | None:
         """Specification for the field which is a foreign key to ``datasets``
         table, and also a primary key for obscore table (`ddl.FieldSpec` or
         `None`).

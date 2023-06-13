@@ -44,7 +44,8 @@ import collections.abc
 import itertools
 import json
 import re
-from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, cast
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -67,7 +68,7 @@ class ParquetFormatter(Formatter):
 
     extension = ".parq"
 
-    def read(self, component: Optional[str] = None) -> Any:
+    def read(self, component: str | None = None) -> Any:
         # Docstring inherited from Formatter.read.
         schema = pq.read_schema(self.fileDescriptor.location.path)
 
@@ -505,7 +506,7 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
                     strlen = max(len(row.as_py()) for row in arrow_table[name] if row.is_valid)
                 else:
                     strlen = default_length
-                md[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(strlen)
+                md[f"lsst::arrow::len::{name}".encode()] = str(strlen)
 
     arrow_table = arrow_table.replace_schema_metadata(md)
 
@@ -871,7 +872,7 @@ class ArrowNumpySchema:
         return True
 
 
-def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequence[str]]:
+def _split_multi_index_column_names(n: int, names: Iterable[str]) -> list[Sequence[str]]:
     """Split a string that represents a multi-index column.
 
     PyArrow maps Pandas' multi-index column names (which are tuples in Python)
@@ -891,7 +892,7 @@ def _split_multi_index_column_names(n: int, names: Iterable[str]) -> List[Sequen
     column_names : `list` [`tuple` [`str`]]
         A list of multi-index column name tuples.
     """
-    column_names: List[Sequence[str]] = []
+    column_names: list[Sequence[str]] = []
 
     pattern = re.compile(r"\({}\)".format(", ".join(["'(.*)'"] * n)))
     for name in names:
@@ -1050,9 +1051,9 @@ def _append_numpy_string_metadata(metadata: dict[bytes, str], name: str, dtype: 
     import numpy as np
 
     if dtype.type is np.str_:
-        metadata[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(dtype.itemsize // 4)
+        metadata[f"lsst::arrow::len::{name}".encode()] = str(dtype.itemsize // 4)
     elif dtype.type is np.bytes_:
-        metadata[f"lsst::arrow::len::{name}".encode("UTF-8")] = str(dtype.itemsize)
+        metadata[f"lsst::arrow::len::{name}".encode()] = str(dtype.itemsize)
 
 
 def _append_numpy_multidim_metadata(metadata: dict[bytes, str], name: str, dtype: np.dtype) -> None:
@@ -1071,7 +1072,7 @@ def _append_numpy_multidim_metadata(metadata: dict[bytes, str], name: str, dtype
         Numpy dtype.
     """
     if len(dtype.shape) > 1:
-        metadata[f"lsst::arrow::shape::{name}".encode("UTF-8")] = str(dtype.shape)
+        metadata[f"lsst::arrow::shape::{name}".encode()] = str(dtype.shape)
 
 
 def _multidim_shape_from_metadata(metadata: dict[bytes, bytes], list_size: int, name: str) -> tuple[int, ...]:

@@ -23,7 +23,8 @@ from __future__ import annotations
 
 __all__ = ("MappingFactory",)
 
-from typing import Any, Dict, Iterable, List, Set, Tuple, Type, Union
+from collections.abc import Iterable
+from typing import Any
 
 from lsst.utils.introspection import get_class_of
 
@@ -49,8 +50,8 @@ class MappingFactory:
 
     """
 
-    def __init__(self, refType: Type):
-        self._registry: Dict[LookupKey, Dict[str, Any]] = {}
+    def __init__(self, refType: type):
+        self._registry: dict[LookupKey, dict[str, Any]] = {}
         self.refType = refType
 
     def __contains__(self, key: Any) -> bool:
@@ -70,7 +71,7 @@ class MappingFactory:
         key = self._getNameKey(key)
         return key in self._registry
 
-    def getLookupKeys(self) -> Set[LookupKey]:
+    def getLookupKeys(self) -> set[LookupKey]:
         """Retrieve the look up keys for all the registry entries.
 
         Returns
@@ -82,7 +83,7 @@ class MappingFactory:
 
     def getClassFromRegistryWithMatch(
         self, targetClasses: Iterable[Any]
-    ) -> Tuple[LookupKey, Type, Dict[Any, Any]]:
+    ) -> tuple[LookupKey, type, dict[Any, Any]]:
         """Get the class stored in the registry along with the matching key.
 
         Parameters
@@ -107,7 +108,7 @@ class MappingFactory:
             Raised if none of the supplied target classes match an item in the
             registry.
         """
-        attempts: List[Any] = []
+        attempts: list[Any] = []
         for t in targetClasses:
             if t is None:
                 attempts.append(t)
@@ -126,7 +127,7 @@ class MappingFactory:
         plural = "" if len(attempts) == 1 else "s"
         raise KeyError(f"Unable to find item in registry with key{plural}: {msg}")
 
-    def getClassFromRegistry(self, targetClasses: Iterable[Any]) -> Type:
+    def getClassFromRegistry(self, targetClasses: Iterable[Any]) -> type:
         """Get the matching class stored in the registry.
 
         Parameters
@@ -152,7 +153,7 @@ class MappingFactory:
 
     def getFromRegistryWithMatch(
         self, targetClasses: Iterable[Any], *args: Any, **kwargs: Any
-    ) -> Tuple[LookupKey, Any]:
+    ) -> tuple[LookupKey, Any]:
         """Get a new instance of the registry object along with matching key.
 
         Parameters
@@ -220,7 +221,7 @@ class MappingFactory:
         return instance
 
     def placeInRegistry(
-        self, registryKey: Any, typeName: Union[str, Type], overwrite: bool = False, **kwargs: Any
+        self, registryKey: Any, typeName: str | type, overwrite: bool = False, **kwargs: Any
     ) -> None:
         """Register a class name with the associated type.
 

@@ -24,7 +24,7 @@
 
 import os
 import unittest
-from typing import Sequence, Tuple, Union
+from collections.abc import Sequence
 
 from astropy.table import Table
 from lsst.daf.butler import Butler, CollectionType
@@ -50,8 +50,8 @@ from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
-QueryCollectionsRow = Union[Tuple[str, str], Tuple[str, str, str]]
-RemoveCollectionRow = Tuple[str, str]
+QueryCollectionsRow = tuple[str, str] | tuple[str, str, str]
+RemoveCollectionRow = tuple[str, str]
 
 
 class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):

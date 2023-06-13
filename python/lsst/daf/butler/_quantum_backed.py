@@ -27,7 +27,8 @@ import itertools
 import logging
 import uuid
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Type, Union
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePathExpression
@@ -86,7 +87,7 @@ class _DatasetRecordStorageManagerDatastoreConstructionMimic:
         *,
         name: str = "dataset",
         constraint: bool = True,
-        onDelete: Optional[str] = None,
+        onDelete: str | None = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         # Docstring inherited.
@@ -161,10 +162,10 @@ class QuantumBackedButler(LimitedButler):
         self._dimensions = dimensions
         self._predicted_inputs = set(predicted_inputs)
         self._predicted_outputs = set(predicted_outputs)
-        self._available_inputs: Set[DatasetId] = set()
-        self._unavailable_inputs: Set[DatasetId] = set()
-        self._actual_inputs: Set[DatasetId] = set()
-        self._actual_output_refs: Set[DatasetRef] = set()
+        self._available_inputs: set[DatasetId] = set()
+        self._unavailable_inputs: set[DatasetId] = set()
+        self._actual_inputs: set[DatasetId] = set()
+        self._actual_output_refs: set[DatasetRef] = set()
         self.datastore = datastore
         self.storageClasses = storageClasses
         self._dataset_types: Mapping[str, DatasetType] = {}
@@ -175,13 +176,13 @@ class QuantumBackedButler(LimitedButler):
     @classmethod
     def initialize(
         cls,
-        config: Union[Config, ResourcePathExpression],
+        config: Config | ResourcePathExpression,
         quantum: Quantum,
         dimensions: DimensionUniverse,
         filename: str = ":memory:",
-        OpaqueManagerClass: Type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
-        BridgeManagerClass: Type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
-        search_paths: Optional[List[str]] = None,
+        OpaqueManagerClass: type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
+        BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
+        search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
     ) -> QuantumBackedButler:
         """Construct a new `QuantumBackedButler` from repository configuration
@@ -209,7 +210,8 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `Mapping` [`str`, `DatasetType`], optional
+        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`], \
+                optional
             Mapping of the dataset type name to its registry definition.
         """
         predicted_inputs = [ref.id for ref in itertools.chain.from_iterable(quantum.inputs.values())]
@@ -231,15 +233,15 @@ class QuantumBackedButler(LimitedButler):
     @classmethod
     def from_predicted(
         cls,
-        config: Union[Config, ResourcePathExpression],
+        config: Config | ResourcePathExpression,
         predicted_inputs: Iterable[DatasetId],
         predicted_outputs: Iterable[DatasetId],
         dimensions: DimensionUniverse,
         datastore_records: Mapping[str, DatastoreRecordData],
         filename: str = ":memory:",
-        OpaqueManagerClass: Type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
-        BridgeManagerClass: Type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
-        search_paths: Optional[List[str]] = None,
+        OpaqueManagerClass: type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
+        BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
+        search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
     ) -> QuantumBackedButler:
         """Construct a new `QuantumBackedButler` from sets of input and output
@@ -270,7 +272,8 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `Mapping` [`str`, `DatasetType`], optional
+        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`], \
+                optional
             Mapping of the dataset type name to its registry definition.
         """
         return cls._initialize(
@@ -290,15 +293,15 @@ class QuantumBackedButler(LimitedButler):
     def _initialize(
         cls,
         *,
-        config: Union[Config, ResourcePathExpression],
+        config: Config | ResourcePathExpression,
         predicted_inputs: Iterable[DatasetId],
         predicted_outputs: Iterable[DatasetId],
         dimensions: DimensionUniverse,
         filename: str = ":memory:",
         datastore_records: Mapping[str, DatastoreRecordData] | None = None,
-        OpaqueManagerClass: Type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
-        BridgeManagerClass: Type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
-        search_paths: Optional[List[str]] = None,
+        OpaqueManagerClass: type[OpaqueTableStorageManager] = ByNameOpaqueTableStorageManager,
+        BridgeManagerClass: type[DatastoreRegistryBridgeManager] = MonolithicDatastoreRegistryBridgeManager,
+        search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
     ) -> QuantumBackedButler:
         """Internal method with common implementation used by `initialize` and
@@ -328,7 +331,7 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `Mapping` [`str`, `DatasetType`]
+        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`]
             Mapping of the dataset type name to its registry definition.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
@@ -384,7 +387,7 @@ class QuantumBackedButler(LimitedButler):
         self,
         ref: DatasetRef,
         *,
-        parameters: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any] | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> Any:
         # Docstring inherited.
@@ -404,7 +407,7 @@ class QuantumBackedButler(LimitedButler):
                 parameters=parameters,
                 storageClass=storageClass,
             )
-        except (LookupError, FileNotFoundError, IOError):
+        except (LookupError, FileNotFoundError, OSError):
             self._unavailable_inputs.add(ref.id)
             raise
         if ref.id in self._predicted_inputs:
@@ -423,7 +426,7 @@ class QuantumBackedButler(LimitedButler):
         self,
         ref: DatasetRef,
         *,
-        parameters: Union[dict, None] = None,
+        parameters: dict[str, Any] | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         # Docstring inherited.
@@ -610,12 +613,12 @@ class QuantumProvenanceData(BaseModel):
     # `~CollectionType.RUN` level, such as the compute node ID). but adding it
     # now is out of scope for this prototype.
 
-    predicted_inputs: Set[uuid.UUID]
+    predicted_inputs: set[uuid.UUID]
     """Unique IDs of datasets that were predicted as inputs to this quantum
     when the QuantumGraph was built.
     """
 
-    available_inputs: Set[uuid.UUID]
+    available_inputs: set[uuid.UUID]
     """Unique IDs of input datasets that were actually present in the datastore
     when this quantum was executed.
 
@@ -624,7 +627,7 @@ class QuantumProvenanceData(BaseModel):
     task.
     """
 
-    actual_inputs: Set[uuid.UUID]
+    actual_inputs: set[uuid.UUID]
     """Unique IDs of datasets that were actually used as inputs by this task.
 
     This is a subset of `available_inputs`.
@@ -638,17 +641,17 @@ class QuantumProvenanceData(BaseModel):
     that input as actually used.
     """
 
-    predicted_outputs: Set[uuid.UUID]
+    predicted_outputs: set[uuid.UUID]
     """Unique IDs of datasets that were predicted as outputs of this quantum
     when the QuantumGraph was built.
     """
 
-    actual_outputs: Set[uuid.UUID]
+    actual_outputs: set[uuid.UUID]
     """Unique IDs of datasets that were actually written when this quantum
     was executed.
     """
 
-    datastore_records: Dict[str, SerializedDatastoreRecordData]
+    datastore_records: dict[str, SerializedDatastoreRecordData]
     """Datastore records indexed by datastore name."""
 
     @staticmethod
@@ -663,10 +666,10 @@ class QuantumProvenanceData(BaseModel):
         butler : `Butler`
             Full butler representing the data repository to transfer datasets
             to.
-        quanta : `Iterable` [ `Quantum` ]
+        quanta : `~collections.abc.Iterable` [ `Quantum` ]
             Iterable of `Quantum` objects that carry information about
             predicted outputs.  May be a single-pass iterator.
-        provenance : `Iterable` [ `QuantumProvenanceData` ]
+        provenance : `~collections.abc.Iterable` [ `QuantumProvenanceData` ]
             Provenance and datastore data for each of the given quanta, in the
             same order.  May be a single-pass iterator.
 
@@ -687,7 +690,7 @@ class QuantumProvenanceData(BaseModel):
         ignored.
         """
         grouped_refs = defaultdict(list)
-        summary_records: Dict[str, DatastoreRecordData] = {}
+        summary_records: dict[str, DatastoreRecordData] = {}
         for quantum, provenance_for_quantum in zip(quanta, provenance):
             quantum_refs_by_id = {
                 ref.id: ref
@@ -717,11 +720,11 @@ class QuantumProvenanceData(BaseModel):
     def direct(
         cls,
         *,
-        predicted_inputs: Iterable[Union[str, uuid.UUID]],
-        available_inputs: Iterable[Union[str, uuid.UUID]],
-        actual_inputs: Iterable[Union[str, uuid.UUID]],
-        predicted_outputs: Iterable[Union[str, uuid.UUID]],
-        actual_outputs: Iterable[Union[str, uuid.UUID]],
+        predicted_inputs: Iterable[str | uuid.UUID],
+        available_inputs: Iterable[str | uuid.UUID],
+        actual_inputs: Iterable[str | uuid.UUID],
+        predicted_outputs: Iterable[str | uuid.UUID],
+        actual_outputs: Iterable[str | uuid.UUID],
         datastore_records: Mapping[str, Mapping],
     ) -> QuantumProvenanceData:
         """Construct an instance directly without validators.
@@ -734,11 +737,11 @@ class QuantumProvenanceData(BaseModel):
         This method should only be called when the inputs are trusted.
         """
 
-        def _to_uuid_set(uuids: Iterable[Union[str, uuid.UUID]]) -> Set[uuid.UUID]:
+        def _to_uuid_set(uuids: Iterable[str | uuid.UUID]) -> set[uuid.UUID]:
             """Convert input UUIDs, which could be in string representation to
             a set of `UUID` instances.
             """
-            return set(uuid.UUID(id) if isinstance(id, str) else id for id in uuids)
+            return {uuid.UUID(id) if isinstance(id, str) else id for id in uuids}
 
         data = QuantumProvenanceData.__new__(cls)
         setter = object.__setattr__

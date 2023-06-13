@@ -27,7 +27,8 @@ opaque tables for `Registry`.
 __all__ = ["ByNameOpaqueTableStorage", "ByNameOpaqueTableStorageManager"]
 
 import itertools
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterable, Iterator, List, Optional
+from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
@@ -96,7 +97,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
             """Generate a sequence of WHERE clauses with a limited number of
             items in IN clauses.
             """
-            batches: List[Iterable[Any]] = []
+            batches: list[Iterable[Any]] = []
             for k, v in where.items():
                 column = self._table.columns[k]
                 if isinstance(v, (list, tuple, set)):
@@ -149,7 +150,7 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
         super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
         self._metaTable = metaTable
-        self._storage: Dict[str, OpaqueTableStorage] = {}
+        self._storage: dict[str, OpaqueTableStorage] = {}
 
     _META_TABLE_NAME: ClassVar[str] = "opaque_meta"
 
@@ -167,7 +168,7 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
         metaTable = context.addTable(cls._META_TABLE_NAME, cls._META_TABLE_SPEC)
         return cls(db=db, metaTable=metaTable, registry_schema_version=registry_schema_version)
 
-    def get(self, name: str) -> Optional[OpaqueTableStorage]:
+    def get(self, name: str) -> OpaqueTableStorage | None:
         # Docstring inherited from OpaqueTableStorageManager.
         return self._storage.get(name)
 

@@ -25,7 +25,8 @@ __all__ = ("RemoteRegistry",)
 
 import contextlib
 import functools
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Sequence, Set
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from lsst.daf.butler import __version__
@@ -276,7 +277,7 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def getCollectionParentChains(self, collection: str) -> Set[str]:
+    def getCollectionParentChains(self, collection: str) -> set[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 

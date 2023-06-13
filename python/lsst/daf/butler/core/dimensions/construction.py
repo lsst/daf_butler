@@ -22,7 +22,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Dict, Iterable, Optional
+from collections.abc import Iterable, Set
+from typing import TYPE_CHECKING
 
 from .._topology import TopologicalFamily, TopologicalSpace
 from ..named import NamedValueSet
@@ -56,7 +57,7 @@ class DimensionConstructionVisitor(ABC):
         return self.name
 
     @abstractmethod
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         """Test if dependencies have already been constructed.
 
         Tests whether other entities this visitor depends on have already
@@ -64,7 +65,7 @@ class DimensionConstructionVisitor(ABC):
 
         Parameters
         ----------
-        others : `AbstractSet` [ `str` ]
+        others : `~collections.abc.Set` [ `str` ]
             The names of other visitors that have not yet been invoked.
 
         Returns
@@ -112,7 +113,7 @@ class DimensionConstructionBuilder:
         spatial `TopologicalRelationshipEndpoint` objects.
     namespace : `str`, optional
         The namespace to assign to this universe.
-    visitors : `Iterable` [ `DimensionConstructionVisitor` ]
+    visitors : `~collections.abc.Iterable` [ `DimensionConstructionVisitor` ]
         Visitor instances to include from the start.
     """
 
@@ -122,7 +123,7 @@ class DimensionConstructionBuilder:
         commonSkyPixName: str,
         config: DimensionConfig,
         *,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         visitors: Iterable[DimensionConstructionVisitor] = (),
     ) -> None:
         self.dimensions = NamedValueSet()
@@ -133,7 +134,7 @@ class DimensionConstructionBuilder:
         self.namespace = namespace
         self.config = config
         self.commonSkyPixName = commonSkyPixName
-        self._todo: Dict[str, DimensionConstructionVisitor] = {v.name: v for v in visitors}
+        self._todo: dict[str, DimensionConstructionVisitor] = {v.name: v for v in visitors}
 
     def add(self, visitor: DimensionConstructionVisitor) -> None:
         """Add a single visitor to the builder.
@@ -150,7 +151,8 @@ class DimensionConstructionBuilder:
 
         Parameters
         ----------
-        visitors : `Iterable` [ `DimensionConstructionVisitor` ]
+        visitors : `~collections.abc.Iterable` \
+                [ `DimensionConstructionVisitor` ]
             Visitor instances to add.
         """
         self._todo.update((v.name, v) for v in visitors)
@@ -180,7 +182,7 @@ class DimensionConstructionBuilder:
     Populated at builder construction.
     """
 
-    namespace: Optional[str]
+    namespace: str | None
     """Namespace for the `DimensionUniverse` (`str`)
 
     Populated at builder construction.
@@ -208,12 +210,12 @@ class DimensionConstructionBuilder:
     set as well as `dimensions`.
     """
 
-    topology: Dict[TopologicalSpace, NamedValueSet[TopologicalFamily]]
+    topology: dict[TopologicalSpace, NamedValueSet[TopologicalFamily]]
     """Dictionary containing all `TopologicalFamily` objects
     (`dict` [ `TopologicalSpace`, `NamedValueSet` [ `TopologicalFamily` ] ] ).
     """
 
-    packers: Dict[str, DimensionPackerFactory]
+    packers: dict[str, DimensionPackerFactory]
     """Dictionary containing all `DimensionPackerFactory` objects
     (`dict` [ `str`, `DimensionPackerFactory` ] ).
     """

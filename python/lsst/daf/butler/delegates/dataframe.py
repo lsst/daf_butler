@@ -23,7 +23,8 @@
 from __future__ import annotations
 
 import collections.abc
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 import pandas
 from lsst.daf.butler import StorageClassDelegate
@@ -72,7 +73,7 @@ class DataFrameDelegate(StorageClassDelegate):
             )
 
     def handleParameters(
-        self, inMemoryDataset: pandas.DataFrame, parameters: Optional[Mapping[str, Any]] = None
+        self, inMemoryDataset: pandas.DataFrame, parameters: Mapping[str, Any] | None = None
     ) -> Any:
         """Return possibly new in-memory dataset using the supplied parameters.
 

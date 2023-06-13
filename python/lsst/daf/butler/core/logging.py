@@ -24,22 +24,10 @@ __all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler", "ButlerLog
 import datetime
 import logging
 import traceback
+from collections.abc import Callable, Generator, Iterable, Iterator
 from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
-from typing import (
-    IO,
-    Any,
-    Callable,
-    ClassVar,
-    Dict,
-    Generator,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Union,
-    overload,
-)
+from typing import IO, Any, ClassVar, Union, overload
 
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
@@ -84,7 +72,7 @@ class ButlerMDC:
 
     _MDC = MDCDict()
 
-    _old_factory: Optional[Callable[..., logging.LogRecord]] = None
+    _old_factory: Callable[..., logging.LogRecord] | None = None
     """Old log record factory."""
 
     @classmethod
@@ -117,7 +105,7 @@ class ButlerMDC:
 
     @classmethod
     @contextmanager
-    def set_mdc(cls, mdc: Dict[str, str]) -> Generator[None, None, None]:
+    def set_mdc(cls, mdc: dict[str, str]) -> Generator[None, None, None]:
         """Set the MDC key for this context.
 
         Parameters
@@ -187,11 +175,11 @@ class ButlerLogRecord(BaseModel):
     filename: str
     pathname: str
     lineno: int
-    funcName: Optional[str]
+    funcName: str | None
     process: int
     processName: str
-    exc_info: Optional[str]
-    MDC: Dict[str, str]
+    exc_info: str | None
+    MDC: dict[str, str]
 
     class Config:
         """Pydantic model configuration."""
@@ -243,7 +231,7 @@ class ButlerLogRecord(BaseModel):
 
         return cls(**record_dict)
 
-    def format(self, log_format: Optional[str] = None) -> str:
+    def format(self, log_format: str | None = None) -> str:
         """Format this record.
 
         Parameters
@@ -276,7 +264,7 @@ class ButlerLogRecord(BaseModel):
 
 
 # The class below can convert LogRecord to ButlerLogRecord if needed.
-Record = Union[LogRecord, ButlerLogRecord]
+Record = LogRecord | ButlerLogRecord
 
 
 # Do not inherit from MutableSequence since mypy insists on the values
@@ -284,8 +272,8 @@ Record = Union[LogRecord, ButlerLogRecord]
 class ButlerLogRecords(BaseModel):
     """Class representing a collection of `ButlerLogRecord`."""
 
-    __root__: List[ButlerLogRecord]
-    _log_format: Optional[str] = PrivateAttr(None)
+    __root__: list[ButlerLogRecord]
+    _log_format: str | None = PrivateAttr(None)
 
     @classmethod
     def from_records(cls, records: Iterable[ButlerLogRecord]) -> "ButlerLogRecords":
@@ -312,11 +300,11 @@ class ButlerLogRecords(BaseModel):
         Works with one-record-per-line format JSON files and a direct
         serialization of the Pydantic model.
         """
-        with open(filename, "r") as fd:
+        with open(filename) as fd:
             return cls.from_stream(fd)
 
     @staticmethod
-    def _detect_model(startdata: Union[str, bytes]) -> bool:
+    def _detect_model(startdata: str | bytes) -> bool:
         """Given some representative data, determine if this is a serialized
         model or a streaming format.
 
@@ -407,7 +395,7 @@ class ButlerLogRecords(BaseModel):
         return cls.from_records(records)
 
     @classmethod
-    def from_raw(cls, serialized: Union[str, bytes]) -> "ButlerLogRecords":
+    def from_raw(cls, serialized: str | bytes) -> "ButlerLogRecords":
         """Parse raw serialized form and return records.
 
         Parameters
@@ -430,7 +418,7 @@ class ButlerLogRecords(BaseModel):
         # Filter out blank lines -- mypy is confused by the newline
         # argument to isplit() [which can't have two different types
         # simultaneously] so we have to duplicate some logic.
-        substrings: Iterator[Union[str, bytes]]
+        substrings: Iterator[str | bytes]
         if isinstance(serialized, str):
             substrings = isplit(serialized, "\n")
         elif isinstance(serialized, bytes):
@@ -449,7 +437,7 @@ class ButlerLogRecords(BaseModel):
 
     # Pydantic does not allow a property setter to be given for
     # public properties of a model that is not based on a dict.
-    def set_log_format(self, format: Optional[str]) -> Optional[str]:
+    def set_log_format(self, format: str | None) -> str | None:
         """Set the log format string for these records.
 
         Parameters
@@ -488,7 +476,7 @@ class ButlerLogRecords(BaseModel):
     def __getitem__(self, index: slice) -> "ButlerLogRecords":
         ...
 
-    def __getitem__(self, index: Union[slice, int]) -> "Union[ButlerLogRecords, ButlerLogRecord]":
+    def __getitem__(self, index: slice | int) -> "Union[ButlerLogRecords, ButlerLogRecord]":
         # Handles slices and returns a new collection in that
         # case.
         item = self.__root__[index]
@@ -500,7 +488,7 @@ class ButlerLogRecords(BaseModel):
     def __reversed__(self) -> Iterator[ButlerLogRecord]:
         return self.__root__.__reversed__()
 
-    def __delitem__(self, index: Union[slice, int]) -> None:
+    def __delitem__(self, index: slice | int) -> None:
         del self.__root__[index]
 
     def __str__(self) -> str:

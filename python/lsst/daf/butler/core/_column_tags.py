@@ -74,7 +74,7 @@ class DimensionKeyColumnTag(_BaseColumnTag):
 
         Parameters
         ----------
-        dimensions : `Iterable` [ `str` ]
+        dimensions : `~collections.abc.Iterable` [ `str` ]
             Dimension names.
 
         Returns
@@ -119,7 +119,7 @@ class DimensionRecordColumnTag(_BaseColumnTag):
         ----------
         element : `str`
             Name of the dimension element.
-        columns : `Iterable` [ `str` ]
+        columns : `~collections.abc.Iterable` [ `str` ]
             Column names.
 
         Returns
@@ -172,7 +172,7 @@ class DatasetColumnTag(_BaseColumnTag):
         ----------
         dataset_type : `str`
             Name of the dataset type.
-        columns : `Iterable` [ `str` ]
+        columns : `~collections.abc.Iterable` [ `str` ]
             Column names.
 
         Returns

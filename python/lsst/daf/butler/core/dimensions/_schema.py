@@ -24,7 +24,7 @@ __all__ = ("addDimensionForeignKey",)
 
 import copy
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
 
 from lsst.utils.classes import cached_getter
 
@@ -245,7 +245,7 @@ class DimensionElementFields:
     @cached_getter
     def columns(self) -> Mapping[ColumnTag, str]:
         """A mapping from `ColumnTag` to field name for all fields in this
-        element's records (`Mapping`).
+        element's records (`~collections.abc.Mapping`).
         """
         result: dict[ColumnTag, str] = {}
         for dimension_name, field_name in zip(self.element.dimensions.names, self.dimensions.names):
@@ -305,7 +305,7 @@ class DimensionElementFields:
     and/or timespan (`NamedValueSet` [ `ddl.FieldSpec` ]).
     """
 
-    names: Tuple[str, ...]
+    names: tuple[str, ...]
     """The names of all fields in the specification (`tuple` [ `str` ]).
 
     This includes "region" and/or "timespan" if `element` is spatial and/or

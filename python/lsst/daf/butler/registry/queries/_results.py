@@ -335,7 +335,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
         Returns
         -------
-        messages : `Iterable` [ `str` ]
+        messages : `~collections.abc.Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
         """
@@ -406,7 +406,7 @@ class DatasetQueryResults(Iterable[DatasetRef]):
 
         Returns
         -------
-        iter : `Iterator` [ `ParentDatasetQueryResults` ]
+        iter : `~collections.abc.Iterator` [ `ParentDatasetQueryResults` ]
             An iterator over `DatasetQueryResults` instances that are each
             responsible for a single parent dataset type (either just that
             dataset type, one or more of its component dataset types, or both).
@@ -523,7 +523,7 @@ class DatasetQueryResults(Iterable[DatasetRef]):
 
         Returns
         -------
-        messages : `Iterable` [ `str` ]
+        messages : `~collections.abc.Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
         """
@@ -540,7 +540,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         Low-level query object that backs these results.
     dataset_type : `DatasetType`
         Parent dataset type for all datasets returned by this query.
-    components : `Sequence` [ `str` or `None` ], optional
+    components : `~collections.abc.Sequence` [ `str` or `None` ], optional
         Names of components to include in iteration.  `None` may be included
         (at most once) to include the parent dataset type.
 
@@ -602,7 +602,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         """Return a new query results object for the same parent datasets but
         different components.
 
-        components :  `Sequence` [ `str` or `None` ]
+        components :  `~collections.abc.Sequence` [ `str` or `None` ]
             Names of components to include in iteration.  `None` may be
             included (at most once) to include the parent dataset type.
         """
@@ -633,9 +633,9 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
 
     Parameters
     ----------
-    chain : `Sequence` [ `ParentDatasetQueryResults` ]
+    chain : `~collections.abc.Sequence` [ `ParentDatasetQueryResults` ]
         The underlying results objects this object will chain together.
-    doomed_by : `Iterable` [ `str` ], optional
+    doomed_by : `~collections.abc.Iterable` [ `str` ], optional
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
         executed.  Queries with a non-empty list will never be executed.
@@ -817,7 +817,7 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
 
         Returns
         -------
-        messages : `Iterable` [ `str` ]
+        messages : `~collections.abc.Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
         """

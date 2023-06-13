@@ -87,7 +87,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertIn("namespace", response.json())
 
     def test_registry(self):
-        universe = self.butler.registry.dimensions
+        universe = self.butler.dimensions
         self.assertEqual(universe.namespace, "daf_butler")
 
         dataset_type = self.butler.registry.getDatasetType("test_metric_comp")
@@ -131,9 +131,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # Create a DataCoordinate to test the alternate path for specifying
         # a data ID.
-        data_id = DataCoordinate.standardize(
-            {"instrument": "DummyCamComp"}, universe=self.butler.registry.dimensions
-        )
+        data_id = DataCoordinate.standardize({"instrument": "DummyCamComp"}, universe=self.butler.dimensions)
         records = list(self.butler.registry.queryDimensionRecords("physical_filter", dataId=data_id))
         self.assertEqual(len(records), 1)
 

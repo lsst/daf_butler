@@ -30,7 +30,8 @@ __all__ = (
 """Models used for client/server communication."""
 
 import re
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Union
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
 from lsst.utils.iteration import ensure_iterable
 from pydantic import BaseModel, Field, validator
@@ -39,10 +40,10 @@ from .dimensions import DataIdValue, SerializedDataCoordinate
 from .utils import globToRegex
 
 # Simple scalar python types.
-ScalarType = Union[int, bool, float, str]
+ScalarType = int | bool | float | str
 
 # Bind parameters can have any scalar type.
-BindType = Dict[str, ScalarType]
+BindType = dict[str, ScalarType]
 
 # For serialization purposes a data ID key must be a str.
 SimpleDataId = Mapping[str, DataIdValue]
@@ -58,13 +59,13 @@ class ExpressionQueryParameter(BaseModel):
     _allow_ellipsis: ClassVar[bool] = True
     """Control whether expression can match everything."""
 
-    regex: Optional[List[str]] = Field(
+    regex: list[str] | None = Field(
         None,
         title="List of regular expression strings.",
         example="^cal.*",
     )
 
-    glob: Optional[List[str]] = Field(
+    glob: list[str] | None = Field(
         None,
         title="List of globs or explicit strings to use in expression.",
         example="cal*",
@@ -89,7 +90,7 @@ class ExpressionQueryParameter(BaseModel):
             # at all.
             return None
 
-        expression: List[Union[str, re.Pattern]] = []
+        expression: list[str | re.Pattern] = []
         if self.regex is not None:
             for r in self.regex:
                 expression.append(re.compile(r))
@@ -110,7 +111,7 @@ class ExpressionQueryParameter(BaseModel):
             return cls()
 
         expressions = ensure_iterable(expression)
-        params: Dict[str, List[str]] = {"glob": [], "regex": []}
+        params: dict[str, list[str]] = {"glob": [], "regex": []}
         for expression in expressions:
             if expression is ...:
                 # This matches everything
@@ -197,7 +198,7 @@ class QueryBaseModel(BaseModel):
     """Base model for all query models."""
 
     @validator("keyword_args", check_fields=False)
-    def _check_keyword_args(cls, v, values) -> Optional[SimpleDataId]:  # type: ignore # noqa: N805
+    def _check_keyword_args(cls, v, values) -> SimpleDataId | None:  # type: ignore # noqa: N805
         """Convert kwargs into None if empty.
 
         This retains the property at its default value and can therefore
@@ -234,39 +235,39 @@ class QueryDatasetsModel(QueryBaseModel):
     """Information needed for a registry dataset query."""
 
     datasetType: ExpressionQueryParameter = Field(..., title="Dataset types to query. Can match all.")
-    collections: Optional[ExpressionQueryParameter] = Collections
-    dimensions: Optional[List[str]] = OptionalDimensions
-    dataId: Optional[SerializedDataCoordinate] = DataId
+    collections: ExpressionQueryParameter | None = Collections
+    dimensions: list[str] | None = OptionalDimensions
+    dataId: SerializedDataCoordinate | None = DataId
     where: str = Where
     findFirst: bool = FindFirst
-    components: Optional[bool] = Components
-    bind: Optional[BindType] = Bind
+    components: bool | None = Components
+    bind: BindType | None = Bind
     check: bool = Check
-    keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
+    keyword_args: SimpleDataId | None = KeywordArgs  # mypy refuses to allow kwargs in model
 
 
 class QueryDataIdsModel(QueryBaseModel):
     """Information needed to query data IDs."""
 
-    dimensions: List[str] = Dimensions
-    dataId: Optional[SerializedDataCoordinate] = DataId
-    datasets: Optional[DatasetsQueryParameter] = Datasets
-    collections: Optional[ExpressionQueryParameter] = Collections
+    dimensions: list[str] = Dimensions
+    dataId: SerializedDataCoordinate | None = DataId
+    datasets: DatasetsQueryParameter | None = Datasets
+    collections: ExpressionQueryParameter | None = Collections
     where: str = Where
-    components: Optional[bool] = Components
-    bind: Optional[BindType] = Bind
+    components: bool | None = Components
+    bind: BindType | None = Bind
     check: bool = Check
-    keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
+    keyword_args: SimpleDataId | None = KeywordArgs  # mypy refuses to allow kwargs in model
 
 
 class QueryDimensionRecordsModel(QueryBaseModel):
     """Information needed to query the dimension records."""
 
-    dataId: Optional[SerializedDataCoordinate] = DataId
-    datasets: Optional[DatasetsQueryParameter] = Datasets
-    collections: Optional[ExpressionQueryParameter] = Collections
+    dataId: SerializedDataCoordinate | None = DataId
+    datasets: DatasetsQueryParameter | None = Datasets
+    collections: ExpressionQueryParameter | None = Collections
     where: str = Where
-    components: Optional[bool] = Components
-    bind: Optional[SimpleDataId] = Bind
+    components: bool | None = Components
+    bind: SimpleDataId | None = Bind
     check: bool = Check
-    keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
+    keyword_args: SimpleDataId | None = KeywordArgs  # mypy refuses to allow kwargs in model

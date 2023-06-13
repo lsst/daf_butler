@@ -21,7 +21,7 @@
 
 __all__ = ("ButlerLogRecordsFormatter",)
 
-from typing import Any, Optional, Type
+from typing import Any
 
 from lsst.daf.butler.core.logging import ButlerLogRecords
 
@@ -37,7 +37,7 @@ class ButlerLogRecordsFormatter(JsonFormatter):
     of records given some filtering parameters.
     """
 
-    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
+    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         """Read a file from the path in JSON format.
 
         Parameters
@@ -66,7 +66,7 @@ class ButlerLogRecordsFormatter(JsonFormatter):
 
         return pytype.from_file(path)
 
-    def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
+    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
         """Read the bytes object as a python object.
 
         Parameters

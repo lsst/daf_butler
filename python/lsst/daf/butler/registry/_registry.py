@@ -27,22 +27,9 @@ import contextlib
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from types import EllipsisType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import TYPE_CHECKING, Any
 
 from lsst.resources import ResourcePathExpression
 from lsst.utils import doImportType
@@ -98,14 +85,14 @@ class Registry(ABC):
     implementations.
     """
 
-    defaultConfigFile: Optional[str] = None
+    defaultConfigFile: str | None = None
     """Path to configuration defaults. Accessed within the ``configs`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
 
     @classmethod
     def forceRegistryConfig(
-        cls, config: Optional[Union[ButlerConfig, RegistryConfig, Config, str]]
+        cls, config: ButlerConfig | RegistryConfig | Config | str | None
     ) -> RegistryConfig:
         """Force the supplied config to a `RegistryConfig`.
 
@@ -129,8 +116,8 @@ class Registry(ABC):
 
     @classmethod
     def determineTrampoline(
-        cls, config: Optional[Union[ButlerConfig, RegistryConfig, Config, str]]
-    ) -> Tuple[Type[Registry], RegistryConfig]:
+        cls, config: ButlerConfig | RegistryConfig | Config | str | None
+    ) -> tuple[type[Registry], RegistryConfig]:
         """Return class to use to instantiate real registry.
 
         Parameters
@@ -162,9 +149,9 @@ class Registry(ABC):
     @classmethod
     def createFromConfig(
         cls,
-        config: Optional[Union[RegistryConfig, str]] = None,
-        dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
-        butlerRoot: Optional[ResourcePathExpression] = None,
+        config: RegistryConfig | str | None = None,
+        dimensionConfig: DimensionConfig | str | None = None,
+        butlerRoot: ResourcePathExpression | None = None,
     ) -> Registry:
         """Create registry database and return `Registry` instance.
 
@@ -199,10 +186,10 @@ class Registry(ABC):
     @classmethod
     def fromConfig(
         cls,
-        config: Union[ButlerConfig, RegistryConfig, Config, str],
-        butlerRoot: Optional[ResourcePathExpression] = None,
+        config: ButlerConfig | RegistryConfig | Config | str,
+        butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
-        defaults: Optional[RegistryDefaults] = None,
+        defaults: RegistryDefaults | None = None,
     ) -> Registry:
         """Create `Registry` subclass instance from ``config``.
 
@@ -245,7 +232,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def copy(self, defaults: Optional[RegistryDefaults] = None) -> Registry:
+    def copy(self, defaults: RegistryDefaults | None = None) -> Registry:
         """Create a new `Registry` backed by the same data repository and
         connection as this one, but independent defaults.
 
@@ -325,7 +312,7 @@ class Registry(ABC):
 
     @abstractmethod
     def registerCollection(
-        self, name: str, type: CollectionType = CollectionType.TAGGED, doc: Optional[str] = None
+        self, name: str, type: CollectionType = CollectionType.TAGGED, doc: str | None = None
     ) -> bool:
         """Add a new collection if one with the given name does not exist.
 
@@ -390,7 +377,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def registerRun(self, name: str, doc: Optional[str] = None) -> bool:
+    def registerRun(self, name: str, doc: str | None = None) -> bool:
         """Add a new run if one with the given name does not exist.
 
         Parameters
@@ -504,7 +491,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getCollectionParentChains(self, collection: str) -> Set[str]:
+    def getCollectionParentChains(self, collection: str) -> set[str]:
         """Return the CHAINED collections that directly contain the given one.
 
         Parameters
@@ -520,7 +507,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getCollectionDocumentation(self, collection: str) -> Optional[str]:
+    def getCollectionDocumentation(self, collection: str) -> str | None:
         """Retrieve the documentation string for a collection.
 
         Parameters
@@ -536,7 +523,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def setCollectionDocumentation(self, collection: str, doc: Optional[str]) -> None:
+    def setCollectionDocumentation(self, collection: str, doc: str | None) -> None:
         """Set the documentation string for a collection.
 
         Parameters
@@ -677,13 +664,13 @@ class Registry(ABC):
     @abstractmethod
     def findDataset(
         self,
-        datasetType: Union[DatasetType, str],
-        dataId: Optional[DataId] = None,
+        datasetType: DatasetType | str,
+        dataId: DataId | None = None,
         *,
         collections: CollectionArgType | None = None,
-        timespan: Optional[Timespan] = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
-    ) -> Optional[DatasetRef]:
+    ) -> DatasetRef | None:
         """Find a dataset given its `DatasetType` and data ID.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
@@ -753,12 +740,12 @@ class Registry(ABC):
     @abstractmethod
     def insertDatasets(
         self,
-        datasetType: Union[DatasetType, str],
+        datasetType: DatasetType | str,
         dataIds: Iterable[DataId],
-        run: Optional[str] = None,
+        run: str | None = None,
         expand: bool = True,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-    ) -> List[DatasetRef]:
+    ) -> list[DatasetRef]:
         """Insert one or more datasets into the `Registry`
 
         This always adds new datasets; to associate existing datasets with
@@ -809,7 +796,7 @@ class Registry(ABC):
         self,
         datasets: Iterable[DatasetRef],
         expand: bool = True,
-    ) -> List[DatasetRef]:
+    ) -> list[DatasetRef]:
         """Import one or more datasets into the `Registry`.
 
         Difference from `insertDatasets` method is that this method accepts
@@ -865,7 +852,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDataset(self, id: DatasetId) -> Optional[DatasetRef]:
+    def getDataset(self, id: DatasetId) -> DatasetRef | None:
         """Retrieve a Dataset entry.
 
         Parameters
@@ -973,7 +960,7 @@ class Registry(ABC):
         collection : `str`
             The name of an already-registered `~CollectionType.CALIBRATION`
             collection.
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to be associated.
         timespan : `Timespan`
             The validity range for these datasets within the collection.
@@ -997,10 +984,10 @@ class Registry(ABC):
     def decertify(
         self,
         collection: str,
-        datasetType: Union[str, DatasetType],
+        datasetType: str | DatasetType,
         timespan: Timespan,
         *,
-        dataIds: Optional[Iterable[DataId]] = None,
+        dataIds: Iterable[DataId] | None = None,
     ) -> None:
         """Remove or adjust datasets to clear a validity range within a
         calibration collection.
@@ -1068,10 +1055,10 @@ class Registry(ABC):
     @abstractmethod
     def expandDataId(
         self,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         *,
-        graph: Optional[DimensionGraph] = None,
-        records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
+        graph: DimensionGraph | None = None,
+        records: NameLookupMapping[DimensionElement, DimensionRecord | None] | None = None,
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
@@ -1087,7 +1074,8 @@ class Registry(ABC):
             Dimensions that are in ``dataId`` or ``kwargs`` but not in
             ``graph`` are silently ignored, providing a way to extract and
             ``graph`` expand a subset of a data ID.
-        records : `Mapping` [`str`, `DimensionRecord`], optional
+        records : `~collections.abc.Mapping` [`str`, `DimensionRecord`], \
+                optional
             Dimension record data to use before querying the database for that
             data, keyed by element name.
         withDefaults : `bool`, optional
@@ -1126,8 +1114,8 @@ class Registry(ABC):
     @abstractmethod
     def insertDimensionData(
         self,
-        element: Union[DimensionElement, str],
-        *data: Union[Mapping[str, Any], DimensionRecord],
+        element: DimensionElement | str,
+        *data: Mapping[str, Any] | DimensionRecord,
         conform: bool = True,
         replace: bool = False,
         skip_existing: bool = False,
@@ -1161,11 +1149,11 @@ class Registry(ABC):
     @abstractmethod
     def syncDimensionData(
         self,
-        element: Union[DimensionElement, str],
-        row: Union[Mapping[str, Any], DimensionRecord],
+        element: DimensionElement | str,
+        row: Mapping[str, Any] | DimensionRecord,
         conform: bool = True,
         update: bool = False,
-    ) -> Union[bool, Dict[str, Any]]:
+    ) -> bool | dict[str, Any]:
         """Synchronize the given dimension record with the database, inserting
         if it does not already exist and comparing values if it does.
 
@@ -1206,8 +1194,8 @@ class Registry(ABC):
         self,
         expression: Any = ...,
         *,
-        components: Optional[bool] = None,
-        missing: Optional[List[str]] = None,
+        components: bool | None = None,
+        missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
 
@@ -1252,10 +1240,10 @@ class Registry(ABC):
     def queryCollections(
         self,
         expression: Any = ...,
-        datasetType: Optional[DatasetType] = None,
-        collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
+        datasetType: DatasetType | None = None,
+        collectionTypes: Iterable[CollectionType] | CollectionType = CollectionType.all(),
         flattenChains: bool = False,
-        includeChains: Optional[bool] = None,
+        includeChains: bool | None = None,
     ) -> Sequence[str]:
         """Iterate over the collections whose names match an expression.
 
@@ -1309,12 +1297,12 @@ class Registry(ABC):
         datasetType: Any,
         *,
         collections: CollectionArgType | None = None,
-        dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
-        dataId: Optional[DataId] = None,
+        dimensions: Iterable[Dimension | str] | None = None,
+        dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> DatasetQueryResults:
@@ -1428,14 +1416,14 @@ class Registry(ABC):
     @abstractmethod
     def queryDataIds(
         self,
-        dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str],
+        dimensions: Iterable[Dimension | str] | Dimension | str,
         *,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateQueryResults:
@@ -1538,14 +1526,14 @@ class Registry(ABC):
     @abstractmethod
     def queryDimensionRecords(
         self,
-        element: Union[DimensionElement, str],
+        element: DimensionElement | str,
         *,
-        dataId: Optional[DataId] = None,
+        dataId: DataId | None = None,
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: Optional[bool] = None,
-        bind: Optional[Mapping[str, Any]] = None,
+        components: bool | None = None,
+        bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
     ) -> DimensionRecordQueryResults:
@@ -1625,7 +1613,7 @@ class Registry(ABC):
     @abstractmethod
     def queryDatasetAssociations(
         self,
-        datasetType: Union[str, DatasetType],
+        datasetType: str | DatasetType,
         collections: CollectionArgType | None = ...,
         *,
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),

@@ -21,7 +21,7 @@
 
 import json
 import unittest
-from typing import Iterable, Tuple
+from collections.abc import Iterable
 
 from lsst.daf.butler import (
     DataCoordinate,
@@ -47,7 +47,7 @@ class MockTask:
 class QuantumTestCase(unittest.TestCase):
     """Test for Quantum."""
 
-    def _buildFullQuantum(self, taskName, addRecords=False) -> Tuple[Quantum, Iterable[DatasetType]]:
+    def _buildFullQuantum(self, taskName, addRecords=False) -> tuple[Quantum, Iterable[DatasetType]]:
         universe = DimensionUniverse()
         datasetTypeNameInit = "test_ds_init"
         datasetTypeNameInput = "test_ds_input"

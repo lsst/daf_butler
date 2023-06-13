@@ -23,7 +23,8 @@ from __future__ import annotations
 __all__ = ("CollectionSummary",)
 
 import dataclasses
-from typing import AbstractSet, Generator, Iterable, List, Mapping, Optional, cast
+from collections.abc import Generator, Iterable, Mapping, Set
+from typing import cast
 
 from ..core import DataCoordinate, DatasetRef, DatasetType
 from ..core.named import NamedValueSet
@@ -53,7 +54,7 @@ class CollectionSummary:
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to include.
 
         Yields
@@ -80,7 +81,7 @@ class CollectionSummary:
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to include.
         """
         for _ in self.add_datasets_generator(refs):
@@ -96,7 +97,7 @@ class CollectionSummary:
         ----------
         dataset_type : `DatasetType`
             Dataset type to include.
-        data_ids : `Iterable` [ `DataCoordinate` ]
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
             Data IDs to include.
 
         Yields
@@ -125,7 +126,7 @@ class CollectionSummary:
         ----------
         dataset_type : `DatasetType`
             Dataset type to include.
-        data_ids : `Iterable` [ `DataCoordinate` ]
+        data_ids : `~collections.abc.Iterable` [ `DataCoordinate` ]
             Data IDs to include.
         """
         for _ in self.add_data_ids_generator(dataset_type, data_ids):
@@ -166,9 +167,9 @@ class CollectionSummary:
     def is_compatible_with(
         self,
         dataset_type: DatasetType,
-        dimensions: Mapping[str, AbstractSet[str]],
-        rejections: Optional[List[str]] = None,
-        name: Optional[str] = None,
+        dimensions: Mapping[str, Set[str]],
+        rejections: list[str] | None = None,
+        name: str | None = None,
     ) -> bool:
         """Test whether the collection summarized by this object should be
         queried for a given dataset type and governor dimension values.
@@ -179,7 +180,7 @@ class CollectionSummary:
             Dataset type being queried.  If this collection has no instances of
             this dataset type (or its parent dataset type, if it is a
             component), `False` will always be returned.
-        dimensions : `Mapping`
+        dimensions : `~collections.abc.Mapping`
             Bounds on the values governor dimensions can take in the query,
             usually from a WHERE expression, as a mapping from dimension name
             to a set of `str` governor dimension values.

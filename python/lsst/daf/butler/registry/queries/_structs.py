@@ -85,7 +85,7 @@ class QueryWhereClause:
             A user-provided string expression.
         column_types : `ColumnTypeInfo`
             Information about column types.
-        bind : `Mapping` [ `str`, `object` ], optional
+        bind : `~collections.abc.Mapping` [ `str`, `object` ], optional
             Mapping containing literal values that should be injected into the
             query expression, keyed by the identifiers they replace.
         data_id : `DataCoordinate`, optional
@@ -148,7 +148,7 @@ class QueryWhereClause:
     governor_constraints: Mapping[str, Set[str]]
     """Restrictions on the values governor dimensions can take in this query,
     imposed by the string expression and/or data ID
-    (`Mapping` [ `set`,  `~collections.abc.Set` [ `str` ] ]).
+    (`~collections.abc.Mapping` [ `str`,  `~collections.abc.Set` [ `str` ] ]).
 
     Governor dimensions not present in this mapping are not constrained at all.
     """
@@ -179,7 +179,7 @@ class OrderByClause:
 
         Parameters
         ----------
-        order_by : `Iterable` [ `str` ]
+        order_by : `~collections.abc.Iterable` [ `str` ]
             Sequence of names to use for ordering with optional "-" prefix.
         graph : `DimensionGraph`
             Dimensions used by a query.
@@ -209,7 +209,7 @@ class OrderByClause:
 
         Parameters
         ----------
-        order_by : `Iterable` [ `str` ]
+        order_by : `~collections.abc.Iterable` [ `str` ]
             Sequence of names to use for ordering with optional "-" prefix.
         element : `DimensionElement`
             Single or primary dimension element in the query
@@ -269,7 +269,7 @@ class OrderByClause:
 
     terms: Iterable[SortTerm]
     """Columns that appear in the ORDER BY
-    (`Iterable` [ `OrderByClauseColumn` ]).
+    (`~collections.abc.Iterable` [ `OrderByClauseColumn` ]).
     """
 
     @property
@@ -290,7 +290,7 @@ class ElementOrderByClause:
 
     Parameters
     ----------
-    order_by : `Iterable` [ `str` ]
+    order_by : `~collections.abc.Iterable` [ `str` ]
         Sequence of names to use for ordering with optional "-" prefix.
     element : `DimensionElement`
         Dimensions used by a query.
@@ -312,7 +312,7 @@ class ElementOrderByClause:
 
     order_by_columns: Iterable[OrderByClauseColumn]
     """Columns that appear in the ORDER BY
-    (`Iterable` [ `OrderByClauseColumn` ]).
+    (`~collections.abc.Iterable` [ `OrderByClauseColumn` ]).
     """
 
 
@@ -340,18 +340,18 @@ class QuerySummary:
         A spatial constraint that all rows must overlap.
     timespan : `Timespan`, optional
         A temporal constraint that all rows must overlap.
-    bind : `Mapping` [ `str`, `object` ], optional
+    bind : `~collections.abc.Mapping` [ `str`, `object` ], optional
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
     defaults : `DataCoordinate`, optional
         A data ID containing default for governor dimensions.
-    datasets : `Iterable` [ `DatasetType` ], optional
+    datasets : `~collections.abc.Iterable` [ `DatasetType` ], optional
         Dataset types whose searches may be joined into the query.  Callers
         must still call `QueryBuilder.joinDataset` explicitly to control how
         that join happens (e.g. which collections are searched), but by
         declaring them here first we can ensure that the query includes the
         right dimensions for those joins.
-    order_by : `Iterable` [ `str` ]
+    order_by : `~collections.abc.Iterable` [ `str` ]
         Sequence of names to use for ordering with optional "-" prefix.
     limit : `Tuple`, optional
         Limit on the number of returned rows and optional offset.

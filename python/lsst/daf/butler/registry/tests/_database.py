@@ -27,9 +27,10 @@ import itertools
 import warnings
 from abc import ABC, abstractmethod
 from collections import namedtuple
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import Any, ContextManager, Iterable, Optional, Set, Tuple
+from typing import Any, ContextManager
 
 import astropy.time
 import sqlalchemy
@@ -93,7 +94,7 @@ def _patch_getExistingTable(db: Database) -> Database:
     """
     original_method = db.getExistingTable
 
-    def _getExistingTable(name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
+    def _getExistingTable(name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table | None:
         # Return None on first call, but forward to original method after that
         db.getExistingTable = original_method
         return None
@@ -728,7 +729,7 @@ class DatabaseTests(ABC):
         with db1.declareStaticTables(create=True) as context:
             tables1 = context.addTableTuple(STATIC_TABLE_SPECS)
 
-        async def side1(lock: Iterable[str] = ()) -> Tuple[Set[str], Set[str]]:
+        async def side1(lock: Iterable[str] = ()) -> tuple[set[str], set[str]]:
             """One side of the concurrent locking test.
 
             This optionally locks the table (and maybe the whole database),

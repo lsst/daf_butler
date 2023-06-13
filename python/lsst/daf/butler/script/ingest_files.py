@@ -103,7 +103,7 @@ def ingest_files(
     datasetType = butler.registry.getDatasetType(dataset_type)
 
     # Convert the k=v strings into a dataId dict.
-    universe = butler.registry.dimensions
+    universe = butler.dimensions
     common_data_id = parse_data_id_tuple(data_id, universe)
 
     # Read the table assuming that Astropy can work out the format.

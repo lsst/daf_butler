@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ("YamlFormatter",)
 
 import dataclasses
-from typing import Any, Optional, Type
+from typing import Any
 
 import yaml
 
@@ -43,7 +43,7 @@ class YamlFormatter(FileFormatter):
     """Allow the normal yaml.dump to be used to write the YAML. Use this
     if you know that your class has registered representers."""
 
-    def _readFile(self, path: str, pytype: Type[Any] | None = None) -> Any:
+    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         """Read a file from the path in YAML format.
 
         Parameters
@@ -71,7 +71,7 @@ class YamlFormatter(FileFormatter):
 
         return data
 
-    def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
+    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
         """Read the bytes object as a python object.
 
         Parameters

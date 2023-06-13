@@ -78,7 +78,7 @@ class ConfigDumpUseTest(unittest.TestCase):
             result = self.runner.invoke(butler.cli, ["config-dump", "here", "--file=there"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             # check for some expected keywords:
-            with open("there", "r") as f:
+            with open("there") as f:
                 cfg = yaml.safe_load(f)
                 self.assertIn("datastore", cfg)
                 self.assertIn("composites", cfg["datastore"])

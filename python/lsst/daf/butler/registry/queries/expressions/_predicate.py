@@ -27,7 +27,7 @@ import datetime
 import types
 import warnings
 from collections.abc import Mapping, Set
-from typing import Any, Union, cast
+from typing import Any, cast
 
 import astropy.time
 import astropy.utils.exceptions
@@ -97,7 +97,7 @@ def make_string_expression_predicate(
         expression.
     column_types : `ColumnTypeInfo`
         Information about column types.
-    bind : `Mapping` [ `str`, `Any` ], optional
+    bind : `~collections.abc.Mapping` [ `str`, `Any` ], optional
         Literal values referenced in the expression.
     data_id : `DataCoordinate`, optional
         A fully-expanded data ID identifying dimensions known in advance.
@@ -120,7 +120,8 @@ def make_string_expression_predicate(
     predicate : `lsst.daf.relation.colum_expressions.Predicate` or `None`
         New predicate derived from the string expression, or `None` if the
         string is empty.
-    governor_constraints : `Mapping` [ `str` , `~collections.abc.Set` ]
+    governor_constraints : `~collections.abc.Mapping` [ `str` , \
+            `~collections.abc.Set` ]
         Constraints on dimension values derived from the expression and data
         ID.
     """
@@ -175,7 +176,7 @@ def make_string_expression_predicate(
     return predicate, governor_constraints
 
 
-VisitorResult = Union[Predicate, ColumnExpression, ColumnContainer]
+VisitorResult = Predicate | ColumnExpression | ColumnContainer
 
 
 class PredicateConversionVisitor(TreeVisitor[VisitorResult]):

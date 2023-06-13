@@ -27,7 +27,8 @@ __all__ = ("GenericBaseDatastore",)
 
 import logging
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Iterable, List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import DatasetTypeNotSupportedError, Datastore
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
@@ -97,7 +98,7 @@ class GenericBaseDatastore(Datastore):
         """
         raise NotImplementedError()
 
-    def _register_datasets(self, refsAndInfos: Iterable[Tuple[DatasetRef, StoredDatastoreItemInfo]]) -> None:
+    def _register_datasets(self, refsAndInfos: Iterable[tuple[DatasetRef, StoredDatastoreItemInfo]]) -> None:
         """Update registry to indicate that one or more datasets have been
         stored.
 
@@ -108,7 +109,7 @@ class GenericBaseDatastore(Datastore):
             Datasets to register and the internal datastore metadata associated
             with them.
         """
-        expandedRefs: List[DatasetRef] = []
+        expandedRefs: list[DatasetRef] = []
         expandedItemInfos = []
 
         for ref, itemInfo in refsAndInfos:
@@ -126,7 +127,7 @@ class GenericBaseDatastore(Datastore):
         self,
         inMemoryDataset: Any,
         readStorageClass: StorageClass,
-        assemblerParams: Optional[Mapping[str, Any]] = None,
+        assemblerParams: Mapping[str, Any] | None = None,
         isComponent: bool = False,
     ) -> Any:
         """Given the Python object read from the datastore, manipulate

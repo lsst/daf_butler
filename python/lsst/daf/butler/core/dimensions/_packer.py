@@ -25,7 +25,8 @@ __all__ = ("DimensionPacker",)
 
 import warnings
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Iterable, Optional, Tuple, Type, Union
+from collections.abc import Iterable, Set
+from typing import TYPE_CHECKING, Any
 
 from deprecated.sphinx import deprecated
 from lsst.utils import doImportType
@@ -99,7 +100,7 @@ class DimensionPacker(metaclass=ABCMeta):
 
     def pack(
         self, dataId: DataId | None = None, *, returnMaxBits: bool = False, **kwargs: Any
-    ) -> Union[Tuple[int, int], int]:
+    ) -> tuple[int, int] | int:
         """Pack the given data ID into a single integer.
 
         Parameters
@@ -191,11 +192,11 @@ class DimensionPackerFactory:
     ----------
     clsName : `str`
         Fully-qualified name of the packer class this factory constructs.
-    fixed : `AbstractSet` [ `str` ]
+    fixed : `~collections.abc.Set` [ `str` ]
         Names of dimensions whose values must be provided to the packer when it
         is constructed.  This will be expanded lazily into a `DimensionGraph`
         prior to `DimensionPacker` construction.
-    dimensions : `AbstractSet` [ `str` ]
+    dimensions : `~collections.abc.Set` [ `str` ]
         Names of dimensions whose values are passed to `DimensionPacker.pack`.
         This will be expanded lazily into a `DimensionGraph` prior to
         `DimensionPacker` construction.
@@ -204,16 +205,16 @@ class DimensionPackerFactory:
     def __init__(
         self,
         clsName: str,
-        fixed: AbstractSet[str],
-        dimensions: AbstractSet[str],
+        fixed: Set[str],
+        dimensions: Set[str],
     ):
         # We defer turning these into DimensionGraph objects until first use
         # because __init__ is called before a DimensionUniverse exists, and
         # DimensionGraph instances can only be constructed afterwards.
-        self._fixed: Union[AbstractSet[str], DimensionGraph] = fixed
-        self._dimensions: Union[AbstractSet[str], DimensionGraph] = dimensions
+        self._fixed: Set[str] | DimensionGraph = fixed
+        self._dimensions: Set[str] | DimensionGraph = dimensions
         self._clsName = clsName
-        self._cls: Optional[Type[DimensionPacker]] = None
+        self._cls: type[DimensionPacker] | None = None
 
     def __call__(self, universe: DimensionUniverse, fixed: DataCoordinate) -> DimensionPacker:
         """Construct a `DimensionPacker` instance for the given fixed data ID.
@@ -261,11 +262,11 @@ class DimensionPackerConstructionVisitor(DimensionConstructionVisitor):
         `DimensionUniverse`.
     clsName : `str`
         Fully-qualified name of a `DimensionPacker` subclass.
-    fixed : `Iterable` [ `str` ]
+    fixed : `~collections.abc.Iterable` [ `str` ]
         Names of dimensions whose values must be provided to the packer when it
         is constructed.  This will be expanded lazily into a `DimensionGraph`
         prior to `DimensionPacker` construction.
-    dimensions : `Iterable` [ `str` ]
+    dimensions : `~collections.abc.Iterable` [ `str` ]
         Names of dimensions whose values are passed to `DimensionPacker.pack`.
         This will be expanded lazily into a `DimensionGraph` prior to
         `DimensionPacker` construction.
@@ -277,7 +278,7 @@ class DimensionPackerConstructionVisitor(DimensionConstructionVisitor):
         self._dimensions = set(dimensions)
         self._clsName = clsName
 
-    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+    def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
         return False
 
