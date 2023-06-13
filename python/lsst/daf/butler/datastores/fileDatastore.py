@@ -86,11 +86,11 @@ class _IngestPrepData(Datastore.IngestPrepData):
 
     Parameters
     ----------
-    datasets : `list` of `FileDataset`
+    datasets : `~collections.abc.Iterable` of `FileDataset`
         Files to be ingested by this datastore.
     """
 
-    def __init__(self, datasets: list[FileDataset]):
+    def __init__(self, datasets: Iterable[FileDataset]):
         super().__init__(ref for dataset in datasets for ref in dataset.refs)
         self.datasets = datasets
 
