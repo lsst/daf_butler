@@ -26,7 +26,7 @@ __all__ = ("ColumnTypeInfo", "LogicalColumn")
 import dataclasses
 import datetime
 from collections.abc import Iterable
-from typing import Union, cast
+from typing import cast
 
 import astropy.time
 import sqlalchemy
@@ -37,7 +37,7 @@ from ._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionReco
 from .dimensions import Dimension, DimensionUniverse
 from .timespan import TimespanDatabaseRepresentation
 
-LogicalColumn = Union[sqlalchemy.sql.ColumnElement, TimespanDatabaseRepresentation]
+LogicalColumn = sqlalchemy.sql.ColumnElement | TimespanDatabaseRepresentation
 """A type alias for the types used to represent columns in SQL relations.
 
 This is the butler specialization of the `lsst.daf.relation.sql.LogicalColumn`
