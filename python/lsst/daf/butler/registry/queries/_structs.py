@@ -148,7 +148,7 @@ class QueryWhereClause:
     governor_constraints: Mapping[str, Set[str]]
     """Restrictions on the values governor dimensions can take in this query,
     imposed by the string expression and/or data ID
-    (`~collections.abc.Mapping` [ `set`,  `~collections.abc.Set` [ `str` ] ]).
+    (`~collections.abc.Mapping` [ `str`,  `~collections.abc.Set` [ `str` ] ]).
 
     Governor dimensions not present in this mapping are not constrained at all.
     """
