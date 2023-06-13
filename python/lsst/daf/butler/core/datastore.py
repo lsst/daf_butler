@@ -325,7 +325,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        config : `Config`
+        config : `Config` or `~lsst.resources.ResourcePathExpression`
             Configuration instance.
         bridgeManager : `DatastoreRegistryBridgeManager`
             Object that manages the interface between `Registry` and
@@ -340,7 +340,7 @@ class Datastore(metaclass=ABCMeta):
 
     def __init__(
         self,
-        config: Config | str,
+        config: Config | ResourcePathExpression,
         bridgeManager: DatastoreRegistryBridgeManager,
         butlerRoot: ResourcePathExpression | None = None,
     ):

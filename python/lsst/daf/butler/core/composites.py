@@ -34,6 +34,8 @@ from .config import ConfigSubset
 from .configSupport import processLookupConfigs
 
 if TYPE_CHECKING:
+    from lsst.resources import ResourcePathExpression
+
     from .._butlerConfig import ButlerConfig
     from .configSupport import LookupKey
     from .datasets import DatasetRef, DatasetType
@@ -77,7 +79,9 @@ class CompositesMap:
         in lookup keys.
     """
 
-    def __init__(self, config: ResourcePathExpression | ButlerConfig | CompositesConfig, *, universe: DimensionUniverse):
+    def __init__(
+        self, config: ResourcePathExpression | ButlerConfig | CompositesConfig, *, universe: DimensionUniverse
+    ):
         if not isinstance(config, CompositesConfig):
             config = CompositesConfig(config)
         assert isinstance(config, CompositesConfig)
