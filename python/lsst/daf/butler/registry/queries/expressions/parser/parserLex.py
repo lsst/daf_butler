@@ -67,7 +67,7 @@ class ParserLexError(Exception):
     """
 
     def __init__(self, expression, remain, pos, lineno):
-        Exception.__init__(self, "Unexpected character at position {}".format(pos))
+        Exception.__init__(self, f"Unexpected character at position {pos}")
         self.expression = expression
         self.remain = remain
         self.pos = pos
