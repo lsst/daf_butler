@@ -1113,7 +1113,7 @@ class ConfigSubset(Config):
 
     Parameters
     ----------
-    other : `Config` or `str` or `dict`
+    other : `Config` or `~lsst.resources.ResourcePathExpression` or `dict`
         Argument specifying the configuration information as understood
         by `Config`
     validate : `bool`, optional
