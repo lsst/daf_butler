@@ -234,7 +234,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def __init__(
         self,
-        config: DatastoreConfig | str,
+        config: DatastoreConfig | ResourcePathExpression,
         bridgeManager: DatastoreRegistryBridgeManager,
         butlerRoot: str | None = None,
     ):

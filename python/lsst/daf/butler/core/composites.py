@@ -77,7 +77,7 @@ class CompositesMap:
         in lookup keys.
     """
 
-    def __init__(self, config: str | ButlerConfig | CompositesConfig, *, universe: DimensionUniverse):
+    def __init__(self, config: ResourcePathExpression | ButlerConfig | CompositesConfig, *, universe: DimensionUniverse):
         if not isinstance(config, CompositesConfig):
             config = CompositesConfig(config)
         assert isinstance(config, CompositesConfig)

@@ -426,7 +426,7 @@ class QuantumBackedButler(LimitedButler):
         self,
         ref: DatasetRef,
         *,
-        parameters: dict | None = None,
+        parameters: dict[str, Any] | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         # Docstring inherited.

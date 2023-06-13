@@ -179,7 +179,7 @@ class ChainedDatastore(Datastore):
 
     def __init__(
         self,
-        config: Config | str,
+        config: Config | ResourcePathExpression,
         bridgeManager: DatastoreRegistryBridgeManager,
         butlerRoot: str | None = None,
     ):

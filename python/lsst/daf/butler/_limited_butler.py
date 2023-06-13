@@ -209,7 +209,7 @@ class LimitedButler(ABC):
         self,
         ref: DatasetRef,
         *,
-        parameters: dict | None = None,
+        parameters: dict[str, Any] | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
