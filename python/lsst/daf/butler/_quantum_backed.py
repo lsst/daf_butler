@@ -407,7 +407,7 @@ class QuantumBackedButler(LimitedButler):
                 parameters=parameters,
                 storageClass=storageClass,
             )
-        except (LookupError, FileNotFoundError, IOError):
+        except (LookupError, FileNotFoundError, OSError):
             self._unavailable_inputs.add(ref.id)
             raise
         if ref.id in self._predicted_inputs:
