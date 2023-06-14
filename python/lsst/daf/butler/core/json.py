@@ -24,17 +24,15 @@ from __future__ import annotations
 __all__ = ("to_json_generic", "from_json_generic", "to_json_pydantic", "from_json_pydantic")
 
 import json
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, Type
 
 if TYPE_CHECKING:
-    from pydantic import BaseModel
-
     from ..registry import Registry
     from .dimensions import DimensionUniverse
 
 
 class SupportsSimple(Protocol):
-    _serializedType: type[BaseModel]
+    _serializedType: Type
 
     def to_simple(self, minimal: bool) -> Any:
         ...
