@@ -2512,12 +2512,13 @@ class Butler(LimitedButler):
         # a DatasetRef for each defined instrument
         datasetRefs = []
 
+        dimensions = self.dimensions.extract(("instrument",))
         for datasetType in datasetTypes:
             if "instrument" in datasetType.dimensions:
                 for instrument in instruments:
                     datasetRef = DatasetRef(
                         datasetType,
-                        {"instrument": instrument},  # type: ignore
+                        DataCoordinate.standardize(instrument=instrument, graph=dimensions),
                         conform=False,
                         run="validate",
                     )
