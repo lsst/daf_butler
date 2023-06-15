@@ -30,7 +30,7 @@ __all__ = (
 )
 
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, StorageClass
@@ -48,7 +48,7 @@ class DatasetTestHelper:
         datasetTypeName: str,
         dimensions: DimensionGraph | Iterable[str | Dimension],
         storageClass: StorageClass | str,
-        dataId: DataCoordinate,
+        dataId: DataCoordinate | Mapping[str, Any],
         *,
         id: DatasetId | None = None,
         run: str | None = None,
@@ -70,7 +70,7 @@ class DatasetTestHelper:
         datasetTypeName: str,
         dimensions: DimensionGraph | Iterable[str | Dimension],
         storageClass: StorageClass | str,
-        dataId: DataCoordinate,
+        dataId: DataCoordinate | Mapping,
         *,
         id: DatasetId | None = None,
         run: str | None = None,
@@ -88,7 +88,8 @@ class DatasetTestHelper:
 
         if run is None:
             run = "dummy"
-        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
+        if not isinstance(dataId, DataCoordinate):
+            dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)
 
 
