@@ -62,6 +62,7 @@ from lsst.daf.butler.tests import (
     MetricsExample,
     MetricsExampleDataclass,
     MetricsExampleModel,
+    TestCaseMixin,
 )
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 from lsst.resources import ResourcePath
@@ -90,7 +91,7 @@ class TransactionTestError(Exception):
     pass
 
 
-class DatastoreTestsBase(DatasetTestHelper, DatastoreTestHelper):
+class DatastoreTestsBase(DatasetTestHelper, DatastoreTestHelper, TestCaseMixin):
     """Support routines for datastore testing"""
 
     root = None
