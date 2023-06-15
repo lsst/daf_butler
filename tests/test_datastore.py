@@ -30,6 +30,7 @@ import unittest
 import unittest.mock
 import uuid
 from collections.abc import Callable
+from typing import Any, cast
 
 import lsst.utils.tests
 import yaml
@@ -62,9 +63,9 @@ from lsst.daf.butler.tests import (
     MetricsExample,
     MetricsExampleDataclass,
     MetricsExampleModel,
-    TestCaseMixin,
 )
 from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
+from lsst.daf.butler.tests.utils import TestCaseMixin
 from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
@@ -94,10 +95,9 @@ class TransactionTestError(Exception):
 class DatastoreTestsBase(DatasetTestHelper, DatastoreTestHelper, TestCaseMixin):
     """Support routines for datastore testing"""
 
-    root = None
+    root: str | None = None
     universe: DimensionUniverse
     storageClassFactory: StorageClassFactory
-    datastoreType: type[Datastore]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -110,7 +110,7 @@ class DatastoreTestsBase(DatasetTestHelper, DatastoreTestHelper, TestCaseMixin):
         # information (since we should not assume the constructor
         # name here, but rely on the configuration file itself)
         datastoreConfig = DatastoreConfig(cls.configFile)
-        cls.datastoreType = doImport(datastoreConfig["cls"])
+        cls.datastoreType = cast(type[Datastore], doImport(datastoreConfig["cls"]))
         cls.universe = DimensionUniverse()
 
     def setUp(self) -> None:
@@ -125,6 +125,9 @@ class DatastoreTests(DatastoreTestsBase):
     """Some basic tests of a simple datastore."""
 
     hasUnsupportedPut = True
+    rootKeys: tuple[str, ...] | None = None
+    isEphemeral: bool = False
+    validationCanFail: bool = False
 
     def testConfigRoot(self) -> None:
         full = DatastoreConfig(self.configFile)
@@ -690,7 +693,7 @@ class DatastoreTests(DatastoreTestsBase):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore()
 
-                def succeed(obj: MetricsExample, path: str, ref: DatasetRef):
+                def succeed(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     """Ingest a file already in the datastore root."""
                     # first move it into the root, and adjust the path
                     # accordingly
@@ -699,7 +702,7 @@ class DatastoreTests(DatastoreTestsBase):
                     datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
-                def failInputDoesNotExist(obj: MetricsExample, path: str, ref: DatasetRef):
+                def failInputDoesNotExist(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     """Can't ingest files if we're given a bad path."""
                     with self.assertRaises(FileNotFoundError):
                         datastore.ingest(
@@ -707,7 +710,7 @@ class DatastoreTests(DatastoreTestsBase):
                         )
                     self.assertFalse(datastore.exists(ref))
 
-                def failOutsideRoot(obj: MetricsExample, path: str, ref: DatasetRef):
+                def failOutsideRoot(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     """Can't ingest files outside of datastore root unless
                     auto."""
                     if mode == "auto":
@@ -718,7 +721,7 @@ class DatastoreTests(DatastoreTestsBase):
                             datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                         self.assertFalse(datastore.exists(ref))
 
-                def failNotImplemented(obj: MetricsExample, path: str, ref: DatasetRef):
+                def failNotImplemented(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     with self.assertRaises(NotImplementedError):
                         datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
 
@@ -735,13 +738,13 @@ class DatastoreTests(DatastoreTestsBase):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore(mode)
 
-                def succeed(obj: MetricsExample, path: str, ref: DatasetRef):
+                def succeed(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     """Ingest a file by transferring it to the template
                     location."""
                     datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
-                def failInputDoesNotExist(obj: MetricsExample, path: str, ref: DatasetRef):
+                def failInputDoesNotExist(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     """Can't ingest files if we're given a bad path."""
                     with self.assertRaises(FileNotFoundError):
                         # Ensure the file does not look like it is in
@@ -751,7 +754,7 @@ class DatastoreTests(DatastoreTestsBase):
                         )
                     self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
 
-                def failNotImplemented(obj: MetricsExample, path: str, ref: DatasetRef):
+                def failNotImplemented(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     with self.assertRaises(NotImplementedError):
                         datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
 
@@ -928,7 +931,7 @@ class DatastoreTests(DatastoreTestsBase):
         data = tuple(["a", "b", 1])
         self._assert_different_puts(datastore, "TupleExample", data)
 
-    def _assert_different_puts(self, datastore: Datastore, storageClass_root: str, data) -> None:
+    def _assert_different_puts(self, datastore: Datastore, storageClass_root: str, data: Any) -> None:
         refs = {
             x: self.makeDatasetRef(
                 f"stora_as_{x}",
@@ -1000,7 +1003,7 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
         ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
         compRef = self.makeDatasetRef("metric", dimensions, compositeStorageClass, dataId)
 
-        def raiser(ref):
+        def raiser(ref: DatasetRef) -> None:
             raise DatasetTypeNotSupportedError()
 
         with unittest.mock.patch.object(
@@ -1410,7 +1413,7 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         config = Config.fromYaml(config_str)
         return DatastoreCacheManager(DatastoreCacheManagerConfig(config), universe=self.universe)
 
-    def testNoCacheDir(self):
+    def testNoCacheDir(self) -> None:
         config_str = """
 cached:
   root: null
@@ -1440,7 +1443,7 @@ cached:
 
         self.assertCache(cache_manager)
 
-    def testEnvvarCacheDir(self):
+    def testEnvvarCacheDir(self) -> None:
         config_str = f"""
 cached:
   root: '{self.root}'
@@ -1529,7 +1532,7 @@ cached:
         # Test that the cache directory is not marked temporary
         self.assertFalse(cache_manager.cache_directory.isTemporary)
 
-    def assertCache(self, cache_manager) -> None:
+    def assertCache(self, cache_manager: DatastoreCacheManager) -> None:
         self.assertTrue(cache_manager.should_be_cached(self.refs[0]))
         self.assertFalse(cache_manager.should_be_cached(self.refs[1]))
 
