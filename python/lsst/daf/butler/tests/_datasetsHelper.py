@@ -30,7 +30,6 @@ __all__ = (
 )
 
 import os
-import uuid
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -97,7 +96,6 @@ class DatastoreTestHelper:
     """Helper methods for Datastore tests"""
 
     root: str
-    id: DatasetId
     config: Config
     datastoreType: type[Datastore]
     configFile: str
@@ -105,11 +103,6 @@ class DatastoreTestHelper:
     def setUpDatastoreTests(self, registryClass: type[Registry], configClass: type[Config]) -> None:
         """Shared setUp code for all Datastore tests"""
         self.registry = registryClass()
-
-        # Need to keep ID for each datasetRef since we have no butler
-        # for these tests
-        self.id = uuid.uuid4()
-
         self.config = configClass(self.configFile)
 
         # Some subclasses override the working root directory
