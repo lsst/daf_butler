@@ -96,7 +96,7 @@ class DatasetTestHelper:
 class DatastoreTestHelper:
     """Helper methods for Datastore tests"""
 
-    root: str
+    root: str | None
     config: Config
     datastoreType: type[Datastore]
     configFile: str
