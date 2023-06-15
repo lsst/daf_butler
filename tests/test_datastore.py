@@ -151,7 +151,7 @@ class DatastoreTests(DatastoreTestsBase):
 
         dimensions = self.universe.extract(("visit", "physical_filter"))
         dataId = dict({"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"})
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         datastore.validateConfiguration([ref])
 
     def testParameterValidation(self) -> None:
@@ -159,7 +159,7 @@ class DatastoreTests(DatastoreTestsBase):
         sc = self.storageClassFactory.getStorageClass("ThingOne")
         dimensions = self.universe.extract(("visit", "physical_filter"))
         dataId = dict({"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"})
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         datastore = self.makeDatastore()
         data = {1: 2, 3: 4}
         datastore.put(data, ref)
@@ -183,8 +183,8 @@ class DatastoreTests(DatastoreTestsBase):
         dataId2 = dict({"instrument": "dummy", "visit": 53, "physical_filter": "V", "band": "v"})
 
         for sc in storageClasses:
-            ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
-            ref2 = self.makeDatasetRef("metric", dimensions, sc, dataId2, conform=False)
+            ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
+            ref2 = self.makeDatasetRef("metric", dimensions, sc, dataId2)
 
             # Make sure that using getManyURIs without predicting before the
             # dataset has been put raises.
@@ -242,7 +242,7 @@ class DatastoreTests(DatastoreTestsBase):
         # get it back as None
         metricsNone = makeExampleMetrics(use_none=True)
         dataIdNone = {"instrument": "dummy", "visit": 54, "physical_filter": "V", "band": "v"}
-        refNone = self.makeDatasetRef("metric", dimensions, sc, dataIdNone, conform=False)
+        refNone = self.makeDatasetRef("metric", dimensions, sc, dataIdNone)
         datastore.put(metricsNone, refNone)
 
         comp = "data"
@@ -302,7 +302,7 @@ class DatastoreTests(DatastoreTestsBase):
 
             dataId = dict({"instrument": "dummy", "visit": 52 + i, "physical_filter": "V", "band": "v"})
 
-            ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId, conform=False)
+            ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
             datastore.put(metrics, ref)
 
             # Does it exist?
@@ -454,7 +454,7 @@ class DatastoreTests(DatastoreTestsBase):
                 # Create a different dataset type each time round
                 # so that a test failure in this subtest does not trigger
                 # a cascade of tests because of file clashes
-                ref = self.makeDatasetRef(f"metric_comp_{i}", dimensions, sc, dataId, conform=False)
+                ref = self.makeDatasetRef(f"metric_comp_{i}", dimensions, sc, dataId)
 
                 disassembled = sc.name not in {"StructuredData", "StructuredCompositeReadCompNoDisassembly"}
 
@@ -503,7 +503,7 @@ class DatastoreTests(DatastoreTestsBase):
         refs = []
         for i in range(n_refs):
             dataId = {"instrument": "dummy", "visit": 638 + i, "physical_filter": "U", "band": "u"}
-            ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+            ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
             datastore.put(metrics, ref)
 
             # Does it exist?
@@ -566,7 +566,7 @@ class DatastoreTests(DatastoreTestsBase):
         dataId = dict({"instrument": "dummy", "visit": 2048, "physical_filter": "Uprime", "band": "u"})
 
         sc = self.storageClassFactory.getStorageClass("StructuredData")
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
 
         inputDatastore = self.makeDatastore("test_input_datastore")
         outputDatastore = self.makeDatastore("test_output_datastore")
@@ -588,7 +588,7 @@ class DatastoreTests(DatastoreTestsBase):
         ]
         data = [
             (
-                self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False),
+                self.makeDatasetRef("metric", dimensions, storageClass, dataId),
                 makeExampleMetrics(),
             )
             for dataId in dataIds
@@ -631,16 +631,16 @@ class DatastoreTests(DatastoreTestsBase):
         metrics = makeExampleMetrics()
 
         dataId = dict({"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v"})
-        refBefore = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+        refBefore = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
         datastore.put(metrics, refBefore)
         with self.assertRaises(TransactionTestError):
             with datastore.transaction():
                 dataId = dict({"instrument": "dummy", "visit": 1, "physical_filter": "V", "band": "v"})
-                refOuter = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+                refOuter = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
                 datastore.put(metrics, refOuter)
                 with datastore.transaction():
                     dataId = dict({"instrument": "dummy", "visit": 2, "physical_filter": "V", "band": "v"})
-                    refInner = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+                    refInner = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
                     datastore.put(metrics, refInner)
                 # All datasets should exist
                 for ref in (refBefore, refOuter, refInner):
@@ -662,7 +662,7 @@ class DatastoreTests(DatastoreTestsBase):
         dimensions = self.universe.extract(("visit", "physical_filter"))
         metrics = makeExampleMetrics()
         dataId = dict({"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v"})
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
         return metrics, ref
 
     def runIngestTest(
@@ -817,7 +817,7 @@ class DatastoreTests(DatastoreTestsBase):
         refs = []
         for visit in (2048, 2049, 2050):
             dataId = {"instrument": "dummy", "visit": visit, "physical_filter": "Uprime", "band": "u"}
-            ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+            ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
             datastore.put(metrics, ref)
             refs.append(ref)
         return datastore, refs
@@ -878,7 +878,7 @@ class DatastoreTests(DatastoreTestsBase):
         sc = self.storageClassFactory.getStorageClass("ThingOne")
         dimensions = self.universe.extract(("visit", "physical_filter"))
         dataId = dict({"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"})
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         with self.assertRaises(FileNotFoundError):
             list(datastore.export(refs + [ref], transfer=None))
 
@@ -968,7 +968,7 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
         metrics = makeExampleMetrics()
 
         dataId = dict({"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v"})
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
 
         with self.assertLogs("lsst.resources", "DEBUG") as cm:
             datastore.put(metrics, ref)
@@ -996,8 +996,8 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
         dimensions = self.universe.extract(("visit", "physical_filter"))
         dataId = dict({"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"})
 
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
-        compRef = self.makeDatasetRef("metric", dimensions, compositeStorageClass, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
+        compRef = self.makeDatasetRef("metric", dimensions, compositeStorageClass, dataId)
 
         def raiser(ref):
             raise DatasetTypeNotSupportedError()
@@ -1030,7 +1030,7 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
         metrics = makeExampleMetrics()
 
         dataId = dict({"instrument": "dummy", "visit": 0, "physical_filter": "V", "band": "v"})
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
 
         # Configuration should have disabled checksum calculation
         datastore.put(metrics, ref)
@@ -1109,7 +1109,7 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
         dimensions = self.universe.extract(("visit", "physical_filter"))
         dataId = dict({"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"})
 
-        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
 
         # Determine where the file will end up (we assume Formatters use
         # the same file extension)
@@ -1202,7 +1202,7 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
             testfile = testfile_j if sc.name.endswith("Json") else testfile_y
 
             with self.subTest(datasetTypeName=datasetTypeName, storageClass=sc.name, file=testfile.name):
-                ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId, conform=False)
+                ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
                 if accepted:
                     datastore.put(metrics, ref)
                     self.assertTrue(datastore.exists(ref))
@@ -1301,7 +1301,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
             testfile = testfile_j if sc.name.endswith("Json") else testfile_y
 
             with self.subTest(datasetTypeName=typeName, dataId=dataId, sc=sc.name):
-                ref = self.makeDatasetRef(typeName, dimensions, sc, dataId, conform=False)
+                ref = self.makeDatasetRef(typeName, dimensions, sc, dataId)
                 if any(accept):
                     datastore.put(metrics, ref)
                     self.assertTrue(datastore.exists(ref))
@@ -1374,10 +1374,7 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
 
         # Create list of refs and list of temporary files
         n_datasets = 10
-        self.refs = [
-            self.makeDatasetRef(f"metric{n}", dimensions, sc, dataId, conform=False)
-            for n in range(n_datasets)
-        ]
+        self.refs = [self.makeDatasetRef(f"metric{n}", dimensions, sc, dataId) for n in range(n_datasets)]
 
         root_uri = ResourcePath(self.root, forceDirectory=True)
         self.files = [root_uri.join(f"file{n}.txt") for n in range(n_datasets)]
@@ -1388,9 +1385,7 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
 
         # Create some composite refs with component files.
         sc = self.storageClassFactory.getStorageClass("StructuredData")
-        self.composite_refs = [
-            self.makeDatasetRef(f"composite{n}", dimensions, sc, dataId, conform=False) for n in range(3)
-        ]
+        self.composite_refs = [self.makeDatasetRef(f"composite{n}", dimensions, sc, dataId) for n in range(3)]
         self.comp_files = []
         self.comp_refs = []
         for n, ref in enumerate(self.composite_refs):
@@ -1774,7 +1769,7 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
 
     def test_StoredFileInfo(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
-        ref = self.makeDatasetRef("metric", DimensionUniverse().extract(()), storageClass, {}, conform=False)
+        ref = self.makeDatasetRef("metric", DimensionUniverse().extract(()), storageClass, {})
 
         record = dict(
             storage_class="StructuredDataDict",
@@ -1790,7 +1785,7 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
         self.assertEqual(info.dataset_id, ref.id)
         self.assertEqual(info.to_record(), record)
 
-        ref2 = self.makeDatasetRef("metric", DimensionUniverse().extract(()), storageClass, {}, conform=False)
+        ref2 = self.makeDatasetRef("metric", DimensionUniverse().extract(()), storageClass, {})
         rebased = info.rebase(ref2)
         self.assertEqual(rebased.dataset_id, ref2.id)
         self.assertEqual(rebased.rebase(ref), info)

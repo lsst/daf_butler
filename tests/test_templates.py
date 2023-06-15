@@ -83,42 +83,42 @@ class TestFileTemplates(unittest.TestCase):
         self.assertTemplate(
             tmplstr,
             "run2/calexp/00052/Most_Amazing_U_Filter_Ever",
-            self.makeDatasetRef("calexp", conform=False),
+            self.makeDatasetRef("calexp"),
         )
         tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail"
         self.assertTemplate(
             tmplstr,
             "run2/calexp/00052/Most_Amazing_U_Filter_Ever-trail",
-            self.makeDatasetRef("calexp", conform=False),
+            self.makeDatasetRef("calexp"),
         )
 
         tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
         self.assertTemplate(
             tmplstr,
             "run2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run2",
-            self.makeDatasetRef("calexp", conform=False),
+            self.makeDatasetRef("calexp"),
         )
         self.assertTemplate(
             tmplstr,
             "run_2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run_2",
-            self.makeDatasetRef("calexp", run="run/2", conform=False),
+            self.makeDatasetRef("calexp", run="run/2"),
         )
 
         # Check that the id is sufficient without any other information.
-        self.assertTemplate("{id}", "1", self.makeDatasetRef("calexp", run="run2", conform=False))
+        self.assertTemplate("{id}", "1", self.makeDatasetRef("calexp", run="run2"))
 
-        self.assertTemplate("{run}/{id}", "run2/1", self.makeDatasetRef("calexp", run="run2", conform=False))
+        self.assertTemplate("{run}/{id}", "run2/1", self.makeDatasetRef("calexp", run="run2"))
 
         self.assertTemplate(
             "fixed/{id}",
             "fixed/1",
-            self.makeDatasetRef("calexp", run="run2", conform=False),
+            self.makeDatasetRef("calexp", run="run2"),
         )
 
         self.assertTemplate(
             "fixed/{id}_{physical_filter}",
             "fixed/1_Most_Amazing_U_Filter_Ever",
-            self.makeDatasetRef("calexp", run="run2", conform=False),
+            self.makeDatasetRef("calexp", run="run2"),
         )
 
         # Retain any "/" in run
@@ -126,7 +126,7 @@ class TestFileTemplates(unittest.TestCase):
         self.assertTemplate(
             tmplstr,
             "run/2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run_2",
-            self.makeDatasetRef("calexp", run="run/2", conform=False),
+            self.makeDatasetRef("calexp", run="run/2"),
         )
 
         # Check that "." are replaced in the file basename, but not directory.
@@ -134,7 +134,7 @@ class TestFileTemplates(unittest.TestCase):
         self.assertTemplate(
             tmplstr,
             "run.2/calexp/00052/g_10-trail-run_2",
-            self.makeDatasetRef("calexp", run="run.2", dataId=dataId, conform=False),
+            self.makeDatasetRef("calexp", run="run.2", dataId=dataId),
         )
 
         with self.assertRaises(FileTemplateValidationError):
@@ -165,16 +165,16 @@ class TestFileTemplates(unittest.TestCase):
 
     def testOptional(self):
         """Optional units in templates."""
-        ref = self.makeDatasetRef("calexp", conform=False)
+        ref = self.makeDatasetRef("calexp")
         tmplstr = "{run}/{datasetType}/v{visit:05d}_f{physical_filter:?}"
         self.assertTemplate(
             tmplstr,
             "run2/calexp/v00052_fMost_Amazing_U_Filter_Ever",
-            self.makeDatasetRef("calexp", conform=False),
+            self.makeDatasetRef("calexp"),
         )
 
         du = {"visit": 48, "tract": 265, "skymap": "big", "instrument": "dummy"}
-        self.assertTemplate(tmplstr, "run2/calexpT/v00048", self.makeDatasetRef("calexpT", du, conform=False))
+        self.assertTemplate(tmplstr, "run2/calexpT/v00048", self.makeDatasetRef("calexpT", du))
 
         # Ensure that this returns a relative path even if the first field
         # is optional
