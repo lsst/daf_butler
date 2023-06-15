@@ -34,19 +34,11 @@ import uuid
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DatasetRef, DatasetType, StorageClass
+from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, StorageClass
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import (
-        Config,
-        DataCoordinate,
-        DatasetId,
-        Datastore,
-        Dimension,
-        DimensionGraph,
-        Registry,
-    )
+    from lsst.daf.butler import Config, DatasetId, Datastore, Dimension, DimensionGraph, Registry
 
 
 class DatasetTestHelper:
@@ -65,7 +57,13 @@ class DatasetTestHelper:
     ) -> DatasetRef:
         """Make a DatasetType and wrap it in a DatasetRef for a test"""
         return self._makeDatasetRef(
-            datasetTypeName, dimensions, storageClass, dataId, id=id, run=run, conform=conform
+            datasetTypeName,
+            dimensions,
+            storageClass,
+            dataId,
+            id=id,
+            run=run,
+            conform=conform,
         )
 
     def _makeDatasetRef(
@@ -91,6 +89,7 @@ class DatasetTestHelper:
 
         if run is None:
             run = "dummy"
+        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)
 
 

@@ -191,16 +191,23 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         # Create a DatasetRef with and without instrument matching the
         # one in the config file.
         dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
+        constant_dataId = {"physical_filter": "v", "visit": 1}
         sc = StorageClass("DummySC", dict, None)
         refPviHsc = self.makeDatasetRef(
-            "pvi", dimensions, sc, {"instrument": "DummyHSC", "physical_filter": "v"}, conform=False
+            "pvi",
+            dimensions,
+            sc,
+            {"instrument": "DummyHSC", **constant_dataId},
         )
         refPviHscFmt = self.factory.getFormatterClass(refPviHsc)
         self.assertIsFormatter(refPviHscFmt)
         self.assertIn("JsonFormatter", refPviHscFmt.name())
 
         refPviNotHsc = self.makeDatasetRef(
-            "pvi", dimensions, sc, {"instrument": "DummyNotHSC", "physical_filter": "v"}, conform=False
+            "pvi",
+            dimensions,
+            sc,
+            {"instrument": "DummyNotHSC", **constant_dataId},
         )
         refPviNotHscFmt = self.factory.getFormatterClass(refPviNotHsc)
         self.assertIsFormatter(refPviNotHscFmt)
@@ -208,7 +215,10 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
         # Create a DatasetRef that should fall back to using Dimensions
         refPvixHsc = self.makeDatasetRef(
-            "pvix", dimensions, sc, {"instrument": "DummyHSC", "physical_filter": "v"}, conform=False
+            "pvix",
+            dimensions,
+            sc,
+            {"instrument": "DummyHSC", **constant_dataId},
         )
         refPvixNotHscFmt = self.factory.getFormatterClass(refPvixHsc)
         self.assertIsFormatter(refPvixNotHscFmt)
@@ -217,7 +227,10 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         # Create a DatasetRef that should fall back to using StorageClass
         dimensionsNoV = DimensionGraph(self.universe, names=("physical_filter", "instrument"))
         refPvixNotHscDims = self.makeDatasetRef(
-            "pvix", dimensionsNoV, sc, {"instrument": "DummyHSC", "physical_filter": "v"}, conform=False
+            "pvix",
+            dimensionsNoV,
+            sc,
+            {"instrument": "DummyHSC", "physical_filter": "v"},
         )
         refPvixNotHscDims_fmt = self.factory.getFormatterClass(refPvixNotHscDims)
         self.assertIsFormatter(refPvixNotHscDims_fmt)
@@ -225,7 +238,10 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
         # Check that parameters are stored
         refParam = self.makeDatasetRef(
-            "paramtest", dimensions, sc, {"instrument": "DummyNotHSC", "physical_filter": "v"}, conform=False
+            "paramtest",
+            dimensions,
+            sc,
+            {"instrument": "DummyNotHSC", **constant_dataId},
         )
         lookup, refParam_fmt, kwargs = self.factory.getFormatterClassWithMatch(refParam)
         self.assertIn("writeParameters", kwargs)

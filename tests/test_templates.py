@@ -25,6 +25,7 @@ import os.path
 import unittest
 
 from lsst.daf.butler import (
+    DataCoordinate,
     DatasetRef,
     DatasetType,
     DimensionGraph,
@@ -48,8 +49,13 @@ class TestFileTemplates(unittest.TestCase):
         self, datasetTypeName, dataId=None, storageClassName="DefaultStorageClass", run="run2", conform=True
     ):
         """Make a simple DatasetRef"""
+
         if dataId is None:
             dataId = self.dataId
+        if "physical_filter" in dataId and "band" not in dataId:
+            dataId["band"] = "b"  # Add fake band.
+        dimensions = DimensionGraph(self.universe, names=dataId.keys())
+        dataId = DataCoordinate.standardize(dataId, graph=dimensions)
 
         # Pretend we have a parent if this looks like a composite
         compositeName, componentName = DatasetType.splitDatasetTypeName(datasetTypeName)
@@ -57,7 +63,7 @@ class TestFileTemplates(unittest.TestCase):
 
         datasetType = DatasetType(
             datasetTypeName,
-            DimensionGraph(self.universe, names=dataId.keys()),
+            dimensions,
             StorageClass(storageClassName),
             parentStorageClass=parentStorageClass,
         )

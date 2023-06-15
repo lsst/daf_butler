@@ -36,12 +36,25 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
         self.calexpA = self.makeDatasetRef(
-            "calexp", dimensions, sc, {"instrument": "A", "physical_filter": "u"}, conform=False
+            "calexp",
+            dimensions,
+            sc,
+            {"instrument": "A", "physical_filter": "u", "visit": 3},
         )
 
         dimensions = self.universe.extract(("visit", "detector", "instrument"))
-        self.pviA = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "A", "visit": 1}, conform=False)
-        self.pviB = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "B", "visit": 2}, conform=False)
+        self.pviA = self.makeDatasetRef(
+            "pvi",
+            dimensions,
+            sc,
+            {"instrument": "A", "visit": 1, "detector": 0},
+        )
+        self.pviB = self.makeDatasetRef(
+            "pvi",
+            dimensions,
+            sc,
+            {"instrument": "B", "visit": 2, "detector": 0},
+        )
 
     def testSimpleAccept(self):
         config = ConstraintsConfig({"accept": ["calexp", "ExposureF"]})
