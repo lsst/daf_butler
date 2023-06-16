@@ -46,7 +46,7 @@ try:
 except ImportError:
     boto3 = None
 
-    def mock_s3(cls):
+    def mock_s3(cls):  # type: ignore[no-untyped-def]
         """A no-op decorator in case moto mock_s3 can not be imported."""
         return cls
 
@@ -98,6 +98,8 @@ from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
+    import types
+
     from lsst.daf.butler import Datastore, DimensionGraph, Registry, StorageClass
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -115,7 +117,7 @@ def clean_environment() -> None:
         os.environ.pop(k, None)
 
 
-def makeExampleMetrics():
+def makeExampleMetrics() -> MetricsExample:
     return MetricsExample(
         {"AM1": 5.2, "AM2": 30.6},
         {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
@@ -135,7 +137,7 @@ class ButlerConfigTests(unittest.TestCase):
     """Simple tests for ButlerConfig that are not tested in any other test
     cases."""
 
-    def testSearchPath(self):
+    def testSearchPath(self) -> None:
         configFile = os.path.join(TESTDIR, "config", "basic", "butler.yaml")
         with self.assertLogs("lsst.daf.butler", level="DEBUG") as cm:
             config1 = ButlerConfig(configFile)
@@ -175,7 +177,14 @@ class ButlerPutGetTests(TestCaseMixin):
         cls.storageClassFactory = StorageClassFactory()
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
-    def assertGetComponents(self, butler, datasetRef, components, reference, collections=None) -> None:
+    def assertGetComponents(
+        self,
+        butler: Butler,
+        datasetRef: DatasetRef,
+        components: tuple[str, ...],
+        reference: Any,
+        collections: Any = None,
+    ) -> None:
         datasetType = datasetRef.datasetType
         dataId = datasetRef.dataId
         deferred = butler.getDeferred(datasetRef)
@@ -381,6 +390,7 @@ class ButlerPutGetTests(TestCaseMixin):
         self.assertNotEqual(metric, sliced)
         self.assertEqual(metric.summary, sliced.summary)
         self.assertEqual(metric.output, sliced.output)
+        assert metric.data is not None  # for mypy
         self.assertEqual(metric.data[:stop], sliced.data)
         # getDeferred with parameters
         sliced = butler.getDeferred(ref, parameters={"slice": slice(stop)}).get()
@@ -2314,7 +2324,7 @@ class ChainedDatastoreTransfers(PosixDatastoreTransfers):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
-def setup_module(module) -> None:
+def setup_module(module: types.ModuleType) -> None:
     clean_environment()
 
 

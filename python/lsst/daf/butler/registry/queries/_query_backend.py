@@ -690,7 +690,7 @@ class QueryBackend(Generic[_C]):
         could easily correct this by joining that dimension in directly.  But
         it's also missing the ``{instrument, exposure, physical_filter}``
         relationship we'd get from the ``exposure`` dimension's own relation
-        (``exposure`` implies ``phyiscal_filter``) and the similar
+        (``exposure`` implies ``physical_filter``) and the similar
         ``{instrument, physical_filter, band}`` relationship from the
         ``physical_filter`` dimension relation; we need the relationship logic
         to recognize that those dimensions need to be joined in as well in

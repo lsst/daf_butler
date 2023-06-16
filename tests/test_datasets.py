@@ -41,10 +41,10 @@ from lsst.daf.butler import (
 class DatasetTypeTestCase(unittest.TestCase):
     """Test for DatasetType."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.universe = DimensionUniverse()
 
-    def testConstructor(self):
+    def testConstructor(self) -> None:
         """Test construction preserves values.
 
         Note that construction doesn't check for valid storageClass.
@@ -63,7 +63,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         with self.assertRaises(ValueError, msg="Construct non-component with parent storage class"):
             DatasetType(datasetTypeName, dimensions, storageClass, parentStorageClass="NotAllowed")
 
-    def testConstructor2(self):
+    def testConstructor2(self) -> None:
         """Test construction from StorageClass name."""
         datasetTypeName = "test"
         storageClass = StorageClass("test_constructor2")
@@ -74,7 +74,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetType.storageClass, storageClass)
         self.assertEqual(datasetType.dimensions, dimensions)
 
-    def testNameValidation(self):
+    def testNameValidation(self) -> None:
         """Test that dataset type names only contain certain characters
         in certain positions.
         """
@@ -95,6 +95,7 @@ class DatasetTypeTestCase(unittest.TestCase):
                 full = DatasetType.nameWithComponent(name, suffix)
                 component = composite.makeComponentDatasetType(suffix)
                 self.assertEqual(component.name, full)
+                assert component.parentStorageClass is not None
                 self.assertEqual(component.parentStorageClass.name, "test_StructuredData")
             for suffix in badNames:
                 full = DatasetType.nameWithComponent(name, suffix)
@@ -106,7 +107,7 @@ class DatasetTypeTestCase(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     DatasetType(name, dimensions, storageClass)
 
-    def testEquality(self):
+    def testEquality(self) -> None:
         storageA = StorageClass("test_a")
         storageB = StorageClass("test_b")
         parent = StorageClass("test")
@@ -253,7 +254,7 @@ class DatasetTypeTestCase(unittest.TestCase):
             DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageB"),
         )
 
-    def testCompatibility(self):
+    def testCompatibility(self) -> None:
         storageA = StorageClass("test_a", pytype=set, converters={"list": "builtins.set"})
         storageB = StorageClass("test_b", pytype=list)
         storageC = StorageClass("test_c", pytype=dict)
@@ -270,7 +271,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         dA3 = DatasetType("a", dimensionsA, storageC)
         self.assertFalse(dA.is_compatible_with(dA3))
 
-    def testOverrideStorageClass(self):
+    def testOverrideStorageClass(self) -> None:
         storageA = StorageClass("test_a", pytype=list, converters={"dict": "builtins.list"})
         storageB = StorageClass("test_b", pytype=dict)
         dimensions = self.universe.extract(["instrument"])
@@ -292,7 +293,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(dp_B.storageClass, storageB)
         self.assertEqual(dp_B.parentStorageClass, parent)
 
-    def testJson(self):
+    def testJson(self) -> None:
         storageA = StorageClass("test_a")
         dimensionsA = self.universe.extract(["instrument"])
         self.assertEqual(
@@ -318,7 +319,7 @@ class DatasetTypeTestCase(unittest.TestCase):
             ),
         )
 
-    def testSorting(self):
+    def testSorting(self) -> None:
         """Can we sort a DatasetType"""
         storage = StorageClass("test_a")
         dimensions = self.universe.extract(["instrument"])
@@ -332,9 +333,9 @@ class DatasetTypeTestCase(unittest.TestCase):
 
         # Now with strings
         with self.assertRaises(TypeError):
-            sort = sorted(["z", d_p, "c", d_f, d_a, "d"])
+            sort = sorted(["z", d_p, "c", d_f, d_a, "d"])  # type: ignore [list-item]
 
-    def testHashability(self):
+    def testHashability(self) -> None:
         """Test `DatasetType.__hash__`.
 
         This test is performed by checking that `DatasetType` entries can
@@ -345,15 +346,15 @@ class DatasetTypeTestCase(unittest.TestCase):
         This does not check for uniformity of hashing or the actual values
         of the hash function.
         """
-        types = []
+        types: list[DatasetType] = []
         unique = 0
         storageC = StorageClass("test_c")
         storageD = StorageClass("test_d")
         for name in ["a", "b"]:
             for storageClass in [storageC, storageD]:
-                for dimensions in [("instrument",), ("skymap",)]:
-                    datasetType = DatasetType(name, self.universe.extract(dimensions), storageClass)
-                    datasetTypeCopy = DatasetType(name, self.universe.extract(dimensions), storageClass)
+                for dims in [("instrument",), ("skymap",)]:
+                    datasetType = DatasetType(name, self.universe.extract(dims), storageClass)
+                    datasetTypeCopy = DatasetType(name, self.universe.extract(dims), storageClass)
                     types.extend((datasetType, datasetTypeCopy))
                     unique += 1  # datasetType should always equal its copy
         self.assertEqual(len(set(types)), unique)  # all other combinations are unique
@@ -377,7 +378,7 @@ class DatasetTypeTestCase(unittest.TestCase):
             hash(DatasetType("a", dimensions, "test_c")), hash(DatasetType("a", dimensions, "test_d"))
         )
 
-    def testDeepCopy(self):
+    def testDeepCopy(self) -> None:
         """Test that we can copy a dataset type."""
         storageClass = StorageClass("test_copy")
         datasetTypeName = "test"
@@ -403,7 +404,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         dcopy = copy.deepcopy(componentDatasetType)
         self.assertEqual(dcopy, componentDatasetType)
 
-    def testPickle(self):
+    def testPickle(self) -> None:
         """Test pickle support."""
         storageClass = StorageClass("test_pickle")
         datasetTypeName = "test"
@@ -468,7 +469,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetTypeOut, componentDatasetType)
         self.assertEqual(datasetTypeOut._parentStorageClassName, componentDatasetType._parentStorageClassName)
 
-    def test_composites(self):
+    def test_composites(self) -> None:
         """Test components within composite DatasetTypes."""
         storageClassA = StorageClass("compA")
         storageClassB = StorageClass("compB")
@@ -507,7 +508,7 @@ class DatasetTypeTestCase(unittest.TestCase):
 class DatasetRefTestCase(unittest.TestCase):
     """Test for DatasetRef."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.universe = DimensionUniverse()
         datasetTypeName = "test"
         self.componentStorageClass1 = StorageClass("Component1")
@@ -516,14 +517,16 @@ class DatasetRefTestCase(unittest.TestCase):
             "Parent", components={"a": self.componentStorageClass1, "b": self.componentStorageClass2}
         )
         dimensions = self.universe.extract(("instrument", "visit"))
-        self.dataId = dict(instrument="DummyCam", visit=42)
+        self.dataId = DataCoordinate.standardize(
+            dict(instrument="DummyCam", visit=42), universe=self.universe
+        )
         self.datasetType = DatasetType(datasetTypeName, dimensions, self.parentStorageClass)
 
-    def testConstructor(self):
+    def testConstructor(self) -> None:
         """Test that construction preserves and validates values."""
         # Constructing a ref requires a run.
         with self.assertRaises(TypeError):
-            DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4())
+            DatasetRef(self.datasetType, self.dataId, id=uuid.uuid4())  # type: ignore [call-arg]
 
         # Constructing an unresolved ref with run and/or components should
         # issue a ref with an id.
@@ -536,8 +539,12 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertIsNotNone(ref.id)
 
         # Passing a data ID that is missing dimensions should fail.
+        # Create a full DataCoordinate to ensure that we are testing the
+        # right thing.
+        dimensions = self.universe.extract(("instrument",))
+        dataId = DataCoordinate.standardize(instrument="DummyCam", graph=dimensions)
         with self.assertRaises(KeyError):
-            DatasetRef(self.datasetType, {"instrument": "DummyCam"}, run="run")
+            DatasetRef(self.datasetType, dataId, run="run")
         # Constructing a resolved ref should preserve run as well as everything
         # else.
         id_ = uuid.uuid4()
@@ -551,14 +558,27 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref.run, run)
 
         with self.assertRaises(ValueError):
-            DatasetRef(self.datasetType, self.dataId, run=run, id_generation_mode=42)
+            DatasetRef(self.datasetType, self.dataId, run=run, id_generation_mode=42)  # type: ignore
 
-    def testSorting(self):
+    def testSorting(self) -> None:
         """Can we sort a DatasetRef"""
         # All refs have the same run.
-        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=1), run="run")
-        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="run")
-        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=22), run="run")
+        dimensions = self.universe.extract(("instrument", "visit"))
+        ref1 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=1, graph=dimensions),
+            run="run",
+        )
+        ref2 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=10, graph=dimensions),
+            run="run",
+        )
+        ref3 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=22, graph=dimensions),
+            run="run",
+        )
 
         # Enable detailed diff report
         self.maxDiff = None
@@ -568,11 +588,27 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(sort, [ref1, ref2, ref3], msg=f"Got order: {[r.dataId for r in sort]}")
 
         # Now include different runs.
-        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b")
+        ref1 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=43, graph=dimensions),
+            run="b",
+        )
         self.assertEqual(ref1.run, "b")
-        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b")
-        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=4), run="a")
-        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=104), run="c")
+        ref4 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=10, graph=dimensions),
+            run="b",
+        )
+        ref2 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=4, graph=dimensions),
+            run="a",
+        )
+        ref3 = DatasetRef(
+            self.datasetType,
+            DataCoordinate.standardize(instrument="DummyCam", visit=104, graph=dimensions),
+            run="c",
+        )
 
         # This will sort them on run before visit
         sort = sorted([ref3, ref1, ref2, ref4])
@@ -580,9 +616,9 @@ class DatasetRefTestCase(unittest.TestCase):
 
         # Now with strings
         with self.assertRaises(TypeError):
-            sort = sorted(["z", ref1, "c"])
+            sort = sorted(["z", ref1, "c"])  # type: ignore [list-item]
 
-    def testOverrideStorageClass(self):
+    def testOverrideStorageClass(self) -> None:
         storageA = StorageClass("test_a", pytype=list)
 
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
@@ -593,7 +629,7 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref_new.overrideStorageClass(ref.datasetType.storageClass), ref)
         self.assertTrue(ref.is_compatible_with(ref_new))
         with self.assertRaises(AttributeError):
-            ref_new.is_compatible_with(None)
+            ref_new.is_compatible_with(None)  # type: ignore
 
         # Check different code paths of incompatibility.
         ref_incompat = DatasetRef(ref.datasetType, ref.dataId, run="somerun2", id=ref.id)
@@ -607,17 +643,17 @@ class DatasetRefTestCase(unittest.TestCase):
             # of "object" which is compatible with everything.
             ref_new.overrideStorageClass(incompatible_sc)
 
-    def testPickle(self):
+    def testPickle(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = pickle.dumps(ref)
         self.assertEqual(pickle.loads(s), ref)
 
-    def testJson(self):
+    def testJson(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = ref.to_json()
         self.assertEqual(DatasetRef.from_json(s, universe=self.universe), ref)
 
-    def testFileDataset(self):
+    def testFileDataset(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         file_dataset = FileDataset(path="something.yaml", refs=ref)
         self.assertEqual(file_dataset.refs, [ref])

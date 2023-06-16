@@ -2505,23 +2505,31 @@ class Butler(LimitedButler):
         else:
             ignore = set()
 
-        # Find all the registered instruments
-        instruments = {record.name for record in self.registry.queryDimensionRecords("instrument")}
-
         # For each datasetType that has an instrument dimension, create
         # a DatasetRef for each defined instrument
         datasetRefs = []
 
-        for datasetType in datasetTypes:
-            if "instrument" in datasetType.dimensions:
-                for instrument in instruments:
-                    datasetRef = DatasetRef(
-                        datasetType,
-                        {"instrument": instrument},  # type: ignore
-                        conform=False,
-                        run="validate",
-                    )
-                    datasetRefs.append(datasetRef)
+        # Find all the registered instruments (if "instrument" is in the
+        # universe).
+        if "instrument" in self.dimensions:
+            instruments = {record.name for record in self.registry.queryDimensionRecords("instrument")}
+
+            for datasetType in datasetTypes:
+                if "instrument" in datasetType.dimensions:
+                    # In order to create a conforming dataset ref, create
+                    # fake DataCoordinate values for the non-instrument
+                    # dimensions. The type of the value does not matter here.
+                    dataId = {dim.name: 1 for dim in datasetType.dimensions if dim.name != "instrument"}
+
+                    for instrument in instruments:
+                        datasetRef = DatasetRef(
+                            datasetType,
+                            DataCoordinate.standardize(
+                                dataId, instrument=instrument, graph=datasetType.dimensions
+                            ),
+                            run="validate",
+                        )
+                        datasetRefs.append(datasetRef)
 
         entities: list[DatasetType | DatasetRef] = []
         entities.extend(datasetTypes)
