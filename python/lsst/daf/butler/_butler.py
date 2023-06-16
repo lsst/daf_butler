@@ -2505,24 +2505,26 @@ class Butler(LimitedButler):
         else:
             ignore = set()
 
-        # Find all the registered instruments
-        instruments = {record.name for record in self.registry.queryDimensionRecords("instrument")}
-
         # For each datasetType that has an instrument dimension, create
         # a DatasetRef for each defined instrument
         datasetRefs = []
 
-        dimensions = self.dimensions.extract(("instrument",))
-        for datasetType in datasetTypes:
-            if "instrument" in datasetType.dimensions:
-                for instrument in instruments:
-                    datasetRef = DatasetRef(
-                        datasetType,
-                        DataCoordinate.standardize(instrument=instrument, graph=dimensions),
-                        conform=False,
-                        run="validate",
-                    )
-                    datasetRefs.append(datasetRef)
+        # Find all the registered instruments (if "instrument" is in the
+        # universe).
+        if "instrument" in self.dimensions:
+            instruments = {record.name for record in self.registry.queryDimensionRecords("instrument")}
+
+            dimensions = self.dimensions.extract(("instrument",))
+            for datasetType in datasetTypes:
+                if "instrument" in datasetType.dimensions:
+                    for instrument in instruments:
+                        datasetRef = DatasetRef(
+                            datasetType,
+                            DataCoordinate.standardize(instrument=instrument, graph=dimensions),
+                            conform=False,
+                            run="validate",
+                        )
+                        datasetRefs.append(datasetRef)
 
         entities: list[DatasetType | DatasetRef] = []
         entities.extend(datasetTypes)
