@@ -1,0 +1,3 @@
+Changed all Butler code and tests to use conforming DataIDs.
+Removed the fake ``DataCoordinate`` classes from the datastore tests.
+Improved type annotations in some test files.
