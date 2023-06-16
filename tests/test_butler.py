@@ -365,7 +365,10 @@ class ButlerPutGetTests(TestCaseMixin):
                 # Now remove the dataset completely.
                 butler.pruneDatasets([ref], purge=True, unstore=True)
                 # Lookup with original args should still fail.
-                self.assertFalse(butler.exists(*args, collections=this_run))
+                kwargs = {"collections": this_run}
+                if isinstance(args[0], DatasetRef):
+                    kwargs = {}  # Prevent warning from being issued.
+                self.assertFalse(butler.exists(*args, **kwargs))
                 # get() should still fail.
                 with self.assertRaises(FileNotFoundError):
                     butler.get(ref)
