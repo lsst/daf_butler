@@ -2514,14 +2514,19 @@ class Butler(LimitedButler):
         if "instrument" in self.dimensions:
             instruments = {record.name for record in self.registry.queryDimensionRecords("instrument")}
 
-            dimensions = self.dimensions.extract(("instrument",))
             for datasetType in datasetTypes:
                 if "instrument" in datasetType.dimensions:
+                    # In order to create a conforming dataset ref, create
+                    # fake DataCoordinate values for the non-instrument
+                    # dimensions. The type of the value does not matter here.
+                    dataId = {dim.name: 1 for dim in datasetType.dimensions if dim.name != "instrument"}
+
                     for instrument in instruments:
                         datasetRef = DatasetRef(
                             datasetType,
-                            DataCoordinate.standardize(instrument=instrument, graph=dimensions),
-                            conform=False,
+                            DataCoordinate.standardize(
+                                dataId, instrument=instrument, graph=datasetType.dimensions
+                            ),
                             run="validate",
                         )
                         datasetRefs.append(datasetRef)
