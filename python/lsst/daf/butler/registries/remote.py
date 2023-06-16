@@ -359,8 +359,6 @@ class RemoteRegistry(Registry):
         self,
         datasets: Iterable[DatasetRef],
         expand: bool = True,
-        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-        reuseIds: bool = False,
     ) -> list[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
