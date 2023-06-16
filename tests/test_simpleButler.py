@@ -665,11 +665,7 @@ class SimpleButlerMixedUUIDTestCase(SimpleButlerTestCase):
     loads datasets from YAML file with integer IDs.
     """
 
-    datasetsManager = (
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
-    )
     datasetsImportFile = "datasets.yaml"
-    datasetsIdType = uuid.UUID
 
 
 if __name__ == "__main__":
