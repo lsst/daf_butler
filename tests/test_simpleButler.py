@@ -169,8 +169,6 @@ class SimpleButlerTestCase(unittest.TestCase):
         """Test exporting dimension records and datasets from a repo and then
         importing them all back in again twice.
         """
-        if self.datasetsIdType is not uuid.UUID:
-            self.skipTest("This test can only work for UUIDs")
         # Import data to play with.
         butler1 = self.makeButler(writeable=True)
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
