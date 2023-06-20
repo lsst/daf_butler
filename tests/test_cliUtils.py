@@ -241,22 +241,22 @@ class MWArgumentDecoratorTest(unittest.TestCase):
 class MWOptionDecoratorTest(unittest.TestCase):
     """Tests for the MWOptionDecorator class."""
 
-    test_option = MWOptionDecorator("-t", "--test", multiple=True)
+    _test_option = MWOptionDecorator("-t", "--test", multiple=True)
 
     def testGetName(self):
         """Test getting the option name from the MWOptionDecorator."""
-        self.assertEqual(self.test_option.name(), "test")
+        self.assertEqual(self._test_option.name(), "test")
 
     def testGetOpts(self):
         """Test getting the option flags from the MWOptionDecorator."""
-        self.assertEqual(self.test_option.opts(), ["-t", "--test"])
+        self.assertEqual(self._test_option.opts(), ["-t", "--test"])
 
     def testUse(self):
         """Test using the MWOptionDecorator with a command."""
         mock = MagicMock()
 
         @click.command()
-        @self.test_option()
+        @self._test_option()
         def cli(test):
             mock(test)
 
@@ -271,7 +271,7 @@ class MWOptionDecoratorTest(unittest.TestCase):
         mock = MagicMock()
 
         @click.command()
-        @self.test_option(multiple=False)
+        @self._test_option(multiple=False)
         def cli(test):
             mock(test)
 

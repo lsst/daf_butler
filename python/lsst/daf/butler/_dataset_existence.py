@@ -91,7 +91,7 @@ class DatasetExistence(Flag):
 
         Returns
         -------
-        exists : `bool
+        exists : `bool`
             Evaluates to `True` if the flags evaluate to either ``KNOWN``
             or ``VERIFIED``.
         """
