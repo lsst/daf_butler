@@ -415,7 +415,13 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
 
         for datasetTypeExpression in ensure_iterable(name):
-            datasetTypes = list(self.queryDatasetTypes(datasetTypeExpression))
+            # Catch any warnings from the caller specifying a component
+            # dataset type. This will result in an error later but the
+            # warning could be confusing when the caller is not querying
+            # anything.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=FutureWarning)
+                datasetTypes = list(self.queryDatasetTypes(datasetTypeExpression))
             if not datasetTypes:
                 _LOG.info("Dataset type %r not defined", datasetTypeExpression)
             else:
