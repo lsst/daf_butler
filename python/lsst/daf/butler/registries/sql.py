@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import sqlalchemy
 from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
+from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
@@ -1109,6 +1110,7 @@ class SqlRegistry(Registry):
                 warnings.warn(
                     f"Dataset type(s) {missing} are not registered; this will be an error after v26.",
                     FutureWarning,
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                 )
             doomed_by.extend(f"Dataset type {name} is not registered." for name in missing)
         elif collections:
