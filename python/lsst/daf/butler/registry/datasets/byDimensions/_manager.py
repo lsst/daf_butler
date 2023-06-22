@@ -8,6 +8,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+from lsst.utils.introspection import find_outside_stacklevel
 
 from ....core import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType, DimensionUniverse, ddl
 from ..._collection_summary import CollectionSummary
@@ -371,7 +372,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         for name, dataset_type in wildcard.values.items():
             parent_name, component_name = DatasetType.splitDatasetTypeName(name)
             if component_name is not None and components_deprecated:
-                warnings.warn(deprecation_message, FutureWarning)
+                warnings.warn(
+                    deprecation_message, FutureWarning, stacklevel=find_outside_stacklevel("lsst.daf.butler")
+                )
             if (found_storage := self.find(parent_name)) is not None:
                 found_parent = found_storage.datasetType
                 if component_name is not None:
@@ -412,7 +415,11 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                             and not already_warned
                             and components_deprecated
                         ):
-                            warnings.warn(deprecation_message, FutureWarning)
+                            warnings.warn(
+                                deprecation_message,
+                                FutureWarning,
+                                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+                            )
                             already_warned = True
                     except KeyError as err:
                         _LOG.warning(
@@ -426,6 +433,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 warnings.warn(
                     "Passing wildcard patterns here is deprecated and will be prohibited after v26.",
                     FutureWarning,
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                 )
             for storage in self._byName.values():
                 if any(p.fullmatch(storage.datasetType.name) for p in wildcard.patterns):
@@ -451,7 +459,11 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                         ):
                             result[storage.datasetType].add(component_name)
                             if not already_warned and components_deprecated:
-                                warnings.warn(deprecation_message, FutureWarning)
+                                warnings.warn(
+                                    deprecation_message,
+                                    FutureWarning,
+                                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+                                )
                                 already_warned = True
         return {k: list(v) for k, v in result.items()}
 

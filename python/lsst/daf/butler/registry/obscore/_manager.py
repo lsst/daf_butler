@@ -35,6 +35,7 @@ import sqlalchemy
 from lsst.daf.butler import Config, DataCoordinate, DatasetRef, DimensionRecordColumnTag, DimensionUniverse
 from lsst.daf.relation import Join
 from lsst.sphgeom import Region
+from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import chunk_iterable
 
 from ..interfaces import ObsCoreTableManager, VersionTuple
@@ -313,6 +314,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
                 warnings.warn(
                     f"Failed to convert region for exposure={exposure} detector={detector}: {exc}",
                     category=RegionTypeWarning,
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                 )
                 continue
 

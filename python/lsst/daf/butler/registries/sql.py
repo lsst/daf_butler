@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import sqlalchemy
 from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
+from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
@@ -415,7 +416,13 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
 
         for datasetTypeExpression in ensure_iterable(name):
-            datasetTypes = list(self.queryDatasetTypes(datasetTypeExpression))
+            # Catch any warnings from the caller specifying a component
+            # dataset type. This will result in an error later but the
+            # warning could be confusing when the caller is not querying
+            # anything.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=FutureWarning)
+                datasetTypes = list(self.queryDatasetTypes(datasetTypeExpression))
             if not datasetTypes:
                 _LOG.info("Dataset type %r not defined", datasetTypeExpression)
             else:
@@ -1103,6 +1110,7 @@ class SqlRegistry(Registry):
                 warnings.warn(
                     f"Dataset type(s) {missing} are not registered; this will be an error after v26.",
                     FutureWarning,
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                 )
             doomed_by.extend(f"Dataset type {name} is not registered." for name in missing)
         elif collections:
