@@ -46,8 +46,8 @@ jobs:
         run: pip install --no-deps -v .
 
       - name: Install documenteer
-        run: pip install 'documenteer[pipelines]<0.8'
+        run: pip install 'documenteer[pipelines] @ git+https://github.com/lsst-sqre/documenteer.git@tickets/DM-37783'
 
       - name: Build documentation
         working-directory: ./doc
-        run: package-docs build
+        run: package-docs build -W -n
