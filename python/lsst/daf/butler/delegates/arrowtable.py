@@ -34,6 +34,8 @@ __all__ = ["ArrowTableDelegate"]
 
 
 class ArrowTableDelegate(StorageClassDelegate):
+    """Delegate that understands the ``ArrowTable`` storage class."""
+
     _datasetType = pa.Table
 
     def getComponent(self, composite: pa.Table, componentName: str) -> Any:

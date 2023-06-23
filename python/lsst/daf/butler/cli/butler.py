@@ -326,6 +326,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
 
 
 class ButlerCLI(LoaderCLI):
+    """Specialized command loader implementing the ``butler`` command."""
+
     localCmdPkg = "lsst.daf.butler.cli.cmd"
 
     pluginEnvVar = "DAF_BUTLER_PLUGINS"
@@ -364,11 +366,15 @@ class ButlerCLI(LoaderCLI):
 @log_label_option()
 @ClickProgressHandler.option
 def cli(log_level: str, long_log: bool, log_file: str, log_tty: bool, log_label: str, progress: bool) -> None:
-    # log_level is handled by get_command and list_commands, and is called in
-    # one of those functions before this is called. long_log is handled by
-    # setup_logging.
+    """Command line interface for butler.
+
+    log_level is handled by get_command and list_commands, and is called in
+    one of those functions before this is called. long_log is handled by
+    setup_logging.
+    """
     pass
 
 
 def main() -> click.Command:
+    """Return main entry point for command-line."""
     return cli()

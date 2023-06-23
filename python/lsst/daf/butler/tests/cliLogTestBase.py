@@ -75,6 +75,7 @@ def command_log_settings_test(
     expected_lsstbutler_level: str,
     expected_lsstx_level: str,
 ) -> None:
+    """Test command-line log settings."""
     LogLevel = namedtuple("LogLevel", ("expected", "actual", "name"))
 
     logLevels = [
