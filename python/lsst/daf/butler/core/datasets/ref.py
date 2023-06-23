@@ -35,7 +35,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.classes import immutable
-from pydantic import BaseModel, ConstrainedInt, StrictStr, validator
+from pydantic import BaseModel, StrictStr, validator
 
 from ..configSupport import LookupKey
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
@@ -54,11 +54,6 @@ class AmbiguousDatasetError(Exception):
     This happens when the `DatasetRef` has no ID or run but the requested
     operation requires one of them.
     """
-
-
-class PositiveInt(ConstrainedInt):
-    ge = 0
-    strict = True
 
 
 class DatasetIdGenEnum(enum.Enum):
