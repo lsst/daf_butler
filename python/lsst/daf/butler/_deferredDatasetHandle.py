@@ -44,7 +44,7 @@ class DeferredDatasetHandle:
         parameters: dict | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> Any:
-        """Retrieves the dataset pointed to by this handle.
+        """Retrieve the dataset pointed to by this handle.
 
         This handle may be used multiple times, possibly with different
         parameters.

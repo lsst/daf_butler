@@ -1387,7 +1387,9 @@ class FileDatastore(GenericBaseDatastore):
         all_required: bool,
         artifact_existence: dict[ResourcePath, bool] | None = None,
     ) -> dict[DatasetRef, bool]:
-        """Helper function for mexists that checks the given records.
+        """Check given records for existence.
+
+        Helper function for `mexists()`.
 
         Parameters
         ----------

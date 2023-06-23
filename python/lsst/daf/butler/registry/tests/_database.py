@@ -751,7 +751,7 @@ class DatabaseTests(ABC):
             return names1, names2
 
         async def side2() -> None:
-            """The other side of the concurrent locking test.
+            """Other side of the concurrent locking test.
 
             This side just waits a bit and then tries to insert a row into the
             table that the other side is trying to lock.  Hopefully that

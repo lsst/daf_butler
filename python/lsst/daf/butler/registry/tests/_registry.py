@@ -2443,9 +2443,7 @@ class RegistryTests(ABC):
         }
 
         def query(where):
-            """Helper function that queries for visit data IDs and returns
-            results as a sorted, deduplicated list of visit IDs.
-            """
+            """Return results as a sorted, deduplicated list of visit IDs."""
             return sorted(
                 {
                     dataId["visit"]

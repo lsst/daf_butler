@@ -304,7 +304,9 @@ class QuantumBackedButler(LimitedButler):
         search_paths: list[str] | None = None,
         dataset_types: Mapping[str, DatasetType] | None = None,
     ) -> QuantumBackedButler:
-        """Internal method with common implementation used by `initialize` and
+        """Initialize quantum-backed butler.
+
+        Internal method with common implementation used by `initialize` and
         `for_output`.
 
         Parameters

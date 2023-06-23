@@ -39,9 +39,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     @staticmethod
     def _queryDataIds(repo, dimensions=(), collections=(), datasets=None, where=""):
-        """Helper to populate the call to script.queryDataIds with default
-        values.
-        """
+        """Call script.queryDataIds, allowing for default values."""
         return script.queryDataIds(
             repo=repo,
             dimensions=dimensions,

@@ -50,7 +50,7 @@ class ClickProgressHandler(ProgressHandler):
 
     @classmethod
     def callback(cls, ctx: click.Context, params: click.Parameter, value: Any) -> None:
-        """A `click` callback that installs this handler as the global handler
+        """`click` callback that installs this handler as the global handler
         for progress bars.
 
         Should usually be called only by the `option` method.
@@ -62,7 +62,7 @@ class ClickProgressHandler(ProgressHandler):
 
     @classmethod
     def option(cls, cmd: Any) -> Any:
-        """A `click` command decorator that adds a ``--progress`` option
+        """`click` command decorator that adds a ``--progress`` option
         that installs a default-constructed instance of this progress handler.
         """
         return click.option(

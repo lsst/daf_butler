@@ -126,8 +126,10 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         )
 
     def list_commands(self, ctx: click.Context) -> list[str]:
-        """Used by Click to get all the commands that can be called by the
+        """Gget all the commands that can be called by the
         butler command, it is used to generate the --help output.
+
+        Used by Click.
 
         Parameters
         ----------
@@ -145,7 +147,9 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         return sorted(commands)
 
     def get_command(self, ctx: click.Context, name: str) -> click.Command | None:
-        """Used by Click to get a single command for execution.
+        """Get a single command for execution.
+
+        Used by Click.
 
         Parameters
         ----------

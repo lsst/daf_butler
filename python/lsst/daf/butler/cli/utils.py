@@ -174,7 +174,7 @@ def clickResultMsg(result: click.testing.Result) -> str:
 
 @contextmanager
 def command_test_env(runner: click.testing.CliRunner, commandModule: str, commandName: str) -> Iterator[None]:
-    """A context manager that creates (and then cleans up) an environment that
+    """Context manager that creates (and then cleans up) an environment that
     provides a CLI plugin command with the given name.
 
     Parameters
@@ -604,7 +604,9 @@ class MWPath(click.Path):
         )
 
     def convert(self, value: str, param: click.Parameter | None, ctx: click.Context | None) -> Any:
-        """Called by click.ParamType to "convert values through types".
+        """Convert values through types.
+
+        Called by `click.ParamType` to "convert values through types".
         `click.Path` uses this step to verify Path conditions.
         """
         if self.mustNotExist and os.path.exists(value):
@@ -616,14 +618,16 @@ class MWOption(click.Option):
     """Overrides click.Option with desired behaviors."""
 
     def make_metavar(self) -> str:
-        """Overrides `click.Option.make_metavar`. Makes the metavar for the
-        help menu. Adds a space and an elipsis after the metavar name if
+        """Make the metavar for the help menu.
+
+        Overrides `click.Option.make_metavar`.
+        Adds a space and an elipsis after the metavar name if
         the option accepts multiple inputs, otherwise defers to the base
         implementation.
 
-        By default click does not add an elipsis when multiple is True and
-        nargs is 1. And when nargs does not equal 1 click adds an elipsis
-        without a space between the metavar and the elipsis, but we prefer a
+        By default click does not add an ellipsis when multiple is True and
+        nargs is 1. And when nargs does not equal 1 click adds an ellipsis
+        without a space between the metavar and the ellipsis, but we prefer a
         space between.
 
         Does not get called for some option types (e.g. flag) so metavar
@@ -642,12 +646,14 @@ class MWArgument(click.Argument):
     """Overrides click.Argument with desired behaviors."""
 
     def make_metavar(self) -> str:
-        """Overrides `click.Option.make_metavar`. Makes the metavar for the
-        help menu. Always adds a space and an elipsis (' ...') after the
+        """Make the metavar for the help menu.
+
+        Overrides `click.Option.make_metavar`.
+        Always adds a space and an ellipsis (' ...') after the
         metavar name if the option accepts multiple inputs.
 
-        By default click adds an elipsis without a space between the metavar
-        and the elipsis, but we prefer a space between.
+        By default click adds an ellipsis without a space between the metavar
+        and the ellipsis, but we prefer a space between.
 
         Returns
         -------
@@ -961,8 +967,7 @@ class MWCtxObj:
 
 
 def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
-    """Click callback that reads additional values from the supplied
-    YAML file.
+    """Read additional values from the supplied YAML file.
 
     Parameters
     ----------
@@ -1097,8 +1102,10 @@ def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list
 
 
 def catch_and_exit(func: Callable) -> Callable:
-    """Decorator which catches all exceptions, prints an exception traceback
+    """Catch all exceptions, prints an exception traceback
     and signals click to exit.
+
+    Use as decorator.
     """
 
     @wraps(func)

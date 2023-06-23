@@ -160,7 +160,7 @@ TRACT_DATA = {
 
 
 def main():
-    """Main entry point for the script."""
+    """Run script."""
     parser = argparse.ArgumentParser(description="Create and examine spatial-topology registry test data.")
     default_filename = os.path.join(os.path.dirname(__file__), "spatial.yaml")
     parser.add_argument(

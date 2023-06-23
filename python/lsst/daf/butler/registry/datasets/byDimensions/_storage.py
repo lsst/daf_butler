@@ -419,10 +419,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         collections: Sequence[tuple[CollectionRecord, int]],
         context: SqlQueryContext,
     ) -> Relation:
-        """Helper method for `make_relation`.
-
-        This handles adding columns and WHERE terms that are not specific to
+        """Handle adding columns and WHERE terms that are not specific to
         either the tags or calibs tables.
+
+        Helper method for `make_relation`.
 
         Parameters
         ----------

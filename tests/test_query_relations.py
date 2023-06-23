@@ -95,7 +95,7 @@ class TestQueryRelationsTests(unittest.TestCase):
         | queries.DimensionRecordQueryResults
         | queries.ParentDatasetQueryResults,
     ) -> None:
-        """A specialized test assert that checks that one or more registry
+        """Assert that checks that one or more registry
         queries have relation trees that match the given string.
 
         Parameters

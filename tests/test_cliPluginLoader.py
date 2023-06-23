@@ -41,7 +41,7 @@ def command_test():
 
 @contextmanager
 def duplicate_command_test_env(runner):
-    """A context manager that creates (and then cleans up) an environment that
+    """Context manager that creates (and then cleans up) an environment that
     declares a plugin command named 'create', which will conflict with the
     daf_butler 'create' command.
 

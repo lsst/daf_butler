@@ -55,7 +55,7 @@ class ConnectionStringFactory:
 
     @classmethod
     def fromConfig(cls, registryConfig: RegistryConfig) -> url.URL:
-        """Parses the `db`, and, if they exist, username, password, host, port
+        """Parse the `db`, and, if they exist, username, password, host, port
         and database keys from the given config.
 
         If no  username and password are found in the connection string, or in

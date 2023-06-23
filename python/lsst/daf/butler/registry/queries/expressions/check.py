@@ -88,7 +88,7 @@ class InspectionSummary:
     """
 
     def make_column_tag_set(self, dataset_type_name: str | None) -> set[ColumnTag]:
-        """Transforms the columns captured here into a set of `ColumnTag`
+        """Transform the columns captured here into a set of `ColumnTag`
         objects.
 
         Parameters

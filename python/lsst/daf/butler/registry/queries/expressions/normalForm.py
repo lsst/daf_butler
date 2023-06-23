@@ -1096,7 +1096,8 @@ class TreeReconstructionVisitor(NormalFormVisitor[Node, Node, Node]):
         return node
 
     def _visitSequence(self, branches: Sequence[Node], operator: LogicalBinaryOperator) -> Node:
-        """Common recursive implementation for `visitInner` and `visitOuter`.
+        """Implement common recursive implementation for `visitInner` and
+        `visitOuter`.
 
         Parameters
         ----------

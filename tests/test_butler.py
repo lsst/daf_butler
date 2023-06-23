@@ -47,7 +47,7 @@ except ImportError:
     boto3 = None
 
     def mock_s3(cls):  # type: ignore[no-untyped-def]
-        """A no-op decorator in case moto mock_s3 can not be imported."""
+        """No-op decorator in case moto mock_s3 can not be imported."""
         return cls
 
 
@@ -1223,7 +1223,7 @@ class FileDatastoreButlerTests(ButlerTests):
     """
 
     def checkFileExists(self, root: str | ResourcePath, relpath: str | ResourcePath) -> bool:
-        """Checks if file exists at a given path (relative to root).
+        """Check if file exists at a given path (relative to root).
 
         Test testPutTemplates verifies actual physical existance of the files
         in the requested location.
@@ -1315,8 +1315,10 @@ class FileDatastoreButlerTests(ButlerTests):
         self.runImportExportTest(storageClass)
 
     def runImportExportTest(self, storageClass: StorageClass) -> None:
-        """This test does an export to a temp directory and an import back
-        into a new temp directory repo. It does not assume a posix datastore
+        """Test exporting and importing.
+
+        This test does an export to a temp directory and an import back
+        into a new temp directory repo. It does not assume a posix datastore.
         """
         exportButler = self.runPutGetTest(storageClass, "test_metric")
 
@@ -1933,7 +1935,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """The mocked s3 interface from moto."""
 
     def genRoot(self) -> str:
-        """Returns a random string of len 20 to serve as a root
+        """Return a random string of len 20 to serve as a root
         name for the temporary bucket repo.
 
         This is equivalent to tempfile.mkdtemp as this is what self.root

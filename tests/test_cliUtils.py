@@ -49,7 +49,7 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
         @repo_argument(help="repo help text")
         @directory_argument(help="directory help text")
         def cli():
-            """The cli help message."""
+            """Return the cli help message."""
             pass
 
         self.runTest(cli)
@@ -61,16 +61,13 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
         @repo_argument(help="repo help text")
         @directory_argument(help="directory help text")
         def cli():
-            """The cli
-            help
-            message.
-            """
+            """Return the cli help message."""
             pass
 
         self.runTest(cli)
 
     def runTest(self, cli):
-        """Tests `utils.addArgumentHelp` and its use in repo_argument and
+        """Test `utils.addArgumentHelp` and its use in repo_argument and
         directory_argument; verifies that the argument help gets added to the
         command function help, and that it's added in the correct order. See
         addArgumentHelp for more details.

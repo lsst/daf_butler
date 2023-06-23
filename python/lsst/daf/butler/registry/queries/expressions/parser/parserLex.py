@@ -79,7 +79,7 @@ class ParserLex:
 
     @classmethod
     def make_lexer(cls, reflags=0, **kwargs):
-        """Factory for lexers.
+        """Return lexer.
 
         Returns
         -------

@@ -186,7 +186,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertFalse(c)
 
     def testDict(self):
-        """Test toDict()"""
+        """Test toDict()."""
         c1 = Config({"a": {"b": 1}, "c": 2})
         self.assertIsInstance(c1["a"], Config)
         d1 = c1.toDict()
@@ -198,7 +198,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertNotEqual(d1["a"], c1["a"])
 
     def assertSplit(self, answer, *args):
-        """Helper function to compare string splitting"""
+        """Assert that string splitting was correct."""
         for s in (answer, *args):
             split = Config._splitIntoKeys(s)
             self.assertEqual(split, answer)

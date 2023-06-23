@@ -1409,7 +1409,7 @@ class Butler(LimitedButler):
         run: str | None = None,
         **kwargs: Any,
     ) -> DatasetRefURIs:
-        """Returns the URIs associated with the dataset.
+        """Return the URIs associated with the dataset.
 
         Parameters
         ----------

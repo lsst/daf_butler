@@ -262,7 +262,7 @@ class FileFormatter(Formatter):
         return data
 
     def fromBytes(self, serializedDataset: bytes, component: str | None = None) -> Any:
-        """Reads serialized data into a Dataset or its component.
+        """Read serialized data into a Dataset or its component.
 
         Parameters
         ----------

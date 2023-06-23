@@ -238,7 +238,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 raise TypeError(f"Unexpected dimension element type for spatial join: {other}.")
 
     def _on_governor_insert(self, record: DimensionRecord) -> None:
-        """A `GovernorDimensionRecordStorage.registerInsertionListener`
+        """`GovernorDimensionRecordStorage.registerInsertionListener`
         callback for this element.
 
         Parameters
