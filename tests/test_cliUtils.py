@@ -51,7 +51,7 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
         @repo_argument(help="repo help text")
         @directory_argument(help="directory help text")
         def cli():
-            """Return the cli help message."""
+            """The cli help message."""  # noqa: D401
             pass
 
         self.runTest(cli)
@@ -63,7 +63,7 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
         @repo_argument(help="repo help text")
         @directory_argument(help="directory help text")
         def cli():
-            """Return the cli help message."""
+            """The cli help message."""  # noqa: D401
             pass
 
         self.runTest(cli)
@@ -199,9 +199,9 @@ class MWArgumentDecoratorTest(unittest.TestCase):
         arguments are declared.
 
         Verify that MWArgument adds " ..." after the option metavar when
-        `nargs` != 1. The default behavior of click is to add elipsis when
-        nargs does not equal 1, but it does not put a space before the elipsis
-        and we prefer a space between the metavar and the elipsis.
+        `nargs` != 1. The default behavior of click is to add ellipsis when
+        nargs does not equal 1, but it does not put a space before the ellipsis
+        and we prefer a space between the metavar and the ellipsis.
         """
         # nargs can be -1 for any number of args, or >= 1 for a specified
         # number of arguments.
