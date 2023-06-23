@@ -74,8 +74,8 @@ class TimeConverter(metaclass=Singleton):
         time_nsec : `int`
             Nanoseconds since epoch.
 
-        Note
-        ----
+        Notes
+        -----
         Only the limited range of input times is supported by this method as it
         is defined useful in the context of Butler and Registry. If input time
         is earlier `min_time` then this method returns `min_nsec`. If input
@@ -123,8 +123,8 @@ class TimeConverter(metaclass=Singleton):
         astropy_time : `astropy.time.Time`
             Time to be converted.
 
-        Note
-        ----
+        Notes
+        -----
         Usually the input time for this method is the number returned from
         `astropy_to_nsec` which has a limited range. This method does not check
         that the number falls in the supported range and can produce output
