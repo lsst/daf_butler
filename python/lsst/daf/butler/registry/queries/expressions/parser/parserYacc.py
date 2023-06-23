@@ -328,7 +328,7 @@ class ParserYacc:
         else:
             p[0] = p[1]
 
-    def p_identifier(self, p):  # noqa: D401, D403
+    def p_identifier(self, p):
         """identifier : SIMPLE_IDENTIFIER
         | QUALIFIED_IDENTIFIER
         """

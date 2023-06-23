@@ -712,11 +712,11 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     def __getitem__(self, index: int) -> DataCoordinate:
         pass
 
-    @overload  # noqa: F811 (FIXME: remove for py 3.8+)
-    def __getitem__(self, index: slice) -> DataCoordinateSequence:  # noqa: F811
+    @overload
+    def __getitem__(self, index: slice) -> DataCoordinateSequence:
         pass
 
-    def __getitem__(self, index: Any) -> Any:  # noqa: F811
+    def __getitem__(self, index: Any) -> Any:
         r = self._dataIds[index]
         if isinstance(index, slice):
             return DataCoordinateSequence(

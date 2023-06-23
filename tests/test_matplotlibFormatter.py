@@ -30,7 +30,7 @@ from random import Random
 try:
     import matplotlib
 
-    matplotlib.use("Agg")  # noqa:E402
+    matplotlib.use("Agg")
     from matplotlib import pyplot
 except ImportError:
     pyplot = None
