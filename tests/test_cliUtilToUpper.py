@@ -31,10 +31,13 @@ from lsst.daf.butler.cli.utils import LogCliRunner, to_upper
 @click.command()
 @click.option("--value", callback=to_upper)
 def cli(value):
+    """Run mock command."""
     click.echo(value)
 
 
 class ToUpperTestCase(unittest.TestCase):
+    """Test the to_upper function."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 

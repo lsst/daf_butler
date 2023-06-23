@@ -28,6 +28,8 @@ TESTDIR = os.path.dirname(__file__)
 
 
 class TestCompositesConfig(unittest.TestCase):
+    """Test composites configuration."""
+
     @classmethod
     def setUpClass(cls):
         cls.configFile = os.path.join(TESTDIR, "config", "basic", "composites.yaml")

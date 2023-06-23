@@ -38,6 +38,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 @contextmanager
 def removeWritePermission(filename):
+    """Remove the write permission on a file."""
     mode = os.stat(filename).st_mode
     try:
         os.chmod(filename, stat.S_IREAD)

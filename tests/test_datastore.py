@@ -73,6 +73,7 @@ TESTDIR = os.path.dirname(__file__)
 
 
 def makeExampleMetrics(use_none: bool = False) -> MetricsExample:
+    """Make example dataset that can be stored in butler."""
     if use_none:
         array = None
     else:
@@ -1097,6 +1098,8 @@ class TrashDatastoreTestCase(PosixDatastoreTestCase):
 
 
 class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
+    """Test datastore cleans up on failure."""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def setUp(self) -> None:
@@ -1773,6 +1776,8 @@ class DatasetRefURIsTestCase(unittest.TestCase):
 
 
 class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
+    """Test the StoredFileInfo class."""
+
     storageClassFactory = StorageClassFactory()
 
     def test_StoredFileInfo(self) -> None:

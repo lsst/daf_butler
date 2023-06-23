@@ -61,6 +61,8 @@ def _startServer(root):
 
 @unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
+    """Test a postgres Registry."""
+
     @classmethod
     def setUpClass(cls):
         cls.root = makeTestTempDir(TESTDIR)

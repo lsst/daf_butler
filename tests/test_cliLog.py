@@ -49,6 +49,8 @@ class CliLogTestCase(CliLogTestBase, unittest.TestCase):
 
 
 class ConvertPyLogLevelTestCase(unittest.TestCase):
+    """Test python command-line log levels."""
+
     def test_convertToPyLogLevel(self):
         self.assertEqual(logging.CRITICAL, CliLog._getPyLogLevel("CRITICAL"))
         self.assertEqual(logging.ERROR, CliLog._getPyLogLevel("ERROR"))

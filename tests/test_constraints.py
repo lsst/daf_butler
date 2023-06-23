@@ -28,6 +28,8 @@ from lsst.daf.butler.tests import DatasetTestHelper
 
 
 class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
+    """Test constraints system."""
+
     def setUp(self):
         self.id = 0
 

@@ -42,6 +42,8 @@ from lsst.daf.butler.cli.utils import (
 
 
 class ArgumentHelpGeneratorTestCase(unittest.TestCase):
+    """Test the help system."""
+
     def testHelp(self):
         @click.command()
         # Use custom help in the arguments so that any changes to default help
@@ -89,6 +91,8 @@ Options:
 
 
 class UnwrapStringTestCase(unittest.TestCase):
+    """Test string unwrapping."""
+
     def test_leadingNewline(self):
         testStr = """
             foo bar
@@ -132,14 +136,16 @@ class UnwrapStringTestCase(unittest.TestCase):
 
 
 class MWOptionTest(unittest.TestCase):
+    """Test MWOption."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 
-    def test_addElipsisToMultiple(self):
-        """Verify that MWOption adds elipsis to the option metavar when
+    def test_addEllipsisToMultiple(self):
+        """Verify that MWOption adds ellipsis to the option metavar when
         `multiple=True`
 
-        The default behavior of click is to not add elipsis to options that
+        The default behavior of click is to not add ellipsis to options that
         have `multiple=True`.
         """
 
@@ -154,13 +160,13 @@ class MWOptionTest(unittest.TestCase):
   --things TEXT ..."""
         self.assertIn(expectedOutput, result.output)
 
-    def test_addElipsisToNargs(self):
+    def test_addEllipsisToNargs(self):
         """Verify that MWOption adds " ..." after the option metavar when
         `nargs` is set to more than 1 and less than 1.
 
-        The default behavior of click is to add elipsis when nargs does not
-        equal 1, but it does not put a space before the elipsis and we prefer
-        a space between the metavar and the elipsis.
+        The default behavior of click is to add ellipsis when nargs does not
+        equal 1, but it does not put a space before the ellipsis and we prefer
+        a space between the metavar and the ellipsis.
         """
         for numberOfArgs in (0, 1, 2):  # nargs must be >= 0 for an option
 
@@ -330,6 +336,8 @@ Section break between metasyntactic variables.
 
 
 class MWPathTest(unittest.TestCase):
+    """Test MWPath."""
+
     def getCmd(self, exists):
         @click.command()
         @click.option("--name", type=MWPath(exists=exists))
@@ -377,6 +385,8 @@ class MWPathTest(unittest.TestCase):
 
 
 class MWCommandTest(unittest.TestCase):
+    """Test MWCommand."""
+
     def setUp(self):
         self.runner = click.testing.CliRunner()
         self.ctx = None

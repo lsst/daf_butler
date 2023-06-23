@@ -34,8 +34,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 @contextlib.contextmanager
 def modified_environment(**environ):
-    """
-    Temporarily set environment variables.
+    """Temporarily set environment variables.
 
     >>> with modified_environment(DAF_BUTLER_CONFIG_PATHS="/somewhere"):
     ...    os.environ["DAF_BUTLER_CONFIG_PATHS"] == "/somewhere"
@@ -59,43 +58,61 @@ def modified_environment(**environ):
 
 
 class ExampleWithConfigFileReference:
+    """Example class referenced from config file."""
+
     defaultConfigFile = "viacls.yaml"
 
 
 class ExampleWithConfigFileReference2:
+    """Example class referenced from config file."""
+
     defaultConfigFile = "viacls2.yaml"
 
 
 class ConfigTest(ConfigSubset):
+    """Default config class for testing."""
+
     component = "comp"
     requiredKeys = ("item1", "item2")
     defaultConfigFile = "testconfig.yaml"
 
 
 class ConfigTestPathlib(ConfigTest):
+    """Config with default using `pathlib.Path`."""
+
     defaultConfigFile = Path("testconfig.yaml")
 
 
 class ConfigTestEmpty(ConfigTest):
+    """Config pointing to empty file."""
+
     defaultConfigFile = "testconfig_empty.yaml"
     requiredKeys = ()
 
 
 class ConfigTestButlerDir(ConfigTest):
+    """Simple config."""
+
     defaultConfigFile = "testConfigs/testconfig.yaml"
 
 
 class ConfigTestNoDefaults(ConfigTest):
+    """Test config with no defaults."""
+
     defaultConfigFile = None
     requiredKeys = ()
 
 
 class ConfigTestAbsPath(ConfigTest):
+    """Test config with absolute paths."""
+
     defaultConfigFile = None
     requiredKeys = ()
 
 
 class ConfigTestCls(ConfigTest):
+    """Test config."""
+
     defaultConfigFile = "withcls.yaml"
 
 
@@ -668,6 +685,8 @@ resource:
 
 
 class FileWriteConfigTestCase(unittest.TestCase):
+    """Test writing of configs."""
+
     def setUp(self):
         self.tmpdir = makeTestTempDir(TESTDIR)
 

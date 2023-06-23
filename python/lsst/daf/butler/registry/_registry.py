@@ -1666,7 +1666,7 @@ class Registry(ABC):
 
     @property
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:
-        """ObsCore manager instance for this registry
+        """The ObsCore manager instance for this registry
         (`~.interfaces.ObsCoreTableManager`
         or `None`).
 

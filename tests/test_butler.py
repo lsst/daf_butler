@@ -118,6 +118,7 @@ def clean_environment() -> None:
 
 
 def makeExampleMetrics() -> MetricsExample:
+    """Return example dataset suitable for tests."""
     return MetricsExample(
         {"AM1": 5.2, "AM2": 30.6},
         {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
@@ -2325,10 +2326,13 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
 
 class ChainedDatastoreTransfers(PosixDatastoreTransfers):
+    """Test transfers using a chained datastore."""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
 def setup_module(module: types.ModuleType) -> None:
+    """Set up the module for pytest."""
     clean_environment()
 
 

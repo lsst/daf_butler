@@ -53,6 +53,8 @@ class PythonType3:
 
 
 class NotCopyable:
+    """Class with deep copying disabled."""
+
     def __deepcopy__(self, memo=None):
         raise RuntimeError("Can not be copied.")
 

@@ -26,6 +26,8 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class CreateTest(CliCmdTestBase, unittest.TestCase):
+    """Test the butler create command-line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.createRepo"
 
     @staticmethod

@@ -35,6 +35,8 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
+    """Test the query-data-ids command-line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDataIds"
 
     @staticmethod

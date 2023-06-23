@@ -30,6 +30,8 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class ImportTestCase(CliCmdTestBase, unittest.TestCase):
+    """Test the butler import command-line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
 
     @staticmethod

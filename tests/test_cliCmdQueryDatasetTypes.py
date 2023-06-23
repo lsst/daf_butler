@@ -34,6 +34,8 @@ from numpy import array
 
 
 class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
+    """Test the query-dataset-types command line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDatasetTypes"
 
     @staticmethod
@@ -65,6 +67,8 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
 
 class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
+    """Test the query-dataset-types script interface."""
+
     def testQueryDatasetTypes(self):
         self.maxDiff = None
         datasetName = "test"

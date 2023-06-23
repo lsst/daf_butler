@@ -763,7 +763,9 @@ class DatabaseTests(ABC):
             """
 
             def toRunInThread():
-                """SQLite locking isn't asyncio-friendly unless we actually
+                """Create new SQLite connection for use in thread.
+
+                SQLite locking isn't asyncio-friendly unless we actually
                 run it in another thread.  And SQLite gets very unhappy if
                 we try to use a connection from multiple threads, so we have
                 to create the new connection here instead of out in the main

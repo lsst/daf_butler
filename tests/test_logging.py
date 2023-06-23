@@ -265,6 +265,8 @@ class LoggingTestCase(unittest.TestCase):
 
 
 class TestJsonLogging(unittest.TestCase):
+    """Test logging using JSON."""
+
     def testJsonLogStream(self):
         log = logging.getLogger(self.id())
         log.setLevel(logging.INFO)

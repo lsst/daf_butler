@@ -41,6 +41,8 @@ from lsst.sphgeom import Circle
 
 
 class MockTask:
+    """Mock task for testing."""
+
     pass
 
 

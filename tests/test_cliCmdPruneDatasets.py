@@ -55,16 +55,19 @@ doFindTables = True
 
 
 def getTables():
+    """Return test table."""
     if doFindTables:
         return (Table(((1, 2, 3),), names=("foo",)),)
     return tuple()
 
 
 def getDatasets():
+    """Return the datasets string."""
     return "datasets"
 
 
 def makeQueryDatasets(*args, **kwargs):
+    """Return a query datasets object."""
     return QueryDatasets(*args, **kwargs)
 
 

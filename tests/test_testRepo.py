@@ -66,6 +66,8 @@ class ButlerTestRepoTestCase(unittest.TestCase):
 
 
 class ButlerUtilsTestSuite(unittest.TestCase):
+    """Test the butler test utilities."""
+
     @classmethod
     def setUpClass(cls):
         # Repository should be re-created for each test case, but

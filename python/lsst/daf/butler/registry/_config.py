@@ -38,6 +38,8 @@ if TYPE_CHECKING:
 
 
 class RegistryConfig(ConfigSubset):
+    """Configuration specific to a butler Registry."""
+
     component = "registry"
     requiredKeys = ("db",)
     defaultConfigFile = "registry.yaml"

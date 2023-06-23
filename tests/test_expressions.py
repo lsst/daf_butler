@@ -42,6 +42,8 @@ from sqlalchemy.schema import Column
 
 
 class FakeDatasetRecordStorageManager:
+    """Fake class for representing dataset record storage."""
+
     ingestDate = Column("ingest_date")
 
 

@@ -36,6 +36,7 @@ from lsst.daf.butler.cli.utils import LogCliRunner, command_test_env
 
 @click.command()
 def command_test():
+    """Run command test."""
     click.echo(message="test command")
 
 
@@ -58,6 +59,8 @@ def duplicate_command_test_env(runner):
 
 
 class FailedLoadTest(unittest.TestCase):
+    """Test failed plugin loading."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -87,6 +90,8 @@ class FailedLoadTest(unittest.TestCase):
 
 
 class PluginLoaderTest(unittest.TestCase):
+    """Test the command-line plugin loader."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 

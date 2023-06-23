@@ -34,10 +34,13 @@ mock = MagicMock()
 @click.command()
 @click.option("--list-of-values", "-l", multiple=True, callback=split_commas)
 def cli(list_of_values):
+    """Run mocked command line."""
     mock(list_of_values)
 
 
 class SplitCommasTestCase(unittest.TestCase):
+    """Test the split commas utility."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 

@@ -160,6 +160,8 @@ class BadNoWriteFormatter(BadWriteFormatter):
 
 
 class MultiDetectorFormatter(YamlFormatter):
+    """A formatter that requires a detector to be specified in the dataID."""
+
     def _writeFile(self, inMemoryDataset: Any) -> None:
         raise NotImplementedError("Can not write")
 
