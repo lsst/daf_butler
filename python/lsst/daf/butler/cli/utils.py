@@ -621,7 +621,7 @@ class MWOption(click.Option):
         """Make the metavar for the help menu.
 
         Overrides `click.Option.make_metavar`.
-        Adds a space and an elipsis after the metavar name if
+        Adds a space and an ellipsis after the metavar name if
         the option accepts multiple inputs, otherwise defers to the base
         implementation.
 
