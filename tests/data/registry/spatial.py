@@ -604,7 +604,8 @@ def labels(text: str, **kwargs: Any):
 
 def flatten_ranges(ranges: RangeSet) -> Iterator[int]:
     """Flatten an `lsst.sphgeom.RangeSet` into an iterator over pixel
-    indices."""
+    indices.
+    """
     for begin, end in ranges:
         yield from range(begin, end)
 

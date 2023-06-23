@@ -135,7 +135,8 @@ class TransactionTestError(Exception):
 
 class ButlerConfigTests(unittest.TestCase):
     """Simple tests for ButlerConfig that are not tested in any other test
-    cases."""
+    cases.
+    """
 
     def testSearchPath(self) -> None:
         configFile = os.path.join(TESTDIR, "config", "basic", "butler.yaml")
@@ -155,7 +156,8 @@ class ButlerConfigTests(unittest.TestCase):
 
 class ButlerPutGetTests(TestCaseMixin):
     """Helper method for running a suite of put/get tests from different
-    butler configurations."""
+    butler configurations.
+    """
 
     root: str
     default_run = "ingésτ😺"
@@ -790,7 +792,6 @@ class ButlerTests(ButlerPutGetTests):
 
     def testPytypePutCoercion(self) -> None:
         """Test python type coercion on Butler.get and put."""
-
         # Store some data with the normal example storage class.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         datasetTypeName = "test_metric"
@@ -1166,7 +1167,6 @@ class ButlerTests(ButlerPutGetTests):
 
     def testButlerRewriteDataId(self) -> None:
         """Test that dataIds can be rewritten based on dimension records."""
-
         butler = Butler(self.tmpConfigFile, run=self.default_run)
 
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
@@ -1316,7 +1316,8 @@ class FileDatastoreButlerTests(ButlerTests):
 
     def runImportExportTest(self, storageClass: StorageClass) -> None:
         """This test does an export to a temp directory and an import back
-        into a new temp directory repo. It does not assume a posix datastore"""
+        into a new temp directory repo. It does not assume a posix datastore
+        """
         exportButler = self.runPutGetTest(storageClass, "test_metric")
 
         # Test that we must have a file extension.
@@ -1660,7 +1661,6 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
     def testPytypeCoercion(self) -> None:
         """Test python type coercion on Butler.get and put."""
-
         # Store some data with the normal example storage class.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         datasetTypeName = "test_metric"
@@ -2120,7 +2120,6 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
     def assertButlerTransfers(self, purge: bool = False, storageClassName: str = "StructuredData") -> None:
         """Test that a run can be transferred to another butler."""
-
         storageClass = self.storageClassFactory.getStorageClass(storageClassName)
         datasetTypeName = "random_data"
 

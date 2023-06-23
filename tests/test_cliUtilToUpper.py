@@ -39,25 +39,25 @@ class ToUpperTestCase(unittest.TestCase):
         self.runner = LogCliRunner()
 
     def test_isolated(self):
-        """test the to_upper callback by itself"""
+        """Test the to_upper callback by itself."""
         ctx = "unused"
         param = "unused"
         self.assertEqual(to_upper(ctx, param, "debug"), "DEBUG")
 
     def test_lowerToUpper(self):
-        """test the to_upper callback in an option with a lowercase value"""
+        """Test the to_upper callback in an option with a lowercase value."""
         result = self.runner.invoke(cli, ["--value", "debug"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "DEBUG\n")
 
     def test_upperToUpper(self):
-        """test the to_upper callback in an option with a uppercase value"""
+        """Test the to_upper callback in an option with a uppercase value."""
         result = self.runner.invoke(cli, ["--value", "DEBUG"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "DEBUG\n")
 
     def test_mixedToUpper(self):
-        """test the to_upper callback in an option with a mixed-case value"""
+        """Test the to_upper callback in an option with a mixed-case value."""
         result = self.runner.invoke(cli, ["--value", "DeBuG"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "DEBUG\n")

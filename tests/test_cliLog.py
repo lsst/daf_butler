@@ -42,7 +42,8 @@ class CliLogTestCase(CliLogTestBase, unittest.TestCase):
     directly depend on that package. When running in an environment where
     `lsst.log` is setup then this will test use of `lsst.log`. This test also
     runs in obs_base which does provide coverage of python `logging` and
-    `lsst.log` in CI."""
+    `lsst.log` in CI.
+    """
 
     pass
 

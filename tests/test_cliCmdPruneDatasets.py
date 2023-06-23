@@ -210,7 +210,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """Test running with the default values.
 
         Verify that with the default flags that the subcommand says what it
-        will do, prompts for input, and says that it's done."""
+        will do, prompts for input, and says that it's done.
+        """
         self.run_test(
             cliArgs=["myCollection", "--unstore"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
@@ -229,7 +230,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """Test running with the default values but not continuing.
 
         Verify that with the default flags that the subcommand says what it
-        will do, prompts for input, and aborts when told not to continue."""
+        will do, prompts for input, and aborts when told not to continue.
+        """
         self.run_test(
             cliArgs=["myCollection", "--unstore"],
             exPruneDatasetsCallArgs=None,
@@ -247,7 +249,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """Test the --dry-run flag with --unstore.
 
         Verify that with the dry-run flag the subcommand says what it would
-        remove, but does not remove the datasets."""
+        remove, but does not remove the datasets.
+        """
         self.run_test(
             cliArgs=["myCollection", "--dry-run", "--unstore"],
             exPruneDatasetsCallArgs=None,
@@ -260,7 +263,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """Test the --dry-run flag with --disassociate.
 
         Verify that with the dry-run flag the subcommand says what it would
-        remove, but does not remove the datasets."""
+        remove, but does not remove the datasets.
+        """
         collection = "myCollection"
         self.run_test(
             cliArgs=[collection, "--dry-run", "--disassociate", "tag1"],
@@ -277,7 +281,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """Test the --dry-run flag with --unstore and --disassociate.
 
         Verify that with the dry-run flag the subcommand says what it would
-        remove, but does not remove the datasets."""
+        remove, but does not remove the datasets.
+        """
         collection = "myCollection"
         self.run_test(
             cliArgs=[collection, "--dry-run", "--unstore", "--disassociate", "tag1"],
@@ -295,7 +300,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
 
         Verify that with the no-confirm flag the subcommand does not ask for
         a confirmation, prints the did remove message and the tables that were
-        passed for removal."""
+        passed for removal.
+        """
         self.run_test(
             cliArgs=["myCollection", "--no-confirm", "--unstore"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
@@ -308,7 +314,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """Test the --quiet flag.
 
         Verify that with the quiet flag and the no-confirm flags set that no
-        output is produced by the subcommand."""
+        output is produced by the subcommand.
+        """
         self.run_test(
             cliArgs=["myCollection", "--quiet", "--unstore"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
@@ -359,7 +366,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
 
     def test_purgeWithDisassociate(self):
         """Verify there is an error when --purge and --disassociate are both
-        passed in."""
+        passed in.
+        """
         self.run_test(
             cliArgs=["--purge", "run", "--disassociate", "tag1", "tag2"],
             exPruneDatasetsCallArgs=None,
@@ -371,7 +379,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
 
     def test_purgeNoOp(self):
         """Verify there is an error when none of --purge, --unstore, or
-        --disassociate are passed."""
+        --disassociate are passed.
+        """
         self.run_test(
             cliArgs=[],
             exPruneDatasetsCallArgs=None,
@@ -445,7 +454,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
     )
     def test_purgeOnNonRunCollection(self, mockGetCollectionType):
         """Verify calling run on a non-run collection fails with expected
-        error message."""
+        error message.
+        """
         collectionName = "myTaggedCollection"
         self.run_test(
             cliArgs=["--purge", collectionName],
@@ -483,7 +493,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
 
     def test_disassociateImpliedArgsWithCollections(self):
         """Verify the arguments implied by --disassociate, with a --collection
-        flag."""
+        flag.
+        """
         self.run_test(
             cliArgs=["myCollection", "--disassociate", "tag1", "--disassociate", "tag2", "--no-confirm"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(

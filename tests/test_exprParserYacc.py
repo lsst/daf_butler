@@ -519,7 +519,6 @@ class ParserLexTestCase(unittest.TestCase):
 
     def testVisit(self):
         """Test for visitor methods"""
-
         # test should cover all visit* methods
         parser = ParserYacc()
         visitor = _Visitor()
@@ -549,7 +548,6 @@ class ParserLexTestCase(unittest.TestCase):
 
     def testParseTimeStr(self):
         """Test for _parseTimeString method"""
-
         # few expected failures
         bad_times = [
             "",

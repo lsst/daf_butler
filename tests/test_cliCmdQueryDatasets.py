@@ -247,8 +247,8 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
     def testFindFirstAndCollections(self):
         """Test the find-first option, and the collections option, since it
-        is required for find-first."""
-
+        is required for find-first.
+        """
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
         # Add a new run, and add a dataset to shadow an existing dataset.

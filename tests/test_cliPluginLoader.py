@@ -120,7 +120,8 @@ class PluginLoaderTest(unittest.TestCase):
 
     def test_mergeCommandLists(self):
         """Verify dicts of command to list-of-source-package get merged
-        properly."""
+        properly.
+        """
         first = defaultdict(list, {"a": [1]})
         second = defaultdict(list, {"b": [2]})
         self.assertEqual(butler.LoaderCLI._mergeCommandLists(first, second), {"a": [1], "b": [2]})

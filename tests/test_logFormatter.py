@@ -70,7 +70,6 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
 
     def testJsonLogRecordsFormatter(self):
         """Test that externally created JSON format stream files work."""
-
         log = logging.getLogger(self.id())
         log.setLevel(logging.INFO)
 

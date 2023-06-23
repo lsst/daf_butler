@@ -402,7 +402,6 @@ class ConfigTestCase(unittest.TestCase):
 
     def testSerializedString(self):
         """Test that we can create configs from strings"""
-
         serialized = {
             "yaml": """
 testing: hello
@@ -458,7 +457,6 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testDefaults(self):
         """Read of defaults"""
-
         # Supply the search path explicitly
         c = ConfigTest(searchPaths=(self.configDir,))
         self.assertIsInstance(c, ConfigSubset)
@@ -504,7 +502,6 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testNoDefaults(self):
         """Ensure that defaults can be turned off."""
-
         # Mandatory keys but no defaults
         c = ConfigTest({"item1": "a", "item2": "b", "item6": 6})
         self.assertEqual(len(c.filesRead), 0)
@@ -595,7 +592,6 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testStringInclude(self):
         """Using include directives in strings"""
-
         # See if include works for absolute path
         c = Config.fromYaml(f"something: !include {os.path.join(self.configDir, 'testconfig.yaml')}")
         self.assertEqual(c["something", "comp", "item3"], 3)
@@ -607,7 +603,8 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testIncludeConfigs(self):
         """Test the special includeConfigs key for pulling in additional
-        files."""
+        files.
+        """
         c = Config(os.path.join(self.configDir, "configIncludes.yaml"))
         self.assertEqual(c["comp", "item2"], "hello")
         self.assertEqual(c["comp", "item50"], 5000)
@@ -679,7 +676,6 @@ class FileWriteConfigTestCase(unittest.TestCase):
 
     def testDump(self):
         """Test that we can write and read a configuration."""
-
         c = Config({"1": 2, "3": 4, "key3": 6, "dict": {"a": 1, "b": 2}})
 
         for format in ("yaml", "json"):

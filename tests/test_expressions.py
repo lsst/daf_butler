@@ -102,7 +102,6 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
 
     def test_bind(self):
         """Test with bind parameters"""
-
         self.assertEqual(
             make_string_expression_predicate(
                 "a > b OR t in (x, y, z)",
@@ -126,7 +125,6 @@ class ConvertExpressionToPredicateTestCase(unittest.TestCase):
 
     def test_bind_list(self):
         """Test with bind parameter which is list/tuple/set inside IN rhs."""
-
         self.assertEqual(
             make_string_expression_predicate(
                 "a > b OR t in (x)",
@@ -231,7 +229,6 @@ class InspectionVisitorTestCase(unittest.TestCase):
 
     def test_simple(self):
         """Test for simple expressions"""
-
         universe = DimensionUniverse()
         parser = ParserYacc()
 
@@ -269,7 +266,6 @@ class InspectionVisitorTestCase(unittest.TestCase):
 
     def test_bind(self):
         """Test for simple expressions with binds."""
-
         universe = DimensionUniverse()
         parser = ParserYacc()
 
@@ -305,7 +301,6 @@ class InspectionVisitorTestCase(unittest.TestCase):
 
     def test_in(self):
         """Test for IN expressions."""
-
         universe = DimensionUniverse()
         parser = ParserYacc()
 
@@ -352,7 +347,6 @@ class CheckVisitorTestCase(unittest.TestCase):
 
     def test_governor(self):
         """Test with governor dimension in expression"""
-
         parser = ParserYacc()
 
         universe = DimensionUniverse()

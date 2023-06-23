@@ -42,7 +42,7 @@ class SplitCommasTestCase(unittest.TestCase):
         self.runner = LogCliRunner()
 
     def test_separate(self):
-        """test the split_commas callback by itself"""
+        """Test the split_commas callback by itself."""
         ctx = "unused"
         param = "unused"
         self.assertEqual(
@@ -51,41 +51,45 @@ class SplitCommasTestCase(unittest.TestCase):
         self.assertEqual(split_commas(ctx, param, None), tuple())
 
     def test_single(self):
-        """test the split_commas callback in an option with one value"""
+        """Test the split_commas callback in an option with one value."""
         result = self.runner.invoke(cli, ["-l", "one"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with(("one",))
 
     def test_multiple(self):
-        """test the split_commas callback in an option with two single
-        values"""
+        """Test the split_commas callback in an option with two single
+        values.
+        """
         result = self.runner.invoke(cli, ["-l", "one", "-l", "two"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with(("one", "two"))
 
     def test_singlePair(self):
-        """test the split_commas callback in an option with one pair of
-        values"""
+        """Test the split_commas callback in an option with one pair of
+        values.
+        """
         result = self.runner.invoke(cli, ["-l", "one,two"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with(("one", "two"))
 
     def test_multiplePair(self):
-        """test the split_commas callback in an option with two pairs of
-        values"""
+        """Test the split_commas callback in an option with two pairs of
+        values.
+        """
         result = self.runner.invoke(cli, ["-l", "one,two", "-l", "three,four"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with(("one", "two", "three", "four"))
 
     def test_none(self):
-        """test that passing None does not fail and returns None, producing an
-        empty tuple in the command function call."""
+        """Test that passing None does not fail and returns None, producing an
+        empty tuple in the command function call.
+        """
         result = self.runner.invoke(cli, [])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with(())
 
     def test_parens(self):
-        """Test that split commas understands [a,b]"""
+        """Test that split commas understands ``[a, b]``."""
         for test, expected in (
             ("single", ("single",)),
             ("a,b", ("a", "b")),

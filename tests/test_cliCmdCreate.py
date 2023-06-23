@@ -48,7 +48,6 @@ class CreateTest(CliCmdTestBase, unittest.TestCase):
 
     def test_all(self):
         """Test all parameters."""
-
         self.run_test(
             [
                 "create",

@@ -52,7 +52,6 @@ class LoggingTestCase(unittest.TestCase):
 
     def testRecordCapture(self):
         """Test basic log capture and serialization."""
-
         self.log.setLevel(VERBOSE)
 
         test_messages = (
@@ -130,7 +129,6 @@ class LoggingTestCase(unittest.TestCase):
 
     def testButlerLogRecords(self):
         """Test the list-like methods of ButlerLogRecords."""
-
         self.log.setLevel(logging.INFO)
 
         n_messages = 10
