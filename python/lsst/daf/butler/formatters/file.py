@@ -246,7 +246,6 @@ class FileFormatter(Formatter):
         NotImplementedError
             Formatter does not implement a method to read from files.
         """
-
         # Read the file naively
         path = self.fileDescriptor.location.path
         data = self._readFile(path, self.fileDescriptor.storageClass.pytype)

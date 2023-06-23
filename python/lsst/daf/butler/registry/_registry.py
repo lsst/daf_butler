@@ -746,7 +746,7 @@ class Registry(ABC):
         expand: bool = True,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
     ) -> list[DatasetRef]:
-        """Insert one or more datasets into the `Registry`
+        """Insert one or more datasets into the `Registry`.
 
         This always adds new datasets; to associate existing datasets with
         a new collection, use ``associate``.

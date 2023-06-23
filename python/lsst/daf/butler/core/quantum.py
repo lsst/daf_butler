@@ -49,7 +49,7 @@ def _reconstructDatasetRef(
     reconstitutedDimensions: dict[int, tuple[str, DimensionRecord]],
     universe: DimensionUniverse,
 ) -> DatasetRef:
-    """Reconstruct a DatasetRef stored in a Serialized Quantum"""
+    """Reconstruct a DatasetRef stored in a Serialized Quantum."""
     # Reconstruct the dimension records
     records = {}
     for dId in ids:

@@ -45,7 +45,8 @@ if TYPE_CHECKING:
 
 class DoNothingFormatter(Formatter):
     """A test formatter that does not need to format anything and has
-    parameters."""
+    parameters.
+    """
 
     def read(self, component: str | None = None) -> Any:
         raise NotImplementedError("Type does not support reading")
@@ -89,7 +90,8 @@ class MultipleExtensionsFormatter(SingleExtensionFormatter):
 
 class LenientYamlFormatter(YamlFormatter):
     """A test formatter that allows any file extension but always reads and
-    writes YAML."""
+    writes YAML.
+    """
 
     extension = ".yaml"
 
@@ -100,7 +102,8 @@ class LenientYamlFormatter(YamlFormatter):
 
 class MetricsExampleFormatter(Formatter):
     """A specialist test formatter for metrics that supports components
-    directly without assembler delegate."""
+    directly without assembler delegate.
+    """
 
     supportedExtensions = frozenset({".yaml", ".json"})
 
@@ -134,7 +137,6 @@ class MetricsExampleFormatter(Formatter):
             Raised when parameters passed with fileDescriptor are not
             supported.
         """
-
         # This formatter can not read a subset from disk because it
         # uses yaml or json.
         path = self.fileDescriptor.location.path
@@ -228,7 +230,6 @@ class MetricsExampleDataFormatter(Formatter):
             Raised when parameters passed with fileDescriptor are not
             supported.
         """
-
         # This formatter can not read a subset from disk because it
         # uses yaml.
         path = self.fileDescriptor.location.path

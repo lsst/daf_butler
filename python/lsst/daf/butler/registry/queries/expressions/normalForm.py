@@ -747,7 +747,7 @@ class TransformationWrapper(ABC):
     def unwrap(self) -> Node:
         """Return an transformed expression tree.
 
-        Return
+        Return:
         ------
         tree : `Node`
             Tree node representing the same expression (and form) as ``self``.

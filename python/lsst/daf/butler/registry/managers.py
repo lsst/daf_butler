@@ -449,7 +449,8 @@ class RegistryManagerInstances(
 
     def refresh(self) -> None:
         """Refresh all in-memory state by querying the database or clearing
-        caches."""
+        caches.
+        """
         self.dimensions.clearCaches()
         self.collections.refresh()
         self.datasets.refresh()

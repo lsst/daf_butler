@@ -120,7 +120,8 @@ class CliLogTestBase:
 
     class PythonLogger:
         """Keeps track of log level of a component and number of handlers
-        attached to it at the time this object was initialized."""
+        attached to it at the time this object was initialized.
+        """
 
         def __init__(self, component: str | None) -> None:
             self.logger = logging.getLogger(component)
@@ -128,7 +129,8 @@ class CliLogTestBase:
 
     class LsstLogger:
         """Keeps track of log level for a component at the time this object was
-        initialized."""
+        initialized.
+        """
 
         def __init__(self, component: str) -> None:
             self.logger = lsstLog.getLogger(component) if lsstLog else None
@@ -138,7 +140,8 @@ class CliLogTestBase:
         """Test that the log context manager works with the butler cli to
         initialize the logging system according to cli inputs for the duration
         of the command execution and resets the logging system to its previous
-        state or expected state when command execution finishes."""
+        state or expected state when command execution finishes.
+        """
         pyRoot = self.PythonLogger(None)
         pyButler = self.PythonLogger("lsst.daf.butler")
         pyLsstRoot = self.PythonLogger("lsst")
@@ -171,8 +174,8 @@ class CliLogTestBase:
         """Test that the log context manager works with the butler cli to
         initialize the logging system according to cli inputs for the duration
         of the command execution and resets the logging system to its previous
-        state or expected state when command execution finishes."""
-
+        state or expected state when command execution finishes.
+        """
         # Run with two different log level settings.
         log_levels = (
             # --log-level / --log-level / expected pyroot, pylsst, pybutler,
@@ -249,14 +252,14 @@ class CliLogTestBase:
 
     def test_helpLogReset(self) -> None:
         """Verify that when a command does not execute, like when the help menu
-        is printed instead, that CliLog is still reset."""
-
+        is printed instead, that CliLog is still reset.
+        """
         self.runTest(partial(self.runner.invoke, butlerCli, ["command-log-settings-test", "--help"]))
 
     def testLongLog(self) -> None:
         """Verify the timestamp is in the log messages when the --long-log
-        flag is set."""
-
+        flag is set.
+        """
         # When longlog=True, loglines start with the log level and a
         # timestamp with the following format:
         # "year-month-day T hour-minute-second.millisecond-zoneoffset"
@@ -358,7 +361,6 @@ class CliLogTestBase:
 
     def testLogTty(self) -> None:
         """Verify that log output to terminal can be suppressed."""
-
         with self.runner.isolated_filesystem():
             for log_tty in (True, False):
                 # The pytest log handler interferes with the log configuration

@@ -29,7 +29,7 @@ from .file import FileFormatter
 
 class AstropyTableFormatter(FileFormatter):
     """Interface for reading and writing astropy.Table objects
-    in either ECSV or FITS format
+    in either ECSV or FITS format.
     """
 
     supportedWriteParameters = frozenset({"format"})

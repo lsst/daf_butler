@@ -144,7 +144,8 @@ class LogCliRunner(click.testing.CliRunner):
 
     lsst.log modules can not be set back to an uninitialized state (python
     logging modules can be set back to NOTSET), instead they are set to
-    `CliLog.defaultLsstLogLevel`."""
+    `CliLog.defaultLsstLogLevel`.
+    """
 
     def invoke(self, *args: Any, **kwargs: Any) -> Any:
         result = super().invoke(*args, **kwargs)
@@ -153,7 +154,7 @@ class LogCliRunner(click.testing.CliRunner):
 
 
 def clickResultMsg(result: click.testing.Result) -> str:
-    """Get a standard assert message from a click result
+    """Get a standard assert message from a click result.
 
     Parameters
     ----------
@@ -604,7 +605,8 @@ class MWPath(click.Path):
 
     def convert(self, value: str, param: click.Parameter | None, ctx: click.Context | None) -> Any:
         """Called by click.ParamType to "convert values through types".
-        `click.Path` uses this step to verify Path conditions."""
+        `click.Path` uses this step to verify Path conditions.
+        """
         if self.mustNotExist and os.path.exists(value):
             self.fail(f'Path "{value}" should not exist.')
         return super().convert(value, param, ctx)
@@ -722,18 +724,21 @@ class MWOptionDecorator:
 
     def name(self) -> str:
         """Get the name that will be passed to the command function for this
-        option."""
+        option.
+        """
         return cast(str, self._name)
 
     def opts(self) -> list[str]:
         """Get the flags that will be used for this option on the command
-        line."""
+        line.
+        """
         return self._opts
 
     @property
     def help(self) -> str:
         """Get the help text for this option. Returns an empty string if no
-        help was defined."""
+        help was defined.
+        """
         return self.partialOpt.keywords.get("help", "")
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
@@ -742,7 +747,8 @@ class MWOptionDecorator:
 
 class MWArgumentDecorator:
     """Wraps the click.argument decorator to enable shared arguments to be
-    declared."""
+    declared.
+    """
 
     def __init__(self, *param_decls: Any, **kwargs: Any) -> None:
         self._helpText = kwargs.pop("help", None)
@@ -761,7 +767,8 @@ class MWArgumentDecorator:
 
 class MWCommand(click.Command):
     """Command subclass that stores a copy of the args list for use by the
-    command."""
+    command.
+    """
 
     extra_epilog: str | None = None
 
@@ -882,7 +889,8 @@ class ButlerCommand(MWCommand):
 
 class OptionGroup:
     """Base class for an option group decorator. Requires the option group
-    subclass to have a property called `decorator`."""
+    subclass to have a property called `decorator`.
+    """
 
     decorators: list[Any]
 
@@ -944,7 +952,8 @@ class MWCtxObj:
     @staticmethod
     def getFrom(ctx: click.Context) -> Any:
         """If needed, initialize `ctx.obj` with a new `MWCtxObj`, and return
-        the new or already existing `MWCtxObj`."""
+        the new or already existing `MWCtxObj`.
+        """
         if ctx.obj is not None:
             return ctx.obj
         ctx.obj = MWCtxObj()
@@ -1046,7 +1055,7 @@ def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list
     order:
     1. the provided named columns
     2. spatial and temporal columns
-    3. the rest of the columns
+    3. the rest of the columns.
 
     The table is sorted in-place, and is also returned for convenience.
 

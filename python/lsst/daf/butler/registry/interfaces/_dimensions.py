@@ -589,7 +589,8 @@ class DatabaseDimensionOverlapStorage(ABC):
     @abstractmethod
     def clearCaches(self) -> None:
         """Clear any cached state about which overlaps have been
-        materialized."""
+        materialized.
+        """
         raise NotImplementedError()
 
     @abstractmethod

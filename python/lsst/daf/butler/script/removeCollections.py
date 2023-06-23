@@ -49,7 +49,8 @@ class RemoveCollectionResult:
 @dataclass
 class CollectionInfo:
     """Lightweight container to hold the name and type of non-run
-    collections, as well as the names of run collections."""
+    collections, as well as the names of run collections.
+    """
 
     nonRunCollections: Table
     runCollections: Table

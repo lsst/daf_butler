@@ -19,8 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""
-Module containing classes used with deferring dataset loading
+"""Module containing classes used with deferring dataset loading.
 """
 from __future__ import annotations
 
@@ -45,7 +44,7 @@ class DeferredDatasetHandle:
         parameters: dict | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> Any:
-        """Retrieves the dataset pointed to by this handle
+        """Retrieves the dataset pointed to by this handle.
 
         This handle may be used multiple times, possibly with different
         parameters.

@@ -140,7 +140,6 @@ class ChainedDatastore(Datastore):
         will not be overridden by this method if ``overwrite`` is `False`.
         This allows explicit values set in external configs to be retained.
         """
-
         # Extract the part of the config we care about updating
         datastoreConfig = DatastoreConfig(config, mergeDefaults=False)
 
@@ -364,7 +363,6 @@ class ChainedDatastore(Datastore):
         ValueError
             Formatter failed to process the dataset.
         """
-
         for datastore in self.datastores:
             try:
                 inMemoryObject = datastore.get(ref, parameters, storageClass=storageClass)
@@ -880,7 +878,6 @@ class ChainedDatastore(Datastore):
         -----
         This method checks each datastore in turn.
         """
-
         # Need to catch each of the datastore outputs and ensure that
         # all are tested.
         failures = []

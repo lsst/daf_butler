@@ -171,7 +171,6 @@ def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -
         `~lsst.daf.butler.DimensionRecord` for each input name. Related
         dimensions (e.g., instruments and detectors) are linked arbitrarily.
     """
-
     # Create values for all dimensions that are (recursive) required or implied
     # dependencies of the given ones.
     complete_data_id_values = {}

@@ -170,7 +170,7 @@ class OrderByClauseColumn:
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class OrderByClause:
-    """Class for information about columns in ORDER BY clause"""
+    """Class for information about columns in ORDER BY clause."""
 
     @classmethod
     def parse_general(cls, order_by: Iterable[str], graph: DimensionGraph) -> OrderByClause:

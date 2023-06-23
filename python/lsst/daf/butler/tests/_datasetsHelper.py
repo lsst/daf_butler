@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 
 class DatasetTestHelper:
-    """Helper methods for Datasets"""
+    """Helper methods for Datasets."""
 
     def makeDatasetRef(
         self,
@@ -54,7 +54,7 @@ class DatasetTestHelper:
         run: str | None = None,
         conform: bool = True,
     ) -> DatasetRef:
-        """Make a DatasetType and wrap it in a DatasetRef for a test"""
+        """Make a DatasetType and wrap it in a DatasetRef for a test."""
         return self._makeDatasetRef(
             datasetTypeName,
             dimensions,
@@ -94,7 +94,7 @@ class DatasetTestHelper:
 
 
 class DatastoreTestHelper:
-    """Helper methods for Datastore tests"""
+    """Helper methods for Datastore tests."""
 
     root: str | None
     config: Config
@@ -102,7 +102,7 @@ class DatastoreTestHelper:
     configFile: str
 
     def setUpDatastoreTests(self, registryClass: type[Registry], configClass: type[Config]) -> None:
-        """Shared setUp code for all Datastore tests"""
+        """Shared setUp code for all Datastore tests."""
         self.registry = registryClass()
         self.config = configClass(self.configFile)
 

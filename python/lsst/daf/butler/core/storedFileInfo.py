@@ -87,7 +87,7 @@ class StoredDatastoreItemInfo:
 
     @property
     def dataset_id(self) -> DatasetId:
-        """Dataset ID associated with this record (`DatasetId`)"""
+        """Dataset ID associated with this record (`DatasetId`)."""
         raise NotImplementedError()
 
     def update(self, **kwargs: Any) -> StoredDatastoreItemInfo:

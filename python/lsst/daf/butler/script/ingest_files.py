@@ -82,7 +82,6 @@ def ingest_files(
     transfer : `str`, optional
         Transfer mode to use for ingest.
     """
-
     # Check that the formatter can be imported -- validate this as soon
     # as possible before we read a potentially large table file.
     if formatter:

@@ -61,21 +61,24 @@ class CliCmdTestBase(abc.ABC):
     @property
     def cli(self) -> click.core.Command:
         """Get the command line interface function under test, can be
-        overridden to test CLIs other than butler."""
+        overridden to test CLIs other than butler.
+        """
         return butler.cli
 
     @property
     def mock(self) -> unittest.mock.Mock:
         """Get the mock object to use in place of `mockFuncName`. If not
         provided will use the default provided by `unittest.mock.patch`, this
-        is usually a `unittest.mock.MagicMock`."""
+        is usually a `unittest.mock.MagicMock`.
+        """
         return DEFAULT
 
     @property
     @abc.abstractmethod
     def mockFuncName(self) -> str:
         """The qualified name of the function to mock, will be passed to
-        unittest.mock.patch, see python docs for details."""
+        unittest.mock.patch, see python docs for details.
+        """
         pass
 
     def setUp(self) -> None:

@@ -82,7 +82,8 @@ def _importPlugin(pluginName: str) -> types.ModuleType | type | None | click.Com
 
 class LoaderCLI(click.MultiCommand, abc.ABC):
     """Extends `click.MultiCommand`, which dispatches to subcommands, to load
-    subcommands at runtime."""
+    subcommands at runtime.
+    """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -90,8 +91,10 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
     @property
     @abc.abstractmethod
     def localCmdPkg(self) -> str:
-        """localCmdPkg identifies the location of the commands that are in this
-        package. `getLocalCommands` assumes that the commands can be found in
+        """Identifies the location of the commands that are in this
+        package.
+
+        `getLocalCommands` assumes that the commands can be found in
         `localCmdPkg.__all__`, if this is not the case then getLocalCommands
         should be overridden.
 
@@ -177,7 +180,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
     def _setupLogging(self, ctx: click.Context | None) -> None:
         """Init the logging system and config it for the command.
 
-        Subcommands may further configure the log settings."""
+        Subcommands may further configure the log settings.
+        """
         if isinstance(ctx, click.Context):
             CliLog.initLog(
                 longlog=ctx.params.get(long_log_option.name(), False),
@@ -228,7 +232,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         """Convert butler command name to function name: change dashes (used in
         commands) to underscores (used in functions), and for local-package
         commands names that conflict with python keywords, change the local,
-        legal, function name to the command name."""
+        legal, function name to the command name.
+        """
         return commandName.replace("-", "_")
 
     @staticmethod
@@ -308,7 +313,6 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             Raised if a command is offered by more than one package, with an
             error message to be displayed to the user.
         """
-
         msg = ""
         for command, packages in commands.items():
             if len(packages) > 1:

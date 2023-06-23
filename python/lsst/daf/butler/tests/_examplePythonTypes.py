@@ -286,7 +286,7 @@ class MetricsExampleDataclass:
 
 
 class ListDelegate(StorageClassDelegate):
-    """Parameter handler for list parameters"""
+    """Parameter handler for list parameters."""
 
     def handleParameters(self, inMemoryDataset: Any, parameters: Mapping[str, Any] | None = None) -> Any:
         """Modify the in-memory dataset using the supplied parameters,
@@ -316,7 +316,7 @@ class ListDelegate(StorageClassDelegate):
 
 
 class MetricsDelegate(StorageClassDelegate):
-    """Parameter handler for parameters using Metrics"""
+    """Parameter handler for parameters using Metrics."""
 
     def handleParameters(self, inMemoryDataset: Any, parameters: Mapping[str, Any] | None = None) -> Any:
         """Modify the in-memory dataset using the supplied parameters,
