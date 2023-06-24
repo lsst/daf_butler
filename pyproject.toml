@@ -190,6 +190,7 @@ extend-select = [
 ]
 
 [tool.ruff.per-file-ignores]
+# parserYacc docstrings can not be fixed. Docstrings are used to define grammar.
 "python/lsst/daf/butler/registry/queries/expressions/parser/parserYacc.py" = ["D401", "D403"]
 
 [tool.ruff.pycodestyle]
