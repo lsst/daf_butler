@@ -36,12 +36,13 @@ from lsst.daf.butler.cli.utils import LogCliRunner, command_test_env
 
 @click.command()
 def command_test():
+    """Run command test."""
     click.echo(message="test command")
 
 
 @contextmanager
 def duplicate_command_test_env(runner):
-    """A context manager that creates (and then cleans up) an environment that
+    """Context manager that creates (and then cleans up) an environment that
     declares a plugin command named 'create', which will conflict with the
     daf_butler 'create' command.
 
@@ -58,6 +59,8 @@ def duplicate_command_test_env(runner):
 
 
 class FailedLoadTest(unittest.TestCase):
+    """Test failed plugin loading."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -87,6 +90,8 @@ class FailedLoadTest(unittest.TestCase):
 
 
 class PluginLoaderTest(unittest.TestCase):
+    """Test the command-line plugin loader."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -120,7 +125,8 @@ class PluginLoaderTest(unittest.TestCase):
 
     def test_mergeCommandLists(self):
         """Verify dicts of command to list-of-source-package get merged
-        properly."""
+        properly.
+        """
         first = defaultdict(list, {"a": [1]})
         second = defaultdict(list, {"b": [2]})
         self.assertEqual(butler.LoaderCLI._mergeCommandLists(first, second), {"a": [1], "b": [2]})

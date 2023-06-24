@@ -53,7 +53,7 @@ class OpaqueTableStorage(ABC):
 
     @abstractmethod
     def insert(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
-        """Insert records into the table
+        """Insert records into the table.
 
         Parameters
         ----------

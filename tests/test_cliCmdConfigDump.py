@@ -38,6 +38,8 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class ConfigDumpTest(CliCmdTestBase, unittest.TestCase):
+    """Test the butler config-dump command line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.configDump"
 
     @staticmethod
@@ -71,7 +73,7 @@ class ConfigDumpUseTest(unittest.TestCase):
             self.assertIn("storageClasses", cfg)
 
     def test_file(self):
-        """test dumping the config to a file."""
+        """Test dumping the config to a file."""
         with self.runner.isolated_filesystem():
             result = self.runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))

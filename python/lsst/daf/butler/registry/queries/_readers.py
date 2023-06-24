@@ -321,6 +321,8 @@ class DatasetRefReader:
 
 
 class DimensionRecordReader:
+    """Read dimension records."""
+
     def __init__(self, element: DimensionElement):
         self._cls = element.RecordClass
         self._tags = element.RecordClass.fields.columns

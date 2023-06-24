@@ -81,7 +81,6 @@ class ObsCoreTests(TestCaseMixin):
 
     def initialize_registry(self, registry: Registry) -> None:
         """Populate Registry with the things that we need for tests."""
-
         registry.insertDimensionData("instrument", {"name": "DummyCam"})
         registry.insertDimensionData(
             "physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "r"}
@@ -250,7 +249,6 @@ class ObsCoreTests(TestCaseMixin):
 
     def test_config_errors(self):
         """Test for handling various configuration problems."""
-
         # This raises pydantic ValidationError, which wraps ValueError
         exception_re = "'collections' must have one element"
         with self.assertRaisesRegex(ValueError, exception_re):
@@ -268,7 +266,6 @@ class ObsCoreTests(TestCaseMixin):
 
     def test_schema(self):
         """Check how obscore schema is constructed"""
-
         config = ObsCoreConfig(obs_collection="", dataset_types=[], facility_name="FACILITY")
         schema = ObsCoreSchema(config, [])
         table_spec = schema.table_spec
@@ -351,7 +348,6 @@ class ObsCoreTests(TestCaseMixin):
         """Test insert and import registry methods, with various restrictions
         on collection names.
         """
-
         # First item is collections, second item is expected record count.
         test_data = (
             (None, 6),
@@ -378,7 +374,6 @@ class ObsCoreTests(TestCaseMixin):
 
     def test_drop_datasets(self):
         """Test for dropping datasets after obscore insert."""
-
         collections = None
         registry = self.make_registry(collections)
         obscore = registry.obsCoreTableManager
@@ -403,7 +398,6 @@ class ObsCoreTests(TestCaseMixin):
 
     def test_associate(self):
         """Test for associating datasets to TAGGED collection."""
-
         collections = ["tagged"]
         registry = self.make_registry(collections, "TAGGED")
         obscore = registry.obsCoreTableManager
@@ -445,7 +439,6 @@ class ObsCoreTests(TestCaseMixin):
 
     def test_region_type_warning(self) -> None:
         """Test that non-polygon region generates one or more warnings."""
-
         collections = None
         registry = self.make_registry(collections)
 
@@ -460,7 +453,6 @@ class ObsCoreTests(TestCaseMixin):
 
     def test_update_exposure_region(self) -> None:
         """Test for update_exposure_regions method."""
-
         registry = self.make_registry(["run1"])
         obscore = registry.obsCoreTableManager
         assert obscore is not None
@@ -604,7 +596,6 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
 
     def test_spatial(self):
         """Test that pgsphere plugin fills spatial columns."""
-
         collections = None
         registry = self.make_registry(collections)
         obscore = registry.obsCoreTableManager

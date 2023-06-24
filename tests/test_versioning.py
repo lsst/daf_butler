@@ -100,7 +100,6 @@ class SchemaVersioningTestCase(unittest.TestCase):
 
     def test_new_schema(self) -> None:
         """Test for creating new database schema."""
-
         # Check that managers know what schema versions they can make.
         Manager1.checkNewSchemaVersion(V_1_0_0)
         Manager2.checkNewSchemaVersion(V_1_0_0)
@@ -149,7 +148,6 @@ class SchemaVersioningTestCase(unittest.TestCase):
 
     def test_existing_schema(self) -> None:
         """Test for reading manager versions from existing database."""
-
         manager_versions = (
             ((None, V_1_0_0), (None, V_1_0_0)),
             ((V_1_0_0, V_1_0_0), (V_1_0_0, V_1_0_0)),
@@ -194,7 +192,6 @@ class SchemaVersioningTestCase(unittest.TestCase):
 
     def test_compatibility(self) -> None:
         """Test for version compatibility rules."""
-
         #    Manager,  version, update, compatible
         compat_matrix = (
             (Manager0, V_1_0_0, False, True),

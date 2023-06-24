@@ -69,7 +69,8 @@ class CliLog:
 
     This class can perform log uninitialization, which allows command line
     interface code that initializes logging to run unit tests that execute in
-    batches, without affecting other unit tests. See ``resetLog``."""
+    batches, without affecting other unit tests. See ``resetLog``.
+    """
 
     defaultLsstLogLevel = lsstLog.FATAL if lsstLog is not None else None
 
@@ -394,7 +395,8 @@ class CliLog:
     @classmethod
     def _recordComponentSetting(cls, component: str | None) -> None:
         """Cache current levels for the given component in the list of
-        component levels."""
+        component levels.
+        """
         componentSettings = cls.ComponentSettings(component)
         cls._componentSettings.append(componentSettings)
 

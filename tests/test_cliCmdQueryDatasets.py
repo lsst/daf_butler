@@ -36,6 +36,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def expectedFilesystemDatastoreTables(root: ResourcePath):
+    """Return the expected table contents."""
     return (
         AstropyTable(
             array(
@@ -134,6 +135,8 @@ def expectedFilesystemDatastoreTables(root: ResourcePath):
 
 
 class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
+    """Test the query-datasets command-line."""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
 
@@ -247,8 +250,8 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
     def testFindFirstAndCollections(self):
         """Test the find-first option, and the collections option, since it
-        is required for find-first."""
-
+        is required for find-first.
+        """
         testRepo = MetricTestRepo(self.repoDir, configFile=self.configFile)
 
         # Add a new run, and add a dataset to shadow an existing dataset.

@@ -19,8 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""
-Butler top level classes.
+"""Butler top level classes.
 """
 from __future__ import annotations
 
@@ -1410,7 +1409,7 @@ class Butler(LimitedButler):
         run: str | None = None,
         **kwargs: Any,
     ) -> DatasetRefURIs:
-        """Returns the URIs associated with the dataset.
+        """Return the URIs associated with the dataset.
 
         Parameters
         ----------

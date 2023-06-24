@@ -144,7 +144,8 @@ class LogCliRunner(click.testing.CliRunner):
 
     lsst.log modules can not be set back to an uninitialized state (python
     logging modules can be set back to NOTSET), instead they are set to
-    `CliLog.defaultLsstLogLevel`."""
+    `CliLog.defaultLsstLogLevel`.
+    """
 
     def invoke(self, *args: Any, **kwargs: Any) -> Any:
         result = super().invoke(*args, **kwargs)
@@ -153,7 +154,7 @@ class LogCliRunner(click.testing.CliRunner):
 
 
 def clickResultMsg(result: click.testing.Result) -> str:
-    """Get a standard assert message from a click result
+    """Get a standard assert message from a click result.
 
     Parameters
     ----------
@@ -173,7 +174,7 @@ def clickResultMsg(result: click.testing.Result) -> str:
 
 @contextmanager
 def command_test_env(runner: click.testing.CliRunner, commandModule: str, commandName: str) -> Iterator[None]:
-    """A context manager that creates (and then cleans up) an environment that
+    """Context manager that creates (and then cleans up) an environment that
     provides a CLI plugin command with the given name.
 
     Parameters
@@ -603,8 +604,11 @@ class MWPath(click.Path):
         )
 
     def convert(self, value: str, param: click.Parameter | None, ctx: click.Context | None) -> Any:
-        """Called by click.ParamType to "convert values through types".
-        `click.Path` uses this step to verify Path conditions."""
+        """Convert values through types.
+
+        Called by `click.ParamType` to "convert values through types".
+        `click.Path` uses this step to verify Path conditions.
+        """
         if self.mustNotExist and os.path.exists(value):
             self.fail(f'Path "{value}" should not exist.')
         return super().convert(value, param, ctx)
@@ -614,14 +618,16 @@ class MWOption(click.Option):
     """Overrides click.Option with desired behaviors."""
 
     def make_metavar(self) -> str:
-        """Overrides `click.Option.make_metavar`. Makes the metavar for the
-        help menu. Adds a space and an elipsis after the metavar name if
+        """Make the metavar for the help menu.
+
+        Overrides `click.Option.make_metavar`.
+        Adds a space and an ellipsis after the metavar name if
         the option accepts multiple inputs, otherwise defers to the base
         implementation.
 
-        By default click does not add an elipsis when multiple is True and
-        nargs is 1. And when nargs does not equal 1 click adds an elipsis
-        without a space between the metavar and the elipsis, but we prefer a
+        By default click does not add an ellipsis when multiple is True and
+        nargs is 1. And when nargs does not equal 1 click adds an ellipsis
+        without a space between the metavar and the ellipsis, but we prefer a
         space between.
 
         Does not get called for some option types (e.g. flag) so metavar
@@ -640,12 +646,14 @@ class MWArgument(click.Argument):
     """Overrides click.Argument with desired behaviors."""
 
     def make_metavar(self) -> str:
-        """Overrides `click.Option.make_metavar`. Makes the metavar for the
-        help menu. Always adds a space and an elipsis (' ...') after the
+        """Make the metavar for the help menu.
+
+        Overrides `click.Option.make_metavar`.
+        Always adds a space and an ellipsis (' ...') after the
         metavar name if the option accepts multiple inputs.
 
-        By default click adds an elipsis without a space between the metavar
-        and the elipsis, but we prefer a space between.
+        By default click adds an ellipsis without a space between the metavar
+        and the ellipsis, but we prefer a space between.
 
         Returns
         -------
@@ -722,18 +730,21 @@ class MWOptionDecorator:
 
     def name(self) -> str:
         """Get the name that will be passed to the command function for this
-        option."""
+        option.
+        """
         return cast(str, self._name)
 
     def opts(self) -> list[str]:
         """Get the flags that will be used for this option on the command
-        line."""
+        line.
+        """
         return self._opts
 
     @property
     def help(self) -> str:
         """Get the help text for this option. Returns an empty string if no
-        help was defined."""
+        help was defined.
+        """
         return self.partialOpt.keywords.get("help", "")
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
@@ -742,7 +753,8 @@ class MWOptionDecorator:
 
 class MWArgumentDecorator:
     """Wraps the click.argument decorator to enable shared arguments to be
-    declared."""
+    declared.
+    """
 
     def __init__(self, *param_decls: Any, **kwargs: Any) -> None:
         self._helpText = kwargs.pop("help", None)
@@ -761,7 +773,8 @@ class MWArgumentDecorator:
 
 class MWCommand(click.Command):
     """Command subclass that stores a copy of the args list for use by the
-    command."""
+    command.
+    """
 
     extra_epilog: str | None = None
 
@@ -882,7 +895,8 @@ class ButlerCommand(MWCommand):
 
 class OptionGroup:
     """Base class for an option group decorator. Requires the option group
-    subclass to have a property called `decorator`."""
+    subclass to have a property called `decorator`.
+    """
 
     decorators: list[Any]
 
@@ -944,7 +958,8 @@ class MWCtxObj:
     @staticmethod
     def getFrom(ctx: click.Context) -> Any:
         """If needed, initialize `ctx.obj` with a new `MWCtxObj`, and return
-        the new or already existing `MWCtxObj`."""
+        the new or already existing `MWCtxObj`.
+        """
         if ctx.obj is not None:
             return ctx.obj
         ctx.obj = MWCtxObj()
@@ -952,8 +967,7 @@ class MWCtxObj:
 
 
 def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
-    """Click callback that reads additional values from the supplied
-    YAML file.
+    """Read additional values from the supplied YAML file.
 
     Parameters
     ----------
@@ -1046,7 +1060,7 @@ def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list
     order:
     1. the provided named columns
     2. spatial and temporal columns
-    3. the rest of the columns
+    3. the rest of the columns.
 
     The table is sorted in-place, and is also returned for convenience.
 
@@ -1088,8 +1102,10 @@ def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list
 
 
 def catch_and_exit(func: Callable) -> Callable:
-    """Decorator which catches all exceptions, prints an exception traceback
+    """Catch all exceptions, prints an exception traceback
     and signals click to exit.
+
+    Use as decorator.
     """
 
     @wraps(func)

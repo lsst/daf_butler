@@ -82,7 +82,8 @@ def _importPlugin(pluginName: str) -> types.ModuleType | type | None | click.Com
 
 class LoaderCLI(click.MultiCommand, abc.ABC):
     """Extends `click.MultiCommand`, which dispatches to subcommands, to load
-    subcommands at runtime."""
+    subcommands at runtime.
+    """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -90,8 +91,10 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
     @property
     @abc.abstractmethod
     def localCmdPkg(self) -> str:
-        """localCmdPkg identifies the location of the commands that are in this
-        package. `getLocalCommands` assumes that the commands can be found in
+        """Identifies the location of the commands that are in this
+        package.
+
+        `getLocalCommands` assumes that the commands can be found in
         `localCmdPkg.__all__`, if this is not the case then getLocalCommands
         should be overridden.
 
@@ -123,8 +126,10 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         )
 
     def list_commands(self, ctx: click.Context) -> list[str]:
-        """Used by Click to get all the commands that can be called by the
+        """Get all the commands that can be called by the
         butler command, it is used to generate the --help output.
+
+        Used by Click.
 
         Parameters
         ----------
@@ -142,7 +147,9 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         return sorted(commands)
 
     def get_command(self, ctx: click.Context, name: str) -> click.Command | None:
-        """Used by Click to get a single command for execution.
+        """Get a single command for execution.
+
+        Used by Click.
 
         Parameters
         ----------
@@ -177,7 +184,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
     def _setupLogging(self, ctx: click.Context | None) -> None:
         """Init the logging system and config it for the command.
 
-        Subcommands may further configure the log settings."""
+        Subcommands may further configure the log settings.
+        """
         if isinstance(ctx, click.Context):
             CliLog.initLog(
                 longlog=ctx.params.get(long_log_option.name(), False),
@@ -228,7 +236,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         """Convert butler command name to function name: change dashes (used in
         commands) to underscores (used in functions), and for local-package
         commands names that conflict with python keywords, change the local,
-        legal, function name to the command name."""
+        legal, function name to the command name.
+        """
         return commandName.replace("-", "_")
 
     @staticmethod
@@ -308,7 +317,6 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             Raised if a command is offered by more than one package, with an
             error message to be displayed to the user.
         """
-
         msg = ""
         for command, packages in commands.items():
             if len(packages) > 1:
@@ -318,6 +326,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
 
 
 class ButlerCLI(LoaderCLI):
+    """Specialized command loader implementing the ``butler`` command."""
+
     localCmdPkg = "lsst.daf.butler.cli.cmd"
 
     pluginEnvVar = "DAF_BUTLER_PLUGINS"
@@ -356,11 +366,15 @@ class ButlerCLI(LoaderCLI):
 @log_label_option()
 @ClickProgressHandler.option
 def cli(log_level: str, long_log: bool, log_file: str, log_tty: bool, log_label: str, progress: bool) -> None:
-    # log_level is handled by get_command and list_commands, and is called in
-    # one of those functions before this is called. long_log is handled by
-    # setup_logging.
+    """Command line interface for butler.
+
+    log_level is handled by get_command and list_commands, and is called in
+    one of those functions before this is called. long_log is handled by
+    setup_logging.
+    """
     pass
 
 
 def main() -> click.Command:
+    """Return main entry point for command-line."""
     return cli()

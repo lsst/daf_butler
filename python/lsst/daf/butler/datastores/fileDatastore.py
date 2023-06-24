@@ -515,7 +515,6 @@ class FileDatastore(GenericBaseDatastore):
         Will not work for files that have been ingested without using the
         standard file template or default formatter.
         """
-
         # If we have a component ref we always need to ask the questions
         # of the composite.  If the composite is disassembled this routine
         # should return all components.  If the composite was not
@@ -766,7 +765,7 @@ class FileDatastore(GenericBaseDatastore):
         return transfer
 
     def _pathInStore(self, path: ResourcePathExpression) -> str | None:
-        """Return path relative to datastore root
+        """Return path relative to datastore root.
 
         Parameters
         ----------
@@ -1388,7 +1387,9 @@ class FileDatastore(GenericBaseDatastore):
         all_required: bool,
         artifact_existence: dict[ResourcePath, bool] | None = None,
     ) -> dict[DatasetRef, bool]:
-        """Helper function for mexists that checks the given records.
+        """Check given records for existence.
+
+        Helper function for `mexists()`.
 
         Parameters
         ----------
@@ -1920,7 +1921,6 @@ class FileDatastore(GenericBaseDatastore):
             If a passed in `StoredFileInfo`'s ``component`` is `None` (this is
             unexpected).
         """
-
         guessing = False
         uris = DatasetRefURIs()
 
@@ -2271,7 +2271,6 @@ class FileDatastore(GenericBaseDatastore):
         allow `ChainedDatastore` to put to multiple datastores without
         requiring that every datastore accepts the dataset.
         """
-
         doDisassembly = self.composites.shouldBeDisassembled(ref)
         # doDisassembly = True
 
@@ -2766,7 +2765,6 @@ class FileDatastore(GenericBaseDatastore):
         This method checks that all the supplied entities have valid file
         templates and also have formatters defined.
         """
-
         templateFailed = None
         try:
             self.templates.validateTemplates(entities, logFailures=logFailures)

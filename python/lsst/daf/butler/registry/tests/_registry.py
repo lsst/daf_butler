@@ -959,7 +959,8 @@ class RegistryTests(ABC):
 
     def testInstrumentDimensions(self):
         """Test queries involving only instrument dimensions, with no joins to
-        skymap."""
+        skymap.
+        """
         registry = self.makeRegistry()
 
         # need a bunch of dimensions and datasets for test
@@ -2442,9 +2443,7 @@ class RegistryTests(ABC):
         }
 
         def query(where):
-            """Helper function that queries for visit data IDs and returns
-            results as a sorted, deduplicated list of visit IDs.
-            """
+            """Return results as a sorted, deduplicated list of visit IDs."""
             return sorted(
                 {
                     dataId["visit"]
@@ -2562,7 +2561,7 @@ class RegistryTests(ABC):
 
     def testQueryResultSummaries(self):
         """Test summary methods like `count`, `any`, and `explain_no_results`
-        on `DataCoordinateQueryResults` and `DatasetQueryResults`
+        on `DataCoordinateQueryResults` and `DatasetQueryResults`.
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")

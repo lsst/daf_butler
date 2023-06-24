@@ -42,12 +42,15 @@ class CliLogTestCase(CliLogTestBase, unittest.TestCase):
     directly depend on that package. When running in an environment where
     `lsst.log` is setup then this will test use of `lsst.log`. This test also
     runs in obs_base which does provide coverage of python `logging` and
-    `lsst.log` in CI."""
+    `lsst.log` in CI.
+    """
 
     pass
 
 
 class ConvertPyLogLevelTestCase(unittest.TestCase):
+    """Test python command-line log levels."""
+
     def test_convertToPyLogLevel(self):
         self.assertEqual(logging.CRITICAL, CliLog._getPyLogLevel("CRITICAL"))
         self.assertEqual(logging.ERROR, CliLog._getPyLogLevel("ERROR"))

@@ -73,6 +73,7 @@ TESTDIR = os.path.dirname(__file__)
 
 
 def makeExampleMetrics(use_none: bool = False) -> MetricsExample:
+    """Make example dataset that can be stored in butler."""
     if use_none:
         array = None
     else:
@@ -277,7 +278,6 @@ class DatastoreTests(DatastoreTestsBase):
 
     def testTrustGetRequest(self) -> None:
         """Check that we can get datasets that registry knows nothing about."""
-
         datastore = self.makeDatastore()
 
         # Skip test if the attribute is not defined
@@ -712,7 +712,8 @@ class DatastoreTests(DatastoreTestsBase):
 
                 def failOutsideRoot(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     """Can't ingest files outside of datastore root unless
-                    auto."""
+                    auto.
+                    """
                     if mode == "auto":
                         datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                         self.assertTrue(datastore.exists(ref))
@@ -740,7 +741,8 @@ class DatastoreTests(DatastoreTestsBase):
 
                 def succeed(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
                     """Ingest a file by transferring it to the template
-                    location."""
+                    location.
+                    """
                     datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
@@ -908,7 +910,8 @@ class DatastoreTests(DatastoreTestsBase):
 
     def test_simple_class_put_get(self) -> None:
         """Test that we can put and get a simple class with dict()
-        constructor."""
+        constructor.
+        """
         datastore = self.makeDatastore()
         data = MetricsExample(summary={"a": 1}, data=[1, 2, 3], output={"b": 2})
         self._assert_different_puts(datastore, "MetricsExample", data)
@@ -984,8 +987,8 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
 
     def testCanNotDeterminePutFormatterLocation(self) -> None:
         """Verify that the expected exception is raised if the FileDatastore
-        can not determine the put formatter location."""
-
+        can not determine the put formatter location.
+        """
         _ = makeExampleMetrics()
         datastore = self.makeDatastore()
 
@@ -1027,7 +1030,6 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
 
     def testChecksum(self) -> None:
         """Ensure that checksums have not been calculated."""
-
         datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         dimensions = self.universe.extract(("visit", "physical_filter"))
@@ -1096,6 +1098,8 @@ class TrashDatastoreTestCase(PosixDatastoreTestCase):
 
 
 class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
+    """Test datastore cleans up on failure."""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def setUp(self) -> None:
@@ -1184,7 +1188,8 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
 
     def testConstraints(self) -> None:
         """Test constraints model.  Assumes that each test class has the
-        same constraints."""
+        same constraints.
+        """
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
 
@@ -1242,7 +1247,7 @@ class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.Test
 
 
 class InMemoryDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
-    """InMemoryDatastore specialization"""
+    """InMemoryDatastore specialization."""
 
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastoreP.yaml")
     canIngest = False
@@ -1250,19 +1255,20 @@ class InMemoryDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.T
 
 class ChainedDatastoreConstraintsNativeTestCase(PosixDatastoreConstraintsTestCase):
     """ChainedDatastore specialization using a POSIXDatastore and constraints
-    at the ChainedDatstore"""
+    at the ChainedDatstore.
+    """
 
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastorePa.yaml")
 
 
 class ChainedDatastoreConstraintsTestCase(PosixDatastoreConstraintsTestCase):
-    """ChainedDatastore specialization using a POSIXDatastore"""
+    """ChainedDatastore specialization using a POSIXDatastore."""
 
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastoreP.yaml")
 
 
 class ChainedDatastoreMemoryConstraintsTestCase(InMemoryDatastoreConstraintsTestCase):
-    """ChainedDatastore specialization using all InMemoryDatastore"""
+    """ChainedDatastore specialization using all InMemoryDatastore."""
 
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2P.yaml")
     canIngest = False
@@ -1270,7 +1276,8 @@ class ChainedDatastoreMemoryConstraintsTestCase(InMemoryDatastoreConstraintsTest
 
 class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.TestCase):
     """Test that a chained datastore can control constraints per-datastore
-    even if child datastore would accept."""
+    even if child datastore would accept.
+    """
 
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastorePb.yaml")
 
@@ -1769,6 +1776,8 @@ class DatasetRefURIsTestCase(unittest.TestCase):
 
 
 class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
+    """Test the StoredFileInfo class."""
+
     storageClassFactory = StorageClassFactory()
 
     def test_StoredFileInfo(self) -> None:

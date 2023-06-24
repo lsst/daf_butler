@@ -38,12 +38,14 @@ if TYPE_CHECKING:
 
 
 class RegistryConfig(ConfigSubset):
+    """Configuration specific to a butler Registry."""
+
     component = "registry"
     requiredKeys = ("db",)
     defaultConfigFile = "registry.yaml"
 
     def getDialect(self) -> str:
-        """Parses the `db` key of the config and returns the database dialect.
+        """Parse the `db` key of the config and returns the database dialect.
 
         Returns
         -------
@@ -54,7 +56,7 @@ class RegistryConfig(ConfigSubset):
         return conStr.get_backend_name()
 
     def getDatabaseClass(self) -> type[Database]:
-        """Returns the `Database` class targeted by configuration values.
+        """Return the `Database` class targeted by configuration values.
 
         The appropriate class is determined by parsing the `db` key to extract
         the dialect, and then looking that up under the `engines` key of the

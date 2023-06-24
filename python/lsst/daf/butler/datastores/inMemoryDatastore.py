@@ -311,7 +311,6 @@ class InMemoryDatastore(GenericBaseDatastore):
         ValueError
             Formatter failed to process the dataset.
         """
-
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
         realID, storedItemInfo = self._get_dataset_info(ref)
@@ -434,7 +433,6 @@ class InMemoryDatastore(GenericBaseDatastore):
         The URIs returned for in-memory datastores are not usable but
         provide an indication of the associated dataset.
         """
-
         # Include the dataID as a URI query
         query = urlencode(ref.dataId)
 

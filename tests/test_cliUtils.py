@@ -42,6 +42,8 @@ from lsst.daf.butler.cli.utils import (
 
 
 class ArgumentHelpGeneratorTestCase(unittest.TestCase):
+    """Test the help system."""
+
     def testHelp(self):
         @click.command()
         # Use custom help in the arguments so that any changes to default help
@@ -49,7 +51,7 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
         @repo_argument(help="repo help text")
         @directory_argument(help="directory help text")
         def cli():
-            """The cli help message."""
+            """The cli help message."""  # noqa: D401
             pass
 
         self.runTest(cli)
@@ -61,18 +63,17 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
         @repo_argument(help="repo help text")
         @directory_argument(help="directory help text")
         def cli():
-            """The cli
-            help
-            message."""
+            """The cli help message."""  # noqa: D401
             pass
 
         self.runTest(cli)
 
     def runTest(self, cli):
-        """Tests `utils.addArgumentHelp` and its use in repo_argument and
+        """Test `utils.addArgumentHelp` and its use in repo_argument and
         directory_argument; verifies that the argument help gets added to the
         command function help, and that it's added in the correct order. See
-        addArgumentHelp for more details."""
+        addArgumentHelp for more details.
+        """
         expected = """Usage: cli [OPTIONS] REPO DIRECTORY
 
   The cli help message.
@@ -90,6 +91,8 @@ Options:
 
 
 class UnwrapStringTestCase(unittest.TestCase):
+    """Test string unwrapping."""
+
     def test_leadingNewline(self):
         testStr = """
             foo bar
@@ -133,15 +136,18 @@ class UnwrapStringTestCase(unittest.TestCase):
 
 
 class MWOptionTest(unittest.TestCase):
+    """Test MWOption."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 
-    def test_addElipsisToMultiple(self):
-        """Verify that MWOption adds elipsis to the option metavar when
+    def test_addEllipsisToMultiple(self):
+        """Verify that MWOption adds ellipsis to the option metavar when
         `multiple=True`
 
-        The default behavior of click is to not add elipsis to options that
-        have `multiple=True`."""
+        The default behavior of click is to not add ellipsis to options that
+        have `multiple=True`.
+        """
 
         @click.command()
         @click.option("--things", cls=MWOption, multiple=True)
@@ -154,13 +160,14 @@ class MWOptionTest(unittest.TestCase):
   --things TEXT ..."""
         self.assertIn(expectedOutput, result.output)
 
-    def test_addElipsisToNargs(self):
+    def test_addEllipsisToNargs(self):
         """Verify that MWOption adds " ..." after the option metavar when
         `nargs` is set to more than 1 and less than 1.
 
-        The default behavior of click is to add elipsis when nargs does not
-        equal 1, but it does not put a space before the elipsis and we prefer
-        a space between the metavar and the elipsis."""
+        The default behavior of click is to add ellipsis when nargs does not
+        equal 1, but it does not put a space before the ellipsis and we prefer
+        a space between the metavar and the ellipsis.
+        """
         for numberOfArgs in (0, 1, 2):  # nargs must be >= 0 for an option
 
             @click.command()
@@ -192,9 +199,10 @@ class MWArgumentDecoratorTest(unittest.TestCase):
         arguments are declared.
 
         Verify that MWArgument adds " ..." after the option metavar when
-        `nargs` != 1. The default behavior of click is to add elipsis when
-        nargs does not equal 1, but it does not put a space before the elipsis
-        and we prefer a space between the metavar and the elipsis."""
+        `nargs` != 1. The default behavior of click is to add ellipsis when
+        nargs does not equal 1, but it does not put a space before the ellipsis
+        and we prefer a space between the metavar and the ellipsis.
+        """
         # nargs can be -1 for any number of args, or >= 1 for a specified
         # number of arguments.
 
@@ -267,7 +275,8 @@ class MWOptionDecoratorTest(unittest.TestCase):
 
     def testOverride(self):
         """Test using the MWOptionDecorator with a command and overriding one
-        of the default values."""
+        of the default values.
+        """
         mock = MagicMock()
 
         @click.command()
@@ -283,7 +292,8 @@ class MWOptionDecoratorTest(unittest.TestCase):
 
 class SectionOptionTest(unittest.TestCase):
     """Tests for the option_section decorator that inserts section break
-    headings between options in the --help output of a command."""
+    headings between options in the --help output of a command.
+    """
 
     @staticmethod
     @click.command()
@@ -298,7 +308,8 @@ class SectionOptionTest(unittest.TestCase):
 
     def test_section_help(self):
         """Verify that the section break is printed in the help output in the
-        expected location and with expected formatting."""
+        expected location and with expected formatting.
+        """
         result = self.runner.invoke(self.cli, ["--help"])
         # \x20 is a space, added explicitly below to prevent the
         # normally-helpful editor setting "remove trailing whitespace" from
@@ -325,6 +336,8 @@ Section break between metasyntactic variables.
 
 
 class MWPathTest(unittest.TestCase):
+    """Test MWPath."""
+
     def getCmd(self, exists):
         @click.command()
         @click.option("--name", type=MWPath(exists=exists))
@@ -339,7 +352,8 @@ class MWPathTest(unittest.TestCase):
     def test_exist(self):
         """Test the exist argument, verify that True means the file must exist,
         False means the file must not exist, and None means that the file may
-        or may not exist."""
+        or may not exist.
+        """
         with self.runner.isolated_filesystem():
             mustExistCmd = self.getCmd(exists=True)
             mayExistCmd = self.getCmd(exists=None)
@@ -371,6 +385,8 @@ class MWPathTest(unittest.TestCase):
 
 
 class MWCommandTest(unittest.TestCase):
+    """Test MWCommand."""
+
     def setUp(self):
         self.runner = click.testing.CliRunner()
         self.ctx = None

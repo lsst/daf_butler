@@ -337,7 +337,7 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         region: lsst.sphgeom.Region,
     ) -> Predicate:
         """Return a `~lsst.daf.relation.column_expressions.Predicate` that
-        tests whether two region columns overlap
+        tests whether two region columns overlap.
 
         This operation only works with `iteration engines
         <lsst.daf.relation.iteration.Engine>`; it is usually used to refine the
@@ -375,7 +375,7 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         rhs: ColumnExpression,
     ) -> Predicate:
         """Return a `~lsst.daf.relation.column_expressions.Predicate` that
-        tests whether two regions overlap
+        tests whether two regions overlap.
 
         This operation only works with
         `iteration engines <lsst.daf.relation.iteration.Engine>`; it is usually

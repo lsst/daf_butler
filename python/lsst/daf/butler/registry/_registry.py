@@ -746,7 +746,7 @@ class Registry(ABC):
         expand: bool = True,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
     ) -> list[DatasetRef]:
-        """Insert one or more datasets into the `Registry`
+        """Insert one or more datasets into the `Registry`.
 
         This always adds new datasets; to associate existing datasets with
         a new collection, use ``associate``.
@@ -1666,7 +1666,7 @@ class Registry(ABC):
 
     @property
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:
-        """ObsCore manager instance for this registry
+        """The ObsCore manager instance for this registry
         (`~.interfaces.ObsCoreTableManager`
         or `None`).
 

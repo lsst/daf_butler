@@ -162,7 +162,6 @@ class DbAuth:
 
         Examples
         --------
-
         The connection URL
         ``postgresql://user@host.example.com:5432/my_database`` matches against
         the identical string as a pattern.  Other patterns that would match
@@ -271,7 +270,7 @@ class DbAuth:
             dictionary is missing elements, the authorization file is
             misconfigured, or no matching authorization is found.
 
-        See also
+        See Also
         --------
         getAuth
         """

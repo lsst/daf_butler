@@ -34,6 +34,8 @@ __all__ = ["ArrowAstropyDelegate"]
 
 
 class ArrowAstropyDelegate(ArrowTableDelegate):
+    """Delegate that understands the ``ArrowAstropy`` storage class."""
+
     _datasetType = atable.Table
 
     def getComponent(self, composite: atable.Table, componentName: str) -> Any:

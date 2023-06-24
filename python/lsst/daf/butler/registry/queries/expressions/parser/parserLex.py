@@ -79,13 +79,12 @@ class ParserLex:
 
     @classmethod
     def make_lexer(cls, reflags=0, **kwargs):
-        """Factory for lexers.
+        """Return lexer.
 
         Returns
         -------
         `ply.lex.Lexer` instance.
         """
-
         # make sure that flags that we need are there
         kw = dict(reflags=reflags | re.IGNORECASE | re.VERBOSE)
         kw.update(kwargs)
@@ -157,19 +156,19 @@ class ParserLex:
 
     # Define a rule so we can track line numbers
     def t_newline(self, t):
-        r"\n+"
+        r"""\n+"""
         t.lexer.lineno += len(t.value)
 
     # quoted string prefixed with 'T'
     def t_TIME_LITERAL(self, t):
-        r"T'.*?'"
+        """T'.*?'"""
         # strip quotes
         t.value = t.value[2:-1]
         return t
 
     # quoted string
     def t_STRING_LITERAL(self, t):
-        r"'.*?'"
+        """'.*?'"""
         # strip quotes
         t.value = t.value[1:-1]
         return t
@@ -196,13 +195,13 @@ class ParserLex:
 
     # qualified identifiers have one or two dots
     def t_QUALIFIED_IDENTIFIER(self, t):
-        r"[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*){1,2}"
+        r"""[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*){1,2}"""
         t.type = "QUALIFIED_IDENTIFIER"
         return t
 
     # we only support ASCII in identifier names
     def t_SIMPLE_IDENTIFIER(self, t):
-        r"[a-zA-Z_][a-zA-Z0-9_]*"
+        """[a-zA-Z_][a-zA-Z0-9_]*"""
         # Check for reserved words and make sure they are upper case
         reserved = self.reserved.get(t.value.upper())
         if reserved is not None:
@@ -213,6 +212,6 @@ class ParserLex:
         return t
 
     def t_error(self, t):
-        "Error handling rule"
+        """Error handling rule"""
         lexer = t.lexer
         raise ParserLexError(lexer.lexdata, t.value, lexer.lexpos, lexer.lineno)

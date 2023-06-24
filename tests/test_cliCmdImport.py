@@ -30,6 +30,8 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class ImportTestCase(CliCmdTestBase, unittest.TestCase):
+    """Test the butler import command-line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
 
     @staticmethod
@@ -53,7 +55,8 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
     def test_missingArgument(self):
         """Verify the command fails if either of the positional arguments,
-        REPO or DIRECTORY, is missing."""
+        REPO or DIRECTORY, is missing.
+        """
         self.run_missing(["import", "foo"], r"Error: Missing argument ['\"]DIRECTORY['\"].")
 
 

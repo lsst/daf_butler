@@ -42,10 +42,12 @@ def queryDimensionRecords(
     limit: int,
     offset: int,
 ) -> Table | None:
-    # Docstring for supported parameters is the same as
-    # Registry.queryDimensionRecords except for ``no_check``, which is the
-    # inverse of ``check``.
+    """Query dimension records.
 
+    Docstring for supported parameters is the same as
+    `~lsst.daf.butler.Registry.queryDimensionRecords` except for ``no_check``,
+    which is the inverse of ``check``.
+    """
     butler = Butler(repo)
 
     query_collections: Iterable[str] | EllipsisType | None = None

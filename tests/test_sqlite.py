@@ -38,6 +38,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 @contextmanager
 def removeWritePermission(filename):
+    """Remove the write permission on a file."""
     mode = os.stat(filename).st_mode
     try:
         os.chmod(filename, stat.S_IREAD)
@@ -178,8 +179,8 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
 class SqliteFileRegistryTests(RegistryTests):
     """Tests for `Registry` backed by a SQLite file-based database.
 
-    Note
-    ----
+    Notes
+    -----
     This is not a subclass of `unittest.TestCase` but to avoid repetition it
     defines methods that override `unittest.TestCase` methods. To make this
     work sublasses have to have this class first in the bases list.

@@ -31,6 +31,8 @@ from .options import collections_option, dataset_type_option, where_option
 
 
 class query_datasets_options(OptionGroup):  # noqa: N801
+    """A collection of options common to querying datasets."""
+
     def __init__(self, repo: bool = True, showUri: bool = True, useArguments: bool = True) -> None:
         self.decorators = []
         if repo:

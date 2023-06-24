@@ -64,8 +64,8 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
     def assertIsFormatter(self, formatter):
         """Check that the supplied parameter is either a Formatter instance
-        or Formatter class."""
-
+        or Formatter class.
+        """
         if inspect.isclass(formatter):
             self.assertTrue(issubclass(formatter, Formatter), f"Is {formatter} a Formatter")
         else:
@@ -95,7 +95,6 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
     def testExtensionValidation(self):
         """Test extension validation"""
-
         for file, single_ok, multi_ok in (
             ("e.fits", True, True),
             ("e.fit", False, True),

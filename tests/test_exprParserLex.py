@@ -48,7 +48,6 @@ class ParserLexTestCase(unittest.TestCase):
 
     def testInstantiate(self):
         """Tests for making ParserLex instances"""
-
         default_reflags = re.IGNORECASE | re.VERBOSE
         lexer = ParserLex.make_lexer()
         self.assertEqual(lexer.lexreflags, default_reflags)

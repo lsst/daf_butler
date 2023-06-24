@@ -751,7 +751,7 @@ class DatabaseTests(ABC):
             return names1, names2
 
         async def side2() -> None:
-            """The other side of the concurrent locking test.
+            """Other side of the concurrent locking test.
 
             This side just waits a bit and then tries to insert a row into the
             table that the other side is trying to lock.  Hopefully that
@@ -763,7 +763,9 @@ class DatabaseTests(ABC):
             """
 
             def toRunInThread():
-                """SQLite locking isn't asyncio-friendly unless we actually
+                """Create new SQLite connection for use in thread.
+
+                SQLite locking isn't asyncio-friendly unless we actually
                 run it in another thread.  And SQLite gets very unhappy if
                 we try to use a connection from multiple threads, so we have
                 to create the new connection here instead of out in the main

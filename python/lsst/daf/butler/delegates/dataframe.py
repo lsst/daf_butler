@@ -38,6 +38,8 @@ __all__ = ["DataFrameDelegate"]
 
 
 class DataFrameDelegate(StorageClassDelegate):
+    """Delegate that understands the ``DataFrame`` storage class."""
+
     def getComponent(self, composite: pandas.DataFrame, componentName: str) -> Any:
         """Get a component from a DataFrame.
 

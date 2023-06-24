@@ -171,7 +171,6 @@ def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -
         `~lsst.daf.butler.DimensionRecord` for each input name. Related
         dimensions (e.g., instruments and detectors) are linked arbitrarily.
     """
-
     # Create values for all dimensions that are (recursive) required or implied
     # dependencies of the given ones.
     complete_data_id_values = {}
@@ -550,7 +549,7 @@ class DatastoreMock:
     def _mock_export(
         refs: Iterable[DatasetRef], *, directory: str | None = None, transfer: str | None = None
     ) -> Iterable[FileDataset]:
-        """A mock of `Datastore.export` that satisfies the requirement that
+        """Mock of `Datastore.export` that satisfies the requirement that
         the refs passed in are included in the `FileDataset` objects
         returned.
 
@@ -572,7 +571,7 @@ class DatastoreMock:
         parameters: Mapping[str, Any] | None = None,
         storageClass: StorageClass | str | None = None,
     ) -> tuple[DatasetId, Mapping[str, Any] | None]:
-        """A mock of `Datastore.get` that just returns the integer dataset ID
+        """Mock of `Datastore.get` that just returns the integer dataset ID
         value and parameters it was given.
         """
         return (ref.id, parameters)

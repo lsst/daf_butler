@@ -35,6 +35,8 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
+    """Test the retrieve-artifacts command-line."""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
 

@@ -273,7 +273,6 @@ class SimpleButlerTestCase(unittest.TestCase):
 
     def testButlerGet(self):
         """Test that butler.get can work with different variants."""
-
         # Import data to play with.
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
@@ -633,7 +632,6 @@ class SimpleButlerTestCase(unittest.TestCase):
 
     def testWildcardQueries(self):
         """Test that different collection type queries work."""
-
         # Import data to play with.
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))

@@ -98,8 +98,11 @@ def queryDataIds(
     limit: int,
     offset: int,
 ) -> tuple[AstropyTable | None, str | None]:
-    # Docstring for supported parameters is the same as Registry.queryDataIds
+    """Query for data IDs.
 
+    Docstring for supported parameters is the same as
+    `~lsst.daf.butler.Registry.queryDataIds`.
+    """
     butler = Butler(repo)
 
     if datasets and collections and not dimensions:

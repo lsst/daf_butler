@@ -36,6 +36,8 @@ __all__ = ["ArrowNumpyDictDelegate"]
 
 
 class ArrowNumpyDictDelegate(ArrowTableDelegate):
+    """Delegate that understands the ``ArrowNumpyDict`` storage class."""
+
     _datasetType = dict
 
     def getComponent(self, composite: dict[str, np.ndarray], componentName: str) -> Any:

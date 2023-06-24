@@ -197,7 +197,7 @@ class DimensionUniverse:
         return self._namespace
 
     def isCompatibleWith(self, other: DimensionUniverse) -> bool:
-        """Check compatibility between this `DimensionUniverse` and another
+        """Check compatibility between this `DimensionUniverse` and another.
 
         Parameters
         ----------

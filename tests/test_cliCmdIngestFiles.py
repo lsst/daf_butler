@@ -37,6 +37,8 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
+    """Test ingest-files command line."""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def setUp(self):

@@ -289,7 +289,6 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
 
     def _check_dataset_run(self, run: str) -> bool:
         """Check that specified run collection matches know patterns."""
-
         if not self.run_patterns:
             # Empty list means take anything.
             return True

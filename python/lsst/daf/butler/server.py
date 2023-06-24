@@ -85,11 +85,13 @@ def _make_global_butler() -> None:
 
 
 def butler_readonly_dependency() -> Butler:
+    """Return global read-only butler."""
     _make_global_butler()
     return Butler(butler=GLOBAL_READONLY_BUTLER)
 
 
 def butler_readwrite_dependency() -> Butler:
+    """Return read-write butler."""
     _make_global_butler()
     return Butler(butler=GLOBAL_READWRITE_BUTLER)
 
@@ -116,6 +118,7 @@ def unpack_dataId(butler: Butler, data_id: SerializedDataCoordinate | None) -> D
 
 @app.get("/butler/")
 def read_root() -> str:
+    """Return message when accessing the root URL."""
     return "Welcome to Excalibur... aka your Butler Server"
 
 
@@ -154,6 +157,7 @@ def get_uri(id: DatasetId, butler: Butler = Depends(butler_readonly_dependency))
 
 @app.put("/butler/v1/registry/refresh")
 def refresh(butler: Butler = Depends(butler_readonly_dependency)) -> None:
+    """Refresh the registry cache."""
     # Unclear whether this should exist. Which butler is really being
     # refreshed? How do we know the server we are refreshing is used later?
     # For testing at the moment it is important if a test adds a dataset type
@@ -172,6 +176,7 @@ def refresh(butler: Butler = Depends(butler_readonly_dependency)) -> None:
 def get_dataset_type(
     datasetTypeName: str, butler: Butler = Depends(butler_readonly_dependency)
 ) -> SerializedDatasetType:
+    """Return the dataset type."""
     datasetType = butler.registry.getDatasetType(datasetTypeName)
     return datasetType.to_simple()
 
@@ -187,6 +192,7 @@ def get_dataset_type(
 def query_all_dataset_types(
     components: bool | None = Query(None), butler: Butler = Depends(butler_readonly_dependency)
 ) -> list[SerializedDatasetType]:
+    """Return all dataset types."""
     datasetTypes = butler.registry.queryDatasetTypes(..., components=components)
     return [d.to_simple() for d in datasetTypes]
 
@@ -205,6 +211,7 @@ def query_dataset_types_re(
     components: bool | None = Query(None),
     butler: Butler = Depends(butler_readonly_dependency),
 ) -> list[SerializedDatasetType]:
+    """Return all dataset types matching a regular expression."""
     expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
 
     datasetTypes = butler.registry.queryDatasetTypes(expression_params.expression(), components=components)
@@ -213,6 +220,7 @@ def query_dataset_types_re(
 
 @app.get("/butler/v1/registry/collection/chain/{parent:path}", response_model=list[str])
 def get_collection_chain(parent: str, butler: Butler = Depends(butler_readonly_dependency)) -> list[str]:
+    """Return the collection chain members."""
     chain = butler.registry.getCollectionChain(parent)
     return list(chain)
 
@@ -227,6 +235,7 @@ def query_collections(
     includeChains: bool | None = Query(None),
     butler: Butler = Depends(butler_readonly_dependency),
 ) -> list[str]:
+    """Return collections matching query."""
     expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
     collectionTypes = CollectionType.from_names(collectionType)
     dataset_type = butler.registry.getDatasetType(datasetType) if datasetType else None
@@ -243,6 +252,7 @@ def query_collections(
 
 @app.get("/butler/v1/registry/collection/type/{name:path}", response_model=str)
 def get_collection_type(name: str, butler: Butler = Depends(butler_readonly_dependency)) -> str:
+    """Return type for named collection."""
     collectionType = butler.registry.getCollectionType(name)
     return collectionType.name
 
@@ -254,6 +264,7 @@ def register_collection(
     doc: str | None = Query(None),
     butler: Butler = Depends(butler_readwrite_dependency),
 ) -> str:
+    """Register a collection."""
     collectionType = CollectionType.from_name(collectionTypeName)
     butler.registry.registerCollection(name, collectionType, doc)
 
@@ -276,6 +287,7 @@ def register_collection(
 def get_dataset(
     id: DatasetId, butler: Butler = Depends(butler_readonly_dependency)
 ) -> SerializedDatasetRef | None:
+    """Return a single dataset reference."""
     ref = butler.registry.getDataset(id)
     if ref is not None:
         return ref.to_simple()
@@ -286,6 +298,7 @@ def get_dataset(
 
 @app.get("/butler/v1/registry/datasetLocations/{id}", response_model=list[str])
 def get_dataset_locations(id: DatasetId, butler: Butler = Depends(butler_readonly_dependency)) -> list[str]:
+    """Return locations of datasets."""
     # Takes an ID so need to convert to a real DatasetRef
     fake_ref = SerializedDatasetRef(id=id)
 
@@ -317,6 +330,7 @@ def find_dataset(
     collections: list[str] | None = Query(None),
     butler: Butler = Depends(butler_readonly_dependency),
 ) -> SerializedDatasetRef | None:
+    """Return a single dataset reference matching query."""
     collection_query = collections if collections else None
 
     ref = butler.registry.findDataset(
@@ -337,6 +351,7 @@ def find_dataset(
 def query_datasets(
     query: QueryDatasetsModel, butler: Butler = Depends(butler_readonly_dependency)
 ) -> list[SerializedDatasetRef]:
+    """Return datasets matching query."""
     # This method might return a lot of results
 
     if query.collections:
@@ -371,6 +386,7 @@ def query_datasets(
 def query_data_ids(
     query: QueryDataIdsModel, butler: Butler = Depends(butler_readonly_dependency)
 ) -> list[SerializedDataCoordinate]:
+    """Return data IDs matching query."""
     if query.datasets:
         datasets = query.datasets.expression()
     else:
@@ -406,6 +422,7 @@ def query_data_ids(
 def query_dimension_records(
     element: str, query: QueryDimensionRecordsModel, butler: Butler = Depends(butler_readonly_dependency)
 ) -> list[SerializedDimensionRecord]:
+    """Return dimension records matching query."""
     if query.datasets:
         datasets = query.datasets.expression()
     else:

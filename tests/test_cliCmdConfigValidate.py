@@ -31,6 +31,8 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class ValidateTest(CliCmdTestBase, unittest.TestCase):
+    """Test the config validation command-line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.configValidate"
 
     @staticmethod

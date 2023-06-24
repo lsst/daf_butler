@@ -31,6 +31,8 @@ TESTDIR = os.path.dirname(__file__)
 
 
 class NamedKeyDictTest(unittest.TestCase):
+    """Tests for NamedKeyDict."""
+
     def setUp(self):
         self.TestTuple = namedtuple("TestTuple", ("name", "id"))
         self.a = self.TestTuple(name="a", id=1)
@@ -103,6 +105,8 @@ class NamedKeyDictTest(unittest.TestCase):
 
 
 class NamedValueSetTest(unittest.TestCase):
+    """Tests for NamedValueSet."""
+
     def setUp(self):
         self.TestTuple = namedtuple("TestTuple", ("name", "id"))
         self.a = self.TestTuple(name="a", id=1)
@@ -171,6 +175,8 @@ class NamedValueSetTest(unittest.TestCase):
 
 
 class GlobToRegexTestCase(unittest.TestCase):
+    """Tests for glob to regex."""
+
     def testStarInList(self):
         """Test that if a one of the items in the expression list is a star
         (stand-alone) then ``...`` is returned (which implies no restrictions)

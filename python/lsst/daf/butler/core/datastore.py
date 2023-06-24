@@ -67,6 +67,8 @@ class DatastoreValidationError(ValidationError):
 
 @dataclasses.dataclass(frozen=True)
 class Event:
+    """Representation of an event that can be rolled back."""
+
     __slots__ = {"name", "undoFunc", "args", "kwargs"}
     name: str
     undoFunc: Callable

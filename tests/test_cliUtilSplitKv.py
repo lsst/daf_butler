@@ -39,7 +39,8 @@ class SplitKvTestCase(unittest.TestCase):
 
     def test_single_tuple(self):
         """Test that a single kv pair converts to a tuple when
-        return_type=tuple."""
+        return_type=tuple.
+        """
         self.assertEqual(split_kv("context", "param", "first=1", return_type=tuple), (("first", "1"),))
 
     def test_multiple_dict(self):
@@ -48,7 +49,8 @@ class SplitKvTestCase(unittest.TestCase):
 
     def test_multiple_tuple(self):
         """Test that multiple comma separated kv pairs convert to a tuple when
-        return_type=tuple."""
+        return_type=tuple.
+        """
         self.assertEqual(
             split_kv("context", "param", "first=1,second=2", return_type=tuple),
             (("first", "1"), ("second", "2")),
@@ -56,7 +58,8 @@ class SplitKvTestCase(unittest.TestCase):
 
     def test_unseparated(self):
         """Test that a value without a key converts to a kv pair with an empty
-        string key."""
+        string key.
+        """
         self.assertEqual(
             split_kv("context", "param", "first,second=2", unseparated_okay=True),
             {"": "first", "second": "2"},
@@ -79,18 +82,21 @@ class SplitKvTestCase(unittest.TestCase):
 
     def test_missingSeparator(self):
         """Test that an input with no separator raises when
-        unseparated_okay=False (this is the default value)."""
+        unseparated_okay=False (this is the default value).
+        """
         with self.assertRaises(click.ClickException):
             split_kv("context", "param", "first 1")
 
     def test_unseparatedOkay(self):
         """Test that that the default key is used for values without a
-        separator when unseparated_okay=True."""
+        separator when unseparated_okay=True.
+        """
         self.assertEqual(split_kv("context", "param", "foo", unseparated_okay=True), {"": "foo"})
 
     def test_unseparatedOkay_list(self):
         """Test that that the default key is used for values without a
-        separator when unseparated_okay=True and the return_type is tuple."""
+        separator when unseparated_okay=True and the return_type is tuple.
+        """
         self.assertEqual(
             split_kv("context", "param", "foo,bar", unseparated_okay=True, return_type=tuple),
             (("", "foo"), ("", "bar")),
@@ -98,7 +104,8 @@ class SplitKvTestCase(unittest.TestCase):
 
     def test_unseparatedOkay_defaultKey(self):
         """Test that that the default key can be set and is used for values
-        without a separator when unseparated_okay=True."""
+        without a separator when unseparated_okay=True.
+        """
         self.assertEqual(
             split_kv("context", "param", "foo", unseparated_okay=True, default_key=...), {...: "foo"}
         )

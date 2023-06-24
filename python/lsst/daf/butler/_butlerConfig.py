@@ -19,8 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""
-Configuration classes specific to the Butler
+"""Configuration classes specific to the Butler.
 """
 from __future__ import annotations
 
@@ -41,7 +40,7 @@ CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig, DatastoreConfig,
 
 
 class ButlerConfig(Config):
-    """Contains the configuration for a `Butler`
+    """Contains the configuration for a `Butler`.
 
     The configuration is read and merged with default configurations for
     the particular classes. The defaults are read according to the rules

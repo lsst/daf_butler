@@ -131,7 +131,6 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         Combining several tests into one case allows us to reuse the test repo,
         which saves execution time.
         """
-
         # Test wildcard with chained collections:
 
         # Add a couple chained collections
@@ -177,7 +176,6 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
 
     def testRemoveCmd(self):
         """Test remove command outputs."""
-
         # Test expected output with a non-existent collection:
 
         result = self.runner.invoke(butlerCli, ["remove-collections", self.root, "fake_collection"])

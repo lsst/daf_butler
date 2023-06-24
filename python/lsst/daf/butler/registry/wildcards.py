@@ -367,7 +367,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
 
 @dataclasses.dataclass(frozen=True)
 class CollectionWildcard:
-    """A validated wildcard for collection names
+    """A validated wildcard for collection names.
 
     The `from_expression` method should almost always be used to construct
     instances, as the regular constructor performs no checking of inputs (and

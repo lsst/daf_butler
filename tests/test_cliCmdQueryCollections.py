@@ -39,6 +39,8 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
+    """Test the query-collections command-line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryCollections"
 
     @staticmethod
@@ -79,6 +81,8 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
 
 class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
+    """Test the query-collections script interface."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -114,6 +118,8 @@ class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
 
 
 class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
+    """Test the collection-chain command-line interface."""
+
     def setUp(self):
         self.runner = LogCliRunner()
 

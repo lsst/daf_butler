@@ -33,8 +33,8 @@ from .configSupport import LookupKey
 
 
 class MappingFactory:
-    """
-    Register the mapping of some key to a python type and retrieve instances.
+    """Register the mapping of some key to a python type and retrieve
+    instances.
 
     Enables instances of these classes to be retrieved from the factory later.
     The class can be specified as an object, class or string.

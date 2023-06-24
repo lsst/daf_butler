@@ -82,7 +82,6 @@ def ingest_files(
     transfer : `str`, optional
         Transfer mode to use for ingest.
     """
-
     # Check that the formatter can be imported -- validate this as soon
     # as possible before we read a potentially large table file.
     if formatter:
@@ -202,8 +201,9 @@ def extract_datasets_from_table(
 
 
 def parse_data_id_tuple(data_ids: tuple[str, ...], universe: DimensionUniverse) -> dict[str, Any]:
-    # Convert any additional k=v strings in the dataId tuple to dict
-    # form.
+    """Convert any additional k=v strings in the dataId tuple to dict
+    form.
+    """
     data_id: dict[str, Any] = {}
     for id_str in data_ids:
         dimension_str, value = id_str.split("=")

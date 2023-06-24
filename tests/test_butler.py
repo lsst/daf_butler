@@ -47,7 +47,7 @@ except ImportError:
     boto3 = None
 
     def mock_s3(cls):  # type: ignore[no-untyped-def]
-        """A no-op decorator in case moto mock_s3 can not be imported."""
+        """No-op decorator in case moto mock_s3 can not be imported."""
         return cls
 
 
@@ -118,6 +118,7 @@ def clean_environment() -> None:
 
 
 def makeExampleMetrics() -> MetricsExample:
+    """Return example dataset suitable for tests."""
     return MetricsExample(
         {"AM1": 5.2, "AM2": 30.6},
         {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
@@ -135,7 +136,8 @@ class TransactionTestError(Exception):
 
 class ButlerConfigTests(unittest.TestCase):
     """Simple tests for ButlerConfig that are not tested in any other test
-    cases."""
+    cases.
+    """
 
     def testSearchPath(self) -> None:
         configFile = os.path.join(TESTDIR, "config", "basic", "butler.yaml")
@@ -155,7 +157,8 @@ class ButlerConfigTests(unittest.TestCase):
 
 class ButlerPutGetTests(TestCaseMixin):
     """Helper method for running a suite of put/get tests from different
-    butler configurations."""
+    butler configurations.
+    """
 
     root: str
     default_run = "ingésτ😺"
@@ -790,7 +793,6 @@ class ButlerTests(ButlerPutGetTests):
 
     def testPytypePutCoercion(self) -> None:
         """Test python type coercion on Butler.get and put."""
-
         # Store some data with the normal example storage class.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         datasetTypeName = "test_metric"
@@ -1166,7 +1168,6 @@ class ButlerTests(ButlerPutGetTests):
 
     def testButlerRewriteDataId(self) -> None:
         """Test that dataIds can be rewritten based on dimension records."""
-
         butler = Butler(self.tmpConfigFile, run=self.default_run)
 
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
@@ -1223,7 +1224,7 @@ class FileDatastoreButlerTests(ButlerTests):
     """
 
     def checkFileExists(self, root: str | ResourcePath, relpath: str | ResourcePath) -> bool:
-        """Checks if file exists at a given path (relative to root).
+        """Check if file exists at a given path (relative to root).
 
         Test testPutTemplates verifies actual physical existance of the files
         in the requested location.
@@ -1315,8 +1316,11 @@ class FileDatastoreButlerTests(ButlerTests):
         self.runImportExportTest(storageClass)
 
     def runImportExportTest(self, storageClass: StorageClass) -> None:
-        """This test does an export to a temp directory and an import back
-        into a new temp directory repo. It does not assume a posix datastore"""
+        """Test exporting and importing.
+
+        This test does an export to a temp directory and an import back
+        into a new temp directory repo. It does not assume a posix datastore.
+        """
         exportButler = self.runPutGetTest(storageClass, "test_metric")
 
         # Test that we must have a file extension.
@@ -1660,7 +1664,6 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
     def testPytypeCoercion(self) -> None:
         """Test python type coercion on Butler.get and put."""
-
         # Store some data with the normal example storage class.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         datasetTypeName = "test_metric"
@@ -1933,7 +1936,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """The mocked s3 interface from moto."""
 
     def genRoot(self) -> str:
-        """Returns a random string of len 20 to serve as a root
+        """Return a random string of len 20 to serve as a root
         name for the temporary bucket repo.
 
         This is equivalent to tempfile.mkdtemp as this is what self.root
@@ -2120,7 +2123,6 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
     def assertButlerTransfers(self, purge: bool = False, storageClassName: str = "StructuredData") -> None:
         """Test that a run can be transferred to another butler."""
-
         storageClass = self.storageClassFactory.getStorageClass(storageClassName)
         datasetTypeName = "random_data"
 
@@ -2324,10 +2326,13 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
 
 class ChainedDatastoreTransfers(PosixDatastoreTransfers):
+    """Test transfers using a chained datastore."""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
 def setup_module(module: types.ModuleType) -> None:
+    """Set up the module for pytest."""
     clean_environment()
 
 

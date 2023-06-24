@@ -34,8 +34,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 @contextlib.contextmanager
 def modified_environment(**environ):
-    """
-    Temporarily set environment variables.
+    """Temporarily set environment variables.
 
     >>> with modified_environment(DAF_BUTLER_CONFIG_PATHS="/somewhere"):
     ...    os.environ["DAF_BUTLER_CONFIG_PATHS"] == "/somewhere"
@@ -59,43 +58,61 @@ def modified_environment(**environ):
 
 
 class ExampleWithConfigFileReference:
+    """Example class referenced from config file."""
+
     defaultConfigFile = "viacls.yaml"
 
 
 class ExampleWithConfigFileReference2:
+    """Example class referenced from config file."""
+
     defaultConfigFile = "viacls2.yaml"
 
 
 class ConfigTest(ConfigSubset):
+    """Default config class for testing."""
+
     component = "comp"
     requiredKeys = ("item1", "item2")
     defaultConfigFile = "testconfig.yaml"
 
 
 class ConfigTestPathlib(ConfigTest):
+    """Config with default using `pathlib.Path`."""
+
     defaultConfigFile = Path("testconfig.yaml")
 
 
 class ConfigTestEmpty(ConfigTest):
+    """Config pointing to empty file."""
+
     defaultConfigFile = "testconfig_empty.yaml"
     requiredKeys = ()
 
 
 class ConfigTestButlerDir(ConfigTest):
+    """Simple config."""
+
     defaultConfigFile = "testConfigs/testconfig.yaml"
 
 
 class ConfigTestNoDefaults(ConfigTest):
+    """Test config with no defaults."""
+
     defaultConfigFile = None
     requiredKeys = ()
 
 
 class ConfigTestAbsPath(ConfigTest):
+    """Test config with absolute paths."""
+
     defaultConfigFile = None
     requiredKeys = ()
 
 
 class ConfigTestCls(ConfigTest):
+    """Test config."""
+
     defaultConfigFile = "withcls.yaml"
 
 
@@ -186,7 +203,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertFalse(c)
 
     def testDict(self):
-        """Test toDict()"""
+        """Test toDict()."""
         c1 = Config({"a": {"b": 1}, "c": 2})
         self.assertIsInstance(c1["a"], Config)
         d1 = c1.toDict()
@@ -198,7 +215,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertNotEqual(d1["a"], c1["a"])
 
     def assertSplit(self, answer, *args):
-        """Helper function to compare string splitting"""
+        """Assert that string splitting was correct."""
         for s in (answer, *args):
             split = Config._splitIntoKeys(s)
             self.assertEqual(split, answer)
@@ -402,7 +419,6 @@ class ConfigTestCase(unittest.TestCase):
 
     def testSerializedString(self):
         """Test that we can create configs from strings"""
-
         serialized = {
             "yaml": """
 testing: hello
@@ -458,7 +474,6 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testDefaults(self):
         """Read of defaults"""
-
         # Supply the search path explicitly
         c = ConfigTest(searchPaths=(self.configDir,))
         self.assertIsInstance(c, ConfigSubset)
@@ -504,7 +519,6 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testNoDefaults(self):
         """Ensure that defaults can be turned off."""
-
         # Mandatory keys but no defaults
         c = ConfigTest({"item1": "a", "item2": "b", "item6": 6})
         self.assertEqual(len(c.filesRead), 0)
@@ -595,7 +609,6 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testStringInclude(self):
         """Using include directives in strings"""
-
         # See if include works for absolute path
         c = Config.fromYaml(f"something: !include {os.path.join(self.configDir, 'testconfig.yaml')}")
         self.assertEqual(c["something", "comp", "item3"], 3)
@@ -607,7 +620,8 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testIncludeConfigs(self):
         """Test the special includeConfigs key for pulling in additional
-        files."""
+        files.
+        """
         c = Config(os.path.join(self.configDir, "configIncludes.yaml"))
         self.assertEqual(c["comp", "item2"], "hello")
         self.assertEqual(c["comp", "item50"], 5000)
@@ -671,6 +685,8 @@ resource:
 
 
 class FileWriteConfigTestCase(unittest.TestCase):
+    """Test writing of configs."""
+
     def setUp(self):
         self.tmpdir = makeTestTempDir(TESTDIR)
 
@@ -679,7 +695,6 @@ class FileWriteConfigTestCase(unittest.TestCase):
 
     def testDump(self):
         """Test that we can write and read a configuration."""
-
         c = Config({"1": 2, "3": 4, "key3": 6, "dict": {"a": 1, "b": 2}})
 
         for format in ("yaml", "json"):

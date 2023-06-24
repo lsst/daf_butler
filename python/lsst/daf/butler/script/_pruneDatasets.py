@@ -61,6 +61,8 @@ class PruneDatasetsResult:
     onConfirmation: Callable | None
 
     class State(Enum):
+        """State associated with dataset pruning request."""
+
         INIT = auto()
         DRY_RUN_COMPLETE = auto()
         AWAITING_CONFIRMATION = auto()

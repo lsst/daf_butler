@@ -48,6 +48,8 @@ timespan_columns = "" if minversion(astropy, "5.1") else " [2]"
 
 
 class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
+    """Test the query-dimension-records command-line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDimensionRecords"
 
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")

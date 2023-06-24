@@ -50,11 +50,11 @@ class PgSpherePoint(UserDefinedType):
     cache_ok = True
 
     def get_col_spec(self, **kw: Any) -> str:
-        """Return name of the column type"""
+        """Return name of the column type."""
         return "SPOINT"
 
     def bind_processor(self, dialect: sqlalchemy.engine.Dialect) -> Callable:
-        """Return processor method for bind values"""
+        """Return processor method for bind values."""
 
         def _process(value: LonLat | None) -> str | None:
             if value is None:
@@ -78,11 +78,11 @@ class PgSpherePolygon(UserDefinedType):
     cache_ok = True
 
     def get_col_spec(self, **kw: Any) -> str:
-        """Return name of the column type"""
+        """Return name of the column type."""
         return "SPOLY"
 
     def bind_processor(self, dialect: sqlalchemy.engine.Dialect) -> Callable:
-        """Return processor method for bind values"""
+        """Return processor method for bind values."""
 
         def _process(value: Sequence[LonLat] | None) -> str | None:
             if value is None:

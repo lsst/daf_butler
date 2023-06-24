@@ -747,7 +747,7 @@ class TransformationWrapper(ABC):
     def unwrap(self) -> Node:
         """Return an transformed expression tree.
 
-        Return
+        Return:
         ------
         tree : `Node`
             Tree node representing the same expression (and form) as ``self``.
@@ -1096,7 +1096,8 @@ class TreeReconstructionVisitor(NormalFormVisitor[Node, Node, Node]):
         return node
 
     def _visitSequence(self, branches: Sequence[Node], operator: LogicalBinaryOperator) -> Node:
-        """Common recursive implementation for `visitInner` and `visitOuter`.
+        """Implement common recursive implementation for `visitInner` and
+        `visitOuter`.
 
         Parameters
         ----------

@@ -112,7 +112,6 @@ def associate(**kwargs: Any) -> None:
 @options_file_option()
 def butler_import(*args: Any, **kwargs: Any) -> None:
     """Import data into a butler repository."""
-
     # `reuse_ids`` is not used by `butlerImport`.
     reuse_ids = kwargs.pop("reuse_ids", False)
     if reuse_ids:

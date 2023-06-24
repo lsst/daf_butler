@@ -53,6 +53,8 @@ class PythonType3:
 
 
 class NotCopyable:
+    """Class with deep copying disabled."""
+
     def __deepcopy__(self, memo=None):
         raise RuntimeError("Can not be copied.")
 
@@ -63,7 +65,8 @@ class StorageClassFactoryTestCase(unittest.TestCase):
     def testCreation(self):
         """Test that we can dynamically create storage class subclasses.
 
-        This is critical for testing the factory functions."""
+        This is critical for testing the factory functions.
+        """
         className = "TestImage"
         sc = StorageClass(className, pytype=dict)
         self.assertIsInstance(sc, StorageClass)
@@ -180,7 +183,8 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
     def testRegistry(self):
         """Check that storage classes can be created on the fly and stored
-        in a registry."""
+        in a registry.
+        """
         className = "TestImage"
         factory = StorageClassFactory()
         newclass = StorageClass(className, pytype=PythonType)
@@ -315,7 +319,6 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
     def testConverters(self):
         """Test conversion maps."""
-
         className = "TestConverters"
         converters = {
             "lsst.daf.butler.tests.MetricsExample": "lsst.daf.butler.tests.MetricsExample.exportAsDict",

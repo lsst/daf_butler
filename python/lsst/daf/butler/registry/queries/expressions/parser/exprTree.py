@@ -418,7 +418,7 @@ class PointNode(Node):
 
 
 def function_call(function: str, args: list[Node]) -> Node:
-    """Factory method for nodes representing function calls.
+    """Return node representing function calls.
 
     Attributes
     ----------

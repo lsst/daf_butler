@@ -32,6 +32,10 @@ if TYPE_CHECKING:
 
 
 class SupportsSimple(Protocol):
+    """Protocol defining the methods required to support the standard
+    serialization using "simple" methods names.
+    """
+
     _serializedType: Type
 
     def to_simple(self, minimal: bool) -> Any:

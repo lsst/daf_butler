@@ -225,7 +225,6 @@ class TimespanTestCase(unittest.TestCase):
 
     def testFuture(self):
         """Check that we do not get warnings from future dates."""
-
         # Astropy will give "dubious year" for UTC five years in the future
         # so hide these expected warnings from the test output
         with warnings.catch_warnings():

@@ -49,7 +49,6 @@ class TestFileTemplates(unittest.TestCase):
         self, datasetTypeName, dataId=None, storageClassName="DefaultStorageClass", run="run2", conform=True
     ):
         """Make a simple DatasetRef"""
-
         if dataId is None:
             dataId = self.dataId
         if "physical_filter" in dataId and "band" not in dataId:

@@ -103,7 +103,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def make_quantum(self, step: int = 1) -> Quantum:
         """Make a Quantum which includes datastore records."""
-
         if step == 1:
             datastore_records = self.butler.datastore.export_records(self.all_input_refs)
             predictedInputs = {self.datasetTypeInput: self.input_refs}
@@ -128,7 +127,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_initialize(self) -> None:
         """Test for initialize factory method"""
-
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -137,7 +135,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_initialize_repo_index(self) -> None:
         """Test for initialize using config file and repo index."""
-
         # Store config to a file.
         self.config.dumpToUri(self.root)
 
@@ -158,7 +155,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_from_predicted(self) -> None:
         """Test for from_predicted factory method"""
-
         datastore_records = self.butler.datastore.export_records(self.all_input_refs)
         qbb = QuantumBackedButler.from_predicted(
             config=self.config,
@@ -172,7 +168,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def _test_factory(self, qbb: QuantumBackedButler) -> None:
         """Test state immediately after construction."""
-
         self.assertTrue(qbb.isWriteable())
         self.assertEqual(qbb._predicted_inputs, {ref.id for ref in self.all_input_refs})
         self.assertEqual(qbb._predicted_outputs, {ref.id for ref in self.output_refs})
@@ -183,7 +178,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_getput(self) -> None:
         """Test for getDirect/putDirect methods"""
-
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -217,7 +211,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_getDeferred(self) -> None:
         """Test for getDirectDeferred method"""
-
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -243,7 +236,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_datasetExistsDirect(self) -> None:
         """Test for dataset existence method"""
-
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -278,7 +270,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_markInputUnused(self) -> None:
         """Test for markInputUnused method"""
-
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -300,7 +291,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_pruneDatasets(self) -> None:
         """Test for pruneDatasets methods"""
-
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -345,7 +335,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_extract_provenance_data(self) -> None:
         """Test for extract_provenance_data method"""
-
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -385,7 +374,6 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_collect_and_transfer(self) -> None:
         """Test for collect_and_transfer method"""
-
         quantum1 = self.make_quantum(1)
         qbb1 = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum1, dimensions=self.universe, dataset_types=self.dataset_types

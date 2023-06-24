@@ -35,12 +35,13 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
+    """Test the query-data-ids command-line."""
+
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDataIds"
 
     @staticmethod
     def _queryDataIds(repo, dimensions=(), collections=(), datasets=None, where=""):
-        """Helper to populate the call to script.queryDataIds with default
-        values."""
+        """Call script.queryDataIds, allowing for default values."""
         return script.queryDataIds(
             repo=repo,
             dimensions=dimensions,
