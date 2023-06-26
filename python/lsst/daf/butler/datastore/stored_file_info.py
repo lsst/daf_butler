@@ -30,11 +30,14 @@ from __future__ import annotations
 __all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
-from collections.abc import Mapping
+import uuid
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from lsst.resources import ResourcePath
+from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
 
 from .._formatter import Formatter, FormatterParameter
 from .._location import Location, LocationFactory
@@ -101,6 +104,68 @@ class StoredDatastoreItemInfo:
         specified values.
         """
         raise NotImplementedError()
+
+    @classmethod
+    def to_records(
+        cls, records: Iterable[StoredDatastoreItemInfo]
+    ) -> tuple[str, Iterable[Mapping[str, Any]]]:
+        """Convert a collection of records to dictionaries.
+
+        Parameters
+        ----------
+        records : `~collections.abc.Iterable` [ `StoredDatastoreItemInfo` ]
+            A collection of records, all records must be of the same type.
+
+        Returns
+        -------
+        class_name : `str`
+            Name of the record class.
+        records : `list` [ `dict` ]
+            Records in their dictionary representation.
+        """
+        if not records:
+            return "", []
+        classes = {record.__class__ for record in records}
+        assert len(classes) == 1, f"Records have to be of the same class: {classes}"
+        return get_full_type_name(classes.pop()), [record.to_record() for record in records]
+
+    @classmethod
+    def from_records(
+        cls, class_name: str, records: Iterable[Mapping[str, Any]]
+    ) -> list[StoredDatastoreItemInfo]:
+        """Convert collection of dictionaries to records.
+
+        Parameters
+        ----------
+        class_name : `str`
+            Name of the record class.
+        records : `~collections.abc.Iterable` [ `dict` ]
+            Records in their dictionary representation.
+
+        Returns
+        -------
+        infos : `list` [`StoredDatastoreItemInfo`]
+            Sequence of records converted to typed representation.
+
+        Raises
+        ------
+        TypeError
+            Raised if ``class_name`` is not a sub-class of
+            `StoredDatastoreItemInfo`.
+        """
+        try:
+            klass = doImportType(class_name)
+        except ImportError:
+            # Prior to DM-41043 we were embedding a lsst.daf.butler.core
+            # path in the serialized form, which we never wanted; fix this
+            # one case.
+            if class_name == "lsst.daf.butler.core.storedFileInfo.StoredFileInfo":
+                klass = StoredFileInfo
+            else:
+                raise
+        if not issubclass(klass, StoredDatastoreItemInfo):
+            raise TypeError(f"Class {class_name} is not a subclass of StoredDatastoreItemInfo")
+        return [klass.from_record(record) for record in records]
 
 
 @dataclass(frozen=True)
@@ -239,6 +304,11 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         storageClass = cls.storageClassFactory.getStorageClass(record["storage_class"])
         component = record["component"] if (record["component"] and record["component"] != NULLSTR) else None
 
+        # UUID may be converted to string, e.g. in round-trip through JSON,
+        # convert it back to UUID.
+        dataset_id = record["dataset_id"]
+        if isinstance(dataset_id, str):
+            dataset_id = uuid.UUID(dataset_id)
         info = cls(
             formatter=record["formatter"],
             path=record["path"],
@@ -246,7 +316,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             component=component,
             checksum=record["checksum"],
             file_size=record["file_size"],
-            dataset_id=record["dataset_id"],
+            dataset_id=dataset_id,
         )
         return info
 

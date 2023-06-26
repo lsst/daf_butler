@@ -253,8 +253,6 @@ class FileDatastore(GenericBaseDatastore):
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
 
-        self._bridgeManager = bridgeManager
-
         # Name ourselves either using an explicit name or a name
         # derived from the (unexpanded) root
         if "name" in self.config:
@@ -463,6 +461,10 @@ class FileDatastore(GenericBaseDatastore):
 
     def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
         # Docstring inherited from GenericBaseDatastore
+
+        # Note that this method is actually not used by this implementation,
+        # we depend on bridge to delete opaque records. But there are some
+        # tests that check that this method works, so we keep it for now.
         self._table.delete(["dataset_id"], {"dataset_id": ref.id})
 
     def _get_dataset_locations_info(self, ref: DatasetIdRef) -> list[tuple[Location, StoredFileInfo]]:

@@ -34,28 +34,27 @@ import copy
 import logging
 from abc import ABCMeta, abstractmethod
 from collections.abc import Iterator, Mapping, Set
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
 
 from lsst.utils.introspection import get_full_type_name
 
 from ._config import Config
 from ._config_support import LookupKey, processLookupConfigs
-from ._dataset_ref import DatasetRef
-from ._dataset_type import DatasetType
 from ._file_descriptor import FileDescriptor
 from ._location import Location
-from ._storage_class import StorageClass
 from .dimensions import DimensionUniverse
 from .mapping_factory import MappingFactory
 
 log = logging.getLogger(__name__)
 
-# Define a new special type for functions that take "entity"
-Entity = DatasetType | DatasetRef | StorageClass | str
-
-
 if TYPE_CHECKING:
+    from ._dataset_ref import DatasetRef
+    from ._dataset_type import DatasetType
+    from ._storage_class import StorageClass
     from .dimensions import DataCoordinate
+
+    # Define a new special type for functions that take "entity"
+    Entity: TypeAlias = DatasetType | DatasetRef | StorageClass | str
 
 
 class Formatter(metaclass=ABCMeta):

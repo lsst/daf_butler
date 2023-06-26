@@ -39,6 +39,7 @@ from ..._dataset_ref import DatasetId, DatasetRef
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
+    from ..._dataset_ref import DatasetDatastoreRecords
     from ..._dataset_type import DatasetType
     from ...datastore import DatastoreTransaction
     from ...datastore.stored_file_info import StoredDatastoreItemInfo
@@ -90,6 +91,10 @@ class FakeDatasetRef:
     @property
     def datasetType(self) -> DatasetType:
         raise AttributeError("A FakeDatasetRef can not be associated with a valid DatasetType")
+
+    @property
+    def datastore_records(self) -> DatasetDatastoreRecords | None:
+        raise AttributeError("A FakeDatasetRef can not be associated with datastore records")
 
 
 DatasetIdRef = DatasetRef | FakeDatasetRef
