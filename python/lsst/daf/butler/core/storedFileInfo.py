@@ -24,11 +24,13 @@ from __future__ import annotations
 __all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from lsst.resources import ResourcePath
+from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
 
 from .formatter import Formatter, FormatterParameter
 from .location import Location, LocationFactory
@@ -95,6 +97,46 @@ class StoredDatastoreItemInfo:
         specified values.
         """
         raise NotImplementedError()
+
+    @classmethod
+    def to_records(cls, records: Iterable[StoredDatastoreItemInfo]) -> tuple[str, list[dict[str, Any]]]:
+        """Convert a collection of records to dictionaries.
+
+        Parameters
+        ----------
+        records : `~collections.abc.Iterable` [ `StoredDatastoreItemInfo` ]
+            A collection of records, all records must be of the same type.
+
+        Returns
+        -------
+        class_name : `str`
+            Name of the record class.
+        records : `list` [ `dict` ]
+            Records in their dictionary representation.
+        """
+        if not records:
+            return "", []
+        classes = {record.__class__ for record in records}
+        assert len(classes) == 1, f"Records have to be of the same class: {classes}"
+        return get_full_type_name(classes.pop()), [record.to_record() for record in records]
+
+    @classmethod
+    def from_records(
+        cls, class_name: str, records: Iterable[dict[str, Any]]
+    ) -> list[StoredDatastoreItemInfo]:
+        """Convert collection of dictionaries to records.
+
+        Parameters
+        ----------
+        class_name : `str`
+            Name of the record class.
+        records : `~collections.abc.Iterable` [ `dict` ]
+            Records in their dictionary representation.
+        """
+        klass = doImportType(class_name)
+        if not issubclass(klass, StoredDatastoreItemInfo):
+            raise TypeError(f"Class {class_name} is not a subclass of StoredDatastoreItemInfo")
+        return [klass.from_record(record) for record in records]
 
 
 @dataclass(frozen=True)

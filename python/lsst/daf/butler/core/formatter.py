@@ -28,13 +28,12 @@ import copy
 import logging
 from abc import ABCMeta, abstractmethod
 from collections.abc import Iterator, Mapping, Set
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
 
 from lsst.utils.introspection import get_full_type_name
 
 from .config import Config
 from .configSupport import LookupKey, processLookupConfigs
-from .datasets import DatasetRef, DatasetType
 from .dimensions import DimensionUniverse
 from .fileDescriptor import FileDescriptor
 from .location import Location
@@ -43,12 +42,12 @@ from .storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 
-# Define a new special type for functions that take "entity"
-Entity = DatasetType | DatasetRef | StorageClass | str
-
-
 if TYPE_CHECKING:
+    from .datasets import DatasetRef, DatasetType
     from .dimensions import DataCoordinate
+
+    # Define a new special type for functions that take "entity"
+    Entity: TypeAlias = DatasetType | DatasetRef | StorageClass | str
 
 
 class Formatter(metaclass=ABCMeta):
