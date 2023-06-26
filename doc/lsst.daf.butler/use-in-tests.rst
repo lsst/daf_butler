@@ -36,7 +36,7 @@ Any unspecified relationships are still filled arbitrarily, so you need only giv
 
 .. code-block:: py
 
-   from lsst.daf.butlker.tests import addDataIdValue
+   from lsst.daf.butler.tests import addDataIdValue
 
    addDataIdValue(butler, "skymap", "map")
    # Tract requires a skymap; can assume it's "map" because no other options.
