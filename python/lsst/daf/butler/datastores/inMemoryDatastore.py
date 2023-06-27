@@ -39,6 +39,7 @@ from lsst.daf.butler import (
     DatastoreRecordData,
     StorageClass,
     StoredDatastoreItemInfo,
+    ddl,
 )
 from lsst.daf.butler.core.utils import transactional
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
@@ -661,4 +662,8 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from the base class.
 
         # In-memory Datastore records cannot be exported or imported
+        return {}
+
+    def opaque_table_definitions(self) -> Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]:
+        # Docstring inherited from the base class.
         return {}

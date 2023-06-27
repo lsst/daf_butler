@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils import doImportType
 
+from . import ddl
 from .config import Config, ConfigSubset
 from .constraints import Constraints
 from .exceptions import DatasetTypeNotSupportedError, ValidationError
@@ -49,6 +50,7 @@ if TYPE_CHECKING:
     from .datasets import DatasetRef, DatasetType
     from .datastoreRecordData import DatastoreRecordData
     from .storageClass import StorageClass
+    from .storedFileInfo import StoredDatastoreItemInfo
 
 
 class DatastoreConfig(ConfigSubset):
@@ -1195,3 +1197,18 @@ class Datastore(metaclass=ABCMeta):
         guess dataset location based on its stored dataset type.
         """
         pass
+
+    @abstractmethod
+    def opaque_table_definitions(self) -> Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]:
+        """Make definitions of the opaque tables used by this Datastore.
+
+        Returns
+        -------
+        tables : `~collections.abc.Mapping` [ `str`, `.ddl.TableSpec` ]
+            Mapping of opaque table names to their definitions. This can be an
+            empty mapping if Datastore does not use opaque tables to keep
+            datastore records. Table definition is a tuple containing
+            `.ddl.TableSpec` for a table and a class of a record which must be
+            a subclass of `StoredDatastoreItemInfo`.
+        """
+        raise NotImplementedError()

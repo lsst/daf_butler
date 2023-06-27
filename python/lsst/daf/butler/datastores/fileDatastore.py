@@ -29,7 +29,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from lsst.daf.butler import (
     CompositesMap,
@@ -269,11 +269,11 @@ class FileDatastore(GenericBaseDatastore):
         # See if composites should be disassembled
         self.composites = CompositesMap(self.config["composites"], universe=bridgeManager.universe)
 
-        tableName = self.config["records", "table"]
+        self._opaque_table_name = self.config["records", "table"]
         try:
             # Storage of paths and formatters, keyed by dataset_id
             self._table = bridgeManager.opaque.register(
-                tableName, self.makeTableSpec(bridgeManager.datasetIdColumnType)
+                self._opaque_table_name, self.makeTableSpec(bridgeManager.datasetIdColumnType)
             )
             # Interface to Registry.
             self._bridge = bridgeManager.register(self.name)
@@ -363,6 +363,15 @@ class FileDatastore(GenericBaseDatastore):
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
+
+        # Try to get them from the ref first.
+        if ref.datastore_records is not None:
+            if (ref_records := ref.datastore_records.get(self._table.name)) is not None:
+                # Need to make sure they have correct type
+                for record in ref_records:
+                    if not isinstance(record, StoredFileInfo):
+                        raise TypeError(f"Datastore record has unexpected type {record.__class__.__name__}")
+                return cast(list[StoredFileInfo], ref_records)
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
@@ -2979,3 +2988,7 @@ class FileDatastore(GenericBaseDatastore):
         if dataset_type is not None:
             ref = ref.overrideStorageClass(dataset_type.storageClass)
         return ref
+
+    def opaque_table_definitions(self) -> Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]:
+        # Docstring inherited from the base class.
+        return {self._opaque_table_name: (self.makeTableSpec(ddl.GUID), StoredFileInfo)}

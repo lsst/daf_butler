@@ -56,6 +56,7 @@ from ..core import (
     NameLookupMapping,
     Progress,
     StorageClassFactory,
+    StoredDatastoreItemInfo,
     Timespan,
     ddl,
 )
@@ -218,6 +219,10 @@ class SqlRegistry(Registry):
         # In the future DatasetIdFactory may become configurable and this
         # instance will need to be shared with datasets manager.
         self.datasetIdFactory = DatasetIdFactory()
+
+        # TODO: This is currently initialized by `make_datastore_tables`,
+        # eventually we'll need to do it during construction.
+        self._datastore_opaques: Mapping[str, type[StoredDatastoreItemInfo]] = {}
 
     def __str__(self) -> str:
         return str(self._db)
@@ -450,6 +455,7 @@ class SqlRegistry(Registry):
         *,
         collections: CollectionArgType | None = None,
         timespan: Timespan | None = None,
+        datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -544,6 +550,9 @@ class SqlRegistry(Registry):
         ref = reader.read(best_row, data_id=dataId)
         if component is not None:
             ref = ref.makeComponentRef(component)
+        if datastore_records:
+            ref = self.get_datastore_records(ref)
+
         return ref
 
     @transactional
@@ -1338,6 +1347,34 @@ class SqlRegistry(Registry):
                         # timespan.
                         timespan = None
                     yield DatasetAssociation(ref=ref, collection=collection_record.name, timespan=timespan)
+
+    def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
+        # Docstring inherited from base class.
+
+        opaque_records: dict[str, list[StoredDatastoreItemInfo]] = {}
+        for opaque, record_class in self._datastore_opaques.items():
+            records = self.fetchOpaqueData(opaque, dataset_id=ref.id)
+            opaque_records[opaque] = [record_class.from_record(record) for record in records]
+        ref = DatasetRef(
+            datasetType=ref.datasetType,
+            dataId=ref.dataId,
+            run=ref.run,
+            id=ref.id,
+            conform=False,
+            datastore_records=opaque_records,
+        )
+        return ref
+
+    def make_datastore_tables(
+        self, tables: Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]
+    ) -> None:
+        # Docstring inherited from base class.
+
+        datastore_opaques = {}
+        for table_name, (table_spec, record_class) in tables.items():
+            datastore_opaques[table_name] = record_class
+            self._managers.opaque.register(table_name, table_spec)
+        self._datastore_opaques = datastore_opaques
 
     @property
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:

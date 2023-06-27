@@ -52,7 +52,9 @@ from ..core import (
     DimensionUniverse,
     NameLookupMapping,
     StorageClassFactory,
+    StoredDatastoreItemInfo,
     Timespan,
+    ddl,
 )
 from ._collection_summary import CollectionSummary
 from ._collectionType import CollectionType
@@ -669,6 +671,7 @@ class Registry(ABC):
         *,
         collections: CollectionArgType | None = None,
         timespan: Timespan | None = None,
+        datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
         """Find a dataset given its `DatasetType` and data ID.
@@ -1661,6 +1664,29 @@ class Registry(ABC):
             ``self.defaults.collections`` is `None`.
         lsst.daf.butler.registry.CollectionExpressionError
             Raised when ``collections`` expression is invalid.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
+        """Retrieve datastore records for given ref."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_datastore_tables(
+        self, tables: Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]
+    ) -> None:
+        """Create opaque tables used by datastores.
+
+        Parameters
+        ----------
+        tables : `~collections.abc.Mapping`
+            Maps opaque table name to its definition.
+
+        Notes
+        -----
+        This method should disappear in the future when opaque table
+        definitions will be provided during `Registry` construction.
         """
         raise NotImplementedError()
 

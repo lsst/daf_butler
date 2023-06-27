@@ -82,6 +82,10 @@ class FakeDatasetRef:
     def datasetType(self) -> DatasetType:
         raise AttributeError("A FakeDatasetRef can not be associated with a valid DatasetType")
 
+    @property
+    def datastore_records(self) -> dict[str, list[StoredDatastoreItemInfo]] | None:
+        raise AttributeError("A FakeDatasetRef can not be associated with datastore records")
+
 
 DatasetIdRef = DatasetRef | FakeDatasetRef
 """A type-annotation alias that matches both `DatasetRef` and `FakeDatasetRef`.

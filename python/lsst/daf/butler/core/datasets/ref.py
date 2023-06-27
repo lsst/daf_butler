@@ -552,7 +552,12 @@ class DatasetRef:
         """
         assert dataId == self.dataId
         return DatasetRef(
-            datasetType=self.datasetType, dataId=dataId, id=self.id, run=self.run, conform=False
+            datasetType=self.datasetType,
+            dataId=dataId,
+            id=self.id,
+            run=self.run,
+            conform=False,
+            datastore_records=self.datastore_records,
         )
 
     def isComponent(self) -> bool:
@@ -632,7 +637,12 @@ class DatasetRef:
         # Assume that the data ID does not need to be standardized
         # and should match whatever this ref already has.
         return DatasetRef(
-            self.datasetType.makeCompositeDatasetType(), self.dataId, id=self.id, run=self.run, conform=False
+            self.datasetType.makeCompositeDatasetType(),
+            self.dataId,
+            id=self.id,
+            run=self.run,
+            conform=False,
+            datastore_records=self.datastore_records,
         )
 
     def makeComponentRef(self, name: str) -> DatasetRef:
@@ -658,6 +668,7 @@ class DatasetRef:
             id=self.id,
             run=self.run,
             conform=False,
+            datastore_records=self.datastore_records,
         )
 
     def overrideStorageClass(self, storageClass: str | StorageClass) -> DatasetRef:
@@ -681,6 +692,7 @@ class DatasetRef:
             id=self.id,
             run=self.run,
             conform=False,
+            datastore_records=self.datastore_records,
         )
 
     def is_compatible_with(self, ref: DatasetRef) -> bool:

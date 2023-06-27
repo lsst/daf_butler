@@ -42,6 +42,8 @@ from lsst.daf.butler import (
     DatastoreRecordData,
     DatastoreValidationError,
     FileDataset,
+    StoredDatastoreItemInfo,
+    ddl,
 )
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
@@ -1123,3 +1125,10 @@ class ChainedDatastore(Datastore):
             raise TypeError(f"None of the child datastores could accept transfers from {source_datastore!r}")
 
         return all_accepted, remaining_refs
+
+    def opaque_table_definitions(self) -> Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]:
+        # Docstring inherited from the base class.
+        tables: dict[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]] = {}
+        for datastore in self.datastores:
+            tables.update(datastore.opaque_table_definitions())
+        return tables
