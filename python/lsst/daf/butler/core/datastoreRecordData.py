@@ -36,6 +36,7 @@ from pydantic import BaseModel
 
 from .datasets import DatasetId
 from .dimensions import DimensionUniverse
+from .persistenceContext import PersistenceContextVars
 from .storedFileInfo import StoredDatastoreItemInfo
 
 if TYPE_CHECKING:
@@ -70,6 +71,11 @@ class SerializedDatastoreRecordData(BaseModel):
 
         This method should only be called when the inputs are trusted.
         """
+        key = frozenset(dataset_ids)
+        cache = PersistenceContextVars.serializedDatastoreRecordMapping.get()
+        if cache is not None and (value := cache.get(key)) is not None:
+            return value
+
         data = SerializedDatastoreRecordData.__new__(cls)
         setter = object.__setattr__
         # JSON makes strings out of UUIDs, need to convert them back
@@ -83,6 +89,8 @@ class SerializedDatastoreRecordData(BaseModel):
                     if (id := record.get("dataset_id")) is not None:
                         record["dataset_id"] = uuid.UUID(id) if isinstance(id, str) else id
         setter(data, "records", records)
+        if cache is not None:
+            cache[key] = data
         return data
 
 
@@ -204,6 +212,10 @@ class DatastoreRecordData:
         item_info : `StoredDatastoreItemInfo`
             De-serialized instance of `StoredDatastoreItemInfo`.
         """
+        cache = PersistenceContextVars.dataStoreRecords.get()
+        key = frozenset(simple.dataset_ids)
+        if cache is not None and (record := cache.get(key)) is not None:
+            return record
         records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {}
         # make sure that all dataset IDs appear in the dict even if they don't
         # have records.
@@ -216,4 +228,7 @@ class DatastoreRecordData:
                     info = klass.from_record(record)
                     dataset_type_records = records.setdefault(info.dataset_id, {})
                     dataset_type_records.setdefault(table_name, []).append(info)
-        return cls(records=records)
+        record = cls(records=records)
+        if cache is not None:
+            cache[key] = record
+        return record

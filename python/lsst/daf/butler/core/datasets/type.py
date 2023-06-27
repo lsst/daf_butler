@@ -34,6 +34,7 @@ from pydantic import BaseModel, StrictBool, StrictStr
 from ..configSupport import LookupKey
 from ..dimensions import DimensionGraph, SerializedDimensionGraph
 from ..json import from_json_pydantic, to_json_pydantic
+from ..persistenceContext import PersistenceContextVars
 from ..storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
@@ -74,6 +75,10 @@ class SerializedDatasetType(BaseModel):
 
         This method should only be called when the inputs are trusted.
         """
+        cache = PersistenceContextVars.serializedDatasetTypeMapping.get()
+        key = (name, storageClass or "")
+        if cache is not None and (type_ := cache.get(key, None)) is not None:
+            return type_
         node = SerializedDatasetType.__new__(cls)
         setter = object.__setattr__
         setter(node, "name", name)
@@ -90,6 +95,8 @@ class SerializedDatasetType(BaseModel):
             "__fields_set__",
             {"name", "storageClass", "dimensions", "parentStorageClass", "isCalibration"},
         )
+        if cache is not None:
+            cache[key] = node
         return node
 
 
@@ -685,6 +692,13 @@ class DatasetType:
         datasetType : `DatasetType`
             Newly-constructed object.
         """
+        # check to see if there is a cache, and if there is, if there is a
+        # cached dataset type
+        cache = PersistenceContextVars.loadedTypes.get()
+        key = (simple.name, simple.storageClass or "")
+        if cache is not None and (type_ := cache.get(key, None)) is not None:
+            return type_
+
         if simple.storageClass is None:
             # Treat this as minimalist representation
             if registry is None:
@@ -708,7 +722,7 @@ class DatasetType:
             # mypy hint
             raise ValueError(f"Dimensions must be specified in {simple}")
 
-        return cls(
+        newType = cls(
             name=simple.name,
             dimensions=DimensionGraph.from_simple(simple.dimensions, universe=universe),
             storageClass=simple.storageClass,
@@ -716,6 +730,9 @@ class DatasetType:
             parentStorageClass=simple.parentStorageClass,
             universe=universe,
         )
+        if cache is not None:
+            cache[key] = newType
+        return newType
 
     to_json = to_json_pydantic
     from_json: ClassVar = classmethod(from_json_pydantic)

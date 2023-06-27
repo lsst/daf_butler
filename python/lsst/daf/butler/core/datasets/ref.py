@@ -30,6 +30,7 @@ __all__ = [
 ]
 
 import enum
+import sys
 import uuid
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -41,6 +42,7 @@ from ..configSupport import LookupKey
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
 from ..json import from_json_pydantic, to_json_pydantic
 from ..named import NamedKeyDict
+from ..persistenceContext import PersistenceContextVars
 from .type import DatasetType, SerializedDatasetType
 
 if TYPE_CHECKING:
@@ -142,6 +144,10 @@ class DatasetIdFactory:
             return uuid.uuid5(self.NS_UUID, data)
 
 
+# This is constant, so don't recreate a set for each instance
+_serializedDatasetRefFieldsSet = {"id", "datasetType", "dataId", "run", "component"}
+
+
 class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
@@ -202,9 +208,9 @@ class SerializedDatasetRef(BaseModel):
             datasetType if datasetType is None else SerializedDatasetType.direct(**datasetType),
         )
         setter(node, "dataId", dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
-        setter(node, "run", run)
+        setter(node, "run", sys.intern(run))
         setter(node, "component", component)
-        setter(node, "__fields_set__", {"id", "datasetType", "dataId", "run", "component"})
+        setter(node, "__fields_set__", _serializedDatasetRefFieldsSet)
         return node
 
 
@@ -254,7 +260,7 @@ class DatasetRef:
 
     _serializedType = SerializedDatasetRef
     __slots__ = (
-        "id",
+        "_id",
         "datasetType",
         "dataId",
         "run",
@@ -277,11 +283,15 @@ class DatasetRef:
             self.dataId = dataId
         self.run = run
         if id is not None:
-            self.id = id
+            self._id = id.int
         else:
-            self.id = DatasetIdFactory().makeDatasetId(
+            self._id = DatasetIdFactory().makeDatasetId(
                 self.run, self.datasetType, self.dataId, id_generation_mode
-            )
+            ).int
+
+    @property
+    def id(self) -> DatasetId:
+        return uuid.UUID(int=self._id)
 
     def __eq__(self, other: Any) -> bool:
         try:
@@ -396,9 +406,18 @@ class DatasetRef:
         ref : `DatasetRef`
             Newly-constructed object.
         """
+        cache = PersistenceContextVars.datasetRefs.get()
+        localName = sys.intern(
+            datasetType.name
+            if datasetType is not None
+            else (x.name if (x := simple.datasetType) is not None else "")
+        )
+        key = (simple.id.int, localName)
+        if cache is not None and (cachedRef := cache.get(key, None)) is not None:
+            return cachedRef
         # Minimalist component will just specify component and id and
         # require registry to reconstruct
-        if set(simple.dict(exclude_unset=True, exclude_defaults=True)).issubset({"id", "component"}):
+        if not (simple.datasetType is not None or simple.dataId is not None or simple.run is not None):
             if registry is None:
                 raise ValueError("Registry is required to construct component DatasetRef from integer id")
             if simple.id is None:
@@ -408,6 +427,8 @@ class DatasetRef:
                 raise RuntimeError(f"No matching dataset found in registry for id {simple.id}")
             if simple.component:
                 ref = ref.makeComponentRef(simple.component)
+            if cache is not None:
+                cache[key] = ref
             return ref
 
         if universe is None and registry is None:
@@ -443,7 +464,10 @@ class DatasetRef:
                 f"Encountered with {simple!r}{dstr}."
             )
 
-        return cls(datasetType, dataId, id=simple.id, run=simple.run)
+        newRef = cls(datasetType, dataId, id=simple.id, run=simple.run)
+        if cache is not None:
+            cache[key] = newRef
+        return newRef
 
     to_json = to_json_pydantic
     from_json: ClassVar = classmethod(from_json_pydantic)
