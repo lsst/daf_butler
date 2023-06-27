@@ -28,7 +28,7 @@ import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import datetime
-from typing import IO, TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any, cast
 
 import astropy.time
 import yaml
@@ -63,6 +63,8 @@ EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 2)
 Files with a different major version or a newer minor version cannot be read by
 this version of the code.
 """
+
+_refIntId2UUID = defaultdict[int, uuid.UUID](uuid.uuid4)
 
 
 def _uuid_representer(dumper: yaml.Dumper, data: uuid.UUID) -> yaml.Node:
@@ -338,16 +340,27 @@ class YamlRepoImportBackend(RepoImportBackend):
             elif data["type"] == "associations":
                 collectionType = CollectionType.from_name(data["collection_type"])
                 if collectionType is CollectionType.TAGGED:
-                    self.tagAssociations[data["collection"]].extend(data["dataset_ids"])
+                    self.tagAssociations[data["collection"]].extend(
+                        [
+                            x if not isinstance(x, int) else cast(DatasetId, _refIntId2UUID[x])
+                            for x in data["dataset_ids"]
+                        ]
+                    )
                 elif collectionType is CollectionType.CALIBRATION:
                     assocsByTimespan = self.calibAssociations[data["collection"]]
                     for d in data["validity_ranges"]:
                         if "timespan" in d:
-                            assocsByTimespan[d["timespan"]] = d["dataset_ids"]
+                            assocsByTimespan[d["timespan"]] = [
+                                x if not isinstance(x, int) else cast(DatasetId, _refIntId2UUID[x])
+                                for x in d["dataset_ids"]
+                            ]
                         else:
                             # TODO: this is for backward compatibility, should
                             # be removed at some point.
-                            assocsByTimespan[Timespan(begin=d["begin"], end=d["end"])] = d["dataset_ids"]
+                            assocsByTimespan[Timespan(begin=d["begin"], end=d["end"])] = [
+                                x if not isinstance(x, int) else cast(DatasetId, _refIntId2UUID[x])
+                                for x in d["dataset_ids"]
+                            ]
                 else:
                     raise ValueError(f"Unexpected calibration type for association: {collectionType.name}.")
             else:
@@ -362,7 +375,14 @@ class YamlRepoImportBackend(RepoImportBackend):
                 FileDataset(
                     d.get("path"),
                     [
-                        DatasetRef(datasetType, dataId, run=data["run"], id=refid)
+                        DatasetRef(
+                            datasetType,
+                            dataId,
+                            run=data["run"],
+                            id=refid
+                            if not isinstance(refid, int)
+                            else cast(DatasetId, _refIntId2UUID[refid]),
+                        )
                         for dataId, refid in zip(
                             ensure_iterable(d["data_id"]), ensure_iterable(d["dataset_id"])
                         )
