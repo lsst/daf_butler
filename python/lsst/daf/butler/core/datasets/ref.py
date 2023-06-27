@@ -285,9 +285,11 @@ class DatasetRef:
         if id is not None:
             self._id = id.int
         else:
-            self._id = DatasetIdFactory().makeDatasetId(
-                self.run, self.datasetType, self.dataId, id_generation_mode
-            ).int
+            self._id = (
+                DatasetIdFactory()
+                .makeDatasetId(self.run, self.datasetType, self.dataId, id_generation_mode)
+                .int
+            )
 
     @property
     def id(self) -> DatasetId:

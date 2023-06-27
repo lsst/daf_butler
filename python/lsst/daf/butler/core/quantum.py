@@ -23,10 +23,10 @@ from __future__ import annotations
 
 __all__ = ("Quantum", "SerializedQuantum", "DimensionRecordsAccumulator")
 
-from collections.abc import Iterable, Mapping, MutableMapping
-from typing import Any
 import sys
 import warnings
+from collections.abc import Iterable, Mapping, MutableMapping
+from typing import Any
 
 from lsst.utils import doImportType
 from pydantic import BaseModel
@@ -57,9 +57,7 @@ def _reconstructDatasetRef(
         # if the dimension record has been loaded previously use that,
         # otherwise load it from the dict of Serialized DimensionRecords
         if dimensionRecords is None:
-            raise ValueError(
-                "Cannot construct from a SerializedQuantum with no dimension records. "
-            )
+            raise ValueError("Cannot construct from a SerializedQuantum with no dimension records. ")
         tmpSerialized = dimensionRecords[dId]
         reconstructedDim = DimensionRecord.from_simple(tmpSerialized, universe=universe)
         records[sys.intern(reconstructedDim.definition.name)] = reconstructedDim

@@ -132,8 +132,7 @@ class PersistenceContextVars:
 
     @classmethod
     def _getContextVars(cls) -> dict[str, ContextVar]:
-        """Build a dictionary of names to caches declared at class scope.
-        """
+        """Build a dictionary of names to caches declared at class scope."""
         classAttributes: dict[str, ContextVar] = {}
         for k in vars(cls):
             v = getattr(cls, k)
