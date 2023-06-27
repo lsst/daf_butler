@@ -29,6 +29,7 @@ from .location import *
 from .logging import ButlerLogRecords
 from .mappingFactory import *
 from .named import *
+from .persistenceContext import *
 from .progress import Progress
 from .quantum import *
 from .storageClass import *
