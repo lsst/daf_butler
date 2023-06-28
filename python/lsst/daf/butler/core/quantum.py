@@ -103,7 +103,7 @@ class SerializedQuantum(BaseModel):
         """
         node = SerializedQuantum.__new__(cls)
         setter = object.__setattr__
-        setter(node, "taskName", sys.intern(taskName))
+        setter(node, "taskName", sys.intern(taskName or ""))
         setter(node, "dataId", dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
 
         setter(

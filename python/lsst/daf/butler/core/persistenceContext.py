@@ -27,7 +27,7 @@ __all__ = ("PersistenceContextVars",)
 import uuid
 from collections.abc import Callable
 from contextvars import Context, ContextVar, Token, copy_context
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 
 if TYPE_CHECKING:
     from .datasets.ref import DatasetRef
@@ -37,6 +37,10 @@ if TYPE_CHECKING:
     from .dimensions._records import DimensionRecord, SerializedDimensionRecord
 
 _T = TypeVar("_T")
+_V = TypeVar("_V")
+
+_P = ParamSpec("_P")
+_Q = ParamSpec("_Q")
 
 
 class PersistenceContextVars:
@@ -76,6 +80,7 @@ class PersistenceContextVars:
     until process completion. It was determined the runtime cost of recreating
     the `SerializedDatasetRef`\ s was worth the memory savings.
     """
+
     serializedDatasetTypeMapping: ContextVar[
         dict[tuple[str, str], SerializedDatasetType] | None
     ] = ContextVar("serializedDatasetTypeMapping", default=None)
@@ -141,11 +146,11 @@ class PersistenceContextVars:
                 classAttributes[k] = v
         return classAttributes
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._ctx: Context | None = None
         self._tokens: dict[str, Token] | None = None
 
-    def _functionRunner(self, function: Callable[..., _T], *args, **kwargs) -> _T:
+    def _functionRunner(self, function: Callable[_P, _V], *args: _P.args, **kwargs: _P.kwargs) -> _V:
         # create a storage space for the tokens returned from setting the
         # context variables
         self._tokens = {}
@@ -168,7 +173,7 @@ class PersistenceContextVars:
         self._tokens = None
         return result
 
-    def run(self, function: Callable[..., _T], *args, **kwargs) -> _T:
+    def run(self, function: Callable[_Q, _T], *args: _Q.args, **kwargs: _Q.kwargs) -> _T:
         """Execute the supplied function inside context specific caches.
 
         Parameters
@@ -186,4 +191,9 @@ class PersistenceContextVars:
             The result returned by executing the supplied `Callable`
         """
         self._ctx = copy_context()
-        return self._ctx.run(self._functionRunner, function, *args, **kwargs)
+        # Type checkers seem to have trouble with a second layer nesting of
+        # parameter specs in callables, so ignore the call here and explicitly
+        # cast the result as we know this is exactly what the return type will
+        # be.
+        result = self._ctx.run(self._functionRunner, function, *args, **kwargs)  # type: ignore
+        return cast(_T, result)

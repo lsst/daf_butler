@@ -214,8 +214,8 @@ class DatastoreRecordData:
         """
         cache = PersistenceContextVars.dataStoreRecords.get()
         key = frozenset(simple.dataset_ids)
-        if cache is not None and (record := cache.get(key)) is not None:
-            return record
+        if cache is not None and (cachedRecord := cache.get(key)) is not None:
+            return cachedRecord
         records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {}
         # make sure that all dataset IDs appear in the dict even if they don't
         # have records.
@@ -228,7 +228,7 @@ class DatastoreRecordData:
                     info = klass.from_record(record)
                     dataset_type_records = records.setdefault(info.dataset_id, {})
                     dataset_type_records.setdefault(table_name, []).append(info)
-        record = cls(records=records)
+        newRecord = cls(records=records)
         if cache is not None:
-            cache[key] = record
-        return record
+            cache[key] = newRecord
+        return newRecord

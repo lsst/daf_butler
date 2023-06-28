@@ -293,6 +293,10 @@ class DatasetRef:
 
     @property
     def id(self) -> DatasetId:
+        """Primary key of the dataset (`DatasetId`).
+
+        Cannot be changed after a `DatasetRef` is constructed.
+        """
         return uuid.UUID(int=self._id)
 
     def __eq__(self, other: Any) -> bool:
@@ -705,12 +709,6 @@ class DatasetRef:
 
     run: str
     """The name of the run that produced the dataset.
-
-    Cannot be changed after a `DatasetRef` is constructed.
-    """
-
-    id: DatasetId
-    """Primary key of the dataset (`DatasetId`).
 
     Cannot be changed after a `DatasetRef` is constructed.
     """

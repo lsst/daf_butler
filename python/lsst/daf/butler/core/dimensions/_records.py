@@ -167,9 +167,12 @@ class SerializedDimensionRecord(BaseModel):
 
         This method should only be called when the inputs are trusted.
         """
+        _recItems = record.items()
+        # Type ignore because the ternary statement seems to confuse mypy
+        # based on conflicting inferred types of v.
         key = (
             definition,
-            frozenset((k, v if not isinstance(v, list) else tuple(v)) for k, v in record.items()),
+            frozenset((k, v if not isinstance(v, list) else tuple(v)) for k, v in _recItems),  # type: ignore
         )
         cache = PersistenceContextVars.serializedDimensionRecordMapping.get()
         if cache is not None and (result := cache.get(key)) is not None:
@@ -376,9 +379,12 @@ class DimensionRecord:
         if universe is None:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
+        _recItems = simple.record.items()
+        # Type ignore because the ternary statement seems to confuse mypy
+        # based on conflicting inferred types of v.
         key = (
             simple.definition,
-            frozenset((k, v if not isinstance(v, list) else tuple(v)) for k, v in simple.record.items()),
+            frozenset((k, v if not isinstance(v, list) else tuple(v)) for k, v in _recItems),  # type: ignore
         )
         cache = PersistenceContextVars.dimensionRecords.get()
         if cache is not None and (result := cache.get(key)) is not None:
