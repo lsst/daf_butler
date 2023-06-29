@@ -223,6 +223,11 @@ class DatastoreRecordData:
             records[dataset_id] = {}
         for class_name, table_data in simple.records.items():
             klass = doImportType(class_name)
+            if not issubclass(klass, StoredDatastoreItemInfo):
+                raise RuntimeError(
+                    "The class specified in the SerializedDatastoreRecordData "
+                    f"({get_full_type_name(klass)}) is not a StoredDatastoreItemInfo."
+                )
             for table_name, table_records in table_data.items():
                 for record in table_records:
                     info = klass.from_record(record)
