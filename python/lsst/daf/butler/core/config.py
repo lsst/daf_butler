@@ -39,7 +39,7 @@ from typing import IO, TYPE_CHECKING, Any, ClassVar, cast
 
 import yaml
 from lsst.resources import ResourcePath, ResourcePathExpression
-from lsst.utils import doImport
+from lsst.utils import doImportType
 from yaml.representer import Representer
 
 yaml.add_representer(defaultdict, Representer.represent_dict)
@@ -1203,18 +1203,17 @@ class ConfigSubset(Config):
 
             if pytype is not None:
                 try:
-                    cls = doImport(pytype)
+                    cls = doImportType(pytype)
                 except ImportError as e:
                     raise RuntimeError(f"Failed to import cls '{pytype}' for config {type(self)}") from e
-                defaultsFile = cls.defaultConfigFile
+                # The class referenced from the config file is not required
+                # to specify a default config file.
+                defaultsFile = getattr(cls, "defaultConfigFile", None)
                 if defaultsFile is not None:
                     self._updateWithConfigsFromPath(fullSearchPath, defaultsFile)
 
-                # Get the container key in case we need it
-                try:
-                    containerKey = cls.containerKey
-                except AttributeError:
-                    pass
+                # Get the container key in case we need it and it is specified.
+                containerKey = getattr(cls, "containerKey", None)
 
         # Now update this object with the external values so that the external
         # values always override the defaults
