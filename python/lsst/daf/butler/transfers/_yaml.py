@@ -25,7 +25,7 @@ __all__ = ["YamlRepoExportBackend", "YamlRepoImportBackend"]
 
 import uuid
 import warnings
-from collections import defaultdict
+from collections import UserDict, defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import IO, TYPE_CHECKING, Any
@@ -64,7 +64,21 @@ Files with a different major version or a newer minor version cannot be read by
 this version of the code.
 """
 
-_refIntId2UUID = defaultdict[int, uuid.UUID](uuid.uuid4)
+
+class _RefMapper(UserDict[int, uuid.UUID]):
+    """Create a local dict subclass which creates new deterministic UUID for
+    missing keys.
+    """
+
+    _namespace = uuid.UUID("4d4851f4-2890-4d41-8779-5f38a3f5062b")
+
+    def __missing__(self, key: int) -> uuid.UUID:
+        newUUID = uuid.uuid3(namespace=self._namespace, name=str(key))
+        self[key] = newUUID
+        return newUUID
+
+
+_refIntId2UUID = _RefMapper()
 
 
 def _uuid_representer(dumper: yaml.Dumper, data: uuid.UUID) -> yaml.Node:

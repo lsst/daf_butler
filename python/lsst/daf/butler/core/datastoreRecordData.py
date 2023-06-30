@@ -71,11 +71,6 @@ class SerializedDatastoreRecordData(BaseModel):
 
         This method should only be called when the inputs are trusted.
         """
-        key = frozenset(dataset_ids)
-        cache = PersistenceContextVars.serializedDatastoreRecordMapping.get()
-        if cache is not None and (value := cache.get(key)) is not None:
-            return value
-
         data = SerializedDatastoreRecordData.__new__(cls)
         setter = object.__setattr__
         # JSON makes strings out of UUIDs, need to convert them back
@@ -89,8 +84,6 @@ class SerializedDatastoreRecordData(BaseModel):
                     if (id := record.get("dataset_id")) is not None:
                         record["dataset_id"] = uuid.UUID(id) if isinstance(id, str) else id
         setter(data, "records", records)
-        if cache is not None:
-            cache[key] = data
         return data
 
 

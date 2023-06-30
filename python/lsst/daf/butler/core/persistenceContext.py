@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 if TYPE_CHECKING:
     from .datasets.ref import DatasetRef
     from .datasets.type import DatasetType, SerializedDatasetType
-    from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
+    from .datastoreRecordData import DatastoreRecordData
     from .dimensions._coordinate import DataCoordinate, SerializedDataCoordinate
     from .dimensions._records import DimensionRecord, SerializedDimensionRecord
 
@@ -97,12 +97,6 @@ class PersistenceContextVars:
         dict[tuple[str, frozenset], SerializedDimensionRecord] | None
     ] = ContextVar("serializedDimensionRecordMapping", default=None)
     r"""A cache of `SerializedDimensionRecord`\ s.
-    """
-
-    serializedDatastoreRecordMapping: ContextVar[
-        dict[frozenset[str | uuid.UUID], SerializedDatastoreRecordData] | None
-    ] = ContextVar("serializedDatastoreRecordMapping", default=None)
-    r"""A cache of `SerializedDatastoreRecord`\ s.
     """
 
     loadedTypes: ContextVar[dict[tuple[str, str], DatasetType] | None] = ContextVar(

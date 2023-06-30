@@ -29,6 +29,7 @@ from collections.abc import Iterable, Mapping, MutableMapping
 from typing import Any
 
 from lsst.utils import doImportType
+from lsst.utils.introspection import find_outside_stacklevel
 from pydantic import BaseModel
 
 from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
@@ -416,7 +417,8 @@ class Quantum:
         if reconstitutedDimensions is not None:
             warnings.warn(
                 "The reconstitutedDimensions argument is now ignored and may be removed after v 27",
-                category=DeprecationWarning,
+                category=FutureWarning,
+                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
             )
 
         # Unpersist all the init inputs
