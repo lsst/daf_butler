@@ -29,7 +29,10 @@ from copy import deepcopy
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, StrictBool, StrictStr
+try:
+    from pydantic.v1 import BaseModel, StrictBool, StrictStr
+except ModuleNotFoundError:
+    from pydantic import BaseModel, StrictBool, StrictStr
 
 from ..configSupport import LookupKey
 from ..dimensions import DimensionGraph, SerializedDimensionGraph

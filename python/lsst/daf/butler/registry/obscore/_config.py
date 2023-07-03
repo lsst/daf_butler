@@ -35,7 +35,10 @@ import enum
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator
+try:
+    from pydantic.v1 import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator
+except ModuleNotFoundError:
+    from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator
 
 
 class ExtraColumnType(str, enum.Enum):

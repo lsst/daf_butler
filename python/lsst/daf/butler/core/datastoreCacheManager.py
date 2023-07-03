@@ -46,7 +46,11 @@ from random import Random
 from typing import TYPE_CHECKING
 
 from lsst.resources import ResourcePath
-from pydantic import BaseModel, PrivateAttr
+
+try:
+    from pydantic.v1 import BaseModel, PrivateAttr
+except ModuleNotFoundError:
+    from pydantic import BaseModel, PrivateAttr
 
 from .config import ConfigSubset
 from .configSupport import processLookupConfigs

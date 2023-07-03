@@ -32,7 +32,11 @@ from typing import TYPE_CHECKING, Any
 
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
-from pydantic import BaseModel
+
+try:
+    from pydantic.v1 import BaseModel
+except ModuleNotFoundError:
+    from pydantic import BaseModel
 
 from .datasets import DatasetId
 from .dimensions import DimensionUniverse

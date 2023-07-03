@@ -43,7 +43,11 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import StorageClass, StorageClassDelegate
-from pydantic import BaseModel
+
+try:
+    from pydantic.v1 import BaseModel
+except ModuleNotFoundError:
+    from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Butler, Datastore, FormatterFactory

@@ -30,7 +30,11 @@ from typing import Any
 
 from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel
-from pydantic import BaseModel
+
+try:
+    from pydantic.v1 import BaseModel
+except ModuleNotFoundError:
+    from pydantic import BaseModel
 
 from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
 from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
