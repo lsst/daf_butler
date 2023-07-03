@@ -32,7 +32,7 @@ from ...core import DatasetId, DatasetRef
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from ...core import DatasetType, DimensionUniverse, StoredDatastoreItemInfo
+    from ...core import DatasetDatastoreRecords, DatasetType, DimensionUniverse, StoredDatastoreItemInfo
     from ...core.datastore import DatastoreTransaction
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
@@ -83,7 +83,7 @@ class FakeDatasetRef:
         raise AttributeError("A FakeDatasetRef can not be associated with a valid DatasetType")
 
     @property
-    def datastore_records(self) -> dict[str, list[StoredDatastoreItemInfo]] | None:
+    def datastore_records(self) -> DatasetDatastoreRecords | None:
         raise AttributeError("A FakeDatasetRef can not be associated with datastore records")
 
 

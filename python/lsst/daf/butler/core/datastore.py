@@ -50,7 +50,6 @@ if TYPE_CHECKING:
     from .datasets import DatasetRef, DatasetType
     from .datastoreRecordData import DatastoreRecordData
     from .storageClass import StorageClass
-    from .storedFileInfo import StoredDatastoreItemInfo
 
 
 class DatastoreConfig(ConfigSubset):
@@ -1199,7 +1198,7 @@ class Datastore(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def opaque_table_definitions(self) -> Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]:
+    def opaque_table_definitions(self) -> Mapping[str, ddl.TableSpec]:
         """Make definitions of the opaque tables used by this Datastore.
 
         Returns
@@ -1207,8 +1206,6 @@ class Datastore(metaclass=ABCMeta):
         tables : `~collections.abc.Mapping` [ `str`, `.ddl.TableSpec` ]
             Mapping of opaque table names to their definitions. This can be an
             empty mapping if Datastore does not use opaque tables to keep
-            datastore records. Table definition is a tuple containing
-            `.ddl.TableSpec` for a table and a class of a record which must be
-            a subclass of `StoredDatastoreItemInfo`.
+            datastore records.
         """
         raise NotImplementedError()

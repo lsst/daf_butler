@@ -42,7 +42,6 @@ from lsst.daf.butler import (
     DatastoreRecordData,
     DatastoreValidationError,
     FileDataset,
-    StoredDatastoreItemInfo,
     ddl,
 )
 from lsst.resources import ResourcePath
@@ -1126,9 +1125,9 @@ class ChainedDatastore(Datastore):
 
         return all_accepted, remaining_refs
 
-    def opaque_table_definitions(self) -> Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]:
+    def opaque_table_definitions(self) -> Mapping[str, ddl.TableSpec]:
         # Docstring inherited from the base class.
-        tables: dict[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]] = {}
+        tables: dict[str, ddl.TableSpec] = {}
         for datastore in self.datastores:
             tables.update(datastore.opaque_table_definitions())
         return tables

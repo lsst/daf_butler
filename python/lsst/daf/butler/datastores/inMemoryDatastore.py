@@ -664,6 +664,6 @@ class InMemoryDatastore(GenericBaseDatastore):
         # In-memory Datastore records cannot be exported or imported
         return {}
 
-    def opaque_table_definitions(self) -> Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]:
+    def opaque_table_definitions(self) -> Mapping[str, ddl.TableSpec]:
         # Docstring inherited from the base class.
         return {}

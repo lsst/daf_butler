@@ -56,7 +56,6 @@ from ..core import (
     NameLookupMapping,
     Progress,
     StorageClassFactory,
-    StoredDatastoreItemInfo,
     Timespan,
     ddl,
 )
@@ -222,7 +221,7 @@ class SqlRegistry(Registry):
 
         # TODO: This is currently initialized by `make_datastore_tables`,
         # eventually we'll need to do it during construction.
-        self._datastore_opaques: Mapping[str, type[StoredDatastoreItemInfo]] = {}
+        self._datastore_opaques: Iterable[str] = []
 
     def __str__(self) -> str:
         return str(self._db)
@@ -1351,28 +1350,25 @@ class SqlRegistry(Registry):
     def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
         # Docstring inherited from base class.
 
-        opaque_records: dict[str, list[StoredDatastoreItemInfo]] = {}
-        for opaque, record_class in self._datastore_opaques.items():
-            records = self.fetchOpaqueData(opaque, dataset_id=ref.id)
-            opaque_records[opaque] = [record_class.from_record(record) for record in records]
+        records: dict[str, list[Mapping[str, Any]]] = {}
+        for opaque in self._datastore_opaques:
+            records[opaque] = list(self.fetchOpaqueData(opaque, dataset_id=ref.id))
         ref = DatasetRef(
             datasetType=ref.datasetType,
             dataId=ref.dataId,
             run=ref.run,
             id=ref.id,
             conform=False,
-            datastore_records=opaque_records,
+            datastore_records=records,
         )
         return ref
 
-    def make_datastore_tables(
-        self, tables: Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]
-    ) -> None:
+    def make_datastore_tables(self, tables: Mapping[str, ddl.TableSpec]) -> None:
         # Docstring inherited from base class.
 
-        datastore_opaques = {}
-        for table_name, (table_spec, record_class) in tables.items():
-            datastore_opaques[table_name] = record_class
+        datastore_opaques = []
+        for table_name, table_spec in tables.items():
+            datastore_opaques.append(table_name)
             self._managers.opaque.register(table_name, table_spec)
         self._datastore_opaques = datastore_opaques
 

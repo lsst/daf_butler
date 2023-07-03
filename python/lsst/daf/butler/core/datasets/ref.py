@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = [
     "AmbiguousDatasetError",
+    "DatasetDatastoreRecords",
     "DatasetId",
     "DatasetIdFactory",
     "DatasetIdGenEnum",
@@ -47,16 +48,21 @@ from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, Seri
 from ..json import from_json_pydantic, to_json_pydantic
 from ..named import NamedKeyDict
 from ..persistenceContext import PersistenceContextVars
-from ..storedFileInfo import StoredDatastoreItemInfo
 from .type import DatasetType, SerializedDatasetType
 
 if TYPE_CHECKING:
     from ...registry import Registry
     from ..storageClass import StorageClass
 
-# Per-dataset records grouped by opaque table name, usually there is just one
-# opaque table.
-DatasetDatastoreRecords: TypeAlias = dict[str, list[StoredDatastoreItemInfo]]
+_DatastoreRecord: TypeAlias = Mapping[str, Any]
+
+DatasetDatastoreRecords: TypeAlias = Mapping[str, list[_DatastoreRecord]]
+"""Type alias for datastore records in their dictionary representation.
+
+The mapping is indexed by the opaque table name. Content of the record maps is
+specific to Datastore implementation, but it has to contain at least a
+``dataset_id`` key.
+"""
 
 
 class AmbiguousDatasetError(Exception):
@@ -156,10 +162,6 @@ class DatasetIdFactory:
 # This is constant, so don't recreate a set for each instance
 _serializedDatasetRefFieldsSet = {"id", "datasetType", "dataId", "run", "component"}
 
-# Serialized representation of StoredDatastoreItemInfo collection, first item
-# is the record class name.
-_DatastoreRecords: TypeAlias = tuple[str, list[dict[str, Any]]]
-
 
 class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
@@ -169,7 +171,7 @@ class SerializedDatasetRef(BaseModel):
     dataId: SerializedDataCoordinate | None = None
     run: StrictStr | None = None
     component: StrictStr | None = None
-    datastore_records: Mapping[str, _DatastoreRecords] | None = None
+    datastore_records: DatasetDatastoreRecords | None = None
     """Maps opaque table name to datastore records."""
 
     @validator("dataId")
@@ -200,7 +202,7 @@ class SerializedDatasetRef(BaseModel):
         datasetType: dict[str, Any] | None = None,
         dataId: dict[str, Any] | None = None,
         component: str | None = None,
-        datastore_records: Mapping[str, _DatastoreRecords] | None = None,
+        datastore_records: DatasetDatastoreRecords | None = None,
     ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.
 
@@ -391,18 +393,12 @@ class DatasetRef:
                 simple["component"] = self.datasetType.component()
             return SerializedDatasetRef(**simple)
 
-        datastore_records: Mapping[str, _DatastoreRecords] | None = None
-        if self.datastore_records is not None:
-            datastore_records = {}
-            for opaque_name, records in self.datastore_records.items():
-                datastore_records[opaque_name] = StoredDatastoreItemInfo.to_records(records)
-
         return SerializedDatasetRef(
             datasetType=self.datasetType.to_simple(minimal=minimal),
             dataId=self.dataId.to_simple(),
             run=self.run,
             id=self.id,
-            datastore_records=datastore_records,
+            datastore_records=self.datastore_records,
         )
 
     @classmethod
@@ -497,15 +493,13 @@ class DatasetRef:
                 f"Encountered with {simple!r}{dstr}."
             )
 
-        # rebuild datastore records
-        datastore_records: DatasetDatastoreRecords | None = None
-        if simple.datastore_records is not None:
-            datastore_records = {}
-            for opaque_name, (class_name, records) in simple.datastore_records.items():
-                infos = StoredDatastoreItemInfo.from_records(class_name, records)
-                datastore_records[opaque_name] = infos
-
-        newRef = cls(datasetType, dataId, id=simple.id, run=simple.run, datastore_records=datastore_records)
+        newRef = cls(
+            datasetType,
+            dataId,
+            id=simple.id,
+            run=simple.run,
+            datastore_records=simple.datastore_records,
+        )
         if cache is not None:
             cache[key] = newRef
         return newRef

@@ -231,7 +231,8 @@ class Butler(LimitedButler):
                 # TODO: Once datastore drops dependency on registry we can
                 # construct datastore first and pass opaque tables to registry
                 # constructor.
-                self.registry.make_datastore_tables(self.datastore.opaque_table_definitions())
+                if writeable:
+                    self.registry.make_datastore_tables(self.datastore.opaque_table_definitions())
                 self.storageClasses = StorageClassFactory()
                 self.storageClasses.addFromConfig(self._config)
             except Exception:

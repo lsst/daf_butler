@@ -52,7 +52,6 @@ from ..core import (
     DimensionUniverse,
     NameLookupMapping,
     StorageClassFactory,
-    StoredDatastoreItemInfo,
     Timespan,
     ddl,
 )
@@ -1669,13 +1668,22 @@ class Registry(ABC):
 
     @abstractmethod
     def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
-        """Retrieve datastore records for given ref."""
+        """Retrieve datastore records for a given ref.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference for which to return the records.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            `DatasetRef` with updated datastore records
+        """
         raise NotImplementedError()
 
     @abstractmethod
-    def make_datastore_tables(
-        self, tables: Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]
-    ) -> None:
+    def make_datastore_tables(self, tables: Mapping[str, ddl.TableSpec]) -> None:
         """Create opaque tables used by datastores.
 
         Parameters

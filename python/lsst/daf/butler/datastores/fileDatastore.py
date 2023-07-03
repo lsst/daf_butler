@@ -29,7 +29,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.daf.butler import (
     CompositesMap,
@@ -368,10 +368,7 @@ class FileDatastore(GenericBaseDatastore):
         if ref.datastore_records is not None:
             if (ref_records := ref.datastore_records.get(self._table.name)) is not None:
                 # Need to make sure they have correct type
-                for record in ref_records:
-                    if not isinstance(record, StoredFileInfo):
-                        raise TypeError(f"Datastore record has unexpected type {record.__class__.__name__}")
-                return cast(list[StoredFileInfo], ref_records)
+                return [StoredFileInfo.from_record(record) for record in ref_records]
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
@@ -2989,6 +2986,6 @@ class FileDatastore(GenericBaseDatastore):
             ref = ref.overrideStorageClass(dataset_type.storageClass)
         return ref
 
-    def opaque_table_definitions(self) -> Mapping[str, tuple[ddl.TableSpec, type[StoredDatastoreItemInfo]]]:
+    def opaque_table_definitions(self) -> Mapping[str, ddl.TableSpec]:
         # Docstring inherited from the base class.
-        return {self._opaque_table_name: (self.makeTableSpec(ddl.GUID), StoredFileInfo)}
+        return {self._opaque_table_name: self.makeTableSpec(ddl.GUID)}
