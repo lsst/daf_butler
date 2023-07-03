@@ -175,10 +175,10 @@ class ButlerLogRecord(BaseModel):
     filename: str
     pathname: str
     lineno: int
-    funcName: str | None
+    funcName: str | None = None
     process: int
     processName: str
-    exc_info: str | None
+    exc_info: str | None = None
     MDC: dict[str, str]
 
     class Config:

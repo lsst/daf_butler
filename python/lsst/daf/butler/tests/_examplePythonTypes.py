@@ -266,9 +266,9 @@ class MetricsExample:
 class MetricsExampleModel(BaseModel):
     """A variant of `MetricsExample` based on model."""
 
-    summary: dict[str, Any] | None
-    output: dict[str, Any] | None
-    data: list[Any] | None
+    summary: dict[str, Any] | None = None
+    output: dict[str, Any] | None = None
+    data: list[Any] | None = None
 
     @classmethod
     def from_metrics(cls, metrics: MetricsExample) -> MetricsExampleModel:

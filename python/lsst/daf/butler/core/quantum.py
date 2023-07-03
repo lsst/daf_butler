@@ -72,8 +72,8 @@ def _reconstructDatasetRef(
 class SerializedQuantum(BaseModel):
     """Simplified model of a `Quantum` suitable for serialization."""
 
-    taskName: str | None
-    dataId: SerializedDataCoordinate | None
+    taskName: str | None = None
+    dataId: SerializedDataCoordinate | None = None
     datasetTypeMapping: Mapping[str, SerializedDatasetType]
     initInputs: Mapping[str, tuple[SerializedDatasetRef, list[int]]]
     inputs: Mapping[str, list[tuple[SerializedDatasetRef, list[int]]]]
