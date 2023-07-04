@@ -36,7 +36,7 @@ from lsst.resources import ResourcePathExpression
 try:
     from pydantic.v1 import BaseModel
 except ModuleNotFoundError:
-    from pydantic import BaseModel
+    from pydantic import BaseModel  # type: ignore
 
 from ._butlerConfig import ButlerConfig
 from ._deferredDatasetHandle import DeferredDatasetHandle

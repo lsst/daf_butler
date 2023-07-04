@@ -39,7 +39,7 @@ from lsst.sphgeom import IntersectionRegion, Region
 try:
     from pydantic.v1 import BaseModel
 except ModuleNotFoundError:
-    from pydantic import BaseModel
+    from pydantic import BaseModel  # type: ignore
 
 from ..json import from_json_pydantic, to_json_pydantic
 from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping

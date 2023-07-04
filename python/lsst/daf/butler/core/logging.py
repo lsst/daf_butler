@@ -35,7 +35,7 @@ from lsst.utils.iteration import isplit
 try:
     from pydantic.v1 import BaseModel, PrivateAttr
 except ModuleNotFoundError:
-    from pydantic import BaseModel, PrivateAttr
+    from pydantic import BaseModel, PrivateAttr  # type: ignore
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""

@@ -39,7 +39,7 @@ from lsst.utils.iteration import ensure_iterable
 try:
     from pydantic.v1 import BaseModel
 except ModuleNotFoundError:
-    from pydantic import BaseModel
+    from pydantic import BaseModel  # type: ignore
 
 from ..core import DatasetType
 from ..core.utils import globToRegex

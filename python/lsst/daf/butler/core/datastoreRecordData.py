@@ -36,7 +36,7 @@ from lsst.utils.introspection import get_full_type_name
 try:
     from pydantic.v1 import BaseModel
 except ModuleNotFoundError:
-    from pydantic import BaseModel
+    from pydantic import BaseModel  # type: ignore
 
 from .datasets import DatasetId
 from .dimensions import DimensionUniverse

@@ -50,7 +50,7 @@ from lsst.resources import ResourcePath
 try:
     from pydantic.v1 import BaseModel, PrivateAttr
 except ModuleNotFoundError:
-    from pydantic import BaseModel, PrivateAttr
+    from pydantic import BaseModel, PrivateAttr  # type: ignore
 
 from .config import ConfigSubset
 from .configSupport import processLookupConfigs

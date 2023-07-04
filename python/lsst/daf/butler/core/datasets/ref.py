@@ -40,7 +40,7 @@ from lsst.utils.classes import immutable
 try:
     from pydantic.v1 import BaseModel, StrictStr, validator
 except ModuleNotFoundError:
-    from pydantic import BaseModel, StrictStr, validator
+    from pydantic import BaseModel, StrictStr, validator  # type: ignore
 
 from ..configSupport import LookupKey
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate

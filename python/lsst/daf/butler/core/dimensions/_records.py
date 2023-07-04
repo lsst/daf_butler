@@ -31,7 +31,15 @@ from lsst.utils.classes import immutable
 try:
     from pydantic.v1 import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 except ModuleNotFoundError:
-    from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
+    from pydantic import (  # type: ignore
+        BaseModel,
+        Field,
+        StrictBool,
+        StrictFloat,
+        StrictInt,
+        StrictStr,
+        create_model,
+    )
 
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistenceContext import PersistenceContextVars

@@ -38,7 +38,7 @@ from typing import Any
 try:
     from pydantic.v1 import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator
 except ModuleNotFoundError:
-    from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator
+    from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator  # type: ignore
 
 
 class ExtraColumnType(str, enum.Enum):

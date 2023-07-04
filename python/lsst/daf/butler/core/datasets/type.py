@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 try:
     from pydantic.v1 import BaseModel, StrictBool, StrictStr
 except ModuleNotFoundError:
-    from pydantic import BaseModel, StrictBool, StrictStr
+    from pydantic import BaseModel, StrictBool, StrictStr  # type: ignore
 
 from ..configSupport import LookupKey
 from ..dimensions import DimensionGraph, SerializedDimensionGraph

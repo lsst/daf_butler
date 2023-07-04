@@ -38,7 +38,7 @@ from lsst.utils.iteration import ensure_iterable
 try:
     from pydantic.v1 import BaseModel, Field, validator
 except ModuleNotFoundError:
-    from pydantic import BaseModel, Field, validator
+    from pydantic import BaseModel, Field, validator  # type: ignore
 
 from .dimensions import DataIdValue, SerializedDataCoordinate
 from .utils import globToRegex

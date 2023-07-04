@@ -47,7 +47,7 @@ from lsst.daf.butler import StorageClass, StorageClassDelegate
 try:
     from pydantic.v1 import BaseModel
 except ModuleNotFoundError:
-    from pydantic import BaseModel
+    from pydantic import BaseModel  # type: ignore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Butler, Datastore, FormatterFactory
