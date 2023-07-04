@@ -36,6 +36,7 @@ from pydantic import BaseModel
 
 from .datasets import DatasetId
 from .dimensions import DimensionUniverse
+from .persistenceContext import PersistenceContextVars
 from .storedFileInfo import StoredDatastoreItemInfo
 
 if TYPE_CHECKING:
@@ -204,6 +205,10 @@ class DatastoreRecordData:
         item_info : `StoredDatastoreItemInfo`
             De-serialized instance of `StoredDatastoreItemInfo`.
         """
+        cache = PersistenceContextVars.dataStoreRecords.get()
+        key = frozenset(simple.dataset_ids)
+        if cache is not None and (cachedRecord := cache.get(key)) is not None:
+            return cachedRecord
         records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {}
         # make sure that all dataset IDs appear in the dict even if they don't
         # have records.
@@ -211,9 +216,17 @@ class DatastoreRecordData:
             records[dataset_id] = {}
         for class_name, table_data in simple.records.items():
             klass = doImportType(class_name)
+            if not issubclass(klass, StoredDatastoreItemInfo):
+                raise RuntimeError(
+                    "The class specified in the SerializedDatastoreRecordData "
+                    f"({get_full_type_name(klass)}) is not a StoredDatastoreItemInfo."
+                )
             for table_name, table_records in table_data.items():
                 for record in table_records:
                     info = klass.from_record(record)
                     dataset_type_records = records.setdefault(info.dataset_id, {})
                     dataset_type_records.setdefault(table_name, []).append(info)
-        return cls(records=records)
+        newRecord = cls(records=records)
+        if cache is not None:
+            cache[key] = newRecord
+        return newRecord

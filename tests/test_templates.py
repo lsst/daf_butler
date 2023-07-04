@@ -23,9 +23,11 @@
 
 import os.path
 import unittest
+import uuid
 
 from lsst.daf.butler import (
     DataCoordinate,
+    DatasetId,
     DatasetRef,
     DatasetType,
     DimensionGraph,
@@ -40,6 +42,8 @@ from lsst.daf.butler import (
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 PlaceHolder = StorageClass("PlaceHolder")
+
+REFUUID = DatasetId(int=uuid.uuid4().int)
 
 
 class TestFileTemplates(unittest.TestCase):
@@ -66,7 +70,7 @@ class TestFileTemplates(unittest.TestCase):
             StorageClass(storageClassName),
             parentStorageClass=parentStorageClass,
         )
-        return DatasetRef(datasetType, dataId, id=1, run=run, conform=conform)
+        return DatasetRef(datasetType, dataId, id=REFUUID, run=run, conform=conform)
 
     def setUp(self):
         self.universe = DimensionUniverse()
@@ -104,19 +108,19 @@ class TestFileTemplates(unittest.TestCase):
         )
 
         # Check that the id is sufficient without any other information.
-        self.assertTemplate("{id}", "1", self.makeDatasetRef("calexp", run="run2"))
+        self.assertTemplate("{id}", str(REFUUID), self.makeDatasetRef("calexp", run="run2"))
 
-        self.assertTemplate("{run}/{id}", "run2/1", self.makeDatasetRef("calexp", run="run2"))
+        self.assertTemplate("{run}/{id}", f"run2/{str(REFUUID)}", self.makeDatasetRef("calexp", run="run2"))
 
         self.assertTemplate(
             "fixed/{id}",
-            "fixed/1",
+            f"fixed/{str(REFUUID)}",
             self.makeDatasetRef("calexp", run="run2"),
         )
 
         self.assertTemplate(
             "fixed/{id}_{physical_filter}",
-            "fixed/1_Most_Amazing_U_Filter_Ever",
+            f"fixed/{str(REFUUID)}_Most_Amazing_U_Filter_Ever",
             self.makeDatasetRef("calexp", run="run2"),
         )
 

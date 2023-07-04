@@ -30,6 +30,7 @@ from lsst.utils.classes import immutable
 from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
 from ..json import from_json_pydantic, to_json_pydantic
+from ..persistenceContext import PersistenceContextVars
 from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ._elements import Dimension, DimensionElement
 
@@ -166,7 +167,16 @@ class SerializedDimensionRecord(BaseModel):
 
         This method should only be called when the inputs are trusted.
         """
-        node = cls.construct(definition=definition, record=record)
+        _recItems = record.items()
+        # Type ignore because the ternary statement seems to confuse mypy
+        # based on conflicting inferred types of v.
+        key = (
+            definition,
+            frozenset((k, v if not isinstance(v, list) else tuple(v)) for k, v in _recItems),  # type: ignore
+        )
+        cache = PersistenceContextVars.serializedDimensionRecordMapping.get()
+        if cache is not None and (result := cache.get(key)) is not None:
+            return result
         node = SerializedDimensionRecord.__new__(cls)
         setter = object.__setattr__
         setter(node, "definition", definition)
@@ -177,6 +187,8 @@ class SerializedDimensionRecord(BaseModel):
             node, "record", {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
         )
         setter(node, "__fields_set__", {"definition", "record"})
+        if cache is not None:
+            cache[key] = node
         return node
 
 
@@ -367,6 +379,16 @@ class DimensionRecord:
         if universe is None:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
+        _recItems = simple.record.items()
+        # Type ignore because the ternary statement seems to confuse mypy
+        # based on conflicting inferred types of v.
+        key = (
+            simple.definition,
+            frozenset((k, v if not isinstance(v, list) else tuple(v)) for k, v in _recItems),  # type: ignore
+        )
+        cache = PersistenceContextVars.dimensionRecords.get()
+        if cache is not None and (result := cache.get(key)) is not None:
+            return result
 
         definition = DimensionElement.from_simple(simple.definition, universe=universe)
 
@@ -389,7 +411,10 @@ class DimensionRecord:
         if (hsh := "hash") in rec:
             rec[hsh] = bytes.fromhex(rec[hsh].decode())
 
-        return _reconstructDimensionRecord(definition, rec)
+        dimRec = _reconstructDimensionRecord(definition, rec)
+        if cache is not None:
+            cache[key] = dimRec
+        return dimRec
 
     to_json = to_json_pydantic
     from_json: ClassVar = classmethod(from_json_pydantic)

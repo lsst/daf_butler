@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from ..json import from_json_pydantic, to_json_pydantic
 from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping
+from ..persistenceContext import PersistenceContextVars
 from ..timespan import Timespan
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
@@ -76,6 +77,10 @@ class SerializedDataCoordinate(BaseModel):
 
         This method should only be called when the inputs are trusted.
         """
+        key = (frozenset(dataId.items()), records is not None)
+        cache = PersistenceContextVars.serializedDataCoordinateMapping.get()
+        if cache is not None and (result := cache.get(key)) is not None:
+            return result
         node = SerializedDataCoordinate.__new__(cls)
         setter = object.__setattr__
         setter(node, "dataId", dataId)
@@ -87,6 +92,8 @@ class SerializedDataCoordinate(BaseModel):
             else {k: SerializedDimensionRecord.direct(**v) for k, v in records.items()},
         )
         setter(node, "__fields_set__", {"dataId", "records"})
+        if cache is not None:
+            cache[key] = node
         return node
 
 
@@ -730,6 +737,10 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         dataId : `DataCoordinate`
             Newly-constructed object.
         """
+        key = (frozenset(simple.dataId.items()), simple.records is not None)
+        cache = PersistenceContextVars.dataCoordinates.get()
+        if cache is not None and (result := cache.get(key)) is not None:
+            return result
         if universe is None and registry is None:
             raise ValueError("One of universe or registry is required to convert a dict to a DataCoordinate")
         if universe is None and registry is not None:
@@ -743,6 +754,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             dataId = dataId.expanded(
                 {k: DimensionRecord.from_simple(v, universe=universe) for k, v in simple.records.items()}
             )
+        if cache is not None:
+            cache[key] = dataId
         return dataId
 
     to_json = to_json_pydantic

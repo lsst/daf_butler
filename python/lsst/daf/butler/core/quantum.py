@@ -23,10 +23,13 @@ from __future__ import annotations
 
 __all__ = ("Quantum", "SerializedQuantum", "DimensionRecordsAccumulator")
 
+import sys
+import warnings
 from collections.abc import Iterable, Mapping, MutableMapping
 from typing import Any
 
 from lsst.utils import doImportType
+from lsst.utils.introspection import find_outside_stacklevel
 from pydantic import BaseModel
 
 from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
@@ -46,7 +49,6 @@ def _reconstructDatasetRef(
     type_: DatasetType | None,
     ids: Iterable[int],
     dimensionRecords: dict[int, SerializedDimensionRecord] | None,
-    reconstitutedDimensions: dict[int, tuple[str, DimensionRecord]],
     universe: DimensionUniverse,
 ) -> DatasetRef:
     """Reconstruct a DatasetRef stored in a Serialized Quantum."""
@@ -55,19 +57,11 @@ def _reconstructDatasetRef(
     for dId in ids:
         # if the dimension record has been loaded previously use that,
         # otherwise load it from the dict of Serialized DimensionRecords
-        if (recId := reconstitutedDimensions.get(dId)) is None:
-            if dimensionRecords is None:
-                raise ValueError(
-                    "Cannot construct from a SerializedQuantum with no dimension records. "
-                    "Reconstituted Dimensions must be supplied and populated in method call."
-                )
-            tmpSerialized = dimensionRecords[dId]
-            reconstructedDim = DimensionRecord.from_simple(tmpSerialized, universe=universe)
-            definition = tmpSerialized.definition
-            reconstitutedDimensions[dId] = (definition, reconstructedDim)
-        else:
-            definition, reconstructedDim = recId
-        records[definition] = reconstructedDim
+        if dimensionRecords is None:
+            raise ValueError("Cannot construct from a SerializedQuantum with no dimension records. ")
+        tmpSerialized = dimensionRecords[dId]
+        reconstructedDim = DimensionRecord.from_simple(tmpSerialized, universe=universe)
+        records[sys.intern(reconstructedDim.definition.name)] = reconstructedDim
     # turn the serialized form into an object and attach the dimension records
     rebuiltDatasetRef = DatasetRef.from_simple(simple, universe, datasetType=type_)
     if records:
@@ -110,13 +104,15 @@ class SerializedQuantum(BaseModel):
         """
         node = SerializedQuantum.__new__(cls)
         setter = object.__setattr__
-        setter(node, "taskName", taskName)
+        setter(node, "taskName", sys.intern(taskName or ""))
         setter(node, "dataId", dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
+
         setter(
             node,
             "datasetTypeMapping",
             {k: SerializedDatasetType.direct(**v) for k, v in datasetTypeMapping.items()},
         )
+
         setter(
             node,
             "initInputs",
@@ -207,7 +203,6 @@ class Quantum:
         "_initInputs",
         "_inputs",
         "_outputs",
-        "_hash",
         "_datastore_records",
     )
 
@@ -236,8 +231,12 @@ class Quantum:
         if outputs is None:
             outputs = {}
         self._initInputs = NamedKeyDict[DatasetType, DatasetRef](initInputs).freeze()
-        self._inputs = NamedKeyDict[DatasetType, list[DatasetRef]](inputs).freeze()
-        self._outputs = NamedKeyDict[DatasetType, list[DatasetRef]](outputs).freeze()
+        self._inputs = NamedKeyDict[DatasetType, tuple[DatasetRef]](
+            (k, tuple(v)) for k, v in inputs.items()
+        ).freeze()
+        self._outputs = NamedKeyDict[DatasetType, tuple[DatasetRef]](
+            (k, tuple(v)) for k, v in outputs.items()
+        ).freeze()
         if datastore_records is None:
             datastore_records = {}
         self._datastore_records = datastore_records
@@ -412,23 +411,22 @@ class Quantum:
             required dimension has already been loaded. Otherwise the record
             will be unpersisted from the SerializedQuatnum and added to the
             reconstitutedDimensions dict (if not None). Defaults to None.
+            Deprecated, any argument will be ignored.
         """
-        loadedTypes: MutableMapping[str, DatasetType] = {}
         initInputs: MutableMapping[DatasetType, DatasetRef] = {}
-        if reconstitutedDimensions is None:
-            reconstitutedDimensions = {}
+        if reconstitutedDimensions is not None:
+            warnings.warn(
+                "The reconstitutedDimensions argument is now ignored and may be removed after v 27",
+                category=FutureWarning,
+                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+            )
 
         # Unpersist all the init inputs
         for key, (value, dimensionIds) in simple.initInputs.items():
-            # If a datasetType has already been created use that instead of
-            # unpersisting.
-            if (type_ := loadedTypes.get(key)) is None:
-                type_ = loadedTypes.setdefault(
-                    key, DatasetType.from_simple(simple.datasetTypeMapping[key], universe=universe)
-                )
+            type_ = DatasetType.from_simple(simple.datasetTypeMapping[key], universe=universe)
             # reconstruct the dimension records
             rebuiltDatasetRef = _reconstructDatasetRef(
-                value, type_, dimensionIds, simple.dimensionRecords, reconstitutedDimensions, universe
+                value, type_, dimensionIds, simple.dimensionRecords, universe
             )
             initInputs[type_] = rebuiltDatasetRef
 
@@ -438,17 +436,12 @@ class Quantum:
 
         for container, simpleRefs in ((inputs, simple.inputs), (outputs, simple.outputs)):
             for key, values in simpleRefs.items():
-                # If a datasetType has already been created use that instead of
-                # unpersisting.
-                if (type_ := loadedTypes.get(key)) is None:
-                    type_ = loadedTypes.setdefault(
-                        key, DatasetType.from_simple(simple.datasetTypeMapping[key], universe=universe)
-                    )
+                type_ = DatasetType.from_simple(simple.datasetTypeMapping[key], universe=universe)
                 # reconstruct the list of DatasetRefs for this DatasetType
                 tmp: list[DatasetRef] = []
                 for v, recIds in values:
                     rebuiltDatasetRef = _reconstructDatasetRef(
-                        v, type_, recIds, simple.dimensionRecords, reconstitutedDimensions, universe
+                        v, type_, recIds, simple.dimensionRecords, universe
                     )
                     tmp.append(rebuiltDatasetRef)
                 container[type_] = tmp
@@ -466,7 +459,7 @@ class Quantum:
                 for datastore_name, record_data in simple.datastoreRecords.items()
             }
 
-        return Quantum(
+        quant = Quantum(
             taskName=simple.taskName,
             dataId=dataId,
             initInputs=initInputs,
@@ -474,6 +467,7 @@ class Quantum:
             outputs=outputs,
             datastore_records=datastore_records,
         )
+        return quant
 
     @property
     def taskClass(self) -> type | None:
@@ -508,7 +502,7 @@ class Quantum:
         return self._initInputs
 
     @property
-    def inputs(self) -> NamedKeyMapping[DatasetType, list[DatasetRef]]:
+    def inputs(self) -> NamedKeyMapping[DatasetType, tuple[DatasetRef]]:
         """Return mapping of input datasets that were expected to be used.
 
         Has `DatasetType` instances as keys (names can also be used for
@@ -523,7 +517,7 @@ class Quantum:
         return self._inputs
 
     @property
-    def outputs(self) -> NamedKeyMapping[DatasetType, list[DatasetRef]]:
+    def outputs(self) -> NamedKeyMapping[DatasetType, tuple[DatasetRef]]:
         """Return mapping of output datasets (to be) generated by this quantum.
 
         Has the same form as `predictedInputs`.

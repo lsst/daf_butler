@@ -1651,9 +1651,9 @@ class Butler(LimitedButler):
         if full_check:
             if self.datastore.exists(ref):
                 existence |= DatasetExistence._ARTIFACT
-        elif existence != DatasetExistence.UNRECOGNIZED:
+        elif existence.value != DatasetExistence.UNRECOGNIZED.value:
             # Do not add this flag if we have no other idea about a dataset.
-            existence |= DatasetExistence._ASSUMED
+            existence |= DatasetExistence(DatasetExistence._ASSUMED)
 
         return existence
 
