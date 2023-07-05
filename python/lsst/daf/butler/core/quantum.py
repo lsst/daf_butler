@@ -25,7 +25,7 @@ __all__ = ("Quantum", "SerializedQuantum", "DimensionRecordsAccumulator")
 
 import sys
 import warnings
-from collections.abc import Iterable, Mapping, MutableMapping
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 from lsst.utils import doImportType
@@ -217,8 +217,8 @@ class Quantum:
         taskClass: type | None = None,
         dataId: DataCoordinate | None = None,
         initInputs: Mapping[DatasetType, DatasetRef] | Iterable[DatasetRef] | None = None,
-        inputs: Mapping[DatasetType, list[DatasetRef]] | None = None,
-        outputs: Mapping[DatasetType, list[DatasetRef]] | None = None,
+        inputs: Mapping[DatasetType, Sequence[DatasetRef]] | None = None,
+        outputs: Mapping[DatasetType, Sequence[DatasetRef]] | None = None,
         datastore_records: Mapping[str, DatastoreRecordData] | None = None,
     ):
         if taskClass is not None:
