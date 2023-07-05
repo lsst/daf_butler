@@ -35,7 +35,11 @@ from typing import Any
 
 from deprecated.sphinx import deprecated
 from lsst.utils.iteration import ensure_iterable
-from pydantic import BaseModel
+
+try:
+    from pydantic.v1 import BaseModel
+except ModuleNotFoundError:
+    from pydantic import BaseModel  # type: ignore
 
 from ..core import DatasetType
 from ..core.utils import globToRegex

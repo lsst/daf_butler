@@ -30,7 +30,11 @@ from typing import Any
 
 from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel
-from pydantic import BaseModel
+
+try:
+    from pydantic.v1 import BaseModel
+except ModuleNotFoundError:
+    from pydantic import BaseModel  # type: ignore
 
 from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
 from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
@@ -72,8 +76,8 @@ def _reconstructDatasetRef(
 class SerializedQuantum(BaseModel):
     """Simplified model of a `Quantum` suitable for serialization."""
 
-    taskName: str | None
-    dataId: SerializedDataCoordinate | None
+    taskName: str | None = None
+    dataId: SerializedDataCoordinate | None = None
     datasetTypeMapping: Mapping[str, SerializedDatasetType]
     initInputs: Mapping[str, tuple[SerializedDatasetRef, list[int]]]
     inputs: Mapping[str, list[tuple[SerializedDatasetRef, list[int]]]]

@@ -25,7 +25,10 @@ __all__ = ()
 
 from collections.abc import Mapping
 
-from pydantic import BaseModel, Field
+try:
+    from pydantic.v1 import BaseModel, Field
+except ModuleNotFoundError:
+    from pydantic import BaseModel, Field  # type: ignore
 
 
 class DictConvertibleModel(BaseModel):

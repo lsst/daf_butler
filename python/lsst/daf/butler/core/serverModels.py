@@ -34,7 +34,11 @@ from collections.abc import Mapping
 from typing import Any, ClassVar
 
 from lsst.utils.iteration import ensure_iterable
-from pydantic import BaseModel, Field, validator
+
+try:
+    from pydantic.v1 import BaseModel, Field, validator
+except ModuleNotFoundError:
+    from pydantic import BaseModel, Field, validator  # type: ignore
 
 from .dimensions import DataIdValue, SerializedDataCoordinate
 from .utils import globToRegex

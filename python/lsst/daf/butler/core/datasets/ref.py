@@ -36,7 +36,11 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.classes import immutable
-from pydantic import BaseModel, StrictStr, validator
+
+try:
+    from pydantic.v1 import BaseModel, StrictStr, validator
+except ModuleNotFoundError:
+    from pydantic import BaseModel, StrictStr, validator  # type: ignore
 
 from ..configSupport import LookupKey
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate

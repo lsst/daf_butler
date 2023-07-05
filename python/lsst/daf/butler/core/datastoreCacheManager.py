@@ -46,7 +46,11 @@ from random import Random
 from typing import TYPE_CHECKING
 
 from lsst.resources import ResourcePath
-from pydantic import BaseModel, PrivateAttr
+
+try:
+    from pydantic.v1 import BaseModel, PrivateAttr
+except ModuleNotFoundError:
+    from pydantic import BaseModel, PrivateAttr  # type: ignore
 
 from .config import ConfigSubset
 from .configSupport import processLookupConfigs
@@ -135,7 +139,7 @@ class CacheEntry(BaseModel):
     ref: DatasetId
     """ID of this dataset."""
 
-    component: str | None
+    component: str | None = None
     """Component for this disassembled composite (optional)."""
 
     @classmethod

@@ -31,7 +31,11 @@ from typing import IO, Any, ClassVar, Union, overload
 
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
-from pydantic import BaseModel, PrivateAttr
+
+try:
+    from pydantic.v1 import BaseModel, PrivateAttr
+except ModuleNotFoundError:
+    from pydantic import BaseModel, PrivateAttr  # type: ignore
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
@@ -175,10 +179,10 @@ class ButlerLogRecord(BaseModel):
     filename: str
     pathname: str
     lineno: int
-    funcName: str | None
+    funcName: str | None = None
     process: int
     processName: str
-    exc_info: str | None
+    exc_info: str | None = None
     MDC: dict[str, str]
 
     class Config:

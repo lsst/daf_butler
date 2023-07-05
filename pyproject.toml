@@ -30,7 +30,7 @@ dependencies = [
     "lsst-resources",
     "lsst-daf-relation",
     "deprecated >= 1.2",
-    "pydantic",
+    "pydantic <3.0",
 ]
 
 dynamic = ["version"]

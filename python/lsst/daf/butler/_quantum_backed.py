@@ -32,7 +32,11 @@ from typing import TYPE_CHECKING, Any
 
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePathExpression
-from pydantic import BaseModel
+
+try:
+    from pydantic.v1 import BaseModel
+except ModuleNotFoundError:
+    from pydantic import BaseModel  # type: ignore
 
 from ._butlerConfig import ButlerConfig
 from ._deferredDatasetHandle import DeferredDatasetHandle
