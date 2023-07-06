@@ -18,14 +18,16 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import annotations
 
 """Unit tests for the daf_butler CliLog utility.
 
 Code is implemented in
 daf_butler but some only runs if lsst.log.Log can be imported so these parts of
 it can't be tested there because daf_butler does not directly depend on
-lsst.log, and only uses it if it has been setup by another package."""
+lsst.log, and only uses it if it has been setup by another package.
+"""
+
+from __future__ import annotations
 
 import logging
 import os

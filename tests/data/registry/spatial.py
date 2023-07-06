@@ -18,7 +18,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import annotations
 
 """A script that creates and displays test data for topological spatial
 operations.
@@ -36,6 +35,8 @@ that don't actually correspond to any exposures; those could be added in
 another export file (along with the visit_definition records that relate them)
 in the future.
 """
+
+from __future__ import annotations
 
 import argparse
 import os.path

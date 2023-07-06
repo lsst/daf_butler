@@ -170,7 +170,6 @@ ignore = [
     "D200",
     "D205",
     "D400",
-    "E402", # Module level import not at top of file (against Rubin style)
 ]
 line-length = 110
 select = [

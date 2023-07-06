@@ -18,13 +18,14 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import annotations
 
 """
 Python classes that can be used to test datastores without requiring
 large external dependencies on python classes such as afw or serialization
 formats such as FITS or HDF5.
 """
+
+from __future__ import annotations
 
 __all__ = (
     "ListDelegate",

@@ -19,10 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import annotations
-
 """Code relating to constraints based on `DatasetRef`, `DatasetType`, or
-`StorageClass`."""
+`StorageClass`.
+"""
+
+from __future__ import annotations
 
 __all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
 
