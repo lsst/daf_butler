@@ -1350,9 +1350,9 @@ class SqlRegistry(Registry):
     def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
         # Docstring inherited from base class.
 
-        records: dict[str, list[Mapping[str, Any]]] = {}
+        records: dict[str, list[dict[str, Any]]] = {}
         for opaque in self._datastore_opaques:
-            records[opaque] = list(self.fetchOpaqueData(opaque, dataset_id=ref.id))
+            records[opaque] = [dict(rec) for rec in self.fetchOpaqueData(opaque, dataset_id=ref.id)]
         ref = DatasetRef(
             datasetType=ref.datasetType,
             dataId=ref.dataId,
@@ -1362,6 +1362,21 @@ class SqlRegistry(Registry):
             datastore_records=records,
         )
         return ref
+
+    def store_datastore_records(self, refs: Mapping[str, DatasetRef]) -> None:
+        # Docstring inherited from base class.
+
+        for datastore_name, ref in refs.items():
+            # Store ref IDs in the bridge table.
+            bridge = self._managers.datastores.register(datastore_name)
+            bridge.insert([ref])
+
+            # store records in opaque tables
+            assert ref.datastore_records is not None, "Dataset ref must have datastore records"
+            for table_name, records in ref.datastore_records.items():
+                opaque_table = self._managers.opaque.get(table_name)
+                assert opaque_table is not None, f"Unexpected opaque table name {table_name}"
+                opaque_table.insert(*records)
 
     def make_datastore_tables(self, tables: Mapping[str, ddl.TableSpec]) -> None:
         # Docstring inherited from base class.

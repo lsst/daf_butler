@@ -511,6 +511,26 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
+    @abstractmethod
+    def put_new(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> Mapping[str, DatasetRef]:
+        """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            The Dataset to store.
+        datasetRef : `DatasetRef`
+            Reference to the associated Dataset.
+
+        Returns
+        -------
+        datastore_refs : `~collections.abc.Mapping` [`str`, `DatasetRef`]
+            Mapping of a datastore name to dataset reference stored in that
+            datastore, reference will include datastore records. Only
+            non-ephemeral datastores will appear in this mapping.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
     def _overrideTransferMode(self, *datasets: FileDataset, transfer: str | None = None) -> str | None:
         """Allow ingest transfer mode to be defaulted based on datasets.
 

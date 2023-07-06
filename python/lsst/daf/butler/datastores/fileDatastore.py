@@ -2240,7 +2240,7 @@ class FileDatastore(GenericBaseDatastore):
             # be looking at the composite ref itself.
             cache_ref = ref.makeCompositeRef() if isComponent else ref
 
-            # For a disassembled component we can validate parametersagainst
+            # For a disassembled component we can validate parameters against
             # the component storage class directly
             if isDisassembled:
                 refStorageClass.validateParameters(parameters)
@@ -2306,6 +2306,38 @@ class FileDatastore(GenericBaseDatastore):
             artifacts.append((ref, storedInfo))
 
         self._register_datasets(artifacts)
+
+    @transactional
+    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+        doDisassembly = self.composites.shouldBeDisassembled(ref)
+        # doDisassembly = True
+
+        artifacts = []
+        if doDisassembly:
+            components = ref.datasetType.storageClass.delegate().disassemble(inMemoryDataset)
+            if components is None:
+                raise RuntimeError(
+                    f"Inconsistent configuration: dataset type {ref.datasetType.name} "
+                    f"with storage class {ref.datasetType.storageClass.name} "
+                    "is configured to be disassembled, but cannot be."
+                )
+            for component, componentInfo in components.items():
+                # Don't recurse because we want to take advantage of
+                # bulk insert -- need a new DatasetRef that refers to the
+                # same dataset_id but has the component DatasetType
+                # DatasetType does not refer to the types of components
+                # So we construct one ourselves.
+                compRef = ref.makeComponentRef(component)
+                storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
+                artifacts.append((compRef, storedInfo))
+        else:
+            # Write the entire thing out
+            storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
+            artifacts.append((ref, storedInfo))
+
+        ref_records = {self._opaque_table_name: [info.to_record() for _, info in artifacts]}
+        ref = ref.update(datastore_records=ref_records)
+        return {self.name: ref}
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:

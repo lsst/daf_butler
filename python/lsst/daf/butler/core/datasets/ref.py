@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from ...registry import Registry
     from ..storageClass import StorageClass
 
-_DatastoreRecord: TypeAlias = Mapping[str, Any]
+_DatastoreRecord: TypeAlias = dict[str, Any]
 
 DatasetDatastoreRecords: TypeAlias = Mapping[str, list[_DatastoreRecord]]
 """Type alias for datastore records in their dictionary representation.
@@ -680,13 +680,42 @@ class DatasetRef:
             A new dataset reference that is the same as the current one but
             with a different storage class in the `DatasetType`.
         """
+        return self.update(storageClass=storageClass)
+
+    def update(
+        self,
+        *,
+        storageClass: str | StorageClass | None = None,
+        datastore_records: DatasetDatastoreRecords | None = None,
+    ) -> DatasetRef:
+        """Create a new `DatasetRef` from this one, but with a modified
+        attributes.
+
+        Parameters
+        ----------
+        storageClass : `str` or `StorageClass`
+            The new storage class.
+        datastore_records : `str` or `StorageClass`
+            New datastore records, replaces all existing datastore records.
+
+        Returns
+        -------
+        modified : `DatasetRef`
+            A new dataset reference.
+        """
+        if datastore_records is None:
+            datastore_records = self.datastore_records
+        if storageClass is None:
+            datasetType = self.datasetType
+        else:
+            datasetType = self.datasetType.overrideStorageClass(storageClass)
         return DatasetRef(
-            datasetType=self.datasetType.overrideStorageClass(storageClass),
+            datasetType=datasetType,
             dataId=self.dataId,
             id=self.id,
             run=self.run,
             conform=False,
-            datastore_records=self.datastore_records,
+            datastore_records=datastore_records,
         )
 
     def is_compatible_with(self, ref: DatasetRef) -> bool:
