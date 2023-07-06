@@ -161,7 +161,7 @@ class LimitedButler(ABC):
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
         log.debug("Butler get: %s, parameters=%s, storageClass: %s", ref, parameters, storageClass)
-        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     @deprecated(
         reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
@@ -197,7 +197,7 @@ class LimitedButler(ABC):
         obj : `object`
             The dataset.
         """
-        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     @deprecated(
         reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
@@ -289,7 +289,7 @@ class LimitedButler(ABC):
             Whether the dataset artifact exists in the datastore and can be
             retrieved.
         """
-        return self.datastore.exists(ref)
+        return self._datastore.exists(ref)
 
     def stored_many(
         self,
@@ -309,7 +309,7 @@ class LimitedButler(ABC):
             Mapping from given dataset refs to boolean indicating artifact
             existence.
         """
-        return self.datastore.mexists(refs)
+        return self._datastore.mexists(refs)
 
     @deprecated(
         reason="Butler.datasetExistsDirect() has been replaced by Butler.stored(). "
@@ -410,13 +410,19 @@ class LimitedButler(ABC):
         """
         raise NotImplementedError()
 
-    datastore: Datastore
-    """The object that manages actual dataset storage (`Datastore`).
+    @property
+    @deprecated(
+        reason="The Butler.datastore property is now deprecated. Butler APIs should now exist with the "
+        "relevant functionality. Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
+    def datastore(self) -> Datastore:
+        """The object that manages actual dataset storage. (`Datastore`)"""
+        return self._datastore
 
-    Direct user access to the datastore should rarely be necessary; the primary
-    exception is the case where a `Datastore` implementation provides extra
-    functionality beyond what the base class defines.
-    """
+    _datastore: Datastore
+    """The object that manages actual dataset storage (`Datastore`)."""
 
     storageClasses: StorageClassFactory
     """An object that maps known storage class names to objects that fully

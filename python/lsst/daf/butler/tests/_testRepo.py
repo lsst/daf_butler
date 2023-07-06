@@ -541,9 +541,9 @@ class DatastoreMock:
     @staticmethod
     def apply(butler: Butler) -> None:
         """Apply datastore mocks to a butler."""
-        butler.datastore.export = DatastoreMock._mock_export  # type: ignore
-        butler.datastore.get = DatastoreMock._mock_get  # type: ignore
-        butler.datastore.ingest = MagicMock()  # type: ignore
+        butler._datastore.export = DatastoreMock._mock_export  # type: ignore
+        butler._datastore.get = DatastoreMock._mock_get  # type: ignore
+        butler._datastore.ingest = MagicMock()  # type: ignore
 
     @staticmethod
     def _mock_export(

@@ -210,7 +210,7 @@ class Butler(LimitedButler):
                     "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
                 )
             self.registry = butler.registry.copy(defaults)
-            self.datastore = butler.datastore
+            self._datastore = butler._datastore
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
         else:
@@ -225,7 +225,7 @@ class Butler(LimitedButler):
                 self.registry = Registry.fromConfig(
                     self._config, butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
                 )
-                self.datastore = Datastore.fromConfig(
+                self._datastore = Datastore.fromConfig(
                     self._config, self.registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
                 )
                 self.storageClasses = StorageClassFactory()
@@ -240,7 +240,7 @@ class Butler(LimitedButler):
         # dependency-inversion trick. This is not used by regular butler,
         # but we do not have a way to distinguish regular butler from execution
         # butler.
-        self.datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
+        self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
 
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
@@ -524,7 +524,7 @@ class Butler(LimitedButler):
 
     def __str__(self) -> str:
         return "Butler(collections={}, run={}, datastore='{}', registry='{}')".format(
-            self.collections, self.run, self.datastore, self.registry
+            self.collections, self.run, self._datastore, self.registry
         )
 
     def isWriteable(self) -> bool:
@@ -538,7 +538,7 @@ class Butler(LimitedButler):
         Transactions can be nested.
         """
         with self.registry.transaction():
-            with self.datastore.transaction():
+            with self._datastore.transaction():
                 yield
 
     def _standardizeArgs(
@@ -1163,13 +1163,13 @@ class Butler(LimitedButler):
             self.registry._importDatasets([datasetRefOrType], expand=True)
             # Before trying to write to the datastore check that it does not
             # know this dataset. This is prone to races, of course.
-            if self.datastore.knows(datasetRefOrType):
+            if self._datastore.knows(datasetRefOrType):
                 raise ConflictingDefinitionError(f"Datastore already contains dataset: {datasetRefOrType}")
             # Try to write dataset to the datastore, if it fails due to a race
             # with another write, the content of stored data may be
             # unpredictable.
             try:
-                self.datastore.put(obj, datasetRefOrType)
+                self._datastore.put(obj, datasetRefOrType)
             except IntegrityError as e:
                 raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}")
             return datasetRefOrType
@@ -1185,7 +1185,7 @@ class Butler(LimitedButler):
         # Add Registry Dataset entry.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
         (ref,) = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
-        self.datastore.put(obj, ref)
+        self._datastore.put(obj, ref)
 
         return ref
 
@@ -1223,7 +1223,7 @@ class Butler(LimitedButler):
         obj : `object`
             The dataset.
         """
-        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     @deprecated(
         reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
@@ -1266,7 +1266,7 @@ class Butler(LimitedButler):
             Raised if no matching dataset exists in the `Registry`.
         """
         # Check thad dataset actuall exists.
-        if not self.datastore.exists(ref):
+        if not self._datastore.exists(ref):
             raise LookupError(f"Dataset reference {ref} does not exist.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
@@ -1325,7 +1325,7 @@ class Butler(LimitedButler):
         TypeError
             Raised if no collections were provided.
         """
-        if isinstance(datasetRefOrType, DatasetRef) and not self.datastore.exists(datasetRefOrType):
+        if isinstance(datasetRefOrType, DatasetRef) and not self._datastore.exists(datasetRefOrType):
             raise LookupError(f"Dataset reference {datasetRefOrType} does not exist.")
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
@@ -1396,7 +1396,7 @@ class Butler(LimitedButler):
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getURIs(
         self,
@@ -1445,7 +1445,7 @@ class Butler(LimitedButler):
         ref = self._findDatasetRef(
             datasetRefOrType, dataId, predict=predict, run=run, collections=collections, **kwargs
         )
-        return self.datastore.getURIs(ref, predict)
+        return self._datastore.getURIs(ref, predict)
 
     def getURI(
         self,
@@ -1562,7 +1562,7 @@ class Butler(LimitedButler):
         a hierarchical data structure in a NoSQL database may well be stored
         as a JSON file.
         """
-        return self.datastore.retrieveArtifacts(
+        return self._datastore.retrieveArtifacts(
             refs,
             ResourcePath(destination),
             transfer=transfer,
@@ -1645,11 +1645,11 @@ class Butler(LimitedButler):
                 return existence
             existence |= DatasetExistence.RECORDED
 
-        if self.datastore.knows(ref):
+        if self._datastore.knows(ref):
             existence |= DatasetExistence.DATASTORE
 
         if full_check:
-            if self.datastore.exists(ref):
+            if self._datastore.exists(ref):
                 existence |= DatasetExistence._ARTIFACT
         elif existence.value != DatasetExistence.UNRECOGNIZED.value:
             # Do not add this flag if we have no other idea about a dataset.
@@ -1706,13 +1706,13 @@ class Butler(LimitedButler):
                 existence[ref] |= DatasetExistence.RECORDED
 
         # Ask datastore if it knows about these refs.
-        knows = self.datastore.knows_these(refs)
+        knows = self._datastore.knows_these(refs)
         for ref, known in knows.items():
             if known:
                 existence[ref] |= DatasetExistence.DATASTORE
 
         if full_check:
-            mexists = self.datastore.mexists(refs)
+            mexists = self._datastore.mexists(refs)
             for ref, exists in mexists.items():
                 if exists:
                     existence[ref] |= DatasetExistence._ARTIFACT
@@ -1776,7 +1776,7 @@ class Butler(LimitedButler):
                 )
         else:
             ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self.datastore.exists(ref)
+        return self._datastore.exists(ref)
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
         """Remove one or more `~CollectionType.RUN` collections and the
@@ -1808,17 +1808,17 @@ class Butler(LimitedButler):
             if collectionType is not CollectionType.RUN:
                 raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
             refs.extend(self.registry.queryDatasets(..., collections=name, findFirst=True))
-        with self.datastore.transaction():
+        with self._datastore.transaction():
             with self.registry.transaction():
                 if unstore:
-                    self.datastore.trash(refs)
+                    self._datastore.trash(refs)
                 else:
-                    self.datastore.forget(refs)
+                    self._datastore.forget(refs)
                 for name in names:
                     self.registry.removeCollection(name)
         if unstore:
             # Point of no return for removing artifacts
-            self.datastore.emptyTrash()
+            self._datastore.emptyTrash()
 
     def pruneDatasets(
         self,
@@ -1863,10 +1863,10 @@ class Butler(LimitedButler):
         # mutating the Registry (it can _look_ at Datastore-specific things,
         # but shouldn't change them), and hence all operations here are
         # Registry operations.
-        with self.datastore.transaction():
+        with self._datastore.transaction():
             with self.registry.transaction():
                 if unstore:
-                    self.datastore.trash(refs)
+                    self._datastore.trash(refs)
                 if purge:
                     self.registry.removeDatasets(refs)
                 elif disassociate:
@@ -1884,7 +1884,7 @@ class Butler(LimitedButler):
         # in the dataset_location_trash table.
         if unstore:
             # Point of no return for removing artifacts
-            self.datastore.emptyTrash()
+            self._datastore.emptyTrash()
 
     @transactional
     def ingest(
@@ -2056,7 +2056,9 @@ class Butler(LimitedButler):
         # (_importDatasets only complains if they exist but differ) so
         # we have to catch IntegrityError explicitly.
         try:
-            self.datastore.ingest(*datasets, transfer=transfer, record_validation_info=record_validation_info)
+            self._datastore.ingest(
+                *datasets, transfer=transfer, record_validation_info=record_validation_info
+            )
         except IntegrityError as e:
             raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}")
 
@@ -2136,7 +2138,7 @@ class Butler(LimitedButler):
             backend = BackendClass(stream, universe=self.dimensions)
             try:
                 helper = RepoExportContext(
-                    self.registry, self.datastore, backend=backend, directory=directory, transfer=transfer
+                    self.registry, self._datastore, backend=backend, directory=directory, transfer=transfer
                 )
                 yield helper
             except BaseException:
@@ -2230,7 +2232,7 @@ class Butler(LimitedButler):
             backend.register()
             with self.transaction():
                 backend.load(
-                    self.datastore,
+                    self._datastore,
                     directory=directory,
                     transfer=transfer,
                     skip_dimensions=skip_dimensions,
@@ -2315,7 +2317,7 @@ class Butler(LimitedButler):
         # this with no datastore records.
         artifact_existence: dict[ResourcePath, bool] = {}
         if skip_missing:
-            dataset_existence = source_butler.datastore.mexists(
+            dataset_existence = source_butler._datastore.mexists(
                 source_refs, artifact_existence=artifact_existence
             )
             source_refs = [ref for ref, exists in dataset_existence.items() if exists]
@@ -2442,8 +2444,8 @@ class Butler(LimitedButler):
 
             # Ask the datastore to transfer. The datastore has to check that
             # the source datastore is compatible with the target datastore.
-            accepted, rejected = self.datastore.transfer_from(
-                source_butler.datastore,
+            accepted, rejected = self._datastore.transfer_from(
+                source_butler._datastore,
                 source_refs,
                 transfer=transfer,
                 artifact_existence=artifact_existence,
@@ -2536,13 +2538,13 @@ class Butler(LimitedButler):
 
         datastoreErrorStr = None
         try:
-            self.datastore.validateConfiguration(entities, logFailures=logFailures)
+            self._datastore.validateConfiguration(entities, logFailures=logFailures)
         except ValidationError as e:
             datastoreErrorStr = str(e)
 
         # Also check that the LookupKeys used by the datastores match
         # registry and storage class definitions
-        keys = self.datastore.getLookupKeys()
+        keys = self._datastore.getLookupKeys()
 
         failedNames = set()
         failedDataId = set()

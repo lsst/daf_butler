@@ -149,7 +149,7 @@ def get_uri(id: DatasetId, butler: Butler = Depends(butler_readonly_dependency))
     if not ref:
         raise HTTPException(status_code=404, detail=f"Dataset with id {id} does not exist.")
 
-    uri = butler.datastore.getURI(ref)
+    uri = butler.getURI(ref)
 
     # In reality would have to convert this to a signed URL
     return str(uri)

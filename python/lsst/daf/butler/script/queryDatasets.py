@@ -195,7 +195,7 @@ class QueryDatasets:
                 tables[dataset_ref.datasetType.name].add(dataset_ref)
         else:
             d = list(self.datasets)
-            ref_uris = self.butler.datastore.getManyURIs(d, predict=True)
+            ref_uris = self.butler._datastore.getManyURIs(d, predict=True)
             for ref, uris in ref_uris.items():
                 if uris.primaryURI:
                     tables[ref.datasetType.name].add(ref, uris.primaryURI)

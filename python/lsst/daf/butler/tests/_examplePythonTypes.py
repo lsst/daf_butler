@@ -141,7 +141,7 @@ def _addFullStorageClass(
         The newly created storage class, or the class of the same name
         previously found in the repository.
     """
-    storageRegistry = butler.datastore.storageClassFactory
+    storageRegistry = butler._datastore.storageClassFactory
 
     storage = StorageClass(name, *args, **kwargs)
     try:
@@ -149,7 +149,7 @@ def _addFullStorageClass(
     except ValueError:
         storage = storageRegistry.getStorageClass(name)
 
-    for registry in _getAllFormatterRegistries(butler.datastore):
+    for registry in _getAllFormatterRegistries(butler._datastore):
         registry.registerFormatter(storage, formatter)
 
     return storage

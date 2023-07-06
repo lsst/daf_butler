@@ -170,12 +170,12 @@ class QuantumBackedButler(LimitedButler):
         self._unavailable_inputs: set[DatasetId] = set()
         self._actual_inputs: set[DatasetId] = set()
         self._actual_output_refs: set[DatasetRef] = set()
-        self.datastore = datastore
+        self._datastore = datastore
         self.storageClasses = storageClasses
         self._dataset_types: Mapping[str, DatasetType] = {}
         if dataset_types is not None:
             self._dataset_types = dataset_types
-        self.datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
+        self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
 
     @classmethod
     def initialize(
@@ -491,7 +491,7 @@ class QuantumBackedButler(LimitedButler):
         # Docstring inherited.
         if ref.id not in self._predicted_outputs:
             raise RuntimeError("Cannot `put` dataset that was not predicted as an output.")
-        self.datastore.put(obj, ref)
+        self._datastore.put(obj, ref)
         self._actual_output_refs.add(ref)
         return ref
 
@@ -523,7 +523,7 @@ class QuantumBackedButler(LimitedButler):
                 raise ValueError(f"Can not prune a component of a dataset (ref={ref})")
 
         if unstore:
-            self.datastore.trash(refs)
+            self._datastore.trash(refs)
         if purge:
             for ref in refs:
                 # We only care about removing them from actual output refs,
@@ -531,7 +531,7 @@ class QuantumBackedButler(LimitedButler):
 
         if unstore:
             # Point of no return for removing artifacts
-            self.datastore.emptyTrash()
+            self._datastore.emptyTrash()
 
     def extract_provenance_data(self) -> QuantumProvenanceData:
         """Extract provenance information and datastore records from this
@@ -582,7 +582,7 @@ class QuantumBackedButler(LimitedButler):
                 "recorded in provenance may be incomplete.",
                 self._predicted_inputs - checked_inputs,
             )
-        datastore_records = self.datastore.export_records(self._actual_output_refs)
+        datastore_records = self._datastore.export_records(self._actual_output_refs)
         provenance_records = {
             datastore_name: records.to_simple() for datastore_name, records in datastore_records.items()
         }
@@ -716,7 +716,7 @@ class QuantumProvenanceData(BaseModel):
 
         for refs in grouped_refs.values():
             butler.registry._importDatasets(refs)
-        butler.datastore.import_records(summary_records)
+        butler._datastore.import_records(summary_records)
 
     @classmethod
     def parse_raw(cls, *args: Any, **kwargs: Any) -> QuantumProvenanceData:
