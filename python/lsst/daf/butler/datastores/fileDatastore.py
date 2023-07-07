@@ -321,6 +321,11 @@ class FileDatastore(GenericBaseDatastore):
     def bridge(self) -> DatastoreRegistryBridge:
         return self._bridge
 
+    @property
+    def roots(self) -> dict[str, ResourcePath | None]:
+        # Docstring inherited.
+        return {self.name: self.root}
+
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
         location.

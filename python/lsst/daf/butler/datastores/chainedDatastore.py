@@ -238,6 +238,14 @@ class ChainedDatastore(Datastore):
     def names(self) -> tuple[str, ...]:
         return tuple(self._names)
 
+    @property
+    def roots(self) -> dict[str, ResourcePath | None]:
+        # Docstring inherited.
+        roots = {}
+        for datastore in self.datastores:
+            roots.update(datastore.roots)
+        return roots
+
     def __str__(self) -> str:
         chainName = ", ".join(str(ds) for ds in self.datastores)
         return chainName

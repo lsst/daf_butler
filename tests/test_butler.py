@@ -1468,7 +1468,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         self.assertGreater(len(datasets), 0)
         uris = [exportButler.getURI(d) for d in datasets]
         assert isinstance(exportButler._datastore, FileDatastore)
-        datastoreRoot = exportButler._datastore.root
+        datastoreRoot = exportButler.get_datastore_roots()[exportButler.get_datastore_names()[0]]
 
         pathsInStore = [uri.relative_to(datastoreRoot) for uri in uris]
 

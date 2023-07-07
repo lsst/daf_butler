@@ -372,6 +372,18 @@ class Datastore(metaclass=ABCMeta):
         # Default implementation returns solely the name itself
         return (self.name,)
 
+    @property
+    def roots(self) -> dict[str, ResourcePath | None]:
+        """Return the root URIs for each named datastore.
+
+        Returns
+        -------
+        roots : `dict` [`str`, `ResourcePath` | `None`]
+            Mapping from datastore name to root URI. The URI can be `None`
+            if a datastore has no concept of a root URI.
+        """
+        return {self.name: None}
+
     @contextlib.contextmanager
     def transaction(self) -> Iterator[DatastoreTransaction]:
         """Context manager supporting `Datastore` transactions.
