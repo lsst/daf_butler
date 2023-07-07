@@ -644,7 +644,7 @@ class Butler(LimitedButler):
         ``exposure.day_obs`` and ``exposure.seq_num`` instead of giving
         the integer exposure ID.  It also allows a string to be given
         for a dimension value rather than the integer ID if that is more
-        convenient. For example, rather than having to specifyin the
+        convenient. For example, rather than having to specifying the
         detector with ``detector.full_name``, a string given for ``detector``
         will be interpreted as the full name and converted to the integer
         value.
@@ -1265,7 +1265,7 @@ class Butler(LimitedButler):
         LookupError
             Raised if no matching dataset exists in the `Registry`.
         """
-        # Check thad dataset actuall exists.
+        # Check thad dataset actually exists.
         if not self._datastore.exists(ref):
             raise LookupError(f"Dataset reference {ref} does not exist.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
