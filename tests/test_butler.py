@@ -1642,8 +1642,9 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Simulate execution butler setup by deleting the datastore
         # record but keeping the file around and trusting.
         butler._datastore.trustGetRequest = True
-        uri2 = butler.getURI(ref2)
-        uri3 = butler.getURI(ref3)
+        uris = butler.get_many_uris([ref2, ref3])
+        uri2 = uris[ref2].primaryURI
+        uri3 = uris[ref3].primaryURI
         self.assertTrue(uri2.exists())
         self.assertTrue(uri3.exists())
 

@@ -806,7 +806,7 @@ class Datastore(metaclass=ABCMeta):
 
         Notes
         -----
-        In file-based datastores, getManuURIs does not check that the file is
+        In file-based datastores, getManyURIs does not check that the file is
         really there, it's assuming it is if datastore is aware of the file
         then it actually exists.
         """

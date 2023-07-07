@@ -31,7 +31,7 @@ from typing import Any, ClassVar
 from deprecated.sphinx import deprecated
 
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from .core import DatasetRef, Datastore, DimensionUniverse, StorageClass, StorageClassFactory
+from .core import DatasetRef, DatasetRefURIs, Datastore, DimensionUniverse, StorageClass, StorageClassFactory
 
 log = logging.getLogger(__name__)
 
@@ -273,6 +273,45 @@ class LimitedButler(ABC):
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
+
+    def get_many_uris(
+        self,
+        refs: Iterable[DatasetRef],
+        predict: bool = False,
+        allow_missing: bool = False,
+    ) -> dict[DatasetRef, DatasetRefURIs]:
+        """Return URIs associated with many datasets.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetIdRef`
+            References to the required datasets.
+        predict : `bool`, optional
+            If the datastore does not know about a dataset, should it
+            return a predicted URI or not?
+        allow_missing : `bool`
+            If `False`, and `predict` is `False`, will raise if a `DatasetRef`
+            does not exist.
+
+        Returns
+        -------
+        URIs : `dict` of [`DatasetRef`, `DatasetRefUris`]
+            A dict of primary and component URIs, indexed by the passed-in
+            refs.
+
+        Raises
+        ------
+        FileNotFoundError
+            A URI has been requested for a dataset that does not exist and
+            guessing is not allowed.
+
+        Notes
+        -----
+        In file-based datastores, get_many_uris does not check that the file is
+        present. It assumes that if datastore is aware of the file then it
+        actually exists.
+        """
+        return self._datastore.getManyURIs(refs, predict=predict, allow_missing=allow_missing)
 
     def stored(self, ref: DatasetRef) -> bool:
         """Indicate whether the dataset's artifacts are present in the
