@@ -584,7 +584,7 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         progress = Progress("lsst.daf.butler.Registry.removeDatasets", level=logging.DEBUG)
         for datasetType, refsForType in progress.iter_item_chunks(
-            DatasetRef.groupByType(refs).items(), desc="Removing datasets by type"
+            DatasetRef.iter_by_type(refs), desc="Removing datasets by type"
         ):
             storage = self._managers.datasets[datasetType.name]
             try:
@@ -604,7 +604,7 @@ class SqlRegistry(Registry):
                 f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED."
             )
         for datasetType, refsForType in progress.iter_item_chunks(
-            DatasetRef.groupByType(refs).items(), desc="Associating datasets by type"
+            DatasetRef.iter_by_type(refs), desc="Associating datasets by type"
         ):
             storage = self._managers.datasets[datasetType.name]
             try:
@@ -627,7 +627,7 @@ class SqlRegistry(Registry):
                 f"Collection '{collection}' has type {collectionRecord.type.name}; expected TAGGED."
             )
         for datasetType, refsForType in progress.iter_item_chunks(
-            DatasetRef.groupByType(refs).items(), desc="Disassociating datasets by type"
+            DatasetRef.iter_by_type(refs), desc="Disassociating datasets by type"
         ):
             storage = self._managers.datasets[datasetType.name]
             storage.disassociate(collectionRecord, refsForType)
@@ -638,7 +638,7 @@ class SqlRegistry(Registry):
         progress = Progress("lsst.daf.butler.Registry.certify", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         for datasetType, refsForType in progress.iter_item_chunks(
-            DatasetRef.groupByType(refs).items(), desc="Certifying datasets by type"
+            DatasetRef.iter_by_type(refs), desc="Certifying datasets by type"
         ):
             storage = self._managers.datasets[datasetType.name]
             storage.certify(collectionRecord, refsForType, timespan)

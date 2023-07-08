@@ -498,11 +498,40 @@ class DatasetRef:
         -------
         grouped : `NamedKeyDict` [ `DatasetType`, `list` [ `DatasetRef` ] ]
             Grouped `DatasetRef` instances.
+
+        Notes
+        -----
+        When lazy item-iterables are acceptable instead of a full mapping,
+        `iter_by_type` can in some cases be far more efficient.
         """
         result: NamedKeyDict[DatasetType, List[DatasetRef]] = NamedKeyDict()
         for ref in refs:
             result.setdefault(ref.datasetType, []).append(ref)
         return result
+
+    @staticmethod
+    def iter_by_type(
+        refs: Iterable[DatasetRef],
+    ) -> Iterable[tuple[DatasetType, Iterable[DatasetRef]]]:
+        """Group an iterable of `DatasetRef` by `DatasetType` with special
+        hooks for custom iterables that can do this efficiently.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
+            `DatasetRef` instances to group.  If this has a
+            ``_iter_by_dataset_type`` method, it will be called with no
+            arguments and the result reutrnd.
+
+        Returns
+        -------
+        grouped : `~collections.abc.Iterable` [ `tuple` [ `DatasetType`, \
+                `Iterable` [ `DatasetRef` ] ]]
+            Grouped `DatasetRef` instances.
+        """
+        if hasattr(refs, "_iter_by_dataset_type"):
+            return refs._iter_by_dataset_type()
+        return DatasetRef.groupByType(refs).items()
 
     def getCheckedId(self) -> DatasetId:
         """Return ``self.id``, or raise if it is `None`.
