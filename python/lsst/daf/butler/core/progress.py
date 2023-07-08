@@ -25,13 +25,13 @@ __all__ = ("Progress", "ProgressBar", "ProgressHandler")
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Collection, Generator, Iterable, Iterator
+from collections.abc import Generator, Iterable, Iterator, Sized
 from contextlib import contextmanager
 from typing import ClassVar, ContextManager, Protocol, TypeVar
 
 _T = TypeVar("_T", covariant=True)
 _K = TypeVar("_K")
-_V = TypeVar("_V", bound=Collection)
+_V = TypeVar("_V", bound=Iterable)
 
 
 class ProgressBar(Iterable[_T], Protocol):
@@ -237,7 +237,7 @@ class Progress:
 
     def iter_chunks(
         self,
-        chunks: Collection[_V],
+        chunks: Iterable[_V],
         desc: str | None = None,
         total: int | None = None,
         skip_scalar: bool = True,
@@ -246,19 +246,18 @@ class Progress:
 
         Parameters
         ----------
-        chunks : `~collections.abc.Collection`
-            A sized iterable whose elements are themselves both iterable and
-            sized (i.e. ``len(item)`` works).  If ``total`` is not provided,
-            this may not be a single-pass iteration, because an initial pass to
-            estimate the total number of elements is required.
+        chunks : `~collections.abc.Iterable`
+            An iterable whose elements are themselves iterable.
         desc: `str`, optional
             A user-friendly description for this progress bar; usually appears
             next to it.  If not provided, ``self.name`` is used (which is not
             usually a user-friendly string, but may be appropriate for
             debug-level progress).
         total : `int`, optional
-            The total number of steps in this progress bar; defaults to the
-            sum of the lengths of the chunks.
+            The total number of steps in this progress bar; defaults to the sum
+            of the lengths of the chunks if this can be computed.  If this is
+            provided or `True`, each element in ``chunks`` must be sized but
+            ``chunks`` itself need not be (and may be a single-pass iterable).
         skip_scalar: `bool`, optional
             If `True` and there are zero or one chunks, do not report progress.
 
@@ -266,20 +265,66 @@ class Progress:
         ------
         chunk
             The same objects that iteration over ``chunks`` would yield.
+
+        Notes
+        -----
+        This attempts to display as much progress as possible given the
+        limitations of the iterables, assuming that sized iterables are also
+        multi-pass (as is true of all built-in collections and lazy iterators).
+        In detail, if ``total`` is `None`:
+
+        - if ``chunks`` and its elements are both sized, ``total`` is computed
+          from them and full progress is reported, and ``chunks`` must be a
+          multi-pass iterable.
+        - if ``chunks`` is sized but its elements are not, a progress bar over
+          the number of chunks is shown, and ``chunks`` must be a multi-pass
+          iterable.
+        - if ``chunks`` is not sized, the progress bar just shows when updates
+          occur.
+
+        If ``total`` is `True` or an integer, ``chunks`` need not be sized, but
+        its elements must be, ``chunks`` must be a multi-pass iterable, and
+        full progress is shown.
+
+        If ``total`` is `False`, ``chunks`` and its elements need not be sized,
+        and the progress bar just shows when updates occur.
         """
-        if skip_scalar and len(chunks) <= 1:
-            yield from chunks
+        if isinstance(chunks, Sized):
+            n_chunks = len(chunks)
         else:
+            n_chunks = None
             if total is None:
-                total = sum(len(c) for c in chunks)
+                total = False
+        if skip_scalar and n_chunks == 1:
+            yield from chunks
+            return
+        use_n_chunks = False
+        if total is True or total is None:
+            total = 0
+            for c in chunks:
+                if total is True or isinstance(c, Sized):
+                    total += len(c)  # type: ignore
+                else:
+                    use_n_chunks = True
+                    total = None
+                    break
+        if total is False:
+            total = None
+            use_n_chunks = True
+        if use_n_chunks:
+            with self.bar(desc=desc, total=n_chunks) as bar:  # type: ignore
+                for chunk in chunks:
+                    yield chunk
+                    bar.update(1)
+        else:
             with self.bar(desc=desc, total=total) as bar:  # type: ignore
                 for chunk in chunks:
                     yield chunk
-                    bar.update(len(chunk))
+                    bar.update(len(chunk))  # type: ignore
 
     def iter_item_chunks(
         self,
-        items: Collection[tuple[_K, _V]],
+        items: Iterable[tuple[_K, _V]],
         desc: str | None = None,
         total: int | None = None,
         skip_scalar: bool = True,
@@ -289,36 +334,81 @@ class Progress:
         Parameters
         ----------
         items : `~collections.abc.Iterable`
-            A sized iterable whose elements are (key, value) tuples, where the
-            values are themselves both iterable and sized (i.e. ``len(item)``
-            works).  If ``total`` is not provided, this may not be a
-            single-pass iteration, because an initial pass to estimate the
-            total number of elements is required.
+            An iterable whose elements are (key, value) tuples, where the
+            values are themselves iterable.
         desc: `str`, optional
             A user-friendly description for this progress bar; usually appears
             next to it.  If not provided, ``self.name`` is used (which is not
             usually a user-friendly string, but may be appropriate for
             debug-level progress).
         total : `int`, optional
-            The total number of values in this progress bar; defaults to the
-            sum of the lengths of the chunks.
+            The total number of steps in this progress bar; defaults to the sum
+            of the lengths of the chunks if this can be computed.  If this is
+            provided or `True`, each element in ``chunks`` must be sized but
+            ``chunks`` itself need not be (and may be a single-pass iterable).
         skip_scalar: `bool`, optional
             If `True` and there are zero or one items, do not report progress.
 
         Yields
         ------
         chunk
-            The same items that iteration over ``chunks`` would yield.
+            The same 2-tuples that iteration over ``items`` would yield.
+
+        Notes
+        -----
+        This attempts to display as much progress as possible given the
+        limitations of the iterables, assuming that sized iterables are also
+        multi-pass (as is true of all built-in collections and lazy iterators).
+        In detail, if ``total`` is `None`:
+
+        - if ``chunks`` and its values elements are both sized, ``total`` is
+          computed from them and full progress is reported, and ``chunks`` must
+          be a multi-pass iterable.
+        - if ``chunks`` is sized but its value elements are not, a progress bar
+          over the number of chunks is shown, and ``chunks`` must be a
+          multi-pass iterable.
+        - if ``chunks`` is not sized, the progress bar just shows when updates
+          occur.
+
+        If ``total`` is `True` or an integer, ``chunks`` need not be sized, but
+        its value elements must be, ``chunks`` must be a multi-pass iterable,
+        and full progress is shown.
+
+        If ``total`` is `False`, ``chunks`` and its values elements need not be
+        sized, and the progress bar just shows when updates occur.
         """
-        if skip_scalar and len(items) <= 1:
-            yield from items
+        if isinstance(items, Sized):
+            n_items = len(items)
+            if skip_scalar and n_items == 1:
+                yield from items
+                return
         else:
+            n_items = None
             if total is None:
-                total = sum(len(v) for _, v in items)
+                total = False
+        use_n_items = False
+        if total is True or total is None:
+            total = 0
+            for _, v in items:
+                if total is True or isinstance(v, Sized):
+                    total += len(v)  # type: ignore
+                else:
+                    use_n_items = True
+                    total = None
+                    break
+        if total is False:
+            total = None
+            use_n_items = True
+        if use_n_items:
+            with self.bar(desc=desc, total=n_items) as bar:  # type: ignore
+                for chunk in items:
+                    yield chunk
+                    bar.update(1)
+        else:
             with self.bar(desc=desc, total=total) as bar:  # type: ignore
-                for key, chunk in items:
-                    yield key, chunk
-                    bar.update(len(chunk))
+                for k, v in items:
+                    yield k, v
+                    bar.update(len(v))  # type: ignore
 
 
 class ProgressHandler(ABC):
