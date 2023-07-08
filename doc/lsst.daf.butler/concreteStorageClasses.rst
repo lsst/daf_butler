@@ -26,12 +26,15 @@ Retrieving this dataset via:
 .. code-block:: python
 
    butler.get(
-       "deepCoadd_obj", ...,
+       "deepCoadd_obj",
+       ...,
        parameters={
-           "columns": {"dataset": "meas",
-                       "filter": ["HSC-R", "HSC-I"],
-                       "column": ["base_SdssShape_xx", "base_SdssShape_yy"]}
-       }
+           "columns": {
+               "dataset": "meas",
+               "filter": ["HSC-R", "HSC-I"],
+               "column": ["base_SdssShape_xx", "base_SdssShape_yy"],
+           }
+       },
    )
 
 is equivalent to (but potentially much more efficient than):
@@ -39,5 +42,4 @@ is equivalent to (but potentially much more efficient than):
 .. code-block:: python
 
    full = butler.get("deepCoadd_obj", ...)
-   full.loc[:, ["meas", ["HSC-R", "HSC-I"],
-                ["base_SdssShape_xx", "base_SdssShape_yy"]]]
+   full.loc[:, ["meas", ["HSC-R", "HSC-I"], ["base_SdssShape_xx", "base_SdssShape_yy"]]]
