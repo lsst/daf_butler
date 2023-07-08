@@ -707,7 +707,7 @@ class DatasetQueryResults(Iterable[DatasetRef]):
                 dataset_type = parent_results.parentDatasetType
                 if component is not None:
                     dataset_type = dataset_type.makeComponentDatasetType(component)
-                yield (dataset_type, parent_results.withComponents((component,)))
+                yield (dataset_type, set(parent_results.withComponents((component,))))
 
 
 class ParentDatasetQueryResults(DatasetQueryResults):
