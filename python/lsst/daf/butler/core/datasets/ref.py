@@ -33,7 +33,7 @@ import enum
 import sys
 import uuid
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
 from lsst.utils.classes import immutable
 
@@ -60,6 +60,27 @@ class AmbiguousDatasetError(Exception):
     This happens when the `DatasetRef` has no ID or run but the requested
     operation requires one of them.
     """
+
+
+@runtime_checkable
+class _DatasetRefGroupedIterable(Protocol):
+    """A package-private interface for iterables of `DatasetRef` that know how
+    to efficiently group their contents by `DatasetType`.
+
+    """
+
+    def _iter_by_dataset_type(self) -> Iterable[tuple[DatasetType, Iterable[DatasetRef]]]:
+        """Iterate over `DatasetRef` instances, one `DatasetType` at a time.
+
+        Returns
+        -------
+        grouped : `~collections.abc.Iterable` [ `tuple` [ `DatasetType`, \
+                `~collections.abc.Iterable` [ `DatasetRef` ]
+            An iterable of tuples, in which the first element is a dataset type
+            and the second is an iterable of `DatasetRef` objects with exactly
+            that dataset type.
+        """
+        ...
 
 
 class DatasetIdGenEnum(enum.Enum):
@@ -580,11 +601,41 @@ class DatasetRef:
         -------
         grouped : `NamedKeyDict` [ `DatasetType`, `list` [ `DatasetRef` ] ]
             Grouped `DatasetRef` instances.
+
+        Notes
+        -----
+        When lazy item-iterables are acceptable instead of a full mapping,
+        `iter_by_type` can in some cases be far more efficient.
         """
         result: NamedKeyDict[DatasetType, list[DatasetRef]] = NamedKeyDict()
         for ref in refs:
             result.setdefault(ref.datasetType, []).append(ref)
         return result
+
+    @staticmethod
+    def iter_by_type(
+        refs: Iterable[DatasetRef],
+    ) -> Iterable[tuple[DatasetType, Iterable[DatasetRef]]]:
+        """Group an iterable of `DatasetRef` by `DatasetType` with special
+        hooks for custom iterables that can do this efficiently.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
+            `DatasetRef` instances to group.  If this satisfies the
+            `_DatasetRefGroupedIterable` protocol, its
+            `~_DatasetRefGroupedIterable._iter_by_dataset_type` method will
+            be called.
+
+        Returns
+        -------
+        grouped : `~collections.abc.Iterable` [ `tuple` [ `DatasetType`, \
+                `Iterable` [ `DatasetRef` ] ]]
+            Grouped `DatasetRef` instances.
+        """
+        if isinstance(refs, _DatasetRefGroupedIterable):
+            return refs._iter_by_dataset_type()
+        return DatasetRef.groupByType(refs).items()
 
     def makeCompositeRef(self) -> DatasetRef:
         """Create a `DatasetRef` of the composite from a component ref.

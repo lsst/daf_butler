@@ -529,6 +529,21 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         """
         raise NotImplementedError()
 
+    def _iter_by_dataset_type(self) -> Iterator[tuple[DatasetType, Iterable[DatasetRef]]]:
+        """Group results by dataset type.
+
+        This is a private hook for the interface defined by
+        `DatasetRef.iter_by_type`, enabling much more efficient
+        processing of heterogeneous `DatasetRef` iterables when they come
+        directly from queries.
+        """
+        for parent_results in self.byParentDatasetType():
+            for component in parent_results.components:
+                dataset_type = parent_results.parentDatasetType
+                if component is not None:
+                    dataset_type = dataset_type.makeComponentDatasetType(component)
+                yield (dataset_type, parent_results.withComponents((component,)))
+
 
 class ParentDatasetQueryResults(DatasetQueryResults):
     """An object that represents results from a query for datasets with a
@@ -569,6 +584,13 @@ class ParentDatasetQueryResults(DatasetQueryResults):
 
     def __repr__(self) -> str:
         return f"<DatasetRef iterator for [components of] {self._dataset_type.name}>"
+
+    @property
+    def components(self) -> Sequence[str | None]:
+        """The components of the parent dataset type included in these results
+        (`~collections.abc.Sequence` [ `str` or `None` ]).
+        """
+        return self._components
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
