@@ -2602,28 +2602,6 @@ class Butler(LimitedButler):
         if messages:
             raise ValidationError(";\n".join(messages))
 
-    def get_datastore_names(self) -> tuple[str, ...]:
-        """Return the names of the datastores associated with this butler.
-
-        Returns
-        -------
-        names : `tuple` [`str`, ...]
-            The names of the datastores.
-        """
-        return self._datastore.names
-
-    def get_datastore_roots(self) -> dict[str, ResourcePath | None]:
-        """Return the defined root URIs for all registered datastores.
-
-        Returns
-        -------
-        roots : `dict` [`str`, `~lsst.resources.ResourcePath` | `None`]
-            A mapping from datastore name to datastore root URI. The root
-            can be `None` if the datastore does not have any concept of a root
-            URI.
-        """
-        return self._datastore.roots
-
     @property
     def collections(self) -> Sequence[str]:
         """The collections to search by default, in order

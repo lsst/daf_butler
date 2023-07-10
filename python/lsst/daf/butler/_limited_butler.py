@@ -29,6 +29,7 @@ from collections.abc import Iterable
 from typing import Any, ClassVar
 
 from deprecated.sphinx import deprecated
+from lsst.resources import ResourcePath
 
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from .core import DatasetRef, DatasetRefURIs, Datastore, DimensionUniverse, StorageClass, StorageClassFactory
@@ -273,6 +274,98 @@ class LimitedButler(ABC):
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
+
+    def get_datastore_names(self) -> tuple[str, ...]:
+        """Return the names of the datastores associated with this butler.
+
+        Returns
+        -------
+        names : `tuple` [`str`, ...]
+            The names of the datastores.
+        """
+        return self._datastore.names
+
+    def get_datastore_roots(self) -> dict[str, ResourcePath | None]:
+        """Return the defined root URIs for all registered datastores.
+
+        Returns
+        -------
+        roots : `dict` [`str`, `~lsst.resources.ResourcePath` | `None`]
+            A mapping from datastore name to datastore root URI. The root
+            can be `None` if the datastore does not have any concept of a root
+            URI.
+        """
+        return self._datastore.roots
+
+    def getURIs(
+        self,
+        ref: DatasetRef,
+        /,
+        *,
+        predict: bool = False,
+    ) -> DatasetRefURIs:
+        """Return the URIs associated with the dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A `DatasetRef` for which URIs are requested.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+
+        Returns
+        -------
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
+        """
+        return self._datastore.getURIs(ref, predict)
+
+    def getURI(
+        self,
+        ref: DatasetRef,
+        /,
+        *,
+        predict: bool = False,
+    ) -> ResourcePath:
+        """Return the URI to the Dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A `DatasetRef` for which a single URI is requested.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+
+        Returns
+        -------
+        uri : `lsst.resources.ResourcePath`
+            URI pointing to the Dataset within the datastore. If the
+            Dataset does not exist in the datastore, and if ``predict`` is
+            `True`, the URI will be a prediction and will include a URI
+            fragment "#predicted".
+            If the datastore does not have entities that relate well
+            to the concept of a URI the returned URI string will be
+            descriptive. The returned URI is not guaranteed to be obtainable.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if a URI is requested for a dataset that consists of
+            multiple artifacts.
+        """
+        primary, components = self.getURIs(ref, predict=predict)
+
+        if primary is None or components:
+            raise RuntimeError(
+                f"Dataset ({ref}) includes distinct URIs for components. "
+                "Use LimitedButler.getURIs() instead."
+            )
+        return primary
 
     def get_many_uris(
         self,
