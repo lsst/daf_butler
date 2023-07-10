@@ -1,0 +1,6 @@
+Added new APIs to support the deprecation of ``LimitedButler.datastore``:
+* ``LimitedButler.get_datastore_roots`` can be used to retrieve any root URIs associated with attached datastores.
+  If a datastore does not support the concept it will return `None` for its root URI.
+* ``LimitedButler.get_datastore_names`` can be used to retrieve the names of the internal datastores.
+* ``LimitedButler.get_many_uris`` allows for the bulk retrieval of URIs from a list of refs.
+* Also made ``getURI`` and ``getURIs`` available for ``LimitedButler``.
