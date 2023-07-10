@@ -1265,7 +1265,7 @@ class Butler(LimitedButler):
         LookupError
             Raised if no matching dataset exists in the `Registry`.
         """
-        # Check thad dataset actually exists.
+        # Check that dataset actually exists.
         if not self._datastore.exists(ref):
             raise LookupError(f"Dataset reference {ref} does not exist.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)

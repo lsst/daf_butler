@@ -320,7 +320,7 @@ class LimitedButler(ABC):
             The URI to the primary artifact associated with this dataset (if
             the dataset was disassembled within the datastore this may be
             `None`), and the URIs to any components associated with the dataset
-            artifact. (can be empty if there are no components).
+            artifact (can be empty if there are no components).
         """
         return self._datastore.getURIs(ref, predict)
 
@@ -383,12 +383,12 @@ class LimitedButler(ABC):
             If the datastore does not know about a dataset, should it
             return a predicted URI or not?
         allow_missing : `bool`
-            If `False`, and `predict` is `False`, will raise if a `DatasetRef`
+            If `False`, and ``predict`` is `False`, will raise if a `DatasetRef`
             does not exist.
 
         Returns
         -------
-        URIs : `dict` of [`DatasetRef`, `DatasetRefUris`]
+        URIs : `dict` of [`DatasetRef`, `DatasetRefURIs`]
             A dict of primary and component URIs, indexed by the passed-in
             refs.
 
