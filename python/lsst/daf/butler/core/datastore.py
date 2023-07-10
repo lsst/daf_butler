@@ -789,8 +789,8 @@ class Datastore(metaclass=ABCMeta):
             If the datastore does not know about a dataset, should it
             return a predicted URI or not?
         allow_missing : `bool`
-            If `False`, and `predict` is `False`, will raise if a `DatasetRef`
-            does not exist.
+            If `False`, and ``predict`` is `False`, will raise if a
+            `DatasetRef` does not exist.
 
         Returns
         -------

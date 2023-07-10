@@ -604,8 +604,8 @@ class QuantumProvenanceData(BaseModel):
     Notes
     -----
     This class slightly duplicates information from the `Quantum` class itself
-    (the `predicted_inputs` and `predicted_outputs` sets should have the same
-    IDs present in `Quantum.inputs` and `Quantum.outputs`), but overall it
+    (the ``predicted_inputs`` and ``predicted_outputs`` sets should have the
+    same IDs present in `Quantum.inputs` and `Quantum.outputs`), but overall it
     assumes the original `Quantum` is also available to reconstruct the
     complete provenance (e.g. by associating dataset IDs with data IDs,
     dataset types, and `~CollectionType.RUN` names.
@@ -628,20 +628,20 @@ class QuantumProvenanceData(BaseModel):
     """Unique IDs of input datasets that were actually present in the datastore
     when this quantum was executed.
 
-    This is a subset of `predicted_inputs`, with the difference generally being
-    datasets were `predicted_outputs` but not `actual_outputs` of some upstream
-    task.
+    This is a subset of ``predicted_inputs``, with the difference generally
+    being datasets were ``predicted_outputs`` but not ``actual_outputs`` of
+    some upstream task.
     """
 
     actual_inputs: set[uuid.UUID]
     """Unique IDs of datasets that were actually used as inputs by this task.
 
-    This is a subset of `available_inputs`.
+    This is a subset of ``available_inputs``.
 
     Notes
     -----
     The criteria for marking an input as used is that rerunning the quantum
-    with only these `actual_inputs` available must yield identical outputs.
+    with only these ``actual_inputs`` available must yield identical outputs.
     This means that (for example) even just using an input to help determine
     an output rejection criteria and then rejecting it as an outlier qualifies
     that input as actually used.
