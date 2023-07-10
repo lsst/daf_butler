@@ -376,11 +376,9 @@ class Datastore(metaclass=ABCMeta):
     def roots(self) -> dict[str, ResourcePath | None]:
         """Return the root URIs for each named datastore.
 
-        Returns
-        -------
-        roots : `dict` [`str`, `ResourcePath` | `None`]
-            Mapping from datastore name to root URI. The URI can be `None`
-            if a datastore has no concept of a root URI.
+        Mapping from datastore name to root URI. The URI can be `None`
+        if a datastore has no concept of a root URI.
+        (`dict` [`str`, `ResourcePath` | `None`])
         """
         return {self.name: None}
 
