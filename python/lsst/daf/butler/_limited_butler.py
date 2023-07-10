@@ -380,8 +380,8 @@ class LimitedButler(ABC):
         refs : iterable of `DatasetIdRef`
             References to the required datasets.
         predict : `bool`, optional
-            If the datastore does not know about a dataset, should it
-            return a predicted URI or not?
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
         allow_missing : `bool`
             If `False`, and ``predict`` is `False`, will raise if a
             `DatasetRef` does not exist.
