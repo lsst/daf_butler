@@ -51,6 +51,7 @@ from ._butlerRepoIndex import ButlerRepoIndex
 from ._dataset_existence import DatasetExistence
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
+from ._registry_shim import RegistryShim
 from .core import (
     Config,
     ConfigSubset,
@@ -245,6 +246,8 @@ class Butler(LimitedButler):
 
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
+
+        self._registry_shim = RegistryShim(self)
 
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
@@ -2636,7 +2639,7 @@ class Butler(LimitedButler):
         are accessible only via `Registry` methods. Eventually these methods
         will be replaced by equivalent `Butler` methods.
         """
-        return self._registry
+        return self._registry_shim
 
     @property
     def dimensions(self) -> DimensionUniverse:
