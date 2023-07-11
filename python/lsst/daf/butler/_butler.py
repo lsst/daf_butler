@@ -77,6 +77,7 @@ from .core import (
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional
 from .registry import (
+    ButlerRegistry,
     CollectionType,
     ConflictingDefinitionError,
     DataIdError,
@@ -222,7 +223,7 @@ class Butler(LimitedButler):
                     butlerRoot = self._config.configDir
                 if writeable is None:
                     writeable = run is not None
-                self._registry = Registry.fromConfig(
+                self._registry = ButlerRegistry.fromConfig(
                     self._config, butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
                 )
                 self._datastore = Datastore.fromConfig(
@@ -458,7 +459,7 @@ class Butler(LimitedButler):
         # Create Registry and populate tables
         registryConfig = RegistryConfig(config.get("registry"))
         dimensionConfig = DimensionConfig(dimensionConfig)
-        Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root_uri)
+        ButlerRegistry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root_uri)
 
         log.verbose("Wrote new Butler configuration file to %s", configURI)
 
@@ -2642,8 +2643,9 @@ class Butler(LimitedButler):
         # Docstring inherited.
         return self._registry.dimensions
 
-    _registry: Registry
-    """The object that manages dataset metadata and relationships (`Registry`).
+    _registry: ButlerRegistry
+    """The object that manages dataset metadata and relationships
+    (`ButlerRegistry`).
 
     Most operations that don't involve reading or writing butler datasets are
     accessible only via `Registry` methods.

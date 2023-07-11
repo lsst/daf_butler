@@ -25,7 +25,7 @@ import os.path
 import re
 import unittest
 
-from lsst.daf.butler.registry import MissingSpatialOverlapError, Registry, RegistryConfig, queries
+from lsst.daf.butler.registry import ButlerRegistry, MissingSpatialOverlapError, RegistryConfig, queries
 from lsst.daf.butler.transfers import YamlRepoImportBackend
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -52,7 +52,7 @@ class TestQueryRelationsTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         config = RegistryConfig()
         config["db"] = "sqlite://"
-        cls.registry = Registry.createFromConfig(config)
+        cls.registry = ButlerRegistry.createFromConfig(config)
         # We need just enough test data to have valid dimension records for
         # all of the dimensions we're concerned with, and we want to pick
         # values for each dimension that correspond to a spatiotemporal

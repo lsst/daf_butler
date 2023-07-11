@@ -31,21 +31,15 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any
 
-from lsst.resources import ResourcePathExpression
-from lsst.utils import doImportType
-
 from ..core import (
-    Config,
     DataCoordinate,
     DataId,
     DatasetAssociation,
     DatasetId,
-    DatasetIdFactory,
     DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     Dimension,
-    DimensionConfig,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
@@ -56,14 +50,12 @@ from ..core import (
 )
 from ._collection_summary import CollectionSummary
 from ._collectionType import CollectionType
-from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from .wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
-    from .._butlerConfig import ButlerConfig
-    from .interfaces import CollectionRecord, DatastoreRegistryBridgeManager, ObsCoreTableManager
+    from .interfaces import ObsCoreTableManager
 
 _LOG = logging.getLogger(__name__)
 
@@ -74,186 +66,15 @@ CollectionArgType = str | re.Pattern | Iterable[str | re.Pattern] | EllipsisType
 class Registry(ABC):
     """Abstract Registry interface.
 
-    Each registry implementation can have its own constructor parameters.
-    The assumption is that an instance of a specific subclass will be
-    constructed from configuration using `Registry.fromConfig()`.
-    The base class will look for a ``cls`` entry and call that specific
-    `fromConfig()` method.
-
     All subclasses should store `~lsst.daf.butler.registry.RegistryDefaults` in
     a ``_defaults`` property. No other properties are assumed shared between
     implementations.
     """
 
-    defaultConfigFile: str | None = None
-    """Path to configuration defaults. Accessed within the ``configs`` resource
-    or relative to a search path. Can be None if no defaults specified.
-    """
-
-    @classmethod
-    def forceRegistryConfig(
-        cls, config: ButlerConfig | RegistryConfig | Config | str | None
-    ) -> RegistryConfig:
-        """Force the supplied config to a `RegistryConfig`.
-
-        Parameters
-        ----------
-        config : `RegistryConfig`, `Config` or `str` or `None`
-            Registry configuration, if missing then default configuration will
-            be loaded from registry.yaml.
-
-        Returns
-        -------
-        registry_config : `RegistryConfig`
-            A registry config.
-        """
-        if not isinstance(config, RegistryConfig):
-            if isinstance(config, (str, Config)) or config is None:
-                config = RegistryConfig(config)
-            else:
-                raise ValueError(f"Incompatible Registry configuration: {config}")
-        return config
-
-    @classmethod
-    def determineTrampoline(
-        cls, config: ButlerConfig | RegistryConfig | Config | str | None
-    ) -> tuple[type[Registry], RegistryConfig]:
-        """Return class to use to instantiate real registry.
-
-        Parameters
-        ----------
-        config : `RegistryConfig` or `str`, optional
-            Registry configuration, if missing then default configuration will
-            be loaded from registry.yaml.
-
-        Returns
-        -------
-        requested_cls : `type` of `Registry`
-            The real registry class to use.
-        registry_config : `RegistryConfig`
-            The `RegistryConfig` to use.
-        """
-        config = cls.forceRegistryConfig(config)
-
-        # Default to the standard registry
-        registry_cls_name = config.get("cls", "lsst.daf.butler.registries.sql.SqlRegistry")
-        registry_cls = doImportType(registry_cls_name)
-        if registry_cls is cls:
-            raise ValueError("Can not instantiate the abstract base Registry from config")
-        if not issubclass(registry_cls, Registry):
-            raise TypeError(
-                f"Registry class obtained from config {registry_cls_name} is not a Registry class."
-            )
-        return registry_cls, config
-
-    @classmethod
-    def createFromConfig(
-        cls,
-        config: RegistryConfig | str | None = None,
-        dimensionConfig: DimensionConfig | str | None = None,
-        butlerRoot: ResourcePathExpression | None = None,
-    ) -> Registry:
-        """Create registry database and return `Registry` instance.
-
-        This method initializes database contents, database must be empty
-        prior to calling this method.
-
-        Parameters
-        ----------
-        config : `RegistryConfig` or `str`, optional
-            Registry configuration, if missing then default configuration will
-            be loaded from registry.yaml.
-        dimensionConfig : `DimensionConfig` or `str`, optional
-            Dimensions configuration, if missing then default configuration
-            will be loaded from dimensions.yaml.
-        butlerRoot : convertible to `lsst.resources.ResourcePath`, optional
-            Path to the repository root this `Registry` will manage.
-
-        Returns
-        -------
-        registry : `Registry`
-            A new `Registry` instance.
-
-        Notes
-        -----
-        This class will determine the concrete `Registry` subclass to
-        use from configuration.  Each subclass should implement this method
-        even if it can not create a registry.
-        """
-        registry_cls, registry_config = cls.determineTrampoline(config)
-        return registry_cls.createFromConfig(registry_config, dimensionConfig, butlerRoot)
-
-    @classmethod
-    def fromConfig(
-        cls,
-        config: ButlerConfig | RegistryConfig | Config | str,
-        butlerRoot: ResourcePathExpression | None = None,
-        writeable: bool = True,
-        defaults: RegistryDefaults | None = None,
-    ) -> Registry:
-        """Create `Registry` subclass instance from ``config``.
-
-        Registry database must be initialized prior to calling this method.
-
-        Parameters
-        ----------
-        config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
-            Registry configuration
-        butlerRoot : convertible to `lsst.resources.ResourcePath`, optional
-            Path to the repository root this `Registry` will manage.
-        writeable : `bool`, optional
-            If `True` (default) create a read-write connection to the database.
-        defaults : `~lsst.daf.butler.registry.RegistryDefaults`, optional
-            Default collection search path and/or output `~CollectionType.RUN`
-            collection.
-
-        Returns
-        -------
-        registry : `Registry` (subclass)
-            A new `Registry` subclass instance.
-
-        Notes
-        -----
-        This class will determine the concrete `Registry` subclass to
-        use from configuration.  Each subclass should implement this method.
-        """
-        # The base class implementation should trampoline to the correct
-        # subclass. No implementation should ever use this implementation
-        # directly. If no class is specified, default to the standard
-        # registry.
-        registry_cls, registry_config = cls.determineTrampoline(config)
-        return registry_cls.fromConfig(config, butlerRoot, writeable, defaults)
-
     @abstractmethod
     def isWriteable(self) -> bool:
         """Return `True` if this registry allows write operations, and `False`
         otherwise.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def copy(self, defaults: RegistryDefaults | None = None) -> Registry:
-        """Create a new `Registry` backed by the same data repository and
-        connection as this one, but independent defaults.
-
-        Parameters
-        ----------
-        defaults : `~lsst.daf.butler.registry.RegistryDefaults`, optional
-            Default collections and data ID values for the new registry.  If
-            not provided, ``self.defaults`` will be used (but future changes
-            to either registry's defaults will not affect the other).
-
-        Returns
-        -------
-        copy : `Registry`
-            A new `Registry` instance with its own defaults.
-
-        Notes
-        -----
-        Because the new registry shares a connection with the original, they
-        also share transaction state (despite the fact that their `transaction`
-        context manager methods do not reflect this), and must be used with
-        care.
         """
         raise NotImplementedError()
 
@@ -357,22 +178,6 @@ class Registry(ABC):
         ------
         lsst.daf.butler.registry.MissingCollectionError
             Raised if no collection with the given name exists.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def _get_collection_record(self, name: str) -> CollectionRecord:
-        """Return the record for this collection.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the collection for which the record is to be retrieved.
-
-        Returns
-        -------
-        record : `CollectionRecord`
-            The record for this collection.
         """
         raise NotImplementedError()
 
@@ -1014,19 +819,6 @@ class Registry(ABC):
         lsst.daf.butler.registry.CollectionTypeError
             Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
             collection or if ``datasetType.isCalibration() is False``.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
-        """Return an object that allows a new `Datastore` instance to
-        communicate with this `Registry`.
-
-        Returns
-        -------
-        manager : `~.interfaces.DatastoreRegistryBridgeManager`
-            Object that mediates communication between this `Registry` and its
-            associated datastores.
         """
         raise NotImplementedError()
 
@@ -1678,6 +1470,3 @@ class Registry(ABC):
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).
     """
-
-    datasetIdFactory: DatasetIdFactory
-    """Factory for dataset IDs."""

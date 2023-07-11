@@ -41,7 +41,6 @@ from ..core import (
     DataId,
     DatasetAssociation,
     DatasetId,
-    DatasetIdFactory,
     DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
@@ -66,7 +65,7 @@ from ..core.serverModels import (
     QueryDatasetsModel,
     QueryDimensionRecordsModel,
 )
-from ..registry import CollectionSummary, CollectionType, Registry, RegistryConfig, RegistryDefaults
+from ..registry import ButlerRegistry, CollectionSummary, CollectionType, RegistryConfig, RegistryDefaults
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -74,7 +73,7 @@ if TYPE_CHECKING:
     from ..registry.interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
 
-class RemoteRegistry(Registry):
+class RemoteRegistry(ButlerRegistry):
     """Registry that can talk to a remote Butler server.
 
     Parameters
@@ -92,8 +91,8 @@ class RemoteRegistry(Registry):
         config: RegistryConfig | str | None = None,
         dimensionConfig: DimensionConfig | str | None = None,
         butlerRoot: ResourcePathExpression | None = None,
-    ) -> Registry:
-        """Create registry database and return `Registry` instance.
+    ) -> ButlerRegistry:
+        """Create registry database and return `ButlerRegistry` instance.
 
         A remote registry can not create a registry database. Calling this
         method will raise an exception.
@@ -107,7 +106,7 @@ class RemoteRegistry(Registry):
         butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
         defaults: RegistryDefaults | None = None,
-    ) -> Registry:
+    ) -> ButlerRegistry:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         config = cls.forceRegistryConfig(config)
         config.replaceRoot(butlerRoot)
@@ -132,10 +131,6 @@ class RemoteRegistry(Registry):
     ):
         self._db = server_uri
         self._defaults = defaults
-
-        # In the future DatasetIdFactory may become configurable and this
-        # instance will need to be shared with datasets manager.
-        self.datasetIdFactory = DatasetIdFactory()
 
         # All PUT calls should be short-circuited if not writeable.
         self._writeable = writeable
@@ -167,8 +162,8 @@ class RemoteRegistry(Registry):
         # Can be used to prevent any PUTs to server
         return self._writeable
 
-    def copy(self, defaults: RegistryDefaults | None = None) -> Registry:
-        # Docstring inherited from lsst.daf.butler.registry.Registry
+    def copy(self, defaults: RegistryDefaults | None = None) -> ButlerRegistry:
+        # Docstring inherited from lsst.daf.butler.registry.ButlerRegistry
         if defaults is None:
             # No need to copy, because `RegistryDefaults` is immutable; we
             # effectively copy on write.

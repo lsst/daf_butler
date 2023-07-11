@@ -28,7 +28,7 @@ from contextlib import contextmanager
 
 import sqlalchemy
 from lsst.daf.butler import ddl
-from lsst.daf.butler.registry import Registry
+from lsst.daf.butler.registry import ButlerRegistry
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
@@ -196,7 +196,7 @@ class SqliteFileRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry:
+    def makeRegistry(self, share_repo_with: ButlerRegistry | None = None) -> ButlerRegistry:
         if share_repo_with is None:
             _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         else:
@@ -204,9 +204,9 @@ class SqliteFileRegistryTests(RegistryTests):
         config = self.makeRegistryConfig()
         config["db"] = f"sqlite:///{filename}"
         if share_repo_with is None:
-            return Registry.createFromConfig(config, butlerRoot=self.root)
+            return ButlerRegistry.createFromConfig(config, butlerRoot=self.root)
         else:
-            return Registry.fromConfig(config, butlerRoot=self.root)
+            return ButlerRegistry.fromConfig(config, butlerRoot=self.root)
 
 
 class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -242,12 +242,12 @@ class SqliteMemoryRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry | None:
+    def makeRegistry(self, share_repo_with: ButlerRegistry | None = None) -> ButlerRegistry | None:
         if share_repo_with is not None:
             return None
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
-        return Registry.createFromConfig(config)
+        return ButlerRegistry.createFromConfig(config)
 
     def testMissingAttributes(self):
         """Test for instantiating a registry against outdated schema which
@@ -258,7 +258,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
         with self.assertRaises(LookupError):
-            Registry.fromConfig(config)
+            ButlerRegistry.fromConfig(config)
 
 
 class SqliteMemoryRegistryNameKeyCollMgrUUIDTestCase(unittest.TestCase, SqliteMemoryRegistryTests):

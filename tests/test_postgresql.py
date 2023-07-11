@@ -40,7 +40,7 @@ except ImportError:
 
 import sqlalchemy
 from lsst.daf.butler import Timespan, ddl
-from lsst.daf.butler.registry import Registry
+from lsst.daf.butler.registry import ButlerRegistry
 from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
@@ -236,7 +236,7 @@ class PostgresqlRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry:
+    def makeRegistry(self, share_repo_with: ButlerRegistry | None = None) -> ButlerRegistry:
         if share_repo_with is None:
             namespace = f"namespace_{secrets.token_hex(8).lower()}"
         else:
@@ -245,9 +245,9 @@ class PostgresqlRegistryTests(RegistryTests):
         config["db"] = self.server.url()
         config["namespace"] = namespace
         if share_repo_with is None:
-            return Registry.createFromConfig(config)
+            return ButlerRegistry.createFromConfig(config)
         else:
-            return Registry.fromConfig(config)
+            return ButlerRegistry.fromConfig(config)
 
 
 class PostgresqlRegistryNameKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):

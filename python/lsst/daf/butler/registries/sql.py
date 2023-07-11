@@ -42,7 +42,6 @@ from ..core import (
     DatasetAssociation,
     DatasetColumnTag,
     DatasetId,
-    DatasetIdFactory,
     DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
@@ -62,6 +61,7 @@ from ..core import (
 from ..core.utils import transactional
 from ..registry import (
     ArgumentError,
+    ButlerRegistry,
     CollectionExpressionError,
     CollectionSummary,
     CollectionType,
@@ -73,7 +73,6 @@ from ..registry import (
     InconsistentDataIdError,
     NoDefaultCollectionError,
     OrphanedRecordError,
-    Registry,
     RegistryConfig,
     RegistryConsistencyError,
     RegistryDefaults,
@@ -97,7 +96,7 @@ if TYPE_CHECKING:
 _LOG = logging.getLogger(__name__)
 
 
-class SqlRegistry(Registry):
+class SqlRegistry(ButlerRegistry):
     """Registry implementation based on SQLAlchemy.
 
     Parameters
@@ -122,7 +121,7 @@ class SqlRegistry(Registry):
         config: RegistryConfig | str | None = None,
         dimensionConfig: DimensionConfig | str | None = None,
         butlerRoot: ResourcePathExpression | None = None,
-    ) -> Registry:
+    ) -> ButlerRegistry:
         """Create registry database and return `SqlRegistry` instance.
 
         This method initializes database contents, database must be empty
@@ -169,7 +168,7 @@ class SqlRegistry(Registry):
         butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
         defaults: RegistryDefaults | None = None,
-    ) -> Registry:
+    ) -> ButlerRegistry:
         """Create `Registry` subclass instance from `config`.
 
         Registry database must be initialized prior to calling this method.
@@ -215,9 +214,6 @@ class SqlRegistry(Registry):
         # can only be done after most of the rest of Registry has already been
         # initialized, and must be done before the property getter is used.
         self.defaults = defaults
-        # In the future DatasetIdFactory may become configurable and this
-        # instance will need to be shared with datasets manager.
-        self.datasetIdFactory = DatasetIdFactory()
 
     def __str__(self) -> str:
         return str(self._db)
@@ -229,7 +225,7 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._db.isWriteable()
 
-    def copy(self, defaults: RegistryDefaults | None = None) -> Registry:
+    def copy(self, defaults: RegistryDefaults | None = None) -> ButlerRegistry:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if defaults is None:
             # No need to copy, because `RegistryDefaults` is immutable; we

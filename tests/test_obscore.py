@@ -33,13 +33,12 @@ from lsst.daf.butler import (
     CollectionType,
     Config,
     DataCoordinate,
-    DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
     StorageClassFactory,
 )
 from lsst.daf.butler.registries.sql import SqlRegistry
-from lsst.daf.butler.registry import Registry, RegistryConfig
+from lsst.daf.butler.registry import ButlerRegistry, Registry, RegistryConfig
 from lsst.daf.butler.registry.obscore import (
     DatasetTypeConfig,
     ObsCoreConfig,
@@ -65,10 +64,10 @@ class ObsCoreTests(TestCaseMixin):
 
     def make_registry(
         self, collections: list[str] | None = None, collection_type: str | None = None
-    ) -> Registry:
+    ) -> ButlerRegistry:
         """Create new empty Registry."""
         config = self.make_registry_config(collections, collection_type)
-        registry = Registry.createFromConfig(config, butlerRoot=self.root)
+        registry = ButlerRegistry.createFromConfig(config, butlerRoot=self.root)
         self.initialize_registry(registry)
         return registry
 
@@ -225,10 +224,7 @@ class ObsCoreTests(TestCaseMixin):
         coordinate = DataCoordinate.standardize(data_id, universe=registry.dimensions)
         if do_import:
             ds_type = self.dataset_types[dataset_type]
-            dataset_id = registry.datasetIdFactory.makeDatasetId(
-                run, ds_type, coordinate, DatasetIdGenEnum.UNIQUE
-            )
-            ref = DatasetRef(ds_type, coordinate, id=dataset_id, run=run)
+            ref = DatasetRef(ds_type, coordinate, run=run)
             [ref] = registry._importDatasets([ref])
         else:
             [ref] = registry.insertDatasets(dataset_type, [data_id], run=run)
