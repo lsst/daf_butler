@@ -44,10 +44,12 @@ Example of a command or subcommand definition:
 
     import click
 
+
     @click.group()
     def git():
         """An example git-style interface."""
         pass
+
 
     # Notice this uses "@git" instead of "@click", this adds the command to the
     # git group.
@@ -55,6 +57,7 @@ Example of a command or subcommand definition:
     def pull():
         """An example 'pull' subcommand."""
         print("pull!")
+
 
     if __name__ == "__main__":
         git()
@@ -133,10 +136,12 @@ An example of a subcommand that uses options:
 
     import click
 
+
     @click.group()
     def git():
         """An example git-style interface."""
         pass
+
 
     @git.command()
     @click.option("-m", "--message", help="commit message")
@@ -144,6 +149,7 @@ An example of a subcommand that uses options:
     def commit(all, message):
         """An example 'commit' subcommand."""
         print(f"commit. all: {all}, message: {message}")
+
 
     if __name__ == "__main__":
         git()
@@ -183,10 +189,12 @@ An example of a subcommand that uses arguments:
 
     import click
 
+
     @click.group()
     def git():
         """An example git-style interface."""
         pass
+
 
     @git.command()
     @click.argument("branch")
@@ -198,6 +206,7 @@ An example of a subcommand that uses arguments:
               automatically add argument help to your command function.
         """
         print(f"checkout branch {branch}")
+
 
     if __name__ == "__main__":
         git()
@@ -257,16 +266,20 @@ An example implementation of ``git checkout`` that uses MWArgumentDecorator and 
     # as the argument name in the command function where it is used. (This is
     # available for any click.option)
     new_branch_option = MWOptionDecorator(
-        "-b", "make_new_branch",
+        "-b",
+        "make_new_branch",
         help="create and checkout a new branch",
-        is_flag=True)  # is_flag makes the option take no values, uses a bool
-                       # which is true if the option is passed and false by
-                       # default.
+        # is_flag makes the option take no values, uses a bool
+        # which is true if the option is passed and false by default.
+        is_flag=True,
+    )
+
 
     @click.group()
     def git():
         """An example git-style interface."""
         pass
+
 
     @git.command()
     @branch_argument()
@@ -274,6 +287,7 @@ An example implementation of ``git checkout`` that uses MWArgumentDecorator and 
     def checkout(branch, make_new_branch):
         """An example 'checkout' subcommand."""
         print(f"checkout branch {branch}, make new:{make_new_branch}")
+
 
     if __name__ == "__main__":
         git()
@@ -311,13 +325,13 @@ Defines an Option Group decorator:
    :name: option-group-example
 
     class pipeline_build_options(OptionGroup):  # noqa: N801
-    """Decorator to add options to a command function for building a pipeline.
-    """
+        """Decorator to add options to a command function for building a pipeline."""
 
-    def __init__(self):
-        self.decorators = [
-            ctrlMpExecOpts.pipeline_option(),
-            ctrlMpExecOpts.task_option()]
+        def __init__(self):
+            self.decorators = [
+                ctrlMpExecOpts.pipeline_option(),
+                ctrlMpExecOpts.task_option(),
+            ]
 
 Uses an Option Group decorator:
 
@@ -440,9 +454,9 @@ It's easy to create a new kind of command by copying the template below and maki
 
     from lsst.daf.butler.cli.butler import LoaderCLI
 
+
     # Change the class name to better describe your command.
     class ButlerCLI(LoaderCLI):
-
         # Replace this value with the import path to your `cmd` module.
         localCmdPkg = "lsst.daf.butler.cli.cmd"
 
@@ -450,9 +464,9 @@ It's easy to create a new kind of command by copying the template below and maki
         # above.
         pluginEnvVar = "DAF_BUTLER_PLUGINS"
 
+
     # Change ``cls=ButlerCLI`` to be the same as your new class name above.
-    @click.command(cls=ButlerCLI,
-                   context_settings=dict(help_option_names=["-h", "--help"]))
+    @click.command(cls=ButlerCLI, context_settings=dict(help_option_names=["-h", "--help"]))
     # You can remove log_level_option if you do not support it. You can add
     # other command options here. (Subcommand options are declared elsewhere).
     @log_level_option()

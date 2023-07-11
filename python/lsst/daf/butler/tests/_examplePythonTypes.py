@@ -18,13 +18,14 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import annotations
 
 """
 Python classes that can be used to test datastores without requiring
 large external dependencies on python classes such as afw or serialization
 formats such as FITS or HDF5.
 """
+
+from __future__ import annotations
 
 __all__ = (
     "ListDelegate",
@@ -140,7 +141,7 @@ def _addFullStorageClass(
         The newly created storage class, or the class of the same name
         previously found in the repository.
     """
-    storageRegistry = butler.datastore.storageClassFactory
+    storageRegistry = butler._datastore.storageClassFactory
 
     storage = StorageClass(name, *args, **kwargs)
     try:
@@ -148,7 +149,7 @@ def _addFullStorageClass(
     except ValueError:
         storage = storageRegistry.getStorageClass(name)
 
-    for registry in _getAllFormatterRegistries(butler.datastore):
+    for registry in _getAllFormatterRegistries(butler._datastore):
         registry.registerFormatter(storage, formatter)
 
     return storage

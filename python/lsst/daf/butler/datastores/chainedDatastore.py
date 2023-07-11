@@ -19,9 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import annotations
-
 """Chained datastore."""
+
+from __future__ import annotations
 
 __all__ = ("ChainedDatastore",)
 
@@ -237,6 +237,14 @@ class ChainedDatastore(Datastore):
     @property
     def names(self) -> tuple[str, ...]:
         return tuple(self._names)
+
+    @property
+    def roots(self) -> dict[str, ResourcePath | None]:
+        # Docstring inherited.
+        roots = {}
+        for datastore in self.datastores:
+            roots.update(datastore.roots)
+        return roots
 
     def __str__(self) -> str:
         chainName = ", ".join(str(ds) for ds in self.datastores)

@@ -312,7 +312,7 @@ class ButlerPutGetTests(TestCaseMixin):
                     )
 
                 # Can the artifacts themselves be retrieved?
-                if not butler.datastore.isEphemeral:
+                if not butler._datastore.isEphemeral:
                     root_uri = ResourcePath(self.root)
 
                     for preserve_path in (True, False):
@@ -341,7 +341,7 @@ class ButlerPutGetTests(TestCaseMixin):
                             else:
                                 self.assertEqual(num_seps, 0)
 
-                        primary_uri, secondary_uris = butler.datastore.getURIs(ref)
+                        primary_uri, secondary_uris = butler.getURIs(ref)
                         n_uris = len(secondary_uris)
                         if primary_uri:
                             n_uris += 1
@@ -591,7 +591,7 @@ class ButlerTests(ButlerPutGetTests):
         butler2 = Butler(butler=butler, collections=["other"])
         self.assertEqual(butler2.collections, ("other",))
         self.assertIsNone(butler2.run)
-        self.assertIs(butler.datastore, butler2.datastore)
+        self.assertIs(butler._datastore, butler2._datastore)
 
         # Test that we can use an environment variable to find this
         # repository.
@@ -697,7 +697,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(len(datasets), 1)
         uri, components = butler.getURIs(datasets[0])
 
-        if butler.datastore.isEphemeral:
+        if butler._datastore.isEphemeral:
             # Never disassemble in-memory datastore
             self.assertIsInstance(uri, ResourcePath)
             self.assertFalse(components)
@@ -715,7 +715,7 @@ class ButlerTests(ButlerPutGetTests):
         dataId = {"instrument": "DummyCamComp", "visit": 424}
         uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
 
-        if butler.datastore.isEphemeral:
+        if butler._datastore.isEphemeral:
             # Never disassembled
             self.assertIsInstance(uri, ResourcePath)
             self.assertFalse(components)
@@ -949,7 +949,7 @@ class ButlerTests(ButlerPutGetTests):
         # Check that the datastore recorded no file size.
         # Not all datastores can support this.
         try:
-            infos = butler.datastore.getStoredItemsInfo(datasets[0].refs[0])  # type: ignore[attr-defined]
+            infos = butler._datastore.getStoredItemsInfo(datasets[0].refs[0])  # type: ignore[attr-defined]
             self.assertEqual(infos[0].file_size, -1)
         except AttributeError:
             pass
@@ -1161,7 +1161,7 @@ class ButlerTests(ButlerPutGetTests):
         if self.registryStr is not None:
             self.assertIn(self.registryStr, butlerStr)
 
-        datastoreName = butler.datastore.name
+        datastoreName = butler._datastore.name
         if self.datastoreName is not None:
             for testStr in self.datastoreName:
                 self.assertIn(testStr, datastoreName)
@@ -1270,8 +1270,8 @@ class FileDatastoreButlerTests(ButlerTests):
         )
 
         # Check the template based on dimensions
-        if hasattr(butler.datastore, "templates"):
-            butler.datastore.templates.validateTemplates([ref])
+        if hasattr(butler._datastore, "templates"):
+            butler._datastore.templates.validateTemplates([ref])
 
         # Put with extra data ID keys (physical_filter is an optional
         # dependency); should not change template (at least the way we're
@@ -1285,8 +1285,8 @@ class FileDatastoreButlerTests(ButlerTests):
         )
 
         # Check the template based on dimensions
-        if hasattr(butler.datastore, "templates"):
-            butler.datastore.templates.validateTemplates([ref])
+        if hasattr(butler._datastore, "templates"):
+            butler._datastore.templates.validateTemplates([ref])
 
         # Use a template that has a typo in dimension record metadata.
         # Easier to test with a butler that has a ref with records attached.
@@ -1415,8 +1415,8 @@ class FileDatastoreButlerTests(ButlerTests):
             butler.registry.getCollectionType(run1)
         with self.assertRaises(MissingCollectionError):
             butler.registry.getCollectionType(run2)
-        self.assertFalse(butler.datastore.exists(ref1))
-        self.assertFalse(butler.datastore.exists(ref2))
+        self.assertFalse(butler.stored(ref1))
+        self.assertFalse(butler.stored(ref2))
         # The ref we unstored should be gone according to the URI, but the
         # one we forgot should still be around.
         self.assertFalse(uri1.exists())
@@ -1467,8 +1467,8 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
         uris = [exportButler.getURI(d) for d in datasets]
-        assert isinstance(exportButler.datastore, FileDatastore)
-        datastoreRoot = exportButler.datastore.root
+        assert isinstance(exportButler._datastore, FileDatastore)
+        datastoreRoot = exportButler.get_datastore_roots()[exportButler.get_datastore_names()[0]]
 
         pathsInStore = [uri.relative_to(datastoreRoot) for uri in uris]
 
@@ -1491,7 +1491,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     def testPruneDatasets(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         butler = Butler(self.tmpConfigFile, writeable=True)
-        assert isinstance(butler.datastore, FileDatastore)
+        assert isinstance(butler._datastore, FileDatastore)
         # Load registry data with dimensions to hang datasets off of.
         registryDataDir = os.path.normpath(os.path.join(TESTDIR, "data", "registry"))
         butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
@@ -1574,11 +1574,11 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         butler.pruneDatasets([ref1], purge=False, unstore=True, disassociate=False)
 
         # File has been removed.
-        uri2 = butler.datastore.getURI(ref2)
+        uri2 = butler.getURI(ref2)
         uri2.remove()
 
         # Datastore has lost track.
-        butler.datastore.forget([ref3])
+        butler._datastore.forget([ref3])
 
         # First test with a standard butler.
         exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
@@ -1599,7 +1599,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
             self.assertEqual(butler.exists(ref, full_check=False), exists)
 
         # Test again with a trusting butler.
-        butler.datastore.trustGetRequest = True
+        butler._datastore.trustGetRequest = True
         exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
         self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
         self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
@@ -1622,7 +1622,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         self.assertEqual(exists, exists_many[ref2])
 
         # Remove everything and start from scratch.
-        butler.datastore.trustGetRequest = False
+        butler._datastore.trustGetRequest = False
         butler.pruneDatasets(refs, purge=True, unstore=True)
         for ref in refs:
             butler.put(metric, ref)
@@ -1631,32 +1631,33 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # datastore in an odd state. Do them at the end.
         # Check that in normal mode, deleting the record will lead to
         # trash not touching the file.
-        uri1 = butler.datastore.getURI(ref1)
-        butler.datastore.bridge.moveToTrash([ref1], transaction=None)  # Update the dataset_location table
-        butler.datastore.forget([ref1])
-        butler.datastore.trash(ref1)
-        butler.datastore.emptyTrash()
+        uri1 = butler.getURI(ref1)
+        butler._datastore.bridge.moveToTrash([ref1], transaction=None)  # Update the dataset_location table
+        butler._datastore.forget([ref1])
+        butler._datastore.trash(ref1)
+        butler._datastore.emptyTrash()
         self.assertTrue(uri1.exists())
         uri1.remove()  # Clean it up.
 
         # Simulate execution butler setup by deleting the datastore
         # record but keeping the file around and trusting.
-        butler.datastore.trustGetRequest = True
-        uri2 = butler.datastore.getURI(ref2)
-        uri3 = butler.datastore.getURI(ref3)
+        butler._datastore.trustGetRequest = True
+        uris = butler.get_many_uris([ref2, ref3])
+        uri2 = uris[ref2].primaryURI
+        uri3 = uris[ref3].primaryURI
         self.assertTrue(uri2.exists())
         self.assertTrue(uri3.exists())
 
         # Remove the datastore record.
-        butler.datastore.bridge.moveToTrash([ref2], transaction=None)  # Update the dataset_location table
-        butler.datastore.forget([ref2])
+        butler._datastore.bridge.moveToTrash([ref2], transaction=None)  # Update the dataset_location table
+        butler._datastore.forget([ref2])
         self.assertTrue(uri2.exists())
-        butler.datastore.trash([ref2, ref3])
+        butler._datastore.trash([ref2, ref3])
         # Immediate removal for ref2 file
         self.assertFalse(uri2.exists())
         # But ref3 has to wait for the empty.
         self.assertTrue(uri3.exists())
-        butler.datastore.emptyTrash()
+        butler._datastore.emptyTrash()
         self.assertFalse(uri3.exists())
 
         # Clear out the datasets from registry.
@@ -2065,7 +2066,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.create_butlers()
 
         # Configure the source butler to allow trust.
-        self._enable_trust(self.source_butler.datastore)
+        self._enable_trust(self.source_butler._datastore)
 
         self.assertButlerTransfers(purge=True)
 
@@ -2077,7 +2078,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.create_butlers()
 
         # Configure the source butler to allow trust.
-        self._enable_trust(self.source_butler.datastore)
+        self._enable_trust(self.source_butler._datastore)
 
         # Test disassembly.
         self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
@@ -2204,10 +2205,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
                     # file out.
                     # Access the individual datastores.
                     datastores = []
-                    if hasattr(butler.datastore, "datastores"):
-                        datastores.extend(butler.datastore.datastores)
+                    if hasattr(butler._datastore, "datastores"):
+                        datastores.extend(butler._datastore.datastores)
                     else:
-                        datastores.append(butler.datastore)
+                        datastores.append(butler._datastore)
 
                     if not deleted:
                         # For a chained datastore we need to remove
@@ -2295,16 +2296,16 @@ class PosixDatastoreTransfers(unittest.TestCase):
             # Also do an explicit low-level transfer to trigger some
             # edge cases.
             with self.assertLogs(level=logging.DEBUG) as log_cm:
-                self.target_butler.datastore.transfer_from(self.source_butler.datastore, source_refs)
+                self.target_butler._datastore.transfer_from(self.source_butler._datastore, source_refs)
             log_output = ";".join(log_cm.output)
             self.assertIn("no file artifacts exist", log_output)
 
             with self.assertRaises((TypeError, AttributeError)):
-                self.target_butler.datastore.transfer_from(self.source_butler, source_refs)  # type: ignore
+                self.target_butler._datastore.transfer_from(self.source_butler, source_refs)  # type: ignore
 
             with self.assertRaises(ValueError):
-                self.target_butler.datastore.transfer_from(
-                    self.source_butler.datastore, source_refs, transfer="split"
+                self.target_butler._datastore.transfer_from(
+                    self.source_butler._datastore, source_refs, transfer="split"
                 )
 
         # Now try to get the same refs from the new butler.

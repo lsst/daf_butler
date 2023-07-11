@@ -29,9 +29,10 @@ from collections.abc import Iterable
 from typing import Any, ClassVar
 
 from deprecated.sphinx import deprecated
+from lsst.resources import ResourcePath
 
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from .core import DatasetRef, Datastore, DimensionUniverse, StorageClass, StorageClassFactory
+from .core import DatasetRef, DatasetRefURIs, Datastore, DimensionUniverse, StorageClass, StorageClassFactory
 
 log = logging.getLogger(__name__)
 
@@ -161,7 +162,7 @@ class LimitedButler(ABC):
         to use a resolved `DatasetRef`. Subclasses can support more options.
         """
         log.debug("Butler get: %s, parameters=%s, storageClass: %s", ref, parameters, storageClass)
-        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     @deprecated(
         reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
@@ -197,7 +198,7 @@ class LimitedButler(ABC):
         obj : `object`
             The dataset.
         """
-        return self.datastore.get(ref, parameters=parameters, storageClass=storageClass)
+        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     @deprecated(
         reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
@@ -274,6 +275,137 @@ class LimitedButler(ABC):
         """
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
+    def get_datastore_names(self) -> tuple[str, ...]:
+        """Return the names of the datastores associated with this butler.
+
+        Returns
+        -------
+        names : `tuple` [`str`, ...]
+            The names of the datastores.
+        """
+        return self._datastore.names
+
+    def get_datastore_roots(self) -> dict[str, ResourcePath | None]:
+        """Return the defined root URIs for all registered datastores.
+
+        Returns
+        -------
+        roots : `dict` [`str`, `~lsst.resources.ResourcePath` | `None`]
+            A mapping from datastore name to datastore root URI. The root
+            can be `None` if the datastore does not have any concept of a root
+            URI.
+        """
+        return self._datastore.roots
+
+    def getURIs(
+        self,
+        ref: DatasetRef,
+        /,
+        *,
+        predict: bool = False,
+    ) -> DatasetRefURIs:
+        """Return the URIs associated with the dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A `DatasetRef` for which URIs are requested.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+
+        Returns
+        -------
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact (can be empty if there are no components).
+        """
+        return self._datastore.getURIs(ref, predict)
+
+    def getURI(
+        self,
+        ref: DatasetRef,
+        /,
+        *,
+        predict: bool = False,
+    ) -> ResourcePath:
+        """Return the URI to the Dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A `DatasetRef` for which a single URI is requested.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+
+        Returns
+        -------
+        uri : `lsst.resources.ResourcePath`
+            URI pointing to the Dataset within the datastore. If the
+            Dataset does not exist in the datastore, and if ``predict`` is
+            `True`, the URI will be a prediction and will include a URI
+            fragment "#predicted".
+            If the datastore does not have entities that relate well
+            to the concept of a URI the returned URI string will be
+            descriptive. The returned URI is not guaranteed to be obtainable.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if a URI is requested for a dataset that consists of
+            multiple artifacts.
+        """
+        primary, components = self.getURIs(ref, predict=predict)
+
+        if primary is None or components:
+            raise RuntimeError(
+                f"Dataset ({ref}) includes distinct URIs for components. "
+                "Use LimitedButler.getURIs() instead."
+            )
+        return primary
+
+    def get_many_uris(
+        self,
+        refs: Iterable[DatasetRef],
+        predict: bool = False,
+        allow_missing: bool = False,
+    ) -> dict[DatasetRef, DatasetRefURIs]:
+        """Return URIs associated with many datasets.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetIdRef`
+            References to the required datasets.
+        predict : `bool`, optional
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+        allow_missing : `bool`
+            If `False`, and ``predict`` is `False`, will raise if a
+            `DatasetRef` does not exist.
+
+        Returns
+        -------
+        URIs : `dict` of [`DatasetRef`, `DatasetRefURIs`]
+            A dict of primary and component URIs, indexed by the passed-in
+            refs.
+
+        Raises
+        ------
+        FileNotFoundError
+            A URI has been requested for a dataset that does not exist and
+            guessing is not allowed.
+
+        Notes
+        -----
+        In file-based datastores, get_many_uris does not check that the file is
+        present. It assumes that if datastore is aware of the file then it
+        actually exists.
+        """
+        return self._datastore.getManyURIs(refs, predict=predict, allow_missing=allow_missing)
+
     def stored(self, ref: DatasetRef) -> bool:
         """Indicate whether the dataset's artifacts are present in the
         Datastore.
@@ -289,7 +421,7 @@ class LimitedButler(ABC):
             Whether the dataset artifact exists in the datastore and can be
             retrieved.
         """
-        return self.datastore.exists(ref)
+        return self._datastore.exists(ref)
 
     def stored_many(
         self,
@@ -309,7 +441,7 @@ class LimitedButler(ABC):
             Mapping from given dataset refs to boolean indicating artifact
             existence.
         """
-        return self.datastore.mexists(refs)
+        return self._datastore.mexists(refs)
 
     @deprecated(
         reason="Butler.datasetExistsDirect() has been replaced by Butler.stored(). "
@@ -410,13 +542,19 @@ class LimitedButler(ABC):
         """
         raise NotImplementedError()
 
-    datastore: Datastore
-    """The object that manages actual dataset storage (`Datastore`).
+    @property
+    @deprecated(
+        reason="The Butler.datastore property is now deprecated. Butler APIs should now exist with the "
+        "relevant functionality. Will be removed after v27.0.",
+        version="v26.0",
+        category=FutureWarning,
+    )
+    def datastore(self) -> Datastore:
+        """The object that manages actual dataset storage. (`Datastore`)"""
+        return self._datastore
 
-    Direct user access to the datastore should rarely be necessary; the primary
-    exception is the case where a `Datastore` implementation provides extra
-    functionality beyond what the base class defines.
-    """
+    _datastore: Datastore
+    """The object that manages actual dataset storage (`Datastore`)."""
 
     storageClasses: StorageClassFactory
     """An object that maps known storage class names to objects that fully

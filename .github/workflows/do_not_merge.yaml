@@ -1,0 +1,41 @@
+name: "Check commits can be merged"
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  do-not-merge-checker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check that there are no commits that should not be merged
+        uses: gsactions/commit-message-checker@v2
+        with:
+          excludeDescription: "true"  # optional: this excludes the description body of a pull request
+          excludeTitle: "true"  # optional: this excludes the title of a pull request
+          checkAllCommitMessages: "true"  # optional: this checks all commits associated with a pull request
+          accessToken: ${{ secrets.GITHUB_TOKEN }}  # github access token is only required if checkAllCommitMessages is true
+          # Check for message indicating that there is a commit that should
+          # not be merged.
+          pattern: ^(?!DO NOT MERGE)
+          flags: "i"
+          error: |
+            "This step failed because there is a commit containing the text
+            'DO NOT MERGE'. Remove this commit from the branch before merging
+            or change the commit summary."
+
+      - uses: actions/checkout@v3
+
+      - name: Check requirements.txt for branches
+        shell: bash
+        run: |
+          FILE=requirements.txt
+          MATCH=tickets/DM-
+          if grep -q $MATCH $FILE
+          then
+            echo "Ticket branches found in $FILE:"
+            grep -n $MATCH $FILE
+            exit 1
+          fi

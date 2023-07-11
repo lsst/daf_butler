@@ -71,8 +71,8 @@ class PersistenceContextVars:
 
     This process is thread safe.
 
-    Note
-    ----
+    Notes
+    -----
     Caches of `SerializedDatasetRef`\ s are intentionally left out. It was
     discovered that these caused excessive python memory allocations which
     though cleaned up upon completion, left the process using more memory than

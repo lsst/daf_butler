@@ -139,7 +139,6 @@ convention = "numpy"
 add-ignore = ["D107", "D105", "D102", "D100", "D200", "D205", "D400", "D104"]
 
 [tool.coverage.report]
-show_missing = true
 exclude_lines = [
     "pragma: no cover",
     "raise AssertionError",
@@ -170,7 +169,6 @@ ignore = [
     "D200",
     "D205",
     "D400",
-    "E402", # Module level import not at top of file (against Rubin style)
 ]
 line-length = 110
 select = [

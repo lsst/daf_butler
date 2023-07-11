@@ -104,13 +104,13 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
     def make_quantum(self, step: int = 1) -> Quantum:
         """Make a Quantum which includes datastore records."""
         if step == 1:
-            datastore_records = self.butler.datastore.export_records(self.all_input_refs)
+            datastore_records = self.butler._datastore.export_records(self.all_input_refs)
             predictedInputs = {self.datasetTypeInput: self.input_refs}
             outputs = {self.datasetTypeOutput: self.output_refs}
             initInputs = {self.datasetTypeInit: self.init_inputs_refs[0]}
         elif step == 2:
             # The result should be empty, this is just to test that it works.
-            datastore_records = self.butler.datastore.export_records(self.output_refs)
+            datastore_records = self.butler._datastore.export_records(self.output_refs)
             predictedInputs = {self.datasetTypeInput: self.output_refs}
             outputs = {self.datasetTypeOutput2: self.output_refs2}
             initInputs = {}
@@ -155,7 +155,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
     def test_from_predicted(self) -> None:
         """Test for from_predicted factory method"""
-        datastore_records = self.butler.datastore.export_records(self.all_input_refs)
+        datastore_records = self.butler._datastore.export_records(self.all_input_refs)
         qbb = QuantumBackedButler.from_predicted(
             config=self.config,
             predicted_inputs=[ref.id for ref in self.all_input_refs],

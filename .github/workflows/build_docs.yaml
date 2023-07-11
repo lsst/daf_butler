@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
           cache: "pip"
@@ -45,8 +45,11 @@ jobs:
       - name: Build and install
         run: pip install --no-deps -v .
 
+      - name: Install graphviz
+        run: sudo apt-get install graphviz
+
       - name: Install documenteer
-        run: pip install 'documenteer[pipelines]<0.8'
+        run: pip install 'documenteer[pipelines]>=0.8'
 
       - name: Build documentation
         working-directory: ./doc

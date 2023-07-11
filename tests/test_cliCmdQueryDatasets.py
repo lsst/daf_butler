@@ -158,9 +158,13 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         tables = self._queryDatasets(repo=self.repoDir, show_uri=True)
 
+        # Want second datastore root.
+        roots = testRepo.butler.get_datastore_roots()
+        datastore_root = roots[testRepo.butler.get_datastore_names()[1]]
+
         self.assertAstropyTablesEqual(
             tables,
-            expectedFilesystemDatastoreTables(testRepo.butler.datastore.datastores[1].root),
+            expectedFilesystemDatastoreTables(datastore_root),
             filterColumns=True,
         )
 
@@ -170,8 +174,11 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         tables = self._queryDatasets(repo=self.repoDir, show_uri=True)
 
+        roots = testRepo.butler.get_datastore_roots()
+        datastore_root = list(roots.values())[0]
+
         self.assertAstropyTablesEqual(
-            tables, expectedFilesystemDatastoreTables(testRepo.butler.datastore.root), filterColumns=True
+            tables, expectedFilesystemDatastoreTables(datastore_root), filterColumns=True
         )
 
     def testNoShowURI(self):
@@ -260,6 +267,11 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         # Verify that without find-first, duplicate datasets are returned
         tables = self._queryDatasets(repo=self.repoDir, collections=["foo", "ingest/run"], show_uri=True)
 
+        # The test should be running with a single FileDatastore.
+        roots = testRepo.butler.get_datastore_roots()
+        assert len(roots) == 1
+        datastore_root = list(roots.values())[0]
+
         expectedTables = (
             AstropyTable(
                 array(
@@ -271,7 +283,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "foo/test_metric_comp.data/test_metric_comp_v00000424_fDummyCamComp_data.yaml"
                             ),
                         ),
@@ -282,7 +294,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "423",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.data/"
                                 "test_metric_comp_v00000423_fDummyCamComp_data.yaml"
                             ),
@@ -294,7 +306,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.data/"
                                 "test_metric_comp_v00000424_fDummyCamComp_data.yaml"
                             ),
@@ -313,7 +325,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "foo/test_metric_comp.output/"
                                 "test_metric_comp_v00000424_fDummyCamComp_output.yaml"
                             ),
@@ -325,7 +337,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "423",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.output/"
                                 "test_metric_comp_v00000423_fDummyCamComp_output.yaml"
                             ),
@@ -337,7 +349,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.output/"
                                 "test_metric_comp_v00000424_fDummyCamComp_output.yaml"
                             ),
@@ -356,7 +368,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "foo/test_metric_comp.summary/"
                                 "test_metric_comp_v00000424_fDummyCamComp_summary.yaml"
                             ),
@@ -368,7 +380,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "423",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.summary/"
                                 "test_metric_comp_v00000423_fDummyCamComp_summary.yaml"
                             ),
@@ -380,7 +392,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.summary/"
                                 "test_metric_comp_v00000424_fDummyCamComp_summary.yaml"
                             ),
@@ -410,7 +422,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "foo/test_metric_comp.data/test_metric_comp_v00000424_fDummyCamComp_data.yaml"
                             ),
                         ),
@@ -421,7 +433,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "423",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.data/"
                                 "test_metric_comp_v00000423_fDummyCamComp_data.yaml"
                             ),
@@ -440,7 +452,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "foo/test_metric_comp.output/"
                                 "test_metric_comp_v00000424_fDummyCamComp_output.yaml"
                             ),
@@ -452,7 +464,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "423",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.output/"
                                 "test_metric_comp_v00000423_fDummyCamComp_output.yaml"
                             ),
@@ -471,7 +483,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "424",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "foo/test_metric_comp.summary/"
                                 "test_metric_comp_v00000424_fDummyCamComp_summary.yaml"
                             ),
@@ -483,7 +495,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "DummyCamComp",
                             "d-r",
                             "423",
-                            testRepo.butler.datastore.root.join(
+                            datastore_root.join(
                                 "ingest/run/test_metric_comp.summary/"
                                 "test_metric_comp_v00000423_fDummyCamComp_summary.yaml"
                             ),

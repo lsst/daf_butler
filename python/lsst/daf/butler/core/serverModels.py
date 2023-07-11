@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""Models used for client/server communication."""
+
 __all__ = (
     "QueryDatasetsModel",
     "QueryDataIdsModel",
@@ -26,8 +28,6 @@ __all__ = (
     "ExpressionQueryParameter",
     "DatasetsQueryParameter",
 )
-
-"""Models used for client/server communication."""
 
 import re
 from collections.abc import Mapping

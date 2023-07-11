@@ -1022,6 +1022,14 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
             with self.assertRaises(DatasetTypeNotSupportedError):
                 datastore.getURIs(compRef, predict=True)
 
+    def test_roots(self):
+        datastore = self.makeDatastore()
+
+        self.assertEqual(set(datastore.names), set(datastore.roots.keys()))
+        for root in datastore.roots.values():
+            if root is not None:
+                self.assertTrue(root.exists())
+
 
 class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
     """Posix datastore tests but with checksums disabled."""

@@ -372,6 +372,16 @@ class Datastore(metaclass=ABCMeta):
         # Default implementation returns solely the name itself
         return (self.name,)
 
+    @property
+    def roots(self) -> dict[str, ResourcePath | None]:
+        """Return the root URIs for each named datastore.
+
+        Mapping from datastore name to root URI. The URI can be `None`
+        if a datastore has no concept of a root URI.
+        (`dict` [`str`, `ResourcePath` | `None`])
+        """
+        return {self.name: None}
+
     @contextlib.contextmanager
     def transaction(self) -> Iterator[DatastoreTransaction]:
         """Context manager supporting `Datastore` transactions.
@@ -774,11 +784,11 @@ class Datastore(metaclass=ABCMeta):
         refs : iterable of `DatasetIdRef`
             References to the required datasets.
         predict : `bool`, optional
-            If the datastore does not know about a dataset, should it
-            return a predicted URI or not?
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
         allow_missing : `bool`
-            If `False`, and `predict` is `False`, will raise if a `DatasetRef`
-            does not exist.
+            If `False`, and ``predict`` is `False`, will raise if a
+            `DatasetRef` does not exist.
 
         Returns
         -------
@@ -794,7 +804,7 @@ class Datastore(metaclass=ABCMeta):
 
         Notes
         -----
-        In file-based datastores, getManuURIs does not check that the file is
+        In file-based datastores, getManyURIs does not check that the file is
         really there, it's assuming it is if datastore is aware of the file
         then it actually exists.
         """

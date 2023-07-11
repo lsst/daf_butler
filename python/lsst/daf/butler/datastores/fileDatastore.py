@@ -18,9 +18,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import annotations
 
 """Generic file-based datastore code."""
+
+from __future__ import annotations
 
 __all__ = ("FileDatastore",)
 
@@ -319,6 +320,11 @@ class FileDatastore(GenericBaseDatastore):
     @property
     def bridge(self) -> DatastoreRegistryBridge:
         return self._bridge
+
+    @property
+    def roots(self) -> dict[str, ResourcePath | None]:
+        # Docstring inherited.
+        return {self.name: self.root}
 
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified

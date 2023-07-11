@@ -603,7 +603,9 @@ class MWPath(click.Path):
             path_type=path_type,
         )
 
-    def convert(self, value: str, param: click.Parameter | None, ctx: click.Context | None) -> Any:
+    def convert(
+        self, value: str | os.PathLike[str], param: click.Parameter | None, ctx: click.Context | None
+    ) -> Any:
         """Convert values through types.
 
         Called by `click.ParamType` to "convert values through types".
