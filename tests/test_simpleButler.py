@@ -35,7 +35,7 @@ except ImportError:
 
 import astropy.time
 from lsst.daf.butler import Butler, ButlerConfig, CollectionType, DatasetId, DatasetRef, DatasetType, Timespan
-from lsst.daf.butler.registry import ButlerRegistry, RegistryConfig, RegistryDefaults
+from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -71,7 +71,7 @@ class SimpleButlerTestCase(unittest.TestCase):
 
         # have to make a registry first
         registryConfig = RegistryConfig(config.get("registry"))
-        ButlerRegistry.createFromConfig(registryConfig)
+        RegistryFactory(registryConfig).create_from_config()
 
         butler = Butler(config, **kwargs)
         DatastoreMock.apply(butler)

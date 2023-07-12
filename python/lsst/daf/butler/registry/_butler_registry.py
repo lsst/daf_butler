@@ -27,7 +27,6 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING
 
 from lsst.resources import ResourcePathExpression
-from lsst.utils import doImportType
 
 from ..core import Config, DimensionConfig
 from ._config import RegistryConfig
@@ -79,38 +78,7 @@ class ButlerRegistry(Registry):
         return config
 
     @classmethod
-    def determineTrampoline(
-        cls, config: ButlerConfig | RegistryConfig | Config | str | None
-    ) -> tuple[type[ButlerRegistry], RegistryConfig]:
-        """Return class to use to instantiate real registry.
-
-        Parameters
-        ----------
-        config : `RegistryConfig` or `str`, optional
-            Registry configuration, if missing then default configuration will
-            be loaded from registry.yaml.
-
-        Returns
-        -------
-        requested_cls : `type` of `ButlerRegistry`
-            The real registry class to use.
-        registry_config : `RegistryConfig`
-            The `RegistryConfig` to use.
-        """
-        config = cls.forceRegistryConfig(config)
-
-        # Default to the standard registry
-        registry_cls_name = config.get("cls", "lsst.daf.butler.registries.sql.SqlRegistry")
-        registry_cls = doImportType(registry_cls_name)
-        if registry_cls is cls:
-            raise ValueError("Can not instantiate the abstract base Registry from config")
-        if not issubclass(registry_cls, ButlerRegistry):
-            raise TypeError(
-                f"Registry class obtained from config {registry_cls_name} is not a ButlerRegistry class."
-            )
-        return registry_cls, config
-
-    @classmethod
+    @abstractmethod
     def createFromConfig(
         cls,
         config: RegistryConfig | str | None = None,
@@ -144,10 +112,10 @@ class ButlerRegistry(Registry):
         use from configuration.  Each subclass should implement this method
         even if it can not create a registry.
         """
-        registry_cls, registry_config = cls.determineTrampoline(config)
-        return registry_cls.createFromConfig(registry_config, dimensionConfig, butlerRoot)
+        raise NotImplementedError()
 
     @classmethod
+    @abstractmethod
     def fromConfig(
         cls,
         config: ButlerConfig | RegistryConfig | Config | str,
@@ -185,8 +153,7 @@ class ButlerRegistry(Registry):
         # subclass. No implementation should ever use this implementation
         # directly. If no class is specified, default to the standard
         # registry.
-        registry_cls, registry_config = cls.determineTrampoline(config)
-        return registry_cls.fromConfig(config, butlerRoot, writeable, defaults)
+        raise NotImplementedError()
 
     @abstractmethod
     def copy(self, defaults: RegistryDefaults | None = None) -> ButlerRegistry:

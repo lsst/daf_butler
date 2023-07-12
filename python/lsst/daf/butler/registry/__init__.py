@@ -28,6 +28,7 @@ from ._dbAuth import *
 from ._defaults import *
 from ._exceptions import *
 from ._registry import *
+from ._registry_factory import *
 from .wildcards import CollectionSearch
 
 # Some modules intentionally not imported, either because they are purely

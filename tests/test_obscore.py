@@ -38,7 +38,7 @@ from lsst.daf.butler import (
     StorageClassFactory,
 )
 from lsst.daf.butler.registries.sql import SqlRegistry
-from lsst.daf.butler.registry import ButlerRegistry, Registry, RegistryConfig
+from lsst.daf.butler.registry import ButlerRegistry, Registry, RegistryConfig, RegistryFactory
 from lsst.daf.butler.registry.obscore import (
     DatasetTypeConfig,
     ObsCoreConfig,
@@ -67,7 +67,7 @@ class ObsCoreTests(TestCaseMixin):
     ) -> ButlerRegistry:
         """Create new empty Registry."""
         config = self.make_registry_config(collections, collection_type)
-        registry = ButlerRegistry.createFromConfig(config, butlerRoot=self.root)
+        registry = RegistryFactory(config).create_from_config(butlerRoot=self.root)
         self.initialize_registry(registry)
         return registry
 

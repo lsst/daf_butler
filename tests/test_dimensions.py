@@ -45,7 +45,7 @@ from lsst.daf.butler import (
     TimespanDatabaseRepresentation,
     YamlRepoImportBackend,
 )
-from lsst.daf.butler.registry import ButlerRegistry, RegistryConfig
+from lsst.daf.butler.registry import RegistryConfig, RegistryFactory
 
 DIMENSION_DATA_FILE = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "data", "registry", "hsc-rc2-subset.yaml")
@@ -64,7 +64,7 @@ def loadDimensionData() -> DataCoordinateSequence:
     # data and retreive it as a set of DataCoordinate objects.
     config = RegistryConfig()
     config["db"] = "sqlite://"
-    registry = ButlerRegistry.createFromConfig(config)
+    registry = RegistryFactory(config).create_from_config()
     with open(DIMENSION_DATA_FILE) as stream:
         backend = YamlRepoImportBackend(stream, registry)
     backend.register()
