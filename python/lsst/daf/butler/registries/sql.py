@@ -61,7 +61,6 @@ from ..core import (
 from ..core.utils import transactional
 from ..registry import (
     ArgumentError,
-    ButlerRegistry,
     CollectionExpressionError,
     CollectionSummary,
     CollectionType,
@@ -76,6 +75,7 @@ from ..registry import (
     RegistryConfig,
     RegistryConsistencyError,
     RegistryDefaults,
+    _ButlerRegistry,
     queries,
 )
 from ..registry.interfaces import ChainedCollectionRecord, RunRecord
@@ -96,7 +96,7 @@ if TYPE_CHECKING:
 _LOG = logging.getLogger(__name__)
 
 
-class SqlRegistry(ButlerRegistry):
+class SqlRegistry(_ButlerRegistry):
     """Registry implementation based on SQLAlchemy.
 
     Parameters
@@ -121,7 +121,7 @@ class SqlRegistry(ButlerRegistry):
         config: RegistryConfig | str | None = None,
         dimensionConfig: DimensionConfig | str | None = None,
         butlerRoot: ResourcePathExpression | None = None,
-    ) -> ButlerRegistry:
+    ) -> _ButlerRegistry:
         """Create registry database and return `SqlRegistry` instance.
 
         This method initializes database contents, database must be empty
@@ -168,7 +168,7 @@ class SqlRegistry(ButlerRegistry):
         butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
         defaults: RegistryDefaults | None = None,
-    ) -> ButlerRegistry:
+    ) -> _ButlerRegistry:
         """Create `Registry` subclass instance from `config`.
 
         Registry database must be initialized prior to calling this method.
@@ -225,7 +225,7 @@ class SqlRegistry(ButlerRegistry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._db.isWriteable()
 
-    def copy(self, defaults: RegistryDefaults | None = None) -> ButlerRegistry:
+    def copy(self, defaults: RegistryDefaults | None = None) -> _ButlerRegistry:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if defaults is None:
             # No need to copy, because `RegistryDefaults` is immutable; we

@@ -78,7 +78,6 @@ from .core import (
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional
 from .registry import (
-    ButlerRegistry,
     CollectionType,
     ConflictingDefinitionError,
     DataIdError,
@@ -88,6 +87,7 @@ from .registry import (
     RegistryConfig,
     RegistryDefaults,
     RegistryFactory,
+    _ButlerRegistry,
 )
 from .transfers import RepoExportContext
 
@@ -2649,9 +2649,9 @@ class Butler(LimitedButler):
         # Docstring inherited.
         return self._registry.dimensions
 
-    _registry: ButlerRegistry
+    _registry: _ButlerRegistry
     """The object that manages dataset metadata and relationships
-    (`ButlerRegistry`).
+    (`_ButlerRegistry`).
 
     Most operations that don't involve reading or writing butler datasets are
     accessible only via `Registry` methods.

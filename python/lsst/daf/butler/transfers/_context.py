@@ -38,7 +38,7 @@ from ..core import (
     DimensionRecord,
     FileDataset,
 )
-from ..registry import ButlerRegistry, CollectionType
+from ..registry import CollectionType, _ButlerRegistry
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ._interfaces import RepoExportBackend
 
@@ -58,7 +58,7 @@ class RepoExportContext:
 
     Parameters
     ----------
-    registry : `ButlerRegistry`
+    registry : `_ButlerRegistry`
         Registry to export from.
     datastore : `Datastore`
         Datastore to export from.
@@ -73,7 +73,7 @@ class RepoExportContext:
 
     def __init__(
         self,
-        registry: ButlerRegistry,
+        registry: _ButlerRegistry,
         datastore: Datastore,
         backend: RepoExportBackend,
         *,

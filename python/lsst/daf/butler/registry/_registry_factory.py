@@ -29,7 +29,7 @@ from lsst.resources import ResourcePathExpression
 from lsst.utils import doImportType
 
 from ..core import Config, DimensionConfig
-from ._butler_registry import ButlerRegistry
+from ._butler_registry import _ButlerRegistry
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 
@@ -69,9 +69,9 @@ class RegistryFactory:
         # Default to the standard registry
         registry_cls_name = config.get("cls", "lsst.daf.butler.registries.sql.SqlRegistry")
         registry_cls = doImportType(registry_cls_name)
-        if not issubclass(registry_cls, ButlerRegistry):
+        if not issubclass(registry_cls, _ButlerRegistry):
             raise TypeError(
-                f"Registry class obtained from config {registry_cls_name} is not a ButlerRegistry class."
+                f"Registry class obtained from config {registry_cls_name} is not a _ButlerRegistry class."
             )
         self._registry_cls = registry_cls
 
@@ -79,8 +79,8 @@ class RegistryFactory:
         self,
         dimensionConfig: DimensionConfig | str | None = None,
         butlerRoot: ResourcePathExpression | None = None,
-    ) -> ButlerRegistry:
-        """Create registry database and return `ButlerRegistry` instance.
+    ) -> _ButlerRegistry:
+        """Create registry database and return `_ButlerRegistry` instance.
 
         This method initializes database contents, database must be empty
         prior to calling this method.
@@ -95,8 +95,8 @@ class RegistryFactory:
 
         Returns
         -------
-        registry : `ButlerRegistry`
-            A new `ButlerRegistry` instance.
+        registry : `_ButlerRegistry`
+            A new `_ButlerRegistry` instance.
         """
         return self._registry_cls.createFromConfig(self._config, dimensionConfig, butlerRoot)
 
@@ -105,8 +105,8 @@ class RegistryFactory:
         butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
         defaults: RegistryDefaults | None = None,
-    ) -> ButlerRegistry:
-        """Create `ButlerRegistry` subclass instance from ``config``.
+    ) -> _ButlerRegistry:
+        """Create `_ButlerRegistry` subclass instance from ``config``.
 
         Registry database must be initialized prior to calling this method.
 
@@ -122,7 +122,7 @@ class RegistryFactory:
 
         Returns
         -------
-        registry : `ButlerRegistry` (subclass)
-            A new `ButlerRegistry` subclass instance.
+        registry : `_ButlerRegistry` (subclass)
+            A new `_ButlerRegistry` subclass instance.
         """
         return self._registry_cls.fromConfig(self._config, butlerRoot, writeable, defaults)

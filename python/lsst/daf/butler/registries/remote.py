@@ -65,7 +65,7 @@ from ..core.serverModels import (
     QueryDatasetsModel,
     QueryDimensionRecordsModel,
 )
-from ..registry import ButlerRegistry, CollectionSummary, CollectionType, RegistryConfig, RegistryDefaults
+from ..registry import CollectionSummary, CollectionType, RegistryConfig, RegistryDefaults, _ButlerRegistry
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
     from ..registry.interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
 
-class RemoteRegistry(ButlerRegistry):
+class RemoteRegistry(_ButlerRegistry):
     """Registry that can talk to a remote Butler server.
 
     Parameters
@@ -91,8 +91,8 @@ class RemoteRegistry(ButlerRegistry):
         config: RegistryConfig | str | None = None,
         dimensionConfig: DimensionConfig | str | None = None,
         butlerRoot: ResourcePathExpression | None = None,
-    ) -> ButlerRegistry:
-        """Create registry database and return `ButlerRegistry` instance.
+    ) -> _ButlerRegistry:
+        """Create registry database and return `_ButlerRegistry` instance.
 
         A remote registry can not create a registry database. Calling this
         method will raise an exception.
@@ -106,7 +106,7 @@ class RemoteRegistry(ButlerRegistry):
         butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
         defaults: RegistryDefaults | None = None,
-    ) -> ButlerRegistry:
+    ) -> _ButlerRegistry:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         config = cls.forceRegistryConfig(config)
         config.replaceRoot(butlerRoot)
@@ -162,8 +162,8 @@ class RemoteRegistry(ButlerRegistry):
         # Can be used to prevent any PUTs to server
         return self._writeable
 
-    def copy(self, defaults: RegistryDefaults | None = None) -> ButlerRegistry:
-        # Docstring inherited from lsst.daf.butler.registry.ButlerRegistry
+    def copy(self, defaults: RegistryDefaults | None = None) -> _ButlerRegistry:
+        # Docstring inherited from lsst.daf.butler.registry._ButlerRegistry
         if defaults is None:
             # No need to copy, because `RegistryDefaults` is immutable; we
             # effectively copy on write.

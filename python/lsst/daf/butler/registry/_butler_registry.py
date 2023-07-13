@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("ButlerRegistry",)
+__all__ = ("_ButlerRegistry",)
 
 from abc import abstractmethod
 from typing import TYPE_CHECKING
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from .interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
 
-class ButlerRegistry(Registry):
+class _ButlerRegistry(Registry):
     """Registry interface extended with methods used by Butler implementation.
 
     Each registry implementation can have its own constructor parameters.
@@ -84,8 +84,8 @@ class ButlerRegistry(Registry):
         config: RegistryConfig | str | None = None,
         dimensionConfig: DimensionConfig | str | None = None,
         butlerRoot: ResourcePathExpression | None = None,
-    ) -> ButlerRegistry:
-        """Create registry database and return `ButlerRegistry` instance.
+    ) -> _ButlerRegistry:
+        """Create registry database and return `_ButlerRegistry` instance.
 
         This method initializes database contents, database must be empty
         prior to calling this method.
@@ -103,12 +103,12 @@ class ButlerRegistry(Registry):
 
         Returns
         -------
-        registry : `ButlerRegistry`
-            A new `ButlerRegistry` instance.
+        registry : `_ButlerRegistry`
+            A new `_ButlerRegistry` instance.
 
         Notes
         -----
-        This class will determine the concrete `ButlerRegistry` subclass to
+        This class will determine the concrete `_ButlerRegistry` subclass to
         use from configuration.  Each subclass should implement this method
         even if it can not create a registry.
         """
@@ -122,8 +122,8 @@ class ButlerRegistry(Registry):
         butlerRoot: ResourcePathExpression | None = None,
         writeable: bool = True,
         defaults: RegistryDefaults | None = None,
-    ) -> ButlerRegistry:
-        """Create `ButlerRegistry` subclass instance from ``config``.
+    ) -> _ButlerRegistry:
+        """Create `_ButlerRegistry` subclass instance from ``config``.
 
         Registry database must be initialized prior to calling this method.
 
@@ -141,12 +141,12 @@ class ButlerRegistry(Registry):
 
         Returns
         -------
-        registry : `ButlerRegistry` (subclass)
-            A new `ButlerRegistry` subclass instance.
+        registry : `_ButlerRegistry` (subclass)
+            A new `_ButlerRegistry` subclass instance.
 
         Notes
         -----
-        This class will determine the concrete `ButlerRegistry` subclass to
+        This class will determine the concrete `_ButlerRegistry` subclass to
         use from configuration.  Each subclass should implement this method.
         """
         # The base class implementation should trampoline to the correct
@@ -156,9 +156,9 @@ class ButlerRegistry(Registry):
         raise NotImplementedError()
 
     @abstractmethod
-    def copy(self, defaults: RegistryDefaults | None = None) -> ButlerRegistry:
-        """Create a new `ButlerRegistry` backed by the same data repository and
-        connection as this one, but independent defaults.
+    def copy(self, defaults: RegistryDefaults | None = None) -> _ButlerRegistry:
+        """Create a new `_ButlerRegistry` backed by the same data repository
+        and connection as this one, but independent defaults.
 
         Parameters
         ----------
@@ -169,8 +169,8 @@ class ButlerRegistry(Registry):
 
         Returns
         -------
-        copy : `ButlerRegistry`
-            A new `ButlerRegistry` instance with its own defaults.
+        copy : `_ButlerRegistry`
+            A new `_ButlerRegistry` instance with its own defaults.
 
         Notes
         -----
