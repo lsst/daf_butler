@@ -425,11 +425,11 @@ Few examples of valid expressions using some of the constructs:
 
     (visit = 100 OR visit = 101) AND exposure % 2 = 1
 
-    visit.datetime_begin > T'2020-03-30 12:20:33'
+    visit.timespan.begin > T'2020-03-30 12:20:33'
 
-    exposure.datetime_begin > T'58938.515'
+    exposure.timespan.begin > T'58938.515'
 
-    visit.datetime_end < T'mjd/58938.515/tai'
+    visit.timespan.end < T'mjd/58938.515/tai'
 
     ingest_date < T'2020-11-06 21:10:00'
 

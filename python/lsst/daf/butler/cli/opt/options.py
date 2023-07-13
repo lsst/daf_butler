@@ -277,9 +277,11 @@ order_by_option = MWOptionDecorator(
     "--order-by",
     help=unwrap(
         """One or more comma-separated names used to order records. Names can be dimension names,
-                metadata names optionally prefixed by a dimension name and dot, or
-                timestamp_begin/timestamp_end (with optional dimension name). To reverse ordering for a name
-                prefix it with a minus sign."""
+        metadata field names, or "timespan.begin" / "timespan.end" for temporal dimensions.
+        In some cases the dimension for a metadata field or timespan bound can be inferred, but usually
+        qualifying these with "<dimension>.<field>" is necessary.
+        To reverse ordering for a name, prefix it with a minus sign.
+        """
     ),
     multiple=True,
     callback=split_commas,
