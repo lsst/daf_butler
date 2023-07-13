@@ -2765,6 +2765,18 @@ class RegistryTests(ABC):
         self.assertTrue(messages)
         self.assertTrue(any("no-purpose" in message for message in messages))
 
+    def testQueryDataIdsExpressionError(self):
+        """Test error checking of 'where' expressions in queryDataIds."""
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        bind = {"time": astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")}
+        with self.assertRaisesRegex(LookupError, r"No dimension element with name 'foo' in 'foo\.bar'\."):
+            registry.queryDataIds(["detector"], where="foo.bar = 12")
+        with self.assertRaisesRegex(
+            LookupError, "Dimension element name cannot be inferred in this context."
+        ):
+            registry.queryDataIds(["detector"], where="timespan.end < time", bind=bind)
+
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""
         registry = self.makeRegistry()
@@ -2858,7 +2870,7 @@ class RegistryTests(ABC):
                 list(do_query().order_by(order_by))
 
         for order_by in ("undimension.name", "-undimension.name"):
-            with self.assertRaisesRegex(ValueError, "Unknown dimension element name 'undimension'"):
+            with self.assertRaisesRegex(ValueError, "Unknown dimension element 'undimension'"):
                 list(do_query().order_by(order_by))
 
         for order_by in ("attract", "-attract"):
@@ -2868,7 +2880,11 @@ class RegistryTests(ABC):
         with self.assertRaisesRegex(ValueError, "Metadata 'exposure_time' exists in more than one dimension"):
             list(do_query(("exposure", "visit")).order_by("exposure_time"))
 
-        with self.assertRaisesRegex(ValueError, "Timespan exists in more than one dimesion"):
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Timespan exists in more than one dimension element \(exposure, visit\); "
+            r"qualify timespan with specific dimension name\.",
+        ):
             list(do_query(("exposure", "visit")).order_by("timespan.begin"))
 
         with self.assertRaisesRegex(
@@ -2881,6 +2897,11 @@ class RegistryTests(ABC):
 
         with self.assertRaisesRegex(ValueError, "Field 'name' does not exist in 'tract'."):
             list(do_query("tract").order_by("tract.name"))
+
+        with self.assertRaisesRegex(
+            ValueError, r"Unknown dimension element 'timestamp'; perhaps you meant 'timespan.begin'\?"
+        ):
+            list(do_query("visit").order_by("timestamp.begin"))
 
     def testQueryDataIdsGovernorExceptions(self):
         """Test exceptions raised by queryDataIds() for incorrect governors."""
@@ -3000,6 +3021,14 @@ class RegistryTests(ABC):
         for order_by in ("attract", "-attract"):
             with self.assertRaisesRegex(ValueError, "Field 'attract' does not exist in 'detector'."):
                 list(do_query("detector").order_by(order_by))
+
+        for order_by in ("timestamp.begin", "-timestamp.begin"):
+            with self.assertRaisesRegex(
+                ValueError,
+                r"Element name mismatch: 'timestamp' instead of 'visit'; "
+                r"perhaps you meant 'timespan.begin'\?",
+            ):
+                list(do_query("visit").order_by(order_by))
 
     def testQueryDimensionRecordsExceptions(self):
         """Test exceptions raised by queryDimensionRecords()."""

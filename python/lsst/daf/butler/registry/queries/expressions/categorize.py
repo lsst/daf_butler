@@ -88,12 +88,17 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> tuple[Dimensi
         so at least its message should generally be propagated up to a context
         where the error can be interpreted by a human.
     """
-    table, sep, column = name.partition(".")
+    table, _, column = name.partition(".")
     if column:
         try:
             element = universe[table]
-        except KeyError as err:
-            raise LookupError(f"No dimension element with name '{table}'.") from err
+        except KeyError:
+            if table == "timespan" or table == "datetime" or table == "timestamp":
+                raise LookupError(
+                    "Dimension element name cannot be inferred in this context; "
+                    f"use <dimension>.timespan.{column} instead."
+                ) from None
+            raise LookupError(f"No dimension element with name {table!r} in {name!r}.") from None
         if isinstance(element, Dimension) and column == element.primaryKey.name:
             # Allow e.g. "visit.id = x" instead of just "visit = x"; this
             # can be clearer.
@@ -172,8 +177,9 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionEl
             field_name = name
         elif len(matches) > 1:
             raise ValueError(
-                f"Timespan exists in more than one dimesion element: {matches},"
-                " qualify timespan with specific dimension name."
+                "Timespan exists in more than one dimension element "
+                f"({', '.join(element.name for element in matches)}); "
+                "qualify timespan with specific dimension name."
             )
         else:
             raise ValueError(f"Cannot find any temporal dimension element for '{name}'.")
@@ -197,8 +203,9 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionEl
                 field_name = name
             elif len(match_pairs) > 1:
                 raise ValueError(
-                    f"Metadata '{name}' exists in more than one dimension element: "
-                    f"{[element for element, _ in match_pairs]}, qualify metadata name with dimension name."
+                    f"Metadata '{name}' exists in more than one dimension element "
+                    f"({', '.join(element.name for element, _ in match_pairs)}); "
+                    "qualify field name with dimension name."
                 )
             else:
                 raise ValueError(f"Metadata '{name}' cannot be found in any dimension.")
@@ -206,7 +213,11 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionEl
         # qualified name, must be a dimension element and a field
         elem_name, _, field_name = name.partition(".")
         if elem_name not in graph.elements.names:
-            raise ValueError(f"Unknown dimension element name '{elem_name}'")
+            if field_name == "begin" or field_name == "end":
+                raise ValueError(
+                    f"Unknown dimension element {elem_name!r}; perhaps you meant 'timespan.{field_name}'?"
+                )
+            raise ValueError(f"Unknown dimension element {elem_name!r}.")
         element = graph.elements[elem_name]
         if field_name in ("timespan.begin", "timespan.end"):
             if not element.temporal:
@@ -289,7 +300,11 @@ def categorizeElementOrderByName(element: DimensionElement, name: str) -> str | 
         # qualified name, must be a dimension element and a field
         elem_name, _, field_name = name.partition(".")
         if elem_name != element.name:
-            raise ValueError(f"Element name mismatch: '{elem_name}' instead of '{element}'")
+            if field_name == "begin" or field_name == "end":
+                extra = f"; perhaps you meant 'timespan.{field_name}'?"
+            else:
+                extra = "."
+            raise ValueError(f"Element name mismatch: '{elem_name}' instead of '{element}'{extra}")
         if field_name in ("timespan.begin", "timespan.end"):
             if not element.temporal:
                 raise ValueError(f"Cannot use '{field_name}' with non-temporal element '{element}'.")
