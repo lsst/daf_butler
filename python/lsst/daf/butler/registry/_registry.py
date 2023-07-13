@@ -106,13 +106,13 @@ class Registry(ABC):
         Notes
         -----
         This method is for backward compatibility only, until all clients
-        migrate to use new `~lsst.daf.butler.registry.RegistryFactory` factory
+        migrate to use new `~lsst.daf.butler.registry._RegistryFactory` factory
         class. Regular clients of registry class do not use this method, it is
         only used by tests in multiple packages.
         """
-        from ._registry_factory import RegistryFactory
+        from ._registry_factory import _RegistryFactory
 
-        return RegistryFactory(config).create_from_config(dimensionConfig, butlerRoot)
+        return _RegistryFactory(config).create_from_config(dimensionConfig, butlerRoot)
 
     @abstractmethod
     def isWriteable(self) -> bool:

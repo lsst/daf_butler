@@ -28,7 +28,7 @@ from contextlib import contextmanager
 
 import sqlalchemy
 from lsst.daf.butler import ddl
-from lsst.daf.butler.registry import RegistryFactory, _ButlerRegistry
+from lsst.daf.butler.registry import _ButlerRegistry, _RegistryFactory
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
@@ -204,9 +204,9 @@ class SqliteFileRegistryTests(RegistryTests):
         config = self.makeRegistryConfig()
         config["db"] = f"sqlite:///{filename}"
         if share_repo_with is None:
-            return RegistryFactory(config).create_from_config(butlerRoot=self.root)
+            return _RegistryFactory(config).create_from_config(butlerRoot=self.root)
         else:
-            return RegistryFactory(config).from_config(butlerRoot=self.root)
+            return _RegistryFactory(config).from_config(butlerRoot=self.root)
 
 
 class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -247,7 +247,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
             return None
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
-        return RegistryFactory(config).create_from_config()
+        return _RegistryFactory(config).create_from_config()
 
     def testMissingAttributes(self):
         """Test for instantiating a registry against outdated schema which
@@ -258,7 +258,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
         with self.assertRaises(LookupError):
-            RegistryFactory(config).from_config()
+            _RegistryFactory(config).from_config()
 
 
 class SqliteMemoryRegistryNameKeyCollMgrUUIDTestCase(unittest.TestCase, SqliteMemoryRegistryTests):

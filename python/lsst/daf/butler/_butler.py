@@ -86,8 +86,8 @@ from .registry import (
     Registry,
     RegistryConfig,
     RegistryDefaults,
-    RegistryFactory,
     _ButlerRegistry,
+    _RegistryFactory,
 )
 from .transfers import RepoExportContext
 
@@ -225,7 +225,7 @@ class Butler(LimitedButler):
                     butlerRoot = self._config.configDir
                 if writeable is None:
                     writeable = run is not None
-                self._registry = RegistryFactory(self._config).from_config(
+                self._registry = _RegistryFactory(self._config).from_config(
                     butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
                 )
                 self._datastore = Datastore.fromConfig(
@@ -463,7 +463,7 @@ class Butler(LimitedButler):
         # Create Registry and populate tables
         registryConfig = RegistryConfig(config.get("registry"))
         dimensionConfig = DimensionConfig(dimensionConfig)
-        RegistryFactory(registryConfig).create_from_config(
+        _RegistryFactory(registryConfig).create_from_config(
             dimensionConfig=dimensionConfig, butlerRoot=root_uri
         )
 

@@ -37,7 +37,7 @@ from lsst.daf.butler import (
     RegistryConfig,
     StorageClass,
 )
-from lsst.daf.butler.registry import RegistryFactory
+from lsst.daf.butler.registry import _RegistryFactory
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 from lsst.resources import ResourcePath
 
@@ -55,7 +55,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
         # Make a butler and import dimension definitions.
         registryConfig = RegistryConfig(self.config.get("registry"))
-        RegistryFactory(registryConfig).create_from_config(butlerRoot=self.root)
+        _RegistryFactory(registryConfig).create_from_config(butlerRoot=self.root)
         self.butler = Butler(self.config, writeable=True, run="RUN")
         self.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
 

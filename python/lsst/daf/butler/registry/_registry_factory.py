@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("RegistryFactory",)
+__all__ = ("_RegistryFactory",)
 
 from typing import TYPE_CHECKING
 
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
 
 
-class RegistryFactory:
+class _RegistryFactory:
     """Interface for creating and initializing Registry instances.
 
     Parameters
