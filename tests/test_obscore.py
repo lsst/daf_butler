@@ -262,7 +262,7 @@ class ObsCoreTests(TestCaseMixin):
 
     def test_schema(self):
         """Check how obscore schema is constructed"""
-        config = ObsCoreConfig(obs_collection="", dataset_types=[], facility_name="FACILITY")
+        config = ObsCoreConfig(obs_collection="", dataset_types={}, facility_name="FACILITY")
         schema = ObsCoreSchema(config, [])
         table_spec = schema.table_spec
         self.assertEqual(list(table_spec.fields.names), [col.name for col in _STATIC_COLUMNS])
@@ -271,7 +271,7 @@ class ObsCoreTests(TestCaseMixin):
         config = ObsCoreConfig(
             obs_collection="",
             extra_columns={"c1": 1, "c2": "string", "c3": {"template": "{calib_level}", "type": "float"}},
-            dataset_types=[],
+            dataset_types={},
             facility_name="FACILITY",
         )
         schema = ObsCoreSchema(config, [])
