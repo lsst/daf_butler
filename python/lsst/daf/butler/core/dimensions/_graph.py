@@ -28,12 +28,8 @@ from collections.abc import Iterable, Iterator, Mapping, Set
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils.classes import cached_getter, immutable
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from .._topology import TopologicalFamily, TopologicalSpace
 from ..json import from_json_pydantic, to_json_pydantic
@@ -46,7 +42,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
 
 
-class SerializedDimensionGraph(BaseModel):
+class SerializedDimensionGraph(_BaseModelCompat):
     """Simplified model of a `DimensionGraph` suitable for serialization."""
 
     names: list[str]

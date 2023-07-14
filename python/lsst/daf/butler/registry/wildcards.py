@@ -34,12 +34,8 @@ from types import EllipsisType
 from typing import Any
 
 from deprecated.sphinx import deprecated
+from lsst.daf.butler._compat import PYDANTIC_V2
 from lsst.utils.iteration import ensure_iterable
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from ..core import DatasetType
 from ..core.utils import globToRegex
@@ -262,12 +258,29 @@ class CategorizedWildcard:
     """
 
 
+if PYDANTIC_V2:
+    from pydantic import RootModel
+
+    class _CollectionSearch(RootModel, Sequence[str]):
+        root: tuple[str, ...]
+
+else:
+    from pydantic import BaseModel
+
+    class _CollectionSearch(BaseModel, Sequence[str]):
+        __root__: tuple[str, ...]
+
+        @property
+        def root(self) -> tuple[str, ...]:
+            return self.__root__
+
+
 @deprecated(
     reason="Tuples of string collection names are now preferred.  Will be removed after v26.",
     version="v25.0",
     category=FutureWarning,
 )
-class CollectionSearch(BaseModel, Sequence[str]):
+class CollectionSearch(_CollectionSearch):
     """An ordered search path of collections.
 
     The `fromExpression` method should almost always be used to construct
@@ -296,8 +309,6 @@ class CollectionSearch(BaseModel, Sequence[str]):
     `CollectionSearch` constructed from an equivalent expression, regardless of
     how different the original expressions appear.
     """
-
-    __root__: tuple[str, ...]
 
     @classmethod
     def fromExpression(cls, expression: Any) -> CollectionSearch:
@@ -342,31 +353,35 @@ class CollectionSearch(BaseModel, Sequence[str]):
         for name in wildcard.strings:
             if name not in deduplicated:
                 deduplicated.append(name)
-        return cls(__root__=tuple(deduplicated))
+        if PYDANTIC_V2:
+            model = cls(tuple(deduplicated))
+        else:
+            model = cls(__root__=tuple(deduplicated))
+        return model
 
     def explicitNames(self) -> Iterator[str]:
         """Iterate over collection names that were specified explicitly."""
-        yield from self.__root__
+        yield from self.root
 
     def __iter__(self) -> Iterator[str]:  # type: ignore
-        yield from self.__root__
+        yield from self.root
 
     def __len__(self) -> int:
-        return len(self.__root__)
+        return len(self.root)
 
     def __getitem__(self, index: Any) -> str:
-        return self.__root__[index]
+        return self.root[index]
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, CollectionSearch):
-            return self.__root__ == other.__root__
+            return self.root == other.root
         return False
 
     def __str__(self) -> str:
         return "[{}]".format(", ".join(self))
 
     def __repr__(self) -> str:
-        return f"CollectionSearch({self.__root__!r})"
+        return f"CollectionSearch({self.root!r})"
 
 
 @dataclasses.dataclass(frozen=True)

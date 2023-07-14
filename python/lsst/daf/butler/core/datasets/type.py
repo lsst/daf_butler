@@ -29,10 +29,8 @@ from copy import deepcopy
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar
 
-try:
-    from pydantic.v1 import BaseModel, StrictBool, StrictStr
-except ModuleNotFoundError:
-    from pydantic import BaseModel, StrictBool, StrictStr  # type: ignore
+from lsst.daf.butler._compat import _BaseModelCompat
+from pydantic import StrictBool, StrictStr
 
 from ..configSupport import LookupKey
 from ..dimensions import DimensionGraph, SerializedDimensionGraph
@@ -51,7 +49,7 @@ def _safeMakeMappingProxyType(data: Mapping | None) -> Mapping:
     return MappingProxyType(data)
 
 
-class SerializedDatasetType(BaseModel):
+class SerializedDatasetType(_BaseModelCompat):
     """Simplified model of a `DatasetType` suitable for serialization."""
 
     name: StrictStr

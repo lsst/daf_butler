@@ -30,13 +30,9 @@ import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from .datasets import DatasetId
 from .dimensions import DimensionUniverse
@@ -49,7 +45,7 @@ if TYPE_CHECKING:
 _Record = dict[str, Any]
 
 
-class SerializedDatastoreRecordData(BaseModel):
+class SerializedDatastoreRecordData(_BaseModelCompat):
     """Representation of a `DatastoreRecordData` suitable for serialization."""
 
     dataset_ids: list[uuid.UUID]

@@ -35,12 +35,9 @@ import uuid
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils.classes import immutable
-
-try:
-    from pydantic.v1 import BaseModel, StrictStr, validator
-except ModuleNotFoundError:
-    from pydantic import BaseModel, StrictStr, validator  # type: ignore
+from pydantic import StrictStr, validator
 
 from ..configSupport import LookupKey
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
@@ -173,7 +170,7 @@ class DatasetIdFactory:
 _serializedDatasetRefFieldsSet = {"id", "datasetType", "dataId", "run", "component"}
 
 
-class SerializedDatasetRef(BaseModel):
+class SerializedDatasetRef(_BaseModelCompat):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
     id: uuid.UUID

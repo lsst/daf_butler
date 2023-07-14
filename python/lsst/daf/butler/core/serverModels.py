@@ -33,12 +33,9 @@ import re
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils.iteration import ensure_iterable
-
-try:
-    from pydantic.v1 import BaseModel, Field, validator
-except ModuleNotFoundError:
-    from pydantic import BaseModel, Field, validator  # type: ignore
+from pydantic import Field, validator
 
 from .dimensions import DataIdValue, SerializedDataCoordinate
 from .utils import globToRegex
@@ -53,7 +50,7 @@ BindType = dict[str, ScalarType]
 SimpleDataId = Mapping[str, DataIdValue]
 
 
-class ExpressionQueryParameter(BaseModel):
+class ExpressionQueryParameter(_BaseModelCompat):
     """Represents a specification for an expression query.
 
     Generally used for collection or dataset type expressions.  This
@@ -198,7 +195,7 @@ KeywordArgs = Field(
 )
 
 
-class QueryBaseModel(BaseModel):
+class QueryBaseModel(_BaseModelCompat):
     """Base model for all query models."""
 
     @validator("keyword_args", check_fields=False)

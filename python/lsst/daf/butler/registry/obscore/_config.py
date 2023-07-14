@@ -35,10 +35,8 @@ import enum
 from collections.abc import Mapping
 from typing import Any
 
-try:
-    from pydantic.v1 import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator
-except ModuleNotFoundError:
-    from pydantic import BaseModel, StrictBool, StrictFloat, StrictInt, StrictStr, validator  # type: ignore
+from lsst.daf.butler._compat import _BaseModelCompat
+from pydantic import StrictBool, StrictFloat, StrictInt, StrictStr, validator
 
 
 class ExtraColumnType(str, enum.Enum):
@@ -50,7 +48,7 @@ class ExtraColumnType(str, enum.Enum):
     string = "string"
 
 
-class ExtraColumnConfig(BaseModel):
+class ExtraColumnConfig(_BaseModelCompat):
     """Configuration class describing specification of additional column in
     obscore table.
     """
@@ -68,7 +66,7 @@ class ExtraColumnConfig(BaseModel):
     """Documentation string for this column."""
 
 
-class DatasetTypeConfig(BaseModel):
+class DatasetTypeConfig(_BaseModelCompat):
     """Configuration describing dataset type-related options."""
 
     dataproduct_type: str
@@ -107,7 +105,7 @@ class DatasetTypeConfig(BaseModel):
     values, or ExtraColumnConfig mappings."""
 
 
-class SpatialPluginConfig(BaseModel):
+class SpatialPluginConfig(_BaseModelCompat):
     """Configuration class for a spatial plugin."""
 
     cls: str
@@ -117,7 +115,7 @@ class SpatialPluginConfig(BaseModel):
     """Configuration object passed to plugin ``initialize()`` method."""
 
 
-class ObsCoreConfig(BaseModel):
+class ObsCoreConfig(_BaseModelCompat):
     """Configuration which controls conversion of Registry datasets into
     obscore records.
 

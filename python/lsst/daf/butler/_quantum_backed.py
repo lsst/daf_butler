@@ -31,12 +31,8 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from deprecated.sphinx import deprecated
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.resources import ResourcePathExpression
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from ._butlerConfig import ButlerConfig
 from ._deferredDatasetHandle import DeferredDatasetHandle
@@ -597,7 +593,7 @@ class QuantumBackedButler(LimitedButler):
         )
 
 
-class QuantumProvenanceData(BaseModel):
+class QuantumProvenanceData(_BaseModelCompat):
     """A serializable struct for per-quantum provenance information and
     datastore records.
 

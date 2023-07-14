@@ -34,12 +34,8 @@ from collections.abc import Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, overload
 
 from deprecated.sphinx import deprecated
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.sphgeom import IntersectionRegion, Region
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from ..json import from_json_pydantic, to_json_pydantic
 from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping
@@ -65,7 +61,7 @@ DataCoordinate or other data ID.
 """
 
 
-class SerializedDataCoordinate(BaseModel):
+class SerializedDataCoordinate(_BaseModelCompat):
     """Simplified model for serializing a `DataCoordinate`."""
 
     dataId: dict[str, DataIdValue]

@@ -28,13 +28,9 @@ import warnings
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
 from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
@@ -73,7 +69,7 @@ def _reconstructDatasetRef(
     return rebuiltDatasetRef
 
 
-class SerializedQuantum(BaseModel):
+class SerializedQuantum(_BaseModelCompat):
     """Simplified model of a `Quantum` suitable for serialization."""
 
     taskName: str | None = None
