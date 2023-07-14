@@ -38,14 +38,17 @@ class MockProgressBar:
 
     Parameters
     ----------
-    iterable : `Iterable`, optional
+    iterable : `Iterable`
         Iterable to wrap, or `None`.
+    total : `int` or `None`
+        Total value passed at progress-bar construction.
     """
 
-    def __init__(self, iterable):
+    def __init__(self, iterable, total):
         self._iterable = iterable
         self._current = 0
         self.reported = [self._current]
+        self.total = total
         MockProgressBar.last = self
 
     last = None
@@ -71,7 +74,7 @@ class MockProgressHandler(ProgressHandler):
 
     @contextmanager
     def get_progress_bar(self, iterable, desc, total, level):
-        yield MockProgressBar(iterable)
+        yield MockProgressBar(iterable, total=total)
 
 
 class ClickProgressHandlerTestCase(unittest.TestCase):
@@ -180,23 +183,101 @@ class MockedProgressHandlerTestCase(unittest.TestCase):
                 bar.update(2)
         self.assertEqual(list(range(0, 12, 2)), bar.reported)
 
-    def test_iter_chunks(self):
-        """Test using `Progress.iter_chunks`."""
+    def test_iter_chunks_fully_sized(self):
+        """Test using `Progress.iter_chunks` with a sized iterable of sized
+        chunks.
+        """
         iterable = [list(range(2)), list(range(3))]
         seen = []
         for chunk in self.progress.iter_chunks(iterable):
             seen.extend(chunk)
         self.assertEqual(seen, iterable[0] + iterable[1])
         self.assertEqual(MockProgressBar.last.reported, [0, 2, 5])
+        self.assertEqual(MockProgressBar.last.total, 5)
 
-    def test_iter_item_chunks(self):
-        """Test using `Progress.iter_item_chunks`."""
+    def test_iter_chunks_with_total(self):
+        """Test using `Progress.iter_chunks` with total provided and
+        sized chunks.
+        """
+        iterable = [list(range(2)), list(range(3))]
+        seen = []
+        for chunk in self.progress.iter_chunks(iter(iterable), total=5):
+            seen.extend(chunk)
+        self.assertEqual(seen, iterable[0] + iterable[1])
+        self.assertEqual(MockProgressBar.last.reported, [0, 2, 5])
+        self.assertEqual(MockProgressBar.last.total, 5)
+
+    def test_iter_chunks_total_false(self):
+        """Test using `Progress.iter_chunks` with total=False and non-sized
+        chunks.  This should display progress with the number of
+        chunks.
+        """
+        iterable = [iter(range(2)), iter(range(3))]
+        seen = []
+        for chunk in self.progress.iter_chunks(iterable, total=False):
+            seen.extend(chunk)
+        self.assertEqual(seen, list(range(2)) + list(range(3)))
+        self.assertEqual(MockProgressBar.last.reported, [0, 1, 2])
+        self.assertEqual(MockProgressBar.last.total, 2)
+
+    def test_iter_chunks_not_sized(self):
+        """Test using `Progress.iter_chunks` with an unsized iterable."""
+        iterable = [iter(range(2)), iter(range(3))]
+        seen = []
+        for chunk in self.progress.iter_chunks(iter(iterable)):
+            seen.extend(chunk)
+        self.assertEqual(seen, list(range(2)) + list(range(3)))
+        self.assertEqual(MockProgressBar.last.reported, [0, 1, 2])
+        self.assertEqual(MockProgressBar.last.total, None)
+
+    def test_iter_item_chunks_fully_sized(self):
+        """Test using `Progress.iter_item_chunks` with a sized iterable of
+        sized chunks.
+        """
         mapping = {"x": list(range(2)), "y": list(range(3))}
         seen = {}
         for key, chunk in self.progress.iter_item_chunks(mapping.items()):
             seen[key] = chunk
         self.assertEqual(seen, mapping)
         self.assertEqual(MockProgressBar.last.reported, [0, 2, 5])
+        self.assertEqual(MockProgressBar.last.total, 5)
+
+    def test_iter_item_chunks_with_total(self):
+        """Test using `Progress.iter_item_chunks` with total provided and
+        sized chunks.
+        """
+        mapping = {"x": list(range(2)), "y": list(range(3))}
+        seen = {}
+        for key, chunk in self.progress.iter_item_chunks(iter(mapping.items()), total=5):
+            seen[key] = chunk
+        self.assertEqual(seen, mapping)
+        self.assertEqual(MockProgressBar.last.reported, [0, 2, 5])
+        self.assertEqual(MockProgressBar.last.total, 5)
+
+    def test_iter_item_chunks_total_false(self):
+        """Test using `Progress.iter_item_chunks` with total=False and
+        non-sized chunks.  This should display progress with the number of
+        chunks.
+        """
+        mapping = {"x": iter(range(2)), "y": iter(range(3))}
+        seen = {}
+        for key, chunk in self.progress.iter_item_chunks(mapping.items(), total=False):
+            seen[key] = list(chunk)
+        self.assertEqual(seen, {"x": list(range(2)), "y": list(range(3))})
+        self.assertEqual(MockProgressBar.last.reported, [0, 1, 2])
+        self.assertEqual(MockProgressBar.last.total, 2)
+
+    def test_iter_item_chunks_not_sized(self):
+        """Test using `Progress.iter_item_chunks` with an unsized iterable of
+        non-sized chunks.
+        """
+        mapping = {"x": iter(range(2)), "y": iter(range(3))}
+        seen = {}
+        for key, chunk in self.progress.iter_item_chunks(iter(mapping.items())):
+            seen[key] = list(chunk)
+        self.assertEqual(seen, {"x": list(range(2)), "y": list(range(3))})
+        self.assertEqual(MockProgressBar.last.reported, [0, 1, 2])
+        self.assertEqual(MockProgressBar.last.total, None)
 
 
 if __name__ == "__main__":
