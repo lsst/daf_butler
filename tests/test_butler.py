@@ -1679,8 +1679,8 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Now need to hack the registry dataset type definition.
         # There is no API for this.
-        assert isinstance(butler.registry, SqlRegistry)
-        manager = butler.registry._managers.datasets
+        assert isinstance(butler._registry, SqlRegistry)
+        manager = butler._registry._managers.datasets
         assert hasattr(manager, "_db") and hasattr(manager, "_static")
         manager._db.update(
             manager._static.dataset_type,

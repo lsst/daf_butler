@@ -51,6 +51,7 @@ from ._butlerRepoIndex import ButlerRepoIndex
 from ._dataset_existence import DatasetExistence
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
+from ._registry_shim import RegistryShim
 from .core import (
     Config,
     ConfigSubset,
@@ -85,6 +86,8 @@ from .registry import (
     Registry,
     RegistryConfig,
     RegistryDefaults,
+    _ButlerRegistry,
+    _RegistryFactory,
 )
 from .transfers import RepoExportContext
 
@@ -209,7 +212,7 @@ class Butler(LimitedButler):
                 raise TypeError(
                     "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
                 )
-            self.registry = butler.registry.copy(defaults)
+            self._registry = butler._registry.copy(defaults)
             self._datastore = butler._datastore
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
@@ -222,11 +225,11 @@ class Butler(LimitedButler):
                     butlerRoot = self._config.configDir
                 if writeable is None:
                     writeable = run is not None
-                self.registry = Registry.fromConfig(
-                    self._config, butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
+                self._registry = _RegistryFactory(self._config).from_config(
+                    butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
                 )
                 self._datastore = Datastore.fromConfig(
-                    self._config, self.registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
+                    self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
                 )
                 self.storageClasses = StorageClassFactory()
                 self.storageClasses.addFromConfig(self._config)
@@ -245,6 +248,8 @@ class Butler(LimitedButler):
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
 
+        self._registry_shim = RegistryShim(self)
+
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
 
@@ -256,7 +261,7 @@ class Butler(LimitedButler):
     def _retrieve_dataset_type(self, name: str) -> DatasetType | None:
         """Return DatasetType defined in registry given dataset type name."""
         try:
-            return self.registry.getDatasetType(name)
+            return self._registry.getDatasetType(name)
         except MissingDatasetTypeError:
             return None
 
@@ -458,7 +463,9 @@ class Butler(LimitedButler):
         # Create Registry and populate tables
         registryConfig = RegistryConfig(config.get("registry"))
         dimensionConfig = DimensionConfig(dimensionConfig)
-        Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root_uri)
+        _RegistryFactory(registryConfig).create_from_config(
+            dimensionConfig=dimensionConfig, butlerRoot=root_uri
+        )
 
         log.verbose("Wrote new Butler configuration file to %s", configURI)
 
@@ -517,19 +524,19 @@ class Butler(LimitedButler):
                 self._config,
                 self.collections,
                 self.run,
-                self.registry.defaults.dataId.byName(),
-                self.registry.isWriteable(),
+                self._registry.defaults.dataId.byName(),
+                self._registry.isWriteable(),
             ),
         )
 
     def __str__(self) -> str:
         return "Butler(collections={}, run={}, datastore='{}', registry='{}')".format(
-            self.collections, self.run, self._datastore, self.registry
+            self.collections, self.run, self._datastore, self._registry
         )
 
     def isWriteable(self) -> bool:
         """Return `True` if this `Butler` supports write operations."""
-        return self.registry.isWriteable()
+        return self._registry.isWriteable()
 
     @contextlib.contextmanager
     def transaction(self) -> Iterator[None]:
@@ -537,7 +544,7 @@ class Butler(LimitedButler):
 
         Transactions can be nested.
         """
-        with self.registry.transaction():
+        with self._registry.transaction():
             with self._datastore.transaction():
                 yield
 
@@ -602,11 +609,11 @@ class Butler(LimitedButler):
             if isinstance(datasetRefOrType, DatasetType):
                 externalDatasetType = datasetRefOrType
             else:
-                internalDatasetType = self.registry.getDatasetType(datasetRefOrType)
+                internalDatasetType = self._registry.getDatasetType(datasetRefOrType)
 
         # Check that they are self-consistent
         if externalDatasetType is not None:
-            internalDatasetType = self.registry.getDatasetType(externalDatasetType.name)
+            internalDatasetType = self._registry.getDatasetType(externalDatasetType.name)
             if externalDatasetType != internalDatasetType:
                 # We can allow differences if they are compatible, depending
                 # on whether this is a get or a put. A get requires that
@@ -882,7 +889,7 @@ class Butler(LimitedButler):
                     )
                     # Get the actual record and compare with these values.
                     try:
-                        recs = list(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId))
+                        recs = list(self._registry.queryDimensionRecords(dimensionName, dataId=newDataId))
                     except DataIdError:
                         raise ValueError(
                             f"Could not find dimension '{dimensionName}'"
@@ -911,7 +918,7 @@ class Butler(LimitedButler):
 
                 # Hopefully we get a single record that matches
                 records = set(
-                    self.registry.queryDimensionRecords(
+                    self._registry.queryDimensionRecords(
                         dimensionName, dataId=newDataId, where=where, bind=bind, **kwargs
                     )
                 )
@@ -927,7 +934,7 @@ class Butler(LimitedButler):
                             and "visit_system" in self.dimensions["instrument"].metadata
                         ):
                             instrument_records = list(
-                                self.registry.queryDimensionRecords(
+                                self._registry.queryDimensionRecords(
                                     "instrument",
                                     dataId=newDataId,
                                     **kwargs,
@@ -943,7 +950,7 @@ class Butler(LimitedButler):
                                 # visit_system_membership records.
                                 for rec in records:
                                     membership = list(
-                                        self.registry.queryDimensionRecords(
+                                        self._registry.queryDimensionRecords(
                                             # Use bind to allow zero results.
                                             # This is a fully-specified query.
                                             "visit_system_membership",
@@ -1055,21 +1062,21 @@ class Butler(LimitedButler):
             # dimensions that provide temporal information for a validity-range
             # lookup.
             dataId = DataCoordinate.standardize(
-                dataId, universe=self.dimensions, defaults=self.registry.defaults.dataId, **kwargs
+                dataId, universe=self.dimensions, defaults=self._registry.defaults.dataId, **kwargs
             )
             if dataId.graph.temporal:
-                dataId = self.registry.expandDataId(dataId)
+                dataId = self._registry.expandDataId(dataId)
                 timespan = dataId.timespan
         else:
             # Standardize the data ID to just the dimensions of the dataset
             # type instead of letting registry.findDataset do it, so we get the
             # result even if no dataset is found.
             dataId = DataCoordinate.standardize(
-                dataId, graph=datasetType.dimensions, defaults=self.registry.defaults.dataId, **kwargs
+                dataId, graph=datasetType.dimensions, defaults=self._registry.defaults.dataId, **kwargs
             )
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
+        ref = self._registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
         if ref is None:
             if predict:
                 if run is None:
@@ -1079,7 +1086,7 @@ class Butler(LimitedButler):
                 return DatasetRef(datasetType, dataId, run=run)
             else:
                 if collections is None:
-                    collections = self.registry.defaults.collections
+                    collections = self._registry.defaults.collections
                 raise LookupError(
                     f"Dataset {datasetType.name} with data ID {dataId} "
                     f"could not be found in collections {collections}."
@@ -1160,7 +1167,7 @@ class Butler(LimitedButler):
             # dataset type and DataId, then _importDatasets will do nothing and
             # just return an original ref. We have to raise in this case, there
             # is a datastore check below for that.
-            self.registry._importDatasets([datasetRefOrType], expand=True)
+            self._registry._importDatasets([datasetRefOrType], expand=True)
             # Before trying to write to the datastore check that it does not
             # know this dataset. This is prone to races, of course.
             if self._datastore.knows(datasetRefOrType):
@@ -1183,8 +1190,8 @@ class Butler(LimitedButler):
         dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
 
         # Add Registry Dataset entry.
-        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
-        (ref,) = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
+        dataId = self._registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
+        (ref,) = self._registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
         self._datastore.put(obj, ref)
 
         return ref
@@ -1622,7 +1629,7 @@ class Butler(LimitedButler):
             if data_id is not None:
                 warnings.warn("A DataID should not be specified with DatasetRef", stacklevel=2)
             ref = dataset_ref_or_type
-            registry_ref = self.registry.getDataset(dataset_ref_or_type.id)
+            registry_ref = self._registry.getDataset(dataset_ref_or_type.id)
             if registry_ref is not None:
                 existence |= DatasetExistence.RECORDED
 
@@ -1692,7 +1699,7 @@ class Butler(LimitedButler):
 
         # Registry does not have a bulk API to check for a ref.
         for ref in refs:
-            registry_ref = self.registry.getDataset(ref.id)
+            registry_ref = self._registry.getDataset(ref.id)
             if registry_ref is not None:
                 # It is possible, albeit unlikely, that the given ref does
                 # not match the one in registry even though the UUID matches.
@@ -1769,7 +1776,7 @@ class Butler(LimitedButler):
         """
         # A resolved ref may be given that is not known to this butler.
         if isinstance(datasetRefOrType, DatasetRef):
-            ref = self.registry.getDataset(datasetRefOrType.id)
+            ref = self._registry.getDataset(datasetRefOrType.id)
             if ref is None:
                 raise LookupError(
                     f"Resolved DatasetRef with id {datasetRefOrType.id} is not known to registry."
@@ -1804,18 +1811,18 @@ class Butler(LimitedButler):
         names = list(names)
         refs: list[DatasetRef] = []
         for name in names:
-            collectionType = self.registry.getCollectionType(name)
+            collectionType = self._registry.getCollectionType(name)
             if collectionType is not CollectionType.RUN:
                 raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
-            refs.extend(self.registry.queryDatasets(..., collections=name, findFirst=True))
+            refs.extend(self._registry.queryDatasets(..., collections=name, findFirst=True))
         with self._datastore.transaction():
-            with self.registry.transaction():
+            with self._registry.transaction():
                 if unstore:
                     self._datastore.trash(refs)
                 else:
                     self._datastore.forget(refs)
                 for name in names:
-                    self.registry.removeCollection(name)
+                    self._registry.removeCollection(name)
         if unstore:
             # Point of no return for removing artifacts
             self._datastore.emptyTrash()
@@ -1843,7 +1850,7 @@ class Butler(LimitedButler):
             if not tags:
                 raise TypeError("No tags provided but disassociate=True.")
             for tag in tags:
-                collectionType = self.registry.getCollectionType(tag)
+                collectionType = self._registry.getCollectionType(tag)
                 if collectionType is not CollectionType.TAGGED:
                     raise TypeError(
                         f"Cannot disassociate from collection '{tag}' "
@@ -1864,15 +1871,15 @@ class Butler(LimitedButler):
         # but shouldn't change them), and hence all operations here are
         # Registry operations.
         with self._datastore.transaction():
-            with self.registry.transaction():
+            with self._registry.transaction():
                 if unstore:
                     self._datastore.trash(refs)
                 if purge:
-                    self.registry.removeDatasets(refs)
+                    self._registry.removeDatasets(refs)
                 elif disassociate:
                     assert tags, "Guaranteed by earlier logic in this function."
                     for tag in tags:
-                        self.registry.disassociate(tag, refs)
+                        self._registry.disassociate(tag, refs)
         # We've exited the Registry transaction, and apparently committed.
         # (if there was an exception, everything rolled back, and it's as if
         # nothing happened - and we never get here).
@@ -2041,7 +2048,7 @@ class Butler(LimitedButler):
             # Import the refs and expand the DataCoordinates since we can't
             # guarantee that they are expanded and Datastore will need
             # the records.
-            imported_refs = self.registry._importDatasets(refs_to_import, expand=True)
+            imported_refs = self._registry._importDatasets(refs_to_import, expand=True)
             assert set(imported_refs) == set(refs_to_import)
 
             # Replace all the refs in the FileDataset with expanded versions.
@@ -2138,7 +2145,7 @@ class Butler(LimitedButler):
             backend = BackendClass(stream, universe=self.dimensions)
             try:
                 helper = RepoExportContext(
-                    self.registry, self._datastore, backend=backend, directory=directory, transfer=transfer
+                    self._registry, self._datastore, backend=backend, directory=directory, transfer=transfer
                 )
                 yield helper
             except BaseException:
@@ -2228,7 +2235,7 @@ class Butler(LimitedButler):
         )
 
         def doImport(importStream: TextIO | ResourceHandleProtocol) -> None:
-            backend = BackendClass(importStream, self.registry)  # type: ignore[call-arg]
+            backend = BackendClass(importStream, self._registry)  # type: ignore[call-arg]
             backend.register()
             with self.transaction():
                 backend.load(
@@ -2348,11 +2355,11 @@ class Butler(LimitedButler):
                 # on to find additional inconsistent dataset types
                 # might result in additional unwanted dataset types being
                 # registered.
-                if self.registry.registerDatasetType(datasetType):
+                if self._registry.registerDatasetType(datasetType):
                     newly_registered_dataset_types.add(datasetType)
             else:
                 # If the dataset type is missing, let it fail immediately.
-                target_dataset_type = self.registry.getDatasetType(datasetType.name)
+                target_dataset_type = self._registry.getDatasetType(datasetType.name)
                 if target_dataset_type != datasetType:
                     raise ConflictingDefinitionError(
                         "Source butler dataset type differs from definition"
@@ -2407,7 +2414,7 @@ class Butler(LimitedButler):
                     # Assume that if the record is already present that we can
                     # use it without having to check that the record metadata
                     # is consistent.
-                    self.registry.insertDimensionData(element, *records, skip_existing=True)
+                    self._registry.insertDimensionData(element, *records, skip_existing=True)
 
             n_imported = 0
             for (datasetType, run), refs_to_import in progress.iter_item_chunks(
@@ -2419,7 +2426,7 @@ class Butler(LimitedButler):
                     run_doc = None
                     if registry := getattr(source_butler, "registry", None):
                         run_doc = registry.getCollectionDocumentation(run)
-                    registered = self.registry.registerRun(run, doc=run_doc)
+                    registered = self._registry.registerRun(run, doc=run_doc)
                     handled_collections.add(run)
                     if registered:
                         log.log(VERBOSE, "Creating output run %s", run)
@@ -2435,7 +2442,7 @@ class Butler(LimitedButler):
 
                 # Assume we are using UUIDs and the source refs will match
                 # those imported.
-                imported_refs = self.registry._importDatasets(refs_to_import, expand=False)
+                imported_refs = self._registry._importDatasets(refs_to_import, expand=False)
                 assert set(imported_refs) == set(refs_to_import)
                 n_imported += len(imported_refs)
 
@@ -2493,9 +2500,9 @@ class Butler(LimitedButler):
             is configured.
         """
         if datasetTypeNames:
-            datasetTypes = [self.registry.getDatasetType(name) for name in datasetTypeNames]
+            datasetTypes = [self._registry.getDatasetType(name) for name in datasetTypeNames]
         else:
-            datasetTypes = list(self.registry.queryDatasetTypes())
+            datasetTypes = list(self._registry.queryDatasetTypes())
 
         # filter out anything from the ignore list
         if ignore:
@@ -2513,7 +2520,7 @@ class Butler(LimitedButler):
         # Find all the registered instruments (if "instrument" is in the
         # universe).
         if "instrument" in self.dimensions:
-            instruments = {record.name for record in self.registry.queryDimensionRecords("instrument")}
+            instruments = {record.name for record in self._registry.queryDimensionRecords("instrument")}
 
             for datasetType in datasetTypes:
                 if "instrument" in datasetType.dimensions:
@@ -2563,7 +2570,7 @@ class Butler(LimitedButler):
                     pass
                 else:
                     try:
-                        self.registry.getDatasetType(key.name)
+                        self._registry.getDatasetType(key.name)
                     except KeyError:
                         if logFailures:
                             log.critical("Key '%s' does not correspond to a DatasetType or StorageClass", key)
@@ -2612,7 +2619,7 @@ class Butler(LimitedButler):
         by assigning a new `RegistryDefaults` instance to
         ``self.registry.defaults``.
         """
-        return self.registry.defaults.collections
+        return self._registry.defaults.collections
 
     @property
     def run(self) -> str | None:
@@ -2624,15 +2631,27 @@ class Butler(LimitedButler):
         assigning a new `RegistryDefaults` instance to
         ``self.registry.defaults``.
         """
-        return self.registry.defaults.run
+        return self._registry.defaults.run
+
+    @property
+    def registry(self) -> Registry:
+        """The object that manages dataset metadata and relationships
+        (`Registry`).
+
+        Many operations that don't involve reading or writing butler datasets
+        are accessible only via `Registry` methods. Eventually these methods
+        will be replaced by equivalent `Butler` methods.
+        """
+        return self._registry_shim
 
     @property
     def dimensions(self) -> DimensionUniverse:
         # Docstring inherited.
-        return self.registry.dimensions
+        return self._registry.dimensions
 
-    registry: Registry
-    """The object that manages dataset metadata and relationships (`Registry`).
+    _registry: _ButlerRegistry
+    """The object that manages dataset metadata and relationships
+    (`_ButlerRegistry`).
 
     Most operations that don't involve reading or writing butler datasets are
     accessible only via `Registry` methods.

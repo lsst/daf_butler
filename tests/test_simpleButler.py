@@ -34,17 +34,8 @@ except ImportError:
     np = None
 
 import astropy.time
-from lsst.daf.butler import (
-    Butler,
-    ButlerConfig,
-    CollectionType,
-    DatasetId,
-    DatasetRef,
-    DatasetType,
-    Registry,
-    Timespan,
-)
-from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults
+from lsst.daf.butler import Butler, ButlerConfig, CollectionType, DatasetId, DatasetRef, DatasetType, Timespan
+from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, _RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -80,7 +71,7 @@ class SimpleButlerTestCase(unittest.TestCase):
 
         # have to make a registry first
         registryConfig = RegistryConfig(config.get("registry"))
-        Registry.createFromConfig(registryConfig)
+        _RegistryFactory(registryConfig).create_from_config()
 
         butler = Butler(config, **kwargs)
         DatastoreMock.apply(butler)
@@ -286,7 +277,6 @@ class SimpleButlerTestCase(unittest.TestCase):
 
         # Create a numpy integer to check that works fine
         detector_np = np.int64(2) if np else 2
-        print(type(detector_np))
 
         # Try to get it using different variations of dataId + keyword
         # arguments

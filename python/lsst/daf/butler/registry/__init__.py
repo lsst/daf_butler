@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from . import interfaces, managers, queries, wildcards
+from ._butler_registry import _ButlerRegistry
 from ._collection_summary import *
 from ._collectionType import *
 from ._config import *
@@ -27,6 +28,7 @@ from ._dbAuth import *
 from ._defaults import *
 from ._exceptions import *
 from ._registry import *
+from ._registry_factory import *
 from .wildcards import CollectionSearch
 
 # Some modules intentionally not imported, either because they are purely

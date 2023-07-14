@@ -49,6 +49,7 @@ from ...core import (
     DataCoordinate,
     DataCoordinateSet,
     DatasetAssociation,
+    DatasetIdFactory,
     DatasetIdGenEnum,
     DatasetRef,
     DatasetType,
@@ -3090,7 +3091,7 @@ class RegistryTests(ABC):
         in its API.
         """
         registry = self.makeRegistry()
-        factory = registry.datasetIdFactory
+        factory = DatasetIdFactory()
         dataset_type = DatasetType(
             "datasetType",
             dimensions=["detector", "instrument"],
