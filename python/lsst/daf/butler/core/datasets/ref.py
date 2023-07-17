@@ -33,9 +33,9 @@ import enum
 import sys
 import uuid
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeAlias, runtime_checkable
 
-from lsst.daf.butler._compat import _BaseModelCompat
+from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.classes import immutable
 from pydantic import StrictStr, validator
 
@@ -221,22 +221,34 @@ class SerializedDatasetRef(_BaseModelCompat):
 
         This method should only be called when the inputs are trusted.
         """
-        node = SerializedDatasetRef.__new__(cls)
-        setter = object.__setattr__
-        setter(node, "id", uuid.UUID(id))
-        setter(
-            node,
-            "datasetType",
-            datasetType if datasetType is None else SerializedDatasetType.direct(**datasetType),
+        serialized_datasetType = (
+            SerializedDatasetType.direct(**datasetType) if datasetType is not None else None
         )
-        setter(node, "dataId", dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
-        setter(node, "run", sys.intern(run))
-        setter(node, "component", component)
-        setter(node, "__fields_set__", _serializedDatasetRefFieldsSet)
+        serialized_dataId = SerializedDataCoordinate.direct(**dataId) if dataId is not None else None
+
+        if PYDANTIC_V2:
+            node = cls.model_construct(
+                _fields_set=_serializedDatasetRefFieldsSet,
+                id=uuid.UUID(id),
+                datasetType=serialized_datasetType,
+                dataId=serialized_dataId,
+                run=sys.intern(run),
+                component=component,
+            )
+        else:
+            node = SerializedDatasetRef.__new__(cls)
+            setter = object.__setattr__
+            setter(node, "id", uuid.UUID(id))
+            setter(node, "datasetType", serialized_datasetType)
+            setter(node, "dataId", serialized_dataId)
+            setter(node, "run", sys.intern(run))
+            setter(node, "component", component)
+            setter(node, "__fields_set__", _serializedDatasetRefFieldsSet)
+
         return node
 
 
-DatasetId = uuid.UUID
+DatasetId: TypeAlias = uuid.UUID
 """A type-annotation alias for dataset ID providing typing flexibility.
 """
 

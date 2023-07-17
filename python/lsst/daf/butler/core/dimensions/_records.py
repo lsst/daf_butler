@@ -180,16 +180,22 @@ class SerializedDimensionRecord(_BaseModelCompat):
         cache = PersistenceContextVars.serializedDimensionRecordMapping.get()
         if cache is not None and (result := cache.get(key)) is not None:
             return result
-        node = SerializedDimensionRecord.__new__(cls)
-        setter = object.__setattr__
-        setter(node, "definition", definition)
+
         # This method requires tuples as values of the mapping, but JSON
         # readers will read things in as lists. Be kind and transparently
         # transform to tuples
-        setter(
-            node, "record", {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
-        )
-        setter(node, "__fields_set__", {"definition", "record"})
+        serialized_record = {k: v if type(v) != list else tuple(v) for k, v in record.items()}
+
+        if PYDANTIC_V2:
+            node = cls.model_construct(definition=definition, record=serialized_record)
+        else:
+            node = SerializedDimensionRecord.__new__(cls)
+            setter = object.__setattr__
+            setter(node, "definition", definition)
+            setter(node, "record", serialized_record)  # type: ignore
+
+            setter(node, "__fields_set__", {"definition", "record"})
+
         if cache is not None:
             cache[key] = node
         return node

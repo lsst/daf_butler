@@ -34,7 +34,7 @@ from collections.abc import Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, overload
 
 from deprecated.sphinx import deprecated
-from lsst.daf.butler._compat import _BaseModelCompat
+from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.sphgeom import IntersectionRegion, Region
 
 from ..json import from_json_pydantic, to_json_pydantic
@@ -81,17 +81,21 @@ class SerializedDataCoordinate(_BaseModelCompat):
         cache = PersistenceContextVars.serializedDataCoordinateMapping.get()
         if cache is not None and (result := cache.get(key)) is not None:
             return result
-        node = SerializedDataCoordinate.__new__(cls)
-        setter = object.__setattr__
-        setter(node, "dataId", dataId)
-        setter(
-            node,
-            "records",
-            records
-            if records is None
-            else {k: SerializedDimensionRecord.direct(**v) for k, v in records.items()},
-        )
-        setter(node, "__fields_set__", {"dataId", "records"})
+
+        if records is None:
+            serialized_records = None
+        else:
+            serialized_records = {k: SerializedDimensionRecord.direct(**v) for k, v in records.items()}
+
+        if PYDANTIC_V2:
+            node = cls.model_construct(dataId=dataId, records=serialized_records)
+        else:
+            node = SerializedDataCoordinate.__new__(cls)
+            setter = object.__setattr__
+            setter(node, "dataId", dataId)
+            setter(node, "records", serialized_records)
+            setter(node, "__fields_set__", {"dataId", "records"})
+
         if cache is not None:
             cache[key] = node
         return node
