@@ -397,7 +397,7 @@ class Quantum:
         initInputs: MutableMapping[DatasetType, DatasetRef] = {}
         if reconstitutedDimensions is not None:
             warnings.warn(
-                "The reconstitutedDimensions argument is now ignored and may be removed after v 27",
+                "The reconstitutedDimensions argument is now ignored and may be removed after v26",
                 category=FutureWarning,
                 stacklevel=find_outside_stacklevel("lsst.daf.butler"),
             )

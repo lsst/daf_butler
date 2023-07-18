@@ -28,7 +28,7 @@ from lsst.daf.butler import DataCoordinate, DimensionGraph, DimensionPacker
 
 
 @deprecated(
-    "Deprecated in favor of configurable dimension packers.  Will be removed after v27.",
+    "Deprecated in favor of configurable dimension packers.  Will be removed after v26.",
     version="v26",
     category=FutureWarning,
 )
