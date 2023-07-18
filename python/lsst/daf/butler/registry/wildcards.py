@@ -259,7 +259,7 @@ class CategorizedWildcard:
 
 
 if PYDANTIC_V2:
-    from pydantic import RootModel
+    from pydantic import RootModel  # type: ignore
 
     class _CollectionSearch(RootModel):
         root: tuple[str, ...]

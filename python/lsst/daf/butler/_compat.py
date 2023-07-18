@@ -25,7 +25,7 @@ __all__ = ["PYDANTIC_V2", "_BaseModelCompat"]
 
 import sys
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 from pydantic.version import VERSION as PYDANTIC_VERSION
@@ -54,8 +54,8 @@ if PYDANTIC_V2:
         def json(
             self,
             *,
-            include: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
-            exclude: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
+            include: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,  # type: ignore
+            exclude: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,  # type: ignore
             by_alias: bool = False,
             skip_defaults: bool | None = None,
             exclude_unset: bool = False,
@@ -84,9 +84,46 @@ if PYDANTIC_V2:
             # Catch warnings and call BaseModel.parse_obj directly?
             return cls.model_validate(obj)
 
+        if TYPE_CHECKING and not PYDANTIC_V2:
+            # mypy sees the first definition of a class and ignores any
+            # redefinition. This means that if mypy is run with pydantic v1
+            # it will not see the classes defined in the else block below.
+
+            @classmethod
+            def model_construct(cls, _fields_set: set[str] | None = None, **values: Any) -> Self:
+                return cls()
+
+            @classmethod
+            def model_validate(
+                cls,
+                obj: Any,
+                *,
+                strict: bool | None = None,
+                from_attributes: bool | None = None,
+                context: dict[str, Any] | None = None,
+            ) -> Self:
+                return cls()
+
+            def model_dump_json(
+                self,
+                *,
+                indent: int | None = None,
+                include: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
+                exclude: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
+                by_alias: bool = False,
+                exclude_unset: bool = False,
+                exclude_defaults: bool = False,
+                exclude_none: bool = False,
+                round_trip: bool = False,
+                warnings: bool = True,
+            ) -> str:
+                return ""
+
 else:
 
     class _BaseModelCompat(BaseModel):  # type:ignore[no-redef]
+        """Methods from pydantic v2 that can be used in pydantic v1."""
+
         @classmethod
         def model_validate(
             cls,
@@ -112,10 +149,14 @@ else:
             warnings: bool = True,
         ) -> str:
             return self.json(
-                include=include,
-                exclude=exclude,
+                include=include,  # type: ignore
+                exclude=exclude,  # type: ignore
                 by_alias=by_alias,
                 exclude_unset=exclude_unset,
                 exclude_defaults=exclude_defaults,
                 exclude_none=exclude_none,
             )
+
+        @classmethod  # type: ignore
+        def model_construct(cls, _fields_set: set[str] | None = None, **values: Any) -> Self:
+            return cls.construct(_fields_set=_fields_set, **values)
