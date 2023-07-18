@@ -28,6 +28,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 from pydantic.version import VERSION as PYDANTIC_VERSION
 
 if sys.version_info >= (3, 11, 0):
@@ -119,6 +120,21 @@ if PYDANTIC_V2:
             ) -> str:
                 return ""
 
+            @property
+            def model_fields(self) -> dict[str, FieldInfo]:  # type: ignore
+                return {}
+
+            @classmethod
+            def model_rebuild(
+                cls,
+                *,
+                force: bool = False,
+                raise_errors: bool = True,
+                _parent_namespace_depth: int = 2,
+                _types_namespace: dict[str, Any] | None = None,
+            ) -> bool | None:
+                return None
+
 else:
 
     class _BaseModelCompat(BaseModel):  # type:ignore[no-redef]
@@ -160,3 +176,18 @@ else:
         @classmethod  # type: ignore
         def model_construct(cls, _fields_set: set[str] | None = None, **values: Any) -> Self:
             return cls.construct(_fields_set=_fields_set, **values)
+
+        @property
+        def model_fields(self) -> dict[str, FieldInfo]:  # type: ignore
+            return self.__fields__  # type: ignore
+
+        @classmethod
+        def model_rebuild(
+            cls,
+            *,
+            force: bool = False,
+            raise_errors: bool = True,
+            _parent_namespace_depth: int = 2,
+            _types_namespace: dict[str, Any] | None = None,
+        ) -> bool | None:
+            return cls.update_forward_refs()
