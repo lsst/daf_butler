@@ -243,6 +243,18 @@ class _ButlerRegistry(Registry):
         raise NotImplementedError()
 
     @abstractmethod
+    def store_datastore_records(self, refs: Mapping[str, DatasetRef]) -> None:
+        """Store datastore records for given refs.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Mapping` [`str`, `DatasetRef`]
+            Mapping of a datastore name to dataset reference stored in that
+            datastore, reference must include datastore records.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def make_datastore_tables(self, tables: Mapping[str, OpaqueTableDefinition]) -> None:
         """Create opaque tables used by datastores.
 

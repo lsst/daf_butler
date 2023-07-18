@@ -1358,6 +1358,21 @@ class SqlRegistry(_ButlerRegistry):
             datastore_records[opaque] = [record_class.from_record(record) for record in records]
         return ref.replace(datastore_records=datastore_records)
 
+    def store_datastore_records(self, refs: Mapping[str, DatasetRef]) -> None:
+        # Docstring inherited from base class.
+
+        for datastore_name, ref in refs.items():
+            # Store ref IDs in the bridge table.
+            bridge = self._managers.datastores.register(datastore_name)
+            bridge.insert([ref])
+
+            # store records in opaque tables
+            assert ref.datastore_records is not None, "Dataset ref must have datastore records"
+            for table_name, records in ref.datastore_records.items():
+                opaque_table = self._managers.opaque.get(table_name)
+                assert opaque_table is not None, f"Unexpected opaque table name {table_name}"
+                opaque_table.insert(*(record.to_record() for record in records))
+
     def make_datastore_tables(self, tables: Mapping[str, OpaqueTableDefinition]) -> None:
         # Docstring inherited from base class.
 

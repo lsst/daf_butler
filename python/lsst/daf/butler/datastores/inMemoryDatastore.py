@@ -416,6 +416,11 @@ class InMemoryDatastore(GenericBaseDatastore):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
+    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+        self.put(inMemoryDataset, ref)
+        # As ephemeral we return empty dict.
+        return {}
+
     def getURIs(self, ref: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 

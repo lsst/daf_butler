@@ -427,11 +427,27 @@ class FileDatastore(GenericBaseDatastore):
             The matching records indexed by the ref ID.  The number of entries
             in the dict can be smaller than the number of requested refs.
         """
-        records = self._table.fetch(dataset_id=[ref.id for ref in refs])
+        # Check datastore records in refs first.
+        records_by_ref: defaultdict[DatasetId, list[StoredFileInfo]] = defaultdict(list)
+        refs_with_no_records = []
+        for ref in refs:
+            if ref.datastore_records is None:
+                refs_with_no_records.append(ref)
+            else:
+                if (ref_records := ref.datastore_records.get(self._table.name)) is not None:
+                    # Need to make sure they have correct type.
+                    for ref_record in ref_records:
+                        if not isinstance(ref_record, StoredFileInfo):
+                            raise TypeError(
+                                f"Datastore record has unexpected type {ref_record.__class__.__name__}"
+                            )
+                        records_by_ref[ref.id].append(ref_record)
+
+        # If there were any refs without datastore records, check opaque table.
+        records = self._table.fetch(dataset_id=[ref.id for ref in refs_with_no_records])
 
         # Uniqueness is dataset_id + component so can have multiple records
         # per ref.
-        records_by_ref = defaultdict(list)
         for record in records:
             records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
         return records_by_ref
@@ -2296,7 +2312,7 @@ class FileDatastore(GenericBaseDatastore):
             # be looking at the composite ref itself.
             cache_ref = ref.makeCompositeRef() if isComponent else ref
 
-            # For a disassembled component we can validate parametersagainst
+            # For a disassembled component we can validate parameters against
             # the component storage class directly
             if isDisassembled:
                 refStorageClass.validateParameters(parameters)
@@ -2362,6 +2378,38 @@ class FileDatastore(GenericBaseDatastore):
             artifacts.append((ref, storedInfo))
 
         self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
+
+    @transactional
+    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+        doDisassembly = self.composites.shouldBeDisassembled(ref)
+        # doDisassembly = True
+
+        artifacts = []
+        if doDisassembly:
+            components = ref.datasetType.storageClass.delegate().disassemble(inMemoryDataset)
+            if components is None:
+                raise RuntimeError(
+                    f"Inconsistent configuration: dataset type {ref.datasetType.name} "
+                    f"with storage class {ref.datasetType.storageClass.name} "
+                    "is configured to be disassembled, but cannot be."
+                )
+            for component, componentInfo in components.items():
+                # Don't recurse because we want to take advantage of
+                # bulk insert -- need a new DatasetRef that refers to the
+                # same dataset_id but has the component DatasetType
+                # DatasetType does not refer to the types of components
+                # So we construct one ourselves.
+                compRef = ref.makeComponentRef(component)
+                storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
+                artifacts.append((compRef, storedInfo))
+        else:
+            # Write the entire thing out
+            storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
+            artifacts.append((ref, storedInfo))
+
+        ref_records = {self._opaque_table_name: [info for _, info in artifacts]}
+        ref = ref.replace(datastore_records=ref_records)
+        return {self.name: ref}
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
