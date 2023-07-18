@@ -55,6 +55,7 @@ class LimitedButler(ABC):
         """Return `True` if this `Butler` supports write operations."""
         raise NotImplementedError()
 
+    # TODO: remove on DM-40067.
     @deprecated(
         reason="Butler.put() now behaves like Butler.putDirect() when given a DatasetRef."
         " Please use Butler.put(). Will be removed after v26.0.",
@@ -164,6 +165,7 @@ class LimitedButler(ABC):
         log.debug("Butler get: %s, parameters=%s, storageClass: %s", ref, parameters, storageClass)
         return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
+    # TODO: remove on DM-40067.
     @deprecated(
         reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
         " Please use Butler.get(). Will be removed after v26.0.",
@@ -200,6 +202,7 @@ class LimitedButler(ABC):
         """
         return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
+    # TODO: remove on DM-40067.
     @deprecated(
         reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
         "Please use Butler.getDeferred(). Will be removed after v26.0.",
@@ -443,6 +446,7 @@ class LimitedButler(ABC):
         """
         return self._datastore.mexists(refs)
 
+    # TODO: remove on DM-40079.
     @deprecated(
         reason="Butler.datasetExistsDirect() has been replaced by Butler.stored(). "
         "Will be removed after v26.0.",
@@ -542,6 +546,7 @@ class LimitedButler(ABC):
         """
         raise NotImplementedError()
 
+    # TODO: remove on DM-40080.
     @property
     @deprecated(
         reason="The Butler.datastore property is now deprecated. Butler APIs should now exist with the "

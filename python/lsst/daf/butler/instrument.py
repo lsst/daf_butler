@@ -27,6 +27,7 @@ from deprecated.sphinx import deprecated
 from lsst.daf.butler import DataCoordinate, DimensionGraph, DimensionPacker
 
 
+# TODO: remove on DM-38687.
 @deprecated(
     "Deprecated in favor of configurable dimension packers.  Will be removed after v26.",
     version="v26",

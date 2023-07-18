@@ -379,6 +379,7 @@ class QuantumBackedButler(LimitedButler):
         # Docstring inherited.
         return True
 
+    # TODO: remove on DM-40067.
     @deprecated(
         reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
         " Please use Butler.get(). Will be removed after v26.0.",
@@ -418,6 +419,7 @@ class QuantumBackedButler(LimitedButler):
             self._available_inputs.add(ref.id)
         return obj
 
+    # TODO: remove on DM-40067.
     @deprecated(
         reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
         "Please use Butler.getDeferred(). Will be removed after v26.0.",
