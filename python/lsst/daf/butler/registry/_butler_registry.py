@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = ("_ButlerRegistry",)
 
 from abc import abstractmethod
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from lsst.resources import ResourcePathExpression
@@ -42,6 +43,8 @@ from ._registry import Registry
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
+    from .._dataset_ref import DatasetRef
+    from ..datastore import OpaqueTableDefinition
     from .interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
 
@@ -214,5 +217,43 @@ class _ButlerRegistry(Registry):
         manager : `~.interfaces.DatastoreRegistryBridgeManager`
             Object that mediates communication between this `Registry` and its
             associated datastores.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
+        """Retrieve datastore records for given ref.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset reference for which to retrieve its corresponding datastore
+            records.
+
+        Returns
+        -------
+        updated_ref : `DatasetRef`
+            Dataset reference with filled datastore records.
+
+        Notes
+        -----
+        If this method is called with the dataset ref that is not known to the
+        registry then the reference with an empty set of records is returned.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_datastore_tables(self, tables: Mapping[str, OpaqueTableDefinition]) -> None:
+        """Create opaque tables used by datastores.
+
+        Parameters
+        ----------
+        tables : `~collections.abc.Mapping`
+            Maps opaque table name to its definition.
+
+        Notes
+        -----
+        This method should disappear in the future when opaque table
+        definitions will be provided during `Registry` construction.
         """
         raise NotImplementedError()

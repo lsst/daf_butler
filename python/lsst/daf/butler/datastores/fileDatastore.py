@@ -37,7 +37,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from lsst.daf.butler import (
     Config,
@@ -56,7 +56,12 @@ from lsst.daf.butler import (
     StorageClass,
     ddl,
 )
-from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError
+from lsst.daf.butler.datastore import (
+    DatasetRefURIs,
+    DatastoreConfig,
+    DatastoreValidationError,
+    OpaqueTableDefinition,
+)
 from lsst.daf.butler.datastore.cache_manager import (
     AbstractDatastoreCacheManager,
     DatastoreCacheManager,
@@ -64,6 +69,7 @@ from lsst.daf.butler.datastore.cache_manager import (
 )
 from lsst.daf.butler.datastore.composites import CompositesMap
 from lsst.daf.butler.datastore.file_templates import FileTemplates, FileTemplateValidationError
+from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo, StoredFileInfo
 from lsst.daf.butler.registry.interfaces import (
@@ -82,8 +88,6 @@ from lsst.utils.iteration import chunk_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
-
-from ..datastore.generic_base import GenericBaseDatastore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import LookupKey
@@ -280,11 +284,11 @@ class FileDatastore(GenericBaseDatastore):
         # See if composites should be disassembled
         self.composites = CompositesMap(self.config["composites"], universe=bridgeManager.universe)
 
-        tableName = self.config["records", "table"]
+        self._opaque_table_name = self.config["records", "table"]
         try:
             # Storage of paths and formatters, keyed by dataset_id
             self._table = bridgeManager.opaque.register(
-                tableName, self.makeTableSpec(bridgeManager.datasetIdColumnType)
+                self._opaque_table_name, self.makeTableSpec(bridgeManager.datasetIdColumnType)
             )
             # Interface to Registry.
             self._bridge = bridgeManager.register(self.name)
@@ -293,7 +297,7 @@ class FileDatastore(GenericBaseDatastore):
             # create a table, it means someone is trying to create a read-only
             # butler client for an empty repo.  That should be okay, as long
             # as they then try to get any datasets before some other client
-            # creates the table.  Chances are they'rejust validating
+            # creates the table.  Chances are they're just validating
             # configuration.
             pass
 
@@ -392,6 +396,15 @@ class FileDatastore(GenericBaseDatastore):
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
+
+        # Try to get them from the ref first.
+        if ref.datastore_records is not None:
+            if (ref_records := ref.datastore_records.get(self._table.name)) is not None:
+                # Need to make sure they have correct type.
+                for record in ref_records:
+                    if not isinstance(record, StoredFileInfo):
+                        raise TypeError(f"Datastore record has unexpected type {record.__class__.__name__}")
+                return cast(list[StoredFileInfo], ref_records)
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
@@ -3031,3 +3044,7 @@ class FileDatastore(GenericBaseDatastore):
         if dataset_type is not None:
             ref = ref.overrideStorageClass(dataset_type.storageClass)
         return ref
+
+    def get_opaque_table_definitions(self) -> Mapping[str, OpaqueTableDefinition]:
+        # Docstring inherited from the base class.
+        return {self._opaque_table_name: OpaqueTableDefinition(self.makeTableSpec(ddl.GUID), StoredFileInfo)}

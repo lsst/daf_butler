@@ -40,17 +40,16 @@ from urllib.parse import urlencode
 
 from lsst.daf.butler import DatasetId, DatasetRef, StorageClass
 from lsst.daf.butler.datastore import DatasetRefURIs
+from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo
-from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
+from lsst.daf.butler.registry.interfaces import DatabaseInsertMode, DatastoreRegistryBridge
 from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath
 
-from ..datastore.generic_base import GenericBaseDatastore
-from ..registry.interfaces import DatabaseInsertMode
-
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey
+    from lsst.daf.butler.datastore import OpaqueTableDefinition
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
@@ -669,4 +668,8 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from the base class.
 
         # In-memory Datastore records cannot be exported or imported
+        return {}
+
+    def get_opaque_table_definitions(self) -> Mapping[str, OpaqueTableDefinition]:
+        # Docstring inherited from the base class.
         return {}

@@ -38,8 +38,14 @@ import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, Datastore, FileDataset
-from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError
+from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, FileDataset
+from lsst.daf.butler.datastore import (
+    DatasetRefURIs,
+    Datastore,
+    DatastoreConfig,
+    DatastoreValidationError,
+    OpaqueTableDefinition,
+)
 from lsst.daf.butler.datastore.constraints import Constraints
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.resources import ResourcePath
@@ -1130,3 +1136,10 @@ class ChainedDatastore(Datastore):
             raise TypeError(f"None of the child datastores could accept transfers from {source_datastore!r}")
 
         return all_accepted, remaining_refs
+
+    def get_opaque_table_definitions(self) -> Mapping[str, OpaqueTableDefinition]:
+        # Docstring inherited from the base class.
+        tables: dict[str, OpaqueTableDefinition] = {}
+        for datastore in self.datastores:
+            tables.update(datastore.get_opaque_table_definitions())
+        return tables
