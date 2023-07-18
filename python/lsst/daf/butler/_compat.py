@@ -23,11 +23,20 @@
 
 __all__ = ["PYDANTIC_V2", "_BaseModelCompat"]
 
+import sys
 from collections.abc import Callable, Mapping
-from typing import Any, Self
+from typing import Any
 
 from pydantic import BaseModel
 from pydantic.version import VERSION as PYDANTIC_VERSION
+
+if sys.version_info >= (3, 11, 0):
+    from typing import Self
+else:
+    from typing import TypeVar
+
+    Self = TypeVar("Self", bound="_BaseModelCompat")
+
 
 PYDANTIC_V2 = PYDANTIC_VERSION.startswith("2.")
 
