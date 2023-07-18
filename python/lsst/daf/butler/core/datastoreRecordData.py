@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 if PYDANTIC_V2:
     _Record: TypeAlias = dict[str, int | str | uuid.UUID | None]
 else:
-    _Record: TypeAlias = dict[str, Any]
+    _Record: TypeAlias = dict[str, Any]  # type: ignore
 
 
 class SerializedDatastoreRecordData(_BaseModelCompat):

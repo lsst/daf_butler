@@ -261,13 +261,13 @@ class CategorizedWildcard:
 if PYDANTIC_V2:
     from pydantic import RootModel
 
-    class _CollectionSearch(RootModel, Sequence[str]):
+    class _CollectionSearch(RootModel):
         root: tuple[str, ...]
 
 else:
     from pydantic import BaseModel
 
-    class _CollectionSearch(BaseModel, Sequence[str]):
+    class _CollectionSearch(BaseModel, Sequence[str]):  # type: ignore
         __root__: tuple[str, ...]
 
         @property
@@ -354,9 +354,9 @@ class CollectionSearch(_CollectionSearch):
             if name not in deduplicated:
                 deduplicated.append(name)
         if PYDANTIC_V2:
-            model = cls(tuple(deduplicated))
+            model = cls(tuple(deduplicated))  # type: ignore
         else:
-            model = cls(__root__=tuple(deduplicated))
+            model = cls(__root__=tuple(deduplicated))  # type: ignore
         return model
 
     def explicitNames(self) -> Iterator[str]:

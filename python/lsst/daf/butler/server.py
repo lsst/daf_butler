@@ -36,7 +36,6 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetId,
     DatasetRef,
-    DimensionConfig,
     SerializedDataCoordinate,
     SerializedDatasetRef,
     SerializedDatasetType,
@@ -137,7 +136,7 @@ registry:
 
 
 @app.get("/butler/v1/universe", response_model=dict[str, Any])
-def get_dimension_universe(butler: Butler = Depends(butler_readonly_dependency)) -> DimensionConfig:
+def get_dimension_universe(butler: Butler = Depends(butler_readonly_dependency)) -> dict[str, Any]:
     """Allow remote client to get dimensions definition."""
     return butler.dimensions.dimensionConfig.toDict()
 

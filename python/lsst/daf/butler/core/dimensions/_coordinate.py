@@ -68,7 +68,9 @@ class SerializedDataCoordinate(_BaseModelCompat):
     records: dict[str, SerializedDimensionRecord] | None = None
 
     @classmethod
-    def direct(cls, *, dataId: dict[str, DataIdValue], records: dict[str, dict]) -> SerializedDataCoordinate:
+    def direct(
+        cls, *, dataId: dict[str, DataIdValue], records: dict[str, dict] | None
+    ) -> SerializedDataCoordinate:
         """Construct a `SerializedDataCoordinate` directly without validators.
 
         This differs from the pydantic "construct" method in that the arguments

@@ -276,7 +276,7 @@ if PYDANTIC_V2:
 
 else:
 
-    class _ButlerLogRecords(_BaseModelCompat):
+    class _ButlerLogRecords(_BaseModelCompat):  # type:ignore[no-redef]
         __root__: list[ButlerLogRecord]
 
         @property
@@ -301,9 +301,9 @@ class ButlerLogRecords(_ButlerLogRecords):
             The records to seed this class with.
         """
         if PYDANTIC_V2:
-            return cls(list(records))
+            return cls(list(records))  # type: ignore
         else:
-            return cls(__root__=list(records))
+            return cls(__root__=list(records))  # type: ignore
 
     @classmethod
     def from_file(cls, filename: str) -> "ButlerLogRecords":
@@ -501,9 +501,9 @@ class ButlerLogRecords(_ButlerLogRecords):
         item = self.root[index]
         if isinstance(item, list):
             if PYDANTIC_V2:
-                return type(self)(item)
+                return type(self)(item)  # type: ignore
             else:
-                return type(self)(__root__=item)
+                return type(self)(__root__=item)  # type: ignore
         else:
             return item
 
@@ -552,9 +552,9 @@ class ButlerLogRecordHandler(StreamHandler):
     def __init__(self) -> None:
         super().__init__()
         if PYDANTIC_V2:
-            self.records = ButlerLogRecords([])
+            self.records = ButlerLogRecords([])  # type: ignore
         else:
-            self.records = ButlerLogRecords(__root__=[])
+            self.records = ButlerLogRecords(__root__=[])  # type: ignore
 
     def emit(self, record: LogRecord) -> None:
         self.records.append(record)

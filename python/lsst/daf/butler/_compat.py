@@ -24,7 +24,7 @@
 __all__ = ["PYDANTIC_V2", "_BaseModelCompat"]
 
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel
@@ -35,7 +35,7 @@ if sys.version_info >= (3, 11, 0):
 else:
     from typing import TypeVar
 
-    Self = TypeVar("Self", bound="_BaseModelCompat")
+    Self = TypeVar("Self", bound="_BaseModelCompat")  # type: ignore
 
 
 PYDANTIC_V2 = PYDANTIC_VERSION.startswith("2.")
@@ -54,8 +54,8 @@ if PYDANTIC_V2:
         def json(
             self,
             *,
-            include: set[int | str] | Mapping[int | str, Any] | None = None,
-            exclude: set[int | str] | Mapping[int | str, Any] | None = None,
+            include: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
+            exclude: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
             by_alias: bool = False,
             skip_defaults: bool | None = None,
             exclude_unset: bool = False,
@@ -86,7 +86,7 @@ if PYDANTIC_V2:
 
 else:
 
-    class _BaseModelCompat(BaseModel):
+    class _BaseModelCompat(BaseModel):  # type:ignore[no-redef]
         @classmethod
         def model_validate(
             cls,
