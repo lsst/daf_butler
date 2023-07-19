@@ -136,6 +136,7 @@ if PYDANTIC_V2:
                 return None
 
 else:
+    from astropy.utils.decorators import classproperty
 
     class _BaseModelCompat(BaseModel):  # type:ignore[no-redef]
         """Methods from pydantic v2 that can be used in pydantic v1."""
@@ -177,9 +178,10 @@ else:
         def model_construct(cls, _fields_set: set[str] | None = None, **values: Any) -> Self:
             return cls.construct(_fields_set=_fields_set, **values)
 
-        @property
-        def model_fields(self) -> dict[str, FieldInfo]:  # type: ignore
-            return self.__fields__  # type: ignore
+        @classmethod
+        @classproperty
+        def model_fields(cls) -> dict[str, FieldInfo]:  # type: ignore
+            return cls.__fields__  # type: ignore
 
         @classmethod
         def model_rebuild(
