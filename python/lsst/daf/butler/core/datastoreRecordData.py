@@ -28,15 +28,11 @@ __all__ = ("DatastoreRecordData", "SerializedDatastoreRecordData")
 import dataclasses
 import uuid
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
+from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from .datasets import DatasetId
 from .dimensions import DimensionUniverse
@@ -46,10 +42,16 @@ from .storedFileInfo import StoredDatastoreItemInfo
 if TYPE_CHECKING:
     from ..registry import Registry
 
-_Record = dict[str, Any]
+# Pydantic 2 requires we be explicit about the types that are used in
+# datastore records. Without this UUID can not be handled. Pydantic v1
+# wants the opposite and does not work unless we use Any.
+if PYDANTIC_V2:
+    _Record: TypeAlias = dict[str, int | str | uuid.UUID | None]
+else:
+    _Record: TypeAlias = dict[str, Any]  # type: ignore
 
 
-class SerializedDatastoreRecordData(BaseModel):
+class SerializedDatastoreRecordData(_BaseModelCompat):
     """Representation of a `DatastoreRecordData` suitable for serialization."""
 
     dataset_ids: list[uuid.UUID]
@@ -75,10 +77,6 @@ class SerializedDatastoreRecordData(BaseModel):
 
         This method should only be called when the inputs are trusted.
         """
-        data = SerializedDatastoreRecordData.__new__(cls)
-        setter = object.__setattr__
-        # JSON makes strings out of UUIDs, need to convert them back
-        setter(data, "dataset_ids", [uuid.UUID(id) if isinstance(id, str) else id for id in dataset_ids])
         # See also comments in record_ids_to_uuid()
         for table_data in records.values():
             for table_records in table_data.values():
@@ -87,7 +85,14 @@ class SerializedDatastoreRecordData(BaseModel):
                     # columns that are UUIDs we'd need more generic approach.
                     if (id := record.get("dataset_id")) is not None:
                         record["dataset_id"] = uuid.UUID(id) if isinstance(id, str) else id
-        setter(data, "records", records)
+
+        data = cls.model_construct(
+            _fields_set={"dataset_ids", "records"},
+            # JSON makes strings out of UUIDs, need to convert them back
+            dataset_ids=[uuid.UUID(id) if isinstance(id, str) else id for id in dataset_ids],
+            records=records,
+        )
+
         return data
 
 

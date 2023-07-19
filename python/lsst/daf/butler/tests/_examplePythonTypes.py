@@ -44,11 +44,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import StorageClass, StorageClassDelegate
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
+from lsst.daf.butler._compat import _BaseModelCompat
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Butler, Datastore, FormatterFactory
@@ -268,7 +264,7 @@ class MetricsExample:
         return cls(exportDict["summary"], exportDict["output"], data)
 
 
-class MetricsExampleModel(BaseModel):
+class MetricsExampleModel(_BaseModelCompat):
     """A variant of `MetricsExample` based on model."""
 
     summary: dict[str, Any] | None = None

@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 import gc
 import itertools
 import os
@@ -41,7 +43,11 @@ except ImportError:
 import sqlalchemy
 from lsst.daf.butler import Timespan, ddl
 from lsst.daf.butler.registry import _ButlerRegistry, _RegistryFactory
-from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType
+
+try:
+    from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType
+except ImportError:
+    testing = None
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 

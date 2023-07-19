@@ -43,7 +43,7 @@ except ImportError:
 try:
     import pandas as pd
 except ImportError:
-    np = None
+    pd = None
 
 from lsst.daf.butler import (
     Butler,
@@ -54,31 +54,52 @@ from lsst.daf.butler import (
     StorageClassConfig,
     StorageClassFactory,
 )
-from lsst.daf.butler.delegates.arrowastropy import ArrowAstropyDelegate
-from lsst.daf.butler.delegates.arrownumpy import ArrowNumpyDelegate
-from lsst.daf.butler.delegates.arrowtable import ArrowTableDelegate
-from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
-from lsst.daf.butler.formatters.parquet import (
-    ArrowAstropySchema,
-    ArrowNumpySchema,
-    DataFrameSchema,
-    ParquetFormatter,
-    _append_numpy_multidim_metadata,
-    _astropy_to_numpy_dict,
-    _numpy_dict_to_numpy,
-    _numpy_dtype_to_arrow_types,
-    _numpy_style_arrays_to_arrow_arrays,
-    _numpy_to_numpy_dict,
-    arrow_to_astropy,
-    arrow_to_numpy,
-    arrow_to_numpy_dict,
-    arrow_to_pandas,
-    astropy_to_arrow,
-    compute_row_group_size,
-    numpy_dict_to_arrow,
-    numpy_to_arrow,
-    pandas_to_arrow,
-)
+
+try:
+    from lsst.daf.butler.delegates.arrowastropy import ArrowAstropyDelegate
+except ImportError:
+    atable = None
+    pa = None
+try:
+    from lsst.daf.butler.delegates.arrownumpy import ArrowNumpyDelegate
+except ImportError:
+    np = None
+    pa = None
+try:
+    from lsst.daf.butler.delegates.arrowtable import ArrowTableDelegate
+except ImportError:
+    pa = None
+try:
+    from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
+except ImportError:
+    pd = None
+try:
+    from lsst.daf.butler.formatters.parquet import (
+        ArrowAstropySchema,
+        ArrowNumpySchema,
+        DataFrameSchema,
+        ParquetFormatter,
+        _append_numpy_multidim_metadata,
+        _astropy_to_numpy_dict,
+        _numpy_dict_to_numpy,
+        _numpy_dtype_to_arrow_types,
+        _numpy_style_arrays_to_arrow_arrays,
+        _numpy_to_numpy_dict,
+        arrow_to_astropy,
+        arrow_to_numpy,
+        arrow_to_numpy_dict,
+        arrow_to_pandas,
+        astropy_to_arrow,
+        compute_row_group_size,
+        numpy_dict_to_arrow,
+        numpy_to_arrow,
+        pandas_to_arrow,
+    )
+except ImportError:
+    pa = None
+    pd = None
+    atable = None
+    np = None
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))

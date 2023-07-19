@@ -1637,7 +1637,7 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         dataset_type_in_registry = DatasetType(
-            "tbl", dimensions=["instrument"], storageClass="DataFrame", universe=registry.dimensions
+            "tbl", dimensions=["instrument"], storageClass="Packages", universe=registry.dimensions
         )
         registry.registerDatasetType(dataset_type_in_registry)
         run = "run1"
@@ -1647,7 +1647,7 @@ class RegistryTests(ABC):
         )
         self.assertEqual(inserted_ref.datasetType, dataset_type_in_registry)
         query_dataset_type = DatasetType(
-            "tbl", dimensions=["instrument"], storageClass="ArrowAstropy", universe=registry.dimensions
+            "tbl", dimensions=["instrument"], storageClass="StructuredDataDict", universe=registry.dimensions
         )
         self.assertNotEqual(dataset_type_in_registry, query_dataset_type)
         query_datasets_result = registry.queryDatasets(query_dataset_type, collections=[run])

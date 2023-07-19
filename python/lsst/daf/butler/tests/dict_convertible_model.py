@@ -25,13 +25,11 @@ __all__ = ()
 
 from collections.abc import Mapping
 
-try:
-    from pydantic.v1 import BaseModel, Field
-except ModuleNotFoundError:
-    from pydantic import BaseModel, Field  # type: ignore
+from lsst.daf.butler._compat import _BaseModelCompat
+from pydantic import Field
 
 
-class DictConvertibleModel(BaseModel):
+class DictConvertibleModel(_BaseModelCompat):
     """A pydantic model to/from dict conversion in which the dict
     representation is intentionally different from pydantics' own dict
     conversions.

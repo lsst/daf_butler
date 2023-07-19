@@ -45,12 +45,9 @@ from collections.abc import ItemsView, Iterable, Iterator, KeysView, ValuesView
 from random import Random
 from typing import TYPE_CHECKING
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.resources import ResourcePath
-
-try:
-    from pydantic.v1 import BaseModel, PrivateAttr
-except ModuleNotFoundError:
-    from pydantic import BaseModel, PrivateAttr  # type: ignore
+from pydantic import PrivateAttr
 
 from .config import ConfigSubset
 from .configSupport import processLookupConfigs
@@ -124,7 +121,7 @@ def _parse_cache_name(cached_location: str) -> tuple[uuid.UUID, str | None, str 
     return id_, component, ext
 
 
-class CacheEntry(BaseModel):
+class CacheEntry(_BaseModelCompat):
     """Represent an entry in the cache."""
 
     name: str
@@ -172,7 +169,7 @@ class _MarkerEntry(CacheEntry):
     pass
 
 
-class CacheRegistry(BaseModel):
+class CacheRegistry(_BaseModelCompat):
     """Collection of cache entries."""
 
     _size: int = PrivateAttr(0)

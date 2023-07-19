@@ -42,13 +42,14 @@ from typing import TYPE_CHECKING, Any, cast
 try:
     import boto3
     import botocore
+    from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
     from moto import mock_s3  # type: ignore[import]
 except ImportError:
     boto3 = None
 
-    def mock_s3(cls):  # type: ignore[no-untyped-def]
+    def mock_s3(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-untyped-def]
         """No-op decorator in case moto mock_s3 can not be imported."""
-        return cls
+        return None
 
 
 try:
@@ -93,7 +94,6 @@ from lsst.daf.butler.registry import (
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath
-from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
 

@@ -28,13 +28,9 @@ import warnings
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
 from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
@@ -73,7 +69,7 @@ def _reconstructDatasetRef(
     return rebuiltDatasetRef
 
 
-class SerializedQuantum(BaseModel):
+class SerializedQuantum(_BaseModelCompat):
     """Simplified model of a `Quantum` suitable for serialization."""
 
     taskName: str | None = None
@@ -106,60 +102,41 @@ class SerializedQuantum(BaseModel):
 
         This method should only be called when the inputs are trusted.
         """
-        node = SerializedQuantum.__new__(cls)
-        setter = object.__setattr__
-        setter(node, "taskName", sys.intern(taskName or ""))
-        setter(node, "dataId", dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
-
-        setter(
-            node,
-            "datasetTypeMapping",
-            {k: SerializedDatasetType.direct(**v) for k, v in datasetTypeMapping.items()},
+        serialized_dataId = SerializedDataCoordinate.direct(**dataId) if dataId is not None else None
+        serialized_datasetTypeMapping = {
+            k: SerializedDatasetType.direct(**v) for k, v in datasetTypeMapping.items()
+        }
+        serialized_initInputs = {
+            k: (SerializedDatasetRef.direct(**v), refs) for k, (v, refs) in initInputs.items()
+        }
+        serialized_inputs = {
+            k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in inputs.items()
+        }
+        serialized_outputs = {
+            k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in outputs.items()
+        }
+        serialized_records = (
+            {int(k): SerializedDimensionRecord.direct(**v) for k, v in dimensionRecords.items()}
+            if dimensionRecords is not None
+            else None
+        )
+        serialized_datastore_records = (
+            {k: SerializedDatastoreRecordData.direct(**v) for k, v in datastoreRecords.items()}
+            if datastoreRecords is not None
+            else None
         )
 
-        setter(
-            node,
-            "initInputs",
-            {k: (SerializedDatasetRef.direct(**v), refs) for k, (v, refs) in initInputs.items()},
+        node = cls.model_construct(
+            taskName=sys.intern(taskName or ""),
+            dataId=serialized_dataId,
+            datasetTypeMapping=serialized_datasetTypeMapping,
+            initInputs=serialized_initInputs,
+            inputs=serialized_inputs,
+            outputs=serialized_outputs,
+            dimensionRecords=serialized_records,
+            datastoreRecords=serialized_datastore_records,
         )
-        setter(
-            node,
-            "inputs",
-            {k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in inputs.items()},
-        )
-        setter(
-            node,
-            "outputs",
-            {k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in outputs.items()},
-        )
-        setter(
-            node,
-            "dimensionRecords",
-            dimensionRecords
-            if dimensionRecords is None
-            else {int(k): SerializedDimensionRecord.direct(**v) for k, v in dimensionRecords.items()},
-        )
-        setter(
-            node,
-            "datastoreRecords",
-            datastoreRecords
-            if datastoreRecords is None
-            else {k: SerializedDatastoreRecordData.direct(**v) for k, v in datastoreRecords.items()},
-        )
-        setter(
-            node,
-            "__fields_set__",
-            {
-                "taskName",
-                "dataId",
-                "datasetTypeMapping",
-                "initInputs",
-                "inputs",
-                "outputs",
-                "dimensionRecords",
-                "datastore_records",
-            },
-        )
+
         return node
 
 

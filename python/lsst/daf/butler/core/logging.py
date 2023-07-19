@@ -29,13 +29,10 @@ from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
 from typing import IO, Any, ClassVar, Union, overload
 
+from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
-
-try:
-    from pydantic.v1 import BaseModel, PrivateAttr
-except ModuleNotFoundError:
-    from pydantic import BaseModel, PrivateAttr  # type: ignore
+from pydantic import PrivateAttr
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
@@ -160,7 +157,7 @@ class ButlerMDC:
             logging.setLogRecordFactory(cls._old_factory)
 
 
-class ButlerLogRecord(BaseModel):
+class ButlerLogRecord(_BaseModelCompat):
     """A model representing a `logging.LogRecord`.
 
     A `~logging.LogRecord` always uses the current time in its record
@@ -271,12 +268,27 @@ class ButlerLogRecord(BaseModel):
 Record = LogRecord | ButlerLogRecord
 
 
+if PYDANTIC_V2:
+    from pydantic import RootModel  # type: ignore
+
+    class _ButlerLogRecords(RootModel):
+        root: list[ButlerLogRecord]
+
+else:
+
+    class _ButlerLogRecords(_BaseModelCompat):  # type:ignore[no-redef]
+        __root__: list[ButlerLogRecord]
+
+        @property
+        def root(self) -> list[ButlerLogRecord]:
+            return self.__root__
+
+
 # Do not inherit from MutableSequence since mypy insists on the values
 # being Any even though we wish to constrain them to Record.
-class ButlerLogRecords(BaseModel):
+class ButlerLogRecords(_ButlerLogRecords):
     """Class representing a collection of `ButlerLogRecord`."""
 
-    __root__: list[ButlerLogRecord]
     _log_format: str | None = PrivateAttr(None)
 
     @classmethod
@@ -288,7 +300,10 @@ class ButlerLogRecords(BaseModel):
         records : iterable of `ButlerLogRecord`
             The records to seed this class with.
         """
-        return cls(__root__=list(records))
+        if PYDANTIC_V2:
+            return cls(list(records))  # type: ignore
+        else:
+            return cls(__root__=list(records))  # type: ignore
 
     @classmethod
     def from_file(cls, filename: str) -> "ButlerLogRecords":
@@ -461,16 +476,16 @@ class ButlerLogRecords(BaseModel):
         return previous
 
     def __len__(self) -> int:
-        return len(self.__root__)
+        return len(self.root)
 
     # The signature does not match the one in BaseModel but that is okay
     # if __root__ is being used.
     # See https://pydantic-docs.helpmanual.io/usage/models/#custom-root-types
     def __iter__(self) -> Iterator[ButlerLogRecord]:  # type: ignore
-        return iter(self.__root__)
+        return iter(self.root)
 
     def __setitem__(self, index: int, value: Record) -> None:
-        self.__root__[index] = self._validate_record(value)
+        self.root[index] = self._validate_record(value)
 
     @overload
     def __getitem__(self, index: int) -> ButlerLogRecord:
@@ -483,21 +498,24 @@ class ButlerLogRecords(BaseModel):
     def __getitem__(self, index: slice | int) -> "Union[ButlerLogRecords, ButlerLogRecord]":
         # Handles slices and returns a new collection in that
         # case.
-        item = self.__root__[index]
+        item = self.root[index]
         if isinstance(item, list):
-            return type(self)(__root__=item)
+            if PYDANTIC_V2:
+                return type(self)(item)  # type: ignore
+            else:
+                return type(self)(__root__=item)  # type: ignore
         else:
             return item
 
     def __reversed__(self) -> Iterator[ButlerLogRecord]:
-        return self.__root__.__reversed__()
+        return self.root.__reversed__()
 
     def __delitem__(self, index: slice | int) -> None:
-        del self.__root__[index]
+        del self.root[index]
 
     def __str__(self) -> str:
         # Ensure that every record uses the same format string.
-        return "\n".join(record.format(self.log_format) for record in self.__root__)
+        return "\n".join(record.format(self.log_format) for record in self.root)
 
     def _validate_record(self, record: Record) -> ButlerLogRecord:
         if isinstance(record, ButlerLogRecord):
@@ -509,23 +527,23 @@ class ButlerLogRecords(BaseModel):
         return record
 
     def insert(self, index: int, value: Record) -> None:
-        self.__root__.insert(index, self._validate_record(value))
+        self.root.insert(index, self._validate_record(value))
 
     def append(self, value: Record) -> None:
         value = self._validate_record(value)
-        self.__root__.append(value)
+        self.root.append(value)
 
     def clear(self) -> None:
-        self.__root__.clear()
+        self.root.clear()
 
     def extend(self, records: Iterable[Record]) -> None:
-        self.__root__.extend(self._validate_record(record) for record in records)
+        self.root.extend(self._validate_record(record) for record in records)
 
     def pop(self, index: int = -1) -> ButlerLogRecord:
-        return self.__root__.pop(index)
+        return self.root.pop(index)
 
     def reverse(self) -> None:
-        self.__root__.reverse()
+        self.root.reverse()
 
 
 class ButlerLogRecordHandler(StreamHandler):
@@ -533,7 +551,10 @@ class ButlerLogRecordHandler(StreamHandler):
 
     def __init__(self) -> None:
         super().__init__()
-        self.records = ButlerLogRecords(__root__=[])
+        if PYDANTIC_V2:
+            self.records = ButlerLogRecords([])  # type: ignore
+        else:
+            self.records = ButlerLogRecords(__root__=[])  # type: ignore
 
     def emit(self, record: LogRecord) -> None:
         self.records.append(record)

@@ -26,20 +26,9 @@ __all__ = ("DimensionRecord", "SerializedDimensionRecord")
 from typing import TYPE_CHECKING, Any, ClassVar, Optional, Tuple
 
 import lsst.sphgeom
+from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.classes import immutable
-
-try:
-    from pydantic.v1 import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
-except ModuleNotFoundError:
-    from pydantic import (  # type: ignore
-        BaseModel,
-        Field,
-        StrictBool,
-        StrictFloat,
-        StrictInt,
-        StrictStr,
-        create_model,
-    )
+from pydantic import Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistenceContext import PersistenceContextVars
@@ -78,7 +67,7 @@ def _subclassDimensionRecord(definition: DimensionElement) -> type[DimensionReco
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
-class SpecificSerializedDimensionRecord(BaseModel, extra="forbid"):
+class SpecificSerializedDimensionRecord(_BaseModelCompat, extra="forbid"):
     """Base model for a specific serialized record content."""
 
 
@@ -128,7 +117,7 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSe
     return model
 
 
-class SerializedDimensionRecord(BaseModel):
+class SerializedDimensionRecord(_BaseModelCompat):
     """Simplified model for serializing a `DimensionRecord`."""
 
     definition: str = Field(
@@ -147,22 +136,24 @@ class SerializedDimensionRecord(BaseModel):
         },
     )
 
-    class Config:
-        """Local configuration overrides for model."""
+    if not PYDANTIC_V2:
 
-        schema_extra = {
-            "example": {
-                "definition": "detector",
-                "record": {
-                    "instrument": "HSC",
-                    "id": 72,
-                    "full_name": "0_01",
-                    "name_in_raft": "01",
-                    "raft": "0",
-                    "purpose": "SCIENCE",
-                },
+        class Config:
+            """Local configuration overrides for model."""
+
+            schema_extra = {
+                "example": {
+                    "definition": "detector",
+                    "record": {
+                        "instrument": "HSC",
+                        "id": 72,
+                        "full_name": "0_01",
+                        "name_in_raft": "01",
+                        "raft": "0",
+                        "purpose": "SCIENCE",
+                    },
+                }
             }
-        }
 
     @classmethod
     def direct(
@@ -189,16 +180,14 @@ class SerializedDimensionRecord(BaseModel):
         cache = PersistenceContextVars.serializedDimensionRecordMapping.get()
         if cache is not None and (result := cache.get(key)) is not None:
             return result
-        node = SerializedDimensionRecord.__new__(cls)
-        setter = object.__setattr__
-        setter(node, "definition", definition)
+
         # This method requires tuples as values of the mapping, but JSON
         # readers will read things in as lists. Be kind and transparently
         # transform to tuples
-        setter(
-            node, "record", {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
-        )
-        setter(node, "__fields_set__", {"definition", "record"})
+        serialized_record = {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
+
+        node = cls.model_construct(definition=definition, record=serialized_record)  # type: ignore
+
         if cache is not None:
             cache[key] = node
         return node

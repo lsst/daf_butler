@@ -34,12 +34,8 @@ from collections.abc import Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, overload
 
 from deprecated.sphinx import deprecated
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.sphgeom import IntersectionRegion, Region
-
-try:
-    from pydantic.v1 import BaseModel
-except ModuleNotFoundError:
-    from pydantic import BaseModel  # type: ignore
 
 from ..json import from_json_pydantic, to_json_pydantic
 from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping
@@ -65,14 +61,16 @@ DataCoordinate or other data ID.
 """
 
 
-class SerializedDataCoordinate(BaseModel):
+class SerializedDataCoordinate(_BaseModelCompat):
     """Simplified model for serializing a `DataCoordinate`."""
 
     dataId: dict[str, DataIdValue]
     records: dict[str, SerializedDimensionRecord] | None = None
 
     @classmethod
-    def direct(cls, *, dataId: dict[str, DataIdValue], records: dict[str, dict]) -> SerializedDataCoordinate:
+    def direct(
+        cls, *, dataId: dict[str, DataIdValue], records: dict[str, dict] | None
+    ) -> SerializedDataCoordinate:
         """Construct a `SerializedDataCoordinate` directly without validators.
 
         This differs from the pydantic "construct" method in that the arguments
@@ -85,17 +83,14 @@ class SerializedDataCoordinate(BaseModel):
         cache = PersistenceContextVars.serializedDataCoordinateMapping.get()
         if cache is not None and (result := cache.get(key)) is not None:
             return result
-        node = SerializedDataCoordinate.__new__(cls)
-        setter = object.__setattr__
-        setter(node, "dataId", dataId)
-        setter(
-            node,
-            "records",
-            records
-            if records is None
-            else {k: SerializedDimensionRecord.direct(**v) for k, v in records.items()},
-        )
-        setter(node, "__fields_set__", {"dataId", "records"})
+
+        if records is None:
+            serialized_records = None
+        else:
+            serialized_records = {k: SerializedDimensionRecord.direct(**v) for k, v in records.items()}
+
+        node = cls.model_construct(dataId=dataId, records=serialized_records)
+
         if cache is not None:
             cache[key] = node
         return node
