@@ -28,7 +28,7 @@ import warnings
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel
 
@@ -126,52 +126,16 @@ class SerializedQuantum(_BaseModelCompat):
             else None
         )
 
-        if PYDANTIC_V2:
-            node = cls.model_construct(
-                _fields_set={
-                    "taskName",
-                    "dataId",
-                    "datasetTypeMapping",
-                    "initInputs",
-                    "inputs",
-                    "outputs",
-                    "dimensionRecords",
-                    "datastoreRecords",
-                },
-                taskName=sys.intern(taskName or ""),
-                dataId=serialized_dataId,
-                datasetTypeMapping=serialized_datasetTypeMapping,
-                initInputs=serialized_initInputs,
-                inputs=serialized_inputs,
-                outputs=serialized_outputs,
-                dimensionRecords=serialized_records,
-                datastoreRecords=serialized_datastore_records,
-            )
-        else:
-            node = SerializedQuantum.__new__(cls)
-            setter = object.__setattr__
-            setter(node, "taskName", sys.intern(taskName or ""))
-            setter(node, "dataId", serialized_dataId)
-            setter(node, "datasetTypeMapping", serialized_datasetTypeMapping)
-            setter(node, "initInputs", serialized_initInputs)
-            setter(node, "inputs", serialized_inputs)
-            setter(node, "outputs", serialized_outputs)
-            setter(node, "dimensionRecords", serialized_records)
-            setter(node, "datastoreRecords", serialized_datastore_records)
-            setter(
-                node,
-                "__fields_set__",
-                {
-                    "taskName",
-                    "dataId",
-                    "datasetTypeMapping",
-                    "initInputs",
-                    "inputs",
-                    "outputs",
-                    "dimensionRecords",
-                    "datastoreRecords",
-                },
-            )
+        node = cls.model_construct(
+            taskName=sys.intern(taskName or ""),
+            dataId=serialized_dataId,
+            datasetTypeMapping=serialized_datasetTypeMapping,
+            initInputs=serialized_initInputs,
+            inputs=serialized_inputs,
+            outputs=serialized_outputs,
+            dimensionRecords=serialized_records,
+            datastoreRecords=serialized_datastore_records,
+        )
 
         return node
 

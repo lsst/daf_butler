@@ -186,15 +186,7 @@ class SerializedDimensionRecord(_BaseModelCompat):
         # transform to tuples
         serialized_record = {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
 
-        if PYDANTIC_V2:
-            node = cls.model_construct(definition=definition, record=serialized_record)  # type: ignore
-        else:
-            node = SerializedDimensionRecord.__new__(cls)
-            setter = object.__setattr__
-            setter(node, "definition", definition)
-            setter(node, "record", serialized_record)
-
-            setter(node, "__fields_set__", {"definition", "record"})
+        node = cls.model_construct(definition=definition, record=serialized_record)  # type: ignore
 
         if cache is not None:
             cache[key] = node

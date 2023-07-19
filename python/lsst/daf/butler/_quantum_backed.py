@@ -31,7 +31,7 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from deprecated.sphinx import deprecated
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.resources import ResourcePathExpression
 
 from ._butlerConfig import ButlerConfig
@@ -745,40 +745,16 @@ class QuantumProvenanceData(_BaseModelCompat):
             """
             return {uuid.UUID(id) if isinstance(id, str) else id for id in uuids}
 
-        if PYDANTIC_V2:
-            data = cls.model_construct(
-                _fields_set={
-                    "predicted_inputs",
-                    "available_inputs",
-                    "actual_inputs",
-                    "predicted_outputs",
-                    "actual_outputs",
-                    "datastore_records",
-                },
-                predicted_inputs=_to_uuid_set(predicted_inputs),
-                available_inputs=_to_uuid_set(available_inputs),
-                actual_inputs=_to_uuid_set(actual_inputs),
-                predicted_outputs=_to_uuid_set(predicted_outputs),
-                actual_outputs=_to_uuid_set(actual_outputs),
-                datastore_records={
-                    key: SerializedDatastoreRecordData.direct(**records)
-                    for key, records in datastore_records.items()
-                },
-            )
-        else:
-            data = QuantumProvenanceData.__new__(cls)
-            setter = object.__setattr__
-            setter(data, "predicted_inputs", _to_uuid_set(predicted_inputs))
-            setter(data, "available_inputs", _to_uuid_set(available_inputs))
-            setter(data, "actual_inputs", _to_uuid_set(actual_inputs))
-            setter(data, "predicted_outputs", _to_uuid_set(predicted_outputs))
-            setter(data, "actual_outputs", _to_uuid_set(actual_outputs))
-            setter(
-                data,
-                "datastore_records",
-                {
-                    key: SerializedDatastoreRecordData.direct(**records)
-                    for key, records in datastore_records.items()
-                },
-            )
+        data = cls.model_construct(
+            predicted_inputs=_to_uuid_set(predicted_inputs),
+            available_inputs=_to_uuid_set(available_inputs),
+            actual_inputs=_to_uuid_set(actual_inputs),
+            predicted_outputs=_to_uuid_set(predicted_outputs),
+            actual_outputs=_to_uuid_set(actual_outputs),
+            datastore_records={
+                key: SerializedDatastoreRecordData.direct(**records)
+                for key, records in datastore_records.items()
+            },
+        )
+
         return data

@@ -28,7 +28,7 @@ from collections.abc import Iterable, Iterator, Mapping, Set
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils.classes import cached_getter, immutable
 
 from .._topology import TopologicalFamily, TopologicalSpace
@@ -57,13 +57,7 @@ class SerializedDimensionGraph(_BaseModelCompat):
 
         This method should only be called when the inputs are trusted.
         """
-        if PYDANTIC_V2:
-            return cls.model_construct(names=names)
-        else:
-            node = SerializedDimensionGraph.__new__(cls)
-            object.__setattr__(node, "names", names)
-            object.__setattr__(node, "__fields_set__", {"names"})
-            return node
+        return cls.model_construct(names=names)
 
 
 @immutable

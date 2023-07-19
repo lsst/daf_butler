@@ -29,7 +29,7 @@ from copy import deepcopy
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
+from lsst.daf.butler._compat import _BaseModelCompat
 from pydantic import StrictBool, StrictStr
 
 from ..configSupport import LookupKey
@@ -85,27 +85,13 @@ class SerializedDatasetType(_BaseModelCompat):
             SerializedDimensionGraph.direct(**dimensions) if dimensions is not None else None
         )
 
-        if PYDANTIC_V2:
-            node = cls.model_construct(
-                name=name,
-                storageClass=storageClass,
-                dimensions=serialized_dimensions,
-                parentStorageClass=parentStorageClass,
-                isCalibration=isCalibration,
-            )
-        else:
-            node = SerializedDatasetType.__new__(cls)
-            setter = object.__setattr__
-            setter(node, "name", name)
-            setter(node, "storageClass", storageClass)
-            setter(node, "dimensions", serialized_dimensions)
-            setter(node, "parentStorageClass", parentStorageClass)
-            setter(node, "isCalibration", isCalibration)
-            setter(
-                node,
-                "__fields_set__",
-                {"name", "storageClass", "dimensions", "parentStorageClass", "isCalibration"},
-            )
+        node = cls.model_construct(
+            name=name,
+            storageClass=storageClass,
+            dimensions=serialized_dimensions,
+            parentStorageClass=parentStorageClass,
+            isCalibration=isCalibration,
+        )
 
         if cache is not None:
             cache[key] = node

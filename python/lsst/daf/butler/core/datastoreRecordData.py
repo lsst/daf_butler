@@ -86,18 +86,13 @@ class SerializedDatastoreRecordData(_BaseModelCompat):
                     if (id := record.get("dataset_id")) is not None:
                         record["dataset_id"] = uuid.UUID(id) if isinstance(id, str) else id
 
-        if PYDANTIC_V2:
-            data = cls.model_construct(
-                _fields_set={"dataset_ids", "records"},
-                dataset_ids=[uuid.UUID(id) if isinstance(id, str) else id for id in dataset_ids],
-                records=records,
-            )
-        else:
-            data = SerializedDatastoreRecordData.__new__(cls)
-            setter = object.__setattr__
+        data = cls.model_construct(
+            _fields_set={"dataset_ids", "records"},
             # JSON makes strings out of UUIDs, need to convert them back
-            setter(data, "dataset_ids", [uuid.UUID(id) if isinstance(id, str) else id for id in dataset_ids])
-            setter(data, "records", records)
+            dataset_ids=[uuid.UUID(id) if isinstance(id, str) else id for id in dataset_ids],
+            records=records,
+        )
+
         return data
 
 
