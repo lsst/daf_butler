@@ -176,6 +176,9 @@ else:
 
         @classmethod  # type: ignore
         def model_construct(cls, _fields_set: set[str] | None = None, **values: Any) -> Self:
+            # BaseModel.construct() is very close to what we previously
+            # implemented manually in each direct() method but does have one
+            # extra loop in it to fill in defaults and handle aliases.
             return cls.construct(_fields_set=_fields_set, **values)
 
         @classmethod
