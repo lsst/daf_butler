@@ -103,7 +103,7 @@ def queryDataIds(
     Docstring for supported parameters is the same as
     `~lsst.daf.butler.Registry.queryDataIds`.
     """
-    butler = Butler(repo)
+    butler = Butler(repo, datastore_optional=True)
 
     if datasets and collections and not dimensions:
         # Determine the dimensions relevant to all given dataset types.
