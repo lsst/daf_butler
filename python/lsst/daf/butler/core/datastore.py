@@ -23,11 +23,12 @@
 
 from __future__ import annotations
 
-__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError", "DatasetRefURIs")
+__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError", "DatasetRefURIs", "NullDatastore")
 
 import contextlib
 import dataclasses
 import logging
+import time
 from abc import ABCMeta, abstractmethod
 from collections import abc, defaultdict
 from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -49,6 +50,8 @@ if TYPE_CHECKING:
     from .datasets import DatasetRef, DatasetType
     from .datastoreRecordData import DatastoreRecordData
     from .storageClass import StorageClass
+
+_LOG = logging.getLogger(__name__)
 
 
 class DatastoreConfig(ConfigSubset):
@@ -1205,3 +1208,122 @@ class Datastore(metaclass=ABCMeta):
         guess dataset location based on its stored dataset type.
         """
         pass
+
+
+class NullDatastore(Datastore):
+    """A datastore that implements the `Datastore` API but always fails when
+    it accepts any request.
+    """
+
+    @classmethod
+    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
+        # Nothing to do. This is not a real Datastore.
+        pass
+
+    def __init__(
+        self,
+        config: Config | ResourcePathExpression | None,
+        bridgeManager: DatastoreRegistryBridgeManager | None,
+        butlerRoot: ResourcePathExpression | None = None,
+    ):
+        # Name ourselves with the timestamp the datastore
+        # was created.
+        self.name = f"{type(self).__name__}@{time.time()}"
+        _LOG.debug("Creating datastore %s", self.name)
+
+        return
+
+    def knows(self, ref: DatasetRef) -> bool:
+        return False
+
+    def exists(self, datasetRef: DatasetRef) -> bool:
+        return False
+
+    def get(
+        self,
+        datasetRef: DatasetRef,
+        parameters: Mapping[str, Any] | None = None,
+        storageClass: StorageClass | str | None = None,
+    ) -> Any:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def ingest(
+        self, *datasets: FileDataset, transfer: str | None = None, record_validation_info: bool = True
+    ) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def transfer_from(
+        self,
+        source_datastore: Datastore,
+        refs: Iterable[DatasetRef],
+        transfer: str = "auto",
+        artifact_existence: dict[ResourcePath, bool] | None = None,
+    ) -> tuple[set[DatasetRef], set[DatasetRef]]:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def getURIs(self, datasetRef: DatasetRef, predict: bool = False) -> DatasetRefURIs:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def getURI(self, datasetRef: DatasetRef, predict: bool = False) -> ResourcePath:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def retrieveArtifacts(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ResourcePath,
+        transfer: str = "auto",
+        preserve_path: bool = True,
+        overwrite: bool = False,
+    ) -> list[ResourcePath]:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def remove(self, datasetRef: DatasetRef) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def forget(self, refs: Iterable[DatasetRef]) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def emptyTrash(self, ignore_errors: bool = True) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def transfer(self, inputDatastore: Datastore, datasetRef: DatasetRef) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def export(
+        self,
+        refs: Iterable[DatasetRef],
+        *,
+        directory: ResourcePathExpression | None = None,
+        transfer: str | None = "auto",
+    ) -> Iterable[FileDataset]:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def validateConfiguration(
+        self, entities: Iterable[DatasetRef | DatasetType | StorageClass], logFailures: bool = False
+    ) -> None:
+        # No configuration so always validates.
+        pass
+
+    def validateKey(self, lookupKey: LookupKey, entity: DatasetRef | DatasetType | StorageClass) -> None:
+        pass
+
+    def getLookupKeys(self) -> set[LookupKey]:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def import_records(
+        self,
+        data: Mapping[str, DatastoreRecordData],
+    ) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def export_records(
+        self,
+        refs: Iterable[DatasetIdRef],
+    ) -> Mapping[str, DatastoreRecordData]:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")

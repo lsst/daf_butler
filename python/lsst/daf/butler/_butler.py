@@ -69,6 +69,7 @@ from .core import (
     DimensionRecord,
     DimensionUniverse,
     FileDataset,
+    NullDatastore,
     Progress,
     StorageClass,
     StorageClassFactory,
@@ -149,6 +150,11 @@ class Butler(LimitedButler):
         the default for that dimension.  Nonexistent collections are ignored.
         If a default value is provided explicitly for a governor dimension via
         ``**kwargs``, no default will be inferred for that dimension.
+    datastore_optional : `bool`, optional
+        If `True` a failure to instantiate a datastore from a configuration
+        is no longer an error. This declaration implies that only registry
+        is to be accessed since there is no guarantee a datastore will
+        be accessible.
     **kwargs : `str`
         Default data ID key-value pairs.  These may only identify "governor"
         dimensions like ``instrument`` and ``skymap``.
@@ -203,6 +209,7 @@ class Butler(LimitedButler):
         searchPaths: Sequence[ResourcePathExpression] | None = None,
         writeable: bool | None = None,
         inferDefaults: bool = True,
+        datastore_optional: bool = False,
         **kwargs: str,
     ):
         defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
@@ -228,9 +235,15 @@ class Butler(LimitedButler):
                 self._registry = _RegistryFactory(self._config).from_config(
                     butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
                 )
-                self._datastore = Datastore.fromConfig(
-                    self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
-                )
+                try:
+                    self._datastore = Datastore.fromConfig(
+                        self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
+                    )
+                except Exception:
+                    if not datastore_optional:
+                        raise
+                    else:
+                        self._datastore = NullDatastore(None, None)
                 self.storageClasses = StorageClassFactory()
                 self.storageClasses.addFromConfig(self._config)
             except Exception:
