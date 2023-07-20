@@ -76,6 +76,7 @@ from lsst.daf.butler import (
     FileDataset,
     FileTemplate,
     FileTemplateValidationError,
+    NullDatastore,
     StorageClassFactory,
     ValidationError,
     script,
@@ -2330,6 +2331,54 @@ class ChainedDatastoreTransfers(PosixDatastoreTransfers):
     """Test transfers using a chained datastore."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
+
+
+class NullDatastoreTestCase(unittest.TestCase):
+    """Test that we can fall back to a null datastore."""
+
+    # Need a good config to create the repo.
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.storageClassFactory = StorageClassFactory()
+        cls.storageClassFactory.addFromConfig(cls.configFile)
+
+    def setUp(self) -> None:
+        """Create a new butler root for each test."""
+        self.root = makeTestTempDir(TESTDIR)
+        Butler.makeRepo(self.root, config=Config(self.configFile))
+
+    def tearDown(self) -> None:
+        removeTestTempDir(self.root)
+
+    def test_fallback(self) -> None:
+        # Read the butler config and mess with the datastore section.
+        bad_config = Config(os.path.join(self.root, "butler.yaml"))
+        bad_config["datastore", "cls"] = "lsst.not.a.datastore.Datastore"
+
+        with self.assertRaises(RuntimeError):
+            Butler(bad_config)
+
+        butler = Butler(bad_config, writeable=True, skip_datastore=True)
+        self.assertIsInstance(butler._datastore, NullDatastore)
+
+        # Check that registry is working.
+        butler.registry.registerRun("MYRUN")
+        collections = butler.registry.queryCollections(...)
+        self.assertIn("MYRUN", set(collections))
+
+        # Create a ref.
+        dimensions = butler.dimensions.extract([])
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
+        datasetTypeName = "metric"
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+        butler.registry.registerDatasetType(datasetType)
+        ref = DatasetRef(datasetType, {}, run="MYRUN")
+
+        # Check that datastore will complain.
+        with self.assertRaises(NotImplementedError):
+            butler.get(ref)
 
 
 def setup_module(module: types.ModuleType) -> None:

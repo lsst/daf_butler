@@ -222,7 +222,7 @@ class Butler(LimitedButler):
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
         else:
-            self._config = ButlerConfig(config, searchPaths=searchPaths)
+            self._config = ButlerConfig(config, searchPaths=searchPaths, skip_datastore=skip_datastore)
             try:
                 if "root" in self._config:
                     butlerRoot = self._config["root"]
