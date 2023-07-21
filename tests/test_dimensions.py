@@ -639,7 +639,7 @@ class DataCoordinateTestCase(unittest.TestCase):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
-            for m, dataId in enumerate(split.chain()):
+            for dataId in split.chain():
                 # Passing in any kind of DataCoordinate alone just returns
                 # that object.
                 self.assertIs(dataId, DataCoordinate.standardize(dataId))
