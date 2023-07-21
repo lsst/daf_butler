@@ -1221,7 +1221,7 @@ class SqlRegistry(_ButlerRegistry):
             datasets=dataset_composition.keys(),
         )
         builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
-        for datasetType in dataset_composition.keys():
+        for datasetType in dataset_composition:
             builder.joinDataset(datasetType, collection_wildcard, isResult=False)
         query = builder.finish()
 
@@ -1267,7 +1267,7 @@ class SqlRegistry(_ButlerRegistry):
             datasets=dataset_composition.keys(),
         )
         builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
-        for datasetType in dataset_composition.keys():
+        for datasetType in dataset_composition:
             builder.joinDataset(datasetType, collection_wildcard, isResult=False)
         query = builder.finish().with_record_columns(element)
         return queries.DatabaseDimensionRecordQueryResults(query, element)

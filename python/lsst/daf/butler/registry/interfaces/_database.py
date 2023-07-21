@@ -1375,7 +1375,7 @@ class Database(ABC):
                             connection.execute(
                                 table.update()
                                 .where(sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()]))
-                                .values(**{k: compared[k] for k in bad.keys()})
+                                .values(**{k: compared[k] for k in bad})
                             )
                         inserted_or_updated = bad
                     else:

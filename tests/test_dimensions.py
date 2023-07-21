@@ -558,8 +558,8 @@ class DataCoordinateTestCase(unittest.TestCase):
             split = self.splitByStateFlags(dataIds)
             for dataId in split.chain():
                 with self.subTest(dataId=dataId):
-                    self.assertEqual(list(dataId.values()), [dataId[d] for d in dataId.keys()])
-                    self.assertEqual(list(dataId.values()), [dataId[d.name] for d in dataId.keys()])
+                    self.assertEqual(list(dataId.values()), [dataId[d] for d in dataId])
+                    self.assertEqual(list(dataId.values()), [dataId[d.name] for d in dataId])
                     self.assertEqual(dataId.keys(), dataId.graph.required)
             for dataId in itertools.chain(split.complete, split.expanded):
                 with self.subTest(dataId=dataId):

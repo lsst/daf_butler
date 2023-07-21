@@ -1613,7 +1613,7 @@ class FileDatastore(GenericBaseDatastore):
         )
 
         # Set of IDs that have been handled.
-        handled_ids = {ref.id for ref in dataset_existence.keys()}
+        handled_ids = {ref.id for ref in dataset_existence}
 
         missing_ids = requested_ids - handled_ids
         if missing_ids:
@@ -2942,7 +2942,7 @@ class FileDatastore(GenericBaseDatastore):
         if not record_data:
             return
 
-        self._bridge.insert(FakeDatasetRef(dataset_id) for dataset_id in record_data.records.keys())
+        self._bridge.insert(FakeDatasetRef(dataset_id) for dataset_id in record_data.records)
 
         # TODO: Verify that there are no unexpected table names in the dict?
         unpacked_records = []

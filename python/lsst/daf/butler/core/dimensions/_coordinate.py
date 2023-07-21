@@ -248,7 +248,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                 for k, v in defaults.items():
                     d.setdefault(k.name, v)
         if d.keys() >= graph.dimensions.names:
-            values = tuple(d[name] for name in graph._dataCoordinateIndices.keys())
+            values = tuple(d[name] for name in graph._dataCoordinateIndices)
         else:
             try:
                 values = tuple(d[name] for name in graph.required.names)
@@ -899,7 +899,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         elif self.hasFull() or self._graph.required >= graph.dimensions:
             return _BasicTupleDataCoordinate(
                 graph,
-                tuple(self[k] for k in graph._dataCoordinateIndices.keys()),
+                tuple(self[k] for k in graph._dataCoordinateIndices),
             )
         else:
             return _BasicTupleDataCoordinate(graph, tuple(self[k] for k in graph.required.names))
@@ -1011,7 +1011,7 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         if self._graph == graph:
             return self
         return _ExpandedTupleDataCoordinate(
-            graph, tuple(self[k] for k in graph._dataCoordinateIndices.keys()), records=self._records
+            graph, tuple(self[k] for k in graph._dataCoordinateIndices), records=self._records
         )
 
     def expanded(

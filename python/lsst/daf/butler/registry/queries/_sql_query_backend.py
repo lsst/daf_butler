@@ -260,7 +260,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                 "use make_dataset_query_relation or make_dataset_search relation instead, or filter them "
                 "out if they have already been added or will be added later."
             )
-        for element_name in missing_columns.dimension_records.keys():
+        for element_name in missing_columns.dimension_records:
             if element_name not in dimensions.elements.names:
                 raise ColumnError(
                     f"Cannot join dimension element {element_name} whose dimensions are not a "
@@ -326,7 +326,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
             storage = self._managers.dimensions[dimension]
             records = storage.get_record_cache(context)
             assert records is not None, "Governor dimensions are always cached."
-            all_values = {cast(str, data_id[dimension.name]) for data_id in records.keys()}
+            all_values = {cast(str, data_id[dimension.name]) for data_id in records}
             if (constraint_values := constraints.get(dimension.name)) is not None:
                 if not (constraint_values <= all_values):
                     raise DataIdValueError(

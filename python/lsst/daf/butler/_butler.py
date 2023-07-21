@@ -1733,7 +1733,7 @@ class Butler(LimitedButler):
                     existence[ref] |= DatasetExistence._ARTIFACT
         else:
             # Do not set this flag if nothing is known about the dataset.
-            for ref in existence.keys():
+            for ref in existence:
                 if existence[ref] != DatasetExistence.UNRECOGNIZED:
                     existence[ref] |= DatasetExistence._ASSUMED
 

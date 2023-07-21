@@ -1738,7 +1738,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         dict2 : `dict` [`str`, `np.ndarray`]
         """
         self.assertEqual(set(dict1.keys()), set(dict2.keys()))
-        for name in dict1.keys():
+        for name in dict1:
             self.assertEqual(dict1[name].dtype, dict2[name].dtype)
             self.assertTrue(np.all(dict1[name] == dict2[name]))
 
