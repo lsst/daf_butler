@@ -71,8 +71,8 @@ def transferDatasets(
     source_butler = Butler(source, writeable=False)
     dest_butler = Butler(dest, writeable=True)
 
-    dataset_type_expr = ... if not dataset_type else dataset_type
-    collections_expr: tuple[str, ...] | EllipsisType = ... if not collections else collections
+    dataset_type_expr = dataset_type if dataset_type else ...
+    collections_expr: tuple[str, ...] | EllipsisType = collections if collections else ...
 
     source_refs = source_butler.registry.queryDatasets(
         datasetType=dataset_type_expr, collections=collections_expr, where=where, findFirst=find_first
