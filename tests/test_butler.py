@@ -2338,6 +2338,7 @@ class NullDatastoreTestCase(unittest.TestCase):
 
     # Need a good config to create the repo.
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    storageClassFactory: StorageClassFactory
 
     @classmethod
     def setUpClass(cls) -> None:
