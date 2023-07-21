@@ -596,13 +596,13 @@ class DataCoordinateTestCase(unittest.TestCase):
                     self.assertIs(getattr(data_id, element.name), data_id.records[element.name])
                     self.assertIn(element.name, dir(data_id))
                 with self.assertRaisesRegex(AttributeError, "^not_a_dimension_name$"):
-                    getattr(data_id, "not_a_dimension_name")
+                    data_id.not_a_dimension_name
             for data_id in itertools.chain(split.minimal, split.complete):
                 for element in data_id.graph.elements:
                     with self.assertRaisesRegex(AttributeError, "only available on expanded DataCoordinates"):
                         getattr(data_id, element.name)
                 with self.assertRaisesRegex(AttributeError, "^not_a_dimension_name$"):
-                    getattr(data_id, "not_a_dimension_name")
+                    data_id.not_a_dimension_name
 
     def testEquality(self):
         """Test that different `DataCoordinate` instances with different state

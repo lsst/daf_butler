@@ -518,7 +518,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
     def remove(self, element: str | K) -> Any:
         # Docstring inherited.
-        k = getattr(element, "name") if not isinstance(element, str) else element
+        k = element.name if not isinstance(element, str) else element
         del self._mapping[k]
 
     def discard(self, element: str | K) -> Any:
