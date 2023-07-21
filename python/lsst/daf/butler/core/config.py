@@ -863,9 +863,7 @@ class Config(MutableMapping):
             will be returned, else the value will be the first element.
         """
         val = self.get(name)
-        if isinstance(val, str):
-            val = [val]
-        elif not isinstance(val, Sequence):
+        if isinstance(val, str) or not isinstance(val, Sequence):
             val = [val]
         return val
 

@@ -249,9 +249,7 @@ class GUID(sqlalchemy.TypeDecorator):
     def process_result_value(
         self, value: str | uuid.UUID | None, dialect: sqlalchemy.Dialect
     ) -> uuid.UUID | None:
-        if value is None:
-            return value
-        elif isinstance(value, uuid.UUID):
+        if value is None or isinstance(value, uuid.UUID):
             # sqlalchemy 2 converts to UUID internally
             return value
         else:
