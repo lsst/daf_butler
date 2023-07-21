@@ -140,7 +140,7 @@ class NormalFormExpressionTestCase(unittest.TestCase):
                 self.assertTrue(wrapper.satisfies(NormalForm.DISJUNCTIVE), msg=str(wrapper))
             elif disjunctive:  # str to expect after normalization to disjunctive
                 self.assertEqual(str(trees[NormalForm.DISJUNCTIVE]), disjunctive)
-            for i in range(10):
+            for _ in range(10):
                 values = {k: bool(random.randint(0, 1)) for k in "ABCDEF"}
                 visitor = BooleanEvaluationTreeVisitor(**values)
                 expected = originalTree.visit(visitor)

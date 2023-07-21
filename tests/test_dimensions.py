@@ -552,7 +552,7 @@ class DataCoordinateTestCase(unittest.TestCase):
         applicable) its ``full`` property are self-consistent and consistent
         with the ``graph`` property.
         """
-        for n in range(5):
+        for _ in range(5):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
@@ -568,7 +568,7 @@ class DataCoordinateTestCase(unittest.TestCase):
                     self.assertEqual(list(dataId.full.values()), [dataId[k] for k in dataId.graph.dimensions])
 
     def test_pickle(self):
-        for n in range(5):
+        for _ in range(5):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
@@ -587,7 +587,7 @@ class DataCoordinateTestCase(unittest.TestCase):
         """Test that dimension records are available as attributes on expanded
         data coordinates.
         """
-        for n in range(5):
+        for _ in range(5):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
@@ -635,7 +635,7 @@ class DataCoordinateTestCase(unittest.TestCase):
         """Test constructing a DataCoordinate from many different kinds of
         input via `DataCoordinate.standardize` and `DataCoordinate.subset`.
         """
-        for n in range(5):
+        for _ in range(5):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)

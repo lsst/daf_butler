@@ -2384,7 +2384,7 @@ class FileDatastore(GenericBaseDatastore):
             else:
                 raise FileNotFoundError(err_msg)
 
-        for location, storedFileInfo in fileLocations:
+        for location, _ in fileLocations:
             if not self._artifact_exists(location):
                 err_msg = (
                     f"Dataset is known to datastore {self.name} but "
