@@ -337,10 +337,7 @@ class QuantumBackedButler(LimitedButler):
             Mapping of the dataset type name to its registry definition.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
-        if "root" in butler_config:
-            butler_root = butler_config["root"]
-        else:
-            butler_root = butler_config.configDir
+        butler_root = butler_config.get("root", butler_config.configDir)
         db = SqliteDatabase.fromUri(f"sqlite:///{filename}", origin=0)
         with db.declareStaticTables(create=True) as context:
             opaque_manager = OpaqueManagerClass.initialize(db, context)

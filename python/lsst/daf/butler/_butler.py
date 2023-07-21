@@ -224,10 +224,7 @@ class Butler(LimitedButler):
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths, without_datastore=without_datastore)
             try:
-                if "root" in self._config:
-                    butlerRoot = self._config["root"]
-                else:
-                    butlerRoot = self._config.configDir
+                butlerRoot = self._config.get("root", self._config.configDir)
                 if writeable is None:
                     writeable = run is not None
                 self._registry = _RegistryFactory(self._config).from_config(
