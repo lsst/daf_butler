@@ -405,7 +405,7 @@ class DatastoreTests(DatastoreTestsBase):
                     datastore.get(ref, storageClass="StructuredDataDictJson")
 
                 # Need a special method to generate stored dataset type.
-                def _stored_dataset_type(name: str) -> DatasetType:
+                def _stored_dataset_type(name: str, ref: DatasetRef = ref) -> DatasetType:
                     if name == ref.datasetType.name:
                         return ref.datasetType
                     raise ValueError(f"Unexpected dataset type name {ref.datasetType.name}")
@@ -694,7 +694,13 @@ class DatastoreTests(DatastoreTestsBase):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore()
 
-                def succeed(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def succeed(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Ingest a file already in the datastore root."""
                     # first move it into the root, and adjust the path
                     # accordingly
@@ -703,7 +709,13 @@ class DatastoreTests(DatastoreTestsBase):
                     datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
-                def failInputDoesNotExist(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failInputDoesNotExist(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Can't ingest files if we're given a bad path."""
                     with self.assertRaises(FileNotFoundError):
                         datastore.ingest(
@@ -711,7 +723,13 @@ class DatastoreTests(DatastoreTestsBase):
                         )
                     self.assertFalse(datastore.exists(ref))
 
-                def failOutsideRoot(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failOutsideRoot(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Can't ingest files outside of datastore root unless
                     auto.
                     """
@@ -723,7 +741,13 @@ class DatastoreTests(DatastoreTestsBase):
                             datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                         self.assertFalse(datastore.exists(ref))
 
-                def failNotImplemented(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failNotImplemented(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     with self.assertRaises(NotImplementedError):
                         datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
 
@@ -740,14 +764,26 @@ class DatastoreTests(DatastoreTestsBase):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore(mode)
 
-                def succeed(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def succeed(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Ingest a file by transferring it to the template
                     location.
                     """
                     datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
-                def failInputDoesNotExist(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failInputDoesNotExist(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Can't ingest files if we're given a bad path."""
                     with self.assertRaises(FileNotFoundError):
                         # Ensure the file does not look like it is in
@@ -757,7 +793,13 @@ class DatastoreTests(DatastoreTestsBase):
                         )
                     self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
 
-                def failNotImplemented(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failNotImplemented(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     with self.assertRaises(NotImplementedError):
                         datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
 
