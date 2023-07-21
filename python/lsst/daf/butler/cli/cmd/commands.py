@@ -22,7 +22,6 @@ from __future__ import annotations
 
 __all__ = ()
 
-import warnings
 from typing import Any
 
 import click
@@ -115,7 +114,7 @@ def butler_import(*args: Any, **kwargs: Any) -> None:
     # `reuse_ids`` is not used by `butlerImport`.
     reuse_ids = kwargs.pop("reuse_ids", False)
     if reuse_ids:
-        warnings.warn("--reuse-ids option is deprecated and will be removed after v26.", FutureWarning)
+        click.echo("WARNING: --reuse-ids option is deprecated and will be removed after v26.")
 
     script.butlerImport(*args, **kwargs)
 
