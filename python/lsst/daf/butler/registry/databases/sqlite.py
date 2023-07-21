@@ -93,7 +93,8 @@ class SqliteDatabase(Database):
             raise RuntimeError("No database in connection.")
         if namespace is None:
             namespace = "main"
-        for _, dbname, filename in dbList:
+        # Look for the filename associated with this namespace.
+        for _, dbname, filename in dbList:  # B007
             if dbname == namespace:
                 break
         else:
