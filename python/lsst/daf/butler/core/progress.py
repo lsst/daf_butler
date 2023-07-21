@@ -26,8 +26,8 @@ __all__ = ("Progress", "ProgressBar", "ProgressHandler")
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sized
-from contextlib import contextmanager
-from typing import ClassVar, ContextManager, Protocol, TypeVar
+from contextlib import AbstractContextManager, contextmanager
+from typing import ClassVar, Protocol, TypeVar
 
 _T = TypeVar("_T", covariant=True)
 _K = TypeVar("_K")
@@ -155,7 +155,7 @@ class Progress:
         desc: str | None = None,
         total: int | None = None,
         skip_scalar: bool = True,
-    ) -> ContextManager[ProgressBar[_T]]:
+    ) -> AbstractContextManager[ProgressBar[_T]]:
         """Return a new progress bar context manager.
 
         Parameters
@@ -179,7 +179,7 @@ class Progress:
 
         Returns
         -------
-        bar : `ContextManager` [ `ProgressBar` ]
+        bar : `contextlib.AbstractContextManager` [ `ProgressBar` ]
             A context manager that returns an object satisfying the
             `ProgressBar` interface when it is entered.
         """
@@ -417,7 +417,7 @@ class ProgressHandler(ABC):
     @abstractmethod
     def get_progress_bar(
         self, iterable: Iterable[_T] | None, desc: str, total: int | None, level: int
-    ) -> ContextManager[ProgressBar[_T]]:
+    ) -> AbstractContextManager[ProgressBar[_T]]:
         """Create a new progress bar.
 
         Parameters

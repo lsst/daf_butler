@@ -24,7 +24,8 @@ __all__ = ("DatastoreRegistryBridgeManager", "DatastoreRegistryBridge", "FakeDat
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, ContextManager
+from contextlib import AbstractContextManager
+from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import immutable
 
@@ -165,7 +166,7 @@ class DatastoreRegistryBridge(ABC):
         records_table: OpaqueTableStorage | None = None,
         record_class: type[StoredDatastoreItemInfo] | None = None,
         record_column: str | None = None,
-    ) -> ContextManager[
+    ) -> AbstractContextManager[
         tuple[Iterable[tuple[DatasetIdRef, StoredDatastoreItemInfo | None]], set[str] | None]
     ]:
         """Retrieve all the dataset ref IDs that are in the trash

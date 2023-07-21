@@ -24,7 +24,8 @@ from __future__ import annotations
 __all__ = ("ClickProgressHandler",)
 
 from collections.abc import Iterable
-from typing import Any, ContextManager, TypeVar
+from contextlib import AbstractContextManager
+from typing import Any, TypeVar
 
 import click
 
@@ -75,6 +76,6 @@ class ClickProgressHandler(ProgressHandler):
 
     def get_progress_bar(
         self, iterable: Iterable[_T] | None, desc: str | None, total: int | None, level: int
-    ) -> ContextManager[ProgressBar[_T]]:
+    ) -> AbstractContextManager[ProgressBar[_T]]:
         # Docstring inherited.
         return click.progressbar(iterable=iterable, length=total, label=desc, **self._kwargs)  # type: ignore

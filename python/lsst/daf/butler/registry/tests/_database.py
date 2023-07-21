@@ -29,8 +29,8 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
-from typing import Any, ContextManager
+from contextlib import AbstractContextManager, contextmanager
+from typing import Any
 
 import astropy.time
 import sqlalchemy
@@ -117,7 +117,7 @@ class DatabaseTests(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def asReadOnly(self, database: Database) -> ContextManager[Database]:
+    def asReadOnly(self, database: Database) -> AbstractContextManager[Database]:
         """Return a context manager for a read-only connection into the given
         database.
 
