@@ -85,7 +85,7 @@ class LoggingTestCase(unittest.TestCase):
 
         # Also check we can autodetect the format.
         for raw in (json, json.encode(), json_stream, json_stream.encode()):
-            records = ButlerLogRecords.from_raw(json)
+            records = ButlerLogRecords.from_raw(raw)
             self.assertEqual(records, self.handler.records)
 
         for raw in ("", b""):
