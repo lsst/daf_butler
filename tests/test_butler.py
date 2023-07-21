@@ -2055,9 +2055,9 @@ class PosixDatastoreTransfers(unittest.TestCase):
         if hasattr(datastore, "trustGetRequest"):
             datastore.trustGetRequest = True
         elif hasattr(datastore, "datastores"):
-            for datastore in datastore.datastores:
-                if hasattr(datastore, "trustGetRequest"):
-                    datastore.trustGetRequest = True
+            for this_datastore in datastore.datastores:
+                if hasattr(this_datastore, "trustGetRequest"):
+                    this_datastore.trustGetRequest = True
 
     def testTransferMissing(self) -> None:
         """Test transfers where datastore records are missing.

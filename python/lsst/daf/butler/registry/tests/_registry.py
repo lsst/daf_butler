@@ -1276,10 +1276,10 @@ class RegistryTests(ABC):
 
         # Overlap each DatabaseDimensionElement with the commonSkyPix system.
         commonSkyPix = registry.dimensions.commonSkyPix
-        for elementName, regions in regions.items():
+        for elementName, these_regions in regions.items():
             graph = DimensionGraph.union(registry.dimensions[elementName].graph, commonSkyPix.graph)
             expected = set()
-            for dataId, region in regions.items():
+            for dataId, region in these_regions.items():
                 for begin, end in commonSkyPix.pixelization.envelope(region):
                     expected.update(
                         DataCoordinate.standardize({commonSkyPix.name: index, **dataId.byName()}, graph=graph)
