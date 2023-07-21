@@ -122,7 +122,7 @@ class RegistryDefaults:
                 "(These may just be unrecognized keyword arguments passed at "
                 "Butler construction.)"
             )
-        if self._infer and not self._kwargs.keys() == allGovernorDimensions.names:
+        if self._infer and self._kwargs.keys() != allGovernorDimensions.names:
             summaries = []
             for collection in self.collections:
                 with contextlib.suppress(MissingCollectionError):

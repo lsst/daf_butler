@@ -571,7 +571,7 @@ class QuantumBackedButler(LimitedButler):
             )
             self._actual_inputs -= self._unavailable_inputs
         checked_inputs = self._available_inputs | self._unavailable_inputs
-        if not self._predicted_inputs == checked_inputs:
+        if self._predicted_inputs != checked_inputs:
             _LOG.warning(
                 "Execution harness did not check predicted inputs %s for existence; available inputs "
                 "recorded in provenance may be incomplete.",
