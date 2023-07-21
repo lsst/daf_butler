@@ -61,7 +61,7 @@ class ButlerConfig(Config):
         than those read from the environment in
         `ConfigSubset.defaultSearchPaths()`.  They are only read if ``other``
         refers to a configuration file or directory.
-    skip_datastore : `bool`, optional
+    without_datastore : `bool`, optional
         If `True` remove the datastore configuration.
     """
 
@@ -69,7 +69,7 @@ class ButlerConfig(Config):
         self,
         other: ResourcePathExpression | Config | None = None,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
-        skip_datastore: bool = False,
+        without_datastore: bool = False,
     ):
         self.configDir: ResourcePath | None = None
 
@@ -160,7 +160,7 @@ class ButlerConfig(Config):
         for configClass in CONFIG_COMPONENT_CLASSES:
             assert configClass.component is not None, "Config class component cannot be None"
 
-            if skip_datastore and configClass is DatastoreConfig:
+            if without_datastore and configClass is DatastoreConfig:
                 if configClass.component in butlerConfig:
                     del butlerConfig[configClass.component]
                 continue

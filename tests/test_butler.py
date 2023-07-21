@@ -2360,7 +2360,7 @@ class NullDatastoreTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             Butler(bad_config)
 
-        butler = Butler(bad_config, writeable=True, skip_datastore=True)
+        butler = Butler(bad_config, writeable=True, without_datastore=True)
         self.assertIsInstance(butler._datastore, NullDatastore)
 
         # Check that registry is working.
