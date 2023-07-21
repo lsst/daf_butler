@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("YamlFormatter",)
 
+import contextlib
 import dataclasses
 from typing import Any
 
@@ -93,10 +94,9 @@ class YamlFormatter(FileFormatter):
         """
         data = yaml.safe_load(serializedDataset)
 
-        try:
+        with contextlib.suppress(AttributeError):
             data = data.exportAsDict()
-        except AttributeError:
-            pass
+
         return data
 
     def _writeFile(self, inMemoryDataset: Any) -> None:
@@ -154,10 +154,8 @@ class YamlFormatter(FileFormatter):
         """
         if hasattr(inMemoryDataset, "dict") and hasattr(inMemoryDataset, "json"):
             # Pydantic-like model if both dict() and json() exist.
-            try:
+            with contextlib.suppress(Exception):
                 inMemoryDataset = inMemoryDataset.dict()
-            except Exception:
-                pass
 
         if dataclasses.is_dataclass(inMemoryDataset):
             inMemoryDataset = dataclasses.asdict(inMemoryDataset)

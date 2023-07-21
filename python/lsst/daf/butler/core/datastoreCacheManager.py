@@ -885,10 +885,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
             self._cache_entries.pop(entry, None)
             log.debug("Removing file from cache: %s", path)
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 path.remove()
-            except FileNotFoundError:
-                pass
 
     def _expire_cache(self) -> None:
         """Expire the files in the cache.

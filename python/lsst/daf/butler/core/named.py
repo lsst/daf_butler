@@ -30,6 +30,7 @@ __all__ = (
     "NameMappingSetView",
 )
 
+import contextlib
 from abc import abstractmethod
 from collections.abc import (
     ItemsView,
@@ -523,10 +524,8 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
     def discard(self, element: str | K) -> Any:
         # Docstring inherited.
-        try:
+        with contextlib.suppress(KeyError):
             self.remove(element)
-        except KeyError:
-            pass
 
     def pop(self, *args: str) -> K:
         # Docstring inherited.

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("Progress", "ProgressBar", "ProgressHandler")
 
+import contextlib
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sized
@@ -190,12 +191,10 @@ class Progress:
             assert handler, "Guaranteed by `is_enabled` check above."
             if skip_scalar:
                 if total is None:
-                    try:
+                    with contextlib.suppress(TypeError):
                         # static typing says len() won't but that's why
                         # we're doing it inside a try block.
                         total = len(iterable)  # type: ignore
-                    except TypeError:
-                        pass
                 if total is not None and total <= 1:
                     return _NullProgressBar.context(iterable)
             return handler.get_progress_bar(iterable, desc=desc, total=total, level=self._level)

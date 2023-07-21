@@ -25,6 +25,7 @@ from __future__ import annotations
 
 __all__ = ("FileDatastore",)
 
+import contextlib
 import hashlib
 import logging
 from collections import defaultdict
@@ -1119,10 +1120,8 @@ class FileDatastore(GenericBaseDatastore):
             is written and we should not confuse people by writing spurious
             error messages to the log.
             """
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 uri.remove()
-            except FileNotFoundError:
-                pass
 
         # Register a callback to try to delete the uploaded data if
         # something fails below

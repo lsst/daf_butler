@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("RegistryDefaults",)
 
+import contextlib
 from collections.abc import Sequence, Set
 from typing import TYPE_CHECKING, Any
 
@@ -124,10 +125,9 @@ class RegistryDefaults:
         if self._infer and not self._kwargs.keys() == allGovernorDimensions.names:
             summaries = []
             for collection in self.collections:
-                try:
+                with contextlib.suppress(MissingCollectionError):
                     summaries.append(registry.getCollectionSummary(collection))
-                except MissingCollectionError:
-                    pass
+
             if summaries:
                 summary = CollectionSummary.union(*summaries)
                 for dimensionName in allGovernorDimensions.names - self._kwargs.keys():
