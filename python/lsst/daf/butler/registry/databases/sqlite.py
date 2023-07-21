@@ -87,9 +87,8 @@ class SqliteDatabase(Database):
     ):
         super().__init__(origin=origin, engine=engine, namespace=namespace)
         # Get the filename from a call to 'PRAGMA database_list'.
-        with engine.connect() as connection:
-            with closing(connection.connection.cursor()) as cursor:
-                dbList = list(cursor.execute("PRAGMA database_list").fetchall())
+        with engine.connect() as connection, closing(connection.connection.cursor()) as cursor:
+            dbList = list(cursor.execute("PRAGMA database_list").fetchall())
         if len(dbList) == 0:
             raise RuntimeError("No database in connection.")
         if namespace is None:

@@ -549,9 +549,8 @@ class Butler(LimitedButler):
 
         Transactions can be nested.
         """
-        with self._registry.transaction():
-            with self._datastore.transaction():
-                yield
+        with self._registry.transaction(), self._datastore.transaction():
+            yield
 
     def _standardizeArgs(
         self,
@@ -1824,14 +1823,13 @@ class Butler(LimitedButler):
             if collectionType is not CollectionType.RUN:
                 raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
             refs.extend(self._registry.queryDatasets(..., collections=name, findFirst=True))
-        with self._datastore.transaction():
-            with self._registry.transaction():
-                if unstore:
-                    self._datastore.trash(refs)
-                else:
-                    self._datastore.forget(refs)
-                for name in names:
-                    self._registry.removeCollection(name)
+        with self._datastore.transaction(), self._registry.transaction():
+            if unstore:
+                self._datastore.trash(refs)
+            else:
+                self._datastore.forget(refs)
+            for name in names:
+                self._registry.removeCollection(name)
         if unstore:
             # Point of no return for removing artifacts
             self._datastore.emptyTrash()
@@ -1879,16 +1877,15 @@ class Butler(LimitedButler):
         # mutating the Registry (it can _look_ at Datastore-specific things,
         # but shouldn't change them), and hence all operations here are
         # Registry operations.
-        with self._datastore.transaction():
-            with self._registry.transaction():
-                if unstore:
-                    self._datastore.trash(refs)
-                if purge:
-                    self._registry.removeDatasets(refs)
-                elif disassociate:
-                    assert tags, "Guaranteed by earlier logic in this function."
-                    for tag in tags:
-                        self._registry.disassociate(tag, refs)
+        with self._datastore.transaction(), self._registry.transaction():
+            if unstore:
+                self._datastore.trash(refs)
+            if purge:
+                self._registry.removeDatasets(refs)
+            elif disassociate:
+                assert tags, "Guaranteed by earlier logic in this function."
+                for tag in tags:
+                    self._registry.disassociate(tag, refs)
         # We've exited the Registry transaction, and apparently committed.
         # (if there was an exception, everything rolled back, and it's as if
         # nothing happened - and we never get here).

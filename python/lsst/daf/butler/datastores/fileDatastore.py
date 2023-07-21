@@ -2917,10 +2917,9 @@ class FileDatastore(GenericBaseDatastore):
 
         hasher = hashlib.new(algorithm)
 
-        with uri.as_local() as local_uri:
-            with open(local_uri.ospath, "rb") as f:
-                for chunk in iter(lambda: f.read(block_size), b""):
-                    hasher.update(chunk)
+        with uri.as_local() as local_uri, open(local_uri.ospath, "rb") as f:
+            for chunk in iter(lambda: f.read(block_size), b""):
+                hasher.update(chunk)
 
         return hasher.hexdigest()
 

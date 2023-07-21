@@ -145,9 +145,8 @@ class DatabaseTests(ABC):
         context-manager boilerplate that is usefully verbose in production code
         but just noise in tests.
         """
-        with database.transaction():
-            with database.query(executable) as result:
-                return result.fetchall()
+        with database.transaction(), database.query(executable) as result:
+            return result.fetchall()
 
     def query_scalar(self, database: Database, executable: sqlalchemy.sql.expression.SelectBase) -> Any:
         """Run a SELECT query that yields a single column and row against the

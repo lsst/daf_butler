@@ -74,10 +74,9 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
         uri = butler.getURI(ref)
 
         # Following test needs a local file
-        with uri.as_local() as local:
-            with tempfile.NamedTemporaryFile(suffix=".png") as file:
-                pyplot.gcf().savefig(file.name)
-                self.assertTrue(filecmp.cmp(local.ospath, file.name, shallow=True))
+        with uri.as_local() as local, tempfile.NamedTemporaryFile(suffix=".png") as file:
+            pyplot.gcf().savefig(file.name)
+            self.assertTrue(filecmp.cmp(local.ospath, file.name, shallow=True))
         self.assertTrue(butler.exists(ref))
         with self.assertRaises(ValueError):
             butler.get(ref)
