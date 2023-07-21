@@ -34,6 +34,7 @@ import astropy.time
 import yaml
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
+from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
@@ -319,7 +320,8 @@ class YamlRepoImportBackend(RepoImportBackend):
                         if not isinstance(child, str):
                             warnings.warn(
                                 f"CHAINED collection {data['name']} includes restrictions on child "
-                                "collection searches, which are no longer suppored and will be ignored."
+                                "collection searches, which are no longer suppored and will be ignored.",
+                                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                             )
                             # Old form with dataset type restrictions only,
                             # supported for backwards compatibility.

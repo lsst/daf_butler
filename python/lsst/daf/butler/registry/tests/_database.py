@@ -795,14 +795,16 @@ class DatabaseTests(ABC):
             await task2
             if "a2" in names1:
                 warnings.warn(
-                    "Unlucky scheduling in no-locking test: concurrent INSERT happened before first SELECT."
+                    "Unlucky scheduling in no-locking test: concurrent INSERT happened before first SELECT.",
+                    stacklevel=1,
                 )
                 self.assertEqual(names1, {"a2"})
                 self.assertEqual(names2, {"a1", "a2"})
             elif "a2" not in names2:
                 warnings.warn(
                     "Unlucky scheduling in no-locking test: concurrent INSERT "
-                    "happened after second SELECT even without locking."
+                    "happened after second SELECT even without locking.",
+                    stacklevel=1,
                 )
                 self.assertEqual(names1, set())
                 self.assertEqual(names2, {"a1"})
@@ -829,7 +831,8 @@ class DatabaseTests(ABC):
             await task2
             if "a2" in names1:
                 warnings.warn(
-                    "Unlucky scheduling in locking test: concurrent INSERT happened before first SELECT."
+                    "Unlucky scheduling in locking test: concurrent INSERT happened before first SELECT.",
+                    stacklevel=1,
                 )
                 self.assertEqual(names1, {"a2"})
                 self.assertEqual(names2, {"a1", "a2"})
