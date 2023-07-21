@@ -478,7 +478,7 @@ def split_kv(
                 raise click.ClickException(
                     message=f"Could not parse key-value pair '{val}' using separator '{separator}', "
                     f"with multiple values {'allowed' if multiple else 'not allowed'}: {e}"
-                )
+                ) from None
             ret.add(k, norm(v))
     return ret.get()
 
@@ -1029,7 +1029,7 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
                 option_name=param,
                 message=f"Error reading overrides file: {e}",
                 ctx=ctx,
-            )
+            ) from None
         # Override the defaults for this subcommand
         ctx.default_map.update(overrides)
     return

@@ -99,7 +99,7 @@ class SchemaValidationError(ValidationError):
                 try:
                     return func(self, config, *args, **kwargs)
                 except caught as err:
-                    raise cls(message.format(config=str(config), err=err))
+                    raise cls(message.format(config=str(config), err=err)) from err
 
             return decorated
 

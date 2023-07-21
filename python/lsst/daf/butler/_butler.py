@@ -1183,7 +1183,7 @@ class Butler(LimitedButler):
             try:
                 self._datastore.put(obj, datasetRefOrType)
             except IntegrityError as e:
-                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}")
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
             return datasetRefOrType
 
         log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
@@ -2073,7 +2073,7 @@ class Butler(LimitedButler):
                 *datasets, transfer=transfer, record_validation_info=record_validation_info
             )
         except IntegrityError as e:
-            raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}")
+            raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}") from e
 
     @contextlib.contextmanager
     def export(
