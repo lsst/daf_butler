@@ -438,7 +438,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             self.registry.insertDimensionData(element, *dimensionRecords, skip_existing=True)
         # FileDatasets to ingest into the datastore (in bulk):
         fileDatasets = []
-        for (datasetTypeName, run), records in self.datasets.items():
+        for records in self.datasets.values():
             # Make a big flattened list of all data IDs and dataset_ids, while
             # remembering slices that associate them with the FileDataset
             # instances they came from.
