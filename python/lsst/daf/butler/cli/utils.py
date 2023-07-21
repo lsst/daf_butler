@@ -843,7 +843,7 @@ class MWCommand(click.Command):
                 if (opt := opts[param_name]) is not None:
                     captured_args.append(opt)
             else:
-                assert False  # All parameters should be an Option or an Argument.
+                raise AssertionError("All parameters should be an Option or an Argument")
         MWCtxObj.getFrom(ctx).args = captured_args
 
     def parse_args(self, ctx: click.Context, args: Any) -> list[str]:

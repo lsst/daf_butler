@@ -956,7 +956,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
 
     def _record(self, name: str) -> DimensionRecord | None:
         # Docstring inherited from DataCoordinate.
-        assert False
+        raise AssertionError()
 
     def __reduce__(self) -> tuple[Any, ...]:
         return (_BasicTupleDataCoordinate, (self._graph, self._values))
