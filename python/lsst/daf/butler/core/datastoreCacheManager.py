@@ -861,7 +861,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             # Look solely for matching dataset ref ID and not specific
             # components.
             cached_paths = self._cache_entries.get_dataset_keys(ref.id)
-            return True if cached_paths else False
+            return bool(cached_paths)
 
         else:
             # Extension is known so we can do an explicit look up for the
