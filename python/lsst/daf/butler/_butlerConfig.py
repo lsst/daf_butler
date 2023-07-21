@@ -61,12 +61,15 @@ class ButlerConfig(Config):
         than those read from the environment in
         `ConfigSubset.defaultSearchPaths()`.  They are only read if ``other``
         refers to a configuration file or directory.
+    without_datastore : `bool`, optional
+        If `True` remove the datastore configuration.
     """
 
     def __init__(
         self,
         other: ResourcePathExpression | Config | None = None,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
+        without_datastore: bool = False,
     ):
         self.configDir: ResourcePath | None = None
 
@@ -155,6 +158,13 @@ class ButlerConfig(Config):
         # configuration classes. We ask each of them to apply defaults to
         # the values we have been supplied by the user.
         for configClass in CONFIG_COMPONENT_CLASSES:
+            assert configClass.component is not None, "Config class component cannot be None"
+
+            if without_datastore and configClass is DatastoreConfig:
+                if configClass.component in butlerConfig:
+                    del butlerConfig[configClass.component]
+                continue
+
             # Only send the parent config if the child
             # config component is present (otherwise it assumes that the
             # keys from other components are part of the child)
@@ -163,7 +173,6 @@ class ButlerConfig(Config):
                 localOverrides = butlerConfig
             config = configClass(localOverrides, searchPaths=searchPaths)
             # Re-attach it using the global namespace
-            assert configClass.component is not None, "Config class component cannot be None"
             self.update({configClass.component: config})
             # Remove the key from the butlerConfig since we have already
             # merged that information.

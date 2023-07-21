@@ -69,6 +69,7 @@ from .core import (
     DimensionRecord,
     DimensionUniverse,
     FileDataset,
+    NullDatastore,
     Progress,
     StorageClass,
     StorageClassFactory,
@@ -149,6 +150,9 @@ class Butler(LimitedButler):
         the default for that dimension.  Nonexistent collections are ignored.
         If a default value is provided explicitly for a governor dimension via
         ``**kwargs``, no default will be inferred for that dimension.
+    without_datastore : `bool`, optional
+        If `True` do not attach a datastore to this butler. Any attempts
+        to use a datastore will fail.
     **kwargs : `str`
         Default data ID key-value pairs.  These may only identify "governor"
         dimensions like ``instrument`` and ``skymap``.
@@ -203,6 +207,7 @@ class Butler(LimitedButler):
         searchPaths: Sequence[ResourcePathExpression] | None = None,
         writeable: bool | None = None,
         inferDefaults: bool = True,
+        without_datastore: bool = False,
         **kwargs: str,
     ):
         defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
@@ -217,7 +222,7 @@ class Butler(LimitedButler):
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
         else:
-            self._config = ButlerConfig(config, searchPaths=searchPaths)
+            self._config = ButlerConfig(config, searchPaths=searchPaths, without_datastore=without_datastore)
             try:
                 if "root" in self._config:
                     butlerRoot = self._config["root"]
@@ -228,9 +233,12 @@ class Butler(LimitedButler):
                 self._registry = _RegistryFactory(self._config).from_config(
                     butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
                 )
-                self._datastore = Datastore.fromConfig(
-                    self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
-                )
+                if without_datastore:
+                    self._datastore = NullDatastore(None, None)
+                else:
+                    self._datastore = Datastore.fromConfig(
+                        self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
+                    )
                 self.storageClasses = StorageClassFactory()
                 self.storageClasses.addFromConfig(self._config)
             except Exception:

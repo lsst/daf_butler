@@ -55,7 +55,7 @@ def queryDatasetTypes(repo: str, verbose: bool, glob: Iterable[str], components:
         A dict whose key is "datasetTypes" and whose value is a list of
         collection names.
     """
-    butler = Butler(repo)
+    butler = Butler(repo, without_datastore=True)
     expression = glob if glob else ...
     datasetTypes = butler.registry.queryDatasetTypes(components=components, expression=expression)
     if verbose:

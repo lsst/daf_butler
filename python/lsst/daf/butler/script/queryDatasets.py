@@ -167,7 +167,9 @@ class QueryDatasets:
     ):
         if (repo and butler) or (not repo and not butler):
             raise RuntimeError("One of repo and butler must be provided and the other must be None.")
-        self.butler = butler or Butler(repo)
+        # show_uri requires a datastore.
+        without_datastore = False if show_uri else True
+        self.butler = butler or Butler(repo, without_datastore=without_datastore)
         self._getDatasets(glob, collections, where, find_first)
         self.showUri = show_uri
 

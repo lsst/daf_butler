@@ -48,7 +48,7 @@ def queryDimensionRecords(
     `~lsst.daf.butler.Registry.queryDimensionRecords` except for ``no_check``,
     which is the inverse of ``check``.
     """
-    butler = Butler(repo)
+    butler = Butler(repo, without_datastore=True)
 
     query_collections: Iterable[str] | EllipsisType | None = None
     if datasets:

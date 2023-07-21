@@ -134,7 +134,7 @@ def _getTree(
         names=("Name", "Type"),
         dtype=(str, str),
     )
-    butler = Butler(repo)
+    butler = Butler(repo, without_datastore=True)
 
     def addCollection(name: str, level: int = 0) -> None:
         collectionType = butler.registry.getCollectionType(name)
