@@ -404,7 +404,7 @@ class Butler(LimitedButler):
         construct the repository should also be used to construct any Butlers
         to avoid configuration inconsistencies.
         """
-        if isinstance(config, (ButlerConfig, ConfigSubset)):
+        if isinstance(config, ButlerConfig | ConfigSubset):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
 
         # Ensure that the root of the repository exists or can be made

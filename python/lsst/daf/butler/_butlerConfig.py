@@ -98,7 +98,7 @@ class ButlerConfig(Config):
 
         # Include ResourcePath here in case it refers to a directory.
         # Creating a ResourcePath from a ResourcePath is a no-op.
-        if isinstance(other, (str, os.PathLike, ResourcePath)):
+        if isinstance(other, str | os.PathLike | ResourcePath):
             # This will only allow supported schemes
             uri = ResourcePath(other)
 

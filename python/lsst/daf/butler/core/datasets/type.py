@@ -197,7 +197,7 @@ class DatasetType:
         self._dimensions = dimensions
         if name in self._dimensions.universe.getGovernorDimensions().names:
             raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
-        if not isinstance(storageClass, (StorageClass, str)):
+        if not isinstance(storageClass, StorageClass | str):
             raise ValueError(f"StorageClass argument must be StorageClass or str. Got {storageClass}")
         self._storageClass: StorageClass | None
         if isinstance(storageClass, StorageClass):
@@ -210,7 +210,7 @@ class DatasetType:
         self._parentStorageClass: StorageClass | None = None
         self._parentStorageClassName: str | None = None
         if parentStorageClass is not None:
-            if not isinstance(storageClass, (StorageClass, str)):
+            if not isinstance(storageClass, StorageClass | str):
                 raise ValueError(
                     f"Parent StorageClass argument must be StorageClass or str. Got {parentStorageClass}"
                 )

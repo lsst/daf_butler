@@ -1005,7 +1005,7 @@ class FileDatastore(GenericBaseDatastore):
             if dataset.formatter is None:
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
-                assert isinstance(dataset.formatter, (type, str))
+                assert isinstance(dataset.formatter, type | str)
                 formatter_class = get_class_of(dataset.formatter)
                 if not issubclass(formatter_class, Formatter):
                     raise TypeError(f"Requested formatter {dataset.formatter} is not a Formatter class.")

@@ -101,7 +101,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
             batches: list[Iterable[Any]] = []
             for k, v in where.items():
                 column = self._table.columns[k]
-                if isinstance(v, (list, tuple, set)):
+                if isinstance(v, list | tuple | set):
                     batches.append(_batch_in_clause(column, v))
                 else:
                     # single "batch" for a regular eq operator

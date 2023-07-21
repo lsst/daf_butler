@@ -266,11 +266,11 @@ class Config(MutableMapping):
             # fail. Safer to use update().
             self.update(other._data)
             self.configFile = other.configFile
-        elif isinstance(other, (dict, Mapping)):
+        elif isinstance(other, dict | Mapping):
             # In most cases we have a dict, and it's more efficient
             # to check for a dict instance before checking the generic mapping.
             self.update(other)
-        elif isinstance(other, (str, ResourcePath, Path)):
+        elif isinstance(other, str | ResourcePath | Path):
             # if other is a string, assume it is a file path/URI
             self.__initFromUri(other)
             self._processExplicitIncludes()
@@ -417,7 +417,7 @@ class Config(MutableMapping):
         TypeError:
             Raised if there is an error loading the content.
         """
-        if isinstance(stream, (bytes, str)):
+        if isinstance(stream, bytes | str):
             content = json.loads(stream)
         else:
             content = json.load(stream)
@@ -640,7 +640,7 @@ class Config(MutableMapping):
 
         # In most cases we have a dict, and it's more efficient
         # to check for a dict instance before checking the generic mapping.
-        if isinstance(data, (dict, Mapping)):
+        if isinstance(data, dict | Mapping):
             data = Config(data)
             # Ensure that child configs inherit the parent internal delimiter
             if self._D != Config._D:
@@ -763,7 +763,7 @@ class Config(MutableMapping):
                 val = d[key]
                 levelKey = base + (key,) if base is not None else (key,)
                 keys.append(levelKey)
-                if isinstance(val, (Mapping, Sequence)) and not isinstance(val, str):
+                if isinstance(val, Mapping | Sequence) and not isinstance(val, str):
                     getKeysAsTuples(val, keys, levelKey)
 
         keys: list[tuple[str, ...]] = []
@@ -1301,7 +1301,7 @@ class ConfigSubset(Config):
             # Reverse order so that high priority entries
             # update the object last.
             for pathDir in reversed(searchPaths):
-                if isinstance(pathDir, (str, ResourcePath)):
+                if isinstance(pathDir, str | ResourcePath):
                     pathDir = ResourcePath(pathDir, forceDirectory=True)
                     file = pathDir.join(configFile)
                     if file.exists():
