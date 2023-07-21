@@ -873,10 +873,10 @@ class RegistryTests(ABC):
         self.assertEqual(ref4, registry.findDataset("flat", dataId4, collections=chain2))
         # Deleting a collection that's part of a CHAINED collection is not
         # allowed, and is exception-safe.
-        with self.assertRaises(Exception):
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
             registry.removeCollection(run2)
         self.assertEqual(registry.getCollectionType(run2), CollectionType.RUN)
-        with self.assertRaises(Exception):
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
             registry.removeCollection(chain1)
         self.assertEqual(registry.getCollectionType(chain1), CollectionType.CHAINED)
         # Actually remove chain2, test that it's gone by asking for its type.

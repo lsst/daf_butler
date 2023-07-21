@@ -1185,7 +1185,7 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
                 datastore.formatterFactory.registerFormatter(ref.datasetType, formatter, overwrite=True)
 
                 # Try to put the dataset, it should fail
-                with self.assertRaises(Exception):
+                with self.assertRaises(RuntimeError):
                     datastore.put(metrics, ref)
 
                 # Check that there is no file on disk
