@@ -187,9 +187,8 @@ class RecordFactory:
                 self._exposure_records(dimension_record, record)
                 if self.exposure_region_factory is not None:
                     region = self.exposure_region_factory.exposure_region(dataId, context)
-        elif self.visit in dataId:
-            if (dimension_record := dataId.records[self.visit]) is not None:
-                self._visit_records(dimension_record, record)
+        elif self.visit in dataId and (dimension_record := dataId.records[self.visit]) is not None:
+            self._visit_records(dimension_record, record)
 
         # ask each plugin for its values to add to a record.
         try:

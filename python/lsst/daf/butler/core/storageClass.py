@@ -685,9 +685,8 @@ StorageClasses
         """
         if isinstance(storageClassOrName, str):
             return storageClassOrName in self._storageClasses
-        elif isinstance(storageClassOrName, StorageClass):
-            if storageClassOrName.name in self._storageClasses:
-                return storageClassOrName == self._storageClasses[storageClassOrName.name]
+        elif isinstance(storageClassOrName, StorageClass) and storageClassOrName.name in self._storageClasses:
+            return storageClassOrName == self._storageClasses[storageClassOrName.name]
         return False
 
     def __len__(self) -> int:

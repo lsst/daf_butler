@@ -522,9 +522,10 @@ class RegistryTests(ABC):
         if isinstance(self.datasetsManager, str):
             if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
                 self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
-        elif isinstance(self.datasetsManager, dict):
-            if not self.datasetsManager["cls"].endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
-                self.skipTest(f"Unexpected dataset manager {self.datasetsManager['cls']}")
+        elif isinstance(self.datasetsManager, dict) and not self.datasetsManager["cls"].endswith(
+            ".ByDimensionsDatasetRecordStorageManagerUUID"
+        ):
+            self.skipTest(f"Unexpected dataset manager {self.datasetsManager['cls']}")
 
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")

@@ -399,10 +399,9 @@ class FieldSpec:
             string type if it has been decided that it should be implemented
             as a `sqlalchemy.Text` type.
         """
-        if self.dtype == sqlalchemy.String:
-            # For short strings retain them as strings
-            if self.dtype == sqlalchemy.String and self.length and self.length <= 32:
-                return True
+        # For short strings retain them as strings
+        if self.dtype == sqlalchemy.String and self.length and self.length <= 32:
+            return True
         return False
 
     def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine | type:

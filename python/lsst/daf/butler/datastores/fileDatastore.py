@@ -1128,27 +1128,28 @@ class FileDatastore(GenericBaseDatastore):
         self._transaction.registerUndo("artifactWrite", _removeFileExists, uri)
 
         data_written = False
-        if not uri.isLocal:
-            # This is a remote URI. Some datasets can be serialized directly
-            # to bytes and sent to the remote datastore without writing a
-            # file. If the dataset is intended to be saved to the cache
-            # a file is always written and direct write to the remote
-            # datastore is bypassed.
-            if not self.cacheManager.should_be_cached(ref):
-                try:
-                    serializedDataset = formatter.toBytes(inMemoryDataset)
-                except NotImplementedError:
-                    # Fallback to the file writing option.
-                    pass
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to bytes."
-                    ) from e
-                else:
-                    log.debug("Writing bytes directly to %s", uri)
-                    uri.write(serializedDataset, overwrite=True)
-                    log.debug("Successfully wrote bytes directly to %s", uri)
-                    data_written = True
+
+        # For remote URIs some datasets can be serialized directly
+        # to bytes and sent to the remote datastore without writing a
+        # file. If the dataset is intended to be saved to the cache
+        # a file is always written and direct write to the remote
+        # datastore is bypassed.
+        if not uri.isLocal and not self.cacheManager.should_be_cached(ref):
+            # Remote URI that is not cached so can write directly.
+            try:
+                serializedDataset = formatter.toBytes(inMemoryDataset)
+            except NotImplementedError:
+                # Fallback to the file writing option.
+                pass
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to bytes."
+                ) from e
+            else:
+                log.debug("Writing bytes directly to %s", uri)
+                uri.write(serializedDataset, overwrite=True)
+                log.debug("Successfully wrote bytes directly to %s", uri)
+                data_written = True
 
         if not data_written:
             # Did not write the bytes directly to object store so instead
@@ -2840,10 +2841,9 @@ class FileDatastore(GenericBaseDatastore):
         if directory is not None:
             directoryUri = ResourcePath(directory, forceDirectory=True)
 
-        if transfer is not None and directoryUri is not None:
+        if transfer is not None and directoryUri is not None and not directoryUri.exists():
             # mypy needs the second test
-            if not directoryUri.exists():
-                raise FileNotFoundError(f"Export location {directory} does not exist")
+            raise FileNotFoundError(f"Export location {directory} does not exist")
 
         progress = Progress("lsst.daf.butler.datastores.FileDatastore.export", level=logging.DEBUG)
         for ref in progress.wrap(refs, "Exporting dataset files"):

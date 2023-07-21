@@ -924,11 +924,10 @@ class _BasicTupleDataCoordinate(DataCoordinate):
             # There's some chance that neither self nor other has full values,
             # but together provide enough to the union to.  Let the general
             # case below handle that.
-        elif self.graph == graph:
+        elif self.graph == graph and self.hasFull():
             # No chance at returning records.  If self has full values, it's
             # the best we can do.
-            if self.hasFull():
-                return self
+            return self
         # General case with actual merging of dictionaries.
         values = self.full.byName() if self.hasFull() else self.byName()
         values.update(other.full.byName() if other.hasFull() else other.byName())
@@ -1029,11 +1028,10 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
             # self has records, so even if other is also a valid result, it's
             # no better.
             return self
-        if other.graph == graph:
+        if other.graph == graph and other.hasFull():
             # If other has full values, and self does not identify some of
             # those, it's the base we can do.  It may have records, too.
-            if other.hasFull():
-                return other
+            return other
             # If other does not have full values, there's a chance self may
             # provide the values needed to complete it.  For example, self
             # could be {band} while other could be

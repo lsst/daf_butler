@@ -215,9 +215,12 @@ class DbAuth:
                 continue
 
             # Check for same database name
-            if components.path != "" and components.path != "/":
-                if not fnmatch.fnmatch(database, components.path.lstrip("/")):
-                    continue
+            if (
+                components.path != ""
+                and components.path != "/"
+                and not fnmatch.fnmatch(database, components.path.lstrip("/"))
+            ):
+                continue
 
             # Check username
             if components.username is not None:

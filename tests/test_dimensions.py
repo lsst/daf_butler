@@ -745,9 +745,12 @@ class DataCoordinateTestCase(unittest.TestCase):
                             self.assertTrue(unioned.hasRecords())
                     if lhs.graph.required | rhs.graph.required >= unioned.graph.dimensions:
                         self.assertTrue(unioned.hasFull())
-                    if lhs.hasRecords() and rhs.hasRecords():
-                        if lhs.graph.elements | rhs.graph.elements >= unioned.graph.elements:
-                            self.assertTrue(unioned.hasRecords())
+                    if (
+                        lhs.hasRecords()
+                        and rhs.hasRecords()
+                        and lhs.graph.elements | rhs.graph.elements >= unioned.graph.elements
+                    ):
+                        self.assertTrue(unioned.hasRecords())
 
     def testRegions(self):
         """Test that data IDs for a few known dimensions have the expected

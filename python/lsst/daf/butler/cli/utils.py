@@ -301,12 +301,11 @@ def split_commas(
                             stacklevel=2,
                         )
                     in_parens = False
-                elif c == ",":
-                    if not in_parens:
-                        # Split on this comma.
-                        valueList.append(current)
-                        current = ""
-                        continue
+                elif c == "," and not in_parens:
+                    # Split on this comma.
+                    valueList.append(current)
+                    current = ""
+                    continue
                 current += c
             if in_parens:
                 warnings.warn(

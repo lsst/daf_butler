@@ -685,9 +685,11 @@ class Database(ABC):
                 for table, foreignKey in context._foreignKeys:
                     table.append_constraint(foreignKey)
                 if create:
-                    if self.namespace is not None:
-                        if self.namespace not in context._inspector.get_schema_names():
-                            connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
+                    if (
+                        self.namespace is not None
+                        and self.namespace not in context._inspector.get_schema_names()
+                    ):
+                        connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
                     # In our tables we have columns that make use of sqlalchemy
                     # Sequence objects. There is currently a bug in sqlalchemy
                     # that causes a deprecation warning to be thrown on a
@@ -1153,12 +1155,11 @@ class Database(ABC):
         table = self._convertTableSpec(
             name, spec, metadata, prefixes=["TEMPORARY"], schema=sqlalchemy.schema.BLANK_SCHEMA, **kwargs
         )
-        if table.key in self._temp_tables:
-            if table.key != name:
-                raise ValueError(
-                    f"A temporary table with name {name} (transformed to {table.key} by "
-                    "Database) already exists."
-                )
+        if table.key in self._temp_tables and table.key != name:
+            raise ValueError(
+                f"A temporary table with name {name} (transformed to {table.key} by "
+                "Database) already exists."
+            )
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, metadata))
         with self._transaction():

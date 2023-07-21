@@ -2197,43 +2197,41 @@ class PosixDatastoreTransfers(unittest.TestCase):
             dataId = {"exposure": i, "instrument": "DummyCamComp", "physical_filter": "d-r"}
             ref = butler.put(metric, datasetTypeName, dataId=dataId, run=run)
 
-            # Remove the datastore record using low-level API
-            if purge:
-                # Remove records for a fraction.
-                if index == 1:
-                    # For one of these delete the file as well.
-                    # This allows the "missing" code to filter the
-                    # file out.
-                    # Access the individual datastores.
-                    datastores = []
-                    if hasattr(butler._datastore, "datastores"):
-                        datastores.extend(butler._datastore.datastores)
-                    else:
-                        datastores.append(butler._datastore)
+            # Remove the datastore record using low-level API, but only
+            # for a specific index.
+            if purge and index == 1:
+                # For one of these delete the file as well.
+                # This allows the "missing" code to filter the
+                # file out.
+                # Access the individual datastores.
+                datastores = []
+                if hasattr(butler._datastore, "datastores"):
+                    datastores.extend(butler._datastore.datastores)
+                else:
+                    datastores.append(butler._datastore)
 
-                    if not deleted:
-                        # For a chained datastore we need to remove
-                        # files in each chain.
-                        for datastore in datastores:
-                            # The file might not be known to the datastore
-                            # if constraints are used.
-                            try:
-                                primary, uris = datastore.getURIs(ref)
-                            except FileNotFoundError:
-                                continue
-                            if primary:
-                                if primary.scheme != "mem":
-                                    primary.remove()
-                            for uri in uris.values():
-                                if uri.scheme != "mem":
-                                    uri.remove()
-                        n_expected -= 1
-                        deleted.add(ref)
-
-                    # Remove the datastore record.
+                if not deleted:
+                    # For a chained datastore we need to remove
+                    # files in each chain.
                     for datastore in datastores:
-                        if hasattr(datastore, "removeStoredItemInfo"):
-                            datastore.removeStoredItemInfo(ref)
+                        # The file might not be known to the datastore
+                        # if constraints are used.
+                        try:
+                            primary, uris = datastore.getURIs(ref)
+                        except FileNotFoundError:
+                            continue
+                        if primary and primary.scheme != "mem":
+                            primary.remove()
+                        for uri in uris.values():
+                            if uri.scheme != "mem":
+                                uri.remove()
+                    n_expected -= 1
+                    deleted.add(ref)
+
+                # Remove the datastore record.
+                for datastore in datastores:
+                    if hasattr(datastore, "removeStoredItemInfo"):
+                        datastore.removeStoredItemInfo(ref)
 
             if index < 2:
                 source_refs.append(ref)
