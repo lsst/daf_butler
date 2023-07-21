@@ -1245,7 +1245,7 @@ class NullDatastore(Datastore):
         parameters: Mapping[str, Any] | None = None,
         storageClass: StorageClass | str | None = None,
     ) -> Any:
-        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+        raise FileNotFoundError("This is a no-op datastore that can not access a real datastore")
 
     def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
@@ -1265,10 +1265,10 @@ class NullDatastore(Datastore):
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def getURIs(self, datasetRef: DatasetRef, predict: bool = False) -> DatasetRefURIs:
-        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+        raise FileNotFoundError("This is a no-op datastore that can not access a real datastore")
 
     def getURI(self, datasetRef: DatasetRef, predict: bool = False) -> ResourcePath:
-        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+        raise FileNotFoundError("This is a no-op datastore that can not access a real datastore")
 
     def retrieveArtifacts(
         self,

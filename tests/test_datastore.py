@@ -1762,15 +1762,15 @@ class NullDatastoreTestCase(DatasetTestHelper, unittest.TestCase):
         self.assertFalse(knows[ref])
         null.validateConfiguration(ref)
 
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(FileNotFoundError):
             null.get(ref)
         with self.assertRaises(NotImplementedError):
             null.put("", ref)
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(FileNotFoundError):
             null.getURI(ref)
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(FileNotFoundError):
             null.getURIs(ref)
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(FileNotFoundError):
             null.getManyURIs([ref])
         with self.assertRaises(NotImplementedError):
             null.getLookupKeys()

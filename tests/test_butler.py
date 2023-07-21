@@ -2377,8 +2377,10 @@ class NullDatastoreTestCase(unittest.TestCase):
         ref = DatasetRef(datasetType, {}, run="MYRUN")
 
         # Check that datastore will complain.
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(FileNotFoundError):
             butler.get(ref)
+        with self.assertRaises(FileNotFoundError):
+            butler.getURI(ref)
 
 
 def setup_module(module: types.ModuleType) -> None:
