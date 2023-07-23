@@ -392,12 +392,14 @@ class Quantum:
             required dimension has already been loaded. Otherwise the record
             will be unpersisted from the SerializedQuatnum and added to the
             reconstitutedDimensions dict (if not None). Defaults to None.
-            Deprecated, any argument will be ignored.
+            Deprecated, any argument will be ignored.  Will be removed after
+            v26.
         """
         initInputs: MutableMapping[DatasetType, DatasetRef] = {}
         if reconstitutedDimensions is not None:
+            # TODO: remove this argument on DM-40150.
             warnings.warn(
-                "The reconstitutedDimensions argument is now ignored and may be removed after v 27",
+                "The reconstitutedDimensions argument is now ignored and may be removed after v26",
                 category=FutureWarning,
                 stacklevel=find_outside_stacklevel("lsst.daf.butler"),
             )

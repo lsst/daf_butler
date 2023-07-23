@@ -1109,12 +1109,13 @@ class Butler(LimitedButler):
 
         return ref
 
+    # TODO: remove on DM-40067.
     @transactional
     @deprecated(
         reason="Butler.put() now behaves like Butler.putDirect() when given a DatasetRef."
         " Please use Butler.put(). Be aware that you may need to adjust your usage if you"
         " were relying on the run parameter to determine the run."
-        " Will be removed after v27.0.",
+        " Will be removed after v26.0.",
         version="v26.0",
         category=FutureWarning,
     )
@@ -1204,9 +1205,10 @@ class Butler(LimitedButler):
 
         return ref
 
+    # TODO: remove on DM-40067.
     @deprecated(
         reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
-        " Please use Butler.get(). Will be removed after v27.0.",
+        " Please use Butler.get(). Will be removed after v26.0.",
         version="v26.0",
         category=FutureWarning,
     )
@@ -1240,9 +1242,10 @@ class Butler(LimitedButler):
         """
         return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
+    # TODO: remove on DM-40067.
     @deprecated(
         reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
-        "Please use Butler.getDeferred(). Will be removed after v27.0.",
+        "Please use Butler.getDeferred(). Will be removed after v26.0.",
         version="v26.0",
         category=FutureWarning,
     )
@@ -1739,8 +1742,9 @@ class Butler(LimitedButler):
 
         return existence
 
+    # TODO: remove on DM-40079.
     @deprecated(
-        reason="Butler.datasetExists() has been replaced by Butler.exists(). Will be removed after v27.0.",
+        reason="Butler.datasetExists() has been replaced by Butler.exists(). Will be removed after v26.0.",
         version="v26.0",
         category=FutureWarning,
     )

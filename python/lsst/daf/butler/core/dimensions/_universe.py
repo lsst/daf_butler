@@ -449,7 +449,7 @@ class DimensionUniverse:
 
     # TODO: Remove this method on DM-38687.
     @deprecated(
-        "Deprecated in favor of configurable dimension packers.  Will be removed after v27.",
+        "Deprecated in favor of configurable dimension packers.  Will be removed after v26.",
         version="v26",
         category=FutureWarning,
     )
