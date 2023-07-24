@@ -118,7 +118,7 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 
     def __init__(self, nbytes: int | None = None, *args: Any, **kwargs: Any):
         if nbytes is not None:
-            length = 4 * ceil(nbytes / 3) if self.impl == sqlalchemy.String else None
+            length = 4 * ceil(nbytes / 3) if self.impl is sqlalchemy.String else None
         else:
             length = None
         super().__init__(*args, length=length, **kwargs)
@@ -400,7 +400,7 @@ class FieldSpec:
             as a `sqlalchemy.Text` type.
         """
         # For short strings retain them as strings
-        if self.dtype == sqlalchemy.String and self.length and self.length <= 32:
+        if self.dtype is sqlalchemy.String and self.length and self.length <= 32:
             return True
         return False
 
@@ -416,7 +416,7 @@ class FieldSpec:
         """
         if self.length is not None:
             # Last chance check that we are only looking at possible String
-            if self.dtype == sqlalchemy.String and not self.isStringType():
+            if self.dtype is sqlalchemy.String and not self.isStringType():
                 return sqlalchemy.Text
             return self.dtype(length=self.length)
         if self.nbytes is not None:
