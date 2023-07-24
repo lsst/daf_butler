@@ -1369,7 +1369,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                     self.assertTrue(datastore.exists(ref))
 
                     # Check each datastore inside the chained datastore
-                    for childDatastore, expected in zip(datastore.datastores, accept):
+                    for childDatastore, expected in zip(datastore.datastores, accept, strict=True):
                         self.assertEqual(
                             childDatastore.exists(ref),
                             expected,
@@ -1384,7 +1384,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                         self.assertTrue(datastore.exists(ref))
 
                         # Check each datastore inside the chained datastore
-                        for childDatastore, expected in zip(datastore.datastores, accept):
+                        for childDatastore, expected in zip(datastore.datastores, accept, strict=True):
                             # Ephemeral datastores means InMemory at the moment
                             # and that does not accept ingest of files.
                             if childDatastore.isEphemeral:
@@ -1622,7 +1622,7 @@ cached:
 
     def testNoCache(self) -> None:
         cache_manager = DatastoreDisabledCacheManager("", universe=self.universe)
-        for uri, ref in zip(self.files, self.refs):
+        for uri, ref in zip(self.files, self.refs, strict=True):
             self.assertFalse(cache_manager.should_be_cached(ref))
             self.assertIsNone(cache_manager.move_to_cache(uri, ref))
             self.assertFalse(cache_manager.known_to_cache(ref))
@@ -1722,7 +1722,7 @@ cached:
 
         n_datasets = 3
         for i in range(n_datasets):
-            for component_file, component_ref in zip(self.comp_files[i], self.comp_refs[i]):
+            for component_file, component_ref in zip(self.comp_files[i], self.comp_refs[i], strict=True):
                 cached = cache_manager.move_to_cache(component_file, component_ref)
                 self.assertIsNotNone(cached)
                 self.assertTrue(cache_manager.known_to_cache(component_ref))

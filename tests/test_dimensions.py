@@ -346,7 +346,7 @@ class DimensionTestCase(unittest.TestCase):
                 self.assertIn(foreignKey.table, tableSpecs)
                 self.assertIn(foreignKey.table, element.graph.dimensions.names)
                 self.assertEqual(len(foreignKey.source), len(foreignKey.target))
-                for source, target in zip(foreignKey.source, foreignKey.target):
+                for source, target in zip(foreignKey.source, foreignKey.target, strict=True):
                     self.assertIn(source, tableSpec.fields.names)
                     self.assertIn(target, tableSpecs[foreignKey.table].fields.names)
                     self.assertEqual(

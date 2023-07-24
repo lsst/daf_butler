@@ -252,7 +252,7 @@ def make_plots(detector_grid: bool, patch_grid: bool):
             index_labels(color="black", alpha=0.5),
         )
     colors = iter(["red", "blue", "cyan", "green"])
-    for (visit_id, visit_data), color in zip(VISIT_DATA.items(), colors):
+    for (visit_id, visit_data), color in zip(VISIT_DATA.items(), colors, strict=True):
         for detector_id, pixel_indices in visit_data["detector_regions"].items():
             label = f"visit={visit_id}"
             if label in labels_used:
@@ -274,7 +274,7 @@ def make_plots(detector_grid: bool, patch_grid: bool):
                     color=color,
                 ),
             )
-    for (tract_id, tract_data), color in zip(TRACT_DATA.items(), colors):
+    for (tract_id, tract_data), color in zip(TRACT_DATA.items(), colors, strict=True):
         for patch_id, patch_data in tract_data["patches"].items():
             label = f"tract={tract_id}"
             if label in labels_used:

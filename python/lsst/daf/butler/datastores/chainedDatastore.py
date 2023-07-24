@@ -153,7 +153,7 @@ class ChainedDatastore(Datastore):
 
         containerKey = cls.containerKey
         for idx, (child, fullChild) in enumerate(
-            zip(datastoreConfig[containerKey], fullDatastoreConfig[containerKey])
+            zip(datastoreConfig[containerKey], fullDatastoreConfig[containerKey], strict=True)
         ):
             childConfig = DatastoreConfig(child, mergeDefaults=False)
             fullChildConfig = DatastoreConfig(fullChild, mergeDefaults=False)
@@ -417,7 +417,7 @@ class ChainedDatastore(Datastore):
         nsuccess = 0
         npermanent = 0
         nephemeral = 0
-        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints, strict=True):
             if (
                 constraints is not None and not constraints.isAcceptable(ref)
             ) or not datastore.constraints.isAcceptable(ref):
@@ -497,7 +497,7 @@ class ChainedDatastore(Datastore):
         # ...and remember whether all of the failures are due to
         # NotImplementedError being raised.
         allFailuresAreNotImplementedError = True
-        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints, strict=True):
             okForChild: list[FileDataset]
             if constraints is not None:
                 okForChild = [
@@ -1024,7 +1024,7 @@ class ChainedDatastore(Datastore):
                 # Try the next datastore.
                 continue
 
-            for ref, export in zip(filtered, this_export):
+            for ref, export in zip(filtered, this_export, strict=True):
                 # Get the position and also delete it from the list.
                 exported[ref_positions.pop(ref)] = export
 
@@ -1097,7 +1097,7 @@ class ChainedDatastore(Datastore):
                 # Already transferred all datasets known to this datastore.
                 continue
 
-            for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+            for datastore, constraints in zip(self.datastores, self.datastoreConstraints, strict=True):
                 if constraints is not None:
                     filtered_refs = []
                     for ref in these_refs:

@@ -367,7 +367,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore
-        records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos)]
+        records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos, strict=True)]
         self._table.insert(*records, transaction=self._transaction)
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
@@ -1434,7 +1434,7 @@ class FileDatastore(GenericBaseDatastore):
             # to the remote URI.
             if self.cacheManager.file_count > 0:
                 ref = id_to_ref[ref_id]
-                for uri, storedFileInfo in zip(uris, infos):
+                for uri, storedFileInfo in zip(uris, infos, strict=True):
                     check_ref = ref
                     if not ref.datasetType.isComponent() and (component := storedFileInfo.component):
                         check_ref = ref.makeComponentRef(component)

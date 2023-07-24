@@ -409,7 +409,7 @@ class DatabaseTests(ABC):
             r._asdict()
             for r in self.query_list(db, tables.b.select().where(tables.b.columns.id > results[1]["id"]))
         ]
-        expected = [dict(row, id=id) for row, id in zip(rows, ids)]
+        expected = [dict(row, id=id) for row, id in zip(rows, ids, strict=True)]
         self.assertCountEqual(results, expected)
         self.assertTrue(all(result["id"] is not None for result in results))
         # Insert multiple rows into a table with an autoincrement primary key,
@@ -417,7 +417,7 @@ class DatabaseTests(ABC):
         rows = [{"b_id": results[0]["id"]}, {"b_id": None}]
         ids = db.insert(tables.c, *rows, returnIds=True)
         results = [r._asdict() for r in self.query_list(db, tables.c.select())]
-        expected = [dict(row, id=id) for row, id in zip(rows, ids)]
+        expected = [dict(row, id=id) for row, id in zip(rows, ids, strict=True)]
         self.assertCountEqual(results, expected)
         self.assertTrue(all(result["id"] is not None for result in results))
         # Add the dynamic table.
@@ -865,7 +865,9 @@ class DatabaseTests(ABC):
         # Make another list of timespans that span the full range but don't
         # overlap.  This is a subset of the previous list.
         bTimespans = [Timespan(begin=None, end=timestamps[0])]
-        bTimespans.extend(Timespan(begin=t1, end=t2) for t1, t2 in zip(timestamps[:-1], timestamps[1:]))
+        bTimespans.extend(
+            Timespan(begin=t1, end=t2) for t1, t2 in zip(timestamps[:-1], timestamps[1:], strict=True)
+        )
         bTimespans.append(Timespan(begin=timestamps[-1], end=None))
         # Make a database and create a table with that database's timespan
         # representation.  This one will have no exclusion constraint and

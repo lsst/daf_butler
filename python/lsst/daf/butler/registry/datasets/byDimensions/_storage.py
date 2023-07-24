@@ -613,12 +613,12 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             }
             tagsRows = [
                 dict(protoTagsRow, dataset_id=row["id"], **dataId.byName())
-                for dataId, row in zip(dataIdList, rows)
+                for dataId, row in zip(dataIdList, rows, strict=True)
             ]
             # Insert those rows into the tags table.
             self._db.insert(self._tags, *tagsRows)
 
-        for dataId, row in zip(dataIdList, rows):
+        for dataId, row in zip(dataIdList, rows, strict=True):
             yield DatasetRef(
                 datasetType=self.datasetType,
                 dataId=dataId,

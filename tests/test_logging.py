@@ -68,7 +68,7 @@ class LoggingTestCase(unittest.TestCase):
 
         self.assertEqual(len(self.handler.records), len(expected))
 
-        for given, record in zip(expected, self.handler.records):
+        for given, record in zip(expected, self.handler.records, strict=True):
             self.assertEqual(given[0], record.levelno)
             self.assertEqual(given[1], record.message)
 
@@ -76,7 +76,7 @@ class LoggingTestCase(unittest.TestCase):
         json = self.handler.records.json()
 
         records = ButlerLogRecords.parse_raw(json)
-        for original_record, new_record in zip(self.handler.records, records):
+        for original_record, new_record in zip(self.handler.records, records, strict=True):
             self.assertEqual(new_record, original_record)
         self.assertEqual(str(records), str(self.handler.records))
 

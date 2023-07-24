@@ -146,7 +146,7 @@ class StaticTablesContext:
         we cannot represent this with type annotations.
         """
         return specs._make(  # type: ignore
-            self.addTable(name, spec) for name, spec in zip(specs._fields, specs)  # type: ignore
+            self.addTable(name, spec) for name, spec in zip(specs._fields, specs, strict=True)  # type: ignore
         )
 
     def addInitializer(self, initializer: Callable[[Database], None]) -> None:
@@ -1404,7 +1404,7 @@ class Database(ABC):
             return None, inserted_or_updated
         else:
             assert result is not None
-            return {k: v for k, v in zip(returning, result)}, inserted_or_updated
+            return {k: v for k, v in zip(returning, result, strict=True)}, inserted_or_updated
 
     def insert(
         self,

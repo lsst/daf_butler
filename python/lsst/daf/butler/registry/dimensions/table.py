@@ -98,7 +98,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self._fetchColumns: dict[str, sqlalchemy.sql.ColumnElement] = {
             dimension.name: self._table.columns[name]
             for dimension, name in zip(
-                self._element.dimensions, self._element.RecordClass.fields.dimensions.names
+                self._element.dimensions, self._element.RecordClass.fields.dimensions.names, strict=True
             )
         }
         self._skypix_overlap_tables = skypix_overlap_tables

@@ -1845,7 +1845,10 @@ class RegistryTests(ABC):
         child_regions_large = [
             range_set_hull(htm6.envelope(c.getBoundingCircle()), htm6) for c in child_regions_small
         ]
-        assert all(large.contains(small) for large, small in zip(child_regions_large, child_regions_small))
+        assert all(
+            large.contains(small)
+            for large, small in zip(child_regions_large, child_regions_small, strict=True)
+        )
         parent_region_large = lsst.sphgeom.ConvexPolygon(
             list(itertools.chain.from_iterable(c.getVertices() for c in child_regions_large))
         )
@@ -1858,7 +1861,7 @@ class RegistryTests(ABC):
         # real tests later involve what's in the database, not just post-query
         # filtering of regions.
         child_difference_indices = []
-        for large, small in zip(child_regions_large, child_regions_small):
+        for large, small in zip(child_regions_large, child_regions_small, strict=True):
             difference = list(unpack_range_set(commonSkyPix.envelope(large) - commonSkyPix.envelope(small)))
             assert difference, "if this is empty, we can't test anything useful with these regions"
             assert all(

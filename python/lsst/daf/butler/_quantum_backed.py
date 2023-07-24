@@ -692,7 +692,7 @@ class QuantumProvenanceData(_BaseModelCompat):
         """
         grouped_refs = defaultdict(list)
         summary_records: dict[str, DatastoreRecordData] = {}
-        for quantum, provenance_for_quantum in zip(quanta, provenance):
+        for quantum, provenance_for_quantum in zip(quanta, provenance, strict=True):
             quantum_refs_by_id = {
                 ref.id: ref
                 for ref in itertools.chain.from_iterable(quantum.outputs.values())
