@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("DimensionRecord", "SerializedDimensionRecord")
 
+from collections.abc import Hashable
 from typing import TYPE_CHECKING, Any, ClassVar, Optional, Tuple
 
 import lsst.sphgeom
@@ -170,23 +171,22 @@ class SerializedDimensionRecord(_BaseModelCompat):
 
         This method should only be called when the inputs are trusted.
         """
-        _recItems = record.items()
+        # This method requires tuples as values of the mapping, but JSON
+        # readers will read things in as lists. Be kind and transparently
+        # transform to tuples
+        _recItems = {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
+
         # Type ignore because the ternary statement seems to confuse mypy
         # based on conflicting inferred types of v.
         key = (
             definition,
-            frozenset((k, v if not isinstance(v, list) else tuple(v)) for k, v in _recItems),  # type: ignore
+            frozenset(_recItems.items()),
         )
         cache = PersistenceContextVars.serializedDimensionRecordMapping.get()
         if cache is not None and (result := cache.get(key)) is not None:
             return result
 
-        # This method requires tuples as values of the mapping, but JSON
-        # readers will read things in as lists. Be kind and transparently
-        # transform to tuples
-        serialized_record = {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
-
-        node = cls.model_construct(definition=definition, record=serialized_record)  # type: ignore
+        node = cls.model_construct(definition=definition, record=_recItems)  # type: ignore
 
         if cache is not None:
             cache[key] = node
@@ -350,6 +350,7 @@ class DimensionRecord:
         simple: SerializedDimensionRecord,
         universe: DimensionUniverse | None = None,
         registry: Registry | None = None,
+        cacheKey: Hashable | None = None,
     ) -> DimensionRecord:
         """Construct a new object from the simplified form.
 
@@ -366,6 +367,10 @@ class DimensionRecord:
         registry : `lsst.daf.butler.Registry`, optional
             Registry from which a universe can be extracted. Can be `None`
             if universe is provided explicitly.
+        cacheKey : `Hashable` or `None`
+            If this is not None, it will be used as a key for any cached
+            reconstruction instead of calculating a value from the serialized
+            format.
 
         Returns
         -------
@@ -379,12 +384,11 @@ class DimensionRecord:
         if universe is None:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
-        _recItems = simple.record.items()
         # Type ignore because the ternary statement seems to confuse mypy
         # based on conflicting inferred types of v.
-        key = (
+        key = cacheKey or (
             simple.definition,
-            frozenset((k, v if not isinstance(v, list) else tuple(v)) for k, v in _recItems),  # type: ignore
+            frozenset(simple.record.items()),  # type: ignore
         )
         cache = PersistenceContextVars.dimensionRecords.get()
         if cache is not None and (result := cache.get(key)) is not None:

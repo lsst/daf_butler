@@ -53,19 +53,19 @@ def _reconstructDatasetRef(
 ) -> DatasetRef:
     """Reconstruct a DatasetRef stored in a Serialized Quantum."""
     # Reconstruct the dimension records
+    # if the dimension record has been loaded previously use that,
+    # otherwise load it from the dict of Serialized DimensionRecords
+    if dimensionRecords is None and ids:
+        raise ValueError("Cannot construct from a SerializedQuantum with no dimension records. ")
     records = {}
     for dId in ids:
-        # if the dimension record has been loaded previously use that,
-        # otherwise load it from the dict of Serialized DimensionRecords
-        if dimensionRecords is None:
-            raise ValueError("Cannot construct from a SerializedQuantum with no dimension records. ")
-        tmpSerialized = dimensionRecords[dId]
-        reconstructedDim = DimensionRecord.from_simple(tmpSerialized, universe=universe)
-        records[sys.intern(reconstructedDim.definition.name)] = reconstructedDim
-    # turn the serialized form into an object and attach the dimension records
+        # Ignore typing because it is missing that the above if statement
+        # ensures that if there is a loop that dimensionRecords is not None.
+        tmpSerialized = dimensionRecords[dId]  # type: ignore
+        records[tmpSerialized.definition] = tmpSerialized
+    if simple.dataId is not None:
+        simple.dataId.records = records or None
     rebuiltDatasetRef = DatasetRef.from_simple(simple, universe, datasetType=type_)
-    if records:
-        object.__setattr__(rebuiltDatasetRef, "dataId", rebuiltDatasetRef.dataId.expanded(records))
     return rebuiltDatasetRef
 
 
