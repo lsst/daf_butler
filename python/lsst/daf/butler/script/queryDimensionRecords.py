@@ -52,7 +52,7 @@ def queryDimensionRecords(
 
     query_collections: Iterable[str] | EllipsisType | None = None
     if datasets:
-        query_collections = collections if collections else ...
+        query_collections = collections or ...
     query_results = butler.registry.queryDimensionRecords(
         element, datasets=datasets, collections=query_collections, where=where, check=not no_check
     )
