@@ -255,16 +255,15 @@ class DimensionRecord:
                     )
         for name in self.__slots__:
             object.__setattr__(self, name, kwargs.get(name))
-        if self.definition.temporal is not None:
-            if self.timespan is None:
-                object.__setattr__(
-                    self,
-                    "timespan",
-                    Timespan(
-                        kwargs.get("datetime_begin"),
-                        kwargs.get("datetime_end"),
-                    ),
-                )
+        if self.definition.temporal is not None and self.timespan is None:
+            object.__setattr__(
+                self,
+                "timespan",
+                Timespan(
+                    kwargs.get("datetime_begin"),
+                    kwargs.get("datetime_end"),
+                ),
+            )
 
         from ._coordinate import DataCoordinate
 

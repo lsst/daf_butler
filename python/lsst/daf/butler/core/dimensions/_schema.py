@@ -248,7 +248,9 @@ class DimensionElementFields:
         element's records (`~collections.abc.Mapping`).
         """
         result: dict[ColumnTag, str] = {}
-        for dimension_name, field_name in zip(self.element.dimensions.names, self.dimensions.names):
+        for dimension_name, field_name in zip(
+            self.element.dimensions.names, self.dimensions.names, strict=True
+        ):
             result[DimensionKeyColumnTag(dimension_name)] = field_name
         for field_name in self.facts.names:
             result[DimensionRecordColumnTag(self.element.name, field_name)] = field_name

@@ -301,12 +301,11 @@ def split_commas(
                             stacklevel=2,
                         )
                     in_parens = False
-                elif c == ",":
-                    if not in_parens:
-                        # Split on this comma.
-                        valueList.append(current)
-                        current = ""
-                        continue
+                elif c == "," and not in_parens:
+                    # Split on this comma.
+                    valueList.append(current)
+                    current = ""
+                    continue
                 current += c
             if in_parens:
                 warnings.warn(
@@ -479,7 +478,7 @@ def split_kv(
                 raise click.ClickException(
                     message=f"Could not parse key-value pair '{val}' using separator '{separator}', "
                     f"with multiple values {'allowed' if multiple else 'not allowed'}: {e}"
-                )
+                ) from None
             ret.add(k, norm(v))
     return ret.get()
 
@@ -844,7 +843,7 @@ class MWCommand(click.Command):
                 if (opt := opts[param_name]) is not None:
                     captured_args.append(opt)
             else:
-                assert False  # All parameters should be an Option or an Argument.
+                raise AssertionError("All parameters should be an Option or an Argument")
         MWCtxObj.getFrom(ctx).args = captured_args
 
     def parse_args(self, ctx: click.Context, args: Any) -> list[str]:
@@ -1030,7 +1029,7 @@ def yaml_presets(ctx: click.Context, param: str, value: Any) -> None:
                 option_name=param,
                 message=f"Error reading overrides file: {e}",
                 ctx=ctx,
-            )
+            ) from None
         # Override the defaults for this subcommand
         ctx.default_map.update(overrides)
     return

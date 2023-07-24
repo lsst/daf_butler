@@ -405,7 +405,7 @@ class DatastoreTests(DatastoreTestsBase):
                     datastore.get(ref, storageClass="StructuredDataDictJson")
 
                 # Need a special method to generate stored dataset type.
-                def _stored_dataset_type(name: str) -> DatasetType:
+                def _stored_dataset_type(name: str, ref: DatasetRef = ref) -> DatasetType:
                     if name == ref.datasetType.name:
                         return ref.datasetType
                     raise ValueError(f"Unexpected dataset type name {ref.datasetType.name}")
@@ -694,7 +694,13 @@ class DatastoreTests(DatastoreTestsBase):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore()
 
-                def succeed(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def succeed(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Ingest a file already in the datastore root."""
                     # first move it into the root, and adjust the path
                     # accordingly
@@ -703,7 +709,13 @@ class DatastoreTests(DatastoreTestsBase):
                     datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
-                def failInputDoesNotExist(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failInputDoesNotExist(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Can't ingest files if we're given a bad path."""
                     with self.assertRaises(FileNotFoundError):
                         datastore.ingest(
@@ -711,7 +723,13 @@ class DatastoreTests(DatastoreTestsBase):
                         )
                     self.assertFalse(datastore.exists(ref))
 
-                def failOutsideRoot(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failOutsideRoot(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Can't ingest files outside of datastore root unless
                     auto.
                     """
@@ -723,7 +741,13 @@ class DatastoreTests(DatastoreTestsBase):
                             datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                         self.assertFalse(datastore.exists(ref))
 
-                def failNotImplemented(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failNotImplemented(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     with self.assertRaises(NotImplementedError):
                         datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
 
@@ -740,14 +764,26 @@ class DatastoreTests(DatastoreTestsBase):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore(mode)
 
-                def succeed(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def succeed(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Ingest a file by transferring it to the template
                     location.
                     """
                     datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
-                def failInputDoesNotExist(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failInputDoesNotExist(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     """Can't ingest files if we're given a bad path."""
                     with self.assertRaises(FileNotFoundError):
                         # Ensure the file does not look like it is in
@@ -757,7 +793,13 @@ class DatastoreTests(DatastoreTestsBase):
                         )
                     self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
 
-                def failNotImplemented(obj: MetricsExample, path: str, ref: DatasetRef) -> None:
+                def failNotImplemented(
+                    obj: MetricsExample,
+                    path: str,
+                    ref: DatasetRef,
+                    mode: str | None = mode,
+                    datastore: Datastore = datastore,
+                ) -> None:
                     with self.assertRaises(NotImplementedError):
                         datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
 
@@ -1143,7 +1185,7 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
                 datastore.formatterFactory.registerFormatter(ref.datasetType, formatter, overwrite=True)
 
                 # Try to put the dataset, it should fail
-                with self.assertRaises(Exception):
+                with self.assertRaises(RuntimeError):
                     datastore.put(metrics, ref)
 
                 # Check that there is no file on disk
@@ -1327,7 +1369,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                     self.assertTrue(datastore.exists(ref))
 
                     # Check each datastore inside the chained datastore
-                    for childDatastore, expected in zip(datastore.datastores, accept):
+                    for childDatastore, expected in zip(datastore.datastores, accept, strict=True):
                         self.assertEqual(
                             childDatastore.exists(ref),
                             expected,
@@ -1342,7 +1384,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                         self.assertTrue(datastore.exists(ref))
 
                         # Check each datastore inside the chained datastore
-                        for childDatastore, expected in zip(datastore.datastores, accept):
+                        for childDatastore, expected in zip(datastore.datastores, accept, strict=True):
                             # Ephemeral datastores means InMemory at the moment
                             # and that does not accept ingest of files.
                             if childDatastore.isEphemeral:
@@ -1580,7 +1622,7 @@ cached:
 
     def testNoCache(self) -> None:
         cache_manager = DatastoreDisabledCacheManager("", universe=self.universe)
-        for uri, ref in zip(self.files, self.refs):
+        for uri, ref in zip(self.files, self.refs, strict=True):
             self.assertFalse(cache_manager.should_be_cached(ref))
             self.assertIsNone(cache_manager.move_to_cache(uri, ref))
             self.assertFalse(cache_manager.known_to_cache(ref))
@@ -1680,7 +1722,7 @@ cached:
 
         n_datasets = 3
         for i in range(n_datasets):
-            for component_file, component_ref in zip(self.comp_files[i], self.comp_refs[i]):
+            for component_file, component_ref in zip(self.comp_files[i], self.comp_refs[i], strict=True):
                 cached = cache_manager.move_to_cache(component_file, component_ref)
                 self.assertIsNotNone(cached)
                 self.assertTrue(cache_manager.known_to_cache(component_ref))

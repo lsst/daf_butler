@@ -30,6 +30,7 @@ __all__ = (
     "NameMappingSetView",
 )
 
+import contextlib
 from abc import abstractmethod
 from collections.abc import (
     ItemsView,
@@ -102,7 +103,7 @@ class NamedKeyMapping(Mapping[K, V_co]):
             ``self``, with `str` names as keys.  This is always a new object,
             not a view.
         """
-        return dict(zip(self.names, self.values()))
+        return dict(zip(self.names, self.values(), strict=True))
 
     @abstractmethod
     def keys(self) -> NamedValueAbstractSet[K]:  # type: ignore
@@ -194,7 +195,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
 
     def byName(self) -> dict[str, V]:
         """Return a `dict` with names as keys and the ``self`` values."""
-        return dict(zip(self._names.keys(), self._dict.values()))
+        return dict(zip(self._names.keys(), self._dict.values(), strict=True))
 
     def __len__(self) -> int:
         return len(self._dict)
@@ -518,15 +519,13 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
     def remove(self, element: str | K) -> Any:
         # Docstring inherited.
-        k = getattr(element, "name") if not isinstance(element, str) else element
+        k = element.name if not isinstance(element, str) else element
         del self._mapping[k]
 
     def discard(self, element: str | K) -> Any:
         # Docstring inherited.
-        try:
+        with contextlib.suppress(KeyError):
             self.remove(element)
-        except KeyError:
-            pass
 
     def pop(self, *args: str) -> K:
         # Docstring inherited.

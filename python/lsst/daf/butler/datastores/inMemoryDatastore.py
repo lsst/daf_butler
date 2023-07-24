@@ -180,7 +180,7 @@ class InMemoryDatastore(GenericBaseDatastore):
 
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredMemoryItemInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore.
-        for ref, info in zip(refs, infos):
+        for ref, info in zip(refs, infos, strict=True):
             self.records[ref.id] = info
             self.related.setdefault(info.parentID, set()).add(ref.id)
 

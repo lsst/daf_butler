@@ -337,10 +337,7 @@ class QuantumBackedButler(LimitedButler):
             Mapping of the dataset type name to its registry definition.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)
-        if "root" in butler_config:
-            butler_root = butler_config["root"]
-        else:
-            butler_root = butler_config.configDir
+        butler_root = butler_config.get("root", butler_config.configDir)
         db = SqliteDatabase.fromUri(f"sqlite:///{filename}", origin=0)
         with db.declareStaticTables(create=True) as context:
             opaque_manager = OpaqueManagerClass.initialize(db, context)
@@ -574,7 +571,7 @@ class QuantumBackedButler(LimitedButler):
             )
             self._actual_inputs -= self._unavailable_inputs
         checked_inputs = self._available_inputs | self._unavailable_inputs
-        if not self._predicted_inputs == checked_inputs:
+        if self._predicted_inputs != checked_inputs:
             _LOG.warning(
                 "Execution harness did not check predicted inputs %s for existence; available inputs "
                 "recorded in provenance may be incomplete.",
@@ -695,7 +692,7 @@ class QuantumProvenanceData(_BaseModelCompat):
         """
         grouped_refs = defaultdict(list)
         summary_records: dict[str, DatastoreRecordData] = {}
-        for quantum, provenance_for_quantum in zip(quanta, provenance):
+        for quantum, provenance_for_quantum in zip(quanta, provenance, strict=True):
             quantum_refs_by_id = {
                 ref.id: ref
                 for ref in itertools.chain.from_iterable(quantum.outputs.values())

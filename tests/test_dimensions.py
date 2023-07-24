@@ -346,7 +346,7 @@ class DimensionTestCase(unittest.TestCase):
                 self.assertIn(foreignKey.table, tableSpecs)
                 self.assertIn(foreignKey.table, element.graph.dimensions.names)
                 self.assertEqual(len(foreignKey.source), len(foreignKey.target))
-                for source, target in zip(foreignKey.source, foreignKey.target):
+                for source, target in zip(foreignKey.source, foreignKey.target, strict=True):
                     self.assertIn(source, tableSpec.fields.names)
                     self.assertIn(target, tableSpecs[foreignKey.table].fields.names)
                     self.assertEqual(
@@ -552,14 +552,14 @@ class DataCoordinateTestCase(unittest.TestCase):
         applicable) its ``full`` property are self-consistent and consistent
         with the ``graph`` property.
         """
-        for n in range(5):
+        for _ in range(5):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
             for dataId in split.chain():
                 with self.subTest(dataId=dataId):
-                    self.assertEqual(list(dataId.values()), [dataId[d] for d in dataId.keys()])
-                    self.assertEqual(list(dataId.values()), [dataId[d.name] for d in dataId.keys()])
+                    self.assertEqual(list(dataId.values()), [dataId[d] for d in dataId])
+                    self.assertEqual(list(dataId.values()), [dataId[d.name] for d in dataId])
                     self.assertEqual(dataId.keys(), dataId.graph.required)
             for dataId in itertools.chain(split.complete, split.expanded):
                 with self.subTest(dataId=dataId):
@@ -568,7 +568,7 @@ class DataCoordinateTestCase(unittest.TestCase):
                     self.assertEqual(list(dataId.full.values()), [dataId[k] for k in dataId.graph.dimensions])
 
     def test_pickle(self):
-        for n in range(5):
+        for _ in range(5):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
@@ -587,7 +587,7 @@ class DataCoordinateTestCase(unittest.TestCase):
         """Test that dimension records are available as attributes on expanded
         data coordinates.
         """
-        for n in range(5):
+        for _ in range(5):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
@@ -596,13 +596,13 @@ class DataCoordinateTestCase(unittest.TestCase):
                     self.assertIs(getattr(data_id, element.name), data_id.records[element.name])
                     self.assertIn(element.name, dir(data_id))
                 with self.assertRaisesRegex(AttributeError, "^not_a_dimension_name$"):
-                    getattr(data_id, "not_a_dimension_name")
+                    data_id.not_a_dimension_name
             for data_id in itertools.chain(split.minimal, split.complete):
                 for element in data_id.graph.elements:
                     with self.assertRaisesRegex(AttributeError, "only available on expanded DataCoordinates"):
                         getattr(data_id, element.name)
                 with self.assertRaisesRegex(AttributeError, "^not_a_dimension_name$"):
-                    getattr(data_id, "not_a_dimension_name")
+                    data_id.not_a_dimension_name
 
     def testEquality(self):
         """Test that different `DataCoordinate` instances with different state
@@ -635,11 +635,11 @@ class DataCoordinateTestCase(unittest.TestCase):
         """Test constructing a DataCoordinate from many different kinds of
         input via `DataCoordinate.standardize` and `DataCoordinate.subset`.
         """
-        for n in range(5):
+        for _ in range(5):
             dimensions = self.randomDimensionSubset()
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
-            for m, dataId in enumerate(split.chain()):
+            for dataId in split.chain():
                 # Passing in any kind of DataCoordinate alone just returns
                 # that object.
                 self.assertIs(dataId, DataCoordinate.standardize(dataId))
@@ -745,9 +745,12 @@ class DataCoordinateTestCase(unittest.TestCase):
                             self.assertTrue(unioned.hasRecords())
                     if lhs.graph.required | rhs.graph.required >= unioned.graph.dimensions:
                         self.assertTrue(unioned.hasFull())
-                    if lhs.hasRecords() and rhs.hasRecords():
-                        if lhs.graph.elements | rhs.graph.elements >= unioned.graph.elements:
-                            self.assertTrue(unioned.hasRecords())
+                    if (
+                        lhs.hasRecords()
+                        and rhs.hasRecords()
+                        and lhs.graph.elements | rhs.graph.elements >= unioned.graph.elements
+                    ):
+                        self.assertTrue(unioned.hasRecords())
 
     def testRegions(self):
         """Test that data IDs for a few known dimensions have the expected

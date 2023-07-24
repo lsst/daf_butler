@@ -25,6 +25,7 @@ from __future__ import annotations
 
 __all__ = ("ButlerConfig",)
 
+import contextlib
 import copy
 import os
 from collections.abc import Sequence
@@ -86,19 +87,17 @@ class ButlerConfig(Config):
         original_other = other
         resolved_alias = False
         if isinstance(other, str):
-            try:
+            with contextlib.suppress(Exception):
                 # Force back to a string because the resolved URI
                 # might not refer explicitly to a directory and we have
                 # check below to guess that.
                 other = str(ButlerRepoIndex.get_repo_uri(other, True))
-            except Exception:
-                pass
             if other != original_other:
                 resolved_alias = True
 
         # Include ResourcePath here in case it refers to a directory.
         # Creating a ResourcePath from a ResourcePath is a no-op.
-        if isinstance(other, (str, os.PathLike, ResourcePath)):
+        if isinstance(other, str | os.PathLike | ResourcePath):
             # This will only allow supported schemes
             uri = ResourcePath(other)
 

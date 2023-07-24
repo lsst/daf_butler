@@ -613,12 +613,12 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             }
             tagsRows = [
                 dict(protoTagsRow, dataset_id=row["id"], **dataId.byName())
-                for dataId, row in zip(dataIdList, rows)
+                for dataId, row in zip(dataIdList, rows, strict=True)
             ]
             # Insert those rows into the tags table.
             self._db.insert(self._tags, *tagsRows)
 
-        for dataId, row in zip(dataIdList, rows):
+        for dataId, row in zip(dataIdList, rows, strict=True):
             yield DatasetRef(
                 datasetType=self.datasetType,
                 dataId=dataId,
@@ -659,40 +659,39 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
             for dataset_id, dataId in dataIds.items()
         ]
-        with self._db.transaction(for_temp_tables=True):
-            with self._db.temporary_table(tableSpec) as tmp_tags:
-                # store all incoming data in a temporary table
-                self._db.insert(tmp_tags, *tmpRows)
+        with self._db.transaction(for_temp_tables=True), self._db.temporary_table(tableSpec) as tmp_tags:
+            # store all incoming data in a temporary table
+            self._db.insert(tmp_tags, *tmpRows)
 
-                # There are some checks that we want to make for consistency
-                # of the new datasets with existing ones.
-                self._validateImport(tmp_tags, run)
+            # There are some checks that we want to make for consistency
+            # of the new datasets with existing ones.
+            self._validateImport(tmp_tags, run)
 
-                # Before we merge temporary table into dataset/tags we need to
-                # drop datasets which are already there (and do not conflict).
-                self._db.deleteWhere(
-                    tmp_tags,
-                    tmp_tags.columns.dataset_id.in_(sqlalchemy.sql.select(self._static.dataset.columns.id)),
-                )
+            # Before we merge temporary table into dataset/tags we need to
+            # drop datasets which are already there (and do not conflict).
+            self._db.deleteWhere(
+                tmp_tags,
+                tmp_tags.columns.dataset_id.in_(sqlalchemy.sql.select(self._static.dataset.columns.id)),
+            )
 
-                # Copy it into dataset table, need to re-label some columns.
-                self._db.insert(
-                    self._static.dataset,
-                    select=sqlalchemy.sql.select(
-                        tmp_tags.columns.dataset_id.label("id"),
-                        tmp_tags.columns.dataset_type_id,
-                        tmp_tags.columns[collFkName].label(self._runKeyColumn),
-                        timestamp.label("ingest_date"),
-                    ),
-                )
+            # Copy it into dataset table, need to re-label some columns.
+            self._db.insert(
+                self._static.dataset,
+                select=sqlalchemy.sql.select(
+                    tmp_tags.columns.dataset_id.label("id"),
+                    tmp_tags.columns.dataset_type_id,
+                    tmp_tags.columns[collFkName].label(self._runKeyColumn),
+                    timestamp.label("ingest_date"),
+                ),
+            )
 
-                # Update the summary tables for this collection in case this
-                # is the first time this dataset type or these governor values
-                # will be inserted there.
-                self._summaries.update(run, [self._dataset_type_id], summary)
+            # Update the summary tables for this collection in case this
+            # is the first time this dataset type or these governor values
+            # will be inserted there.
+            self._summaries.update(run, [self._dataset_type_id], summary)
 
-                # Copy it into tags table.
-                self._db.insert(self._tags, select=tmp_tags.select())
+            # Copy it into tags table.
+            self._db.insert(self._tags, select=tmp_tags.select())
 
         # Return refs in the same order as in the input list.
         for dataset_id, dataId in dataIds.items():

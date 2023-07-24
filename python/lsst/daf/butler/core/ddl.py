@@ -99,7 +99,7 @@ class SchemaValidationError(ValidationError):
                 try:
                     return func(self, config, *args, **kwargs)
                 except caught as err:
-                    raise cls(message.format(config=str(config), err=err))
+                    raise cls(message.format(config=str(config), err=err)) from err
 
             return decorated
 
@@ -118,7 +118,7 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 
     def __init__(self, nbytes: int | None = None, *args: Any, **kwargs: Any):
         if nbytes is not None:
-            length = 4 * ceil(nbytes / 3) if self.impl == sqlalchemy.String else None
+            length = 4 * ceil(nbytes / 3) if self.impl is sqlalchemy.String else None
         else:
             length = None
         super().__init__(*args, length=length, **kwargs)
@@ -249,9 +249,7 @@ class GUID(sqlalchemy.TypeDecorator):
     def process_result_value(
         self, value: str | uuid.UUID | None, dialect: sqlalchemy.Dialect
     ) -> uuid.UUID | None:
-        if value is None:
-            return value
-        elif isinstance(value, uuid.UUID):
+        if value is None or isinstance(value, uuid.UUID):
             # sqlalchemy 2 converts to UUID internally
             return value
         else:
@@ -401,10 +399,9 @@ class FieldSpec:
             string type if it has been decided that it should be implemented
             as a `sqlalchemy.Text` type.
         """
-        if self.dtype == sqlalchemy.String:
-            # For short strings retain them as strings
-            if self.dtype == sqlalchemy.String and self.length and self.length <= 32:
-                return True
+        # For short strings retain them as strings
+        if self.dtype is sqlalchemy.String and self.length and self.length <= 32:
+            return True
         return False
 
     def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine | type:
@@ -419,7 +416,7 @@ class FieldSpec:
         """
         if self.length is not None:
             # Last chance check that we are only looking at possible String
-            if self.dtype == sqlalchemy.String and not self.isStringType():
+            if self.dtype is sqlalchemy.String and not self.isStringType():
                 return sqlalchemy.Text
             return self.dtype(length=self.length)
         if self.nbytes is not None:

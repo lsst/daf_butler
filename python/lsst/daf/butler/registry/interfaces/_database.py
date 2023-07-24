@@ -146,7 +146,7 @@ class StaticTablesContext:
         we cannot represent this with type annotations.
         """
         return specs._make(  # type: ignore
-            self.addTable(name, spec) for name, spec in zip(specs._fields, specs)  # type: ignore
+            self.addTable(name, spec) for name, spec in zip(specs._fields, specs, strict=True)  # type: ignore
         )
 
     def addInitializer(self, initializer: Callable[[Database], None]) -> None:
@@ -685,9 +685,11 @@ class Database(ABC):
                 for table, foreignKey in context._foreignKeys:
                     table.append_constraint(foreignKey)
                 if create:
-                    if self.namespace is not None:
-                        if self.namespace not in context._inspector.get_schema_names():
-                            connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
+                    if (
+                        self.namespace is not None
+                        and self.namespace not in context._inspector.get_schema_names()
+                    ):
+                        connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
                     # In our tables we have columns that make use of sqlalchemy
                     # Sequence objects. There is currently a bug in sqlalchemy
                     # that causes a deprecation warning to be thrown on a
@@ -1153,12 +1155,11 @@ class Database(ABC):
         table = self._convertTableSpec(
             name, spec, metadata, prefixes=["TEMPORARY"], schema=sqlalchemy.schema.BLANK_SCHEMA, **kwargs
         )
-        if table.key in self._temp_tables:
-            if table.key != name:
-                raise ValueError(
-                    f"A temporary table with name {name} (transformed to {table.key} by "
-                    "Database) already exists."
-                )
+        if table.key in self._temp_tables and table.key != name:
+            raise ValueError(
+                f"A temporary table with name {name} (transformed to {table.key} by "
+                "Database) already exists."
+            )
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, metadata))
         with self._transaction():
@@ -1375,7 +1376,7 @@ class Database(ABC):
                             connection.execute(
                                 table.update()
                                 .where(sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()]))
-                                .values(**{k: compared[k] for k in bad.keys()})
+                                .values(**{k: compared[k] for k in bad})
                             )
                         inserted_or_updated = bad
                     else:
@@ -1403,7 +1404,7 @@ class Database(ABC):
             return None, inserted_or_updated
         else:
             assert result is not None
-            return {k: v for k, v in zip(returning, result)}, inserted_or_updated
+            return {k: v for k, v in zip(returning, result, strict=True)}, inserted_or_updated
 
     def insert(
         self,

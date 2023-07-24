@@ -224,10 +224,7 @@ class Butler(LimitedButler):
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths, without_datastore=without_datastore)
             try:
-                if "root" in self._config:
-                    butlerRoot = self._config["root"]
-                else:
-                    butlerRoot = self._config.configDir
+                butlerRoot = self._config.get("root", self._config.configDir)
                 if writeable is None:
                     writeable = run is not None
                 self._registry = _RegistryFactory(self._config).from_config(
@@ -404,7 +401,7 @@ class Butler(LimitedButler):
         construct the repository should also be used to construct any Butlers
         to avoid configuration inconsistencies.
         """
-        if isinstance(config, (ButlerConfig, ConfigSubset)):
+        if isinstance(config, ButlerConfig | ConfigSubset):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
 
         # Ensure that the root of the repository exists or can be made
@@ -552,9 +549,8 @@ class Butler(LimitedButler):
 
         Transactions can be nested.
         """
-        with self._registry.transaction():
-            with self._datastore.transaction():
-                yield
+        with self._registry.transaction(), self._datastore.transaction():
+            yield
 
     def _standardizeArgs(
         self,
@@ -1187,7 +1183,7 @@ class Butler(LimitedButler):
             try:
                 self._datastore.put(obj, datasetRefOrType)
             except IntegrityError as e:
-                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}")
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
             return datasetRefOrType
 
         log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
@@ -1736,7 +1732,7 @@ class Butler(LimitedButler):
                     existence[ref] |= DatasetExistence._ARTIFACT
         else:
             # Do not set this flag if nothing is known about the dataset.
-            for ref in existence.keys():
+            for ref in existence:
                 if existence[ref] != DatasetExistence.UNRECOGNIZED:
                     existence[ref] |= DatasetExistence._ASSUMED
 
@@ -1827,14 +1823,13 @@ class Butler(LimitedButler):
             if collectionType is not CollectionType.RUN:
                 raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
             refs.extend(self._registry.queryDatasets(..., collections=name, findFirst=True))
-        with self._datastore.transaction():
-            with self._registry.transaction():
-                if unstore:
-                    self._datastore.trash(refs)
-                else:
-                    self._datastore.forget(refs)
-                for name in names:
-                    self._registry.removeCollection(name)
+        with self._datastore.transaction(), self._registry.transaction():
+            if unstore:
+                self._datastore.trash(refs)
+            else:
+                self._datastore.forget(refs)
+            for name in names:
+                self._registry.removeCollection(name)
         if unstore:
             # Point of no return for removing artifacts
             self._datastore.emptyTrash()
@@ -1882,16 +1877,15 @@ class Butler(LimitedButler):
         # mutating the Registry (it can _look_ at Datastore-specific things,
         # but shouldn't change them), and hence all operations here are
         # Registry operations.
-        with self._datastore.transaction():
-            with self._registry.transaction():
-                if unstore:
-                    self._datastore.trash(refs)
-                if purge:
-                    self._registry.removeDatasets(refs)
-                elif disassociate:
-                    assert tags, "Guaranteed by earlier logic in this function."
-                    for tag in tags:
-                        self._registry.disassociate(tag, refs)
+        with self._datastore.transaction(), self._registry.transaction():
+            if unstore:
+                self._datastore.trash(refs)
+            if purge:
+                self._registry.removeDatasets(refs)
+            elif disassociate:
+                assert tags, "Guaranteed by earlier logic in this function."
+                for tag in tags:
+                    self._registry.disassociate(tag, refs)
         # We've exited the Registry transaction, and apparently committed.
         # (if there was an exception, everything rolled back, and it's as if
         # nothing happened - and we never get here).
@@ -2079,7 +2073,7 @@ class Butler(LimitedButler):
                 *datasets, transfer=transfer, record_validation_info=record_validation_info
             )
         except IntegrityError as e:
-            raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}")
+            raise ConflictingDefinitionError(f"Datastore already contains one or more datasets: {e}") from e
 
     @contextlib.contextmanager
     def export(

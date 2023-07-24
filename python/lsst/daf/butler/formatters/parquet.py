@@ -500,13 +500,12 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     # We loop through the arrow table columns because the datatypes have
     # been checked and converted from pandas objects.
     for name in arrow_table.column_names:
-        if not name.startswith("__"):
-            if arrow_table[name].type == pa.string():
-                if len(arrow_table[name]) > 0:
-                    strlen = max(len(row.as_py()) for row in arrow_table[name] if row.is_valid)
-                else:
-                    strlen = default_length
-                md[f"lsst::arrow::len::{name}".encode()] = str(strlen)
+        if not name.startswith("__") and arrow_table[name].type == pa.string():
+            if len(arrow_table[name]) > 0:
+                strlen = max(len(row.as_py()) for row in arrow_table[name] if row.is_valid)
+            else:
+                strlen = default_length
+            md[f"lsst::arrow::len::{name}".encode()] = str(strlen)
 
     arrow_table = arrow_table.replace_schema_metadata(md)
 
@@ -1024,9 +1023,8 @@ def _arrow_string_to_numpy_dtype(
     if (encoded := md_name.encode("UTF-8")) in metadata:
         # String/bytes length from header.
         strlen = int(schema.metadata[encoded])
-    elif numpy_column is not None:
-        if len(numpy_column) > 0:
-            strlen = max(len(row) for row in numpy_column)
+    elif numpy_column is not None and len(numpy_column) > 0:
+        strlen = max(len(row) for row in numpy_column)
 
     dtype = f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}"
 

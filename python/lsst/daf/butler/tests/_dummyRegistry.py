@@ -71,7 +71,7 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
         # Can support an IN operator if given list.
         wherein = {}
         for k in list(where):
-            if isinstance(where[k], (tuple, list, set)):
+            if isinstance(where[k], tuple | list | set):
                 wherein[k] = set(where[k])
                 del where[k]
 

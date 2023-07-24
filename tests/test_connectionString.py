@@ -54,7 +54,7 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
         regConfigs = [RegistryConfig(os.path.join(self.configDir, name)) for name in self.configFiles]
 
         conStrFactory = ConnectionStringFactory()
-        for regConf, fileName in zip(regConfigs, self.configFiles):
+        for regConf, fileName in zip(regConfigs, self.configFiles, strict=True):
             conStr = conStrFactory.fromConfig(regConf)
             with self.subTest(confFile=fileName):
                 self.assertEqual(

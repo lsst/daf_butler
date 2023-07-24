@@ -217,7 +217,7 @@ class RegistryManagerTypes(
 
         universe = DimensionUniverse(dimensionConfig)
         with database.declareStaticTables(create=True) as context:
-            if self.datasets.getIdColumnType() == sqlalchemy.BigInteger:
+            if self.datasets.getIdColumnType() is sqlalchemy.BigInteger:
                 raise RuntimeError(
                     "New data repositories should be created with UUID dataset IDs instead of autoincrement "
                     "integer dataset IDs.",

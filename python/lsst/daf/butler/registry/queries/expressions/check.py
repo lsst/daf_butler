@@ -217,7 +217,7 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         # Docstring inherited from TreeVisitor.visitIdentifier
         if name in self.bind:
             value = self.bind[name]
-            if isinstance(value, (list, tuple, Set)):
+            if isinstance(value, list | tuple | Set):
                 # This can happen on rhs of IN operator, if there is only one
                 # element in the list then take it.
                 if len(value) == 1:

@@ -29,8 +29,8 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
-from typing import Any, ContextManager
+from contextlib import AbstractContextManager, contextmanager
+from typing import Any
 
 import astropy.time
 import sqlalchemy
@@ -117,7 +117,7 @@ class DatabaseTests(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def asReadOnly(self, database: Database) -> ContextManager[Database]:
+    def asReadOnly(self, database: Database) -> AbstractContextManager[Database]:
         """Return a context manager for a read-only connection into the given
         database.
 
@@ -145,9 +145,8 @@ class DatabaseTests(ABC):
         context-manager boilerplate that is usefully verbose in production code
         but just noise in tests.
         """
-        with database.transaction():
-            with database.query(executable) as result:
-                return result.fetchall()
+        with database.transaction(), database.query(executable) as result:
+            return result.fetchall()
 
     def query_scalar(self, database: Database, executable: sqlalchemy.sql.expression.SelectBase) -> Any:
         """Run a SELECT query that yields a single column and row against the
@@ -410,7 +409,7 @@ class DatabaseTests(ABC):
             r._asdict()
             for r in self.query_list(db, tables.b.select().where(tables.b.columns.id > results[1]["id"]))
         ]
-        expected = [dict(row, id=id) for row, id in zip(rows, ids)]
+        expected = [dict(row, id=id) for row, id in zip(rows, ids, strict=True)]
         self.assertCountEqual(results, expected)
         self.assertTrue(all(result["id"] is not None for result in results))
         # Insert multiple rows into a table with an autoincrement primary key,
@@ -418,7 +417,7 @@ class DatabaseTests(ABC):
         rows = [{"b_id": results[0]["id"]}, {"b_id": None}]
         ids = db.insert(tables.c, *rows, returnIds=True)
         results = [r._asdict() for r in self.query_list(db, tables.c.select())]
-        expected = [dict(row, id=id) for row, id in zip(rows, ids)]
+        expected = [dict(row, id=id) for row, id in zip(rows, ids, strict=True)]
         self.assertCountEqual(results, expected)
         self.assertTrue(all(result["id"] is not None for result in results))
         # Add the dynamic table.
@@ -796,14 +795,16 @@ class DatabaseTests(ABC):
             await task2
             if "a2" in names1:
                 warnings.warn(
-                    "Unlucky scheduling in no-locking test: concurrent INSERT happened before first SELECT."
+                    "Unlucky scheduling in no-locking test: concurrent INSERT happened before first SELECT.",
+                    stacklevel=1,
                 )
                 self.assertEqual(names1, {"a2"})
                 self.assertEqual(names2, {"a1", "a2"})
             elif "a2" not in names2:
                 warnings.warn(
                     "Unlucky scheduling in no-locking test: concurrent INSERT "
-                    "happened after second SELECT even without locking."
+                    "happened after second SELECT even without locking.",
+                    stacklevel=1,
                 )
                 self.assertEqual(names1, set())
                 self.assertEqual(names2, {"a1"})
@@ -830,7 +831,8 @@ class DatabaseTests(ABC):
             await task2
             if "a2" in names1:
                 warnings.warn(
-                    "Unlucky scheduling in locking test: concurrent INSERT happened before first SELECT."
+                    "Unlucky scheduling in locking test: concurrent INSERT happened before first SELECT.",
+                    stacklevel=1,
                 )
                 self.assertEqual(names1, {"a2"})
                 self.assertEqual(names2, {"a1", "a2"})
@@ -863,7 +865,9 @@ class DatabaseTests(ABC):
         # Make another list of timespans that span the full range but don't
         # overlap.  This is a subset of the previous list.
         bTimespans = [Timespan(begin=None, end=timestamps[0])]
-        bTimespans.extend(Timespan(begin=t1, end=t2) for t1, t2 in zip(timestamps[:-1], timestamps[1:]))
+        bTimespans.extend(
+            Timespan(begin=t1, end=t2) for t1, t2 in zip(timestamps[:-1], timestamps[1:], strict=True)
+        )
         bTimespans.append(Timespan(begin=timestamps[-1], end=None))
         # Make a database and create a table with that database's timespan
         # representation.  This one will have no exclusion constraint and

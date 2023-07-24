@@ -24,7 +24,6 @@ from __future__ import annotations
 __all__ = ("RemoteRegistry",)
 
 import contextlib
-import functools
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -237,7 +236,6 @@ class RemoteRegistry(_ButlerRegistry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    @functools.lru_cache
     def getCollectionType(self, name: str) -> CollectionType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         # This could use a local cache since collection types won't

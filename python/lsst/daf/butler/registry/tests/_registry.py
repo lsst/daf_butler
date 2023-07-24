@@ -522,9 +522,10 @@ class RegistryTests(ABC):
         if isinstance(self.datasetsManager, str):
             if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
                 self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
-        elif isinstance(self.datasetsManager, dict):
-            if not self.datasetsManager["cls"].endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
-                self.skipTest(f"Unexpected dataset manager {self.datasetsManager['cls']}")
+        elif isinstance(self.datasetsManager, dict) and not self.datasetsManager["cls"].endswith(
+            ".ByDimensionsDatasetRecordStorageManagerUUID"
+        ):
+            self.skipTest(f"Unexpected dataset manager {self.datasetsManager['cls']}")
 
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
@@ -873,10 +874,10 @@ class RegistryTests(ABC):
         self.assertEqual(ref4, registry.findDataset("flat", dataId4, collections=chain2))
         # Deleting a collection that's part of a CHAINED collection is not
         # allowed, and is exception-safe.
-        with self.assertRaises(Exception):
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
             registry.removeCollection(run2)
         self.assertEqual(registry.getCollectionType(run2), CollectionType.RUN)
-        with self.assertRaises(Exception):
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
             registry.removeCollection(chain1)
         self.assertEqual(registry.getCollectionType(chain1), CollectionType.CHAINED)
         # Actually remove chain2, test that it's gone by asking for its type.
@@ -1275,10 +1276,10 @@ class RegistryTests(ABC):
 
         # Overlap each DatabaseDimensionElement with the commonSkyPix system.
         commonSkyPix = registry.dimensions.commonSkyPix
-        for elementName, regions in regions.items():
+        for elementName, these_regions in regions.items():
             graph = DimensionGraph.union(registry.dimensions[elementName].graph, commonSkyPix.graph)
             expected = set()
-            for dataId, region in regions.items():
+            for dataId, region in these_regions.items():
                 for begin, end in commonSkyPix.pixelization.envelope(region):
                     expected.update(
                         DataCoordinate.standardize({commonSkyPix.name: index, **dataId.byName()}, graph=graph)
@@ -1844,7 +1845,10 @@ class RegistryTests(ABC):
         child_regions_large = [
             range_set_hull(htm6.envelope(c.getBoundingCircle()), htm6) for c in child_regions_small
         ]
-        assert all(large.contains(small) for large, small in zip(child_regions_large, child_regions_small))
+        assert all(
+            large.contains(small)
+            for large, small in zip(child_regions_large, child_regions_small, strict=True)
+        )
         parent_region_large = lsst.sphgeom.ConvexPolygon(
             list(itertools.chain.from_iterable(c.getVertices() for c in child_regions_large))
         )
@@ -1857,7 +1861,7 @@ class RegistryTests(ABC):
         # real tests later involve what's in the database, not just post-query
         # filtering of regions.
         child_difference_indices = []
-        for large, small in zip(child_regions_large, child_regions_small):
+        for large, small in zip(child_regions_large, child_regions_small, strict=True):
             difference = list(unpack_range_set(commonSkyPix.envelope(large) - commonSkyPix.envelope(small)))
             assert difference, "if this is empty, we can't test anything useful with these regions"
             assert all(

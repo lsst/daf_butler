@@ -70,7 +70,7 @@ class TimeTestCase(unittest.TestCase):
         # trigger our own warning and count all the warnings
         with self.assertWarns(Warning) as cm:
             TimeConverter().astropy_to_nsec(time)
-            warnings.warn("deliberate")
+            warnings.warn("deliberate", stacklevel=1)
         self.assertEqual(str(cm.warning), "deliberate")
 
     def test_round_trip(self):

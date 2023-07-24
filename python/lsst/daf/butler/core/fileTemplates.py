@@ -398,7 +398,7 @@ class FileTemplate:
         parts = fmt.parse(self.template)
 
         names = set()
-        for literal, field_name, format_spec, conversion in parts:
+        for _, field_name, format_spec, _ in parts:
             if field_name is not None and format_spec is not None:
                 if "?" in format_spec and not optionals:
                     continue
@@ -470,7 +470,7 @@ class FileTemplate:
         parts = fmt.parse(self.template)
         output = ""
 
-        for literal, field_name, format_spec, conversion in parts:
+        for literal, field_name, format_spec, _ in parts:
             if field_name == "component":
                 usedComponent = True
 

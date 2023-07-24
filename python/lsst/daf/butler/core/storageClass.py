@@ -586,12 +586,7 @@ class StorageClass:
             return False
 
         # Ensure that all the components have the same type
-        for k in self.components:
-            if self.components[k] != other.components[k]:
-                return False
-
-        # If we got to this point everything checks out
-        return True
+        return all(self.components[k] == other.components[k] for k in self.components)
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -690,9 +685,8 @@ StorageClasses
         """
         if isinstance(storageClassOrName, str):
             return storageClassOrName in self._storageClasses
-        elif isinstance(storageClassOrName, StorageClass):
-            if storageClassOrName.name in self._storageClasses:
-                return storageClassOrName == self._storageClasses[storageClassOrName.name]
+        elif isinstance(storageClassOrName, StorageClass) and storageClassOrName.name in self._storageClasses:
+            return storageClassOrName == self._storageClasses[storageClassOrName.name]
         return False
 
     def __len__(self) -> int:

@@ -402,4 +402,4 @@ class StorageClassDelegate:
             raise NotImplementedError(
                 f"Unable to deep copy the supplied python type ({get_full_type_name(inMemoryDataset)}) "
                 f"using default methods ({e})"
-            )
+            ) from e

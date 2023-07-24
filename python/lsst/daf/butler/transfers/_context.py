@@ -270,7 +270,7 @@ class RepoExportContext:
             r = self._records[element]
             self._backend.saveDimensionData(element, *[r[dataId] for dataId in sorted(r.keys())])
         for datasetsByRun in self._datasets.values():
-            for run in datasetsByRun.keys():
+            for run in datasetsByRun:
                 self._collections[run] = self._registry._get_collection_record(run)
         for collectionName in self._computeSortedCollections():
             doc = self._registry.getCollectionDocumentation(collectionName)
@@ -321,7 +321,7 @@ class RepoExportContext:
             unblocked = {
                 parent
                 for parent, children in chains.items()
-                if not any(child in chains.keys() for child in children)
+                if not any(child in chains for child in children)
             }
             if not unblocked:
                 raise RuntimeError(
@@ -348,7 +348,7 @@ class RepoExportContext:
             representing an association between that collection and a dataset.
         """
         results = defaultdict(list)
-        for datasetType in self._datasets.keys():
+        for datasetType in self._datasets:
             # We query for _all_ datasets of each dataset type we export, in
             # the specific collections we are exporting.  The worst-case
             # efficiency of this is _awful_ (i.e. big repo, exporting a tiny

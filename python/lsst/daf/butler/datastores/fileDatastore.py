@@ -25,6 +25,7 @@ from __future__ import annotations
 
 __all__ = ("FileDatastore",)
 
+import contextlib
 import hashlib
 import logging
 from collections import defaultdict
@@ -366,7 +367,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore
-        records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos)]
+        records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos, strict=True)]
         self._table.insert(*records, transaction=self._transaction)
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
@@ -1005,7 +1006,7 @@ class FileDatastore(GenericBaseDatastore):
             if dataset.formatter is None:
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
-                assert isinstance(dataset.formatter, (type, str))
+                assert isinstance(dataset.formatter, type | str)
                 formatter_class = get_class_of(dataset.formatter)
                 if not issubclass(formatter_class, Formatter):
                     raise TypeError(f"Requested formatter {dataset.formatter} is not a Formatter class.")
@@ -1119,37 +1120,36 @@ class FileDatastore(GenericBaseDatastore):
             is written and we should not confuse people by writing spurious
             error messages to the log.
             """
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 uri.remove()
-            except FileNotFoundError:
-                pass
 
         # Register a callback to try to delete the uploaded data if
         # something fails below
         self._transaction.registerUndo("artifactWrite", _removeFileExists, uri)
 
         data_written = False
-        if not uri.isLocal:
-            # This is a remote URI. Some datasets can be serialized directly
-            # to bytes and sent to the remote datastore without writing a
-            # file. If the dataset is intended to be saved to the cache
-            # a file is always written and direct write to the remote
-            # datastore is bypassed.
-            if not self.cacheManager.should_be_cached(ref):
-                try:
-                    serializedDataset = formatter.toBytes(inMemoryDataset)
-                except NotImplementedError:
-                    # Fallback to the file writing option.
-                    pass
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to bytes."
-                    ) from e
-                else:
-                    log.debug("Writing bytes directly to %s", uri)
-                    uri.write(serializedDataset, overwrite=True)
-                    log.debug("Successfully wrote bytes directly to %s", uri)
-                    data_written = True
+
+        # For remote URIs some datasets can be serialized directly
+        # to bytes and sent to the remote datastore without writing a
+        # file. If the dataset is intended to be saved to the cache
+        # a file is always written and direct write to the remote
+        # datastore is bypassed.
+        if not uri.isLocal and not self.cacheManager.should_be_cached(ref):
+            # Remote URI that is not cached so can write directly.
+            try:
+                serializedDataset = formatter.toBytes(inMemoryDataset)
+            except NotImplementedError:
+                # Fallback to the file writing option.
+                pass
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to bytes."
+                ) from e
+            else:
+                log.debug("Writing bytes directly to %s", uri)
+                uri.write(serializedDataset, overwrite=True)
+                log.debug("Successfully wrote bytes directly to %s", uri)
+                data_written = True
 
         if not data_written:
             # Did not write the bytes directly to object store so instead
@@ -1434,7 +1434,7 @@ class FileDatastore(GenericBaseDatastore):
             # to the remote URI.
             if self.cacheManager.file_count > 0:
                 ref = id_to_ref[ref_id]
-                for uri, storedFileInfo in zip(uris, infos):
+                for uri, storedFileInfo in zip(uris, infos, strict=True):
                     check_ref = ref
                     if not ref.datasetType.isComponent() and (component := storedFileInfo.component):
                         check_ref = ref.makeComponentRef(component)
@@ -1614,7 +1614,7 @@ class FileDatastore(GenericBaseDatastore):
         )
 
         # Set of IDs that have been handled.
-        handled_ids = {ref.id for ref in dataset_existence.keys()}
+        handled_ids = {ref.id for ref in dataset_existence}
 
         missing_ids = requested_ids - handled_ids
         if missing_ids:
@@ -2384,7 +2384,7 @@ class FileDatastore(GenericBaseDatastore):
             else:
                 raise FileNotFoundError(err_msg)
 
-        for location, storedFileInfo in fileLocations:
+        for location, _ in fileLocations:
             if not self._artifact_exists(location):
                 err_msg = (
                     f"Dataset is known to datastore {self.name} but "
@@ -2841,10 +2841,9 @@ class FileDatastore(GenericBaseDatastore):
         if directory is not None:
             directoryUri = ResourcePath(directory, forceDirectory=True)
 
-        if transfer is not None and directoryUri is not None:
+        if transfer is not None and directoryUri is not None and not directoryUri.exists():
             # mypy needs the second test
-            if not directoryUri.exists():
-                raise FileNotFoundError(f"Export location {directory} does not exist")
+            raise FileNotFoundError(f"Export location {directory} does not exist")
 
         progress = Progress("lsst.daf.butler.datastores.FileDatastore.export", level=logging.DEBUG)
         for ref in progress.wrap(refs, "Exporting dataset files"):
@@ -2918,10 +2917,9 @@ class FileDatastore(GenericBaseDatastore):
 
         hasher = hashlib.new(algorithm)
 
-        with uri.as_local() as local_uri:
-            with open(local_uri.ospath, "rb") as f:
-                for chunk in iter(lambda: f.read(block_size), b""):
-                    hasher.update(chunk)
+        with uri.as_local() as local_uri, open(local_uri.ospath, "rb") as f:
+            for chunk in iter(lambda: f.read(block_size), b""):
+                hasher.update(chunk)
 
         return hasher.hexdigest()
 
@@ -2943,7 +2941,7 @@ class FileDatastore(GenericBaseDatastore):
         if not record_data:
             return
 
-        self._bridge.insert(FakeDatasetRef(dataset_id) for dataset_id in record_data.records.keys())
+        self._bridge.insert(FakeDatasetRef(dataset_id) for dataset_id in record_data.records)
 
         # TODO: Verify that there are no unexpected table names in the dict?
         unpacked_records = []

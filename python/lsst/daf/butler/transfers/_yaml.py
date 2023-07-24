@@ -34,6 +34,7 @@ import astropy.time
 import yaml
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
+from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
@@ -319,7 +320,8 @@ class YamlRepoImportBackend(RepoImportBackend):
                         if not isinstance(child, str):
                             warnings.warn(
                                 f"CHAINED collection {data['name']} includes restrictions on child "
-                                "collection searches, which are no longer suppored and will be ignored."
+                                "collection searches, which are no longer suppored and will be ignored.",
+                                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                             )
                             # Old form with dataset type restrictions only,
                             # supported for backwards compatibility.
@@ -391,7 +393,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                             id=refid if not isinstance(refid, int) else _refIntId2UUID[refid],
                         )
                         for dataId, refid in zip(
-                            ensure_iterable(d["data_id"]), ensure_iterable(d["dataset_id"])
+                            ensure_iterable(d["data_id"]), ensure_iterable(d["dataset_id"]), strict=True
                         )
                     ],
                     formatter=doImportType(d.get("formatter")) if "formatter" in d else None,
@@ -436,7 +438,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             self.registry.insertDimensionData(element, *dimensionRecords, skip_existing=True)
         # FileDatasets to ingest into the datastore (in bulk):
         fileDatasets = []
-        for (datasetTypeName, run), records in self.datasets.items():
+        for records in self.datasets.values():
             # Make a big flattened list of all data IDs and dataset_ids, while
             # remembering slices that associate them with the FileDataset
             # instances they came from.
@@ -456,12 +458,12 @@ class YamlRepoImportBackend(RepoImportBackend):
             resolvedRefs = self.registry._importDatasets(datasets)
             # Populate our dictionary that maps int dataset_id values from the
             # export file to the new DatasetRefs
-            for fileId, ref in zip(dataset_ids, resolvedRefs):
+            for fileId, ref in zip(dataset_ids, resolvedRefs, strict=True):
                 self.refsByFileId[fileId] = ref
             # Now iterate over the original records, and install the new
             # resolved DatasetRefs to replace the unresolved ones as we
             # reorganize the collection information.
-            for sliceForFileDataset, fileDataset in zip(slices, records):
+            for sliceForFileDataset, fileDataset in zip(slices, records, strict=True):
                 fileDataset.refs = resolvedRefs[sliceForFileDataset]
                 if directory is not None:
                     fileDataset.path = ResourcePath(directory, forceDirectory=True).join(fileDataset.path)

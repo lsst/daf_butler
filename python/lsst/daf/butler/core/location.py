@@ -62,9 +62,8 @@ class Location:
 
         # if the root URI is not None the path must not be absolute since
         # it is required to be within the root.
-        if datastoreRootUri is not None:
-            if path_uri.isabs():
-                raise ValueError(f"Path within datastore must be relative not absolute, got {path_uri}")
+        if datastoreRootUri is not None and path_uri.isabs():
+            raise ValueError(f"Path within datastore must be relative not absolute, got {path_uri}")
 
         self._path = path_uri
 

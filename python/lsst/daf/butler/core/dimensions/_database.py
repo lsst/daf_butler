@@ -143,7 +143,7 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
         family = DatabaseTopologicalFamily(self.name, self._space, members=members.freeze())
         builder.topology[self._space].add(family)
         for member in members:
-            assert isinstance(member, (DatabaseDimension, DatabaseDimensionCombination))
+            assert isinstance(member, DatabaseDimension | DatabaseDimensionCombination)
             other = member._topology.setdefault(self._space, family)
             if other is not family:
                 raise RuntimeError(

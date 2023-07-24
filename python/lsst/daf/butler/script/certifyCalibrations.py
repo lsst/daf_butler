@@ -69,9 +69,8 @@ def certifyCalibrations(
         begin=astropy.time.Time(begin_date, scale="tai") if begin_date is not None else None,
         end=astropy.time.Time(end_date, scale="tai") if end_date is not None else None,
     )
-    if not search_all_inputs:
-        if registry.getCollectionType(input_collection) is CollectionType.CHAINED:
-            input_collection = next(iter(registry.getCollectionChain(input_collection)))
+    if not search_all_inputs and registry.getCollectionType(input_collection) is CollectionType.CHAINED:
+        input_collection = next(iter(registry.getCollectionChain(input_collection)))
 
     refs = set(registry.queryDatasets(dataset_type_name, collections=[input_collection]))
     if not refs:

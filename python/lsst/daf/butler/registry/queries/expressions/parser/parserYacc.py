@@ -407,8 +407,8 @@ class ParserYacc:
         """literal : TIME_LITERAL"""
         try:
             value = _parseTimeString(p[1])
-        except ValueError:
-            raise ParseError(p.lexer.lexdata, p[1], p.lexpos(1), p.lineno(1))
+        except ValueError as e:
+            raise ParseError(p.lexer.lexdata, p[1], p.lexpos(1), p.lineno(1)) from e
         p[0] = TimeLiteral(value)
 
     def p_literal_range(self, p):

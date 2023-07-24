@@ -134,7 +134,7 @@ def queryDataIds(
 
     query_collections: Iterable[str] | EllipsisType | None = None
     if datasets:
-        query_collections = collections if collections else ...
+        query_collections = collections or ...
     results = butler.registry.queryDataIds(
         dimensions, datasets=datasets, where=where, collections=query_collections
     )

@@ -162,8 +162,8 @@ class DimensionGraph:
         # another.
         required: NamedValueSet[Dimension] = NamedValueSet()
         implied: NamedValueSet[Dimension] = NamedValueSet()
-        for i1, dim1 in enumerate(self.dimensions):
-            for i2, dim2 in enumerate(self.dimensions):
+        for dim1 in self.dimensions:
+            for dim2 in self.dimensions:
                 if dim1.name in dim2.implied.names:
                     implied.add(dim1)
                     break

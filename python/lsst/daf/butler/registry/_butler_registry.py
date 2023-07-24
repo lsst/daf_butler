@@ -71,7 +71,7 @@ class _ButlerRegistry(Registry):
             A registry config.
         """
         if not isinstance(config, RegistryConfig):
-            if isinstance(config, (str, Config)) or config is None:
+            if isinstance(config, str | Config) or config is None:
                 config = RegistryConfig(config)
             else:
                 raise ValueError(f"Incompatible Registry configuration: {config}")

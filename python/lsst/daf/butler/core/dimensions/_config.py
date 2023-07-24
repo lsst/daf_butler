@@ -128,7 +128,7 @@ class DimensionConfig(ConfigSubset):
             self.filesRead.append(configFile)
         else:
             for pathDir in searchPaths:
-                if isinstance(pathDir, (str, ResourcePath)):
+                if isinstance(pathDir, str | ResourcePath):
                     pathDir = ResourcePath(pathDir, forceDirectory=True)
                     file = pathDir.join(configFile)
                     if file.exists():

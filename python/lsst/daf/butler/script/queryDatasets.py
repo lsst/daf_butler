@@ -168,7 +168,7 @@ class QueryDatasets:
         if (repo and butler) or (not repo and not butler):
             raise RuntimeError("One of repo and butler must be provided and the other must be None.")
         # show_uri requires a datastore.
-        without_datastore = False if show_uri else True
+        without_datastore = not show_uri
         self.butler = butler or Butler(repo, without_datastore=without_datastore)
         self._getDatasets(glob, collections, where, find_first)
         self.showUri = show_uri
@@ -176,8 +176,8 @@ class QueryDatasets:
     def _getDatasets(
         self, glob: Iterable[str], collections: Iterable[str], where: str, find_first: bool
     ) -> None:
-        datasetTypes = glob if glob else ...
-        query_collections: Iterable[str] | EllipsisType = collections if collections else ...
+        datasetTypes = glob or ...
+        query_collections: Iterable[str] | EllipsisType = collections or ...
 
         self.datasets = self.butler.registry.queryDatasets(
             datasetType=datasetTypes, collections=query_collections, where=where, findFirst=find_first

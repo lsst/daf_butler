@@ -179,7 +179,7 @@ class MockedProgressHandlerTestCase(unittest.TestCase):
     def test_bar_update(self):
         """Test using `Progress.bar` with manual updates."""
         with self.progress.bar(total=10) as bar:
-            for i in range(5):
+            for _ in range(5):
                 bar.update(2)
         self.assertEqual(list(range(0, 12, 2)), bar.reported)
 

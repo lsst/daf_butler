@@ -155,7 +155,7 @@ class ButlerTestHelper:
         if isinstance(expectedTables, AstropyTable):
             expectedTables = [expectedTables]
         self.assertEqual(len(tables), len(expectedTables))
-        for table, expected in zip(tables, expectedTables):
+        for table, expected in zip(tables, expectedTables, strict=True):
             # Assert that we are testing what we think we are testing:
             self.assertIsInstance(table, AstropyTable)
             self.assertIsInstance(expected, AstropyTable)

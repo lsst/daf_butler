@@ -1634,7 +1634,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         # Read the columns.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertEqual(len(columns2), len(dict1.keys()))
-        for i, name in enumerate(dict1.keys()):
+        for name in dict1:
             self.assertIn(name, columns2)
         # Read the rowcount.
         rowcount = self.butler.get(self.datasetType.componentTypeName("rowcount"), dataId={})
@@ -1738,7 +1738,7 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         dict2 : `dict` [`str`, `np.ndarray`]
         """
         self.assertEqual(set(dict1.keys()), set(dict2.keys()))
-        for name in dict1.keys():
+        for name in dict1:
             self.assertEqual(dict1[name].dtype, dict2[name].dtype)
             self.assertTrue(np.all(dict1[name] == dict2[name]))
 

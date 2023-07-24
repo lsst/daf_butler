@@ -244,7 +244,7 @@ class TimespanTestCase(unittest.TestCase):
         # trigger our own warning and count all the warnings
         with self.assertWarns(Warning) as cm:
             self.assertEqual(ts1, ts2)
-            warnings.warn("deliberate")
+            warnings.warn("deliberate", stacklevel=1)
         self.assertEqual(str(cm.warning), "deliberate")
 
     def testJson(self):

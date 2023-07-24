@@ -54,7 +54,7 @@ def configDump(repo: str, subset: str, searchpath: str, outfile: IO) -> None:
         try:
             config = config[subset]
         except KeyError:
-            raise KeyError(f"{subset} not found in config at {repo} (has {config.names()})")
+            raise KeyError(f"{subset} not found in config at {repo} (has {config.names()})") from None
     if hasattr(config, "dump"):
         config.dump(outfile)
     else:

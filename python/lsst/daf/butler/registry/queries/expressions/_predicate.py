@@ -355,7 +355,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
         # Docstring inherited.
         if name in self.bind:
             value = self.bind[name]
-            if isinstance(value, (list, tuple, Set)):
+            if isinstance(value, list | tuple | Set):
                 elements = []
                 all_dtypes = set()
                 for item in value:

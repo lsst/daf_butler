@@ -27,6 +27,7 @@ __all__ = (
     "DatasetTypeWildcard",
 )
 
+import contextlib
 import dataclasses
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -160,10 +161,9 @@ class CategorizedWildcard:
         # trying to get items.
         if coerceItemValue is not None:
             rawItems = None
-            try:
+            with contextlib.suppress(AttributeError):
                 rawItems = expression.items()
-            except AttributeError:
-                pass
+
             if rawItems is not None:
                 for k, v in rawItems:
                     try:

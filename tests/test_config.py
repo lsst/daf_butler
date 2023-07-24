@@ -153,8 +153,8 @@ class ConfigTestCase(unittest.TestCase):
 
         self.assertCountEqual(c.keys(), ["1", "3", "key3", "dict"])
         self.assertEqual(list(c), list(c.keys()))
-        self.assertEqual(list(c.values()), [c[k] for k in c.keys()])
-        self.assertEqual(list(c.items()), [(k, c[k]) for k in c.keys()])
+        self.assertEqual(list(c.values()), [c[k] for k in c])
+        self.assertEqual(list(c.items()), [(k, c[k]) for k in c])
 
         newKeys = ("key4", ".dict.q", ("dict", "r"), "5")
         oldKeys = ("key3", ".dict.a", ("dict", "b"), "3")
