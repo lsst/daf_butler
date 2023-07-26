@@ -25,7 +25,7 @@ __all__ = ("PersistenceContextVars",)
 
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from contextvars import Context, ContextVar, Token, copy_context
 from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 
@@ -117,7 +117,7 @@ class PersistenceContextVars:
     r"""A cache of `DatasetRef`\ s.
     """
 
-    dimensionRecords: ContextVar[dict[tuple[str, frozenset], DimensionRecord] | None] = ContextVar(
+    dimensionRecords: ContextVar[dict[Hashable, DimensionRecord] | None] = ContextVar(
         "dimensionRecords", default=None
     )
     r"""A cache of `DimensionRecord`\ s.
