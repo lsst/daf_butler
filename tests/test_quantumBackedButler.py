@@ -370,13 +370,11 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             datastore_records = provenance.datastore_records[datastore_name]
             self.assertEqual(set(datastore_records.dataset_ids), output_ids)
             class_name = "lsst.daf.butler.datastore.stored_file_info.StoredFileInfo"
-            table_name = "file_datastore_records"
             self.assertEqual(set(datastore_records.records.keys()), {class_name})
-            self.assertEqual(set(datastore_records.records[class_name].keys()), {table_name})
-            self.assertEqual(
-                {record["dataset_id"] for record in datastore_records.records[class_name][table_name]},
-                output_ids,
-            )
+            self.assertEqual(set(datastore_records.records[class_name].keys()), {id.hex for id in output_ids})
+            table_name = "file_datastore_records"
+            for dataset_data in datastore_records.records[class_name].values():
+                self.assertEqual(set(dataset_data), {table_name})
 
     def test_collect_and_transfer(self) -> None:
         """Test for collect_and_transfer method"""

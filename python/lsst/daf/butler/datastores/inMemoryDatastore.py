@@ -61,7 +61,7 @@ class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     DatasetRef.
     """
 
-    __slots__ = {"timestamp", "storageClass", "parentID", "dataset_id"}
+    __slots__ = {"timestamp", "storageClass", "parentID"}
 
     timestamp: float
     """Unix timestamp indicating the time the dataset was stored."""
@@ -74,9 +74,6 @@ class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     composite. Not used if the dataset being stored is not a
     virtual component of a composite
     """
-
-    dataset_id: DatasetId
-    """DatasetId associated with this record."""
 
 
 class InMemoryDatastore(GenericBaseDatastore):
@@ -404,9 +401,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Store time we received this content, to allow us to optionally
         # expire it. Instead of storing a filename here, we include the
         # ID of this datasetRef so we can find it from components.
-        itemInfo = StoredMemoryItemInfo(
-            time.time(), ref.datasetType.storageClass, parentID=ref.id, dataset_id=ref.id
-        )
+        itemInfo = StoredMemoryItemInfo(time.time(), ref.datasetType.storageClass, parentID=ref.id)
 
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries

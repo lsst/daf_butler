@@ -1371,7 +1371,7 @@ class SqlRegistry(_ButlerRegistry):
             for table_name, records in ref.datastore_records.items():
                 opaque_table = self._managers.opaque.get(table_name)
                 assert opaque_table is not None, f"Unexpected opaque table name {table_name}"
-                opaque_table.insert(*(record.to_record() for record in records))
+                opaque_table.insert(*(record.to_record(dataset_id=ref.id) for record in records))
 
     def make_datastore_tables(self, tables: Mapping[str, OpaqueTableDefinition]) -> None:
         # Docstring inherited from base class.

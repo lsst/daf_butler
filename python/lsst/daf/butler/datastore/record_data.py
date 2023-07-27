@@ -61,15 +61,17 @@ class SerializedDatastoreRecordData(_BaseModelCompat):
     dataset_ids: list[uuid.UUID]
     """List of dataset IDs"""
 
-    records: Mapping[str, Mapping[str, list[_Record]]]
-    """List of records indexed by record class name and table name."""
+    records: Mapping[str, Mapping[str, Mapping[str, list[_Record]]]]
+    """List of records indexed by record class name, dataset ID (encoded as
+    str, because JSON), and opaque table name.
+    """
 
     @classmethod
     def direct(
         cls,
         *,
         dataset_ids: list[str | uuid.UUID],
-        records: dict[str, dict[str, list[_Record]]],
+        records: dict[str, dict[str, dict[str, list[_Record]]]],
     ) -> SerializedDatastoreRecordData:
         """Construct a `SerializedDatastoreRecordData` directly without
         validators.
@@ -81,15 +83,6 @@ class SerializedDatastoreRecordData(_BaseModelCompat):
 
         This method should only be called when the inputs are trusted.
         """
-        # See also comments in record_ids_to_uuid()
-        for table_data in records.values():
-            for table_records in table_data.values():
-                for record in table_records:
-                    # This only checks dataset_id value, if there are any other
-                    # columns that are UUIDs we'd need more generic approach.
-                    if (id := record.get("dataset_id")) is not None:
-                        record["dataset_id"] = uuid.UUID(id) if isinstance(id, str) else id
-
         data = cls.model_construct(
             _fields_set={"dataset_ids", "records"},
             # JSON makes strings out of UUIDs, need to convert them back
@@ -180,12 +173,13 @@ class DatastoreRecordData:
         simple : `dict`
             Representation of this instance as a simple dictionary.
         """
-        records: dict[str, dict[str, list[_Record]]] = {}
-        for table_data in self.records.values():
+        records: dict[str, dict[str, dict[str, list[_Record]]]] = {}
+        for dataset_id, table_data in self.records.items():
             for table_name, table_records in table_data.items():
                 class_name, infos = StoredDatastoreItemInfo.to_records(table_records)
                 class_records = records.setdefault(class_name, {})
-                class_records.setdefault(table_name, []).extend(dict(info) for info in infos)
+                dataset_records = class_records.setdefault(dataset_id.hex, {})
+                dataset_records.setdefault(table_name, []).extend(dict(info) for info in infos)
         return SerializedDatastoreRecordData(dataset_ids=list(self.records.keys()), records=records)
 
     @classmethod
@@ -222,18 +216,18 @@ class DatastoreRecordData:
         # have records.
         for dataset_id in simple.dataset_ids:
             records[dataset_id] = {}
-        for class_name, table_data in simple.records.items():
-            for table_name, table_records in table_data.items():
-                try:
-                    infos = StoredDatastoreItemInfo.from_records(class_name, table_records)
-                except TypeError as exc:
-                    raise RuntimeError(
-                        "The class specified in the SerializedDatastoreRecordData "
-                        f"({class_name}) is not a StoredDatastoreItemInfo."
-                    ) from exc
-                for info in infos:
-                    dataset_type_records = records.setdefault(info.dataset_id, {})
-                    dataset_type_records.setdefault(table_name, []).append(info)
+        for class_name, class_data in simple.records.items():
+            for dataset_id_str, dataset_data in class_data.items():
+                for table_name, table_records in dataset_data.items():
+                    try:
+                        infos = StoredDatastoreItemInfo.from_records(class_name, table_records)
+                    except TypeError as exc:
+                        raise RuntimeError(
+                            "The class specified in the SerializedDatastoreRecordData "
+                            f"({class_name}) is not a StoredDatastoreItemInfo."
+                        ) from exc
+                    dataset_records = records.setdefault(uuid.UUID(dataset_id_str), {})
+                    dataset_records.setdefault(table_name, []).extend(infos)
         newRecord = cls(records=records)
         if cache is not None:
             cache[key] = newRecord

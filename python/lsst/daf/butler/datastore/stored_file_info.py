@@ -30,7 +30,6 @@ from __future__ import annotations
 __all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
-import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -44,7 +43,7 @@ from .._location import Location, LocationFactory
 from .._storage_class import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
-    from .. import DatasetId, DatasetRef
+    from .._dataset_ref import DatasetRef
 
 # String to use when a Python None is encountered
 NULLSTR = "__NULL_STRING__"
@@ -90,13 +89,14 @@ class StoredDatastoreItemInfo:
         """
         raise NotImplementedError()
 
-    def to_record(self) -> dict[str, Any]:
-        """Convert record contents to a dictionary."""
-        raise NotImplementedError()
+    def to_record(self, **kwargs: Any) -> dict[str, Any]:
+        """Convert record contents to a dictionary.
 
-    @property
-    def dataset_id(self) -> DatasetId:
-        """Dataset ID associated with this record (`DatasetId`)."""
+        Parameters
+        ----------
+        **kwargs
+            Additional items to add to returned record.
+        """
         raise NotImplementedError()
 
     def update(self, **kwargs: Any) -> StoredDatastoreItemInfo:
@@ -107,7 +107,7 @@ class StoredDatastoreItemInfo:
 
     @classmethod
     def to_records(
-        cls, records: Iterable[StoredDatastoreItemInfo]
+        cls, records: Iterable[StoredDatastoreItemInfo], **kwargs: Any
     ) -> tuple[str, Iterable[Mapping[str, Any]]]:
         """Convert a collection of records to dictionaries.
 
@@ -115,6 +115,8 @@ class StoredDatastoreItemInfo:
         ----------
         records : `~collections.abc.Iterable` [ `StoredDatastoreItemInfo` ]
             A collection of records, all records must be of the same type.
+        **kwargs
+            Additional items to add to each returned record.
 
         Returns
         -------
@@ -127,7 +129,7 @@ class StoredDatastoreItemInfo:
             return "", []
         classes = {record.__class__ for record in records}
         assert len(classes) == 1, f"Records have to be of the same class: {classes}"
-        return get_full_type_name(classes.pop()), [record.to_record() for record in records]
+        return get_full_type_name(classes.pop()), [record.to_record(**kwargs) for record in records]
 
     @classmethod
     def from_records(
@@ -172,7 +174,7 @@ class StoredDatastoreItemInfo:
 class StoredFileInfo(StoredDatastoreItemInfo):
     """Datastore-private metadata associated with a Datastore file."""
 
-    __slots__ = {"formatter", "path", "storageClass", "component", "checksum", "file_size", "dataset_id"}
+    __slots__ = {"formatter", "path", "storageClass", "component", "checksum", "file_size"}
 
     storageClassFactory = StorageClassFactory()
 
@@ -184,7 +186,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         component: str | None,
         checksum: str | None,
         file_size: int,
-        dataset_id: DatasetId,
     ):
         # Use these shenanigans to allow us to use a frozen dataclass
         object.__setattr__(self, "path", path)
@@ -192,7 +193,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         object.__setattr__(self, "component", component)
         object.__setattr__(self, "checksum", checksum)
         object.__setattr__(self, "file_size", file_size)
-        object.__setattr__(self, "dataset_id", dataset_id)
 
         if isinstance(formatter, str):
             # We trust that this string refers to a Formatter
@@ -225,9 +225,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     file_size: int
     """Size of the serialized dataset in bytes."""
 
-    dataset_id: DatasetId
-    """DatasetId associated with this record."""
-
     def rebase(self, ref: DatasetRef) -> StoredFileInfo:
         """Return a copy of the record suitable for a specified reference.
 
@@ -242,14 +239,13 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         record : `StoredFileInfo`
             New record instance.
         """
-        # take component and dataset_id from the ref, rest comes from self
+        # take component from the ref, rest comes from self
         component = ref.datasetType.component()
         if component is None:
             component = self.component
-        dataset_id = ref.id
-        return self.update(dataset_id=dataset_id, component=component)
+        return self.update(component=component)
 
-    def to_record(self) -> dict[str, Any]:
+    def to_record(self, **kwargs: Any) -> dict[str, Any]:
         """Convert the supplied ref to a database record."""
         component = self.component
         if component is None:
@@ -257,13 +253,13 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             # primary key.
             component = NULLSTR
         return dict(
-            dataset_id=self.dataset_id,
             formatter=self.formatter,
             path=self.path,
             storage_class=self.storageClass.name,
             component=component,
             checksum=self.checksum,
             file_size=self.file_size,
+            **kwargs,
         )
 
     def file_location(self, factory: LocationFactory) -> Location:
@@ -306,9 +302,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
         # UUID may be converted to string, e.g. in round-trip through JSON,
         # convert it back to UUID.
-        dataset_id = record["dataset_id"]
-        if isinstance(dataset_id, str):
-            dataset_id = uuid.UUID(dataset_id)
         info = cls(
             formatter=record["formatter"],
             path=record["path"],
@@ -316,7 +309,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             component=component,
             checksum=record["checksum"],
             file_size=record["file_size"],
-            dataset_id=dataset_id,
         )
         return info
 

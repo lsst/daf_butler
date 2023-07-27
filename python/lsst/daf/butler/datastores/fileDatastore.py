@@ -383,7 +383,9 @@ class FileDatastore(GenericBaseDatastore):
         insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
     ) -> None:
         # Docstring inherited from GenericBaseDatastore
-        records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos, strict=True)]
+        records = [
+            info.rebase(ref).to_record(dataset_id=ref.id) for ref, info in zip(refs, infos, strict=True)
+        ]
         match insert_mode:
             case DatabaseInsertMode.INSERT:
                 self._table.insert(*records, transaction=self._transaction)
@@ -614,7 +616,6 @@ class FileDatastore(GenericBaseDatastore):
                     component=component,
                     checksum=None,
                     file_size=-1,
-                    dataset_id=ref.id,
                 ),
             )
             for location, formatter, storageClass, component in all_info
@@ -1044,7 +1045,6 @@ class FileDatastore(GenericBaseDatastore):
             component=ref.datasetType.component(),
             file_size=size,
             checksum=checksum,
-            dataset_id=ref.id,
         )
 
     def _prepIngest(self, *datasets: FileDataset, transfer: str | None = None) -> _IngestPrepData:
@@ -3056,12 +3056,12 @@ class FileDatastore(GenericBaseDatastore):
 
         # TODO: Verify that there are no unexpected table names in the dict?
         unpacked_records = []
-        for dataset_data in record_data.records.values():
+        for dataset_id, dataset_data in record_data.records.items():
             records = dataset_data.get(self._table.name)
             if records:
                 for info in records:
                     assert isinstance(info, StoredFileInfo), "Expecting StoredFileInfo records"
-                    unpacked_records.append(info.to_record())
+                    unpacked_records.append(info.to_record(dataset_id=dataset_id))
         if unpacked_records:
             self._table.insert(*unpacked_records, transaction=self._transaction)
 
@@ -3072,7 +3072,7 @@ class FileDatastore(GenericBaseDatastore):
         records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {id: {} for id in ids}
         for row in self._table.fetch(dataset_id=ids):
             info: StoredDatastoreItemInfo = StoredFileInfo.from_record(row)
-            dataset_records = records.setdefault(info.dataset_id, {})
+            dataset_records = records.setdefault(row["dataset_id"], {})
             dataset_records.setdefault(self._table.name, []).append(info)
 
         record_data = DatastoreRecordData(records=records)

@@ -545,7 +545,6 @@ class DatasetRefTestCase(unittest.TestCase):
                     component=None,
                     checksum=None,
                     file_size=1,
-                    dataset_id=ref.id,
                 )
                 for path in paths
             ]
