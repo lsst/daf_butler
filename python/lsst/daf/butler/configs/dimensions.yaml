@@ -1,4 +1,4 @@
-version: 3
+version: 4
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
@@ -427,6 +427,7 @@ elements:
       A many-to-many join table that provides region information for
       visit-detector combinations.
     requires: [visit, detector]
+    populated_by: visit
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
@@ -459,6 +460,7 @@ elements:
       A many-to-many join table that relates exposures to the visits they
       belong to.
     requires: [exposure, visit]
+    populated_by: visit
     always_join: true
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
@@ -468,6 +470,7 @@ elements:
       A many-to-many join table that relates visits to the visit_systems they
       belong to.
     requires: [visit, visit_system]
+    populated_by: visit
     always_join: true
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage

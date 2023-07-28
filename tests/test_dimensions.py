@@ -285,6 +285,20 @@ class DimensionTestCase(unittest.TestCase):
         self.assertEqual(graph.temporal.names, {"observation_timespans"})
         self.assertEqual(next(iter(graph.spatial)).governor, self.universe["instrument"])
         self.assertEqual(next(iter(graph.temporal)).governor, self.universe["instrument"])
+        self.assertEqual(self.universe["visit_definition"].populated_by, self.universe["visit"])
+        self.assertEqual(self.universe["visit_system_membership"].populated_by, self.universe["visit"])
+        self.assertEqual(self.universe["visit_detector_region"].populated_by, self.universe["visit"])
+        self.assertEqual(
+            self.universe.get_elements_populated_by(self.universe["visit"]),
+            NamedValueSet(
+                {
+                    self.universe["visit"],
+                    self.universe["visit_definition"],
+                    self.universe["visit_system_membership"],
+                    self.universe["visit_detector_region"],
+                }
+            ),
+        )
 
     def testSkyMapDimensions(self):
         graph = DimensionGraph(self.universe, names=("patch",))
