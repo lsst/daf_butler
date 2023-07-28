@@ -26,7 +26,7 @@ import dataclasses
 from collections.abc import Sequence, Set
 from typing import final
 
-from lsst.daf.relation import ColumnTag, Relation, RowFilter
+from lsst.daf.relation import ColumnTag, Relation, RowFilter, UnaryCommutator, UnaryOperationRelation
 from lsst.utils.classes import cached_getter
 
 from ...core import DatasetColumnTag, DimensionKeyColumnTag
@@ -73,3 +73,24 @@ class FindFirstDataset(RowFilter):
     def applied_min_rows(self, target: Relation) -> int:
         # Docstring inherited.
         return 1 if target.min_rows else 0
+
+    def commute(self, current: UnaryOperationRelation) -> UnaryCommutator:
+        # Docstring inherited.
+        if not self.columns_required <= current.target.columns:
+            return UnaryCommutator(
+                first=None,
+                second=current.operation,
+                done=False,
+                messages=(
+                    f"{current.target} is missing columns "
+                    f"{set(self.columns_required - current.target.columns)}",
+                ),
+            )
+        if current.operation.is_count_dependent:
+            return UnaryCommutator(
+                first=None,
+                second=current.operation,
+                done=False,
+                messages=(f"{current.operation} is count-dependent",),
+            )
+        return UnaryCommutator(self, current.operation)

@@ -3428,7 +3428,6 @@ class RegistryTests(ABC):
             sql.Engine,
         )
 
-    @unittest.expectedFailure
     def test_query_find_datasets_drop_postprocessing(self) -> None:
         """Test that DataCoordinateQueryResults.findDatasets avoids commutator
         problems with the FindFirstDataset relation operation.
