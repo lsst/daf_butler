@@ -33,12 +33,12 @@ __all__ = ("GenericBaseDatastore",)
 
 import logging
 from abc import abstractmethod
-from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .._exceptions import DatasetTypeNotSupportedError
+from ..datastore._datastore import Datastore
 from ..registry.interfaces import DatabaseInsertMode, DatastoreRegistryBridge
-from ._datastore import Datastore
 
 if TYPE_CHECKING:
     from .._dataset_ref import DatasetRef
@@ -47,8 +47,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+_InfoType = TypeVar("_InfoType", bound=StoredDatastoreItemInfo)
 
-class GenericBaseDatastore(Datastore):
+
+class GenericBaseDatastore(Datastore, Generic[_InfoType]):
     """Methods useful for most implementations of a `Datastore`.
 
     Should always be sub-classed since key abstract methods are missing.
@@ -87,7 +89,7 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def getStoredItemsInfo(self, ref: DatasetRef) -> Sequence[Any]:
+    def getStoredItemsInfo(self, ref: DatasetRef) -> Iterable[_InfoType]:
         """Retrieve information associated with files stored in this
         `Datastore` associated with this dataset ref.
 
@@ -98,7 +100,7 @@ class GenericBaseDatastore(Datastore):
 
         Returns
         -------
-        items : `list` [`StoredDatastoreItemInfo`]
+        items : `~collections.abc.Iterable` [`StoredDatastoreItemInfo`]
             Stored information about the files and associated formatters
             associated with this dataset. Only one file will be returned
             if the dataset has not been disassembled. Can return an empty
@@ -157,11 +159,11 @@ class GenericBaseDatastore(Datastore):
 
     def _post_process_get(
         self,
-        inMemoryDataset: Any,
+        inMemoryDataset: object,
         readStorageClass: StorageClass,
         assemblerParams: Mapping[str, Any] | None = None,
         isComponent: bool = False,
-    ) -> Any:
+    ) -> object:
         """Given the Python object read from the datastore, manipulate
         it based on the supplied parameters and ensure the Python
         type is correct.
@@ -177,6 +179,11 @@ class GenericBaseDatastore(Datastore):
             Parameters to pass to the assembler.  Can be `None`.
         isComponent : `bool`, optional
             If this is a component, allow the inMemoryDataset to be `None`.
+
+        Returns
+        -------
+        dataset : `object`
+            In-memory dataset, potentially converted to expected type.
         """
         # Process any left over parameters
         if assemblerParams:
@@ -198,7 +205,7 @@ class GenericBaseDatastore(Datastore):
 
         return inMemoryDataset
 
-    def _validate_put_parameters(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
+    def _validate_put_parameters(self, inMemoryDataset: object, ref: DatasetRef) -> None:
         """Validate the supplied arguments for put.
 
         Parameters

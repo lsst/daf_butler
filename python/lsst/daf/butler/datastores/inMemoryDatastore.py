@@ -76,7 +76,7 @@ class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     """
 
 
-class InMemoryDatastore(GenericBaseDatastore):
+class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
     """Basic Datastore for writing to an in memory cache.
 
     This datastore is ephemeral in that the contents of the datastore

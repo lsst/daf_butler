@@ -138,7 +138,7 @@ class DatastoreFileGetInformation:
     """The `StorageClass` of the dataset being read."""
 
 
-class FileDatastore(GenericBaseDatastore):
+class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     """Generic Datastore for file-based implementations.
 
     Should always be sub-classed since key abstract methods are missing.
