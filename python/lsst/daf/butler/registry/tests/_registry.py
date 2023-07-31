@@ -3428,6 +3428,52 @@ class RegistryTests(ABC):
             sql.Engine,
         )
 
+    def test_query_find_datasets_drop_postprocessing(self) -> None:
+        """Test that DataCoordinateQueryResults.findDatasets avoids commutator
+        problems with the FindFirstDataset relation operation.
+        """
+        # Setup: load some visit, tract, and patch records, and insert two
+        # datasets with dimensions {visit, patch}, with one in each of two
+        # RUN collections.
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "spatial.yaml")
+        storage_class = StorageClass("Warpy")
+        registry.storageClasses.registerStorageClass(storage_class)
+        dataset_type = DatasetType(
+            "warp", {"visit", "patch"}, storageClass=storage_class, universe=registry.dimensions
+        )
+        registry.registerDatasetType(dataset_type)
+        (data_id,) = registry.queryDataIds(["visit", "patch"]).limit(1)
+        registry.registerRun("run1")
+        registry.registerRun("run2")
+        (ref1,) = registry.insertDatasets(dataset_type, [data_id], run="run1")
+        (ref2,) = registry.insertDatasets(dataset_type, [data_id], run="run2")
+        # Query for the dataset using queryDataIds(...).findDatasets(...)
+        # against only one of the two collections.  This should work even
+        # though the relation returned by queryDataIds ends with
+        # iteration-engine region-filtering, because we can recognize before
+        # running the query that there is only one collecton to search and
+        # hence the (default) findFirst=True is irrelevant, and joining in the
+        # dataset query commutes past the iteration-engine postprocessing.
+        query1 = registry.queryDataIds(
+            {"visit", "patch"}, visit=data_id["visit"], instrument=data_id["instrument"]
+        )
+        self.assertEqual(
+            set(query1.findDatasets(dataset_type.name, collections=["run1"])),
+            {ref1},
+        )
+        # Query for the dataset using queryDataIds(...).findDatasets(...)
+        # against both collections.  This can only work if the FindFirstDataset
+        # operation can be commuted past the iteration-engine options into SQL.
+        query2 = registry.queryDataIds(
+            {"visit", "patch"}, visit=data_id["visit"], instrument=data_id["instrument"]
+        )
+        self.assertEqual(
+            set(query2.findDatasets(dataset_type.name, collections=["run2", "run1"])),
+            {ref2},
+        )
+
     def test_query_empty_collections(self) -> None:
         """Test for registry query methods with empty collections. The methods
         should return empty result set (or None when applicable) and provide
