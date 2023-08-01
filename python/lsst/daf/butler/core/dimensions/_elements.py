@@ -330,6 +330,22 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         """
         return False
 
+    @property
+    @abstractmethod
+    def populated_by(self) -> Dimension | None:
+        """The dimension that this element's records are always inserted,
+        exported, and imported alongside.
+
+        Notes
+        -----
+        When this is `None` (as it will be, at least at first, for any data
+        repositories created before this attribute was added), records for
+        this element will often need to be exported manually when datasets
+        associated with some other related dimension are exported, in order for
+        the post-import data repository to function as expected.
+        """
+        raise NotImplementedError()
+
 
 class Dimension(DimensionElement):
     """A dimension.
@@ -375,6 +391,11 @@ class Dimension(DimensionElement):
         """
         _, *alternateKeys = self.uniqueKeys
         return NamedValueSet(alternateKeys).freeze()
+
+    @property
+    def populated_by(self) -> Dimension:
+        # Docstring inherited.
+        return self
 
 
 class DimensionCombination(DimensionElement):
