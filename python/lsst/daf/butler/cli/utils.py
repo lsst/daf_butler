@@ -274,7 +274,7 @@ def split_commas(
         combined into a single tuple.
     """
     if values is None:
-        return tuple()
+        return ()
     valueList = []
     for value in ensure_iterable(values):
         # If we have [, or ,] we do the slow split. If square brackets

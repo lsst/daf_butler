@@ -974,7 +974,7 @@ class DatastoreTests(DatastoreTestsBase):
     def test_tuple_put_get(self) -> None:
         """Test that we can put and get a tuple."""
         datastore = self.makeDatastore()
-        data = tuple(["a", "b", 1])
+        data = ("a", "b", 1)
         self._assert_different_puts(datastore, "TupleExample", data)
 
     def _assert_different_puts(self, datastore: Datastore, storageClass_root: str, data: Any) -> None:

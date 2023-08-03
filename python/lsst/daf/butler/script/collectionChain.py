@@ -115,7 +115,7 @@ def collectionChain(
             indices = [convert_index(int(child)) for child in children]
 
             # Reverse sort order so we can remove from the end first
-            indices = list(reversed(sorted(indices)))
+            indices = sorted(indices, reverse=True)
 
         else:
             # Nothing specified, pop from the front of the chain.

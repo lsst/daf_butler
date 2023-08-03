@@ -1050,7 +1050,7 @@ class ChainedDatastore(Datastore):
         else:
             # The source datastore is different, forward everything to the
             # child datastores.
-            source_datastores = tuple([source_datastore])
+            source_datastores = (source_datastore,)
 
         # Need to know the set of all possible refs that could be transferred.
         remaining_refs = set(refs)

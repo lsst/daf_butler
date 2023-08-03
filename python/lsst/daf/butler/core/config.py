@@ -750,7 +750,7 @@ class Config(MutableMapping):
             in the list is a `tuple` of strings representing the hierarchy.
         """
         if topLevelOnly:
-            return list((k,) for k in self)
+            return [(k,) for k in self]
 
         def getKeysAsTuples(
             d: Mapping[str, Any] | Sequence[str], keys: list[tuple[str, ...]], base: tuple[str, ...] | None

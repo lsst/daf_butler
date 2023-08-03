@@ -89,7 +89,7 @@ def _getCollectionInfo(
             )
         )
     except MissingCollectionError:
-        collectionNames = list()
+        collectionNames = []
     runs = []
     datasets: dict[str, int] = defaultdict(int)
     for collectionName in collectionNames:

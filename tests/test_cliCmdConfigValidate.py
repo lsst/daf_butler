@@ -37,7 +37,7 @@ class ValidateTest(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict()
+        return {}
 
     @staticmethod
     def command():

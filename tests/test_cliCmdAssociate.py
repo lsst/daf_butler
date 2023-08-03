@@ -48,8 +48,8 @@ class AssociateTestCase(unittest.TestCase):
         mockAssociate.assert_called_once_with(
             repo="myRepo",
             collection="myCollection",
-            dataset_type=tuple(),
-            collections=tuple(),
+            dataset_type=(),
+            collections=(),
             where="",
             find_first=False,
         )
