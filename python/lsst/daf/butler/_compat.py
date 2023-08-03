@@ -154,6 +154,16 @@ if PYDANTIC_V2:
             ) -> dict[str, Any]:
                 return {}
 
+            @classmethod
+            def model_validate_json(
+                cls,
+                json_data: str | bytes | bytearray,
+                *,
+                strict: bool | None = None,
+                context: dict[str, Any] | None = None,
+            ) -> Self:
+                return cls()
+
 else:
     from astropy.utils.decorators import classproperty
 
@@ -238,3 +248,13 @@ else:
                 exclude_defaults=exclude_defaults,
                 exclude_none=exclude_none,
             )
+
+        @classmethod
+        def model_validate_json(
+            cls,
+            json_data: str | bytes | bytearray,
+            *,
+            strict: bool | None = None,
+            context: dict[str, Any] | None = None,
+        ) -> Self:
+            return cls.parse_raw(json_data)

@@ -339,7 +339,7 @@ class ButlerLogRecords(_ButlerLogRecords):
             Returns `True` if the data look like a serialized pydantic model.
             Returns `False` if it looks like a streaming format. Returns
             `False` also if an empty string is encountered since this
-            is not understood by `ButlerLogRecords.parse_raw()`.
+            is not understood by `ButlerLogRecords.model_validate_json()`.
 
         Raises
         ------
@@ -402,14 +402,14 @@ class ButlerLogRecords(_ButlerLogRecords):
             # This is a ButlerLogRecords model serialization so all the
             # content must be read first.
             all = first_line + stream.read()
-            return cls.parse_raw(all)
+            return cls.model_validate_json(all)
 
         # A stream of records with one record per line.
-        records = [ButlerLogRecord.parse_raw(first_line)]
+        records = [ButlerLogRecord.model_validate_json(first_line)]
         for line in stream:
             line = line.rstrip()
             if line:  # Filter out blank lines.
-                records.append(ButlerLogRecord.parse_raw(line))
+                records.append(ButlerLogRecord.model_validate_json(line))
 
         return cls.from_records(records)
 
@@ -432,7 +432,7 @@ class ButlerLogRecords(_ButlerLogRecords):
         is_model = cls._detect_model(serialized)
 
         if is_model:
-            return cls.parse_raw(serialized)
+            return cls.model_validate_json(serialized)
 
         # Filter out blank lines -- mypy is confused by the newline
         # argument to isplit() [which can't have two different types
@@ -444,7 +444,7 @@ class ButlerLogRecords(_ButlerLogRecords):
             substrings = isplit(serialized, b"\n")
         else:
             raise TypeError(f"Serialized form must be str or bytes not {get_full_type_name(serialized)}")
-        records = [ButlerLogRecord.parse_raw(line) for line in substrings if line]
+        records = [ButlerLogRecord.model_validate_json(line) for line in substrings if line]
 
         return cls.from_records(records)
 

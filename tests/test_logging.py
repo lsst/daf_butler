@@ -75,7 +75,7 @@ class LoggingTestCase(unittest.TestCase):
         # Check that we can serialize the records
         json = self.handler.records.json()
 
-        records = ButlerLogRecords.parse_raw(json)
+        records = ButlerLogRecords.model_validate_json(json)
         for original_record, new_record in zip(self.handler.records, records, strict=True):
             self.assertEqual(new_record, original_record)
         self.assertEqual(str(records), str(self.handler.records))
