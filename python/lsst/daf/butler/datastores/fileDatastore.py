@@ -1332,8 +1332,9 @@ class FileDatastore(GenericBaseDatastore):
                         formatter.name(),
                     )
                     try:
-                        with formatter._updateLocation(newLocation):
-                            with time_this(
+                        with (
+                            formatter._updateLocation(newLocation),
+                            time_this(
                                 log,
                                 msg="Reading%s from location %s %s with formatter %s",
                                 args=(
@@ -1342,8 +1343,9 @@ class FileDatastore(GenericBaseDatastore):
                                     msg,
                                     formatter.name(),
                                 ),
-                            ):
-                                result = formatter.read(component=getInfo.component if isComponent else None)
+                            ),
+                        ):
+                            result = formatter.read(component=getInfo.component if isComponent else None)
                     except Exception as e:
                         raise ValueError(
                             f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
