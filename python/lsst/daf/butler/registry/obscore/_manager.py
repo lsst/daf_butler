@@ -23,7 +23,6 @@ from __future__ import annotations
 
 __all__ = ["ObsCoreLiveTableManager"]
 
-import json
 import re
 import warnings
 from collections import defaultdict
@@ -195,7 +194,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         json : `str`
             Configuration serialized in JSON format.
         """
-        return json.dumps(self.config.dict())
+        return self.config.model_dump_json()
 
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:

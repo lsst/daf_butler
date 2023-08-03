@@ -405,7 +405,7 @@ class DimensionRecord:
 
         # Timespan and region have to be converted to native form
         # for now assume that those keys are special
-        rec = record_model.dict()
+        rec = record_model.model_dump()
 
         if (ts := "timespan") in rec:
             rec[ts] = Timespan.from_simple(rec[ts], universe=universe, registry=registry)

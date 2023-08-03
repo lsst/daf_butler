@@ -250,7 +250,7 @@ class ButlerLogRecord(_BaseModelCompat):
         if log_format is None:
             log_format = self._log_format
 
-        as_dict = self.dict()
+        as_dict = self.model_dump()
 
         # Special case MDC content. Convert it to an MDCDict
         # so that missing items do not break formatting.

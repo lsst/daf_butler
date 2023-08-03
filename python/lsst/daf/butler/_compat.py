@@ -21,11 +21,13 @@
 
 """Code to support backwards compatibility."""
 
+from __future__ import annotations
+
 __all__ = ["PYDANTIC_V2", "_BaseModelCompat"]
 
 import sys
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
@@ -41,6 +43,8 @@ else:
 
 PYDANTIC_V2 = PYDANTIC_VERSION.startswith("2.")
 
+# This matches the pydantic v2 internal definition.
+IncEx = set[int] | set[str] | dict[int, Any] | dict[str, Any] | None
 
 if PYDANTIC_V2:
 
@@ -55,8 +59,8 @@ if PYDANTIC_V2:
         def json(
             self,
             *,
-            include: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,  # type: ignore
-            exclude: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,  # type: ignore
+            include: IncEx = None,  # type: ignore
+            exclude: IncEx = None,  # type: ignore
             by_alias: bool = False,
             skip_defaults: bool | None = None,
             exclude_unset: bool = False,
@@ -109,8 +113,8 @@ if PYDANTIC_V2:
                 self,
                 *,
                 indent: int | None = None,
-                include: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
-                exclude: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
+                include: IncEx = None,
+                exclude: IncEx = None,
                 by_alias: bool = False,
                 exclude_unset: bool = False,
                 exclude_defaults: bool = False,
@@ -135,6 +139,21 @@ if PYDANTIC_V2:
             ) -> bool | None:
                 return None
 
+            def model_dump(
+                self,
+                *,
+                mode: Literal["json", "python"] | str = "python",
+                include: IncEx = None,
+                exclude: IncEx = None,
+                by_alias: bool = False,
+                exclude_unset: bool = False,
+                exclude_defaults: bool = False,
+                exclude_none: bool = False,
+                round_trip: bool = False,
+                warnings: bool = True,
+            ) -> dict[str, Any]:
+                return {}
+
 else:
     from astropy.utils.decorators import classproperty
 
@@ -156,8 +175,8 @@ else:
             self,
             *,
             indent: int | None = None,
-            include: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
-            exclude: set[int] | set[str] | dict[int, Any] | dict[str, Any] | None = None,
+            include: IncEx = None,
+            exclude: IncEx = None,
             by_alias: bool = False,
             exclude_unset: bool = False,
             exclude_defaults: bool = False,
@@ -196,3 +215,26 @@ else:
             _types_namespace: dict[str, Any] | None = None,
         ) -> bool | None:
             return cls.update_forward_refs()
+
+        def model_dump(
+            self,
+            *,
+            mode: Literal["json", "python"] | str = "python",
+            include: IncEx = None,
+            exclude: IncEx = None,
+            by_alias: bool = False,
+            exclude_unset: bool = False,
+            exclude_defaults: bool = False,
+            exclude_none: bool = False,
+            round_trip: bool = False,
+            warnings: bool = True,
+        ) -> dict[str, Any]:
+            # Need to decide whether to warn if the mode parameter is given.
+            return self.dict(
+                include=include,  # type: ignore
+                exclude=exclude,  # type: ignore
+                by_alias=by_alias,
+                exclude_unset=exclude_unset,
+                exclude_defaults=exclude_defaults,
+                exclude_none=exclude_none,
+            )
