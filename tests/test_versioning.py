@@ -136,7 +136,7 @@ class SchemaVersioningTestCase(unittest.TestCase):
             vmgr = ButlerVersionsManager(attributes)
             vmgr.storeManagersConfig({"manager0": manager0, "manager1": manager1, "manager2": manager2})
 
-            attr_dict = {key: value for key, value in attributes.items()}
+            attr_dict = dict(attributes.items())
             expected = {
                 "config:registry.managers.manager0": Manager0.extensionName(),
                 "config:registry.managers.manager1": Manager1.extensionName(),

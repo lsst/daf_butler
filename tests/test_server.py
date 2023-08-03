@@ -107,7 +107,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(collection_type.name, "TAGGED")
 
         chain = self.butler.registry.getCollectionChain("chain")
-        self.assertEqual([coll for coll in chain], ["ingest"])
+        self.assertEqual(list(chain), ["ingest"])
 
         datasets = list(self.butler.registry.queryDatasets("test_metric_comp", collections=...))
         self.assertEqual(len(datasets), 2)

@@ -186,7 +186,7 @@ class LookupKey:
         (`dict` or `None`)
         """
         if self._dataId is not None:
-            return {k: v for k, v in self._dataId}
+            return dict(self._dataId)
         else:
             return None
 

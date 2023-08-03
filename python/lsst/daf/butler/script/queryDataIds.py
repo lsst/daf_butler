@@ -80,7 +80,7 @@ class _Table:
         typeMap = {float: np.float64, int: np.int64}
         columnTypes = [typeMap.get(type(value)) for value in dataId.full.values()]
 
-        rows = [[value for value in dataId.full.values()] for dataId in self.dataIds]
+        rows = [list(dataId.full.values()) for dataId in self.dataIds]
 
         table = AstropyTable(np.array(rows), names=columnNames, dtype=columnTypes)
         if order:

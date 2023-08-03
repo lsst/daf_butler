@@ -608,4 +608,4 @@ class DimensionRecordsAccumulator:
         return mappingValue[0]
 
     def makeSerializedDimensionRecordMapping(self) -> dict[int, SerializedDimensionRecord]:
-        return {id_: serializeRef for id_, serializeRef in self.mapping.values()}
+        return dict(self.mapping.values())

@@ -207,14 +207,14 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         keys = set(factory.keys())
         self.assertIn("Temporary2", keys)
 
-        iterkeys = {k for k in factory}
+        iterkeys = set(factory)
         self.assertEqual(keys, iterkeys)
 
         values = set(factory.values())
         self.assertIn(sc, values)
         self.assertEqual(len(factory), len(values))
 
-        external = {k: v for k, v in factory.items()}
+        external = dict(factory.items())
         self.assertIn("Temporary2", external)
 
         # Make sure we can't register a storage class with the same name

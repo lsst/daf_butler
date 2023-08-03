@@ -1064,7 +1064,7 @@ class ChainedDatastore(Datastore):
             # ask the receiving datastore to copy it when it doesn't exist
             # so we have to filter again based on what the source datastore
             # understands.
-            known_to_source = source_child.knows_these([ref for ref in refs])
+            known_to_source = source_child.knows_these(list(refs))
 
             # Need to know that there is a possibility that some of these
             # datasets exist but are unknown to the source datastore if
@@ -1106,7 +1106,7 @@ class ChainedDatastore(Datastore):
                         else:
                             log.debug("Rejecting ref by constraints: %s", ref)
                 else:
-                    filtered_refs = [ref for ref in these_refs]
+                    filtered_refs = list(these_refs)
                 try:
                     accepted, _ = datastore.transfer_from(
                         source_child, filtered_refs, transfer, artifact_existence

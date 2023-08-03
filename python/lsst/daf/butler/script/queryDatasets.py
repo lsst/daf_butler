@@ -112,7 +112,7 @@ class _Table:
                 datasetTypeName,
                 refInfo.datasetRef.run,
                 str(refInfo.datasetRef.id),
-                *[value for value in refInfo.datasetRef.dataId.full.values()],
+                *list(refInfo.datasetRef.dataId.full.values()),
             ]
             if refInfo.uri:
                 row.append(refInfo.uri)
