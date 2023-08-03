@@ -163,7 +163,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
     ) -> ObsCoreTableManager:
         # Docstring inherited from base class.
         config_data = Config(config)
-        obscore_config = ObsCoreManagerConfig.parse_obj(config_data)
+        obscore_config = ObsCoreManagerConfig.model_validate(config_data)
 
         # Instantiate all spatial plugins.
         spatial_plugins = SpatialObsCorePlugin.load_plugins(obscore_config.spatial_plugins, db)

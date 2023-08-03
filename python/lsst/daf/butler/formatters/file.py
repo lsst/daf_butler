@@ -175,9 +175,9 @@ class FileFormatter(Formatter):
             and type(inMemoryDataset).__module__ == "builtins"
         ):
             # Try different ways of converting to the required type.
-            if hasattr(writeStorageClass.pytype, "parse_obj"):
+            if hasattr(writeStorageClass.pytype, "model_validate"):
                 # This is for a Pydantic model.
-                inMemoryDataset = writeStorageClass.pytype.parse_obj(inMemoryDataset)
+                inMemoryDataset = writeStorageClass.pytype.model_validate(inMemoryDataset)
             elif isinstance(inMemoryDataset, dict):
                 if dataclasses.is_dataclass(writeStorageClass.pytype):
                     # Dataclasses accept key/value parameters.

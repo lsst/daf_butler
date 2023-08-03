@@ -274,7 +274,7 @@ class MetricsExampleModel(_BaseModelCompat):
     @classmethod
     def from_metrics(cls, metrics: MetricsExample) -> MetricsExampleModel:
         """Create a model based on an example."""
-        return cls.parse_obj(metrics.exportAsDict())
+        return cls.model_validate(metrics.exportAsDict())
 
 
 @dataclasses.dataclass
