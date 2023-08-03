@@ -387,6 +387,10 @@ class ButlerPutGetTests(TestCaseMixin):
         # Create DatasetRef for put using default run.
         refIn = DatasetRef(datasetType, dataId, id=uuid.UUID(int=1), run=butler.run)
 
+        # Check that getDeferred fails with standalone ref.
+        with self.assertRaises(LookupError):
+            butler.getDeferred(refIn)
+
         # Put the dataset again, since the last thing we did was remove it
         # and we want to use the default collection.
         ref = butler.put(metric, refIn)
