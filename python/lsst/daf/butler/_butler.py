@@ -1279,9 +1279,9 @@ class Butler(LimitedButler):
         LookupError
             Raised if no matching dataset exists in the `Registry`.
         """
-        # Check that dataset actually exists.
-        if not self._datastore.exists(ref):
-            raise LookupError(f"Dataset reference {ref} does not exist.")
+        # Check that dataset is known to the datastore.
+        if not self._datastore.knows(ref):
+            raise LookupError(f"Dataset reference {ref} is not known to datastore.")
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
@@ -1332,16 +1332,20 @@ class Butler(LimitedButler):
         Raises
         ------
         LookupError
-            Raised if no matching dataset exists in the `Registry`.
+            Raised if no matching dataset exists in the `Registry` or
+            datastore.
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
             differs from the one found in the registry.
         TypeError
             Raised if no collections were provided.
         """
-        if isinstance(datasetRefOrType, DatasetRef) and not self._datastore.exists(datasetRefOrType):
-            raise LookupError(f"Dataset reference {datasetRefOrType} does not exist.")
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+        if isinstance(datasetRefOrType, DatasetRef):
+            if not self._datastore.knows(datasetRefOrType):
+                raise LookupError(f"Dataset reference {datasetRefOrType} does not exist.")
+            ref = datasetRefOrType
+        else:
+            ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def get(

@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lsst-daf-butler"
+requires-python = ">=3.10.0"
 description = "An abstraction layer for reading and writing astronomical data to datastores."
 license = {text = "GPLv3+ License"}
 readme = "README.md"
