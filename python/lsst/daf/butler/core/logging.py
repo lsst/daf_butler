@@ -421,8 +421,9 @@ class ButlerLogRecords(_ButlerLogRecords):
         ----------
         serialized : `bytes` or `str`
             Either the serialized JSON of the model created using
-            ``.json()`` or a streaming format of one JSON `ButlerLogRecord`
-            per line. This can also support a zero-length string.
+            ``.model_dump_json()`` or a streaming format of one JSON
+            `ButlerLogRecord` per line. This can also support a zero-length
+            string.
         """
         if not serialized:
             # No records to return
@@ -565,4 +566,4 @@ class JsonLogFormatter(Formatter):
 
     def format(self, record: LogRecord) -> str:
         butler_record = ButlerLogRecord.from_record(record)
-        return butler_record.json(exclude_unset=True, exclude_defaults=True)
+        return butler_record.model_dump_json(exclude_unset=True, exclude_defaults=True)

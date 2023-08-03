@@ -53,7 +53,7 @@ def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:
     a pydantic model.
 
     """
-    return self.to_simple(minimal=minimal).json(exclude_defaults=True, exclude_unset=True)
+    return self.to_simple(minimal=minimal).model_dump_json(exclude_defaults=True, exclude_unset=True)
 
 
 def from_json_pydantic(

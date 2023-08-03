@@ -73,7 +73,7 @@ class LoggingTestCase(unittest.TestCase):
             self.assertEqual(given[1], record.message)
 
         # Check that we can serialize the records
-        json = self.handler.records.json()
+        json = self.handler.records.model_dump_json()
 
         records = ButlerLogRecords.model_validate_json(json)
         for original_record, new_record in zip(self.handler.records, records, strict=True):
@@ -81,7 +81,7 @@ class LoggingTestCase(unittest.TestCase):
         self.assertEqual(str(records), str(self.handler.records))
 
         # Create stream form of serialization.
-        json_stream = "\n".join(record.json() for record in records)
+        json_stream = "\n".join(record.model_dump_json() for record in records)
 
         # Also check we can autodetect the format.
         for raw in (json, json.encode(), json_stream, json_stream.encode()):
@@ -322,7 +322,7 @@ class TestJsonLogging(unittest.TestCase):
 
         # Serialize this model to stream.
         stream2 = io.StringIO()
-        print(records.json(), file=stream2)
+        print(records.model_dump_json(), file=stream2)
         stream2.seek(0)
         stream_records = ButlerLogRecords.from_stream(stream2)
         self.assertEqual(stream_records, records)

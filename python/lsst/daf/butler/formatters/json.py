@@ -119,7 +119,7 @@ class JsonFormatter(FileFormatter):
         """
         # For example, Pydantic models have a .json method so use it.
         try:
-            return inMemoryDataset.json().encode()
+            return inMemoryDataset.model_dump_json().encode()
         except AttributeError:
             pass
 
