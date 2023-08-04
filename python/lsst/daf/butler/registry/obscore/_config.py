@@ -35,8 +35,9 @@ import enum
 from collections.abc import Mapping
 from typing import Any
 
-from lsst.daf.butler._compat import _BaseModelCompat
-from pydantic import StrictBool, StrictFloat, StrictInt, StrictStr, validator
+import pydantic
+from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
+from pydantic import StrictBool, StrictFloat, StrictInt, StrictStr
 
 
 class ExtraColumnType(str, enum.Enum):
@@ -201,15 +202,30 @@ class ObsCoreManagerConfig(ObsCoreConfig):
     exactly one collection name which must be TAGGED collection.
     """
 
-    @validator("collection_type")
-    def validate_collection_type(
-        cls, value: ConfigCollectionType, values: Mapping[str, Any]  # noqa: N805
-    ) -> Any:
-        """Check that contents of ``collections`` is consistent with
-        ``collection_type``.
-        """
-        if value is ConfigCollectionType.TAGGED:
-            collections: list[str] | None = values["collections"]
-            if collections is None or len(collections) != 1:
-                raise ValueError("'collections' must have one element when 'collection_type' is TAGGED")
-        return value
+    if PYDANTIC_V2:
+
+        @pydantic.model_validator(mode="after")  # type: ignore[attr-defined]
+        def validate_collection_type(self) -> ObsCoreManagerConfig:
+            """Check that contents of ``collections`` is consistent with
+            ``collection_type``.
+            """
+            if self.collection_type is ConfigCollectionType.TAGGED:
+                collections: list[str] | None = self.collections
+                if collections is None or len(collections) != 1:
+                    raise ValueError("'collections' must have one element when 'collection_type' is TAGGED")
+            return self
+
+    else:
+
+        @pydantic.validator("collection_type")
+        def validate_collection_type(
+            cls, value: ConfigCollectionType, values: Mapping[str, Any]  # noqa: N805
+        ) -> Any:
+            """Check that contents of ``collections`` is consistent with
+            ``collection_type``.
+            """
+            if value is ConfigCollectionType.TAGGED:
+                collections: list[str] | None = values["collections"]
+                if collections is None or len(collections) != 1:
+                    raise ValueError("'collections' must have one element when 'collection_type' is TAGGED")
+            return value

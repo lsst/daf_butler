@@ -33,9 +33,10 @@ import re
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from lsst.daf.butler._compat import _BaseModelCompat
+import pydantic
+from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.iteration import ensure_iterable
-from pydantic import Field, validator
+from pydantic import Field
 
 from .dimensions import DataIdValue, SerializedDataCoordinate
 from .utils import globToRegex
@@ -198,19 +199,38 @@ KeywordArgs = Field(
 class QueryBaseModel(_BaseModelCompat):
     """Base model for all query models."""
 
-    @validator("keyword_args", check_fields=False)
-    def _check_keyword_args(cls, v, values) -> SimpleDataId | None:  # type: ignore # noqa: N805
-        """Convert kwargs into None if empty.
+    if PYDANTIC_V2:
 
-        This retains the property at its default value and can therefore
-        remove it from serialization.
+        @pydantic.field_validator("keyword_args", check_fields=False)  # type: ignore[attr-defined]
+        @classmethod
+        def _check_keyword_args(cls, v: SimpleDataId) -> SimpleDataId | None:
+            """Convert kwargs into None if empty.
 
-        The validator will be ignored if the subclass does not have this
-        property in its model.
-        """
-        if not v:
-            return None
-        return v
+            This retains the property at its default value and can therefore
+            remove it from serialization.
+
+            The validator will be ignored if the subclass does not have this
+            property in its model.
+            """
+            if not v:
+                return None
+            return v
+
+    else:
+
+        @pydantic.validator("keyword_args", check_fields=False)
+        def _check_keyword_args(cls, v, values) -> SimpleDataId | None:  # type: ignore # noqa: N805
+            """Convert kwargs into None if empty.
+
+            This retains the property at its default value and can therefore
+            remove it from serialization.
+
+            The validator will be ignored if the subclass does not have this
+            property in its model.
+            """
+            if not v:
+                return None
+            return v
 
     def kwargs(self) -> SimpleDataId:
         """Return keyword args, converting None to a `dict`.
