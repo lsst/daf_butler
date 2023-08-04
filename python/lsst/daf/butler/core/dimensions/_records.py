@@ -118,6 +118,24 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSe
     return model
 
 
+# While supporting pydantic v1 and v2 keep this outside the model.
+_serialized_dimension_record_schema_extra = {
+    "examples": [
+        {
+            "definition": "detector",
+            "record": {
+                "instrument": "HSC",
+                "id": 72,
+                "full_name": "0_01",
+                "name_in_raft": "01",
+                "raft": "0",
+                "purpose": "SCIENCE",
+            },
+        }
+    ]
+}
+
+
 class SerializedDimensionRecord(_BaseModelCompat):
     """Simplified model for serializing a `DimensionRecord`."""
 
@@ -143,24 +161,16 @@ class SerializedDimensionRecord(_BaseModelCompat):
         ],
     )
 
-    if not PYDANTIC_V2:
+    if PYDANTIC_V2:
+        model_config = {
+            "json_schema_extra": _serialized_dimension_record_schema_extra,  # type: ignore[typeddict-item]
+        }
+    else:
 
         class Config:
             """Local configuration overrides for model."""
 
-            schema_extra = {
-                "example": {
-                    "definition": "detector",
-                    "record": {
-                        "instrument": "HSC",
-                        "id": 72,
-                        "full_name": "0_01",
-                        "name_in_raft": "01",
-                        "raft": "0",
-                        "purpose": "SCIENCE",
-                    },
-                }
-            }
+            schema_extra = _serialized_dimension_record_schema_extra
 
     @classmethod
     def direct(

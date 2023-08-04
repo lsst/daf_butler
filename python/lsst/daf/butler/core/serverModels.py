@@ -51,6 +51,17 @@ BindType = dict[str, ScalarType]
 SimpleDataId = Mapping[str, DataIdValue]
 
 
+# While supporting pydantic v1 and v2 keep this outside the model.
+_expression_query_schema_extra = {
+    "examples": [
+        {
+            "regex": ["^cal.*"],
+            "glob": ["cal*", "raw"],
+        }
+    ]
+}
+
+
 class ExpressionQueryParameter(_BaseModelCompat):
     """Represents a specification for an expression query.
 
@@ -73,17 +84,16 @@ class ExpressionQueryParameter(_BaseModelCompat):
         examples=["cal*"],
     )
 
-    class Config:
-        """Local configuration overrides for model."""
-
-        schema_extra = {
-            "examples": [
-                {
-                    "regex": ["^cal.*"],
-                    "glob": ["cal*", "raw"],
-                }
-            ]
+    if PYDANTIC_V2:
+        model_config = {
+            "json_schema_extra": _expression_query_schema_extra,  # type: ignore[typeddict-item]
         }
+    else:
+
+        class Config:
+            """Local configuration overrides for model."""
+
+            schema_extra = _expression_query_schema_extra
 
     def expression(self) -> Any:
         """Combine regex and glob lists into single expression."""
