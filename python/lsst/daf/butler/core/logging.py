@@ -32,7 +32,7 @@ from typing import IO, Any, ClassVar, Union, overload
 from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
-from pydantic import PrivateAttr
+from pydantic import ConfigDict, PrivateAttr
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
@@ -182,10 +182,14 @@ class ButlerLogRecord(_BaseModelCompat):
     exc_info: str | None = None
     MDC: dict[str, str]
 
-    class Config:
-        """Pydantic model configuration."""
+    if PYDANTIC_V2:
+        model_config = ConfigDict(frozen=True)
+    else:
 
-        allow_mutation = False
+        class Config:
+            """Pydantic model configuration."""
+
+            allow_mutation = False
 
     @classmethod
     def from_record(cls, record: LogRecord) -> "ButlerLogRecord":
