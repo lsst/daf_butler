@@ -124,17 +124,23 @@ class SerializedDimensionRecord(_BaseModelCompat):
     definition: str = Field(
         ...,
         title="Name of dimension associated with this record.",
-        example="exposure",
+        examples=["exposure"],
     )
 
     # Use strict types to prevent casting
     record: dict[str, None | StrictFloat | StrictStr | StrictBool | StrictInt | tuple[int, int]] = Field(
         ...,
         title="Dimension record keys and values.",
-        example={
-            "definition": "exposure",
-            "record": {"instrument": "LATISS", "exposure": 2021050300044, "obs_id": "AT_O_20210503_00044"},
-        },
+        examples=[
+            {
+                "definition": "exposure",
+                "record": {
+                    "instrument": "LATISS",
+                    "exposure": 2021050300044,
+                    "obs_id": "AT_O_20210503_00044",
+                },
+            }
+        ],
     )
 
     if not PYDANTIC_V2:

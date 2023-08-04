@@ -64,23 +64,25 @@ class ExpressionQueryParameter(_BaseModelCompat):
     regex: list[str] | None = Field(
         None,
         title="List of regular expression strings.",
-        example="^cal.*",
+        examples=["^cal.*"],
     )
 
     glob: list[str] | None = Field(
         None,
         title="List of globs or explicit strings to use in expression.",
-        example="cal*",
+        examples=["cal*"],
     )
 
     class Config:
         """Local configuration overrides for model."""
 
         schema_extra = {
-            "example": {
-                "regex": ["^cal.*"],
-                "glob": ["cal*", "raw"],
-            }
+            "examples": [
+                {
+                    "regex": ["^cal.*"],
+                    "glob": ["cal*", "raw"],
+                }
+            ]
         }
 
     def expression(self) -> Any:
@@ -150,7 +152,7 @@ class DatasetsQueryParameter(ExpressionQueryParameter):
 Where = Field(
     "",
     title="String expression similar to a SQL WHERE clause.",
-    example="detector = 5 AND instrument = 'HSC'",
+    examples=["detector = 5 AND instrument = 'HSC'"],
 )
 Collections = Field(
     None,
@@ -163,12 +165,12 @@ Datasets = Field(
 OptionalDimensions = Field(
     None,
     title="Relevant dimensions to include.",
-    example=["detector", "physical_filter"],
+    examples=["detector", "physical_filter"],
 )
 Dimensions = Field(
     ...,
     title="Relevant dimensions to include.",
-    example=["detector", "physical_filter"],
+    examples=["detector", "physical_filter"],
 )
 DataId = Field(
     None,
