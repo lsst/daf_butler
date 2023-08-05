@@ -33,9 +33,10 @@ import re
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from lsst.daf.butler._compat import _BaseModelCompat
+import pydantic
+from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.iteration import ensure_iterable
-from pydantic import Field, validator
+from pydantic import Field
 
 from .dimensions import DataIdValue, SerializedDataCoordinate
 from .utils import globToRegex
@@ -48,6 +49,17 @@ BindType = dict[str, ScalarType]
 
 # For serialization purposes a data ID key must be a str.
 SimpleDataId = Mapping[str, DataIdValue]
+
+
+# While supporting pydantic v1 and v2 keep this outside the model.
+_expression_query_schema_extra = {
+    "examples": [
+        {
+            "regex": ["^cal.*"],
+            "glob": ["cal*", "raw"],
+        }
+    ]
+}
 
 
 class ExpressionQueryParameter(_BaseModelCompat):
@@ -63,24 +75,25 @@ class ExpressionQueryParameter(_BaseModelCompat):
     regex: list[str] | None = Field(
         None,
         title="List of regular expression strings.",
-        example="^cal.*",
+        examples=["^cal.*"],
     )
 
     glob: list[str] | None = Field(
         None,
         title="List of globs or explicit strings to use in expression.",
-        example="cal*",
+        examples=["cal*"],
     )
 
-    class Config:
-        """Local configuration overrides for model."""
-
-        schema_extra = {
-            "example": {
-                "regex": ["^cal.*"],
-                "glob": ["cal*", "raw"],
-            }
+    if PYDANTIC_V2:
+        model_config = {
+            "json_schema_extra": _expression_query_schema_extra,  # type: ignore[typeddict-item]
         }
+    else:
+
+        class Config:
+            """Local configuration overrides for model."""
+
+            schema_extra = _expression_query_schema_extra
 
     def expression(self) -> Any:
         """Combine regex and glob lists into single expression."""
@@ -149,7 +162,7 @@ class DatasetsQueryParameter(ExpressionQueryParameter):
 Where = Field(
     "",
     title="String expression similar to a SQL WHERE clause.",
-    example="detector = 5 AND instrument = 'HSC'",
+    examples=["detector = 5 AND instrument = 'HSC'"],
 )
 Collections = Field(
     None,
@@ -162,12 +175,12 @@ Datasets = Field(
 OptionalDimensions = Field(
     None,
     title="Relevant dimensions to include.",
-    example=["detector", "physical_filter"],
+    examples=["detector", "physical_filter"],
 )
 Dimensions = Field(
     ...,
     title="Relevant dimensions to include.",
-    example=["detector", "physical_filter"],
+    examples=["detector", "physical_filter"],
 )
 DataId = Field(
     None,
@@ -198,19 +211,38 @@ KeywordArgs = Field(
 class QueryBaseModel(_BaseModelCompat):
     """Base model for all query models."""
 
-    @validator("keyword_args", check_fields=False)
-    def _check_keyword_args(cls, v, values) -> SimpleDataId | None:  # type: ignore # noqa: N805
-        """Convert kwargs into None if empty.
+    if PYDANTIC_V2:
 
-        This retains the property at its default value and can therefore
-        remove it from serialization.
+        @pydantic.field_validator("keyword_args", check_fields=False)  # type: ignore[attr-defined]
+        @classmethod
+        def _check_keyword_args(cls, v: SimpleDataId) -> SimpleDataId | None:
+            """Convert kwargs into None if empty.
 
-        The validator will be ignored if the subclass does not have this
-        property in its model.
-        """
-        if not v:
-            return None
-        return v
+            This retains the property at its default value and can therefore
+            remove it from serialization.
+
+            The validator will be ignored if the subclass does not have this
+            property in its model.
+            """
+            if not v:
+                return None
+            return v
+
+    else:
+
+        @pydantic.validator("keyword_args", check_fields=False)
+        def _check_keyword_args(cls, v, values) -> SimpleDataId | None:  # type: ignore # noqa: N805
+            """Convert kwargs into None if empty.
+
+            This retains the property at its default value and can therefore
+            remove it from serialization.
+
+            The validator will be ignored if the subclass does not have this
+            property in its model.
+            """
+            if not v:
+                return None
+            return v
 
     def kwargs(self) -> SimpleDataId:
         """Return keyword args, converting None to a `dict`.

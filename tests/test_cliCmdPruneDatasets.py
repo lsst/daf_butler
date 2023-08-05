@@ -58,7 +58,7 @@ def getTables():
     """Return test table."""
     if doFindTables:
         return (Table(((1, 2, 3),), names=("foo",)),)
-    return tuple()
+    return ()
 
 
 def getDatasets():

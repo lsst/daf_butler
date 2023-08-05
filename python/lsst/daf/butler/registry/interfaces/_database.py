@@ -1404,7 +1404,7 @@ class Database(ABC):
             return None, inserted_or_updated
         else:
             assert result is not None
-            return {k: v for k, v in zip(returning, result, strict=True)}, inserted_or_updated
+            return dict(zip(returning, result, strict=True)), inserted_or_updated
 
     def insert(
         self,

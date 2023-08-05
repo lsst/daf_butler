@@ -93,7 +93,7 @@ def _getCollectionInfo(
             )
         )
     except MissingCollectionError:
-        names = list()
+        names = []
     collections = Table(names=("Collection", "Collection Type"), dtype=(str, str))
     runCollections = Table(names=("Collection",), dtype=(str,))
     for name in names:

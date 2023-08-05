@@ -917,7 +917,7 @@ class Butler(LimitedButler):
                     continue
 
                 # Build up a WHERE expression
-                bind = {k: v for k, v in values.items()}
+                bind = dict(values.items())
                 where = " AND ".join(f"{dimensionName}.{k} = {k}" for k in bind)
 
                 # Hopefully we get a single record that matches

@@ -32,7 +32,7 @@ from typing import IO, Any, ClassVar, Union, overload
 from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
-from pydantic import PrivateAttr
+from pydantic import ConfigDict, PrivateAttr
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
@@ -182,10 +182,14 @@ class ButlerLogRecord(_BaseModelCompat):
     exc_info: str | None = None
     MDC: dict[str, str]
 
-    class Config:
-        """Pydantic model configuration."""
+    if PYDANTIC_V2:
+        model_config = ConfigDict(frozen=True)
+    else:
 
-        allow_mutation = False
+        class Config:
+            """Pydantic model configuration."""
+
+            allow_mutation = False
 
     @classmethod
     def from_record(cls, record: LogRecord) -> "ButlerLogRecord":
@@ -250,7 +254,7 @@ class ButlerLogRecord(_BaseModelCompat):
         if log_format is None:
             log_format = self._log_format
 
-        as_dict = self.dict()
+        as_dict = self.model_dump()
 
         # Special case MDC content. Convert it to an MDCDict
         # so that missing items do not break formatting.
@@ -339,7 +343,7 @@ class ButlerLogRecords(_ButlerLogRecords):
             Returns `True` if the data look like a serialized pydantic model.
             Returns `False` if it looks like a streaming format. Returns
             `False` also if an empty string is encountered since this
-            is not understood by `ButlerLogRecords.parse_raw()`.
+            is not understood by `ButlerLogRecords.model_validate_json()`.
 
         Raises
         ------
@@ -402,14 +406,14 @@ class ButlerLogRecords(_ButlerLogRecords):
             # This is a ButlerLogRecords model serialization so all the
             # content must be read first.
             all = first_line + stream.read()
-            return cls.parse_raw(all)
+            return cls.model_validate_json(all)
 
         # A stream of records with one record per line.
-        records = [ButlerLogRecord.parse_raw(first_line)]
+        records = [ButlerLogRecord.model_validate_json(first_line)]
         for line in stream:
             line = line.rstrip()
             if line:  # Filter out blank lines.
-                records.append(ButlerLogRecord.parse_raw(line))
+                records.append(ButlerLogRecord.model_validate_json(line))
 
         return cls.from_records(records)
 
@@ -421,8 +425,9 @@ class ButlerLogRecords(_ButlerLogRecords):
         ----------
         serialized : `bytes` or `str`
             Either the serialized JSON of the model created using
-            ``.json()`` or a streaming format of one JSON `ButlerLogRecord`
-            per line. This can also support a zero-length string.
+            ``.model_dump_json()`` or a streaming format of one JSON
+            `ButlerLogRecord` per line. This can also support a zero-length
+            string.
         """
         if not serialized:
             # No records to return
@@ -432,7 +437,7 @@ class ButlerLogRecords(_ButlerLogRecords):
         is_model = cls._detect_model(serialized)
 
         if is_model:
-            return cls.parse_raw(serialized)
+            return cls.model_validate_json(serialized)
 
         # Filter out blank lines -- mypy is confused by the newline
         # argument to isplit() [which can't have two different types
@@ -444,7 +449,7 @@ class ButlerLogRecords(_ButlerLogRecords):
             substrings = isplit(serialized, b"\n")
         else:
             raise TypeError(f"Serialized form must be str or bytes not {get_full_type_name(serialized)}")
-        records = [ButlerLogRecord.parse_raw(line) for line in substrings if line]
+        records = [ButlerLogRecord.model_validate_json(line) for line in substrings if line]
 
         return cls.from_records(records)
 
@@ -565,4 +570,4 @@ class JsonLogFormatter(Formatter):
 
     def format(self, record: LogRecord) -> str:
         butler_record = ButlerLogRecord.from_record(record)
-        return butler_record.json(exclude_unset=True, exclude_defaults=True)
+        return butler_record.model_dump_json(exclude_unset=True, exclude_defaults=True)

@@ -121,7 +121,7 @@ class ButlerVersionsManager:
 
             # Number of items in attributes table is small, read all of them
             # in a single query and filter later.
-            attributes = {key: value for key, value in self._attributes.items()}
+            attributes = dict(self._attributes.items())
 
             for name, value in attributes.items():
                 if name.startswith("config:registry.managers."):

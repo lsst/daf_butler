@@ -306,7 +306,7 @@ class CliLog:
         """
         components: set[str | None]
         if component is None:
-            components = {comp for comp in cls.root_loggers()}
+            components = set(cls.root_loggers())
         elif not component or component == ".":
             components = {None}
         else:

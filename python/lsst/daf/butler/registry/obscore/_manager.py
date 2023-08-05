@@ -23,7 +23,6 @@ from __future__ import annotations
 
 __all__ = ["ObsCoreLiveTableManager"]
 
-import json
 import re
 import warnings
 from collections import defaultdict
@@ -163,7 +162,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
     ) -> ObsCoreTableManager:
         # Docstring inherited from base class.
         config_data = Config(config)
-        obscore_config = ObsCoreManagerConfig.parse_obj(config_data)
+        obscore_config = ObsCoreManagerConfig.model_validate(config_data)
 
         # Instantiate all spatial plugins.
         spatial_plugins = SpatialObsCorePlugin.load_plugins(obscore_config.spatial_plugins, db)
@@ -195,7 +194,7 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         json : `str`
             Configuration serialized in JSON format.
         """
-        return json.dumps(self.config.dict())
+        return self.config.model_dump_json()
 
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:

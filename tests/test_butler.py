@@ -1432,7 +1432,7 @@ class FileDatastoreButlerTests(ButlerTests):
         butler.registry.removeDatasetType(datasetType.name)
 
         with self.assertLogs("lsst.daf.butler.registries", "INFO") as cm:
-            butler.registry.removeDatasetType(tuple(["test*", "test*"]))
+            butler.registry.removeDatasetType(("test*", "test*"))
         self.assertIn("not defined", "\n".join(cm.output))
 
 

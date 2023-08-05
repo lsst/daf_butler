@@ -118,43 +118,59 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSe
     return model
 
 
+# While supporting pydantic v1 and v2 keep this outside the model.
+_serialized_dimension_record_schema_extra = {
+    "examples": [
+        {
+            "definition": "detector",
+            "record": {
+                "instrument": "HSC",
+                "id": 72,
+                "full_name": "0_01",
+                "name_in_raft": "01",
+                "raft": "0",
+                "purpose": "SCIENCE",
+            },
+        }
+    ]
+}
+
+
 class SerializedDimensionRecord(_BaseModelCompat):
     """Simplified model for serializing a `DimensionRecord`."""
 
     definition: str = Field(
         ...,
         title="Name of dimension associated with this record.",
-        example="exposure",
+        examples=["exposure"],
     )
 
     # Use strict types to prevent casting
     record: dict[str, None | StrictFloat | StrictStr | StrictBool | StrictInt | tuple[int, int]] = Field(
         ...,
         title="Dimension record keys and values.",
-        example={
-            "definition": "exposure",
-            "record": {"instrument": "LATISS", "exposure": 2021050300044, "obs_id": "AT_O_20210503_00044"},
-        },
+        examples=[
+            {
+                "definition": "exposure",
+                "record": {
+                    "instrument": "LATISS",
+                    "exposure": 2021050300044,
+                    "obs_id": "AT_O_20210503_00044",
+                },
+            }
+        ],
     )
 
-    if not PYDANTIC_V2:
+    if PYDANTIC_V2:
+        model_config = {
+            "json_schema_extra": _serialized_dimension_record_schema_extra,  # type: ignore[typeddict-item]
+        }
+    else:
 
         class Config:
             """Local configuration overrides for model."""
 
-            schema_extra = {
-                "example": {
-                    "definition": "detector",
-                    "record": {
-                        "instrument": "HSC",
-                        "id": 72,
-                        "full_name": "0_01",
-                        "name_in_raft": "01",
-                        "raft": "0",
-                        "purpose": "SCIENCE",
-                    },
-                }
-            }
+            schema_extra = _serialized_dimension_record_schema_extra
 
     @classmethod
     def direct(
@@ -405,7 +421,7 @@ class DimensionRecord:
 
         # Timespan and region have to be converted to native form
         # for now assume that those keys are special
-        rec = record_model.dict()
+        rec = record_model.model_dump()
 
         if (ts := "timespan") in rec:
             rec[ts] = Timespan.from_simple(rec[ts], universe=universe, registry=registry)

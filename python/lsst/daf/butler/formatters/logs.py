@@ -109,4 +109,4 @@ class ButlerLogRecordsFormatter(JsonFormatter):
         Exception
             The object could not be serialized.
         """
-        return inMemoryDataset.json(exclude_unset=True, exclude_defaults=True).encode()
+        return inMemoryDataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()

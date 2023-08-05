@@ -610,7 +610,7 @@ def arrow_schema_to_column_list(schema: pa.Schema) -> list[str]:
     column_list : `list` [`str`]
         Converted list of column names.
     """
-    return [name for name in schema.names]
+    return list(schema.names)
 
 
 class DataFrameSchema:

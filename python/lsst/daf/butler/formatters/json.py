@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("JsonFormatter",)
 
+import contextlib
 import dataclasses
 import json
 from typing import Any
@@ -117,11 +118,13 @@ class JsonFormatter(FileFormatter):
         Exception
             The object could not be serialized.
         """
-        # For example, Pydantic models have a .json method so use it.
-        try:
+        # Try different standardized methods for native json.
+        # For example, Pydantic models have a .model_dump_json method.
+        # v1 models without compatibility layer will need .json()
+        with contextlib.suppress(AttributeError):
+            return inMemoryDataset.model_dump_json().encode()
+        with contextlib.suppress(AttributeError):
             return inMemoryDataset.json().encode()
-        except AttributeError:
-            pass
 
         if dataclasses.is_dataclass(inMemoryDataset):
             inMemoryDataset = dataclasses.asdict(inMemoryDataset)

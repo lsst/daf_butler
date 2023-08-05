@@ -53,7 +53,7 @@ def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:
     a pydantic model.
 
     """
-    return self.to_simple(minimal=minimal).json(exclude_defaults=True, exclude_unset=True)
+    return self.to_simple(minimal=minimal).model_dump_json(exclude_defaults=True, exclude_unset=True)
 
 
 def from_json_pydantic(
@@ -63,7 +63,7 @@ def from_json_pydantic(
     registry: Registry | None = None,
 ) -> SupportsSimple:
     """Convert from JSON to a pydantic model."""
-    simple = cls._serializedType.parse_raw(json_str)
+    simple = cls._serializedType.model_validate_json(json_str)
     try:
         return cls.from_simple(simple, universe=universe, registry=registry)
     except AttributeError as e:

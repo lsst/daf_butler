@@ -550,7 +550,7 @@ class RemoteRegistry(_ButlerRegistry):
 
         response = self._client.post(
             self._get_url("registry/datasets"),
-            json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+            json=parameters.model_dump(mode="json", exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
         response.raise_for_status()
@@ -596,7 +596,7 @@ class RemoteRegistry(_ButlerRegistry):
 
         response = self._client.post(
             self._get_url("registry/dataIds"),
-            json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+            json=parameters.model_dump(mode="json", exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
         response.raise_for_status()
@@ -642,7 +642,7 @@ class RemoteRegistry(_ButlerRegistry):
         )
         response = self._client.post(
             self._get_url(f"registry/dimensionRecords/{element}"),
-            json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+            json=parameters.model_dump(mode="json", exclude_unset=True, exclude_defaults=True),
             timeout=20,
         )
         response.raise_for_status()
