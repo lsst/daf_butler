@@ -2027,8 +2027,9 @@ class RegistryTests(ABC):
 
     def testCalibrationCollections(self):
         """Test operations on `~CollectionType.CALIBRATION` collections,
-        including `Registry.certify`, `Registry.decertify`, and
-        `Registry.findDataset`.
+        including `Registry.certify`, `Registry.decertify`,
+        `Registry.findDataset`, and
+        `DataCoordinateQueryResults.findRelatedDatasets`.
         """
         # Setup - make a Registry, fill it with some datasets in
         # non-calibration collections.
@@ -2044,6 +2045,39 @@ class RegistryTests(ABC):
         allTimespans = [
             Timespan(a, b) for a, b in itertools.combinations([None, t1, t2, t3, t4, t5, None], r=2)
         ]
+        # Insert some exposure records with timespans between each sequential
+        # pair of those.
+        registry.insertDimensionData(
+            "exposure",
+            {
+                "instrument": "Cam1",
+                "id": 0,
+                "obs_id": "zero",
+                "physical_filter": "Cam1-G",
+                "timespan": Timespan(t1, t2),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 1,
+                "obs_id": "one",
+                "physical_filter": "Cam1-G",
+                "timespan": Timespan(t2, t3),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 2,
+                "obs_id": "two",
+                "physical_filter": "Cam1-G",
+                "timespan": Timespan(t3, t4),
+            },
+            {
+                "instrument": "Cam1",
+                "id": 3,
+                "obs_id": "three",
+                "physical_filter": "Cam1-G",
+                "timespan": Timespan(t4, t5),
+            },
+        )
         # Get references to some datasets.
         bias2a = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
         bias3a = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
@@ -2058,8 +2092,7 @@ class RegistryTests(ABC):
         # Certify 2a dataset with [t2, t4) validity.
         registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
         # Test that we can query for this dataset via the new collection, both
-        # on its own and with a RUN collection, as long as we don't try to join
-        # in temporal dimensions or use findFirst=True.
+        # on its own and with a RUN collection.
         self.assertEqual(
             set(registry.queryDatasets("bias", findFirst=False, collections=collection)),
             {bias2a},
@@ -2083,6 +2116,30 @@ class RegistryTests(ABC):
                 registry.expandDataId(instrument="Cam1", detector=2),
                 registry.expandDataId(instrument="Cam1", detector=3),
                 registry.expandDataId(instrument="Cam1", detector=4),
+            },
+        )
+        self.assertEqual(
+            set(
+                registry.queryDataIds(["exposure", "detector"]).findRelatedDatasets(
+                    "bias", findFirst=True, collections=[collection]
+                )
+            ),
+            {
+                (registry.expandDataId(instrument="Cam1", detector=2, exposure=1), bias2a),
+                (registry.expandDataId(instrument="Cam1", detector=2, exposure=2), bias2a),
+            },
+        )
+        self.assertEqual(
+            set(
+                registry.queryDataIds(
+                    ["exposure", "detector"], instrument="Cam1", detector=2
+                ).findRelatedDatasets("bias", findFirst=True, collections=[collection, "imported_r"])
+            ),
+            {
+                (registry.expandDataId(instrument="Cam1", detector=2, exposure=1), bias2a),
+                (registry.expandDataId(instrument="Cam1", detector=2, exposure=2), bias2a),
+                (registry.expandDataId(instrument="Cam1", detector=2, exposure=0), bias2b),
+                (registry.expandDataId(instrument="Cam1", detector=2, exposure=3), bias2b),
             },
         )
 
@@ -2216,6 +2273,58 @@ class RegistryTests(ABC):
         assertLookup(detector=3, timespan=Timespan(t4, t5), expected=bias3b)
         assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
         assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
+
+        # Test lookups via temporal joins to exposures.
+        self.assertEqual(
+            set(
+                registry.queryDataIds(
+                    ["exposure", "detector"], instrument="Cam1", detector=2
+                ).findRelatedDatasets("bias", collections=[collection])
+            ),
+            {
+                (registry.expandDataId(instrument="Cam1", exposure=1, detector=2), bias2a),
+                (registry.expandDataId(instrument="Cam1", exposure=2, detector=2), bias2a),
+                (registry.expandDataId(instrument="Cam1", exposure=3, detector=2), bias2b),
+            },
+        )
+        self.assertEqual(
+            set(
+                registry.queryDataIds(
+                    ["exposure", "detector"], instrument="Cam1", detector=3
+                ).findRelatedDatasets("bias", collections=[collection])
+            ),
+            {
+                (registry.expandDataId(instrument="Cam1", exposure=0, detector=3), bias3a),
+                (registry.expandDataId(instrument="Cam1", exposure=1, detector=3), bias3a),
+                (registry.expandDataId(instrument="Cam1", exposure=3, detector=3), bias3b),
+            },
+        )
+        self.assertEqual(
+            set(
+                registry.queryDataIds(
+                    ["exposure", "detector"], instrument="Cam1", detector=2
+                ).findRelatedDatasets("bias", collections=[collection, "imported_g"])
+            ),
+            {
+                (registry.expandDataId(instrument="Cam1", exposure=0, detector=2), bias2a),
+                (registry.expandDataId(instrument="Cam1", exposure=1, detector=2), bias2a),
+                (registry.expandDataId(instrument="Cam1", exposure=2, detector=2), bias2a),
+                (registry.expandDataId(instrument="Cam1", exposure=3, detector=2), bias2b),
+            },
+        )
+        self.assertEqual(
+            set(
+                registry.queryDataIds(
+                    ["exposure", "detector"], instrument="Cam1", detector=3
+                ).findRelatedDatasets("bias", collections=[collection, "imported_g"])
+            ),
+            {
+                (registry.expandDataId(instrument="Cam1", exposure=0, detector=3), bias3a),
+                (registry.expandDataId(instrument="Cam1", exposure=1, detector=3), bias3a),
+                (registry.expandDataId(instrument="Cam1", exposure=2, detector=3), bias3a),
+                (registry.expandDataId(instrument="Cam1", exposure=3, detector=3), bias3b),
+            },
+        )
 
         # Decertify [t3, t5) for all data IDs, and do test lookups again.
         # This should truncate bias2a to [t2, t3), leave bias3a unchanged at

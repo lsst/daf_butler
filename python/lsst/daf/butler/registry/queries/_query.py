@@ -38,7 +38,9 @@ from ...core import (
     DimensionGraph,
     DimensionKeyColumnTag,
     DimensionRecord,
+    DimensionRecordColumnTag,
 )
+from .._collectionType import CollectionType
 from ..wildcards import CollectionWildcard
 from ._query_backend import QueryBackend
 from ._query_context import QueryContext
@@ -236,6 +238,52 @@ class Query:
                     yield parent_ref
                 else:
                     yield parent_ref.makeComponentRef(component)
+
+    def iter_data_ids_and_dataset_refs(
+        self, dataset_type: DatasetType, dimensions: DimensionGraph | None = None
+    ) -> Iterator[tuple[DataCoordinate, DatasetRef]]:
+        """Iterate over pairs of data IDs and dataset refs.
+
+        This permits the data ID dimensions to differ from the dataset
+        dimensions.
+
+        Parameters
+        ----------
+        dataset_type : `DatasetType`
+            The parent dataset type to yield references for.
+        dimensions : `DimensionGraph`, optional
+            Dimensions of the data IDs to return.  If not provided,
+            ``self.dimensions`` is used.
+
+        Returns
+        -------
+        pairs : `~collections.abc.Iterable` [ `tuple` [ `DataCoordinate`,
+                `DatasetRef` ] ]
+            An iterator over (data ID, dataset reference) pairs.
+        """
+        if dimensions is None:
+            dimensions = self._dimensions
+        data_id_reader = DataCoordinateReader.make(
+            dimensions, records=self._has_record_columns is True, record_caches=self._record_caches
+        )
+        dataset_reader = DatasetRefReader(
+            dataset_type,
+            translate_collection=self._backend.get_collection_name,
+            records=self._has_record_columns is True,
+            record_caches=self._record_caches,
+        )
+        if not (data_id_reader.columns_required <= self.relation.columns):
+            raise ColumnError(
+                f"Missing column(s) {set(data_id_reader.columns_required - self.relation.columns)} "
+                f"for data IDs with dimensions {dimensions}."
+            )
+        if not (dataset_reader.columns_required <= self.relation.columns):
+            raise ColumnError(
+                f"Missing column(s) {set(dataset_reader.columns_required - self.relation.columns)} "
+                f"for datasets with type {dataset_type.name} and dimensions {dataset_type.dimensions}."
+            )
+        for row in self:
+            yield (data_id_reader.read(row), dataset_reader.read(row))
 
     def iter_dimension_records(self, element: DimensionElement | None = None) -> Iterator[DimensionRecord]:
         """Return an iterator that converts result rows to dimension records.
@@ -651,22 +699,52 @@ class Query:
             dataset_type,
             collections,
             governor_constraints=self._governor_constraints,
-            allow_calibration_collections=False,  # TODO
+            allow_calibration_collections=True,
             rejections=rejections,
         )
+        relation = self._relation
+        temporal_join_on: set[ColumnTag] = set()
+        if any(r.type is CollectionType.CALIBRATION for r in collection_records):
+            for family in self._dimensions.temporal:
+                element = family.choose(self._dimensions.elements)
+                temporal_join_on.add(DimensionRecordColumnTag(element.name, "timespan"))
+            timespan_columns_required = set(temporal_join_on)
+            relation, columns_found = self._context.restore_columns(self._relation, timespan_columns_required)
+            timespan_columns_required.difference_update(columns_found)
+            if timespan_columns_required:
+                relation = self._backend.make_dimension_relation(
+                    self._dimensions,
+                    timespan_columns_required,
+                    self._context,
+                    initial_relation=relation,
+                    # Don't permit joins to use any columns beyond those in the
+                    # original relation, as that would change what this
+                    # operation does.
+                    initial_join_max_columns=frozenset(self._relation.columns),
+                    governor_constraints=self._governor_constraints,
+                )
         if not collection_records:
-            relation = self._relation.join(
+            relation = relation.join(
                 self._backend.make_doomed_dataset_relation(dataset_type, columns, rejections, self._context)
             )
         elif find_first:
             relation = self._backend.make_dataset_search_relation(
-                dataset_type, collection_records, columns, self._context, join_to=self._relation
+                dataset_type,
+                collection_records,
+                columns,
+                self._context,
+                join_to=relation,
+                temporal_join_on=temporal_join_on,
             )
         else:
-            dataset_relation = self._backend.make_dataset_query_relation(
-                dataset_type, collection_records, columns, self._context
+            relation = self._backend.make_dataset_query_relation(
+                dataset_type,
+                collection_records,
+                columns,
+                self._context,
+                join_to=relation,
+                temporal_join_on=temporal_join_on,
             )
-            relation = self.relation.join(dataset_relation)
         return self._chain(relation, defer=defer)
 
     def sliced(

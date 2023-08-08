@@ -268,6 +268,64 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             components_found,
         )
 
+    def findRelatedDatasets(
+        self,
+        datasetType: DatasetType | str,
+        collections: Any,
+        *,
+        findFirst: bool = True,
+        dimensions: DimensionGraph | None = None,
+    ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
+        """Find datasets using the data IDs identified by this query, and
+        return them along with the original data IDs.
+
+        This is a variant of `findDatasets` that is often more useful when
+        the target dataset type does not have all of the dimensions of the
+        original data ID query, as is generally the case with calibration
+        lookups.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` or `str`
+            Dataset type or the name of one to search for.  Must have
+            dimensions that are a subset of ``self.graph``.
+        collections : `Any`
+            An expression that fully or partially identifies the collections
+            to search for the dataset, such as a `str`, `re.Pattern`, or
+            iterable  thereof.  ``...`` can be used to return all collections.
+            See :ref:`daf_butler_collection_expressions` for more information.
+        findFirst : `bool`, optional
+            If `True` (default), for each data ID in ``self``, only yield one
+            `DatasetRef`, from the first collection in which a dataset of that
+            dataset type appears (according to the order of ``collections``
+            passed in).  If `True`, ``collections`` must not contain regular
+            expressions and may not be ``...``.  Note that this is not the
+            same as yielding one `DatasetRef` for each yielded data ID if
+            ``dimensions`` is not `None`.
+        dimensions : `DimensionGraph`, optional
+            The dimensions of the data IDs returned.  Must be a subset of
+            ``self.dimensions``.
+
+        Returns
+        -------
+        pairs : `~collections.abc.Iterable` [ `tuple` [ `DataCoordinate`, \
+                `DatasetRef` ] ]
+            An iterable of (data ID, dataset reference) pairs.
+
+        Raises
+        ------
+        ValueError
+            Raised if ``datasetType.dimensions.issubset(self.graph) is False``
+            or ``dimensions.issubset(self.graph) is False``.
+        MissingDatasetTypeError
+            Raised if the given dataset type is not registered.
+        """
+        parent_dataset_type, _ = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, components=False, explicit_only=True
+        )
+        query = self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True)
+        return query.iter_data_ids_and_dataset_refs(parent_dataset_type, dimensions)
+
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         """Count the number of rows this query would return.
 

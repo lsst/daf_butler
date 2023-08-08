@@ -141,7 +141,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                         filtered_collections.append(collection_record)
         return result
 
-    def make_dataset_query_relation(
+    def _make_dataset_query_relation_impl(
         self,
         dataset_type: DatasetType,
         collections: Sequence[CollectionRecord],
