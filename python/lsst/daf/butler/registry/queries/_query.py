@@ -661,7 +661,7 @@ class Query:
                 "on a query that already includes dataset columns."
             )
         #
-        # TODO: it'd nice to do a QueryContext.restore_columns call here or
+        # TODO: it'd be nice to do a QueryContext.restore_columns call here or
         # similar, to look for dataset-constraint joins already present in the
         # relation and expand them to include dataset-result columns as well,
         # instead of doing a possibly-redundant join here.  But that would
