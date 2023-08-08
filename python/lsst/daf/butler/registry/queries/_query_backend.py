@@ -451,8 +451,8 @@ class QueryBackend(Generic[_C]):
         join_to: Relation | None = None,
     ) -> Relation:
         """Construct a relation that represents an order query for datasets
-        that returns results from the first matching collection for each
-        data ID.
+        that returns results from the first matching collection for each data
+        ID.
 
         Parameters
         ----------
@@ -462,7 +462,7 @@ class QueryBackend(Generic[_C]):
             Records for collections to search.  Should generally be the result
             of a call to `resolve_dataset_collections`, and must not be empty.
         columns : `~collections.abc.Set` [ `str` ]
-            Columns to include in the `relation.  See
+            Columns to include in the ``relation``.  See
             `make_dataset_query_relation` for options.
         context : `QueryContext`
             Context that manages per-query state.
