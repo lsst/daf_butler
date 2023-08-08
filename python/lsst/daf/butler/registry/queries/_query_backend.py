@@ -28,8 +28,8 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from lsst.daf.relation import (
     BinaryOperationRelation,
-    ColumnTag,
     ColumnExpression,
+    ColumnTag,
     LeafRelation,
     MarkerRelation,
     Predicate,

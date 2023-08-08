@@ -254,8 +254,6 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
         Raises
         ------
-        ValueError
-            Raised if ``datasetType.dimensions.issubset(self.graph) is False``.
         MissingDatasetTypeError
             Raised if the given dataset type is not registered.
         """
@@ -314,12 +312,11 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
         Raises
         ------
-        ValueError
-            Raised if ``datasetType.dimensions.issubset(self.graph) is False``
-            or ``dimensions.issubset(self.graph) is False``.
         MissingDatasetTypeError
             Raised if the given dataset type is not registered.
         """
+        if dimensions is None:
+            dimensions = self.graph
         parent_dataset_type, _ = self._query.backend.resolve_single_dataset_type_wildcard(
             datasetType, components=False, explicit_only=True
         )

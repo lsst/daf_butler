@@ -1490,9 +1490,12 @@ class RegistryTests(ABC):
             expectedDeduplicatedBiases,
         )
 
-        # Check dimensions match.
-        with self.assertRaises(ValueError):
-            subsetDataIds.findDatasets("flat", collections=["imported_r", "imported_g"], findFirst=True)
+        # Searching for a dataset with dimensions we had projected away
+        # restores those dimensions.
+        self.assertCountEqual(
+            list(subsetDataIds.findDatasets("flat", collections=["imported_r"], findFirst=True)),
+            expectedFlats,
+        )
 
         # Use a component dataset type.
         self.assertCountEqual(
@@ -3631,3 +3634,43 @@ class RegistryTests(ABC):
         messages = list(result.explain_no_results())
         self.assertTrue(messages)
         self.assertTrue(any("because collection list is empty" in message for message in messages))
+
+    def test_dataset_followup_spatial_joins(self) -> None:
+        """Test queryDataIds(...).findRelatedDatasets(...) where a spatial join
+        is involved.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "spatial.yaml")
+        pvi_dataset_type = DatasetType(
+            "pvi", {"visit", "detector"}, storageClass="StructuredDataDict", universe=registry.dimensions
+        )
+        registry.registerDatasetType(pvi_dataset_type)
+        collection = "datasets"
+        registry.registerRun(collection)
+        (pvi1,) = registry.insertDatasets(
+            pvi_dataset_type, [{"instrument": "Cam1", "visit": 1, "detector": 1}], run=collection
+        )
+        (pvi2,) = registry.insertDatasets(
+            pvi_dataset_type, [{"instrument": "Cam1", "visit": 1, "detector": 2}], run=collection
+        )
+        (pvi3,) = registry.insertDatasets(
+            pvi_dataset_type, [{"instrument": "Cam1", "visit": 1, "detector": 3}], run=collection
+        )
+        self.assertEqual(
+            set(
+                registry.queryDataIds(["patch"], skymap="SkyMap1", tract=0)
+                .expanded()
+                .findRelatedDatasets("pvi", [collection])
+            ),
+            {
+                (registry.expandDataId(skymap="SkyMap1", tract=0, patch=0), pvi1),
+                (registry.expandDataId(skymap="SkyMap1", tract=0, patch=0), pvi2),
+                (registry.expandDataId(skymap="SkyMap1", tract=0, patch=1), pvi2),
+                (registry.expandDataId(skymap="SkyMap1", tract=0, patch=2), pvi1),
+                (registry.expandDataId(skymap="SkyMap1", tract=0, patch=2), pvi2),
+                (registry.expandDataId(skymap="SkyMap1", tract=0, patch=2), pvi3),
+                (registry.expandDataId(skymap="SkyMap1", tract=0, patch=3), pvi2),
+                (registry.expandDataId(skymap="SkyMap1", tract=0, patch=4), pvi3),
+            },
+        )
