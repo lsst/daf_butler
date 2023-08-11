@@ -342,10 +342,14 @@ storageClasses:
       dict: lsst.utils.packages.Packages
   NumpyArray:
     pytype: numpy.ndarray
+    converters:
+      matplotlib.figure.Figure: lsst.daf.butler.formatters.matplotlib.MatplotlibFormatter.dummyConverter
   Thumbnail:
     pytype: numpy.ndarray
   Plot:
     pytype: matplotlib.figure.Figure
+    converters:
+      numpy.ndarray: lsst.daf.butler.formatters.matplotlib.MatplotlibFormatter.fromArray
   MetricValue:
     pytype: lsst.verify.Measurement
   StampsBase:

@@ -27,6 +27,8 @@ import tempfile
 import unittest
 from random import Random
 
+import numpy as np
+
 try:
     import matplotlib
 
@@ -78,8 +80,13 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
             pyplot.gcf().savefig(file.name)
             self.assertTrue(filecmp.cmp(local.ospath, file.name, shallow=True))
         self.assertTrue(butler.exists(ref))
-        with self.assertRaises(ValueError):
-            butler.get(ref)
+
+        fig = butler.get(ref)
+        # Ensure that the result is a figure
+        self.assertTrue(isinstance(fig, pyplot.Figure))
+        image = butler.get(ref, storageClass="NumpyArray")
+        self.assertTrue(isinstance(image, np.ndarray))
+
         butler.pruneDatasets([ref], unstore=True, purge=True)
         self.assertFalse(butler.exists(ref))
 

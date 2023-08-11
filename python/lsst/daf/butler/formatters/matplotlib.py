@@ -27,6 +27,9 @@ __all__ = ("MatplotlibFormatter",)
 
 from typing import Any
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 from .file import FileFormatter
 
 
@@ -38,8 +41,22 @@ class MatplotlibFormatter(FileFormatter):
 
     def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         # docstring inherited from FileFormatter._readFile
-        raise NotImplementedError(f"matplotlib figures cannot be read by the butler; path is {path}")
+        return plt.imread(path)
 
     def _writeFile(self, inMemoryDataset: Any) -> None:
         # docstring inherited from FileFormatter._writeFile
         inMemoryDataset.savefig(self.fileDescriptor.location.path)
+
+    @staticmethod
+    def fromArray(cls: np.ndarray) -> plt.Figure:
+        """Convert an array into a Figure."""
+        fig = plt.figure()
+        plt.imshow(cls)
+        return fig
+
+    @staticmethod
+    def dummyCovnerter(cls: np.ndarray) -> np.ndarray:
+        """This converter exists to trick the Butler into allowing
+        a numpy array on read with ``storageClass='NumpyArray'``.
+        """
+        return cls
