@@ -44,7 +44,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import StorageClass, StorageClassDelegate
-from lsst.daf.butler._compat import _BaseModelCompat
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Butler, Datastore, FormatterFactory
@@ -264,7 +264,7 @@ class MetricsExample:
         return cls(exportDict["summary"], exportDict["output"], data)
 
 
-class MetricsExampleModel(_BaseModelCompat):
+class MetricsExampleModel(BaseModel):
     """A variant of `MetricsExample` based on model."""
 
     summary: dict[str, Any] | None = None
@@ -274,7 +274,12 @@ class MetricsExampleModel(_BaseModelCompat):
     @classmethod
     def from_metrics(cls, metrics: MetricsExample) -> MetricsExampleModel:
         """Create a model based on an example."""
-        return cls.model_validate(metrics.exportAsDict())
+        d = metrics.exportAsDict()
+        # Assume pydantic v2 but fallback to v1
+        try:
+            return cls.model_validate(d)
+        except AttributeError:
+            return cls.parse_obj(d)
 
 
 @dataclasses.dataclass
