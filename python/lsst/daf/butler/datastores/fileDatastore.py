@@ -365,10 +365,20 @@ class FileDatastore(GenericBaseDatastore):
             raise
         log.debug("Successfully deleted file: %s", location.uri)
 
-    def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
+    def addStoredItemInfo(
+        self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo], insert_mode: str = "insert"
+    ) -> None:
         # Docstring inherited from GenericBaseDatastore
         records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos, strict=True)]
-        self._table.insert(*records, transaction=self._transaction)
+        match insert_mode:
+            case "insert":
+                self._table.insert(*records, transaction=self._transaction)
+            case "ensure":
+                self._table.ensure(*records, transaction=self._transaction)
+            case "replace":
+                self._table.replace(*records, transaction=self._transaction)
+            case _:
+                raise ValueError(f"Unknown insert mode of '{insert_mode}'")
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
@@ -1036,7 +1046,8 @@ class FileDatastore(GenericBaseDatastore):
                 record_validation_info=record_validation_info,
             )
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
-        self._register_datasets(refsAndInfos)
+
+        self._register_datasets(refsAndInfos, insert_mode="insert")
 
     def _calculate_ingested_datastore_name(
         self,
@@ -2305,7 +2316,7 @@ class FileDatastore(GenericBaseDatastore):
             storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
             artifacts.append((ref, storedInfo))
 
-        self._register_datasets(artifacts)
+        self._register_datasets(artifacts, insert_mode="insert")
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
@@ -2729,7 +2740,7 @@ class FileDatastore(GenericBaseDatastore):
                 "" if len(direct_transfers) == 1 else "s",
             )
 
-        self._register_datasets(artifacts)
+        self._register_datasets(artifacts, insert_mode="insert")
 
         if already_present:
             n_skipped = len(already_present)

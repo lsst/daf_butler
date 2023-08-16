@@ -54,7 +54,9 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[Any]) -> None:
+    def addStoredItemInfo(
+        self, refs: Iterable[DatasetRef], infos: Iterable[Any], insert_mode: str = "insert"
+    ) -> None:
         """Record internal storage information associated with one or more
         datasets.
 
@@ -64,6 +66,11 @@ class GenericBaseDatastore(Datastore):
             The datasets that have been stored.
         infos : sequence of `StoredDatastoreItemInfo`
             Metadata associated with the stored datasets.
+        insert_mode : `str`, optional
+            Mode to use to insert the new records into the table. The
+            options are "insert" (error if pre-existing), "replace" (replace
+            content with new values), and "ensure" (skip if the row already
+            exists).
         """
         raise NotImplementedError()
 
@@ -98,7 +105,9 @@ class GenericBaseDatastore(Datastore):
         """
         raise NotImplementedError()
 
-    def _register_datasets(self, refsAndInfos: Iterable[tuple[DatasetRef, StoredDatastoreItemInfo]]) -> None:
+    def _register_datasets(
+        self, refsAndInfos: Iterable[tuple[DatasetRef, StoredDatastoreItemInfo]], insert_mode: str = "insert"
+    ) -> None:
         """Update registry to indicate that one or more datasets have been
         stored.
 
@@ -108,6 +117,10 @@ class GenericBaseDatastore(Datastore):
                                          `StoredDatastoreItemInfo`]
             Datasets to register and the internal datastore metadata associated
             with them.
+        insert_mode : `str`, optional
+            Indicate whether the new records should be new ("insert", default),
+            or allowed to exists ("ensure") or be replaced if already present
+            ("replace").
         """
         expandedRefs: list[DatasetRef] = []
         expandedItemInfos = []
@@ -120,8 +133,13 @@ class GenericBaseDatastore(Datastore):
         # disassembled in datastore we have to deduplicate. Since they
         # will have different datasetTypes we can't use a set
         registryRefs = {r.id: r for r in expandedRefs}
-        self.bridge.insert(registryRefs.values())
-        self.addStoredItemInfo(expandedRefs, expandedItemInfos)
+        if insert_mode == "insert":
+            self.bridge.insert(registryRefs.values())
+        else:
+            # There are only two columns and all that matters is the
+            # dataset ID.
+            self.bridge.ensure(registryRefs.values())
+        self.addStoredItemInfo(expandedRefs, expandedItemInfos, insert_mode=insert_mode)
 
     def _post_process_get(
         self,

@@ -178,7 +178,9 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore.
         return self._bridge
 
-    def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredMemoryItemInfo]) -> None:
+    def addStoredItemInfo(
+        self, refs: Iterable[DatasetRef], infos: Iterable[StoredMemoryItemInfo], insert_mode: str = "insert"
+    ) -> None:
         # Docstring inherited from GenericBaseDatastore.
         for ref, info in zip(refs, infos, strict=True):
             self.records[ref.id] = info
