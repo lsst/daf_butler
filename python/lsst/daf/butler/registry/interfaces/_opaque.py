@@ -70,6 +70,41 @@ class OpaqueTableStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def ensure(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
+        """Insert records into the table, skipping rows that already exist.
+
+        Parameters
+        ----------
+        *data
+            Each additional positional argument is a dictionary that represents
+            a single row to be added.
+        transaction : `DatastoreTransaction`, optional
+            Transaction object that can be used to enable an explicit rollback
+            of the insert to be registered. Can be ignored if rollback is
+            handled via a different mechanism, such as by a database. Can be
+            `None` if no external transaction is available.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def replace(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
+        """Insert records into the table, replacing if previously existing
+        but different.
+
+        Parameters
+        ----------
+        *data
+            Each additional positional argument is a dictionary that represents
+            a single row to be added.
+        transaction : `DatastoreTransaction`, optional
+            Transaction object that can be used to enable an explicit rollback
+            of the insert to be registered. Can be ignored if rollback is
+            handled via a different mechanism, such as by a database. Can be
+            `None` if no external transaction is available.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def fetch(self, **where: Any) -> Iterator[Mapping[Any, Any]]:
         """Retrieve records from an opaque table.
 

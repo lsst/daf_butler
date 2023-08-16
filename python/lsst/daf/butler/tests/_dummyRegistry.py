@@ -51,15 +51,43 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
 
     def insert(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         # Docstring inherited from OpaqueTableStorage.
+        self._insert(*data, transaction=transaction, insert_mode="insert")
+
+    def replace(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
+        # Docstring inherited from OpaqueTableStorage.
+        self._insert(*data, transaction=transaction, insert_mode="replace")
+
+    def ensure(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
+        # Docstring inherited from OpaqueTableStorage.
+        self._insert(*data, transaction=transaction, insert_mode="ensure")
+
+    def _insert(
+        self, *data: dict, transaction: DatastoreTransaction | None = None, insert_mode: str = "insert"
+    ) -> None:
+        if insert_mode not in {"insert", "ensure", "replace"}:
+            raise ValueError(f"Unrecognized insert mode: {insert_mode}.")
         uniqueConstraints = list(self._spec.unique)
         uniqueConstraints.append(tuple(field.name for field in self._spec.fields if field.primaryKey))
         for d in data:
+            skipping = False
             for constraint in uniqueConstraints:
                 matching = list(self.fetch(**{k: d[k] for k in constraint}))
                 if len(matching) != 0:
-                    raise RuntimeError(
-                        f"Unique constraint {constraint} violation in external table {self.name}."
-                    )
+                    match insert_mode:
+                        case "insert":
+                            raise RuntimeError(
+                                f"Unique constraint {constraint} violation in external table {self.name}."
+                            )
+                        case "ensure":
+                            # Row already exists. Skip.
+                            skipping = True
+                        case "replace":
+                            # Should try to put these rows back on transaction
+                            # rollback...
+                            self.delete([], *matching)
+
+            if skipping:
+                continue
             self._rows.append(d)
             if transaction is not None:
                 transaction.registerUndo("insert", self.delete, [], d)

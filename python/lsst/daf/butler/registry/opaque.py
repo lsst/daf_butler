@@ -79,6 +79,18 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         # the database itself providing any rollback functionality.
         self._db.insert(self._table, *data)
 
+    def ensure(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
+        # Docstring inherited from OpaqueTableStorage.
+        # The provided transaction object can be ignored since we rely on
+        # the database itself providing any rollback functionality.
+        self._db.ensure(self._table, *data)
+
+    def replace(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
+        # Docstring inherited from OpaqueTableStorage.
+        # The provided transaction object can be ignored since we rely on
+        # the database itself providing any rollback functionality.
+        self._db.replace(self._table, *data)
+
     def fetch(self, **where: Any) -> Iterator[sqlalchemy.RowMapping]:
         # Docstring inherited from OpaqueTableStorage.
 

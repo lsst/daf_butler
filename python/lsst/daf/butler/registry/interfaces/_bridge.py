@@ -115,6 +115,18 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def ensure(self, refs: Iterable[DatasetIdRef]) -> None:
+        """Record that a datastore holds the given datasets, skipping if
+        the ref is already registered.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` of `DatasetIdRef`
+            References to the datasets.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def forget(self, refs: Iterable[DatasetIdRef]) -> None:
         """Remove dataset location information without any attempt to put it
         in the trash while waiting for external deletes.
