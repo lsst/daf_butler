@@ -1034,6 +1034,7 @@ class FileDatastore(GenericBaseDatastore):
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited from Datastore._finishIngest.
+        uses_uuid_v5 = True
         refsAndInfos = []
         progress = Progress("lsst.daf.butler.datastores.FileDatastore.ingest", level=logging.DEBUG)
         for dataset in progress.wrap(prepData.datasets, desc="Ingesting dataset files"):
@@ -1046,8 +1047,16 @@ class FileDatastore(GenericBaseDatastore):
                 record_validation_info=record_validation_info,
             )
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
+            for ref in dataset.refs:
+                if ref.id.version != 5:
+                    uses_uuid_v5 = False
 
-        self._register_datasets(refsAndInfos, insert_mode="insert")
+        insert_mode = "insert"
+        if uses_uuid_v5 and transfer == "direct":
+            # Datasets are immutable, external and use well-defined UUID.
+            # Re-ingest is allowed (use most recent information).
+            insert_mode = "replace"
+        self._register_datasets(refsAndInfos, insert_mode=insert_mode)
 
     def _calculate_ingested_datastore_name(
         self,
