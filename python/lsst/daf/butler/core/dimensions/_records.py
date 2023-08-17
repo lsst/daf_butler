@@ -146,7 +146,7 @@ class SerializedDimensionRecord(_BaseModelCompat):
     )
 
     # Use strict types to prevent casting
-    record: dict[str, None | StrictFloat | StrictStr | StrictBool | StrictInt | tuple[int, int]] = Field(
+    record: dict[str, None | StrictInt | StrictFloat | StrictStr | StrictBool | tuple[int, int]] = Field(
         ...,
         title="Dimension record keys and values.",
         examples=[
