@@ -2056,12 +2056,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.assertButlerTransfers()
 
     def _enable_trust(self, datastore: Datastore) -> None:
-        if hasattr(datastore, "trustGetRequest"):
-            datastore.trustGetRequest = True
-        elif hasattr(datastore, "datastores"):
-            for this_datastore in datastore.datastores:
-                if hasattr(this_datastore, "trustGetRequest"):
-                    this_datastore.trustGetRequest = True
+        datastores = getattr(datastore, "datastores", [datastore])
+        for this_datastore in datastores:
+            if hasattr(this_datastore, "trustGetRequest"):
+                this_datastore.trustGetRequest = True
 
     def testTransferMissing(self) -> None:
         """Test transfers where datastore records are missing.
