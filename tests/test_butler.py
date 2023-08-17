@@ -1559,6 +1559,11 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         for ref in refs:
             butler.put(metric, ref)
 
+        # Confirm we can retrieve deferred.
+        dref1 = butler.getDeferred(ref1)  # known and exists
+        metric1 = dref1.get()
+        self.assertEqual(metric1, metric)
+
         # Test different forms of file availability.
         # Need to be in a state where:
         # - one ref just has registry record.
@@ -1603,6 +1608,14 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         for ref, exists in exists_many.items():
             self.assertEqual(butler.exists(ref, full_check=False), exists)
 
+        # Get deferred checks for existence before it allows it to be
+        # retrieved.
+        with self.assertRaises(LookupError):
+            butler.getDeferred(ref3)  # not known, file exists
+        dref2 = butler.getDeferred(ref2)  # known but file missing
+        with self.assertRaises(FileNotFoundError):
+            dref2.get()
+
         # Test again with a trusting butler.
         butler._datastore.trustGetRequest = True
         exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
@@ -1610,6 +1623,12 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
         self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
         self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED | DatasetExistence._ARTIFACT)
+
+        # When trusting we can get a deferred dataset handle that is not
+        # known but does exist.
+        dref3 = butler.getDeferred(ref3)
+        metric3 = dref3.get()
+        self.assertEqual(metric3, metric)
 
         # Check that per-ref query gives the same answer as many query.
         for ref, exists in exists_many.items():

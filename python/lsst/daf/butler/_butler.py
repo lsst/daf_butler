@@ -1341,9 +1341,14 @@ class Butler(LimitedButler):
             Raised if no collections were provided.
         """
         if isinstance(datasetRefOrType, DatasetRef):
-            if not self._datastore.knows(datasetRefOrType):
+            # Do the quick check first and if that fails, check for artifact
+            # existence. This is necessary for datastores that are configured
+            # in trust mode where there won't be a record but there will be
+            # a file.
+            if self._datastore.knows(datasetRefOrType) or self._datastore.exists(datasetRefOrType):
+                ref = datasetRefOrType
+            else:
                 raise LookupError(f"Dataset reference {datasetRefOrType} does not exist.")
-            ref = datasetRefOrType
         else:
             ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
