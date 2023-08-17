@@ -643,6 +643,27 @@ class DatasetRefTestCase(unittest.TestCase):
             # of "object" which is compatible with everything.
             ref_new.overrideStorageClass(incompatible_sc)
 
+    def testReplace(self) -> None:
+        """Test for `DatasetRef.replace` method."""
+        ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
+
+        ref2 = ref.replace(run="somerun2")
+        self.assertEqual(ref2.run, "somerun2")
+        self.assertIsNotNone(ref2.id)
+        self.assertNotEqual(ref2.id, ref.id)
+
+        ref3 = ref.replace(run="somerun3", id=ref2.id)
+        self.assertEqual(ref3.run, "somerun3")
+        self.assertEqual(ref3.id, ref2.id)
+
+        ref4 = ref.replace(id=ref2.id)
+        self.assertEqual(ref4.run, "somerun")
+        self.assertEqual(ref4.id, ref2.id)
+
+        ref5 = ref.replace()
+        self.assertEqual(ref5.run, "somerun")
+        self.assertEqual(ref5, ref)
+
     def testPickle(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = pickle.dumps(ref)
