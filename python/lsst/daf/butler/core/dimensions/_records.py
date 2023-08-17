@@ -342,6 +342,10 @@ class DimensionRecord:
         # query. This may not be overly useful since to reconstruct
         # a collection of records will require repeated registry queries.
         # For now do not implement minimal form.
+        key = (id(self.definition), self.dataId)
+        cache = PersistenceContextVars.serializedDimensionRecordMapping.get()
+        if cache is not None and (result := cache.get(key)) is not None:
+            return result
 
         mapping = {name: getattr(self, name) for name in self.__slots__}
         # If the item in mapping supports simplification update it
@@ -360,7 +364,10 @@ class DimensionRecord:
                     # hash objects, encode it here to a hex string
                     mapping[k] = v.hex()
         definition = self.definition.to_simple(minimal=minimal)
-        return SerializedDimensionRecord(definition=definition, record=mapping)
+        dimRec = SerializedDimensionRecord(definition=definition, record=mapping)
+        if cache is not None:
+            cache[key] = dimRec
+        return dimRec
 
     @classmethod
     def from_simple(
