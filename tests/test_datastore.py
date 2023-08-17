@@ -37,6 +37,7 @@ import yaml
 from lsst.daf.butler import (
     Config,
     DataCoordinate,
+    DatasetIdGenEnum,
     DatasetRef,
     DatasetRefURIs,
     DatasetType,
@@ -1100,6 +1101,36 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
 
         infos = datastore.getStoredItemsInfo(ref)
         self.assertIsNotNone(infos[0].checksum)
+
+    def test_repeat_ingest(self):
+        """Test that repeatedly ingesting the same file in direct mode
+        is allowed.
+
+        Test can only run with FileDatastore since that is the only one
+        supporting "direct" ingest.
+        """
+        metrics, v4ref = self._prepareIngestTest()
+        datastore = self.makeDatastore()
+        v5ref = DatasetRef(
+            v4ref.datasetType, v4ref.dataId, v4ref.run, id_generation_mode=DatasetIdGenEnum.DATAID_TYPE_RUN
+        )
+
+        with lsst.utils.tests.getTempFilePath(".yaml", expectOutput=True) as path:
+            with open(path, "w") as fd:
+                yaml.dump(metrics._asdict(), stream=fd)
+
+            datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
+
+            # This will fail because the ref is using UUIDv4.
+            with self.assertRaises(RuntimeError):
+                datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
+
+            # UUIDv5 can be repeatedly ingested in direct mode.
+            datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
+            datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="direct")
+
+            with self.assertRaises(RuntimeError):
+                datastore.ingest(FileDataset(path=path, refs=v5ref), transfer="copy")
 
 
 class TrashDatastoreTestCase(PosixDatastoreTestCase):
