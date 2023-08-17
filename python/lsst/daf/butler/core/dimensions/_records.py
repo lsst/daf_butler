@@ -190,7 +190,9 @@ class SerializedDimensionRecord(_BaseModelCompat):
         # This method requires tuples as values of the mapping, but JSON
         # readers will read things in as lists. Be kind and transparently
         # transform to tuples
-        _recItems = {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
+        _recItems = {
+            k: v if type(v) != list else tuple(v) for k, v in record.items()  # type: ignore # noqa: E721
+        }
 
         # Type ignore because the ternary statement seems to confuse mypy
         # based on conflicting inferred types of v.

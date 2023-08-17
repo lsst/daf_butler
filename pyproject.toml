@@ -180,9 +180,11 @@ select = [
     "D",  # pydocstyle
 ]
 target-version = "py311"
-extend-select = [
-    "RUF100", # Warn about unused noqa
-]
+# Commented out to suppress "unused noqa" in jenkins which has older ruff not
+# generating E721.
+#extend-select = [
+#    "RUF100", # Warn about unused noqa
+#]
 
 [tool.ruff.per-file-ignores]
 # parserYacc docstrings can not be fixed. Docstrings are used to define grammar.
