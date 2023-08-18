@@ -146,7 +146,7 @@ class SerializedDimensionRecord(_BaseModelCompat):
     )
 
     # Use strict types to prevent casting
-    record: dict[str, None | StrictFloat | StrictStr | StrictBool | StrictInt | tuple[int, int]] = Field(
+    record: dict[str, None | StrictInt | StrictFloat | StrictStr | StrictBool | tuple[int, int]] = Field(
         ...,
         title="Dimension record keys and values.",
         examples=[
@@ -190,7 +190,9 @@ class SerializedDimensionRecord(_BaseModelCompat):
         # This method requires tuples as values of the mapping, but JSON
         # readers will read things in as lists. Be kind and transparently
         # transform to tuples
-        _recItems = {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
+        _recItems = {
+            k: v if type(v) != list else tuple(v) for k, v in record.items()  # type: ignore # noqa: E721
+        }
 
         # Type ignore because the ternary statement seems to confuse mypy
         # based on conflicting inferred types of v.
