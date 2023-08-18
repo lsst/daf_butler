@@ -1037,7 +1037,6 @@ class FileDatastore(GenericBaseDatastore):
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited from Datastore._finishIngest.
-        uses_uuid_v5 = True
         refsAndInfos = []
         progress = Progress("lsst.daf.butler.datastores.FileDatastore.ingest", level=logging.DEBUG)
         for dataset in progress.wrap(prepData.datasets, desc="Ingesting dataset files"):
@@ -1050,16 +1049,26 @@ class FileDatastore(GenericBaseDatastore):
                 record_validation_info=record_validation_info,
             )
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
-            for ref in dataset.refs:
-                if ref.id.version != 5:
-                    uses_uuid_v5 = False
 
-        insert_mode = DatabaseInsertMode.INSERT
-        if uses_uuid_v5 and transfer == "direct":
-            # Datasets are immutable, external and use well-defined UUID.
-            # Re-ingest is allowed (use most recent information).
-            insert_mode = DatabaseInsertMode.REPLACE
-        self._register_datasets(refsAndInfos, insert_mode=insert_mode)
+        # In direct mode we can allow repeated ingests of the same thing
+        # if we are sure that the external dataset is immutable. We use
+        # UUIDv5 to indicate this. If there is a mix of v4 and v5 they are
+        # separated.
+        refs_and_infos_replace = []
+        refs_and_infos_insert = []
+        if transfer == "direct":
+            for entry in refsAndInfos:
+                if entry[0].id.version == 5:
+                    refs_and_infos_replace.append(entry)
+                else:
+                    refs_and_infos_insert.append(entry)
+        else:
+            refs_and_infos_insert = refsAndInfos
+
+        if refs_and_infos_insert:
+            self._register_datasets(refs_and_infos_insert, insert_mode=DatabaseInsertMode.INSERT)
+        if refs_and_infos_replace:
+            self._register_datasets(refs_and_infos_replace, insert_mode=DatabaseInsertMode.REPLACE)
 
     def _calculate_ingested_datastore_name(
         self,
