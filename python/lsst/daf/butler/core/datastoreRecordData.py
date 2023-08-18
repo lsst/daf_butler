@@ -114,16 +114,25 @@ class DatastoreRecordData:
         Parameters
         ----------
         other : `DatastoreRecordData`
-            Records tho merge into this instance.
+            Records to merge into this instance.
 
         Notes
         -----
-        Merged instances can not have identical records.
+        If a ``(dataset_id, table_name)`` combination has any records in
+        ``self``, it is assumed that all records for that combination are
+        already present.  This allows duplicates of the same dataset to be
+        handled gracefully.
         """
         for dataset_id, table_records in other.records.items():
             this_table_records = self.records.setdefault(dataset_id, {})
             for table_name, records in table_records.items():
-                this_table_records.setdefault(table_name, []).extend(records)
+                # If this (dataset_id, table_name) combination already has
+                # records in `self`, we assume that means all of the records
+                # for that combination; we require other code to ensure entire
+                # (parent) datasets are exported to these data structures
+                # (never components).
+                if not (this_records := this_table_records.setdefault(table_name, [])):
+                    this_records.extend(records)
 
     def subset(self, dataset_ids: set[DatasetId]) -> DatastoreRecordData | None:
         """Extract a subset of the records that match given dataset IDs.

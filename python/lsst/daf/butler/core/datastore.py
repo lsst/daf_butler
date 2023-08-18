@@ -1166,6 +1166,9 @@ class Datastore(metaclass=ABCMeta):
         Implementations are responsible for calling
         `DatastoreRegistryBridge.insert` on all datasets in ``data.locations``
         where the key is in `names`, as well as loading any opaque table data.
+
+        Implementations may assume that datasets are either fully present or
+        not at all (single-component exports are not permitted).
         """
         raise NotImplementedError()
 
@@ -1181,7 +1184,8 @@ class Datastore(metaclass=ABCMeta):
         ----------
         refs : `~collections.abc.Iterable` [ `DatasetIdRef` ]
             Datasets to save.  This may include datasets not known to this
-            datastore, which should be ignored.
+            datastore, which should be ignored.  May not include component
+            datasets.
 
         Returns
         -------
