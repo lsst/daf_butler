@@ -2761,7 +2761,12 @@ class FileDatastore(GenericBaseDatastore):
                 "" if len(direct_transfers) == 1 else "s",
             )
 
-        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
+        # We are overwriting previous datasets that may have already
+        # existed. We therefore should ensure that we force the
+        # datastore records to agree. Note that this can potentially lead
+        # to difficulties if the dataset has previously been ingested
+        # disassembled and is somehow now assembled, or vice versa.
+        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.REPLACE)
 
         if already_present:
             n_skipped = len(already_present)
