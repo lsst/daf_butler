@@ -30,6 +30,7 @@ from lsst.daf.butler import DimensionUniverse, ddl
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 from lsst.daf.butler.registry.interfaces import (
     Database,
+    DatabaseInsertMode,
     DatasetIdRef,
     DatasetRecordStorageManager,
     DatastoreRegistryBridge,
@@ -51,21 +52,22 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
 
     def insert(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         # Docstring inherited from OpaqueTableStorage.
-        self._insert(*data, transaction=transaction, insert_mode="insert")
+        self._insert(*data, transaction=transaction, insert_mode=DatabaseInsertMode.INSERT)
 
     def replace(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         # Docstring inherited from OpaqueTableStorage.
-        self._insert(*data, transaction=transaction, insert_mode="replace")
+        self._insert(*data, transaction=transaction, insert_mode=DatabaseInsertMode.REPLACE)
 
     def ensure(self, *data: dict, transaction: DatastoreTransaction | None = None) -> None:
         # Docstring inherited from OpaqueTableStorage.
-        self._insert(*data, transaction=transaction, insert_mode="ensure")
+        self._insert(*data, transaction=transaction, insert_mode=DatabaseInsertMode.ENSURE)
 
     def _insert(
-        self, *data: dict, transaction: DatastoreTransaction | None = None, insert_mode: str = "insert"
+        self,
+        *data: dict,
+        transaction: DatastoreTransaction | None = None,
+        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
     ) -> None:
-        if insert_mode not in {"insert", "ensure", "replace"}:
-            raise ValueError(f"Unrecognized insert mode: {insert_mode}.")
         uniqueConstraints = list(self._spec.unique)
         uniqueConstraints.append(tuple(field.name for field in self._spec.fields if field.primaryKey))
         for d in data:
@@ -74,17 +76,19 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
                 matching = list(self.fetch(**{k: d[k] for k in constraint}))
                 if len(matching) != 0:
                     match insert_mode:
-                        case "insert":
+                        case DatabaseInsertMode.INSERT:
                             raise RuntimeError(
                                 f"Unique constraint {constraint} violation in external table {self.name}."
                             )
-                        case "ensure":
+                        case DatabaseInsertMode.ENSURE:
                             # Row already exists. Skip.
                             skipping = True
-                        case "replace":
+                        case DatabaseInsertMode.REPLACE:
                             # Should try to put these rows back on transaction
                             # rollback...
                             self.delete([], *matching)
+                        case _:
+                            raise ValueError(f"Unrecognized insert mode: {insert_mode}.")
 
             if skipping:
                 continue

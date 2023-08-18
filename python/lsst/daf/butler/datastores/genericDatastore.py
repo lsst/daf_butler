@@ -33,6 +33,8 @@ from typing import TYPE_CHECKING, Any
 from lsst.daf.butler import DatasetTypeNotSupportedError, Datastore
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 
+from ..registry.interfaces import DatabaseInsertMode
+
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef, StorageClass, StoredDatastoreItemInfo
 
@@ -55,7 +57,10 @@ class GenericBaseDatastore(Datastore):
 
     @abstractmethod
     def addStoredItemInfo(
-        self, refs: Iterable[DatasetRef], infos: Iterable[Any], insert_mode: str = "insert"
+        self,
+        refs: Iterable[DatasetRef],
+        infos: Iterable[Any],
+        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
     ) -> None:
         """Record internal storage information associated with one or more
         datasets.
@@ -66,11 +71,11 @@ class GenericBaseDatastore(Datastore):
             The datasets that have been stored.
         infos : sequence of `StoredDatastoreItemInfo`
             Metadata associated with the stored datasets.
-        insert_mode : `str`, optional
+        insert_mode : `~lsst.daf.butler.registry.interfaces.DatabaseInsertMode`
             Mode to use to insert the new records into the table. The
-            options are "insert" (error if pre-existing), "replace" (replace
-            content with new values), and "ensure" (skip if the row already
-            exists).
+            options are ``INSERT`` (error if pre-existing), ``REPLACE``
+            (replace content with new values), and ``ENSURE`` (skip if the row
+            already exists).
         """
         raise NotImplementedError()
 
@@ -106,7 +111,9 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     def _register_datasets(
-        self, refsAndInfos: Iterable[tuple[DatasetRef, StoredDatastoreItemInfo]], insert_mode: str = "insert"
+        self,
+        refsAndInfos: Iterable[tuple[DatasetRef, StoredDatastoreItemInfo]],
+        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
     ) -> None:
         """Update registry to indicate that one or more datasets have been
         stored.
@@ -133,7 +140,7 @@ class GenericBaseDatastore(Datastore):
         # disassembled in datastore we have to deduplicate. Since they
         # will have different datasetTypes we can't use a set
         registryRefs = {r.id: r for r in expandedRefs}
-        if insert_mode == "insert":
+        if insert_mode == DatabaseInsertMode.INSERT:
             self.bridge.insert(registryRefs.values())
         else:
             # There are only two columns and all that matters is the

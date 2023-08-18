@@ -73,7 +73,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
 
-from ..registry.interfaces import FakeDatasetRef
+from ..registry.interfaces import DatabaseInsertMode, FakeDatasetRef
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -366,16 +366,19 @@ class FileDatastore(GenericBaseDatastore):
         log.debug("Successfully deleted file: %s", location.uri)
 
     def addStoredItemInfo(
-        self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo], insert_mode: str = "insert"
+        self,
+        refs: Iterable[DatasetRef],
+        infos: Iterable[StoredFileInfo],
+        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
     ) -> None:
         # Docstring inherited from GenericBaseDatastore
         records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos, strict=True)]
         match insert_mode:
-            case "insert":
+            case DatabaseInsertMode.INSERT:
                 self._table.insert(*records, transaction=self._transaction)
-            case "ensure":
+            case DatabaseInsertMode.ENSURE:
                 self._table.ensure(*records, transaction=self._transaction)
-            case "replace":
+            case DatabaseInsertMode.REPLACE:
                 self._table.replace(*records, transaction=self._transaction)
             case _:
                 raise ValueError(f"Unknown insert mode of '{insert_mode}'")
@@ -1051,11 +1054,11 @@ class FileDatastore(GenericBaseDatastore):
                 if ref.id.version != 5:
                     uses_uuid_v5 = False
 
-        insert_mode = "insert"
+        insert_mode = DatabaseInsertMode.INSERT
         if uses_uuid_v5 and transfer == "direct":
             # Datasets are immutable, external and use well-defined UUID.
             # Re-ingest is allowed (use most recent information).
-            insert_mode = "replace"
+            insert_mode = DatabaseInsertMode.REPLACE
         self._register_datasets(refsAndInfos, insert_mode=insert_mode)
 
     def _calculate_ingested_datastore_name(
@@ -2325,7 +2328,7 @@ class FileDatastore(GenericBaseDatastore):
             storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
             artifacts.append((ref, storedInfo))
 
-        self._register_datasets(artifacts, insert_mode="insert")
+        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
@@ -2749,7 +2752,7 @@ class FileDatastore(GenericBaseDatastore):
                 "" if len(direct_transfers) == 1 else "s",
             )
 
-        self._register_datasets(artifacts, insert_mode="insert")
+        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
 
         if already_present:
             n_skipped = len(already_present)
