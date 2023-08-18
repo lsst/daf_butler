@@ -24,10 +24,12 @@ __all__ = [
     "Database",
     "ReadOnlyDatabaseError",
     "DatabaseConflictError",
+    "DatabaseInsertMode",
     "SchemaAlreadyDefinedError",
     "StaticTablesContext",
 ]
 
+import enum
 import uuid
 import warnings
 from abc import ABC, abstractmethod
@@ -42,6 +44,19 @@ import sqlalchemy
 from ...core import TimespanDatabaseRepresentation, ddl, time_utils
 from ...core.named import NamedValueAbstractSet
 from .._exceptions import ConflictingDefinitionError
+
+
+class DatabaseInsertMode(enum.Enum):
+    """Mode options available for inserting database records."""
+
+    INSERT = enum.auto()
+    """Insert records, failing if they already exist."""
+
+    REPLACE = enum.auto()
+    """Replace records, overwriting existing."""
+
+    ENSURE = enum.auto()
+    """Insert records, skipping any that already exist."""
 
 
 # TODO: method is called with list[ReflectedColumn] in SA 2, and

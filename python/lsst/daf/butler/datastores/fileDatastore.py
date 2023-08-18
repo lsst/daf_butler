@@ -73,7 +73,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
 
-from ..registry.interfaces import FakeDatasetRef
+from ..registry.interfaces import DatabaseInsertMode, FakeDatasetRef
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -365,10 +365,23 @@ class FileDatastore(GenericBaseDatastore):
             raise
         log.debug("Successfully deleted file: %s", location.uri)
 
-    def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
+    def addStoredItemInfo(
+        self,
+        refs: Iterable[DatasetRef],
+        infos: Iterable[StoredFileInfo],
+        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
+    ) -> None:
         # Docstring inherited from GenericBaseDatastore
         records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos, strict=True)]
-        self._table.insert(*records, transaction=self._transaction)
+        match insert_mode:
+            case DatabaseInsertMode.INSERT:
+                self._table.insert(*records, transaction=self._transaction)
+            case DatabaseInsertMode.ENSURE:
+                self._table.ensure(*records, transaction=self._transaction)
+            case DatabaseInsertMode.REPLACE:
+                self._table.replace(*records, transaction=self._transaction)
+            case _:
+                raise ValueError(f"Unknown insert mode of '{insert_mode}'")
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
@@ -1036,7 +1049,26 @@ class FileDatastore(GenericBaseDatastore):
                 record_validation_info=record_validation_info,
             )
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
-        self._register_datasets(refsAndInfos)
+
+        # In direct mode we can allow repeated ingests of the same thing
+        # if we are sure that the external dataset is immutable. We use
+        # UUIDv5 to indicate this. If there is a mix of v4 and v5 they are
+        # separated.
+        refs_and_infos_replace = []
+        refs_and_infos_insert = []
+        if transfer == "direct":
+            for entry in refsAndInfos:
+                if entry[0].id.version == 5:
+                    refs_and_infos_replace.append(entry)
+                else:
+                    refs_and_infos_insert.append(entry)
+        else:
+            refs_and_infos_insert = refsAndInfos
+
+        if refs_and_infos_insert:
+            self._register_datasets(refs_and_infos_insert, insert_mode=DatabaseInsertMode.INSERT)
+        if refs_and_infos_replace:
+            self._register_datasets(refs_and_infos_replace, insert_mode=DatabaseInsertMode.REPLACE)
 
     def _calculate_ingested_datastore_name(
         self,
@@ -2305,7 +2337,7 @@ class FileDatastore(GenericBaseDatastore):
             storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
             artifacts.append((ref, storedInfo))
 
-        self._register_datasets(artifacts)
+        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
@@ -2729,7 +2761,12 @@ class FileDatastore(GenericBaseDatastore):
                 "" if len(direct_transfers) == 1 else "s",
             )
 
-        self._register_datasets(artifacts)
+        # We are overwriting previous datasets that may have already
+        # existed. We therefore should ensure that we force the
+        # datastore records to agree. Note that this can potentially lead
+        # to difficulties if the dataset has previously been ingested
+        # disassembled and is somehow now assembled, or vice versa.
+        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.REPLACE)
 
         if already_present:
             n_skipped = len(already_present)

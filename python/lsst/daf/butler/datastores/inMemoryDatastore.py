@@ -44,6 +44,7 @@ from lsst.daf.butler.core.utils import transactional
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from lsst.resources import ResourcePath
 
+from ..registry.interfaces import DatabaseInsertMode
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -178,7 +179,12 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore.
         return self._bridge
 
-    def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredMemoryItemInfo]) -> None:
+    def addStoredItemInfo(
+        self,
+        refs: Iterable[DatasetRef],
+        infos: Iterable[StoredMemoryItemInfo],
+        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
+    ) -> None:
         # Docstring inherited from GenericBaseDatastore.
         for ref, info in zip(refs, infos, strict=True):
             self.records[ref.id] = info

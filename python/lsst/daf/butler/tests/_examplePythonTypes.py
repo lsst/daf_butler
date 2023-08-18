@@ -277,7 +277,7 @@ class MetricsExampleModel(BaseModel):
         d = metrics.exportAsDict()
         # Assume pydantic v2 but fallback to v1
         try:
-            return cls.model_validate(d)
+            return cls.model_validate(d)  # type: ignore
         except AttributeError:
             return cls.parse_obj(d)
 

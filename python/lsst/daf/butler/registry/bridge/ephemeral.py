@@ -61,6 +61,10 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Docstring inherited from DatastoreRegistryBridge
         self._datasetIds.update(ref.id for ref in refs)
 
+    def ensure(self, refs: Iterable[DatasetIdRef]) -> None:
+        # Docstring inherited from DatastoreRegistryBridge
+        self._datasetIds.update(ref.id for ref in refs)
+
     def forget(self, refs: Iterable[DatasetIdRef]) -> None:
         self._datasetIds.difference_update(ref.id for ref in refs)
 

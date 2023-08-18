@@ -150,6 +150,10 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         """
         return [{"datastore_name": self.datastoreName, "dataset_id": ref.id} for ref in refs]
 
+    def ensure(self, refs: Iterable[DatasetIdRef]) -> None:
+        # Docstring inherited from DatastoreRegistryBridge
+        self._db.ensure(self._tables.dataset_location, *self._refsToRows(refs))
+
     def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         self._db.insert(self._tables.dataset_location, *self._refsToRows(refs))
