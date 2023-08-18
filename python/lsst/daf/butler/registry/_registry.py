@@ -1479,9 +1479,8 @@ class Registry(ABC):
             If provided, only yield associations from collections of these
             types.
         flattenChains : `bool`, optional
-            If `True` (default) search in the children of
-            `~CollectionType.CHAINED` collections.  If `False`, ``CHAINED``
-            collections are ignored.
+            If `True`, search in the children of `~CollectionType.CHAINED`
+            collections.  If `False`, ``CHAINED`` collections are ignored.
 
         Yields
         ------
