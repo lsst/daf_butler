@@ -340,12 +340,12 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return _BasicTupleDataCoordinate(graph, values)
 
     def __hash__(self) -> int:
-        return hash((self.graph,) + tuple(self[d.name] for d in self.graph.required))
+        return hash((self.graph,) + self.values_tuple())
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, DataCoordinate):
             other = DataCoordinate.standardize(other, universe=self.universe)
-        return self.graph == other.graph and all(self[d.name] == other[d.name] for d in self.graph.required)
+        return self.graph == other.graph and self.values_tuple() == other.values_tuple()
 
     def __repr__(self) -> str:
         # We can't make repr yield something that could be exec'd here without
@@ -513,6 +513,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         raise NotImplementedError()
 
     @property
+    @abstractmethod
     def full(self) -> NamedKeyMapping[Dimension, DataIdValue]:
         """Return mapping for all dimensions in ``self.graph``.
 
@@ -524,8 +525,17 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         when implied keys are accessed via the returned mapping, depending on
         the implementation and whether assertions are enabled.
         """
-        assert self.hasFull(), "full may only be accessed if hasFull() returns True."
-        return _DataCoordinateFullView(self)
+        raise NotImplementedError()
+
+    @abstractmethod
+    def values_tuple(self) -> tuple[DataIdValue, ...]:
+        """Return the required values (only) of this data ID as a tuple.
+
+        In contexts where all data IDs have the same dimensions, comparing and
+        hashing these tuples can be *much* faster than comparing the original
+        `DataCoordinate` instances.
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def hasRecords(self) -> bool:
@@ -779,7 +789,7 @@ class _DataCoordinateFullView(NamedKeyMapping[Dimension, DataIdValue]):
         The `DataCoordinate` instance this object provides a view of.
     """
 
-    def __init__(self, target: DataCoordinate):
+    def __init__(self, target: _BasicTupleDataCoordinate):
         self._target = target
 
     __slots__ = ("_target",)
@@ -892,6 +902,13 @@ class _BasicTupleDataCoordinate(DataCoordinate):
             # values for the required ones.
             raise KeyError(key) from None
 
+    def byName(self) -> dict[str, DataIdValue]:
+        # Docstring inheritance.
+        # Reimplementation is for optimization; `values_tuple()` is much faster
+        # to iterate over than values() because it doesn't go through
+        # `__getitem__`.
+        return dict(zip(self.names, self.values_tuple(), strict=True))
+
     def subset(self, graph: DimensionGraph) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
         if self._graph == graph:
@@ -933,6 +950,12 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         values.update(other.full.byName() if other.hasFull() else other.byName())
         return DataCoordinate.standardize(values, graph=graph)
 
+    @property
+    def full(self) -> NamedKeyMapping[Dimension, DataIdValue]:
+        # Docstring inherited.
+        assert self.hasFull(), "full may only be accessed if hasFull() returns True."
+        return _DataCoordinateFullView(self)
+
     def expanded(
         self, records: NameLookupMapping[DimensionElement, DimensionRecord | None]
     ) -> DataCoordinate:
@@ -953,6 +976,10 @@ class _BasicTupleDataCoordinate(DataCoordinate):
     def hasRecords(self) -> bool:
         # Docstring inherited from DataCoordinate.
         return False
+
+    def values_tuple(self) -> tuple[DataIdValue, ...]:
+        # Docstring inherited from DataCoordinate.
+        return self._values[: len(self._graph.required)]
 
     def _record(self, name: str) -> DimensionRecord | None:
         # Docstring inherited from DataCoordinate.
