@@ -706,11 +706,48 @@ class DatasetRef:
             A new dataset reference that is the same as the current one but
             with a different storage class in the `DatasetType`.
         """
+        return self.replace(storage_class=storageClass)
+
+    def replace(
+        self,
+        *,
+        id: DatasetId | None = None,
+        run: str | None = None,
+        storage_class: str | StorageClass | None = None,
+    ) -> DatasetRef:
+        """Create a new `DatasetRef` from this one, but with some modified
+        attributes.
+
+        Parameters
+        ----------
+        id : `DatasetId` or `None`
+            If not `None` then update dataset ID.
+        run : `str` or `None`
+            If not `None` then update run collection name. If ``dataset_id`` is
+            `None` then this will also cause new dataset ID to be generated.
+        storage_class : `str` or `StorageClass` or `None`.
+            The new storage class. If not `None`, replaces existing storage
+            class.
+
+        Returns
+        -------
+        modified : `DatasetRef`
+            A new dataset reference with updated attributes.
+        """
+        if storage_class is None:
+            datasetType = self.datasetType
+        else:
+            datasetType = self.datasetType.overrideStorageClass(storage_class)
+        if run is None:
+            run = self.run
+            # Do not regenerate dataset ID if run is the same.
+            if id is None:
+                id = self.id
         return DatasetRef(
-            datasetType=self.datasetType.overrideStorageClass(storageClass),
+            datasetType=datasetType,
             dataId=self.dataId,
-            id=self.id,
-            run=self.run,
+            run=run,
+            id=id,
             conform=False,
         )
 
