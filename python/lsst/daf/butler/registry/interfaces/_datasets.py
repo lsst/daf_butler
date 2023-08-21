@@ -515,7 +515,7 @@ class DatasetRecordStorageManager(VersionedExtension):
     def resolve_wildcard(
         self,
         expression: Any,
-        components: bool | None = None,
+        components: bool | None = False,
         missing: list[str] | None = None,
         explicit_only: bool = False,
         components_deprecated: bool = True,
@@ -530,7 +530,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         components : `bool`, optional
             If `True`, apply all expression patterns to component dataset type
             names as well.  If `False`, never apply patterns to components.  If
-            `None` (default), apply patterns to components only if their parent
+            `None`, apply patterns to components only if their parent
             datasets were not matched by the expression.  Fully-specified
             component datasets (`str` or `DatasetType` instances) are always
             included.

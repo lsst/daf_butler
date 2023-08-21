@@ -1029,7 +1029,7 @@ class Registry(ABC):
         self,
         expression: Any = ...,
         *,
-        components: bool | None = None,
+        components: bool | None = False,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
@@ -1045,7 +1045,7 @@ class Registry(ABC):
         components : `bool`, optional
             If `True`, apply all expression patterns to component dataset type
             names as well.  If `False`, never apply patterns to components.
-            If `None` (default), apply patterns to components only if their
+            If `None`, apply patterns to components only if their
             parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
@@ -1136,7 +1136,7 @@ class Registry(ABC):
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: bool | None = None,
+        components: bool | None = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -1184,7 +1184,7 @@ class Registry(ABC):
         components : `bool`, optional
             If `True`, apply all dataset expression patterns to component
             dataset type names as well.  If `False`, never apply patterns to
-            components.  If `None` (default), apply patterns to components only
+            components.  If `None`, apply patterns to components only
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
@@ -1257,7 +1257,7 @@ class Registry(ABC):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | None = None,
+        components: bool | None = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -1302,7 +1302,7 @@ class Registry(ABC):
         components : `bool`, optional
             If `True`, apply all dataset expression patterns to component
             dataset type names as well.  If `False`, never apply patterns to
-            components.  If `None` (default), apply patterns to components only
+            components.  If `None`, apply patterns to components only
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
@@ -1367,7 +1367,7 @@ class Registry(ABC):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | None = None,
+        components: bool | None = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
