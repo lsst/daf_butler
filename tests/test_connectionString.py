@@ -28,8 +28,9 @@ import os.path
 import unittest
 
 import lsst.daf.butler.registry.connectionString as ConnectionStringModule
-from lsst.daf.butler.registry import DbAuthError, RegistryConfig
+from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.connectionString import ConnectionStringFactory
+from lsst.utils.db_auth import DbAuthError
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
