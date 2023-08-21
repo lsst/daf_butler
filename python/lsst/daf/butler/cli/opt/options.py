@@ -104,15 +104,13 @@ collections_option = MWOptionDecorator(
 
 components_option = MWOptionDecorator(
     "--components/--no-components",
-    default=None,
+    default=False,
     help=unwrap(
         """For --components, apply all expression patterns to
-                                                  component dataset type names as well. For --no-components,
-                                                  never apply patterns to components. Default (where neither
-                                                  is specified) is to apply patterns to components only if
-                                                  their parent datasets were not matched by the expression.
-                                                  Fully-specified component datasets (`str` or `DatasetType`
-                                                  instances) are always included."""
+        component dataset type names as well. For --no-components,
+        never apply patterns to components. Default is False.
+        Fully-specified component datasets (`str` or `DatasetType`
+        instances) are always included."""
     ),
 )
 
