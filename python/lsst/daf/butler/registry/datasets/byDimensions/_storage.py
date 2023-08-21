@@ -728,9 +728,9 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             sqlalchemy.sql.select(
                 dataset.columns.id.label("dataset_id"),
                 dataset.columns.dataset_type_id.label("dataset_type_id"),
-                tmp_tags.columns.dataset_type_id.label("new dataset_type_id"),
+                tmp_tags.columns.dataset_type_id.label("new_dataset_type_id"),
                 dataset.columns[self._runKeyColumn].label("run"),
-                tmp_tags.columns[collFkName].label("new run"),
+                tmp_tags.columns[collFkName].label("new_run"),
             )
             .select_from(dataset.join(tmp_tags, dataset.columns.id == tmp_tags.columns.dataset_id))
             .where(
@@ -742,21 +742,38 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             .limit(1)
         )
         with self._db.query(query) as result:
+            # Only include the first one in the exception message
             if (row := result.first()) is not None:
-                # Only include the first one in the exception message
-                raise ConflictingDefinitionError(
-                    f"Existing dataset type or run do not match new dataset: {row._asdict()}"
-                )
+                existing_run = self._collections[row.run].name
+                new_run = self._collections[row.new_run].name
+                if row.dataset_type_id == self._dataset_type_id:
+                    if row.new_dataset_type_id == self._dataset_type_id:
+                        raise ConflictingDefinitionError(
+                            f"Current run {existing_run!r} and new run {new_run!r} do not agree for "
+                            f"dataset {row.dataset_id}."
+                        )
+                    else:
+                        raise ConflictingDefinitionError(
+                            f"Dataset {row.dataset_id} was provided with type {self.datasetType.name!r} "
+                            f"in run {new_run!r}, but was already defined with type ID {row.dataset_type_id} "
+                            f"in run {run!r}."
+                        )
+                else:
+                    raise ConflictingDefinitionError(
+                        f"Dataset {row.dataset_id} was provided with type ID {row.new_dataset_type_id} "
+                        f"in run {new_run!r}, but was already defined with type {self.datasetType.name!r} "
+                        f"in run {run!r}."
+                    )
 
         # Check that matching dataset in tags table has the same DataId.
         query = (
             sqlalchemy.sql.select(
                 tags.columns.dataset_id,
                 tags.columns.dataset_type_id.label("type_id"),
-                tmp_tags.columns.dataset_type_id.label("new type_id"),
+                tmp_tags.columns.dataset_type_id.label("new_type_id"),
                 *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
                 *[
-                    tmp_tags.columns[dim].label(f"new {dim}")
+                    tmp_tags.columns[dim].label(f"new_{dim}")
                     for dim in self.datasetType.dimensions.required.names
                 ],
             )
@@ -783,12 +800,11 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         # Check that matching run+dataId have the same dataset ID.
         query = (
             sqlalchemy.sql.select(
-                tags.columns.dataset_type_id.label("dataset_type_id"),
                 *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
                 tags.columns.dataset_id,
-                tmp_tags.columns.dataset_id.label("new dataset_id"),
+                tmp_tags.columns.dataset_id.label("new_dataset_id"),
                 tags.columns[collFkName],
-                tmp_tags.columns[collFkName].label(f"new {collFkName}"),
+                tmp_tags.columns[collFkName].label(f"new_{collFkName}"),
             )
             .select_from(
                 tags.join(
@@ -807,8 +823,13 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             .limit(1)
         )
         with self._db.query(query) as result:
+            # only include the first one in the exception message
             if (row := result.first()) is not None:
-                # only include the first one in the exception message
+                data_id = {dim: getattr(row, dim) for dim in self.datasetType.dimensions.required.names}
+                existing_collection = self._collections[getattr(row, collFkName)].name
+                new_collection = self._collections[getattr(row, f"new_{collFkName}")].name
                 raise ConflictingDefinitionError(
-                    f"Existing dataset type and dataId does not match new dataset: {row._asdict()}"
+                    f"Dataset with type {self.datasetType.name!r} and data ID {data_id} "
+                    f"has ID {row.dataset_id} in existing collection {existing_collection!r} "
+                    f"but ID {row.new_dataset_id} in new collection {new_collection!r}."
                 )
