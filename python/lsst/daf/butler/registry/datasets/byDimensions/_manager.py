@@ -354,7 +354,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def resolve_wildcard(
         self,
         expression: Any,
-        components: bool | None = None,
+        components: bool | None = False,
         missing: list[str] | None = None,
         explicit_only: bool = False,
         components_deprecated: bool = True,

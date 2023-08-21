@@ -40,7 +40,7 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict(repo=None, verbose=False, glob=(), components=None)
+        return dict(repo=None, verbose=False, glob=(), components=False)
 
     @staticmethod
     def command():

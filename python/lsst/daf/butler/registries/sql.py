@@ -908,7 +908,7 @@ class SqlRegistry(_ButlerRegistry):
         self,
         expression: Any = ...,
         *,
-        components: bool | None = None,
+        components: bool | None = False,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -1124,7 +1124,7 @@ class SqlRegistry(_ButlerRegistry):
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: bool | None = None,
+        components: bool | None = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
