@@ -24,7 +24,6 @@ from ._butler_registry import _ButlerRegistry
 from ._collection_summary import *
 from ._collectionType import *
 from ._config import *
-from ._dbAuth import *
 from ._defaults import *
 from ._exceptions import *
 from ._registry import *
