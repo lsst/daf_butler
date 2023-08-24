@@ -94,7 +94,7 @@ class PersistenceContextVars:
     """
 
     serializedDimensionRecordMapping: ContextVar[
-        dict[tuple[str, frozenset], SerializedDimensionRecord] | None
+        dict[tuple[str, frozenset] | tuple[int, DataCoordinate], SerializedDimensionRecord] | None
     ] = ContextVar("serializedDimensionRecordMapping", default=None)
     r"""A cache of `SerializedDimensionRecord`\ s.
     """

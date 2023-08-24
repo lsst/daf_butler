@@ -28,9 +28,11 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from lsst.daf.relation import (
     BinaryOperationRelation,
+    ColumnExpression,
     ColumnTag,
     LeafRelation,
     MarkerRelation,
+    Predicate,
     Relation,
     UnaryOperationRelation,
 )
@@ -43,6 +45,7 @@ from ...core import (
     DimensionKeyColumnTag,
     DimensionRecord,
     DimensionUniverse,
+    timespan,
 )
 from .._collectionType import CollectionType
 from .._exceptions import DatasetTypeError, MissingDatasetTypeError
@@ -411,7 +414,7 @@ class QueryBackend(Generic[_C]):
         return supported_collection_records
 
     @abstractmethod
-    def make_dataset_query_relation(
+    def _make_dataset_query_relation_impl(
         self,
         dataset_type: DatasetType,
         collections: Sequence[CollectionRecord],
@@ -438,8 +441,86 @@ class QueryBackend(Generic[_C]):
         -------
         relation : `lsst.daf.relation.Relation`
             Relation representing a dataset query.
+
+        Notes
+        -----
+        This method must be implemented by derived classes but is not
+        responsible for joining the resulting relation to an existing relation.
         """
         raise NotImplementedError()
+
+    def make_dataset_query_relation(
+        self,
+        dataset_type: DatasetType,
+        collections: Sequence[CollectionRecord],
+        columns: Set[str],
+        context: _C,
+        *,
+        join_to: Relation | None = None,
+        temporal_join_on: Set[ColumnTag] = frozenset(),
+    ) -> Relation:
+        """Construct a relation that represents an unordered query for datasets
+        that returns matching results from all given collections.
+
+        Parameters
+        ----------
+        dataset_type : `DatasetType`
+            Type for the datasets being queried.
+        collections : `~collections.abc.Sequence` [ `CollectionRecord` ]
+            Records for collections to query.  Should generally be the result
+            of a call to `resolve_dataset_collections`, and must not be empty.
+        context : `QueryContext`
+            Context that manages per-query state.
+        columns : `~collections.abc.Set` [ `str` ]
+            Columns to include in the relation.  See `Query.find_datasets` for
+            details.
+        join_to : `Relation`, optional
+            Another relation to join with the query for datasets in all
+            collections.
+        temporal_join_on: `~collections.abc.Set` [ `ColumnTag` ], optional
+            Timespan columns in ``join_to`` that calibration dataset timespans
+            must overlap.  Must already be present in ``join_to``.  Ignored if
+            ``join_to`` is `None` or if there are no calibration collections.
+
+        Returns
+        -------
+        relation : `lsst.daf.relation.Relation`
+            Relation representing a dataset query.
+        """
+        # If we need to do a temporal join to a calibration collection, we need
+        # to include the timespan column in the base query and prepare the join
+        # predicate.
+        join_predicates: list[Predicate] = []
+        base_timespan_tag: ColumnTag | None = None
+        full_columns: set[str] = set(columns)
+        if (
+            temporal_join_on
+            and join_to is not None
+            and any(r.type is CollectionType.CALIBRATION for r in collections)
+        ):
+            base_timespan_tag = DatasetColumnTag(dataset_type.name, "timespan")
+            rhs = ColumnExpression.reference(base_timespan_tag, dtype=timespan.Timespan)
+            full_columns.add("timespan")
+            for timespan_tag in temporal_join_on:
+                lhs = ColumnExpression.reference(timespan_tag, dtype=timespan.Timespan)
+                join_predicates.append(lhs.predicate_method("overlaps", rhs))
+        # Delegate to the concrete QueryBackend subclass to do most of the
+        # work.
+        result = self._make_dataset_query_relation_impl(
+            dataset_type,
+            collections,
+            full_columns,
+            context=context,
+        )
+        if join_to is not None:
+            result = join_to.join(
+                result, predicate=Predicate.logical_and(*join_predicates) if join_predicates else None
+            )
+            if join_predicates and "timespan" not in columns:
+                # Drop the timespan column we added for the join only if the
+                # timespan wasn't requested in its own right.
+                result = result.with_only_columns(result.columns - {base_timespan_tag})
+        return result
 
     def make_dataset_search_relation(
         self,
@@ -449,10 +530,11 @@ class QueryBackend(Generic[_C]):
         context: _C,
         *,
         join_to: Relation | None = None,
+        temporal_join_on: Set[ColumnTag] = frozenset(),
     ) -> Relation:
         """Construct a relation that represents an order query for datasets
-        that returns results from the first matching collection for each
-        data ID.
+        that returns results from the first matching collection for each data
+        ID.
 
         Parameters
         ----------
@@ -462,13 +544,17 @@ class QueryBackend(Generic[_C]):
             Records for collections to search.  Should generally be the result
             of a call to `resolve_dataset_collections`, and must not be empty.
         columns : `~collections.abc.Set` [ `str` ]
-            Columns to include in the `relation.  See
+            Columns to include in the ``relation``.  See
             `make_dataset_query_relation` for options.
         context : `QueryContext`
             Context that manages per-query state.
         join_to : `Relation`, optional
             Another relation to join with the query for datasets in all
             collections before filtering out out shadowed datasets.
+        temporal_join_on: `~collections.abc.Set` [ `ColumnTag` ], optional
+            Timespan columns in ``join_to`` that calibration dataset timespans
+            must overlap.  Must already be present in ``join_to``.  Ignored if
+            ``join_to`` is `None` or if there are no calibration collections.
 
         Returns
         -------
@@ -480,9 +566,9 @@ class QueryBackend(Generic[_C]):
             collections,
             columns | {"rank"},
             context=context,
+            join_to=join_to,
+            temporal_join_on=temporal_join_on,
         )
-        if join_to is not None:
-            base = join_to.join(base)
         # Query-simplification shortcut: if there is only one collection, a
         # find-first search is just a regular result subquery.  Same if there
         # are no collections.

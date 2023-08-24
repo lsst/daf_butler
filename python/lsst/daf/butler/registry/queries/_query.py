@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = ()
 
+import itertools
 from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
 from contextlib import contextmanager
 from typing import Any, cast, final
@@ -38,7 +39,9 @@ from ...core import (
     DimensionGraph,
     DimensionKeyColumnTag,
     DimensionRecord,
+    DimensionRecordColumnTag,
 )
+from .._collectionType import CollectionType
 from ..wildcards import CollectionWildcard
 from ._query_backend import QueryBackend
 from ._query_context import QueryContext
@@ -236,6 +239,52 @@ class Query:
                     yield parent_ref
                 else:
                     yield parent_ref.makeComponentRef(component)
+
+    def iter_data_ids_and_dataset_refs(
+        self, dataset_type: DatasetType, dimensions: DimensionGraph | None = None
+    ) -> Iterator[tuple[DataCoordinate, DatasetRef]]:
+        """Iterate over pairs of data IDs and dataset refs.
+
+        This permits the data ID dimensions to differ from the dataset
+        dimensions.
+
+        Parameters
+        ----------
+        dataset_type : `DatasetType`
+            The parent dataset type to yield references for.
+        dimensions : `DimensionGraph`, optional
+            Dimensions of the data IDs to return.  If not provided,
+            ``self.dimensions`` is used.
+
+        Returns
+        -------
+        pairs : `~collections.abc.Iterable` [ `tuple` [ `DataCoordinate`,
+                `DatasetRef` ] ]
+            An iterator over (data ID, dataset reference) pairs.
+        """
+        if dimensions is None:
+            dimensions = self._dimensions
+        data_id_reader = DataCoordinateReader.make(
+            dimensions, records=self._has_record_columns is True, record_caches=self._record_caches
+        )
+        dataset_reader = DatasetRefReader(
+            dataset_type,
+            translate_collection=self._backend.get_collection_name,
+            records=self._has_record_columns is True,
+            record_caches=self._record_caches,
+        )
+        if not (data_id_reader.columns_required <= self.relation.columns):
+            raise ColumnError(
+                f"Missing column(s) {set(data_id_reader.columns_required - self.relation.columns)} "
+                f"for data IDs with dimensions {dimensions}."
+            )
+        if not (dataset_reader.columns_required <= self.relation.columns):
+            raise ColumnError(
+                f"Missing column(s) {set(dataset_reader.columns_required - self.relation.columns)} "
+                f"for datasets with type {dataset_type.name} and dimensions {dataset_type.dimensions}."
+            )
+        for row in self:
+            yield (data_id_reader.read(row), dataset_reader.read(row))
 
     def iter_dimension_records(self, element: DimensionElement | None = None) -> Iterator[DimensionRecord]:
         """Return an iterator that converts result rows to dimension records.
@@ -603,9 +652,6 @@ class Query:
         lsst.daf.relation.ColumnError
             Raised if a dataset search is already present in this query and
             this is a find-first search.
-        ValueError
-            Raised if the given dataset type's dimensions are not a subset of
-            the current query's dimensions.
         """
         if find_first and DatasetColumnTag.filter_from(self._relation.columns):
             raise ColumnError(
@@ -613,7 +659,7 @@ class Query:
                 "on a query that already includes dataset columns."
             )
         #
-        # TODO: it'd nice to do a QueryContext.restore_columns call here or
+        # TODO: it'd be nice to do a QueryContext.restore_columns call here or
         # similar, to look for dataset-constraint joins already present in the
         # relation and expand them to include dataset-result columns as well,
         # instead of doing a possibly-redundant join here.  But that would
@@ -635,14 +681,6 @@ class Query:
         #   where we materialize the initial data ID query into a temp table
         #   and hence can't go back and "recover" those dataset columns anyway;
         #
-        if not (dataset_type.dimensions <= self._dimensions):
-            raise ValueError(
-                "Cannot find datasets from a query unless the dataset types's dimensions "
-                f"({dataset_type.dimensions}, for {dataset_type.name}) are a subset of the query's "
-                f"({self._dimensions})."
-            )
-        columns = set(columns)
-        columns.add("dataset_id")
         collections = CollectionWildcard.from_expression(collections)
         if find_first:
             collections.require_ordered()
@@ -651,23 +689,107 @@ class Query:
             dataset_type,
             collections,
             governor_constraints=self._governor_constraints,
-            allow_calibration_collections=False,  # TODO
+            allow_calibration_collections=True,
             rejections=rejections,
         )
+        # If the dataset type has dimensions not in the current query, or we
+        # need a temporal join for a calibration collection, either restore
+        # those columns or join them in.
+        full_dimensions = dataset_type.dimensions.union(self._dimensions)
+        relation = self._relation
+        record_caches = self._record_caches
+        base_columns_required: set[ColumnTag] = {
+            DimensionKeyColumnTag(name) for name in full_dimensions.names
+        }
+        spatial_joins: list[tuple[str, str]] = []
+        if not (dataset_type.dimensions <= self._dimensions):
+            if self._has_record_columns is True:
+                # This query is for expanded data IDs, so if we add new
+                # dimensions to the query we need to be able to get records for
+                # the new dimensions.
+                record_caches = dict(self._record_caches)
+                for element in full_dimensions.elements:
+                    if element in record_caches:
+                        continue
+                    if (
+                        cache := self._backend.get_dimension_record_cache(element.name, self._context)
+                    ) is not None:
+                        record_caches[element] = cache
+                    else:
+                        base_columns_required.update(element.RecordClass.fields.columns.keys())
+            # See if we need spatial joins between the current query and the
+            # dataset type's dimensions.  The logic here is for multiple
+            # spatial joins in general, but in practice it'll be exceedingly
+            # rare for there to be more than one.  We start by figuring out
+            # which spatial "families" (observations vs. skymaps, skypix
+            # systems) are present on only one side and not the other.
+            lhs_spatial_families = self._dimensions.spatial - dataset_type.dimensions.spatial
+            rhs_spatial_families = dataset_type.dimensions.spatial - self._dimensions.spatial
+            # Now we iterate over the Cartesian product of those, so e.g.
+            # if the query has {tract, patch, visit} and the dataset type
+            # has {htm7} dimensions, the iterations of this loop
+            # correspond to: (skymap, htm), (observations, htm).
+            for lhs_spatial_family, rhs_spatial_family in itertools.product(
+                lhs_spatial_families, rhs_spatial_families
+            ):
+                # For each pair we add a join between the most-precise element
+                # present in each family (e.g. patch beats tract).
+                spatial_joins.append(
+                    (
+                        lhs_spatial_family.choose(full_dimensions.elements).name,
+                        rhs_spatial_family.choose(full_dimensions.elements).name,
+                    )
+                )
+        # Set up any temporal join between the query dimensions and CALIBRATION
+        # collection's validity ranges.
+        temporal_join_on: set[ColumnTag] = set()
+        if any(r.type is CollectionType.CALIBRATION for r in collection_records):
+            for family in self._dimensions.temporal:
+                endpoint = family.choose(self._dimensions.elements)
+                temporal_join_on.add(DimensionRecordColumnTag(endpoint.name, "timespan"))
+            base_columns_required.update(temporal_join_on)
+        # Note which of the many kinds of potentially-missing columns we have
+        # and add the rest.
+        base_columns_required.difference_update(relation.columns)
+        if base_columns_required:
+            relation = self._backend.make_dimension_relation(
+                full_dimensions,
+                base_columns_required,
+                self._context,
+                initial_relation=relation,
+                # Don't permit joins to use any columns beyond those in the
+                # original relation, as that would change what this
+                # operation does.
+                initial_join_max_columns=frozenset(self._relation.columns),
+                governor_constraints=self._governor_constraints,
+                spatial_joins=spatial_joins,
+            )
+        # Finally we can join in the search for the dataset query.
+        columns = set(columns)
+        columns.add("dataset_id")
         if not collection_records:
-            relation = self._relation.join(
+            relation = relation.join(
                 self._backend.make_doomed_dataset_relation(dataset_type, columns, rejections, self._context)
             )
         elif find_first:
             relation = self._backend.make_dataset_search_relation(
-                dataset_type, collection_records, columns, self._context, join_to=self._relation
+                dataset_type,
+                collection_records,
+                columns,
+                self._context,
+                join_to=relation,
+                temporal_join_on=temporal_join_on,
             )
         else:
-            dataset_relation = self._backend.make_dataset_query_relation(
-                dataset_type, collection_records, columns, self._context
+            relation = self._backend.make_dataset_query_relation(
+                dataset_type,
+                collection_records,
+                columns,
+                self._context,
+                join_to=relation,
+                temporal_join_on=temporal_join_on,
             )
-            relation = self.relation.join(dataset_relation)
-        return self._chain(relation, defer=defer)
+        return self._chain(relation, dimensions=full_dimensions, record_caches=record_caches, defer=defer)
 
     def sliced(
         self,

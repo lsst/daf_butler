@@ -141,7 +141,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                         filtered_collections.append(collection_record)
         return result
 
-    def make_dataset_query_relation(
+    def _make_dataset_query_relation_impl(
         self,
         dataset_type: DatasetType,
         collections: Sequence[CollectionRecord],
@@ -244,6 +244,10 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                     f"Cannot construct query involving skypix dimension {dimension.name} unless "
                     "it is part of a dataset subquery, spatial join, or other initial relation."
                 )
+
+        # Before joining in new tables to provide columns, attempt to restore
+        # them from the given relation by weakening projections applied to it.
+        relation, _ = context.restore_columns(relation, columns_required)
 
         # Categorize columns not yet included in the relation to associate them
         # with dimension elements and detect bad inputs.
