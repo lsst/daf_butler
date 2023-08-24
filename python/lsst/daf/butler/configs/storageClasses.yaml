@@ -388,6 +388,8 @@ storageClasses:
     pytype: spectractor.extractor.spectrum.Spectrum
   SpectractorImage:
     pytype: spectractor.extractor.images.Image
+  SpectractorFitParameters:
+    pytype: spectractor.fit.fitter.FitParameters
   ScarletModelData:
     pytype: lsst.meas.extensions.scarlet.ScarletModelData
   MetricMeasurementBundle:
