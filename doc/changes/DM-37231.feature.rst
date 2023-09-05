@@ -1,0 +1,1 @@
+Updated the open-source license to allow for the code to be distributed with either GPLv3 or BSD 3-clause license.
