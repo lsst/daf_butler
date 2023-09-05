@@ -12,3 +12,6 @@ This is a **Python 3 only** package (we assume Python 3.10 or higher).
 * Early design note: [DMTN-056](https://dmtn-056.lsst.io)
 
 PyPI: [lsst-daf-butler](https://pypi.org/project/lsst-daf-butler/)
+
+This software is dual licensed under the GNU General Public License (version 3 of the License, or (at your option) any later version, and also under a 3-clause BSD license.
+Recipients may choose which of these licenses to use; please see the files gpl-3.0.txt and/or bsd_license.txt, respectively.
