@@ -258,7 +258,9 @@ def _makeSimpleAstropyTable(include_multidim=False, include_masked=False, includ
     # Add a couple of units.
     table = atable.Table(data)
     table["a"].unit = units.degree
+    table["a"].description = "Description of column a"
     table["b"].unit = units.meter
+    table["b"].description = "Description of column b"
 
     # Add some masked columns.
     if include_masked:
@@ -1503,6 +1505,17 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         )
         self.assertEqual(schema2, schema)
 
+        # Check the schema conversions and units.
+        arrow_schema = schema.to_arrow_schema()
+        for name in arrow_schema.names:
+            field_metadata = arrow_schema.field(name).metadata
+            if b"doc" in field_metadata and (doc := field_metadata[b"doc"].decode("UTF-8")) != "":
+                self.assertEqual(schema2.schema[name].description, doc)
+            else:
+                self.assertIsNone(schema2.schema[name].description)
+            if b"units" in field_metadata and (units_str := field_metadata[b"units"].decode("UTF-8")) != "":
+                self.assertEqual(schema2.schema[name].unit, units.Unit(units_str))
+
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteArrowTableReadAsNumpyTable(self):
         tab1 = _makeSimpleNumpyTable(include_multidim=True)
@@ -1791,7 +1804,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "32-bit integer",
-                        "unit": "",
+                        "units": "",
                     },
                 ),
                 pa.field(
@@ -1800,7 +1813,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "64-bit integer",
-                        "unit": "",
+                        "units": "",
                     },
                 ),
                 pa.field(
@@ -1809,7 +1822,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "64-bit unsigned integer",
-                        "unit": "",
+                        "units": "",
                     },
                 ),
                 pa.field(
@@ -1818,7 +1831,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "32-bit float",
-                        "unit": "count",
+                        "units": "count",
                     },
                 ),
                 pa.field(
@@ -1827,7 +1840,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "64-bit float",
-                        "unit": "nJy",
+                        "units": "nJy",
                     },
                 ),
                 pa.field(
@@ -1836,7 +1849,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "Fixed size list of 64-bit floats.",
-                        "unit": "nJy",
+                        "units": "nJy",
                     },
                 ),
                 pa.field(
@@ -1845,7 +1858,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "Variable size list of 64-bit floats.",
-                        "unit": "nJy",
+                        "units": "nJy",
                     },
                 ),
                 pa.field(
@@ -1854,7 +1867,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "String",
-                        "unit": "",
+                        "units": "",
                     },
                 ),
                 pa.field(
@@ -1863,7 +1876,7 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     nullable=False,
                     metadata={
                         "doc": "Binary",
-                        "unit": "",
+                        "units": "",
                     },
                 ),
             ]
@@ -1898,6 +1911,16 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
         ap_schema2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropySchema")
         self.assertEqual(ap_schema2, ap_schema1)
 
+        # Confirm that the ap_schema2 has the units/description we expect.
+        for name in schema1.names:
+            field_metadata = schema1.field(name).metadata
+            if b"doc" in field_metadata and (doc := field_metadata[b"doc"].decode("UTF-8")) != "":
+                self.assertEqual(ap_schema2.schema[name].description, doc)
+            else:
+                self.assertIsNone(ap_schema2.schema[name].description)
+            if b"units" in field_metadata and (units_str := field_metadata[b"units"].decode("UTF-8")) != "":
+                self.assertEqual(ap_schema2.schema[name].unit, units.Unit(units_str))
+
     @unittest.skipUnless(atable is not None, "Cannot test reading as an numpy schema without numpy.")
     def testWriteArrowSchemaReadAsArrowNumpySchema(self):
         schema1 = self._makeTestSchema()
@@ -1907,6 +1930,13 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
 
         np_schema2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpySchema")
         self.assertEqual(np_schema2, np_schema1)
+
+
+@unittest.skipUnless(pa is not None, "Cannot test InMemoryArrowSchemaDelegate without pyarrow.")
+class InMemoryArrowSchemaDelegateTestCase(ParquetFormatterArrowSchemaTestCase):
+    """Tests for InMemoryDatastore and ArrowSchema."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
 
 @unittest.skipUnless(np is not None, "Cannot test compute_row_group_size without numpy.")
