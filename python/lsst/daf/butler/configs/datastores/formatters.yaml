@@ -76,6 +76,7 @@ ArrowAstropy: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ArrowNumpy: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ArrowNumpyDict: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ArrowTable: lsst.daf.butler.formatters.parquet.ParquetFormatter
+ArrowSchema: lsst.daf.butler.formatters.parquet.ParquetFormatter
 ExtendedPsf: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 HealSparseMap: lsst.pipe.tasks.healSparseMapping.HealSparseMapFormatter
 ButlerLogRecords: lsst.daf.butler.formatters.logs.ButlerLogRecordsFormatter

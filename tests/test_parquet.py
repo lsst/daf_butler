@@ -1761,6 +1761,154 @@ class InMemoryNumpyDictDelegateTestCase(ParquetFormatterArrowNumpyDictTestCase):
         pass
 
 
+@unittest.skipUnless(pa is not None, "Cannot test ArrowSchema without pyarrow.")
+class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
+    """Tests for ParquetFormatter, ArrowSchema, using local file datastore."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        """Create a new butler root for each test."""
+        self.root = makeTestTempDir(TESTDIR)
+        config = Config(self.configFile)
+        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        # No dimensions in dataset type so we don't have to worry about
+        # inserting dimension data or defining data IDs.
+        self.datasetType = DatasetType(
+            "data", dimensions=(), storageClass="ArrowSchema", universe=self.butler.dimensions
+        )
+        self.butler.registry.registerDatasetType(self.datasetType)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def _makeTestSchema(self):
+        schema = pa.schema(
+            [
+                pa.field(
+                    "int32",
+                    pa.int32(),
+                    nullable=False,
+                    metadata={
+                        "doc": "32-bit integer",
+                        "unit": "",
+                    },
+                ),
+                pa.field(
+                    "int64",
+                    pa.int64(),
+                    nullable=False,
+                    metadata={
+                        "doc": "64-bit integer",
+                        "unit": "",
+                    },
+                ),
+                pa.field(
+                    "uint64",
+                    pa.uint64(),
+                    nullable=False,
+                    metadata={
+                        "doc": "64-bit unsigned integer",
+                        "unit": "",
+                    },
+                ),
+                pa.field(
+                    "float32",
+                    pa.float32(),
+                    nullable=False,
+                    metadata={
+                        "doc": "32-bit float",
+                        "unit": "count",
+                    },
+                ),
+                pa.field(
+                    "float64",
+                    pa.float64(),
+                    nullable=False,
+                    metadata={
+                        "doc": "64-bit float",
+                        "unit": "nJy",
+                    },
+                ),
+                pa.field(
+                    "fixed_size_list",
+                    pa.list_(pa.float64(), list_size=10),
+                    nullable=False,
+                    metadata={
+                        "doc": "Fixed size list of 64-bit floats.",
+                        "unit": "nJy",
+                    },
+                ),
+                pa.field(
+                    "variable_size_list",
+                    pa.list_(pa.float64()),
+                    nullable=False,
+                    metadata={
+                        "doc": "Variable size list of 64-bit floats.",
+                        "unit": "nJy",
+                    },
+                ),
+                pa.field(
+                    "string",
+                    pa.string(),
+                    nullable=False,
+                    metadata={
+                        "doc": "String",
+                        "unit": "",
+                    },
+                ),
+                pa.field(
+                    "binary",
+                    pa.binary(),
+                    nullable=False,
+                    metadata={
+                        "doc": "Binary",
+                        "unit": "",
+                    },
+                ),
+            ]
+        )
+
+        return schema
+
+    def testArrowSchema(self):
+        schema1 = self._makeTestSchema()
+        self.butler.put(schema1, self.datasetType, dataId={})
+
+        schema2 = self.butler.get(self.datasetType, dataId={})
+        self.assertEqual(schema2, schema1)
+
+    @unittest.skipUnless(pd is not None, "Cannot test reading as a dataframe schema without pandas.")
+    def testWriteArrowSchemaReadAsDataFrameSchema(self):
+        schema1 = self._makeTestSchema()
+        self.butler.put(schema1, self.datasetType, dataId={})
+
+        df_schema1 = DataFrameSchema.from_arrow(schema1)
+
+        df_schema2 = self.butler.get(self.datasetType, dataId={}, storageClass="DataFrameSchema")
+        self.assertEqual(df_schema2, df_schema1)
+
+    @unittest.skipUnless(atable is not None, "Cannot test reading as an astropy schema without astropy.")
+    def testWriteArrowSchemaReadAsArrowAstropySchema(self):
+        schema1 = self._makeTestSchema()
+        self.butler.put(schema1, self.datasetType, dataId={})
+
+        ap_schema1 = ArrowAstropySchema.from_arrow(schema1)
+
+        ap_schema2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropySchema")
+        self.assertEqual(ap_schema2, ap_schema1)
+
+    @unittest.skipUnless(atable is not None, "Cannot test reading as an numpy schema without numpy.")
+    def testWriteArrowSchemaReadAsArrowNumpySchema(self):
+        schema1 = self._makeTestSchema()
+        self.butler.put(schema1, self.datasetType, dataId={})
+
+        np_schema1 = ArrowNumpySchema.from_arrow(schema1)
+
+        np_schema2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowNumpySchema")
+        self.assertEqual(np_schema2, np_schema1)
+
+
 @unittest.skipUnless(np is not None, "Cannot test compute_row_group_size without numpy.")
 @unittest.skipUnless(pa is not None, "Cannot test compute_row_group_size without pyarrow.")
 class ComputeRowGroupSizeTestCase(unittest.TestCase):

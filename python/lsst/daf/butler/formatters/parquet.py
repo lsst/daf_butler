@@ -78,7 +78,9 @@ class ParquetFormatter(Formatter):
         # Docstring inherited from Formatter.read.
         schema = pq.read_schema(self.fileDescriptor.location.path)
 
-        if component in ("columns", "schema"):
+        schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
+
+        if component in ("columns", "schema") or self.fileDescriptor.readStorageClass.name in schema_names:
             # The schema will be translated to column format
             # depending on the input type.
             return schema
@@ -141,6 +143,8 @@ class ParquetFormatter(Formatter):
         import numpy as np
         from astropy.table import Table as astropyTable
 
+        location = self.makeUpdatedLocation(self.fileDescriptor.location)
+
         arrow_table = None
         if isinstance(inMemoryDataset, pa.Table):
             # This will be the most likely match.
@@ -156,6 +160,9 @@ class ParquetFormatter(Formatter):
                 raise ValueError(
                     "Input dict for inMemoryDataset does not appear to be a dict of numpy arrays."
                 ) from e
+        elif isinstance(inMemoryDataset, pa.Schema):
+            pq.write_metadata(inMemoryDataset, location.path)
+            return
         else:
             if hasattr(inMemoryDataset, "to_parquet"):
                 # This may be a pandas DataFrame
@@ -174,8 +181,6 @@ class ParquetFormatter(Formatter):
             )
 
         row_group_size = compute_row_group_size(arrow_table.schema)
-
-        location = self.makeUpdatedLocation(self.fileDescriptor.location)
 
         pq.write_table(arrow_table, location.path, row_group_size=row_group_size)
 
