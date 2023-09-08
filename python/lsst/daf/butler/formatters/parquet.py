@@ -458,9 +458,9 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     for name, pa_type in type_list:
         field_metadata = {}
         if description := astropy_table[name].description:
-            field_metadata["doc"] = description
-        if units := astropy_table[name].unit:
-            field_metadata["units"] = str(units)
+            field_metadata["description"] = description
+        if unit := astropy_table[name].unit:
+            field_metadata["unit"] = str(unit)
         fields.append(
             pa.field(
                 name,
@@ -1025,10 +1025,13 @@ def _apply_astropy_metadata(astropy_table: atable.Table, arrow_schema: pa.Schema
             field_metadata = arrow_schema.field(name).metadata
             if field_metadata is None:
                 continue
-            if b"doc" in field_metadata and (doc := field_metadata[b"doc"].decode("UTF-8")) != "":
-                astropy_table[name].description = doc
-            if b"units" in field_metadata and (units := field_metadata[b"units"].decode("UTF-8")) != "":
-                astropy_table[name].unit = units
+            if (
+                b"description" in field_metadata
+                and (description := field_metadata[b"description"].decode("UTF-8")) != ""
+            ):
+                astropy_table[name].description = description
+            if b"unit" in field_metadata and (unit := field_metadata[b"unit"].decode("UTF-8")) != "":
+                astropy_table[name].unit = unit
 
 
 def _arrow_string_to_numpy_dtype(

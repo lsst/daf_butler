@@ -1509,12 +1509,15 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         arrow_schema = schema.to_arrow_schema()
         for name in arrow_schema.names:
             field_metadata = arrow_schema.field(name).metadata
-            if b"doc" in field_metadata and (doc := field_metadata[b"doc"].decode("UTF-8")) != "":
-                self.assertEqual(schema2.schema[name].description, doc)
+            if (
+                b"description" in field_metadata
+                and (description := field_metadata[b"description"].decode("UTF-8")) != ""
+            ):
+                self.assertEqual(schema2.schema[name].description, description)
             else:
                 self.assertIsNone(schema2.schema[name].description)
-            if b"units" in field_metadata and (units_str := field_metadata[b"units"].decode("UTF-8")) != "":
-                self.assertEqual(schema2.schema[name].unit, units.Unit(units_str))
+            if b"unit" in field_metadata and (unit := field_metadata[b"unit"].decode("UTF-8")) != "":
+                self.assertEqual(schema2.schema[name].unit, units.Unit(unit))
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteArrowTableReadAsNumpyTable(self):
@@ -1803,8 +1806,8 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     pa.int32(),
                     nullable=False,
                     metadata={
-                        "doc": "32-bit integer",
-                        "units": "",
+                        "description": "32-bit integer",
+                        "unit": "",
                     },
                 ),
                 pa.field(
@@ -1812,8 +1815,8 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     pa.int64(),
                     nullable=False,
                     metadata={
-                        "doc": "64-bit integer",
-                        "units": "",
+                        "description": "64-bit integer",
+                        "unit": "",
                     },
                 ),
                 pa.field(
@@ -1821,8 +1824,8 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     pa.uint64(),
                     nullable=False,
                     metadata={
-                        "doc": "64-bit unsigned integer",
-                        "units": "",
+                        "description": "64-bit unsigned integer",
+                        "unit": "",
                     },
                 ),
                 pa.field(
@@ -1830,8 +1833,8 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     pa.float32(),
                     nullable=False,
                     metadata={
-                        "doc": "32-bit float",
-                        "units": "count",
+                        "description": "32-bit float",
+                        "unit": "count",
                     },
                 ),
                 pa.field(
@@ -1839,8 +1842,8 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     pa.float64(),
                     nullable=False,
                     metadata={
-                        "doc": "64-bit float",
-                        "units": "nJy",
+                        "description": "64-bit float",
+                        "unit": "nJy",
                     },
                 ),
                 pa.field(
@@ -1848,8 +1851,8 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     pa.list_(pa.float64(), list_size=10),
                     nullable=False,
                     metadata={
-                        "doc": "Fixed size list of 64-bit floats.",
-                        "units": "nJy",
+                        "description": "Fixed size list of 64-bit floats.",
+                        "unit": "nJy",
                     },
                 ),
                 pa.field(
@@ -1857,27 +1860,24 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
                     pa.list_(pa.float64()),
                     nullable=False,
                     metadata={
-                        "doc": "Variable size list of 64-bit floats.",
-                        "units": "nJy",
+                        "description": "Variable size list of 64-bit floats.",
+                        "unit": "nJy",
                     },
                 ),
+                # One of these fields will have no description.
                 pa.field(
                     "string",
                     pa.string(),
                     nullable=False,
                     metadata={
-                        "doc": "String",
-                        "units": "",
+                        "unit": "",
                     },
                 ),
+                # One of these fields will have no metadata.
                 pa.field(
                     "binary",
                     pa.binary(),
                     nullable=False,
-                    metadata={
-                        "doc": "Binary",
-                        "units": "",
-                    },
                 ),
             ]
         )
@@ -1911,15 +1911,20 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
         ap_schema2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropySchema")
         self.assertEqual(ap_schema2, ap_schema1)
 
-        # Confirm that the ap_schema2 has the units/description we expect.
+        # Confirm that the ap_schema2 has the unit/description we expect.
         for name in schema1.names:
             field_metadata = schema1.field(name).metadata
-            if b"doc" in field_metadata and (doc := field_metadata[b"doc"].decode("UTF-8")) != "":
-                self.assertEqual(ap_schema2.schema[name].description, doc)
+            if field_metadata is None:
+                continue
+            if (
+                b"description" in field_metadata
+                and (description := field_metadata[b"description"].decode("UTF-8")) != ""
+            ):
+                self.assertEqual(ap_schema2.schema[name].description, description)
             else:
                 self.assertIsNone(ap_schema2.schema[name].description)
-            if b"units" in field_metadata and (units_str := field_metadata[b"units"].decode("UTF-8")) != "":
-                self.assertEqual(ap_schema2.schema[name].unit, units.Unit(units_str))
+            if b"unit" in field_metadata and (unit := field_metadata[b"unit"].decode("UTF-8")) != "":
+                self.assertEqual(ap_schema2.schema[name].unit, units.Unit(unit))
 
     @unittest.skipUnless(atable is not None, "Cannot test reading as an numpy schema without numpy.")
     def testWriteArrowSchemaReadAsArrowNumpySchema(self):
