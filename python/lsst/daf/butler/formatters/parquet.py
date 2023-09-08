@@ -78,7 +78,9 @@ class ParquetFormatter(Formatter):
         # Docstring inherited from Formatter.read.
         schema = pq.read_schema(self.fileDescriptor.location.path)
 
-        if component in ("columns", "schema"):
+        schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
+
+        if component in ("columns", "schema") or self.fileDescriptor.readStorageClass.name in schema_names:
             # The schema will be translated to column format
             # depending on the input type.
             return schema
@@ -141,6 +143,8 @@ class ParquetFormatter(Formatter):
         import numpy as np
         from astropy.table import Table as astropyTable
 
+        location = self.makeUpdatedLocation(self.fileDescriptor.location)
+
         arrow_table = None
         if isinstance(inMemoryDataset, pa.Table):
             # This will be the most likely match.
@@ -156,6 +160,9 @@ class ParquetFormatter(Formatter):
                 raise ValueError(
                     "Input dict for inMemoryDataset does not appear to be a dict of numpy arrays."
                 ) from e
+        elif isinstance(inMemoryDataset, pa.Schema):
+            pq.write_metadata(inMemoryDataset, location.path)
+            return
         else:
             if hasattr(inMemoryDataset, "to_parquet"):
                 # This may be a pandas DataFrame
@@ -174,8 +181,6 @@ class ParquetFormatter(Formatter):
             )
 
         row_group_size = compute_row_group_size(arrow_table.schema)
-
-        location = self.makeUpdatedLocation(self.fileDescriptor.location)
 
         pq.write_table(arrow_table, location.path, row_group_size=row_group_size)
 
@@ -217,9 +222,7 @@ def arrow_to_astropy(arrow_table: pa.Table) -> atable.Table:
 
     astropy_table = Table(arrow_to_numpy_dict(arrow_table))
 
-    metadata = arrow_table.schema.metadata if arrow_table.schema.metadata is not None else {}
-
-    _apply_astropy_metadata(astropy_table, metadata)
+    _apply_astropy_metadata(astropy_table, arrow_table.schema)
 
     return astropy_table
 
@@ -450,7 +453,23 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     meta_yaml_str = "\n".join(meta_yaml)
     md[b"table_meta_yaml"] = meta_yaml_str
 
-    schema = pa.schema(type_list, metadata=md)
+    # Convert type list to fields with metadata.
+    fields = []
+    for name, pa_type in type_list:
+        field_metadata = {}
+        if description := astropy_table[name].description:
+            field_metadata["description"] = description
+        if unit := astropy_table[name].unit:
+            field_metadata["unit"] = str(unit)
+        fields.append(
+            pa.field(
+                name,
+                pa_type,
+                metadata=field_metadata,
+            )
+        )
+
+    schema = pa.schema(fields, metadata=md)
 
     arrays = _numpy_style_arrays_to_arrow_arrays(
         astropy_table.dtype,
@@ -729,9 +748,7 @@ class ArrowAstropySchema:
         data = np.zeros(0, dtype=dtype)
         astropy_table = Table(data=data)
 
-        metadata = schema.metadata if schema.metadata is not None else {}
-
-        _apply_astropy_metadata(astropy_table, metadata)
+        _apply_astropy_metadata(astropy_table, schema)
 
         return cls(astropy_table)
 
@@ -971,18 +988,21 @@ def _standardize_multi_index_columns(
     return names
 
 
-def _apply_astropy_metadata(astropy_table: atable.Table, metadata: dict) -> None:
+def _apply_astropy_metadata(astropy_table: atable.Table, arrow_schema: pa.Schema) -> None:
     """Apply any astropy metadata from the schema metadata.
 
     Parameters
     ----------
     astropy_table : `astropy.table.Table`
         Table to apply metadata.
-    metadata : `dict` [`bytes`]
-        Metadata dict.
+    arrow_schema : `pyarrow.Schema`
+        Arrow schema with metadata.
     """
     from astropy.table import meta
 
+    metadata = arrow_schema.metadata if arrow_schema.metadata is not None else {}
+
+    # Check if we have a special astropy metadata header yaml.
     meta_yaml = metadata.get(b"table_meta_yaml", None)
     if meta_yaml:
         meta_yaml = meta_yaml.decode("UTF8").split("\n")
@@ -998,6 +1018,20 @@ def _apply_astropy_metadata(astropy_table: atable.Table, metadata: dict) -> None
 
         if "meta" in meta_hdr:
             astropy_table.meta.update(meta_hdr["meta"])
+    else:
+        # If we don't have astropy header data, we may have arrow field
+        # metadata.
+        for name in arrow_schema.names:
+            field_metadata = arrow_schema.field(name).metadata
+            if field_metadata is None:
+                continue
+            if (
+                b"description" in field_metadata
+                and (description := field_metadata[b"description"].decode("UTF-8")) != ""
+            ):
+                astropy_table[name].description = description
+            if b"unit" in field_metadata and (unit := field_metadata[b"unit"].decode("UTF-8")) != "":
+                astropy_table[name].unit = unit
 
 
 def _arrow_string_to_numpy_dtype(
