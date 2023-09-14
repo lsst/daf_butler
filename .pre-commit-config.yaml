@@ -7,8 +7,8 @@ repos:
           - "--unsafe"
       - id: end-of-file-fixer
       - id: trailing-whitespace
-  - repo: https://github.com/psf/black
-    rev: 23.7.0
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 23.9.1
     hooks:
       - id: black
         # It is recommended to specify the latest version of Python
@@ -23,6 +23,6 @@ repos:
         name: isort (python)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.0.285
+    rev: v0.0.289
     hooks:
       - id: ruff
