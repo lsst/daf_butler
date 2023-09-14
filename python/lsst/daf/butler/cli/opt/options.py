@@ -48,6 +48,7 @@ __all__ = (
     "run_option",
     "transfer_dimensions_option",
     "transfer_option",
+    "transfer_option_no_short",
     "verbose_option",
     "where_option",
     "order_by_option",
@@ -243,16 +244,24 @@ register_dataset_types_option = MWOptionDecorator(
 
 run_option = MWOptionDecorator("--output-run", help="The name of the run datasets should be output to.")
 
-
-transfer_option = MWOptionDecorator(
-    "-t",
-    "--transfer",
+_transfer_params = dict(
     default="auto",  # set to `None` if using `required=True`
     help="The external data transfer mode.",
     type=click.Choice(
         choices=["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink", "direct"],
         case_sensitive=False,
     ),
+)
+
+transfer_option_no_short = MWOptionDecorator(
+    "--transfer",
+    **_transfer_params,
+)
+
+transfer_option = MWOptionDecorator(
+    "-t",
+    "--transfer",
+    **_transfer_params,
 )
 
 
