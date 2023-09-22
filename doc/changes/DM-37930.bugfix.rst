@@ -1,1 +1,0 @@
-Fix bugs in spatial query constraints introduced in DM-31725.

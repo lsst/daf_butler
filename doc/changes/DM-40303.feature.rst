@@ -1,1 +1,0 @@
-Fully supports Pydantic version 2.x and version 1.x.

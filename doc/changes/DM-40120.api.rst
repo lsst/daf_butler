@@ -1,2 +1,0 @@
-Added new parameter ``without_datastore`` to the ``Butler`` and ``ButlerConfig`` constructors to allow a butler to be created that can not access a datastore.
-This can be helpful if you want to query registry without requiring the overhead of the datastore.

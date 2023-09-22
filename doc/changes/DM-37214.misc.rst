@@ -1,3 +1,0 @@
-* Enhanced the JSON and YAML formatters so that they can both handle dataclasses and Pydantic models (previously JSON supported Pydantic and YAML supported dataclasses).
-* Rationalized the storage class conversion handling to always convert from a `dict` to the original type even if the caller is requesting a `dict`.
-  Without this change it was possible to some confusion where a Pydantic model's serialization did not match the `dict`-like view it was emulating.

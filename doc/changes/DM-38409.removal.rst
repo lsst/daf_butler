@@ -1,2 +1,0 @@
-Removed support for non-UUID dataset IDs in ``Butler.transfer_from()``.
-The ``id_gen_map`` parameter has been removed and the ``local_refs`` parameter has been removed from ``Datastore.transfer_from()``.

@@ -1,3 +1,0 @@
-* Modified ``Butler.ingest()`` such that it can now ingest resolved ``DatasetRef``.
-  If unresolved refs are given (which was the previous requirement for ingest) they are resolved internally but a warning is issued.
-* Added ``repr()`` support for ``RegistryDefaults`` class.

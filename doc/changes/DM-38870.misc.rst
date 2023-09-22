@@ -1,3 +1,0 @@
-The behavior of ``FileDatastore.transfer_from()`` has been clarified regarding what to do when an absolute URI (from a direct ingest) is found in the source butler.
-If ``transfer="auto"`` (the default) the absolute URI will be stored in the target butler.
-If any other transfer mode is used the absolute URI will be copied/linked into the target butler.
