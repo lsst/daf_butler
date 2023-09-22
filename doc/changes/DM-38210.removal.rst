@@ -1,5 +1,0 @@
-* Deprecated ``Butler.getDirect()`` and ``Butler.putDirect()``.
-  We have modified the ``get()`` and ``put()`` variants to recognize the presence of a resolved ``DatasetRef`` and use it directly.
-  For ``get()`` we no longer unpack the ``DatasetRef`` and re-run the query, but return exactly the dataset being requested.
-* Removed ``Butler.pruneCollections``.
-  This method was replaced by ``Butler.removeRuns`` and ``Registry.removeCollections`` a long time ago and the command-line interface was removed previously.

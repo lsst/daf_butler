@@ -1,3 +1,182 @@
+Butler v26.0.0 2023-09-22
+=========================
+
+Now supports Python 3.11.
+
+New Features
+------------
+
+- Added the ability to remove multiple dataset types at once, including expansion of wildcards, with ``Registry.removeDatasetType`` and ``butler remove-dataset-type``. (`DM-34568 <https://jira.lsstcorp.org/browse/DM-34568>`_)
+- Added the ``ArrowNumpyDict`` storage class to Parquet formatter. (`DM-37279 <https://jira.lsstcorp.org/browse/DM-37279>`_)
+- Added support for columns with array values (1D and multi-dimensional) in Parquet tables accessed via arrow/astropy/numpy.
+  Pandas does not support array-valued columns. (`DM-37425 <https://jira.lsstcorp.org/browse/DM-37425>`_)
+- Integrated an experimental Butler server into distribution.
+  ``lsst.daf.butler.server`` will likely not be in this location permanently.
+  The interface is also evolving and should be considered extremely unstable.
+  Some testing of the remote registry code has been included. (`DM-37609 <https://jira.lsstcorp.org/browse/DM-37609>`_)
+- Added support for writing/reading masked columns in astropy tables.
+  This also adds support for masked columns in pandas dataframes, with limited support for conversion between the two. (`DM-37757 <https://jira.lsstcorp.org/browse/DM-37757>`_)
+- Dimension records are now available via attribute access on ``DataCoordinate`` instances, allowing syntax like ``data_id.exposure.day_obs``. (`DM-38054 <https://jira.lsstcorp.org/browse/DM-38054>`_)
+- Added default row groups (targeting a size of <~ 1GB) for Parquet files. (`DM-38063 <https://jira.lsstcorp.org/browse/DM-38063>`_)
+- ``Butler.get()`` and ``Butler.put()`` can now be used with resolved ``DatasetRef``. (`DM-38210 <https://jira.lsstcorp.org/browse/DM-38210>`_)
+- ``Butler.transfer_from()`` can now be used in conjunction with a ``ChainedDatastore``.
+  Additionally, datastore constraints are now respected. (`DM-38240 <https://jira.lsstcorp.org/browse/DM-38240>`_)
+- * Modified ``Butler.import_()`` (and by extension the ``butler import`` command-line) to accept URIs for the directory and export file.
+  * Modified ``butler ingest-files`` to accept a remote URI for the table file. (`DM-38492 <https://jira.lsstcorp.org/browse/DM-38492>`_)
+- Added support for multi-index dataframes with ``DataFrameDelegate`` and ``InMemoryDatastore``. (`DM-38642 <https://jira.lsstcorp.org/browse/DM-38642>`_)
+- Added new APIs to support the deprecation of ``LimitedButler.datastore``:
+
+  * ``LimitedButler.get_datastore_roots`` can be used to retrieve any root URIs associated with attached datastores.
+    If a datastore does not support the concept it will return `None` for its root URI.
+  * ``LimitedButler.get_datastore_names`` can be used to retrieve the names of the internal datastores.
+  * ``LimitedButler.get_many_uris`` allows for the bulk retrieval of URIs from a list of refs.
+  * Also made ``getURI`` and ``getURIs`` available for ``LimitedButler``. (`DM-39915 <https://jira.lsstcorp.org/browse/DM-39915>`_)
+- Modified to fully support Pydantic version 2.x and version 1.x. (`DM-40002 <https://jira.lsstcorp.org/browse/DM-40002>`_; `DM-40303 <https://jira.lsstcorp.org/browse/DM-40303>`_)
+
+
+API Changes
+-----------
+
+- Added new APIs for checking dataset existence.
+
+  * `~lsst.daf.butler.LimitedButler.stored` checks whether the datastore artifact(s) exists for a single `~lsst.daf.butler.DatasetRef`.
+  * `~lsst.daf.butler.LimitedButler.stored_many` is a bulk version of `~lsst.daf.butler.LimitedButler.stored` that can be used for many `~lsst.daf.butler.DatasetRef`.
+  * `~lsst.daf.butler.Butler.exists` checks whether registry and datastore know about a single `~lsst.daf.butler.DatasetRef` and can optionally check for artifact existence.
+    The results are returned in an `~enum.Flag` object (specifically `~lsst.daf.butler.DatasetExistence`) that evaluates to `True` if the dataset is available for retrieval.
+
+  Additionally `~lsst.daf.butler.DatasetRef` now has a new method for checking whether two `~lsst.daf.butler.DatasetRef` only differ by compatible storage classes. (`DM-32940 <https://jira.lsstcorp.org/browse/DM-32940>`_)
+- `lsst.daf.Butler.transfer_from` method now accepts ``LimitedButler`` as a source Butler.
+  In cases when a full butler is needed as a source it will try to cast it to a ``Butler``. (`DM-33497 <https://jira.lsstcorp.org/browse/DM-33497>`_)
+- * Creating an unresolved dataset reference now issues an ``UnresolvedRefWarning`` and is deprecated (and subsequently removed).
+  * A resolved `~lsst.daf.butler.DatasetRef` can now be created by specifying the run without the ID -- the constructor will now automatically issue an ID.
+    Previously this was an error.
+    To support ID generation a new optional parameter ``id_generation_mode`` can now be given to the constructor to allow the ID to be constructed in different ways. (`DM-37703 <https://jira.lsstcorp.org/browse/DM-37703>`_)
+- - `~lsst.daf.butler.DatasetRef` constructor now requires ``run`` argument in all cases and always constructs a resolved reference.
+  - Methods ``DatasetRef.resolved()``, ``DatasetRef.unresolved()``, and ``DatasetRef.getCheckedId()`` were removed. (`DM-37704 <https://jira.lsstcorp.org/browse/DM-37704>`_)
+- Added ``StorageClassDelegate.copy()`` method.
+  By default this method calls `copy.deepcopy()` but subclasses can override as needed. (`DM-38694 <https://jira.lsstcorp.org/browse/DM-38694>`_)
+- ``Database.fromUri`` and ``Database.makeEngine`` methods now accept `sqlalchemy.engine.URL` instances in addition to strings. (`DM-39484 <https://jira.lsstcorp.org/browse/DM-39484>`_)
+- Added new parameter ``without_datastore`` to the ``Butler`` and ``ButlerConfig`` constructors to allow a butler to be created that can not access a datastore.
+  This can be helpful if you want to query registry without requiring the overhead of the datastore. (`DM-40120 <https://jira.lsstcorp.org/browse/DM-40120>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed race condition in datastore cache involving the possibility of multiple processes trying to retrieve the same file simultaneously and one of those processes deleting the file on exit of the context manager. (`DM-37092 <https://jira.lsstcorp.org/browse/DM-37092>`_)
+- Made ``Registry.findDataset`` respect the storage class of a `~lsst.daf.butler.DatasetType` that is passed to it.
+  This also makes direct ``PipelineTask`` execution respect storage class conversions in the same way that execution butler already did. (`DM-37450 <https://jira.lsstcorp.org/browse/DM-37450>`_)
+- Can now properly retrieve astropy full table metadata with ``butler.get``. (`DM-37530 <https://jira.lsstcorp.org/browse/DM-37530>`_)
+- Fixed an order-of-operations bug in the query system (and as a result, ``QuantumGraph`` generation) that manifested as a "Custom operation find_first not supported by engine iteration" message. (`DM-37625 <https://jira.lsstcorp.org/browse/DM-37625>`_)
+- ``Butler.put`` is fixed to raise a correct exception for duplicate put attempts for ``DatasetRef`` with the same dataset ID. (`DM-37704 <https://jira.lsstcorp.org/browse/DM-37704>`_)
+- Fixed parsing of order by terms to treat direct references to dimension primary key columns as references to the dimensions. (`DM-37855 <https://jira.lsstcorp.org/browse/DM-37855>`_)
+- Fixed bugs involving CALIBRATION-collection skipping and long dataset type names that were introduced on `DM-31725 <https://jira.lsstcorp.org/browse/DM-31725>`_. (`DM-37868 <https://jira.lsstcorp.org/browse/DM-37868>`_)
+- Now check for big-endian arrays when serializing to Parquet.
+  This allows astropy FITS tables to be easily serialized. (`DM-37913 <https://jira.lsstcorp.org/browse/DM-37913>`_)
+- Fixed bugs in spatial query constraints introduced in `DM-31725 <https://jira.lsstcorp.org/browse/DM-31725>`_. (`DM-37930 <https://jira.lsstcorp.org/browse/DM-37930>`_)
+- Fixed additional bugs in spatial query constraints introduced in `DM-31725 <https://jira.lsstcorp.org/browse/DM-31725>`_. (`DM-37938 <https://jira.lsstcorp.org/browse/DM-37938>`_)
+- Fixed occasional crashes in ``Butler`` ``refresh()`` method due to a race condition in dataset types refresh. (`DM-38305 <https://jira.lsstcorp.org/browse/DM-38305>`_)
+- Fixed query manipulation logic to more aggressively move operations from Python postprocessing to SQL.
+
+  This fixes a bug in ``QuantumGraph`` generation that occurs when a dataset type that is actually present in an input collection has exactly the same dimensions as the graph as a whole, manifesting as a mismatch between ``daf_relation`` engines. (`DM-38402 <https://jira.lsstcorp.org/browse/DM-38402>`_)
+- Add check for ``ListType`` when pandas converts a list object into Parquet. (`DM-38845 <https://jira.lsstcorp.org/browse/DM-38845>`_)
+- Few registry methods treated empty collection list in the same way as `None`, meaning that Registry-default run collection was used.
+  This has been fixed now to mean that queries always return empty result set, with explicit "doomed by" messages. (`DM-38915 <https://jira.lsstcorp.org/browse/DM-38915>`_)
+- Fixed a bug in ``butler query-data-ids`` that caused a cryptic "the query has deferred operations..." error message when a spatial join is involved. (`DM-38943 <https://jira.lsstcorp.org/browse/DM-38943>`_)
+- Fixed more issues with storage class conversion. (`DM-38952 <https://jira.lsstcorp.org/browse/DM-38952>`_)
+- Fixed a SQL generation bug for queries that involve the common ``skypix`` dimension and at least two other spatial dimensions. (`DM-38954 <https://jira.lsstcorp.org/browse/DM-38954>`_)
+- Fixed bugs in storage class conversion in ``FileDatastore``, as used by ``QuantumBackedButler``. (`DM-39198 <https://jira.lsstcorp.org/browse/DM-39198>`_)
+- Fixed the bug in initializing PostgreSQL registry which resulted in "password authentication failed" error.
+  The bug appeared during the SQLAlchemy 2.0 transition which changed default rendering of URL to string. (`DM-39484 <https://jira.lsstcorp.org/browse/DM-39484>`_)
+- Fixed a rare bug in follow-up dataset queries involving relation commutators.
+
+  This occurred when building QuantumGraphs where a "warp" dataset type was an overall input to the pipeline and present in more than one input RUN collection. (`DM-40184 <https://jira.lsstcorp.org/browse/DM-40184>`_)
+- Ensureed ``Datastore`` record exports (as used in quantum-backed butler) are deduplicated when necessary. (`DM-40381 <https://jira.lsstcorp.org/browse/DM-40381>`_)
+
+
+Performance Enhancement
+-----------------------
+
+- When passing lazy query-results objects directly to various registry methods (``associate``, ``disassociate``, ``removeDatasets``, and ``certify``), query and process one dataset type at a time instead of querying for all of them and grouping by type in Python. (`DM-39939 <https://jira.lsstcorp.org/browse/DM-39939>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Rewrote the registry query system, using the new ``daf_relation`` package.
+
+  This change should be mostly invisible to users, but there are some subtle behavior changes:
+
+  - ``Registry.findDatasets`` now respects the given storage class when passed a full `~lsst.daf.butler.DatasetType` instance, instead of replacing it with storage class registered with that dataset type.  This causes storage class overrides in ``PipelineTask`` input connections to be respected in more contexts as well; in at least some cases these were previously being incorrectly ignored.
+  - ``Registry.findDatasets`` now utilizes cached summaries of which dataset types and governor dimension values are present in each collection.  This should result in fewer and simpler database calls, but it does make the result vulnerable to stale caches (which, like `~lsst.daf.butler.Registry` methods more generally, must be addressed manually via calls to ``Registry.refresh``.
+  - The diagnostics provided by the ``explain_no_results`` methods on query result object (used prominently in the reporting on empty quantum graph builds) have been significantly improved, though they now use ``daf_relation`` terminology that may be unfamiliar to users.
+  - `~lsst.daf.butler.Registry` is now more consistent about raising ``DataIdValueError`` when given invalid governor dimension values, while not raising (but providing ``explain_no_results`` diagnostics) for all other invalid dimension values, as per `RFC-878 <https://jira.lsstcorp.org/browse/RFC-878>`_.
+  - `~lsst.daf.butler.Registry` methods that take a ``where`` argument are now typed to expect a `str` that is not `None`, with the default no-op value now an empty string (before either an empty `str` or `None` could be passed, and meant the same thing).  This should only affect downstream type checking, as the runtime code still just checks for whether the argument evaluates as `False` in a boolean context. (`DM-31725 <https://jira.lsstcorp.org/browse/DM-31725>`_)
+- Added dimensions config entries that declare that the ``visit`` dimension "populates" various dimension elements that define many-to-many relationships.
+
+  In the future, this will be used to ensure the correct records are included in exports of dimension records. (`DM-34589 <https://jira.lsstcorp.org/browse/DM-34589>`_)
+- Added converter config to allow ``lsst.ip.isr.IntermediateTransmissionCurve`` and subclasses to be used for ``lsst.afw.image.TransmissionCurve``. (`DM-36597 <https://jira.lsstcorp.org/browse/DM-36597>`_)
+- ``Butler.getURIs`` no longer checks the file system to see if the file exists before returning a URI if the datastore thinks it knows about the file.
+  This does mean that if someone has removed the file from the file system without deleting it from datastore that a URI could be retrieved for something that does not exist. (`DM-37173 <https://jira.lsstcorp.org/browse/DM-37173>`_)
+- * Enhanced the JSON and YAML formatters so that they can both handle dataclasses and Pydantic models (previously JSON supported Pydantic and YAML supported dataclasses).
+  * Rationalized the storage class conversion handling to always convert from a `dict` to the original type even if the caller is requesting a `dict`.
+    Without this change it was possible to have some confusion where a Pydantic model's serialization did not match the `dict`-like view it was emulating. (`DM-37214 <https://jira.lsstcorp.org/browse/DM-37214>`_)
+- Added an `obsCoreTableManager` property to `~lsst.daf.butler.Registry` for access to the ObsCore table manager.
+  This will be set to `None` when repository lacks an ObsCore table.
+  It should only be used by a limited number of clients, e.g. ``lsst.obs.base.DefineVisitsTask``, which need to update the table. (`DM-38205 <https://jira.lsstcorp.org/browse/DM-38205>`_)
+- * Modified ``Butler.ingest()`` such that it can now ingest resolved ``DatasetRef``.
+    If unresolved refs are given (which was the previous requirement for ingest and is no longer possible) they are resolved internally but a warning is issued.
+  * Added ``repr()`` support for ``RegistryDefaults`` class. (`DM-38779 <https://jira.lsstcorp.org/browse/DM-38779>`_)
+- The behavior of ``FileDatastore.transfer_from()`` has been clarified regarding what to do when an absolute URI (from a direct ingest) is found in the source butler.
+  If ``transfer="auto"`` (the default) the absolute URI will be stored in the target butler.
+  If any other transfer mode is used the absolute URI will be copied/linked into the target butler. (`DM-38870 <https://jira.lsstcorp.org/browse/DM-38870>`_)
+- Made minor modifications to the StorageClass system to support mock storage classes (in ``pipe_base``) for testing. (`DM-38952 <https://jira.lsstcorp.org/browse/DM-38952>`_)
+- Replaced the use of ``lsst.utils.ellipsis`` mypy workaround with the native type `type.EllipsisType` available since Python 3.10. (`DM-39410 <https://jira.lsstcorp.org/browse/DM-39410>`_)
+- Moved Butler repository aliasing resolution into `~lsst.daf.butler.ButlerConfig` so that it is available everywhere without having to do the resolving each time. (`DM-39563 <https://jira.lsstcorp.org/browse/DM-39563>`_)
+- Added ability for some butler primitives to be cached and re-used on deserialization through a special interface. (`DM-39582 <https://jira.lsstcorp.org/browse/DM-39582>`_)
+- * Replaced usage of ``Butler.registry.dimensions`` with ``Butler.dimensions``.
+  * Modernized type annotations.
+  * Fixed some documentation problems.
+  * Made some Minor modernizations to use set notation and f-strings. (`DM-39605 <https://jira.lsstcorp.org/browse/DM-39605>`_)
+- Changed all Butler code and tests to use conforming DataIDs.
+  Removed the fake ``DataCoordinate`` classes from the datastore tests.
+  Improved type annotations in some test files. (`DM-39665 <https://jira.lsstcorp.org/browse/DM-39665>`_)
+- Added various optimizations to ``QuantumGraph`` loading. (`DM-40121 <https://jira.lsstcorp.org/browse/DM-40121>`_)
+- Fixed docs on referring to timespans in queries, and made related error messages more helpful. (`DM-38084 <https://jira.lsstcorp.org/browse/DM-38084>`_)
+- Clarified that ``butler prune-datasets --purge`` always removes dataset entries and clarified when the run argument is used. (`DM-39086 <https://jira.lsstcorp.org/browse/DM-39086>`_)
+
+An API Removal or Deprecation
+-----------------------------
+
+- Deprecated methods for constructing or using ``DimensionPacker`` instances.
+
+  The ``DimensionPacker`` interface is not being removed, but all concrete implementations will now be downstream of ``daf_butler`` and will not satisfy the assumptions of the current interfaces for constructing them. (`DM-31924 <https://jira.lsstcorp.org/browse/DM-31924>`_)
+- ``Butler.datasetExists`` has been deprecated and will be removed in a future release.
+  It has been replaced by ``Butler.stored()`` (specifically to check if the datastore has the artifact) and ``Butler.exists()`` which will check registry and datastore and optionally check whether the artifact exists. (`DM-32940 <https://jira.lsstcorp.org/browse/DM-32940>`_)
+- Removed the ``Spectraction`` storage class.
+  This was a temporary storage class added for convenience during development, which was a roll-up-and-pickle of all the potentially relevant parts of the extraction.
+  All the necessary information is now stored inside the ``SpectractorSpectrum`` storage class. (`DM-33932 <https://jira.lsstcorp.org/browse/DM-33932>`_)
+- * Removed deprecated ``ButlerURI`` (use ``lsst.resources.ResourcePath`` instead).
+  * Removed deprecated ``kwargs`` parameter from ``DeferredDatasetHandle``.
+  * Removed the deprecated ``butler prune-collection`` command.
+  * Removed the deprecated ``checkManagerDigests`` from butler registry. (`DM-37534 <https://jira.lsstcorp.org/browse/DM-37534>`_)
+- * Deprecated ``Butler.getDirect()`` and ``Butler.putDirect()``.
+    We have modified the ``get()`` and ``put()`` variants to recognize the presence of a resolved ``DatasetRef`` and use it directly.
+    For ``get()`` we no longer unpack the ``DatasetRef`` and re-run the query, but return exactly the dataset being requested.
+  * Removed ``Butler.pruneCollections``.
+    This method was replaced by ``Butler.removeRuns`` and ``Registry.removeCollections`` a long time ago and the command-line interface was removed previously. (`DM-38210 <https://jira.lsstcorp.org/browse/DM-38210>`_)
+- Code that calculates schema digests was removed, registry will no longer store digests in the database.
+  Previously we saved schema digests, but we did not verify them since w_2022_22 in v24.0. (`DM-38235 <https://jira.lsstcorp.org/browse/DM-38235>`_)
+- Support for integer dataset IDs in registry has now been removed.
+  All dataset IDs must now be `uuid.UUID`. (`DM-38280 <https://jira.lsstcorp.org/browse/DM-38280>`_)
+- Removed support for non-UUID dataset IDs in ``Butler.transfer_from()``.
+  The ``id_gen_map`` parameter has been removed and the ``local_refs`` parameter has been removed from ``Datastore.transfer_from()``. (`DM-38409 <https://jira.lsstcorp.org/browse/DM-38409>`_)
+- Deprecated ``reconstituteDimensions`` argument from ``Quantum.from_simple``. (`DM-39582 <https://jira.lsstcorp.org/browse/DM-39582>`_)
+- The semi-public ``Butler.datastore`` property has now been deprecated.
+  The ``LimitedButler`` API has been expanded such that there is no longer any need for anyone to access the datastore class directly. (`DM-39915 <https://jira.lsstcorp.org/browse/DM-39915>`_)
+- ``lsst.daf.butler.registry.DbAuth`` class has been moved to the ``lsst-utils`` package and can be imported from the ``lsst.utils.db_auth`` module. (`DM-40462 <https://jira.lsstcorp.org/browse/DM-40462>`_)
+
+
 Butler v25.0.0 2023-02-27
 =========================
 
