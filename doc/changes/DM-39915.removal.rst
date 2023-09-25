@@ -1,2 +1,0 @@
-The semi-public ``Butler.datastore`` property has now been deprecated.
-The ``LimitedButler`` API has been expanded such that there is no longer any need for anyone to access the datastore class directly.

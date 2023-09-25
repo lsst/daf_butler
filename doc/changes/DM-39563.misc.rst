@@ -1,1 +1,0 @@
-Moved Butler repository aliasing resolution into `~lsst.daf.butler.ButlerConfig` so that it is available everywhere without having to do the resolving each time.

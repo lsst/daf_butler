@@ -1,1 +1,0 @@
-Fix race condition in datastore cache involving the possibility of multiple processes trying to retrieve the same file simultaneously and one of those processes deleting the file on exit of the context manager.

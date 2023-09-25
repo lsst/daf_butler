@@ -1,1 +1,0 @@
-Add converter config to allow ``lsst.ip.isr.IntermediateTransmissionCurve`` and subclasses to be used for ``lsst.afw.image.TransmissionCurve``.
