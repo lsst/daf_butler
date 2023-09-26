@@ -1,2 +1,0 @@
-Add support for writing/reading masked columns in astropy tables.
-This also adds support for masked columns in pandas dataframes, with limited support for conversion between the two.
