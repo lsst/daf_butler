@@ -70,7 +70,7 @@ from ..server_models import (
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
-    from ..datastore._datastore import OpaqueTableDefinition
+    from ..datastore._datastore import DatastoreOpaqueTable
     from ..registry._registry import CollectionArgType
     from ..registry.interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
@@ -677,7 +677,7 @@ class RemoteRegistry(_ButlerRegistry):
         # Docstring inherited from base class.
         return
 
-    def make_datastore_tables(self, tables: Mapping[str, OpaqueTableDefinition]) -> None:
+    def make_datastore_tables(self, tables: Mapping[str, DatastoreOpaqueTable]) -> None:
         # Docstring inherited from base class.
         return
 

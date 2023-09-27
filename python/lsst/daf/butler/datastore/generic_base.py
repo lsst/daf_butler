@@ -32,18 +32,16 @@ from __future__ import annotations
 __all__ = ("GenericBaseDatastore",)
 
 import logging
-from abc import abstractmethod
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .._exceptions import DatasetTypeNotSupportedError
 from ..datastore._datastore import Datastore
-from ..registry.interfaces import DatabaseInsertMode, DatastoreRegistryBridge
+from .stored_file_info import StoredDatastoreItemInfo
 
 if TYPE_CHECKING:
     from .._dataset_ref import DatasetRef
     from .._storage_class import StorageClass
-    from .stored_file_info import StoredDatastoreItemInfo
 
 log = logging.getLogger(__name__)
 
@@ -55,107 +53,6 @@ class GenericBaseDatastore(Datastore, Generic[_InfoType]):
 
     Should always be sub-classed since key abstract methods are missing.
     """
-
-    @property
-    @abstractmethod
-    def bridge(self) -> DatastoreRegistryBridge:
-        """Object that manages the interface between this `Datastore` and the
-        `Registry` (`DatastoreRegistryBridge`).
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def addStoredItemInfo(
-        self,
-        refs: Iterable[DatasetRef],
-        infos: Iterable[Any],
-        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
-    ) -> None:
-        """Record internal storage information associated with one or more
-        datasets.
-
-        Parameters
-        ----------
-        refs : sequence of `DatasetRef`
-            The datasets that have been stored.
-        infos : sequence of `StoredDatastoreItemInfo`
-            Metadata associated with the stored datasets.
-        insert_mode : `~lsst.daf.butler.registry.interfaces.DatabaseInsertMode`
-            Mode to use to insert the new records into the table. The
-            options are ``INSERT`` (error if pre-existing), ``REPLACE``
-            (replace content with new values), and ``ENSURE`` (skip if the row
-            already exists).
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def getStoredItemsInfo(self, ref: DatasetRef) -> Iterable[_InfoType]:
-        """Retrieve information associated with files stored in this
-        `Datastore` associated with this dataset ref.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The dataset that is to be queried.
-
-        Returns
-        -------
-        items : `~collections.abc.Iterable` [`StoredDatastoreItemInfo`]
-            Stored information about the files and associated formatters
-            associated with this dataset. Only one file will be returned
-            if the dataset has not been disassembled. Can return an empty
-            list if no matching datasets can be found.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def removeStoredItemInfo(self, ref: DatasetRef) -> None:
-        """Remove information about the file associated with this dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The dataset that has been removed.
-        """
-        raise NotImplementedError()
-
-    def _register_datasets(
-        self,
-        refsAndInfos: Iterable[tuple[DatasetRef, StoredDatastoreItemInfo]],
-        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
-    ) -> None:
-        """Update registry to indicate that one or more datasets have been
-        stored.
-
-        Parameters
-        ----------
-        refsAndInfos : sequence `tuple` [`DatasetRef`,
-                                         `StoredDatastoreItemInfo`]
-            Datasets to register and the internal datastore metadata associated
-            with them.
-        insert_mode : `str`, optional
-            Indicate whether the new records should be new ("insert", default),
-            or allowed to exists ("ensure") or be replaced if already present
-            ("replace").
-        """
-        expandedRefs: list[DatasetRef] = []
-        expandedItemInfos = []
-
-        for ref, itemInfo in refsAndInfos:
-            expandedRefs.append(ref)
-            expandedItemInfos.append(itemInfo)
-
-        # Dataset location only cares about registry ID so if we have
-        # disassembled in datastore we have to deduplicate. Since they
-        # will have different datasetTypes we can't use a set
-        registryRefs = {r.id: r for r in expandedRefs}
-        if insert_mode == DatabaseInsertMode.INSERT:
-            self.bridge.insert(registryRefs.values())
-        else:
-            # There are only two columns and all that matters is the
-            # dataset ID.
-            self.bridge.ensure(registryRefs.values())
-        self.addStoredItemInfo(expandedRefs, expandedItemInfos, insert_mode=insert_mode)
 
     def _post_process_get(
         self,
@@ -272,7 +169,6 @@ class GenericBaseDatastore(Datastore, Generic[_InfoType]):
             The external `Datastore` from which to retreive the Dataset.
         ref : `DatasetRef`
             Reference to the required dataset in the input data store.
-
         """
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)

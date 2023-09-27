@@ -43,8 +43,8 @@ from lsst.daf.butler.datastore import (
     DatasetRefURIs,
     Datastore,
     DatastoreConfig,
+    DatastoreOpaqueTable,
     DatastoreValidationError,
-    OpaqueTableDefinition,
 )
 from lsst.daf.butler.datastore.constraints import Constraints
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
@@ -1179,9 +1179,9 @@ class ChainedDatastore(Datastore):
 
         return all_accepted, remaining_refs
 
-    def get_opaque_table_definitions(self) -> Mapping[str, OpaqueTableDefinition]:
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         # Docstring inherited from the base class.
-        tables: dict[str, OpaqueTableDefinition] = {}
+        tables: dict[str, DatastoreOpaqueTable] = {}
         for datastore in self.datastores:
             tables.update(datastore.get_opaque_table_definitions())
         return tables

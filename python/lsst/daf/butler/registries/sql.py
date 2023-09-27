@@ -88,7 +88,7 @@ from ..utils import transactional
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
-    from ..datastore._datastore import OpaqueTableDefinition
+    from ..datastore._datastore import DatastoreOpaqueTable
     from ..datastore.stored_file_info import StoredDatastoreItemInfo
     from ..registry._registry import CollectionArgType
     from ..registry.interfaces import (
@@ -1373,7 +1373,7 @@ class SqlRegistry(_ButlerRegistry):
                 assert opaque_table is not None, f"Unexpected opaque table name {table_name}"
                 opaque_table.insert(*(record.to_record(dataset_id=ref.id) for record in records))
 
-    def make_datastore_tables(self, tables: Mapping[str, OpaqueTableDefinition]) -> None:
+    def make_datastore_tables(self, tables: Mapping[str, DatastoreOpaqueTable]) -> None:
         # Docstring inherited from base class.
 
         datastore_record_classes = {}

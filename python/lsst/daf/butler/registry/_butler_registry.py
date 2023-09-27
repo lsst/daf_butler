@@ -44,7 +44,7 @@ from ._registry import Registry
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
     from .._dataset_ref import DatasetRef
-    from ..datastore import OpaqueTableDefinition
+    from ..datastore import DatastoreOpaqueTable
     from .interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
 
@@ -255,7 +255,7 @@ class _ButlerRegistry(Registry):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_datastore_tables(self, tables: Mapping[str, OpaqueTableDefinition]) -> None:
+    def make_datastore_tables(self, tables: Mapping[str, DatastoreOpaqueTable]) -> None:
         """Create opaque tables used by datastores.
 
         Parameters

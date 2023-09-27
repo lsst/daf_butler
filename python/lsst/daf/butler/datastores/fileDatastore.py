@@ -45,7 +45,6 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     DatasetTypeNotSupportedError,
-    Datastore,
     FileDataset,
     FileDescriptor,
     Formatter,
@@ -58,9 +57,10 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.datastore import (
     DatasetRefURIs,
+    Datastore,
     DatastoreConfig,
+    DatastoreOpaqueTable,
     DatastoreValidationError,
-    OpaqueTableDefinition,
 )
 from lsst.daf.butler.datastore.cache_manager import (
     AbstractDatastoreCacheManager,
@@ -382,7 +382,21 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         infos: Iterable[StoredFileInfo],
         insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
     ) -> None:
-        # Docstring inherited from GenericBaseDatastore
+        """Record internal storage information associated with one or more
+        datasets.
+
+        Parameters
+        ----------
+        refs : sequence of `DatasetRef`
+            The datasets that have been stored.
+        infos : sequence of `StoredDatastoreItemInfo`
+            Metadata associated with the stored datasets.
+        insert_mode : `~lsst.daf.butler.registry.interfaces.DatabaseInsertMode`
+            Mode to use to insert the new records into the table. The
+            options are ``INSERT`` (error if pre-existing), ``REPLACE``
+            (replace content with new values), and ``ENSURE`` (skip if the row
+            already exists).
+        """
         records = [
             info.rebase(ref).to_record(dataset_id=ref.id) for ref, info in zip(refs, infos, strict=True)
         ]
@@ -397,8 +411,22 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 raise ValueError(f"Unknown insert mode of '{insert_mode}'")
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
-        # Docstring inherited from GenericBaseDatastore
+        """Retrieve information associated with files stored in this
+        `Datastore` associated with this dataset ref.
 
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            The dataset that is to be queried.
+
+        Returns
+        -------
+        items : `~collections.abc.Iterable` [`StoredDatastoreItemInfo`]
+            Stored information about the files and associated formatters
+            associated with this dataset. Only one file will be returned
+            if the dataset has not been disassembled. Can return an empty
+            list if no matching datasets can be found.
+        """
         # Try to get them from the ref first.
         if ref.datastore_records is not None:
             if (ref_records := ref.datastore_records.get(self._table.name)) is not None:
@@ -412,6 +440,44 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # if we have disassembled the dataset.
         records = self._table.fetch(dataset_id=ref.id)
         return [StoredFileInfo.from_record(record) for record in records]
+
+    def _register_datasets(
+        self,
+        refsAndInfos: Iterable[tuple[DatasetRef, StoredFileInfo]],
+        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
+    ) -> None:
+        """Update registry to indicate that one or more datasets have been
+        stored.
+
+        Parameters
+        ----------
+        refsAndInfos : sequence `tuple` [`DatasetRef`,
+                                         `StoredDatastoreItemInfo`]
+            Datasets to register and the internal datastore metadata associated
+            with them.
+        insert_mode : `str`, optional
+            Indicate whether the new records should be new ("insert", default),
+            or allowed to exists ("ensure") or be replaced if already present
+            ("replace").
+        """
+        expandedRefs: list[DatasetRef] = []
+        expandedItemInfos: list[StoredFileInfo] = []
+
+        for ref, itemInfo in refsAndInfos:
+            expandedRefs.append(ref)
+            expandedItemInfos.append(itemInfo)
+
+        # Dataset location only cares about registry ID so if we have
+        # disassembled in datastore we have to deduplicate. Since they
+        # will have different datasetTypes we can't use a set
+        registryRefs = {r.id: r for r in expandedRefs}
+        if insert_mode == DatabaseInsertMode.INSERT:
+            self.bridge.insert(registryRefs.values())
+        else:
+            # There are only two columns and all that matters is the
+            # dataset ID.
+            self.bridge.ensure(registryRefs.values())
+        self.addStoredItemInfo(expandedRefs, expandedItemInfos, insert_mode=insert_mode)
 
     def _get_stored_records_associated_with_refs(
         self, refs: Iterable[DatasetIdRef]
@@ -491,8 +557,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         return ids
 
     def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
-        # Docstring inherited from GenericBaseDatastore
+        """Remove information about the file associated with this dataset.
 
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            The dataset that has been removed.
+        """
         # Note that this method is actually not used by this implementation,
         # we depend on bridge to delete opaque records. But there are some
         # tests that check that this method works, so we keep it for now.
@@ -3093,6 +3164,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             ref = ref.overrideStorageClass(dataset_type.storageClass)
         return ref
 
-    def get_opaque_table_definitions(self) -> Mapping[str, OpaqueTableDefinition]:
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         # Docstring inherited from the base class.
-        return {self._opaque_table_name: OpaqueTableDefinition(self.makeTableSpec(ddl.GUID), StoredFileInfo)}
+        return {self._opaque_table_name: DatastoreOpaqueTable(self.makeTableSpec(ddl.GUID), StoredFileInfo)}

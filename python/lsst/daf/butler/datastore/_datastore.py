@@ -30,13 +30,13 @@
 from __future__ import annotations
 
 __all__ = (
-    "DatastoreConfig",
-    "Datastore",
-    "DatastoreValidationError",
     "DatasetRefURIs",
+    "Datastore",
+    "DatastoreConfig",
+    "DatastoreOpaqueTable",
+    "DatastoreValidationError",
     "NullDatastore",
     "DatastoreTransaction",
-    "OpaqueTableDefinition",
 )
 
 import contextlib
@@ -97,7 +97,7 @@ class Event:
 
 
 @dataclasses.dataclass(frozen=True)
-class OpaqueTableDefinition:
+class DatastoreOpaqueTable:
     """Definition of the opaque table which stores datastore records.
 
     Table definition contains `.ddl.TableSpec` for a table and a class
@@ -1264,7 +1264,7 @@ class Datastore(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def get_opaque_table_definitions(self) -> Mapping[str, OpaqueTableDefinition]:
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         """Make definitions of the opaque tables used by this Datastore.
 
         Returns
@@ -1398,5 +1398,5 @@ class NullDatastore(Datastore):
     ) -> Mapping[str, DatastoreRecordData]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
-    def get_opaque_table_definitions(self) -> Mapping[str, OpaqueTableDefinition]:
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         return {}
