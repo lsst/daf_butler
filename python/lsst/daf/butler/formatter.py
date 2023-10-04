@@ -42,9 +42,9 @@ from ._dataset_ref import DatasetRef
 from ._dataset_type import DatasetType
 from .config import Config
 from .configSupport import LookupKey, processLookupConfigs
+from .datastore.file_descriptor import FileDescriptor
+from .datastore.location import Location
 from .dimensions import DimensionUniverse
-from .fileDescriptor import FileDescriptor
-from .location import Location
 from .mappingFactory import MappingFactory
 from .storageClass import StorageClass
 

@@ -32,8 +32,8 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from ..storageClass import StorageClass
     from .location import Location
-    from .storageClass import StorageClass
 
 
 class FileDescriptor:

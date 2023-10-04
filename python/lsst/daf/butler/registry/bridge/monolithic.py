@@ -38,8 +38,8 @@ from typing import TYPE_CHECKING, cast
 
 import sqlalchemy
 
+from ...datastore.stored_file_info import StoredDatastoreItemInfo
 from ...named import NamedValueSet
-from ...storedFileInfo import StoredDatastoreItemInfo
 from ..interfaces import (
     DatasetIdRef,
     DatastoreRegistryBridge,

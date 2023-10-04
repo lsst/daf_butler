@@ -46,7 +46,7 @@ from ..formatter import Formatter
 from ..formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
-    from ..location import Location
+    from ..datastore.location import Location
 
 
 class DoNothingFormatter(Formatter):

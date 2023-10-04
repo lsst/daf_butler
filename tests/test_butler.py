@@ -1302,13 +1302,13 @@ class FileDatastoreButlerTests(ButlerTests):
         # Use a template that has a typo in dimension record metadata.
         # Easier to test with a butler that has a ref with records attached.
         template = FileTemplate("a/{visit.name}/{id}_{visit.namex:?}.fits")
-        with self.assertLogs("lsst.daf.butler.fileTemplates", "INFO"):
+        with self.assertLogs("lsst.daf.butler.datastore.file_templates", "INFO"):
             path = template.format(ref)
         self.assertEqual(path, f"a/v423/{ref.id}_fits")
 
         template = FileTemplate("a/{visit.name}/{id}_{visit.namex}.fits")
         with self.assertRaises(KeyError):
-            with self.assertLogs("lsst.daf.butler.fileTemplates", "INFO"):
+            with self.assertLogs("lsst.daf.butler.datastore.file_templates", "INFO"):
                 template.format(ref)
 
         # Now use a file template that will not result in unique filenames

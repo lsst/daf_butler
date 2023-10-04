@@ -40,7 +40,7 @@ from lsst.utils.introspection import find_outside_stacklevel
 
 from ._dataset_ref import DatasetRef, SerializedDatasetRef
 from ._dataset_type import DatasetType, SerializedDatasetType
-from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
+from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from .dimensions import (
     DataCoordinate,
     DimensionRecord,

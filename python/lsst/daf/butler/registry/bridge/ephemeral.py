@@ -37,7 +37,7 @@ from ..interfaces import DatasetIdRef, DatastoreRegistryBridge, FakeDatasetRef, 
 
 if TYPE_CHECKING:
     from ...datastore import DatastoreTransaction
-    from ...storedFileInfo import StoredDatastoreItemInfo
+    from ...datastore.stored_file_info import StoredDatastoreItemInfo
 
 
 class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):

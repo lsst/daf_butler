@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 if TYPE_CHECKING:
     from ._dataset_ref import DatasetRef
     from ._dataset_type import DatasetType, SerializedDatasetType
-    from .datastoreRecordData import DatastoreRecordData
+    from .datastore.record_data import DatastoreRecordData
     from .dimensions._coordinate import DataCoordinate, SerializedDataCoordinate
     from .dimensions._records import DimensionRecord, SerializedDimensionRecord
 

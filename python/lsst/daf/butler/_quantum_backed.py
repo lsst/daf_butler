@@ -49,7 +49,7 @@ from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from .config import Config
 from .datastore import Datastore
-from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
+from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from .dimensions import DimensionUniverse
 from .quantum import Quantum
 from .registry.bridge.monolithic import MonolithicDatastoreRegistryBridgeManager

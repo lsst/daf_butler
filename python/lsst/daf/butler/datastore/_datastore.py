@@ -29,7 +29,14 @@
 
 from __future__ import annotations
 
-__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError", "DatasetRefURIs", "NullDatastore")
+__all__ = (
+    "DatastoreConfig",
+    "Datastore",
+    "DatastoreValidationError",
+    "DatasetRefURIs",
+    "NullDatastore",
+    "DatastoreTransaction",
+)
 
 import contextlib
 import dataclasses
@@ -42,21 +49,21 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils import doImportType
 
-from .config import Config, ConfigSubset
+from ..config import Config, ConfigSubset
+from ..exceptions import DatasetTypeNotSupportedError, ValidationError
+from ..fileDataset import FileDataset
+from ..storageClass import StorageClassFactory
 from .constraints import Constraints
-from .exceptions import DatasetTypeNotSupportedError, ValidationError
-from .fileDataset import FileDataset
-from .storageClass import StorageClassFactory
 
 if TYPE_CHECKING:
     from lsst.resources import ResourcePath, ResourcePathExpression
 
-    from ._dataset_ref import DatasetRef
-    from ._dataset_type import DatasetType
-    from .configSupport import LookupKey
-    from .datastoreRecordData import DatastoreRecordData
-    from .registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
-    from .storageClass import StorageClass
+    from .._dataset_ref import DatasetRef
+    from .._dataset_type import DatasetType
+    from ..configSupport import LookupKey
+    from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
+    from ..storageClass import StorageClass
+    from .record_data import DatastoreRecordData
 
 _LOG = logging.getLogger(__name__)
 

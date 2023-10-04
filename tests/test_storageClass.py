@@ -101,7 +101,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertIn("comp1", scc.components)
         r = repr(scc)
         self.assertIn("comp1", r)
-        self.assertIn("lsst.daf.butler.storageClassDelegate.StorageClassDelegate", r)
+        self.assertIn("lsst.daf.butler.datastore.storage_class_delegate.StorageClassDelegate", r)
 
         # Ensure that we have a delegate
         self.assertIsInstance(scc.delegate(), StorageClassDelegate)

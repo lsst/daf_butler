@@ -41,8 +41,8 @@ from ._versioning import VersionedExtension, VersionTuple
 if TYPE_CHECKING:
     from ..._dataset_type import DatasetType
     from ...datastore import DatastoreTransaction
+    from ...datastore.stored_file_info import StoredDatastoreItemInfo
     from ...dimensions import DimensionUniverse
-    from ...storedFileInfo import StoredDatastoreItemInfo
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
     from ._opaque import OpaqueTableStorage, OpaqueTableStorageManager

@@ -55,15 +55,15 @@ from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.resources import ResourcePath
 from pydantic import PrivateAttr
 
-from ._dataset_ref import DatasetId, DatasetRef
-from .config import ConfigSubset
-from .configSupport import processLookupConfigs
+from .._dataset_ref import DatasetId, DatasetRef
+from ..config import ConfigSubset
+from ..configSupport import processLookupConfigs
 
 if TYPE_CHECKING:
-    from ._dataset_type import DatasetType
-    from .configSupport import LookupKey
-    from .dimensions import DimensionUniverse
-    from .storageClass import StorageClass
+    from .._dataset_type import DatasetType
+    from ..configSupport import LookupKey
+    from ..dimensions import DimensionUniverse
+    from ..storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 

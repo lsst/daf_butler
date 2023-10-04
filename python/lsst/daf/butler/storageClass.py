@@ -54,7 +54,7 @@ from lsst.utils.introspection import get_full_type_name
 
 from .config import Config, ConfigSubset
 from .configSupport import LookupKey
-from .storageClassDelegate import StorageClassDelegate
+from .datastore.storage_class_delegate import StorageClassDelegate
 
 log = logging.getLogger(__name__)
 

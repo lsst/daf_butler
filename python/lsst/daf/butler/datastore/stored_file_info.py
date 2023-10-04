@@ -36,12 +36,12 @@ from typing import TYPE_CHECKING, Any
 
 from lsst.resources import ResourcePath
 
-from .formatter import Formatter, FormatterParameter
+from ..formatter import Formatter, FormatterParameter
+from ..storageClass import StorageClass, StorageClassFactory
 from .location import Location, LocationFactory
-from .storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
-    from . import DatasetId, DatasetRef
+    from .. import DatasetId, DatasetRef
 
 # String to use when a Python None is encountered
 NULLSTR = "__NULL_STRING__"
