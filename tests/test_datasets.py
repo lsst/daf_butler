@@ -693,6 +693,12 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref5.run, "somerun")
         self.assertEqual(ref5, ref)
 
+        self.assertIsNone(ref5._datastore_records)
+        ref5 = ref5.replace(datastore_records={})
+        self.assertEqual(ref5._datastore_records, {})
+        ref5 = ref5.replace(datastore_records=None)
+        self.assertIsNone(ref5._datastore_records)
+
     def testPickle(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = pickle.dumps(ref)
@@ -708,8 +714,8 @@ class DatasetRefTestCase(unittest.TestCase):
         s = ref.to_json()
         ref2 = DatasetRef.from_json(s, universe=self.universe)
         self.assertEqual(ref2, ref)
-        self.assertIsNotNone(ref2.datastore_records)
-        self.assertEqual(ref2.datastore_records, ref.datastore_records)
+        self.assertIsNotNone(ref2._datastore_records)
+        self.assertEqual(ref2._datastore_records, ref._datastore_records)
 
     def testFileDataset(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")

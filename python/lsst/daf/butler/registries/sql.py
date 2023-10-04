@@ -1367,8 +1367,8 @@ class SqlRegistry(_ButlerRegistry):
             bridge.insert([ref])
 
             # store records in opaque tables
-            assert ref.datastore_records is not None, "Dataset ref must have datastore records"
-            for table_name, records in ref.datastore_records.items():
+            assert ref._datastore_records is not None, "Dataset ref must have datastore records"
+            for table_name, records in ref._datastore_records.items():
                 opaque_table = self._managers.opaque.get(table_name)
                 assert opaque_table is not None, f"Unexpected opaque table name {table_name}"
                 opaque_table.insert(*(record.to_record(dataset_id=ref.id) for record in records))

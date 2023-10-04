@@ -1063,7 +1063,7 @@ class Butler(LimitedButler):
             if collections is not None:
                 warnings.warn("Collections should not be specified with DatasetRef", stacklevel=3)
             # May need to retrieve datastore records if requested.
-            if datastore_records and datasetRefOrType.datastore_records is None:
+            if datastore_records and datasetRefOrType._datastore_records is None:
                 datasetRefOrType = self._registry.get_datastore_records(datasetRefOrType)
             return datasetRefOrType
         timespan: Timespan | None = None
@@ -1119,7 +1119,7 @@ class Butler(LimitedButler):
             # using the user definition such that the expected type is
             # returned.
             ref = DatasetRef(
-                datasetType, ref.dataId, run=ref.run, id=ref.id, datastore_records=ref.datastore_records
+                datasetType, ref.dataId, run=ref.run, id=ref.id, datastore_records=ref._datastore_records
             )
 
         return ref

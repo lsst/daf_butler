@@ -320,7 +320,7 @@ class DatasetRef:
         "datasetType",
         "dataId",
         "run",
-        "datastore_records",
+        "_datastore_records",
     )
 
     def __init__(
@@ -348,7 +348,7 @@ class DatasetRef:
                 .makeDatasetId(self.run, self.datasetType, self.dataId, id_generation_mode)
                 .int
             )
-        self.datastore_records = datastore_records
+        self._datastore_records = datastore_records
 
     @property
     def id(self) -> DatasetId:
@@ -431,9 +431,9 @@ class DatasetRef:
             return SerializedDatasetRef(**simple)
 
         datastore_records: Mapping[str, _DatastoreRecords] | None = None
-        if self.datastore_records is not None:
+        if self._datastore_records is not None:
             datastore_records = {}
-            for opaque_name, records in self.datastore_records.items():
+            for opaque_name, records in self._datastore_records.items():
                 class_name, record_dicts = StoredDatastoreItemInfo.to_records(records)
                 datastore_records[opaque_name] = class_name, list(record_dicts)
 
@@ -578,7 +578,7 @@ class DatasetRef:
     def __reduce__(self) -> tuple:
         return (
             self._unpickle,
-            (self.datasetType, self.dataId, self.id, self.run, self.datastore_records),
+            (self.datasetType, self.dataId, self.id, self.run, self._datastore_records),
         )
 
     def __deepcopy__(self, memo: dict) -> DatasetRef:
@@ -607,7 +607,7 @@ class DatasetRef:
             id=self.id,
             run=self.run,
             conform=False,
-            datastore_records=self.datastore_records,
+            datastore_records=self._datastore_records,
         )
 
     def isComponent(self) -> bool:
@@ -722,7 +722,7 @@ class DatasetRef:
             id=self.id,
             run=self.run,
             conform=False,
-            datastore_records=self.datastore_records,
+            datastore_records=self._datastore_records,
         )
 
     def makeComponentRef(self, name: str) -> DatasetRef:
@@ -748,7 +748,7 @@ class DatasetRef:
             id=self.id,
             run=self.run,
             conform=False,
-            datastore_records=self.datastore_records,
+            datastore_records=self._datastore_records,
         )
 
     def overrideStorageClass(self, storageClass: str | StorageClass) -> DatasetRef:
@@ -799,7 +799,7 @@ class DatasetRef:
             A new dataset reference with updated attributes.
         """
         if datastore_records is False:
-            datastore_records = self.datastore_records
+            datastore_records = self._datastore_records
         if storage_class is None:
             datasetType = self.datasetType
         else:

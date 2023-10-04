@@ -428,8 +428,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             list if no matching datasets can be found.
         """
         # Try to get them from the ref first.
-        if ref.datastore_records is not None:
-            if (ref_records := ref.datastore_records.get(self._table.name)) is not None:
+        if ref._datastore_records is not None:
+            if (ref_records := ref._datastore_records.get(self._table.name)) is not None:
                 # Need to make sure they have correct type.
                 for record in ref_records:
                     if not isinstance(record, StoredFileInfo):
@@ -499,10 +499,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         records_by_ref: defaultdict[DatasetId, list[StoredFileInfo]] = defaultdict(list)
         refs_with_no_records = []
         for ref in refs:
-            if ref.datastore_records is None:
+            if ref._datastore_records is None:
                 refs_with_no_records.append(ref)
             else:
-                if (ref_records := ref.datastore_records.get(self._table.name)) is not None:
+                if (ref_records := ref._datastore_records.get(self._table.name)) is not None:
                     # Need to make sure they have correct type.
                     for ref_record in ref_records:
                         if not isinstance(ref_record, StoredFileInfo):

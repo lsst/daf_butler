@@ -93,7 +93,7 @@ class FakeDatasetRef:
         raise AttributeError("A FakeDatasetRef can not be associated with a valid DatasetType")
 
     @property
-    def datastore_records(self) -> DatasetDatastoreRecords | None:
+    def _datastore_records(self) -> DatasetDatastoreRecords | None:
         raise AttributeError("A FakeDatasetRef can not be associated with datastore records")
 
 
