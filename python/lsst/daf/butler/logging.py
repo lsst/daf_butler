@@ -35,10 +35,11 @@ from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
 from typing import IO, Any, ClassVar, Union, overload
 
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
 from pydantic import ConfigDict, PrivateAttr
+
+from ._compat import PYDANTIC_V2, _BaseModelCompat
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""

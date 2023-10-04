@@ -45,8 +45,8 @@ from .persistenceContext import PersistenceContextVars
 from .storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
-    from ..registry import Registry
     from .dimensions import Dimension, DimensionUniverse
+    from .registry import Registry
 
 
 def _safeMakeMappingProxyType(data: Mapping | None) -> Mapping:

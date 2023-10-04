@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegistryBridge")
 
 import copy
@@ -36,7 +38,8 @@ from typing import TYPE_CHECKING, cast
 
 import sqlalchemy
 
-from ...core import NamedValueSet, StoredDatastoreItemInfo, ddl
+from ...named import NamedValueSet
+from ...storedFileInfo import StoredDatastoreItemInfo
 from ..interfaces import (
     DatasetIdRef,
     DatastoreRegistryBridge,
@@ -49,8 +52,8 @@ from ..opaque import ByNameOpaqueTableStorage
 from .ephemeral import EphemeralDatastoreRegistryBridge
 
 if TYPE_CHECKING:
-    from ...core import DimensionUniverse
-    from ...core.datastore import DatastoreTransaction
+    from ...datastore import DatastoreTransaction
+    from ...dimensions import DimensionUniverse
     from ..interfaces import (
         Database,
         DatasetRecordStorageManager,

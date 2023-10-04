@@ -33,15 +33,12 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-from ..core import (
-    ConfigSubset,
-    DatasetAssociation,
-    DatasetType,
-    Datastore,
-    DimensionElement,
-    DimensionRecord,
-    FileDataset,
-)
+from .._dataset_association import DatasetAssociation
+from .._dataset_type import DatasetType
+from ..config import ConfigSubset
+from ..datastore import Datastore
+from ..dimensions import DimensionElement, DimensionRecord
+from ..fileDataset import FileDataset
 from ..registry import CollectionType
 from ..registry.interfaces import CollectionRecord
 

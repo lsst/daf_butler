@@ -33,27 +33,25 @@ import contextlib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from .core import (
+from ._dataset_association import DatasetAssociation
+from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
+from ._dataset_type import DatasetType
+from .dimensions import (
     DataCoordinate,
     DataId,
-    DatasetAssociation,
-    DatasetId,
-    DatasetIdGenEnum,
-    DatasetRef,
-    DatasetType,
     Dimension,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    NameLookupMapping,
-    Timespan,
 )
+from .named import NameLookupMapping
 from .registry import Registry
 from .registry._collection_summary import CollectionSummary
 from .registry._collectionType import CollectionType
 from .registry._defaults import RegistryDefaults
 from .registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
+from .timespan import Timespan
 
 if TYPE_CHECKING:
     from ._butler import Butler

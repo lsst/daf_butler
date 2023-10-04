@@ -42,7 +42,7 @@ from ..json import from_json_pydantic, to_json_pydantic
 from ..named import NamedValueAbstractSet, NamedValueSet
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ...registry import Registry
+    from ..registry import Registry
     from ._elements import Dimension, DimensionElement
     from ._governor import GovernorDimension
     from ._universe import DimensionUniverse

@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ("CrossFamilyDimensionOverlapStorage",)
 
 import logging
@@ -36,7 +38,7 @@ from typing import TYPE_CHECKING
 import sqlalchemy
 from lsst.daf.relation import Relation
 
-from ...core import DatabaseDimensionElement, addDimensionForeignKey, ddl
+from ...dimensions import DatabaseDimensionElement, addDimensionForeignKey
 from ..interfaces import (
     Database,
     DatabaseDimensionOverlapStorage,

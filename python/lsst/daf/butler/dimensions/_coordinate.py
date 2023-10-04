@@ -52,7 +52,7 @@ from ._graph import DimensionGraph
 from ._records import DimensionRecord, SerializedDimensionRecord
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ...registry import Registry
+    from ..registry import Registry
     from ._universe import DimensionUniverse
 
 DataIdKey = str | Dimension

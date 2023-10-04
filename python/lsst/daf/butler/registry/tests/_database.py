@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ["DatabaseTests"]
 
 import asyncio
@@ -42,7 +44,7 @@ import astropy.time
 import sqlalchemy
 from lsst.sphgeom import Circle, ConvexPolygon, UnitVector3d
 
-from ...core import Timespan, ddl
+from ...timespan import Timespan
 from ..interfaces import Database, DatabaseConflictError, ReadOnlyDatabaseError, SchemaAlreadyDefinedError
 
 StaticTablesTuple = namedtuple("StaticTablesTuple", ["a", "b", "c"])

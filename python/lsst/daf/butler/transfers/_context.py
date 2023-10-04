@@ -33,17 +33,12 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Set
 from typing import TYPE_CHECKING
 
-from ..core import (
-    DataCoordinate,
-    DatasetAssociation,
-    DatasetId,
-    DatasetRef,
-    DatasetType,
-    Datastore,
-    DimensionElement,
-    DimensionRecord,
-    FileDataset,
-)
+from .._dataset_association import DatasetAssociation
+from .._dataset_ref import DatasetId, DatasetRef
+from .._dataset_type import DatasetType
+from ..datastore import Datastore
+from ..dimensions import DataCoordinate, DimensionElement, DimensionRecord
+from ..fileDataset import FileDataset
 from ..registry import CollectionType, _ButlerRegistry
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ._interfaces import RepoExportBackend

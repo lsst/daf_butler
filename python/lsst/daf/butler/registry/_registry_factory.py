@@ -34,7 +34,8 @@ from typing import TYPE_CHECKING
 from lsst.resources import ResourcePathExpression
 from lsst.utils import doImportType
 
-from ..core import Config, DimensionConfig
+from ..config import Config
+from ..dimensions import DimensionConfig
 from ._butler_registry import _ButlerRegistry
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults

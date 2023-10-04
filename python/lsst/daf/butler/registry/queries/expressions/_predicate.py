@@ -50,17 +50,10 @@ from lsst.daf.relation import (
 # We import the timespan module rather than types within it because match
 # syntax uses qualified names with periods to distinguish literals from
 # captures.
-from ....core import (
-    ColumnTypeInfo,
-    DataCoordinate,
-    DatasetColumnTag,
-    Dimension,
-    DimensionGraph,
-    DimensionKeyColumnTag,
-    DimensionRecordColumnTag,
-    DimensionUniverse,
-    timespan,
-)
+from .... import timespan
+from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
+from ...._column_type_info import ColumnTypeInfo
+from ....dimensions import DataCoordinate, Dimension, DimensionGraph, DimensionUniverse
 from ..._exceptions import UserExpressionError, UserExpressionSyntaxError
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .check import CheckVisitor

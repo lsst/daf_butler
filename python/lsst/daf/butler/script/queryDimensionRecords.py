@@ -34,7 +34,7 @@ from typing import Any
 from astropy.table import Table
 
 from .._butler import Butler
-from ..core import Timespan
+from ..timespan import Timespan
 
 
 def queryDimensionRecords(

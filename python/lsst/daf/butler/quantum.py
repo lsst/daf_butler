@@ -38,7 +38,8 @@ from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel
 
-from . import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
+from ._dataset_ref import DatasetRef, SerializedDatasetRef
+from ._dataset_type import DatasetType, SerializedDatasetType
 from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
 from .dimensions import (
     DataCoordinate,

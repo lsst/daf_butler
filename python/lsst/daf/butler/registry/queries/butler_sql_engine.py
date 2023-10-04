@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ("ButlerSqlEngine",)
 
 import dataclasses
@@ -36,14 +38,9 @@ import astropy.time
 import sqlalchemy
 from lsst.daf.relation import ColumnTag, Relation, Sort, UnaryOperation, UnaryOperationRelation, sql
 
-from ...core import (
-    ColumnTypeInfo,
-    LogicalColumn,
-    Timespan,
-    TimespanDatabaseRepresentation,
-    ddl,
-    is_timespan_column,
-)
+from ..._column_tags import is_timespan_column
+from ..._column_type_info import ColumnTypeInfo, LogicalColumn
+from ...timespan import Timespan, TimespanDatabaseRepresentation
 from ..nameShrinker import NameShrinker
 from .find_first_dataset import FindFirstDataset
 

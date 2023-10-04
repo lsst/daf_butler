@@ -39,24 +39,22 @@ from typing import TYPE_CHECKING, Any
 
 from lsst.resources import ResourcePathExpression
 
-from ..core import (
+from .._dataset_association import DatasetAssociation
+from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
+from .._dataset_type import DatasetType
+from ..dimensions import (
     DataCoordinate,
     DataId,
-    DatasetAssociation,
-    DatasetId,
-    DatasetIdGenEnum,
-    DatasetRef,
-    DatasetType,
     Dimension,
     DimensionConfig,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    NameLookupMapping,
-    StorageClassFactory,
-    Timespan,
 )
+from ..named import NameLookupMapping
+from ..storageClass import StorageClassFactory
+from ..timespan import Timespan
 from ._collection_summary import CollectionSummary
 from ._collectionType import CollectionType
 from ._config import RegistryConfig

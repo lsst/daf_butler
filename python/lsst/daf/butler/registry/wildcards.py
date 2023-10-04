@@ -44,8 +44,8 @@ from deprecated.sphinx import deprecated
 from lsst.daf.butler._compat import PYDANTIC_V2
 from lsst.utils.iteration import ensure_iterable
 
-from ..core import DatasetType
-from ..core.utils import globToRegex
+from .._dataset_type import DatasetType
+from ..utils import globToRegex
 from ._exceptions import CollectionExpressionError, DatasetTypeExpressionError
 
 

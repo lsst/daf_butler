@@ -77,7 +77,7 @@ import click.testing
 import yaml
 from lsst.utils.iteration import ensure_iterable
 
-from ..core.config import Config
+from ..config import Config
 from .cliLog import CliLog
 
 if TYPE_CHECKING:

@@ -36,19 +36,16 @@ import dataclasses
 from collections.abc import Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
-from ....core import (
+from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
+from ....dimensions import (
     DataCoordinate,
     DataIdValue,
-    DatasetColumnTag,
     Dimension,
     DimensionElement,
     DimensionGraph,
-    DimensionKeyColumnTag,
-    DimensionRecordColumnTag,
     DimensionUniverse,
-    NamedKeyDict,
-    NamedValueSet,
 )
+from ....named import NamedKeyDict, NamedValueSet
 from ..._exceptions import UserExpressionError
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .normalForm import NormalForm, NormalFormVisitor

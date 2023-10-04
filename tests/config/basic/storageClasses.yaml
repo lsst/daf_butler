@@ -100,7 +100,7 @@ storageClasses:
       # Add some entries that will fail to import.
       lsst.daf.butler.bad.type: lsst.daf.butler.tests.MetricsExampleModel.from_metrics
       lsst.daf.butler.tests.MetricsExampleModel: lsst.daf.butler.bad.function
-      lsst.daf.butler.Butler: lsst.daf.butler.core.location.__all__
+      lsst.daf.butler.Butler: lsst.daf.butler.location.__all__
   MetricsConversion:
     # Special storage class to test conversions with components and params.
     pytype: lsst.daf.butler.tests.MetricsExampleModel

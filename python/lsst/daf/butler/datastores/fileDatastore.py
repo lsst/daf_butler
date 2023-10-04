@@ -67,9 +67,9 @@ from lsst.daf.butler import (
     StoredFileInfo,
     ddl,
 )
-from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import transactional
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge, ReadOnlyDatabaseError
+from lsst.daf.butler.repoRelocation import replaceRoot
+from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of, get_instance_of
 from lsst.utils.iteration import chunk_iterable

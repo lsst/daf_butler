@@ -51,10 +51,11 @@ from .storageClass import StorageClassFactory
 if TYPE_CHECKING:
     from lsst.resources import ResourcePath, ResourcePathExpression
 
-    from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
-    from . import DatasetRef, DatasetType
+    from ._dataset_ref import DatasetRef
+    from ._dataset_type import DatasetType
     from .configSupport import LookupKey
     from .datastoreRecordData import DatastoreRecordData
+    from .registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from .storageClass import StorageClass
 
 _LOG = logging.getLogger(__name__)

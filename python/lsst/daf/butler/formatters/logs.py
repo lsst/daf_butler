@@ -29,7 +29,7 @@ __all__ = ("ButlerLogRecordsFormatter",)
 
 from typing import Any
 
-from lsst.daf.butler.core.logging import ButlerLogRecords
+from lsst.daf.butler.logging import ButlerLogRecords
 
 from .json import JsonFormatter
 

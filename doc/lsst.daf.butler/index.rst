@@ -162,10 +162,10 @@ Database backends
 Support API
 -----------
 
-.. automodapi:: lsst.daf.butler.core.utils
+.. automodapi:: lsst.daf.butler.utils
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.core.repoRelocation
+.. automodapi:: lsst.daf.butler.repoRelocation
    :no-main-docstr:
    :headings: ^"
    :include-all-objects:

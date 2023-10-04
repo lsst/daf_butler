@@ -42,7 +42,7 @@ from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
-    from ...registry.interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
+    from ..registry.interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
 
 
 class GovernorDimension(Dimension):
@@ -171,7 +171,7 @@ class GovernorDimension(Dimension):
         storage : `GovernorDimensionRecordStorage`
             Storage object that should back this element in a registry.
         """
-        from ...registry.interfaces import GovernorDimensionRecordStorage
+        from ..registry.interfaces import GovernorDimensionRecordStorage
 
         cls = doImportType(self._storage["cls"])
         assert issubclass(cls, GovernorDimensionRecordStorage)

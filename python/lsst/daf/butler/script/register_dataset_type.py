@@ -29,7 +29,7 @@ from __future__ import annotations
 __all__ = ("register_dataset_type",)
 
 from .._butler import Butler
-from ..core import DatasetType
+from .._dataset_type import DatasetType
 
 
 def register_dataset_type(

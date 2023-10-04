@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from .. import ddl
+
 __all__ = (
     "RegistryManagerInstances",
     "RegistryManagerTypes",
@@ -40,7 +42,9 @@ from typing import Any, Generic, TypeVar
 import sqlalchemy
 from lsst.utils import doImportType
 
-from ..core import ColumnTypeInfo, Config, DimensionConfig, DimensionUniverse, ddl
+from .._column_type_info import ColumnTypeInfo
+from ..config import Config
+from ..dimensions import DimensionConfig, DimensionUniverse
 from ._config import RegistryConfig
 from .interfaces import (
     ButlerAttributeManager,

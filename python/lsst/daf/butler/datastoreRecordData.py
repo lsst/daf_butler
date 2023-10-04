@@ -40,13 +40,13 @@ from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
 
-from . import DatasetId
+from ._dataset_ref import DatasetId
 from .dimensions import DimensionUniverse
 from .persistenceContext import PersistenceContextVars
 from .storedFileInfo import StoredDatastoreItemInfo
 
 if TYPE_CHECKING:
-    from ..registry import Registry
+    from .registry import Registry
 
 # Pydantic 2 requires we be explicit about the types that are used in
 # datastore records. Without this UUID can not be handled. Pydantic v1
@@ -170,7 +170,7 @@ class DatastoreRecordData:
     def to_simple(self, minimal: bool = False) -> SerializedDatastoreRecordData:
         """Make representation of the object for serialization.
 
-        Implements `~lsst.daf.butler.core.json.SupportsSimple` protocol.
+        Implements `~lsst.daf.butler.json.SupportsSimple` protocol.
 
         Parameters
         ----------
@@ -213,7 +213,7 @@ class DatastoreRecordData:
     ) -> DatastoreRecordData:
         """Make an instance of this class from serialized data.
 
-        Implements `~lsst.daf.butler.core.json.SupportsSimple` protocol.
+        Implements `~lsst.daf.butler.json.SupportsSimple` protocol.
 
         Parameters
         ----------

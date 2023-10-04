@@ -44,7 +44,7 @@ from ..json import from_json_generic, to_json_generic
 from ..named import NamedValueAbstractSet, NamedValueSet
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ...registry import Registry
+    from ..registry import Registry
     from ._governor import GovernorDimension
     from ._graph import DimensionGraph
     from ._records import DimensionRecord

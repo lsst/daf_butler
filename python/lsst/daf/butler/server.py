@@ -47,13 +47,13 @@ from lsst.daf.butler import (
     SerializedDatasetType,
     SerializedDimensionRecord,
 )
-from lsst.daf.butler.core.serverModels import (
+from lsst.daf.butler.registry import CollectionType
+from lsst.daf.butler.serverModels import (
     ExpressionQueryParameter,
     QueryDataIdsModel,
     QueryDatasetsModel,
     QueryDimensionRecordsModel,
 )
-from lsst.daf.butler.registry import CollectionType
 
 BUTLER_ROOT = "ci_hsc_gen3/DATA"
 

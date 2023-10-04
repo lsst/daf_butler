@@ -55,35 +55,26 @@ from sqlalchemy.exc import IntegrityError
 from ._butlerConfig import ButlerConfig
 from ._butlerRepoIndex import ButlerRepoIndex
 from ._dataset_existence import DatasetExistence
+from ._dataset_ref import DatasetIdGenEnum, DatasetRef
+from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
 from ._registry_shim import RegistryShim
-from .core import (
-    Config,
-    ConfigSubset,
+from .config import Config, ConfigSubset
+from .datastore import DatasetRefURIs, Datastore, NullDatastore
+from .dimensions import (
     DataCoordinate,
     DataId,
     DataIdValue,
-    DatasetIdGenEnum,
-    DatasetRef,
-    DatasetRefURIs,
-    DatasetType,
-    Datastore,
     Dimension,
     DimensionConfig,
     DimensionElement,
     DimensionRecord,
     DimensionUniverse,
-    FileDataset,
-    NullDatastore,
-    Progress,
-    StorageClass,
-    StorageClassFactory,
-    Timespan,
-    ValidationError,
 )
-from .core.repoRelocation import BUTLER_ROOT_TAG
-from .core.utils import transactional
+from .exceptions import ValidationError
+from .fileDataset import FileDataset
+from .progress import Progress
 from .registry import (
     CollectionType,
     ConflictingDefinitionError,
@@ -96,7 +87,11 @@ from .registry import (
     _ButlerRegistry,
     _RegistryFactory,
 )
+from .repoRelocation import BUTLER_ROOT_TAG
+from .storageClass import StorageClass, StorageClassFactory
+from .timespan import Timespan
 from .transfers import RepoExportContext
+from .utils import transactional
 
 if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol

@@ -41,7 +41,8 @@ from .configSupport import LookupKey, processLookupConfigList
 from .exceptions import ValidationError
 
 if TYPE_CHECKING:
-    from . import DatasetRef, DatasetType
+    from ._dataset_ref import DatasetRef
+    from ._dataset_type import DatasetType
     from .dimensions import DimensionUniverse
     from .storageClass import StorageClass
 

@@ -38,7 +38,7 @@ from collections.abc import Iterable, Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from . import DatasetRef
+from ._dataset_ref import DatasetRef
 from .config import Config
 from .configSupport import LookupKey, processLookupConfigs
 from .dimensions import DataCoordinate, SkyPixDimension
@@ -46,7 +46,7 @@ from .exceptions import ValidationError
 from .storageClass import StorageClass
 
 if TYPE_CHECKING:
-    from . import DatasetType
+    from ._dataset_type import DatasetType
     from .dimensions import DimensionUniverse
 
 log = logging.getLogger(__name__)

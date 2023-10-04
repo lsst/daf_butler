@@ -43,7 +43,7 @@ from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ._elements import Dimension, DimensionElement
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ...registry import Registry
+    from ..registry import Registry
     from ._coordinate import DataCoordinate
     from ._graph import DimensionUniverse
     from ._schema import DimensionElementFields

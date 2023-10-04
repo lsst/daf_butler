@@ -40,10 +40,10 @@ from collections.abc import Mapping
 from typing import Any, ClassVar
 
 import pydantic
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.iteration import ensure_iterable
 from pydantic import Field
 
+from ._compat import PYDANTIC_V2, _BaseModelCompat
 from .dimensions import DataIdValue, SerializedDataCoordinate
 from .utils import globToRegex
 

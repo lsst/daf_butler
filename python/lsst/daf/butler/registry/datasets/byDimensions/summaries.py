@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from .... import ddl
+
 __all__ = ("CollectionSummaryManager",)
 
 from collections.abc import Iterable, Mapping
@@ -34,14 +36,9 @@ from typing import Any, Generic, TypeVar
 
 import sqlalchemy
 
-from ....core import (
-    DatasetType,
-    GovernorDimension,
-    NamedKeyDict,
-    NamedKeyMapping,
-    addDimensionForeignKey,
-    ddl,
-)
+from ...._dataset_type import DatasetType
+from ....dimensions import GovernorDimension, addDimensionForeignKey
+from ....named import NamedKeyDict, NamedKeyMapping
 from ..._collection_summary import CollectionSummary
 from ..._collectionType import CollectionType
 from ...interfaces import (

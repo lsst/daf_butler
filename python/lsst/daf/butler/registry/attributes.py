@@ -38,7 +38,7 @@ from typing import ClassVar
 
 import sqlalchemy
 
-from ..core.ddl import FieldSpec, TableSpec
+from ..ddl import FieldSpec, TableSpec
 from .interfaces import (
     ButlerAttributeExistsError,
     ButlerAttributeManager,

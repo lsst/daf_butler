@@ -34,15 +34,15 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 from lsst.daf.relation import Relation
 
-from ...core import (
+from ..._column_tags import DimensionKeyColumnTag
+from ...dimensions import (
     DatabaseDimension,
     DatabaseDimensionElement,
     DataCoordinate,
-    DimensionKeyColumnTag,
     DimensionRecord,
     GovernorDimension,
-    NamedKeyMapping,
 )
+from ...named import NamedKeyMapping
 from ..interfaces import (
     Database,
     DatabaseDimensionRecordStorage,

@@ -54,7 +54,7 @@ from .named import NamedKeyDict
 from .persistenceContext import PersistenceContextVars
 
 if TYPE_CHECKING:
-    from ..registry import Registry
+    from .registry import Registry
     from .storageClass import StorageClass
 
 

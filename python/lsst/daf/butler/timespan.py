@@ -56,8 +56,8 @@ from .json import from_json_generic, to_json_generic
 from .time_utils import TimeConverter
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ..registry import Registry
     from .dimensions import DimensionUniverse
+    from .registry import Registry
 
 
 class _SpecialTimespanBound(enum.Enum):

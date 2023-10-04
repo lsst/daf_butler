@@ -37,7 +37,7 @@ from lsst.sphgeom import ConvexPolygon, LonLat, Region
 from sqlalchemy.dialects.postgresql.base import ischema_names
 from sqlalchemy.types import UserDefinedType
 
-from ...core import ddl
+from ... import ddl
 from ._spatial import MissingDatabaseError, RegionTypeError, SpatialObsCorePlugin
 
 if TYPE_CHECKING:

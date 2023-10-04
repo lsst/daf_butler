@@ -35,8 +35,10 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from ._dataset_ref import DatasetRef
     from ._limited_butler import LimitedButler
-    from .core import DataCoordinate, DatasetRef, StorageClass
+    from .dimensions import DataCoordinate
+    from .storageClass import StorageClass
 
 
 @dataclasses.dataclass(frozen=True)

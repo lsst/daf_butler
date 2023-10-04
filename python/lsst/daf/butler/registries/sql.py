@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from .. import ddl
+
 __all__ = ("SqlRegistry",)
 
 import contextlib
@@ -41,30 +43,23 @@ from lsst.resources import ResourcePathExpression
 from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
-from ..core import (
-    Config,
+from .._column_tags import DatasetColumnTag
+from .._dataset_association import DatasetAssociation
+from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
+from .._dataset_type import DatasetType
+from ..config import Config
+from ..dimensions import (
     DataCoordinate,
     DataId,
-    DatasetAssociation,
-    DatasetColumnTag,
-    DatasetId,
-    DatasetIdGenEnum,
-    DatasetRef,
-    DatasetType,
     Dimension,
     DimensionConfig,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    NamedKeyMapping,
-    NameLookupMapping,
-    Progress,
-    StorageClassFactory,
-    Timespan,
-    ddl,
 )
-from ..core.utils import transactional
+from ..named import NamedKeyMapping, NameLookupMapping
+from ..progress import Progress
 from ..registry import (
     ArgumentError,
     CollectionExpressionError,
@@ -87,6 +82,9 @@ from ..registry import (
 from ..registry.interfaces import ChainedCollectionRecord, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
+from ..storageClass import StorageClassFactory
+from ..timespan import Timespan
+from ..utils import transactional
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig

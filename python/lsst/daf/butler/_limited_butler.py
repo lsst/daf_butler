@@ -37,8 +37,11 @@ from typing import Any, ClassVar
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath
 
+from ._dataset_ref import DatasetRef
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from .core import DatasetRef, DatasetRefURIs, Datastore, DimensionUniverse, StorageClass, StorageClassFactory
+from .datastore import DatasetRefURIs, Datastore
+from .dimensions import DimensionUniverse
+from .storageClass import StorageClass, StorageClassFactory
 
 log = logging.getLogger(__name__)
 

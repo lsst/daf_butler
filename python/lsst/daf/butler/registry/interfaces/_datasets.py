@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
 
 from abc import ABC, abstractmethod
@@ -35,7 +37,10 @@ from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Relation
 
-from ...core import DataCoordinate, DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType, Timespan, ddl
+from ..._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
+from ..._dataset_type import DatasetType
+from ...dimensions import DataCoordinate
+from ...timespan import Timespan
 from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension, VersionTuple
 

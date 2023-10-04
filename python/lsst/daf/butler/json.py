@@ -33,8 +33,8 @@ import json
 from typing import TYPE_CHECKING, Any, Protocol, Type
 
 if TYPE_CHECKING:
-    from ..registry import Registry
     from .dimensions import DimensionUniverse
+    from .registry import Registry
 
 
 class SupportsSimple(Protocol):

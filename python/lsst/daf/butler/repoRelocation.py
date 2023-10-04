@@ -45,7 +45,7 @@ def replaceRoot(configRoot: str, butlerRoot: ResourcePathExpression | None) -> s
 
     No changes are made if the special root string is not found in the
     configuration entry.  The name of the tag is defined in
-    the module variable `~lsst.daf.butler.core.repoRelocation.BUTLER_ROOT_TAG`.
+    the module variable `~lsst.daf.butler.repoRelocation.BUTLER_ROOT_TAG`.
 
     Parameters
     ----------
@@ -54,7 +54,7 @@ def replaceRoot(configRoot: str, butlerRoot: ResourcePathExpression | None) -> s
     butlerRoot : `lsst.resources.ResourcePathExpression` or `None`
         Butler root directory.  Absolute path is inserted into the
         ``configRoot`` where the
-        `~lsst.daf.butler.core.repoRelocation.BUTLER_ROOT_TAG` string is
+        `~lsst.daf.butler.repoRelocation.BUTLER_ROOT_TAG` string is
         found.  Passing `None` here is allowed only as a convenient way to
         raise an exception (`ValueError`).
 

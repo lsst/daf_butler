@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl, time_utils
+
 __all__ = [
     "Database",
     "ReadOnlyDatabaseError",
@@ -47,8 +49,8 @@ from typing import Any, cast, final
 import astropy.time
 import sqlalchemy
 
-from ...core import TimespanDatabaseRepresentation, ddl, time_utils
-from ...core.named import NamedValueAbstractSet
+from ...named import NamedValueAbstractSet
+from ...timespan import TimespanDatabaseRepresentation
 from .._exceptions import ConflictingDefinitionError
 
 

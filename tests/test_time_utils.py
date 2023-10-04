@@ -40,7 +40,7 @@ except ImportError:
 
 import astropy.utils.exceptions
 from astropy.time import Time, TimeDelta
-from lsst.daf.butler.core.time_utils import TimeConverter
+from lsst.daf.butler.time_utils import TimeConverter
 
 
 class TimeTestCase(unittest.TestCase):

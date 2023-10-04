@@ -42,8 +42,9 @@ from .configSupport import processLookupConfigs
 if TYPE_CHECKING:
     from lsst.resources import ResourcePathExpression
 
-    from .._butlerConfig import ButlerConfig
-    from . import DatasetRef, DatasetType
+    from ._butlerConfig import ButlerConfig
+    from ._dataset_ref import DatasetRef
+    from ._dataset_type import DatasetType
     from .configSupport import LookupKey
     from .dimensions import DimensionUniverse
     from .storageClass import StorageClass

@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import timespan
+
 __all__ = ("QueryBackend",)
 
 from abc import abstractmethod
@@ -43,16 +45,9 @@ from lsst.daf.relation import (
     UnaryOperationRelation,
 )
 
-from ...core import (
-    DataCoordinate,
-    DatasetColumnTag,
-    DatasetType,
-    DimensionGraph,
-    DimensionKeyColumnTag,
-    DimensionRecord,
-    DimensionUniverse,
-    timespan,
-)
+from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
+from ..._dataset_type import DatasetType
+from ...dimensions import DataCoordinate, DimensionGraph, DimensionRecord, DimensionUniverse
 from .._collectionType import CollectionType
 from .._exceptions import DatasetTypeError, MissingDatasetTypeError
 from ..wildcards import CollectionWildcard

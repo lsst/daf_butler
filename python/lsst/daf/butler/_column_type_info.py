@@ -77,7 +77,7 @@ class ColumnTypeInfo:
 
     ingest_date_dtype: type[ddl.AstropyTimeNsecTai] | type[sqlalchemy.TIMESTAMP]
     """Type of the ``ingest_date`` column, can be either
-    `~lsst.daf.butler.core.ddl.AstropyTimeNsecTai` or `sqlalchemy.TIMESTAMP`.
+    `~lsst.daf.butler.ddl.AstropyTimeNsecTai` or `sqlalchemy.TIMESTAMP`.
     """
 
     @property

@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ["SynthIntKeyCollectionManager"]
 
 from collections.abc import Iterable
@@ -33,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
-from ...core import TimespanDatabaseRepresentation, ddl
+from ...timespan import TimespanDatabaseRepresentation
 from ..interfaces import CollectionRecord, VersionTuple
 from ._base import (
     CollectionTablesTuple,

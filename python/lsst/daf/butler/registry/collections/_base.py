@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ()
 
 import itertools
@@ -36,7 +38,8 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 import sqlalchemy
 
-from ...core import DimensionUniverse, Timespan, TimespanDatabaseRepresentation, ddl
+from ...dimensions import DimensionUniverse
+from ...timespan import Timespan, TimespanDatabaseRepresentation
 from .._collectionType import CollectionType
 from .._exceptions import MissingCollectionError
 from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord, VersionTuple

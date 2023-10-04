@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl, time_utils
+
 __all__ = ["PostgresqlDatabase"]
 
 from collections.abc import Iterable, Iterator, Mapping
@@ -37,8 +39,8 @@ import sqlalchemy
 import sqlalchemy.dialects.postgresql
 from sqlalchemy import sql
 
-from ...core import Timespan, TimespanDatabaseRepresentation, ddl, time_utils
-from ...core.named import NamedValueAbstractSet
+from ...named import NamedValueAbstractSet
+from ...timespan import Timespan, TimespanDatabaseRepresentation
 from ..interfaces import Database
 from ..nameShrinker import NameShrinker
 

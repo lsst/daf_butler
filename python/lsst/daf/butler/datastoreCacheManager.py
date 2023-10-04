@@ -55,12 +55,12 @@ from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.resources import ResourcePath
 from pydantic import PrivateAttr
 
-from . import DatasetId, DatasetRef
+from ._dataset_ref import DatasetId, DatasetRef
 from .config import ConfigSubset
 from .configSupport import processLookupConfigs
 
 if TYPE_CHECKING:
-    from . import DatasetType
+    from ._dataset_type import DatasetType
     from .configSupport import LookupKey
     from .dimensions import DimensionUniverse
     from .storageClass import StorageClass

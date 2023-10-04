@@ -46,8 +46,8 @@ from lsst.daf.butler import (
     StorageClass,
     StoredDatastoreItemInfo,
 )
-from lsst.daf.butler.core.utils import transactional
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
+from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath
 
 from ..registry.interfaces import DatabaseInsertMode

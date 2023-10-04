@@ -37,19 +37,11 @@ from lsst.daf.relation import ColumnExpression, ColumnTag, Predicate, SortTerm
 from lsst.sphgeom import IntersectionRegion, Region
 from lsst.utils.classes import cached_getter, immutable
 
-from ...core import (
-    ColumnTypeInfo,
-    DataCoordinate,
-    DatasetType,
-    DimensionElement,
-    DimensionGraph,
-    DimensionKeyColumnTag,
-    DimensionRecordColumnTag,
-    DimensionUniverse,
-    NamedValueAbstractSet,
-    NamedValueSet,
-    SkyPixDimension,
-)
+from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
+from ..._column_type_info import ColumnTypeInfo
+from ..._dataset_type import DatasetType
+from ...dimensions import DataCoordinate, DimensionElement, DimensionGraph, DimensionUniverse, SkyPixDimension
+from ...named import NamedValueAbstractSet, NamedValueSet
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.

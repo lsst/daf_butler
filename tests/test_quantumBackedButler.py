@@ -369,7 +369,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             self.assertEqual(set(provenance.datastore_records.keys()), {datastore_name})
             datastore_records = provenance.datastore_records[datastore_name]
             self.assertEqual(set(datastore_records.dataset_ids), output_ids)
-            class_name = "lsst.daf.butler.core.storedFileInfo.StoredFileInfo"
+            class_name = "lsst.daf.butler.storedFileInfo.StoredFileInfo"
             table_name = "file_datastore_records"
             self.assertEqual(set(datastore_records.records.keys()), {class_name})
             self.assertEqual(set(datastore_records.records[class_name].keys()), {table_name})

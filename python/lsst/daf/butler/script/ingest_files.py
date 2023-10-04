@@ -37,10 +37,12 @@ from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
 from .._butler import Butler
-from ..core import DatasetIdGenEnum, DatasetRef, FileDataset
+from .._dataset_ref import DatasetIdGenEnum, DatasetRef
+from ..fileDataset import FileDataset
 
 if TYPE_CHECKING:
-    from ..core import DatasetType, DimensionUniverse
+    from .._dataset_type import DatasetType
+    from ..dimensions import DimensionUniverse
 
 log = logging.getLogger(__name__)
 

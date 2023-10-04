@@ -34,7 +34,7 @@ from typing import ClassVar
 
 from lsst.resources import ResourcePath
 
-from .core import Config
+from .config import Config
 
 
 class ButlerRepoIndex:

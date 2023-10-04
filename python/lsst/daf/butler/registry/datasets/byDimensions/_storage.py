@@ -28,6 +28,8 @@
 
 from __future__ import annotations
 
+from .... import ddl
+
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 from collections.abc import Iterable, Iterator, Sequence, Set
@@ -38,19 +40,12 @@ import astropy.time
 import sqlalchemy
 from lsst.daf.relation import Relation, sql
 
-from ....core import (
-    DataCoordinate,
-    DatasetColumnTag,
-    DatasetId,
-    DatasetIdFactory,
-    DatasetIdGenEnum,
-    DatasetRef,
-    DatasetType,
-    DimensionKeyColumnTag,
-    LogicalColumn,
-    Timespan,
-    ddl,
-)
+from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag
+from ...._column_type_info import LogicalColumn
+from ...._dataset_ref import DatasetId, DatasetIdFactory, DatasetIdGenEnum, DatasetRef
+from ...._dataset_type import DatasetType
+from ....dimensions import DataCoordinate
+from ....timespan import Timespan
 from ..._collection_summary import CollectionSummary
 from ..._collectionType import CollectionType
 from ..._exceptions import CollectionTypeError, ConflictingDefinitionError

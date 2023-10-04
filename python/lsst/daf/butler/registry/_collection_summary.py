@@ -32,8 +32,10 @@ import dataclasses
 from collections.abc import Generator, Iterable, Mapping, Set
 from typing import cast
 
-from ..core import DataCoordinate, DatasetRef, DatasetType
-from ..core.named import NamedValueSet
+from .._dataset_ref import DatasetRef
+from .._dataset_type import DatasetType
+from ..dimensions import DataCoordinate
+from ..named import NamedValueSet
 
 
 @dataclasses.dataclass

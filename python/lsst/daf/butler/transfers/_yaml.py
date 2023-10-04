@@ -43,22 +43,17 @@ from lsst.utils import doImportType
 from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
-from ..core import (
-    DatasetAssociation,
-    DatasetId,
-    DatasetRef,
-    DatasetType,
-    Datastore,
-    DimensionElement,
-    DimensionRecord,
-    DimensionUniverse,
-    FileDataset,
-    Timespan,
-)
-from ..core.named import NamedValueSet
+from .._dataset_association import DatasetAssociation
+from .._dataset_ref import DatasetId, DatasetRef
+from .._dataset_type import DatasetType
+from ..datastore import Datastore
+from ..dimensions import DimensionElement, DimensionRecord, DimensionUniverse
+from ..fileDataset import FileDataset
+from ..named import NamedValueSet
 from ..registry import CollectionType, Registry
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
 from ..registry.versions import IncompatibleVersionError
+from ..timespan import Timespan
 from ._interfaces import RepoExportBackend, RepoImportBackend
 
 if TYPE_CHECKING:

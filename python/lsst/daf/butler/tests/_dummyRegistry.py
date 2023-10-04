@@ -47,7 +47,7 @@ from lsst.daf.butler.registry.interfaces import (
     VersionTuple,
 )
 
-from ..core.datastore import DatastoreTransaction
+from ..datastore import DatastoreTransaction
 
 
 class DummyOpaqueTableStorage(OpaqueTableStorage):

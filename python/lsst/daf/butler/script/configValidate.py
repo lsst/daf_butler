@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 from .._butler import Butler
-from ..core import ValidationError
+from ..exceptions import ValidationError
 
 
 def configValidate(repo: str, quiet: bool, dataset_type: list[str], ignore: list[str]) -> bool:
