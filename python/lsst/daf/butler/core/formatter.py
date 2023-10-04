@@ -38,9 +38,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.introspection import get_full_type_name
 
+from . import DatasetRef, DatasetType
 from .config import Config
 from .configSupport import LookupKey, processLookupConfigs
-from .datasets import DatasetRef, DatasetType
 from .dimensions import DimensionUniverse
 from .fileDescriptor import FileDescriptor
 from .location import Location

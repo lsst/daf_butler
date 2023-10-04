@@ -36,8 +36,8 @@ from contextvars import Context, ContextVar, Token, copy_context
 from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 
 if TYPE_CHECKING:
-    from .datasets.ref import DatasetRef
-    from .datasets.type import DatasetType, SerializedDatasetType
+    from ._dataset_ref import DatasetRef
+    from ._dataset_type import DatasetType, SerializedDatasetType
     from .datastoreRecordData import DatastoreRecordData
     from .dimensions._coordinate import DataCoordinate, SerializedDataCoordinate
     from .dimensions._records import DimensionRecord, SerializedDimensionRecord

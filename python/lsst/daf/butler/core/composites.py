@@ -43,8 +43,8 @@ if TYPE_CHECKING:
     from lsst.resources import ResourcePathExpression
 
     from .._butlerConfig import ButlerConfig
+    from . import DatasetRef, DatasetType
     from .configSupport import LookupKey
-    from .datasets import DatasetRef, DatasetType
     from .dimensions import DimensionUniverse
     from .storageClass import StorageClass
 

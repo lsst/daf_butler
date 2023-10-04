@@ -34,7 +34,7 @@ from typing import Any
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from .datasets import DatasetRef
+from . import DatasetRef
 from .formatter import FormatterParameter
 
 

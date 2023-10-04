@@ -30,8 +30,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..timespan import Timespan
-from .ref import DatasetRef
+from ._dataset_ref import DatasetRef
+from .timespan import Timespan
 
 
 @dataclass(frozen=True, eq=True)

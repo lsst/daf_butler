@@ -52,8 +52,8 @@ if TYPE_CHECKING:
     from lsst.resources import ResourcePath, ResourcePathExpression
 
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
+    from . import DatasetRef, DatasetType
     from .configSupport import LookupKey
-    from .datasets import DatasetRef, DatasetType
     from .datastoreRecordData import DatastoreRecordData
     from .storageClass import StorageClass
 

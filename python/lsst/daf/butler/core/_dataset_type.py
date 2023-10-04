@@ -38,15 +38,15 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from lsst.daf.butler._compat import _BaseModelCompat
 from pydantic import StrictBool, StrictStr
 
-from ..configSupport import LookupKey
-from ..dimensions import DimensionGraph, SerializedDimensionGraph
-from ..json import from_json_pydantic, to_json_pydantic
-from ..persistenceContext import PersistenceContextVars
-from ..storageClass import StorageClass, StorageClassFactory
+from .configSupport import LookupKey
+from .dimensions import DimensionGraph, SerializedDimensionGraph
+from .json import from_json_pydantic, to_json_pydantic
+from .persistenceContext import PersistenceContextVars
+from .storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
-    from ...registry import Registry
-    from ..dimensions import Dimension, DimensionUniverse
+    from ..registry import Registry
+    from .dimensions import Dimension, DimensionUniverse
 
 
 def _safeMakeMappingProxyType(data: Mapping | None) -> Mapping:

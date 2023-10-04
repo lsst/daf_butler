@@ -40,7 +40,7 @@ from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
 
-from .datasets import DatasetId
+from . import DatasetId
 from .dimensions import DimensionUniverse
 from .persistenceContext import PersistenceContextVars
 from .storedFileInfo import StoredDatastoreItemInfo

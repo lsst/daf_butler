@@ -41,7 +41,7 @@ from .location import Location, LocationFactory
 from .storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
-    from .datasets import DatasetId, DatasetRef
+    from . import DatasetId, DatasetRef
 
 # String to use when a Python None is encountered
 NULLSTR = "__NULL_STRING__"
