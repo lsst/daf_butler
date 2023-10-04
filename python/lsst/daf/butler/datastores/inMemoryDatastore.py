@@ -46,8 +46,8 @@ from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath
 
+from ..datastore.generic_base import GenericBaseDatastore
 from ..registry.interfaces import DatabaseInsertMode
-from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey

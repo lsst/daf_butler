@@ -82,7 +82,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
 
-from .genericDatastore import GenericBaseDatastore
+from ..datastore.generic_base import GenericBaseDatastore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import LookupKey
