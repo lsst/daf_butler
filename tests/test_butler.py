@@ -80,13 +80,12 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     FileDataset,
-    FileTemplate,
-    FileTemplateValidationError,
-    NullDatastore,
     StorageClassFactory,
     ValidationError,
     script,
 )
+from lsst.daf.butler.datastore import NullDatastore
+from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
 from lsst.daf.butler.registries.sql import SqlRegistry
 from lsst.daf.butler.registry import (

@@ -38,17 +38,10 @@ import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import (
-    Constraints,
-    DatasetRef,
-    DatasetRefURIs,
-    DatasetTypeNotSupportedError,
-    Datastore,
-    DatastoreConfig,
-    DatastoreRecordData,
-    DatastoreValidationError,
-    FileDataset,
-)
+from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, Datastore, FileDataset
+from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError
+from lsst.daf.butler.datastore.constraints import Constraints
+from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 

@@ -29,7 +29,7 @@ import os.path
 import posixpath
 import unittest
 
-from lsst.daf.butler import Location, LocationFactory
+from lsst.daf.butler.datastore.location import Location, LocationFactory
 from lsst.resources import ResourcePath
 
 

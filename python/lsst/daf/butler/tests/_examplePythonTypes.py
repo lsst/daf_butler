@@ -49,7 +49,8 @@ import types
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import StorageClass, StorageClassDelegate
+from lsst.daf.butler import StorageClass
+from lsst.daf.butler.datastore.storage_class_delegate import StorageClassDelegate
 from pydantic import BaseModel
 
 if TYPE_CHECKING:

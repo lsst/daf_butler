@@ -40,34 +40,37 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.daf.butler import (
-    CompositesMap,
     Config,
     DatasetId,
     DatasetRef,
-    DatasetRefURIs,
     DatasetType,
     DatasetTypeNotSupportedError,
     Datastore,
-    DatastoreCacheManager,
-    DatastoreConfig,
-    DatastoreDisabledCacheManager,
-    DatastoreRecordData,
-    DatastoreValidationError,
     FileDataset,
-    FileDescriptor,
-    FileTemplates,
-    FileTemplateValidationError,
     Formatter,
     FormatterFactory,
-    Location,
-    LocationFactory,
     Progress,
     StorageClass,
-    StoredDatastoreItemInfo,
-    StoredFileInfo,
     ddl,
 )
-from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge, ReadOnlyDatabaseError
+from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError
+from lsst.daf.butler.datastore.cache_manager import (
+    AbstractDatastoreCacheManager,
+    DatastoreCacheManager,
+    DatastoreDisabledCacheManager,
+)
+from lsst.daf.butler.datastore.composites import CompositesMap
+from lsst.daf.butler.datastore.file_descriptor import FileDescriptor
+from lsst.daf.butler.datastore.file_templates import FileTemplates, FileTemplateValidationError
+from lsst.daf.butler.datastore.location import Location, LocationFactory
+from lsst.daf.butler.datastore.record_data import DatastoreRecordData
+from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo, StoredFileInfo
+from lsst.daf.butler.registry.interfaces import (
+    DatabaseInsertMode,
+    DatastoreRegistryBridge,
+    FakeDatasetRef,
+    ReadOnlyDatabaseError,
+)
 from lsst.daf.butler.repoRelocation import replaceRoot
 from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -79,11 +82,10 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
 
-from ..registry.interfaces import DatabaseInsertMode, FakeDatasetRef
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import AbstractDatastoreCacheManager, LookupKey
+    from lsst.daf.butler import LookupKey
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = getLogger(__name__)

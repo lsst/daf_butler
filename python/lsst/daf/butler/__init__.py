@@ -50,16 +50,9 @@ from ._quantum_backed import *
 from ._topology import *
 from .config import *
 from .configSupport import LookupKey
-from .datastore import *
-from .datastore.cache_manager import *
-from .datastore.composites import *
-from .datastore.constraints import *
-from .datastore.file_descriptor import *
-from .datastore.file_templates import *
-from .datastore.location import *
-from .datastore.record_data import *
-from .datastore.storage_class_delegate import *
-from .datastore.stored_file_info import *
+
+# Only lift 'Datastore' itself to this scope.
+from .datastore import Datastore
 from .dimensions import *
 from .exceptions import *
 from .fileDataset import *

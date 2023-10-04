@@ -45,22 +45,21 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetIdGenEnum,
     DatasetRef,
-    DatasetRefURIs,
     DatasetType,
     DatasetTypeNotSupportedError,
     Datastore,
-    DatastoreCacheManager,
-    DatastoreCacheManagerConfig,
-    DatastoreConfig,
-    DatastoreDisabledCacheManager,
-    DatastoreValidationError,
     DimensionUniverse,
     FileDataset,
-    NullDatastore,
     StorageClass,
     StorageClassFactory,
-    StoredFileInfo,
 )
+from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError, NullDatastore
+from lsst.daf.butler.datastore.cache_manager import (
+    DatastoreCacheManager,
+    DatastoreCacheManagerConfig,
+    DatastoreDisabledCacheManager,
+)
+from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler.tests import (
     BadNoWriteFormatter,

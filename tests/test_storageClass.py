@@ -30,7 +30,8 @@ import os
 import pickle
 import unittest
 
-from lsst.daf.butler import StorageClass, StorageClassConfig, StorageClassDelegate, StorageClassFactory
+from lsst.daf.butler import StorageClass, StorageClassConfig, StorageClassFactory
+from lsst.daf.butler.datastore.storage_class_delegate import StorageClassDelegate
 from lsst.daf.butler.tests import MetricsExample
 from lsst.utils.introspection import get_full_type_name
 
