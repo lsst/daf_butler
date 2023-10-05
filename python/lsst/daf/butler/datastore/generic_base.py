@@ -36,13 +36,14 @@ from abc import abstractmethod
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DatasetTypeNotSupportedError, Datastore
-from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
-
-from ..registry.interfaces import DatabaseInsertMode
+from .._exceptions import DatasetTypeNotSupportedError
+from ..registry.interfaces import DatabaseInsertMode, DatastoreRegistryBridge
+from ._datastore import Datastore
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import DatasetRef, StorageClass, StoredDatastoreItemInfo
+    from .._dataset_ref import DatasetRef
+    from .._storage_class import StorageClass
+    from .stored_file_info import StoredDatastoreItemInfo
 
 log = logging.getLogger(__name__)
 
