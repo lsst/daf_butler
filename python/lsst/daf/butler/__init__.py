@@ -58,6 +58,7 @@ from ._named import *
 from ._quantum import *
 from ._quantum_backed import *
 from ._storage_class import *
+from ._storage_class_delegate import *
 from ._timespan import *
 from ._topology import *
 

@@ -54,7 +54,7 @@ from lsst.utils.introspection import get_full_type_name
 
 from ._config import Config, ConfigSubset
 from ._config_support import LookupKey
-from .datastore.storage_class_delegate import StorageClassDelegate
+from ._storage_class_delegate import StorageClassDelegate
 
 log = logging.getLogger(__name__)
 
@@ -97,8 +97,6 @@ class StorageClass:
     _cls_delegate: str | None = None
     _cls_pytype: type | str | None = None
     _cls_converters: dict[str, str] | None = None
-    defaultDelegate: type = StorageClassDelegate
-    defaultDelegateName: str = get_full_type_name(defaultDelegate)
 
     def __init__(
         self,
@@ -172,8 +170,8 @@ class StorageClass:
             # We set a default delegate for composites so that a class is
             # guaranteed to support something if it is a composite.
             log.debug("Setting default delegate for %s", self.name)
-            self._delegate = self.defaultDelegate
-            self._delegateClassName = self.defaultDelegateName
+            self._delegate = StorageClassDelegate
+            self._delegateClassName = get_full_type_name(self._delegate)
         else:
             self._delegate = None
             self._delegateClassName = None
