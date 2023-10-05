@@ -41,8 +41,8 @@ from lsst.sphgeom import PixelizationABC
 from lsst.utils import doImportType
 
 from .. import ddl
+from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
-from ..named import NamedValueAbstractSet, NamedValueSet
 from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 

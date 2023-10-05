@@ -37,9 +37,9 @@ from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.classes import immutable
 from pydantic import Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
+from .._timespan import Timespan, TimespanDatabaseRepresentation
 from ..json import from_json_pydantic, to_json_pydantic
-from ..persistenceContext import PersistenceContextVars
-from ..timespan import Timespan, TimespanDatabaseRepresentation
+from ..persistence_context import PersistenceContextVars
 from ._elements import Dimension, DimensionElement
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.

@@ -39,10 +39,13 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
+from .._config import Config
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
-from ..config import Config
+from .._named import NameLookupMapping
+from .._storage_class import StorageClassFactory
+from .._timespan import Timespan
 from ..dimensions import (
     DataCoordinate,
     DataCoordinateSequence,
@@ -56,20 +59,17 @@ from ..dimensions import (
     SerializedDataCoordinate,
     SerializedDimensionRecord,
 )
-from ..named import NameLookupMapping
 from ..registry import CollectionSummary, CollectionType, RegistryConfig, RegistryDefaults, _ButlerRegistry
-from ..serverModels import (
+from ..server_models import (
     DatasetsQueryParameter,
     ExpressionQueryParameter,
     QueryDataIdsModel,
     QueryDatasetsModel,
     QueryDimensionRecordsModel,
 )
-from ..storageClass import StorageClassFactory
-from ..timespan import Timespan
 
 if TYPE_CHECKING:
-    from .._butlerConfig import ButlerConfig
+    from .._butler_config import ButlerConfig
     from ..registry._registry import CollectionArgType
     from ..registry.interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 

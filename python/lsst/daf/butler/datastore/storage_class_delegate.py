@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, Any
 from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
-    from ..storageClass import StorageClass
+    from .._storage_class import StorageClass
 
 log = logging.getLogger(__name__)
 

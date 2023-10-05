@@ -37,10 +37,10 @@ from typing import Any, Generic, TypeVar
 import sqlalchemy
 
 from ...._dataset_type import DatasetType
+from ...._named import NamedKeyDict, NamedKeyMapping
 from ....dimensions import GovernorDimension, addDimensionForeignKey
-from ....named import NamedKeyDict, NamedKeyMapping
 from ..._collection_summary import CollectionSummary
-from ..._collectionType import CollectionType
+from ..._collection_type import CollectionType
 from ...interfaces import (
     ChainedCollectionRecord,
     CollectionManager,

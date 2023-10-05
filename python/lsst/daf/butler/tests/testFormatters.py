@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from ..formatter import Formatter
+from .._formatter import Formatter
 from ..formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:

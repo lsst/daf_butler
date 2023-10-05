@@ -84,6 +84,7 @@ from lsst.daf.butler import (
     ValidationError,
     script,
 )
+from lsst.daf.butler._replace_root import BUTLER_ROOT_TAG
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
@@ -96,7 +97,6 @@ from lsst.daf.butler.registry import (
     MissingCollectionError,
     OrphanedRecordError,
 )
-from lsst.daf.butler.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath

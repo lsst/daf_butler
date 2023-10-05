@@ -42,7 +42,7 @@ from lsst.utils.introspection import get_full_type_name
 
 from .._dataset_ref import DatasetId
 from ..dimensions import DimensionUniverse
-from ..persistenceContext import PersistenceContextVars
+from ..persistence_context import PersistenceContextVars
 from .stored_file_info import StoredDatastoreItemInfo
 
 if TYPE_CHECKING:

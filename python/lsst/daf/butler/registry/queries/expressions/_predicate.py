@@ -50,7 +50,7 @@ from lsst.daf.relation import (
 # We import the timespan module rather than types within it because match
 # syntax uses qualified names with periods to distinguish literals from
 # captures.
-from .... import timespan
+from .... import _timespan
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
 from ...._column_type_info import ColumnTypeInfo
 from ....dimensions import DataCoordinate, Dimension, DimensionGraph, DimensionUniverse
@@ -276,13 +276,13 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
             case [
                 "<",
                 ColumnExpression(dtype=astropy.time.Time) as lhs,
-                ColumnExpression(dtype=timespan.Timespan) as rhs,
+                ColumnExpression(dtype=_timespan.Timespan) as rhs,
             ]:
                 return rhs.predicate_method(self.OPERATOR_MAP[">"], lhs)
             case [
                 ">",
                 ColumnExpression(dtype=astropy.time.Time) as lhs,
-                ColumnExpression(dtype=timespan.Timespan) as rhs,
+                ColumnExpression(dtype=_timespan.Timespan) as rhs,
             ]:
                 return rhs.predicate_method(self.OPERATOR_MAP["<"], lhs)
             # Enable other comparisons between times and Timespans (many of the
@@ -290,8 +290,8 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
             # covered by a preceding branch).
             case [
                 "<" | ">",
-                ColumnExpression(dtype=timespan.Timespan | astropy.time.Time) as lhs,
-                ColumnExpression(dtype=timespan.Timespan | astropy.time.Time) as rhs,
+                ColumnExpression(dtype=_timespan.Timespan | astropy.time.Time) as lhs,
+                ColumnExpression(dtype=_timespan.Timespan | astropy.time.Time) as rhs,
             ]:
                 return lhs.predicate_method(self.OPERATOR_MAP[operator], rhs)
             # Enable "overlaps" operations between timespans, and between times
@@ -300,20 +300,20 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
             # OVERLAPS in the string expression language to keep that simple.
             case [
                 "OVERLAPS",
-                ColumnExpression(dtype=timespan.Timespan) as lhs,
-                ColumnExpression(dtype=timespan.Timespan) as rhs,
+                ColumnExpression(dtype=_timespan.Timespan) as lhs,
+                ColumnExpression(dtype=_timespan.Timespan) as rhs,
             ]:
                 return lhs.predicate_method("overlaps", rhs)
             case [
                 "OVERLAPS",
-                ColumnExpression(dtype=timespan.Timespan) as lhs,
+                ColumnExpression(dtype=_timespan.Timespan) as lhs,
                 ColumnExpression(dtype=astropy.time.Time) as rhs,
             ]:
                 return lhs.predicate_method("overlaps", rhs)
             case [
                 "OVERLAPS",
                 ColumnExpression(dtype=astropy.time.Time) as lhs,
-                ColumnExpression(dtype=timespan.Timespan) as rhs,
+                ColumnExpression(dtype=_timespan.Timespan) as rhs,
             ]:
                 return rhs.predicate_method("overlaps", lhs)
             # Enable arithmetic operators on numeric types, without any type
@@ -388,8 +388,8 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
         if column is not None:
             tag = DimensionRecordColumnTag(element.name, column)
             dtype = (
-                timespan.Timespan
-                if column == timespan.TimespanDatabaseRepresentation.NAME
+                _timespan.Timespan
+                if column == _timespan.TimespanDatabaseRepresentation.NAME
                 else element.RecordClass.fields.standard[column].getPythonType()
             )
             return ColumnExpression.reference(tag, dtype)
@@ -463,7 +463,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
                 ColumnLiteral(value=begin, dtype=astropy.time.Time | types.NoneType),
                 ColumnLiteral(value=end, dtype=astropy.time.Time | types.NoneType),
             ]:
-                return ColumnExpression.literal(timespan.Timespan(begin, end), dtype=timespan.Timespan)
+                return ColumnExpression.literal(_timespan.Timespan(begin, end), dtype=_timespan.Timespan)
         raise ExpressionTypeError(
             f'Invalid type(s) ({items[0].dtype}, {items[1].dtype}) in timespan tuple "{node}" '
             '(Note that date/time strings must be preceded by "T" to be recognized).'

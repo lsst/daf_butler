@@ -38,11 +38,11 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from lsst.daf.butler._compat import _BaseModelCompat
 from pydantic import StrictBool, StrictStr
 
-from .configSupport import LookupKey
+from ._config_support import LookupKey
+from ._storage_class import StorageClass, StorageClassFactory
 from .dimensions import DimensionGraph, SerializedDimensionGraph
 from .json import from_json_pydantic, to_json_pydantic
-from .persistenceContext import PersistenceContextVars
-from .storageClass import StorageClass, StorageClassFactory
+from .persistence_context import PersistenceContextVars
 
 if TYPE_CHECKING:
     from .dimensions import Dimension, DimensionUniverse

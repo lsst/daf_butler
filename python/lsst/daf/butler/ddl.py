@@ -66,13 +66,13 @@ from lsst.utils.iteration import ensure_iterable
 from sqlalchemy.dialects.postgresql import UUID
 
 from . import time_utils
-from .config import Config
-from .exceptions import ValidationError
-from .named import NamedValueSet
+from ._config import Config
+from ._exceptions import ValidationError
+from ._named import NamedValueSet
 from .utils import stripIfNotNone
 
 if TYPE_CHECKING:
-    from .timespan import TimespanDatabaseRepresentation
+    from ._timespan import TimespanDatabaseRepresentation
 
 
 _LOG = logging.getLogger(__name__)

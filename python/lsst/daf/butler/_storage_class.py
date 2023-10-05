@@ -52,8 +52,8 @@ from lsst.utils import doImportType
 from lsst.utils.classes import Singleton
 from lsst.utils.introspection import get_full_type_name
 
-from .config import Config, ConfigSubset
-from .configSupport import LookupKey
+from ._config import Config, ConfigSubset
+from ._config_support import LookupKey
 from .datastore.storage_class_delegate import StorageClassDelegate
 
 log = logging.getLogger(__name__)

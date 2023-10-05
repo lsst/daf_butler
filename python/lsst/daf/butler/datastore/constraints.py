@@ -36,15 +36,15 @@ __all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
 import logging
 from typing import TYPE_CHECKING
 
-from ..config import Config
-from ..configSupport import LookupKey, processLookupConfigList
-from ..exceptions import ValidationError
+from .._config import Config
+from .._config_support import LookupKey, processLookupConfigList
+from .._exceptions import ValidationError
 
 if TYPE_CHECKING:
     from .._dataset_ref import DatasetRef
     from .._dataset_type import DatasetType
+    from .._storage_class import StorageClass
     from ..dimensions import DimensionUniverse
-    from ..storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 

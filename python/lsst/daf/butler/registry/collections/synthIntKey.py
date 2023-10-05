@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
-from ...timespan import TimespanDatabaseRepresentation
+from ..._timespan import TimespanDatabaseRepresentation
 from ..interfaces import CollectionRecord, VersionTuple
 from ._base import (
     CollectionTablesTuple,

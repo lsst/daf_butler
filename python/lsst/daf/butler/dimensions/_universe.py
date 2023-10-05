@@ -39,9 +39,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
 
+from .._config import Config
+from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
-from ..config import Config
-from ..named import NamedValueAbstractSet, NamedValueSet
 from ._config import _DEFAULT_NAMESPACE, DimensionConfig
 from ._database import DatabaseDimensionElement
 from ._elements import Dimension, DimensionElement

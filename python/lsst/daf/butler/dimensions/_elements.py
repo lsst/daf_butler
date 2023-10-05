@@ -39,9 +39,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from lsst.utils.classes import cached_getter
 
 from .. import ddl
+from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalRelationshipEndpoint
 from ..json import from_json_generic, to_json_generic
-from ..named import NamedValueAbstractSet, NamedValueSet
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry

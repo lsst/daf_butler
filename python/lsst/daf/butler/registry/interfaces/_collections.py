@@ -40,9 +40,9 @@ from collections import defaultdict
 from collections.abc import Iterator, Set
 from typing import TYPE_CHECKING, Any
 
+from ..._timespan import Timespan
 from ...dimensions import DimensionUniverse
-from ...timespan import Timespan
-from .._collectionType import CollectionType
+from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._versioning import VersionedExtension, VersionTuple
 

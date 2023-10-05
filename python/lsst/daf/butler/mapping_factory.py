@@ -34,8 +34,8 @@ from typing import Any
 
 from lsst.utils.introspection import get_class_of
 
-from .config import Config
-from .configSupport import LookupKey
+from ._config import Config
+from ._config_support import LookupKey
 
 
 class MappingFactory:

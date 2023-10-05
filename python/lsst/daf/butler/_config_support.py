@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 from .dimensions import DimensionGraph
 
 if TYPE_CHECKING:
-    from .config import Config
+    from ._config import Config
     from .dimensions import Dimension, DimensionUniverse
 
 log = logging.getLogger(__name__)

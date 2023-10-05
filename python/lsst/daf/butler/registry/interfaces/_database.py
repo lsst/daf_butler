@@ -49,8 +49,8 @@ from typing import Any, cast, final
 import astropy.time
 import sqlalchemy
 
-from ...named import NamedValueAbstractSet
-from ...timespan import TimespanDatabaseRepresentation
+from ..._named import NamedValueAbstractSet
+from ..._timespan import TimespanDatabaseRepresentation
 from .._exceptions import ConflictingDefinitionError
 
 

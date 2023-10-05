@@ -44,7 +44,7 @@ import astropy.time
 import sqlalchemy
 from lsst.sphgeom import Circle, ConvexPolygon, UnitVector3d
 
-from ...timespan import Timespan
+from ..._timespan import Timespan
 from ..interfaces import Database, DatabaseConflictError, ReadOnlyDatabaseError, SchemaAlreadyDefinedError
 
 StaticTablesTuple = namedtuple("StaticTablesTuple", ["a", "b", "c"])

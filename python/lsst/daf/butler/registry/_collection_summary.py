@@ -34,8 +34,8 @@ from typing import cast
 
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
+from .._named import NamedValueSet
 from ..dimensions import DataCoordinate
-from ..named import NamedValueSet
 
 
 @dataclasses.dataclass

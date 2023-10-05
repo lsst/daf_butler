@@ -56,12 +56,12 @@ from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iterat
 from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
+from ..._named import NamedValueSet
+from ..._storage_class import StorageClass
+from ..._timespan import Timespan
 from ...dimensions import DataCoordinate, DataCoordinateSet, DimensionGraph, SkyPixDimension
-from ...named import NamedValueSet
-from ...storageClass import StorageClass
-from ...timespan import Timespan
 from .._collection_summary import CollectionSummary
-from .._collectionType import CollectionType
+from .._collection_type import CollectionType
 from .._config import RegistryConfig
 from .._exceptions import (
     ArgumentError,

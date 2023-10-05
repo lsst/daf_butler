@@ -36,18 +36,18 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from ..config import ConfigSubset
-from ..configSupport import processLookupConfigs
+from .._config import ConfigSubset
+from .._config_support import processLookupConfigs
 
 if TYPE_CHECKING:
     from lsst.resources import ResourcePathExpression
 
-    from .._butlerConfig import ButlerConfig
+    from .._butler_config import ButlerConfig
+    from .._config_support import LookupKey
     from .._dataset_ref import DatasetRef
     from .._dataset_type import DatasetType
-    from ..configSupport import LookupKey
+    from .._storage_class import StorageClass
     from ..dimensions import DimensionUniverse
-    from ..storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 

@@ -31,8 +31,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable, Set
 from typing import TYPE_CHECKING
 
+from .._named import NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
-from ..named import NamedValueSet
 
 if TYPE_CHECKING:
     from ._config import DimensionConfig

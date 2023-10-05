@@ -39,8 +39,8 @@ from lsst.daf.relation import Relation
 
 from ..._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
+from ..._timespan import Timespan
 from ...dimensions import DataCoordinate
-from ...timespan import Timespan
 from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension, VersionTuple
 

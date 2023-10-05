@@ -37,7 +37,7 @@ from ..._column_categorization import ColumnCategorization
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_type import DatasetType
 from ...dimensions import DataCoordinate, DimensionGraph, DimensionRecord, DimensionUniverse, SkyPixDimension
-from .._collectionType import CollectionType
+from .._collection_type import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, Database
 from ._query_backend import QueryBackend

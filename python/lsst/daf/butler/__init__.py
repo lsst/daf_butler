@@ -32,45 +32,51 @@ Data Access Butler
 # Some components are not auto-imported since they can have additional runtime
 # dependencies.
 
+from . import logging  # most symbols are helpers only
 from . import progress  # most symbols are only used by handler implementors
 from . import ddl, time_utils
 from ._butler import *
-from ._butlerConfig import *
-from ._butlerRepoIndex import *
+from ._butler_config import *
+from ._butler_repo_index import *
 from ._column_categorization import *
 from ._column_tags import *
 from ._column_type_info import *
+from ._config import *
+from ._config_support import LookupKey
 from ._dataset_association import *
 from ._dataset_existence import *
 from ._dataset_ref import *
 from ._dataset_type import *
 from ._deferredDatasetHandle import *
+from ._exceptions import *
+from ._file_dataset import *
+from ._formatter import *
+
+# Do not import 'instrument' or 'json' at all by default.
 from ._limited_butler import *
+from ._named import *
+from ._quantum import *
 from ._quantum_backed import *
+from ._storage_class import *
+from ._timespan import *
 from ._topology import *
-from .config import *
-from .configSupport import LookupKey
 
 # Only lift 'Datastore' itself to this scope.
 from .datastore import Datastore
 from .dimensions import *
-from .exceptions import *
-from .fileDataset import *
-from .formatter import *
 
-# Only import ButlerLogRecords
-# ButlerLogRecords is the fundamental type stored in datastores.
+# Only export 'ButlerLogRecords' from 'logging', import the module as-is for
+# other symbols. ButlerLogRecords is the fundamental type stored in datastores.
 from .logging import ButlerLogRecords
-from .mappingFactory import *
-from .named import *
-from .persistenceContext import *
-from .progress import Progress
-from .quantum import *
 
+# Do not import or lift symbols from mapping_factory and persistence_content,
+# as those are internal.
+# Only lift 'Progress' from 'progess'; the module is imported as-is above
+from .progress import Progress
+
+# Do not import or lift symbols from 'server' or 'server_models'.
 # Import the registry subpackage directly for other symbols.
 from .registry import CollectionSearch, CollectionType, Registry, RegistryConfig
-from .storageClass import *
-from .timespan import *
 from .transfers import RepoExportContext, YamlRepoExportBackend, YamlRepoImportBackend
 from .version import *
 

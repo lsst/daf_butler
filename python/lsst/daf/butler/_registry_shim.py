@@ -36,6 +36,8 @@ from typing import TYPE_CHECKING, Any
 from ._dataset_association import DatasetAssociation
 from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
+from ._named import NameLookupMapping
+from ._timespan import Timespan
 from .dimensions import (
     DataCoordinate,
     DataId,
@@ -45,13 +47,11 @@ from .dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from .named import NameLookupMapping
 from .registry import Registry
 from .registry._collection_summary import CollectionSummary
-from .registry._collectionType import CollectionType
+from .registry._collection_type import CollectionType
 from .registry._defaults import RegistryDefaults
 from .registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
-from .timespan import Timespan
 
 if TYPE_CHECKING:
     from ._butler import Butler

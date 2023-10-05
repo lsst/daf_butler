@@ -43,6 +43,7 @@ import sqlalchemy
 from lsst.daf.relation import Join, Relation, sql
 
 from ..._column_type_info import ColumnTypeInfo, LogicalColumn
+from ..._named import NamedKeyMapping
 from ...dimensions import (
     DatabaseDimensionElement,
     DataCoordinate,
@@ -53,7 +54,6 @@ from ...dimensions import (
     GovernorDimension,
     SkyPixDimension,
 )
-from ...named import NamedKeyMapping
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:

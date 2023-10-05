@@ -34,14 +34,14 @@ from typing import TYPE_CHECKING
 
 from lsst.resources import ResourcePathExpression
 
-from ..config import Config
+from .._config import Config
 from ..dimensions import DimensionConfig
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from ._registry import Registry
 
 if TYPE_CHECKING:
-    from .._butlerConfig import ButlerConfig
+    from .._butler_config import ButlerConfig
     from .interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
 

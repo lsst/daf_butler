@@ -43,7 +43,7 @@ import sqlalchemy
 from lsst.utils import doImportType
 
 from .._column_type_info import ColumnTypeInfo
-from ..config import Config
+from .._config import Config
 from ..dimensions import DimensionConfig, DimensionUniverse
 from ._config import RegistryConfig
 from .interfaces import (

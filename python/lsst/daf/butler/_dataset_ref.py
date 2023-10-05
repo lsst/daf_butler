@@ -46,16 +46,16 @@ from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.classes import immutable
 from pydantic import StrictStr
 
+from ._config_support import LookupKey
 from ._dataset_type import DatasetType, SerializedDatasetType
-from .configSupport import LookupKey
+from ._named import NamedKeyDict
 from .dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
 from .json import from_json_pydantic, to_json_pydantic
-from .named import NamedKeyDict
-from .persistenceContext import PersistenceContextVars
+from .persistence_context import PersistenceContextVars
 
 if TYPE_CHECKING:
+    from ._storage_class import StorageClass
     from .registry import Registry
-    from .storageClass import StorageClass
 
 
 class AmbiguousDatasetError(Exception):

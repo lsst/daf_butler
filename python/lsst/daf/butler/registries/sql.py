@@ -44,10 +44,13 @@ from lsst.utils.introspection import find_outside_stacklevel
 from lsst.utils.iteration import ensure_iterable
 
 from .._column_tags import DatasetColumnTag
+from .._config import Config
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
-from ..config import Config
+from .._named import NamedKeyMapping, NameLookupMapping
+from .._storage_class import StorageClassFactory
+from .._timespan import Timespan
 from ..dimensions import (
     DataCoordinate,
     DataId,
@@ -58,7 +61,6 @@ from ..dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from ..named import NamedKeyMapping, NameLookupMapping
 from ..progress import Progress
 from ..registry import (
     ArgumentError,
@@ -82,12 +84,10 @@ from ..registry import (
 from ..registry.interfaces import ChainedCollectionRecord, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
-from ..storageClass import StorageClassFactory
-from ..timespan import Timespan
 from ..utils import transactional
 
 if TYPE_CHECKING:
-    from .._butlerConfig import ButlerConfig
+    from .._butler_config import ButlerConfig
     from ..registry._registry import CollectionArgType
     from ..registry.interfaces import (
         CollectionRecord,

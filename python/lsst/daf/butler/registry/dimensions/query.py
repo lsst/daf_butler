@@ -35,6 +35,7 @@ import sqlalchemy
 from lsst.daf.relation import Relation
 
 from ..._column_tags import DimensionKeyColumnTag
+from ..._named import NamedKeyMapping
 from ...dimensions import (
     DatabaseDimension,
     DatabaseDimensionElement,
@@ -42,7 +43,6 @@ from ...dimensions import (
     DimensionRecord,
     GovernorDimension,
 )
-from ...named import NamedKeyMapping
 from ..interfaces import (
     Database,
     DatabaseDimensionRecordStorage,

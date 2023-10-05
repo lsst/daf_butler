@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ._dataset_ref import DatasetRef
-from .timespan import Timespan
+from ._timespan import Timespan
 
 
 @dataclass(frozen=True, eq=True)

@@ -38,12 +38,12 @@ from collections.abc import Iterable, Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from .._config import Config
+from .._config_support import LookupKey, processLookupConfigs
 from .._dataset_ref import DatasetRef
-from ..config import Config
-from ..configSupport import LookupKey, processLookupConfigs
+from .._exceptions import ValidationError
+from .._storage_class import StorageClass
 from ..dimensions import DataCoordinate, SkyPixDimension
-from ..exceptions import ValidationError
-from ..storageClass import StorageClass
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType

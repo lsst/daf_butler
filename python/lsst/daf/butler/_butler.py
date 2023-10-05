@@ -52,15 +52,20 @@ from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
 from sqlalchemy.exc import IntegrityError
 
-from ._butlerConfig import ButlerConfig
-from ._butlerRepoIndex import ButlerRepoIndex
+from ._butler_config import ButlerConfig
+from ._butler_repo_index import ButlerRepoIndex
+from ._config import Config, ConfigSubset
 from ._dataset_existence import DatasetExistence
 from ._dataset_ref import DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
+from ._exceptions import ValidationError
+from ._file_dataset import FileDataset
 from ._limited_butler import LimitedButler
 from ._registry_shim import RegistryShim
-from .config import Config, ConfigSubset
+from ._replace_root import BUTLER_ROOT_TAG
+from ._storage_class import StorageClass, StorageClassFactory
+from ._timespan import Timespan
 from .datastore import DatasetRefURIs, Datastore, NullDatastore
 from .dimensions import (
     DataCoordinate,
@@ -72,8 +77,6 @@ from .dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from .exceptions import ValidationError
-from .fileDataset import FileDataset
 from .progress import Progress
 from .registry import (
     CollectionType,
@@ -87,9 +90,6 @@ from .registry import (
     _ButlerRegistry,
     _RegistryFactory,
 )
-from .repoRelocation import BUTLER_ROOT_TAG
-from .storageClass import StorageClass, StorageClassFactory
-from .timespan import Timespan
 from .transfers import RepoExportContext
 from .utils import transactional
 

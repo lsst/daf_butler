@@ -36,9 +36,9 @@ from typing import TYPE_CHECKING
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
+from .._file_dataset import FileDataset
 from ..datastore import Datastore
 from ..dimensions import DataCoordinate, DimensionElement, DimensionRecord
-from ..fileDataset import FileDataset
 from ..registry import CollectionType, _ButlerRegistry
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ._interfaces import RepoExportBackend

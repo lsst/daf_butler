@@ -40,7 +40,7 @@ from typing import Any
 
 from lsst.utils.classes import immutable
 
-from .named import NamedValueAbstractSet
+from ._named import NamedValueAbstractSet
 
 
 @enum.unique

@@ -38,7 +38,7 @@ from lsst.utils import doImport
 
 from .._butler import Butler
 from .._dataset_ref import DatasetIdGenEnum, DatasetRef
-from ..fileDataset import FileDataset
+from .._file_dataset import FileDataset
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType

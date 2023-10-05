@@ -39,7 +39,7 @@ from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRe
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
 from ...dimensions import DataCoordinate, Dimension, DimensionElement, DimensionGraph, DimensionRecord
-from .._collectionType import CollectionType
+from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._query_backend import QueryBackend
 from ._query_context import QueryContext

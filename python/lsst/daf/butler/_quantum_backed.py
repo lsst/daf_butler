@@ -41,22 +41,22 @@ from typing import TYPE_CHECKING, Any
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePathExpression
 
-from ._butlerConfig import ButlerConfig
+from ._butler_config import ButlerConfig
 from ._compat import _BaseModelCompat
+from ._config import Config
 from ._dataset_ref import DatasetId, DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
-from .config import Config
+from ._quantum import Quantum
+from ._storage_class import StorageClass, StorageClassFactory
 from .datastore import Datastore
 from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from .dimensions import DimensionUniverse
-from .quantum import Quantum
 from .registry.bridge.monolithic import MonolithicDatastoreRegistryBridgeManager
 from .registry.databases.sqlite import SqliteDatabase
 from .registry.interfaces import DatastoreRegistryBridgeManager, OpaqueTableStorageManager
 from .registry.opaque import ByNameOpaqueTableStorageManager
-from .storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
     from ._butler import Butler

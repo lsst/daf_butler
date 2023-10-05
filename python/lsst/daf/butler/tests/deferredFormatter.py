@@ -31,7 +31,7 @@ __all__ = "DeferredFormatter"
 
 from typing import Any
 
-from ..formatter import Formatter
+from .._formatter import Formatter
 
 
 class DeferredFormatter(Formatter):

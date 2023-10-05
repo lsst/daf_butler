@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import IO
 
-from .._butlerConfig import ButlerConfig
+from .._butler_config import ButlerConfig
 
 
 def configDump(repo: str, subset: str, searchpath: str, outfile: IO) -> None:

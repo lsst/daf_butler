@@ -40,6 +40,8 @@ from lsst.daf.relation import Join, Relation, sql
 
 from ..._column_tags import DimensionKeyColumnTag
 from ..._column_type_info import LogicalColumn
+from ..._named import NamedKeyMapping
+from ..._timespan import TimespanDatabaseRepresentation
 from ...dimensions import (
     DatabaseDimensionElement,
     DataCoordinate,
@@ -49,8 +51,6 @@ from ...dimensions import (
     SkyPixDimension,
     addDimensionForeignKey,
 )
-from ...named import NamedKeyMapping
-from ...timespan import TimespanDatabaseRepresentation
 from .. import queries
 from ..interfaces import (
     Database,

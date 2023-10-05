@@ -44,10 +44,10 @@ from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ...._column_type_info import LogicalColumn
 from ...._dataset_ref import DatasetId, DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ...._dataset_type import DatasetType
+from ...._timespan import Timespan
 from ....dimensions import DataCoordinate
-from ....timespan import Timespan
 from ..._collection_summary import CollectionSummary
-from ..._collectionType import CollectionType
+from ..._collection_type import CollectionType
 from ..._exceptions import CollectionTypeError, ConflictingDefinitionError
 from ...interfaces import DatasetRecordStorage
 from ...queries import SqlQueryContext

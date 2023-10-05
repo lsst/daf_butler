@@ -40,6 +40,7 @@ from lsst.utils.introspection import find_outside_stacklevel
 
 from ._dataset_ref import DatasetRef, SerializedDatasetRef
 from ._dataset_type import DatasetType, SerializedDatasetType
+from ._named import NamedKeyDict, NamedKeyMapping
 from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
 from .dimensions import (
     DataCoordinate,
@@ -48,7 +49,6 @@ from .dimensions import (
     SerializedDataCoordinate,
     SerializedDimensionRecord,
 )
-from .named import NamedKeyDict, NamedKeyMapping
 
 
 def _reconstructDatasetRef(

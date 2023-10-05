@@ -38,9 +38,9 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 import sqlalchemy
 
+from ..._timespan import Timespan, TimespanDatabaseRepresentation
 from ...dimensions import DimensionUniverse
-from ...timespan import Timespan, TimespanDatabaseRepresentation
-from .._collectionType import CollectionType
+from .._collection_type import CollectionType
 from .._exceptions import MissingCollectionError
 from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord, VersionTuple
 from ..wildcards import CollectionWildcard

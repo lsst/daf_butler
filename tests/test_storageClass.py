@@ -119,7 +119,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         # Check we can create a storageClass using the name of an importable
         # type.
-        sc2 = StorageClass("TestImage2", "lsst.daf.butler.storageClass.StorageClassFactory")
+        sc2 = StorageClass("TestImage2", "lsst.daf.butler.StorageClassFactory")
         self.assertIsInstance(sc2.pytype(), StorageClassFactory)
         self.assertIn("butler", repr(sc2))
 
@@ -185,7 +185,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertTrue(sc1.is_type(dict), repr(sc1))
         self.assertFalse(sc1.is_type(str), repr(sc1))
 
-        sc2 = StorageClass("TestImage2", "lsst.daf.butler.storageClass.StorageClassFactory")
+        sc2 = StorageClass("TestImage2", "lsst.daf.butler.StorageClassFactory")
         self.assertTrue(sc2.is_type(StorageClassFactory), repr(sc2))
 
     def testRegistry(self):

@@ -48,7 +48,7 @@ from lsst.daf.butler import (
     SerializedDimensionRecord,
 )
 from lsst.daf.butler.registry import CollectionType
-from lsst.daf.butler.serverModels import (
+from lsst.daf.butler.server_models import (
     ExpressionQueryParameter,
     QueryDataIdsModel,
     QueryDatasetsModel,

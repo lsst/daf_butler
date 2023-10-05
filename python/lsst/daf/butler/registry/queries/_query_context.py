@@ -47,8 +47,8 @@ from lsst.daf.relation import (
 )
 
 from ..._column_tags import DimensionKeyColumnTag
+from ..._timespan import Timespan
 from ...dimensions import DataCoordinate, SkyPixDimension
-from ...timespan import Timespan
 
 
 class QueryContext(Processor, AbstractContextManager["QueryContext"]):

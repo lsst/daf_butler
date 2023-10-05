@@ -40,8 +40,8 @@ from lsst.utils.classes import cached_getter, immutable
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._column_type_info import ColumnTypeInfo
 from ..._dataset_type import DatasetType
+from ..._named import NamedValueAbstractSet, NamedValueSet
 from ...dimensions import DataCoordinate, DimensionElement, DimensionGraph, DimensionUniverse, SkyPixDimension
-from ...named import NamedValueAbstractSet, NamedValueSet
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.

@@ -37,6 +37,7 @@ from collections.abc import Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
+from ...._named import NamedKeyDict, NamedValueSet
 from ....dimensions import (
     DataCoordinate,
     DataIdValue,
@@ -45,7 +46,6 @@ from ....dimensions import (
     DimensionGraph,
     DimensionUniverse,
 )
-from ....named import NamedKeyDict, NamedValueSet
 from ..._exceptions import UserExpressionError
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .normalForm import NormalForm, NormalFormVisitor

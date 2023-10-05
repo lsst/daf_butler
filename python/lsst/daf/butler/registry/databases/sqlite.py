@@ -41,7 +41,7 @@ import sqlalchemy.dialects.sqlite
 import sqlalchemy.ext.compiler
 
 from ... import ddl
-from ...named import NamedValueAbstractSet
+from ..._named import NamedValueAbstractSet
 from ..interfaces import Database, StaticTablesContext
 
 

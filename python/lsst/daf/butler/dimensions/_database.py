@@ -42,8 +42,8 @@ from lsst.utils import doImportType
 from lsst.utils.classes import cached_getter
 
 from .. import ddl
+from .._named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
-from ..named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
 from ._elements import Dimension, DimensionCombination, DimensionElement
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 

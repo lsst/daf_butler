@@ -36,6 +36,7 @@ from lsst.daf.relation import Relation
 
 from ... import ddl
 from ..._column_tags import DimensionKeyColumnTag
+from ..._named import NamedKeyDict
 from ...dimensions import (
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
@@ -45,7 +46,6 @@ from ...dimensions import (
     GovernorDimension,
     SkyPixDimension,
 )
-from ...named import NamedKeyDict
 from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import (
     Database,

@@ -49,20 +49,20 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils import doImportType
 
-from ..config import Config, ConfigSubset
-from ..exceptions import DatasetTypeNotSupportedError, ValidationError
-from ..fileDataset import FileDataset
-from ..storageClass import StorageClassFactory
+from .._config import Config, ConfigSubset
+from .._exceptions import DatasetTypeNotSupportedError, ValidationError
+from .._file_dataset import FileDataset
+from .._storage_class import StorageClassFactory
 from .constraints import Constraints
 
 if TYPE_CHECKING:
     from lsst.resources import ResourcePath, ResourcePathExpression
 
+    from .._config_support import LookupKey
     from .._dataset_ref import DatasetRef
     from .._dataset_type import DatasetType
-    from ..configSupport import LookupKey
+    from .._storage_class import StorageClass
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
-    from ..storageClass import StorageClass
     from .record_data import DatastoreRecordData
 
 _LOG = logging.getLogger(__name__)

@@ -53,6 +53,7 @@ from lsst.daf.butler import (
     StorageClass,
     ddl,
 )
+from lsst.daf.butler._replace_root import replaceRoot
 from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError
 from lsst.daf.butler.datastore.cache_manager import (
     AbstractDatastoreCacheManager,
@@ -71,7 +72,6 @@ from lsst.daf.butler.registry.interfaces import (
     FakeDatasetRef,
     ReadOnlyDatabaseError,
 )
-from lsst.daf.butler.repoRelocation import replaceRoot
 from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of, get_instance_of

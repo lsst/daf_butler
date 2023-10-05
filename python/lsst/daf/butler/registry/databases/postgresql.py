@@ -39,8 +39,8 @@ import sqlalchemy
 import sqlalchemy.dialects.postgresql
 from sqlalchemy import sql
 
-from ...named import NamedValueAbstractSet
-from ...timespan import Timespan, TimespanDatabaseRepresentation
+from ..._named import NamedValueAbstractSet
+from ..._timespan import Timespan, TimespanDatabaseRepresentation
 from ..interfaces import Database
 from ..nameShrinker import NameShrinker
 

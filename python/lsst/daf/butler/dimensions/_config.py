@@ -36,8 +36,8 @@ from typing import Any
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .. import ddl
+from .._config import Config, ConfigSubset
 from .._topology import TopologicalSpace
-from ..config import Config, ConfigSubset
 from ._database import (
     DatabaseDimensionElementConstructionVisitor,
     DatabaseTopologicalFamilyConstructionVisitor,

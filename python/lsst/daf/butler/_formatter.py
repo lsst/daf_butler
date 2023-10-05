@@ -38,15 +38,15 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils.introspection import get_full_type_name
 
+from ._config import Config
+from ._config_support import LookupKey, processLookupConfigs
 from ._dataset_ref import DatasetRef
 from ._dataset_type import DatasetType
-from .config import Config
-from .configSupport import LookupKey, processLookupConfigs
+from ._storage_class import StorageClass
 from .datastore.file_descriptor import FileDescriptor
 from .datastore.location import Location
 from .dimensions import DimensionUniverse
-from .mappingFactory import MappingFactory
-from .storageClass import StorageClass
+from .mapping_factory import MappingFactory
 
 log = logging.getLogger(__name__)
 

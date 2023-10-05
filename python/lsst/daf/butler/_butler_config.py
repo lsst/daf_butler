@@ -38,11 +38,11 @@ from collections.abc import Sequence
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from ._butlerRepoIndex import ButlerRepoIndex
-from .config import Config
+from ._butler_repo_index import ButlerRepoIndex
+from ._config import Config
+from ._storage_class import StorageClassConfig
 from .datastore import DatastoreConfig
 from .registry import RegistryConfig
-from .storageClass import StorageClassConfig
 from .transfers import RepoTransferFormatConfig
 
 CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig, DatastoreConfig, RepoTransferFormatConfig)

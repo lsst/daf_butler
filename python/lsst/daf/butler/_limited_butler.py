@@ -39,9 +39,9 @@ from lsst.resources import ResourcePath
 
 from ._dataset_ref import DatasetRef
 from ._deferredDatasetHandle import DeferredDatasetHandle
+from ._storage_class import StorageClass, StorageClassFactory
 from .datastore import DatasetRefURIs, Datastore
 from .dimensions import DimensionUniverse
-from .storageClass import StorageClass, StorageClassFactory
 
 log = logging.getLogger(__name__)
 

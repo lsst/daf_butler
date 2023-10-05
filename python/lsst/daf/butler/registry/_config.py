@@ -33,8 +33,8 @@ from typing import TYPE_CHECKING
 
 from lsst.utils import doImportType
 
-from ..config import ConfigSubset
-from ..repoRelocation import replaceRoot
+from .._config import ConfigSubset
+from .._replace_root import replaceRoot
 from .connectionString import ConnectionStringFactory
 from .interfaces import Database
 

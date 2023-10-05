@@ -43,10 +43,10 @@ from deprecated.sphinx import deprecated
 from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.sphgeom import IntersectionRegion, Region
 
+from .._named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping
+from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
-from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping
-from ..persistenceContext import PersistenceContextVars
-from ..timespan import Timespan
+from ..persistence_context import PersistenceContextVars
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
 from ._records import DimensionRecord, SerializedDimensionRecord

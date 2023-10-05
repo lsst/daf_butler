@@ -37,9 +37,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils.classes import cached_getter, immutable
 
+from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
 from ..json import from_json_pydantic, to_json_pydantic
-from ..named import NamedValueAbstractSet, NamedValueSet
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
