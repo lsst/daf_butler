@@ -101,18 +101,8 @@ Python API reference
 
 .. automodapi:: lsst.daf.butler
    :no-main-docstr:
-
-.. automodapi:: lsst.daf.butler.registry
-   :no-main-docstr:
-
-.. automodapi:: lsst.daf.butler.registry.interfaces
-   :no-main-docstr:
-
-.. automodapi:: lsst.daf.butler.registry.queries
-   :no-main-docstr:
-
-.. automodapi:: lsst.daf.butler.registry.wildcards
-   :no-main-docstr:
+   :skip: CollectionSearch
+   :skip: RegistryConfig
 
 Example datastores
 ------------------
@@ -149,57 +139,130 @@ Example formatters
    :no-main-docstr:
    :headings: ^"
 
+Test utilities
+--------------
+
+.. automodapi:: lsst.daf.butler.tests
+   :no-main-docstr:
+   :headings: ^"
+   :no-inheritance-diagram:
+
+Middleware-Internal API
+=======================
+
+.. warning::
+
+   These symbols are used throughout the middleware system and may be used in advanced middleware extensions (e.g. third-party `Datastore` implementations), but are not considered fully public interfaces in terms of stability guarantees.
+
+Datastore utilities
+-------------------
+
+.. automodapi:: lsst.daf.butler.datastore
+   :no-main-docstr:
+   :headings: ^"
+   :skip: Datastore
+
+Registry utilities and interfaces
+---------------------------------
+
+.. automodapi:: lsst.daf.butler.registry
+   :no-main-docstr:
+   :headings: ^"
+   :skip: Registry
+   :skip: CollectionType
+
+.. automodapi:: lsst.daf.butler.registry.interfaces
+   :headings: ^"
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.registry.queries
+   :headings: ^"
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.registry.wildcards
+   :headings: ^"
+   :no-main-docstr:
+
 Database backends
 -----------------
 
 .. automodapi:: lsst.daf.butler.registry.databases.sqlite
    :no-main-docstr:
    :headings: ^"
+
 .. automodapi:: lsst.daf.butler.registry.databases.postgresql
    :no-main-docstr:
    :headings: ^"
 
-Support API
------------
+General utilities
+-----------------
+
+.. automodapi:: lsst.daf.butler.ddl
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.instrument
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.json
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.logging
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.mapping_factory
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.persistence_context
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.progress
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.repo_relocation
+   :no-main-docstr:
+   :headings: ^"
+   :include-all-objects:
+
+.. automodapi:: lsst.daf.butler.time_utils
+   :no-main-docstr:
+   :headings: ^"
 
 .. automodapi:: lsst.daf.butler.utils
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.repoRelocation
-   :no-main-docstr:
-   :headings: ^"
-   :include-all-objects:
 
-Test utilities
---------------
-
-.. automodapi:: lsst.daf.butler.tests
-   :no-main-docstr:
-   :no-inheritance-diagram:
-
-Command Line Interface API
---------------------------
-
-.. warning::
-   The command line interface API (everything in ``lsst.daf.butler.cli``) is for only for developer use to write command line interfaces, and is not intended for general use.
+Command-Line Interface Utilities
+--------------------------------
 
 .. automodapi:: lsst.daf.butler.cli.butler
    :no-main-docstr:
-
+   :headings: ^"
 
 .. automodapi:: lsst.daf.butler.cli.cmd
    :no-main-docstr:
    :include-all-objects:
+   :headings: ^"
 
 .. automodapi:: lsst.daf.butler.cli.opt
    :no-main-docstr:
    :include-all-objects:
+   :headings: ^"
 
 .. automodapi:: lsst.daf.butler.cli.utils
    :no-main-docstr:
+   :headings: ^"
 
 .. automodapi:: lsst.daf.butler.cli.cliLog
    :no-main-docstr:
+   :headings: ^"
 
 .. automodapi:: lsst.daf.butler.cli.progress
    :no-main-docstr:
+   :headings: ^"
