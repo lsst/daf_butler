@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+__all__ = ("DatasetAssociation",)
+
 from dataclasses import dataclass
 from typing import Any
 
