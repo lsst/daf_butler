@@ -81,4 +81,6 @@ from .registry import CollectionSearch, CollectionType, Registry, RegistryConfig
 from .transfers import RepoExportContext, YamlRepoExportBackend, YamlRepoImportBackend
 from .version import *
 
-# Do not export the utility routines from utils
+# Do not import or lift symbols from 'repo_relocation'.
+
+# Do not export the utility routines from utils.

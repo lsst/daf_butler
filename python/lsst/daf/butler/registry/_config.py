@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 from lsst.utils import doImportType
 
 from .._config import ConfigSubset
-from .._replace_root import replaceRoot
+from ..repo_relocation import replaceRoot
 from .connectionString import ConnectionStringFactory
 from .interfaces import Database
 

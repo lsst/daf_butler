@@ -63,7 +63,6 @@ from ._exceptions import ValidationError
 from ._file_dataset import FileDataset
 from ._limited_butler import LimitedButler
 from ._registry_shim import RegistryShim
-from ._replace_root import BUTLER_ROOT_TAG
 from ._storage_class import StorageClass, StorageClassFactory
 from ._timespan import Timespan
 from .datastore import DatasetRefURIs, Datastore, NullDatastore
@@ -90,6 +89,7 @@ from .registry import (
     _ButlerRegistry,
     _RegistryFactory,
 )
+from .repo_relocation import BUTLER_ROOT_TAG
 from .transfers import RepoExportContext
 from .utils import transactional
 
