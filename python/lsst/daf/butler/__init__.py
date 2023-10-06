@@ -50,10 +50,12 @@ from ._dataset_type import *
 from ._deferredDatasetHandle import *
 from ._exceptions import *
 from ._file_dataset import *
+from ._file_descriptor import *
 from ._formatter import *
 
 # Do not import 'instrument' or 'json' at all by default.
 from ._limited_butler import *
+from ._location import *
 from ._named import *
 from ._quantum import *
 from ._quantum_backed import *

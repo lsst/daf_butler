@@ -38,12 +38,12 @@ from lsst.daf.butler import (
     DatasetType,
     DimensionGraph,
     DimensionUniverse,
+    FileDescriptor,
     Formatter,
     FormatterFactory,
+    Location,
     StorageClass,
 )
-from lsst.daf.butler.datastore.file_descriptor import FileDescriptor
-from lsst.daf.butler.datastore.location import Location
 from lsst.daf.butler.tests import DatasetTestHelper
 from lsst.daf.butler.tests.testFormatters import (
     DoNothingFormatter,

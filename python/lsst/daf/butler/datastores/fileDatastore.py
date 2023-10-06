@@ -47,8 +47,11 @@ from lsst.daf.butler import (
     DatasetTypeNotSupportedError,
     Datastore,
     FileDataset,
+    FileDescriptor,
     Formatter,
     FormatterFactory,
+    Location,
+    LocationFactory,
     Progress,
     StorageClass,
     ddl,
@@ -60,9 +63,7 @@ from lsst.daf.butler.datastore.cache_manager import (
     DatastoreDisabledCacheManager,
 )
 from lsst.daf.butler.datastore.composites import CompositesMap
-from lsst.daf.butler.datastore.file_descriptor import FileDescriptor
 from lsst.daf.butler.datastore.file_templates import FileTemplates, FileTemplateValidationError
-from lsst.daf.butler.datastore.location import Location, LocationFactory
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo, StoredFileInfo
 from lsst.daf.butler.registry.interfaces import (

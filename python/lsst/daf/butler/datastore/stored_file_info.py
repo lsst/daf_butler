@@ -37,8 +37,8 @@ from typing import TYPE_CHECKING, Any
 from lsst.resources import ResourcePath
 
 from .._formatter import Formatter, FormatterParameter
+from .._location import Location, LocationFactory
 from .._storage_class import StorageClass, StorageClassFactory
-from .location import Location, LocationFactory
 
 if TYPE_CHECKING:
     from .. import DatasetId, DatasetRef
