@@ -40,7 +40,7 @@ except ImportError:
     erfa = None
 
 from lsst.daf.butler import Timespan
-from lsst.daf.butler.core.time_utils import TimeConverter
+from lsst.daf.butler.time_utils import TimeConverter
 
 
 class TimespanTestCase(unittest.TestCase):

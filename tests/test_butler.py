@@ -80,14 +80,12 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     FileDataset,
-    FileTemplate,
-    FileTemplateValidationError,
-    NullDatastore,
     StorageClassFactory,
     ValidationError,
     script,
 )
-from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
+from lsst.daf.butler.datastore import NullDatastore
+from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
 from lsst.daf.butler.registries.sql import SqlRegistry
 from lsst.daf.butler.registry import (
@@ -98,6 +96,7 @@ from lsst.daf.butler.registry import (
     MissingCollectionError,
     OrphanedRecordError,
 )
+from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath
@@ -1302,13 +1301,13 @@ class FileDatastoreButlerTests(ButlerTests):
         # Use a template that has a typo in dimension record metadata.
         # Easier to test with a butler that has a ref with records attached.
         template = FileTemplate("a/{visit.name}/{id}_{visit.namex:?}.fits")
-        with self.assertLogs("lsst.daf.butler.core.fileTemplates", "INFO"):
+        with self.assertLogs("lsst.daf.butler.datastore.file_templates", "INFO"):
             path = template.format(ref)
         self.assertEqual(path, f"a/v423/{ref.id}_fits")
 
         template = FileTemplate("a/{visit.name}/{id}_{visit.namex}.fits")
         with self.assertRaises(KeyError):
-            with self.assertLogs("lsst.daf.butler.core.fileTemplates", "INFO"):
+            with self.assertLogs("lsst.daf.butler.datastore.file_templates", "INFO"):
                 template.format(ref)
 
         # Now use a file template that will not result in unique filenames

@@ -52,7 +52,7 @@ import click
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cliLog import CliLog
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg, command_test_env
-from lsst.daf.butler.core.logging import ButlerLogRecords
+from lsst.daf.butler.logging import ButlerLogRecords
 from lsst.utils.logging import TRACE
 
 try:
@@ -285,7 +285,7 @@ class CliLogTestBase:
 
         # When longlog=False, log lines start with the module name and
         # log level, for example:
-        # lsst.daf.butler.core.config DEBUG: ...
+        # lsst.daf.butler.config DEBUG: ...
         modulesRegex = re.compile(r".* ([a-z]+\.)+[a-z]+ [A-Z]+: .*")
 
         with self.runner.isolated_filesystem():

@@ -43,7 +43,7 @@ except ModuleNotFoundError:
 
 from lsst.utils.logging import TRACE, VERBOSE
 
-from ..core.logging import ButlerMDC, JsonLogFormatter
+from ..logging import ButlerMDC, JsonLogFormatter
 
 
 class PrecisionLogFormatter(logging.Formatter):

@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
-from ..core.ddl import FieldSpec, TableSpec
+from ..ddl import FieldSpec, TableSpec
 from .interfaces import (
     Database,
     OpaqueTableStorage,
@@ -49,7 +49,7 @@ from .interfaces import (
 )
 
 if TYPE_CHECKING:
-    from ..core.datastore import DatastoreTransaction
+    from ..datastore import DatastoreTransaction
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(0, 2, 0)

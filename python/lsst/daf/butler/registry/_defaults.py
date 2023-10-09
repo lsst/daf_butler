@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import immutable
 
-from ..core import DataCoordinate
+from ..dimensions import DataCoordinate
 from ._collection_summary import CollectionSummary
 from ._exceptions import MissingCollectionError
 from .wildcards import CollectionWildcard

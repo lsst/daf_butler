@@ -40,8 +40,8 @@ import sqlalchemy
 import sqlalchemy.dialects.sqlite
 import sqlalchemy.ext.compiler
 
-from ...core import ddl
-from ...core.named import NamedValueAbstractSet
+from ... import ddl
+from ..._named import NamedValueAbstractSet
 from ..interfaces import Database, StaticTablesContext
 
 

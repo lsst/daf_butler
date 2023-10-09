@@ -28,7 +28,7 @@
 from . import interfaces, managers, queries, wildcards
 from ._butler_registry import _ButlerRegistry
 from ._collection_summary import *
-from ._collectionType import *
+from ._collection_type import *
 from ._config import *
 from ._defaults import *
 from ._exceptions import *

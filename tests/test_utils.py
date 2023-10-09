@@ -31,7 +31,7 @@ import unittest
 from collections import namedtuple
 
 from lsst.daf.butler import NamedKeyDict, NamedValueSet
-from lsst.daf.butler.core.utils import globToRegex
+from lsst.daf.butler.utils import globToRegex
 
 TESTDIR = os.path.dirname(__file__)
 

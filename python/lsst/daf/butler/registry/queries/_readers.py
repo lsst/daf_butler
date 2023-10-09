@@ -39,16 +39,10 @@ from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import cached_getter
 
-from ...core import (
-    DataCoordinate,
-    DatasetColumnTag,
-    DatasetRef,
-    DatasetType,
-    DimensionElement,
-    DimensionGraph,
-    DimensionKeyColumnTag,
-    DimensionRecord,
-)
+from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
+from ..._dataset_ref import DatasetRef
+from ..._dataset_type import DatasetType
+from ...dimensions import DataCoordinate, DimensionElement, DimensionGraph, DimensionRecord
 
 if TYPE_CHECKING:
     from lsst.daf.relation import ColumnTag

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .... import ddl
+
 __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 
 import logging
@@ -10,7 +12,8 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 from lsst.utils.introspection import find_outside_stacklevel
 
-from ....core import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType, DimensionUniverse, ddl
+from ...._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType
+from ....dimensions import DimensionUniverse
 from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, DatasetTypeError, OrphanedRecordError
 from ...interfaces import DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple

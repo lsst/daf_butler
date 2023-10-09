@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = [
     "ChainedCollectionRecord",
     "CollectionManager",
@@ -38,8 +40,9 @@ from collections import defaultdict
 from collections.abc import Iterator, Set
 from typing import TYPE_CHECKING, Any
 
-from ...core import DimensionUniverse, Timespan, ddl
-from .._collectionType import CollectionType
+from ..._timespan import Timespan
+from ...dimensions import DimensionUniverse
+from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._versioning import VersionedExtension, VersionTuple
 

@@ -35,13 +35,8 @@ import sqlalchemy
 from lsst.daf.relation import Join, Relation
 from lsst.utils import doImportType
 
-from ...core import (
-    DatabaseDimensionElement,
-    DataCoordinate,
-    DimensionRecord,
-    GovernorDimension,
-    NamedKeyMapping,
-)
+from ..._named import NamedKeyMapping
+from ...dimensions import DatabaseDimensionElement, DataCoordinate, DimensionRecord, GovernorDimension
 from .. import queries
 from ..interfaces import (
     Database,

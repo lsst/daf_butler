@@ -42,11 +42,11 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from ..core import Formatter
+from .._formatter import Formatter
 from ..formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
-    from ..core import Location
+    from .._location import Location
 
 
 class DoNothingFormatter(Formatter):

@@ -33,13 +33,9 @@ from typing import Any
 
 from lsst.daf.relation import ColumnExpression, ColumnTag, Diagnostics, Relation
 
-from ...core import (
-    ColumnCategorization,
-    DatasetColumnTag,
-    DatasetType,
-    DimensionKeyColumnTag,
-    DimensionRecordColumnTag,
-)
+from ..._column_categorization import ColumnCategorization
+from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
+from ..._dataset_type import DatasetType
 from ..wildcards import CollectionWildcard
 from ._query import Query
 from ._query_backend import QueryBackend

@@ -28,7 +28,8 @@
 import os
 import unittest
 
-from lsst.daf.butler import CompositesConfig, CompositesMap, DatasetType, DimensionUniverse, StorageClass
+from lsst.daf.butler import DatasetType, DimensionUniverse, StorageClass
+from lsst.daf.butler.datastore.composites import CompositesConfig, CompositesMap
 
 TESTDIR = os.path.dirname(__file__)
 

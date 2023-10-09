@@ -42,8 +42,9 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 from lsst.daf.relation import Join, Relation, sql
 
-from ...core import (
-    ColumnTypeInfo,
+from ..._column_type_info import ColumnTypeInfo, LogicalColumn
+from ..._named import NamedKeyMapping
+from ...dimensions import (
     DatabaseDimensionElement,
     DataCoordinate,
     DimensionElement,
@@ -51,10 +52,8 @@ from ...core import (
     DimensionRecord,
     DimensionUniverse,
     GovernorDimension,
-    LogicalColumn,
     SkyPixDimension,
 )
-from ...core.named import NamedKeyMapping
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:

@@ -44,7 +44,8 @@ from ._versioning import VersionedExtension, VersionTuple
 if TYPE_CHECKING:
     from lsst.sphgeom import Region
 
-    from ...core import DatasetRef, DimensionUniverse
+    from ..._dataset_ref import DatasetRef
+    from ...dimensions import DimensionUniverse
     from ..queries import SqlQueryContext
     from ._collections import CollectionRecord
     from ._database import Database, StaticTablesContext

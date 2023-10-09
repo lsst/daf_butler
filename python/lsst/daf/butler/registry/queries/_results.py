@@ -41,11 +41,11 @@ from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from typing import Any
 
-from ...core import (
+from ..._dataset_ref import DatasetRef
+from ..._dataset_type import DatasetType
+from ...dimensions import (
     DataCoordinate,
     DataCoordinateIterable,
-    DatasetRef,
-    DatasetType,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,

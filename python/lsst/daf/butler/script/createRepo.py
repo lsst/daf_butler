@@ -27,7 +27,7 @@
 from __future__ import annotations
 
 from .._butler import Butler
-from ..core import Config
+from .._config import Config
 
 
 def createRepo(

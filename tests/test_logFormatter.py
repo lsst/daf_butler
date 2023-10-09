@@ -35,7 +35,7 @@ import unittest
 from logging import FileHandler
 
 from lsst.daf.butler import Butler, DatasetRef, DatasetType, FileDataset
-from lsst.daf.butler.core.logging import ButlerLogRecordHandler, JsonLogFormatter
+from lsst.daf.butler.logging import ButlerLogRecordHandler, JsonLogFormatter
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))

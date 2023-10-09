@@ -176,7 +176,7 @@ class DimensionTestCase(unittest.TestCase):
         clone = self.universe.dimensionConfig.copy()
         clone["version"] = clone["version"] + 1_000_000  # High version number
         universe_clone = DimensionUniverse(config=clone)
-        with self.assertLogs("lsst.daf.butler.core.dimensions", "INFO") as cm:
+        with self.assertLogs("lsst.daf.butler.dimensions", "INFO") as cm:
             self.assertTrue(self.universe.isCompatibleWith(universe_clone))
         self.assertIn("differing versions", "\n".join(cm.output))
 

@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import _timespan
+
 __all__ = ("QueryBackend",)
 
 from abc import abstractmethod
@@ -43,17 +45,10 @@ from lsst.daf.relation import (
     UnaryOperationRelation,
 )
 
-from ...core import (
-    DataCoordinate,
-    DatasetColumnTag,
-    DatasetType,
-    DimensionGraph,
-    DimensionKeyColumnTag,
-    DimensionRecord,
-    DimensionUniverse,
-    timespan,
-)
-from .._collectionType import CollectionType
+from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
+from ..._dataset_type import DatasetType
+from ...dimensions import DataCoordinate, DimensionGraph, DimensionRecord, DimensionUniverse
+from .._collection_type import CollectionType
 from .._exceptions import DatasetTypeError, MissingDatasetTypeError
 from ..wildcards import CollectionWildcard
 from ._query_context import QueryContext
@@ -505,10 +500,10 @@ class QueryBackend(Generic[_C]):
             and any(r.type is CollectionType.CALIBRATION for r in collections)
         ):
             base_timespan_tag = DatasetColumnTag(dataset_type.name, "timespan")
-            rhs = ColumnExpression.reference(base_timespan_tag, dtype=timespan.Timespan)
+            rhs = ColumnExpression.reference(base_timespan_tag, dtype=_timespan.Timespan)
             full_columns.add("timespan")
             for timespan_tag in temporal_join_on:
-                lhs = ColumnExpression.reference(timespan_tag, dtype=timespan.Timespan)
+                lhs = ColumnExpression.reference(timespan_tag, dtype=_timespan.Timespan)
                 join_predicates.append(lhs.predicate_method("overlaps", rhs))
         # Delegate to the concrete QueryBackend subclass to do most of the
         # work.

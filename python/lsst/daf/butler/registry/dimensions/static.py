@@ -34,17 +34,17 @@ from typing import TYPE_CHECKING, cast
 import sqlalchemy
 from lsst.daf.relation import Relation
 
-from ...core import (
+from ... import ddl
+from ..._column_tags import DimensionKeyColumnTag
+from ..._named import NamedKeyDict
+from ...dimensions import (
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
     DimensionElement,
     DimensionGraph,
-    DimensionKeyColumnTag,
     DimensionUniverse,
     GovernorDimension,
-    NamedKeyDict,
     SkyPixDimension,
-    ddl,
 )
 from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import (

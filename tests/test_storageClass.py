@@ -101,7 +101,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertIn("comp1", scc.components)
         r = repr(scc)
         self.assertIn("comp1", r)
-        self.assertIn("lsst.daf.butler.core.storageClassDelegate.StorageClassDelegate", r)
+        self.assertIn("lsst.daf.butler.StorageClassDelegate", r)
 
         # Ensure that we have a delegate
         self.assertIsInstance(scc.delegate(), StorageClassDelegate)
@@ -118,9 +118,9 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         # Check we can create a storageClass using the name of an importable
         # type.
-        sc2 = StorageClass("TestImage2", "lsst.daf.butler.core.storageClass.StorageClassFactory")
+        sc2 = StorageClass("TestImage2", "lsst.daf.butler.StorageClassFactory")
         self.assertIsInstance(sc2.pytype(), StorageClassFactory)
-        self.assertIn("butler.core", repr(sc2))
+        self.assertIn("butler", repr(sc2))
 
     def testParameters(self):
         """Test that we can set parameters and validate them"""
@@ -184,7 +184,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertTrue(sc1.is_type(dict), repr(sc1))
         self.assertFalse(sc1.is_type(str), repr(sc1))
 
-        sc2 = StorageClass("TestImage2", "lsst.daf.butler.core.storageClass.StorageClassFactory")
+        sc2 = StorageClass("TestImage2", "lsst.daf.butler.StorageClassFactory")
         self.assertTrue(sc2.is_type(StorageClassFactory), repr(sc2))
 
     def testRegistry(self):
@@ -331,7 +331,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
             # Add some entries that will fail to import.
             "lsst.daf.butler.bad.type": "lsst.daf.butler.tests.MetricsExampleModel.from_metrics",
             "lsst.daf.butler.tests.MetricsExampleModel": "lsst.daf.butler.bad.function",
-            "lsst.daf.butler.Butler": "lsst.daf.butler.core.location.__all__",
+            "lsst.daf.butler.Butler": "lsst.daf.butler.location.__all__",
             "list": get_full_type_name(self._convert_type),
         }
         sc = StorageClass(className, pytype=dict, converters=converters)

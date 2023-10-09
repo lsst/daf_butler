@@ -35,7 +35,7 @@ from typing import final
 from lsst.daf.relation import ColumnTag, Relation, RowFilter, UnaryCommutator, UnaryOperationRelation
 from lsst.utils.classes import cached_getter
 
-from ...core import DatasetColumnTag, DimensionKeyColumnTag
+from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 
 
 @final

@@ -39,41 +39,37 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
-from ..core import (
-    Config,
+from .._config import Config
+from .._dataset_association import DatasetAssociation
+from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
+from .._dataset_type import DatasetType, SerializedDatasetType
+from .._named import NameLookupMapping
+from .._storage_class import StorageClassFactory
+from .._timespan import Timespan
+from ..dimensions import (
     DataCoordinate,
     DataCoordinateSequence,
     DataId,
-    DatasetAssociation,
-    DatasetId,
-    DatasetIdGenEnum,
-    DatasetRef,
-    DatasetType,
     Dimension,
     DimensionConfig,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    NameLookupMapping,
     SerializedDataCoordinate,
-    SerializedDatasetRef,
-    SerializedDatasetType,
     SerializedDimensionRecord,
-    StorageClassFactory,
-    Timespan,
 )
-from ..core.serverModels import (
+from ..registry import CollectionSummary, CollectionType, RegistryConfig, RegistryDefaults, _ButlerRegistry
+from ..server_models import (
     DatasetsQueryParameter,
     ExpressionQueryParameter,
     QueryDataIdsModel,
     QueryDatasetsModel,
     QueryDimensionRecordsModel,
 )
-from ..registry import CollectionSummary, CollectionType, RegistryConfig, RegistryDefaults, _ButlerRegistry
 
 if TYPE_CHECKING:
-    from .._butlerConfig import ButlerConfig
+    from .._butler_config import ButlerConfig
     from ..registry._registry import CollectionArgType
     from ..registry.interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 

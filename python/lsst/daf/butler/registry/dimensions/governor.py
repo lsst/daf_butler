@@ -34,7 +34,7 @@ from typing import Any, cast
 import sqlalchemy
 from lsst.daf.relation import Relation
 
-from ...core import DataCoordinate, DimensionRecord, GovernorDimension
+from ...dimensions import DataCoordinate, DimensionRecord, GovernorDimension
 from .. import queries
 from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
 

@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from . import ddl
+
 __all__ = ("QuantumBackedButler", "QuantumProvenanceData")
 
 import itertools
@@ -37,26 +39,20 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from deprecated.sphinx import deprecated
-from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.resources import ResourcePathExpression
 
-from ._butlerConfig import ButlerConfig
+from ._butler_config import ButlerConfig
+from ._compat import _BaseModelCompat
+from ._config import Config
+from ._dataset_ref import DatasetId, DatasetRef
+from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._limited_butler import LimitedButler
-from .core import (
-    Config,
-    DatasetId,
-    DatasetRef,
-    DatasetType,
-    Datastore,
-    DatastoreRecordData,
-    DimensionUniverse,
-    Quantum,
-    SerializedDatastoreRecordData,
-    StorageClass,
-    StorageClassFactory,
-    ddl,
-)
+from ._quantum import Quantum
+from ._storage_class import StorageClass, StorageClassFactory
+from .datastore import Datastore
+from .datastore.record_data import DatastoreRecordData, SerializedDatastoreRecordData
+from .dimensions import DimensionUniverse
 from .registry.bridge.monolithic import MonolithicDatastoreRegistryBridgeManager
 from .registry.databases.sqlite import SqliteDatabase
 from .registry.interfaces import DatastoreRegistryBridgeManager, OpaqueTableStorageManager

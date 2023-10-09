@@ -33,13 +33,8 @@ from typing import TYPE_CHECKING
 import sqlalchemy
 from lsst.daf.relation import Calculation, ColumnExpression, Join, Relation
 
-from ...core import (
-    DataCoordinate,
-    DimensionKeyColumnTag,
-    DimensionRecord,
-    DimensionRecordColumnTag,
-    SkyPixDimension,
-)
+from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
+from ...dimensions import DataCoordinate, DimensionRecord, SkyPixDimension
 from ..interfaces import SkyPixDimensionRecordStorage
 
 if TYPE_CHECKING:

@@ -35,7 +35,7 @@ from typing import Any, TypeVar
 
 import click
 
-from ..core.progress import Progress, ProgressBar, ProgressHandler
+from ..progress import Progress, ProgressBar, ProgressHandler
 
 _T = TypeVar("_T")
 

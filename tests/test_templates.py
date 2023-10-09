@@ -38,11 +38,13 @@ from lsst.daf.butler import (
     DatasetType,
     DimensionGraph,
     DimensionUniverse,
+    StorageClass,
+)
+from lsst.daf.butler.datastore.file_templates import (
     FileTemplate,
     FileTemplates,
     FileTemplatesConfig,
     FileTemplateValidationError,
-    StorageClass,
 )
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))

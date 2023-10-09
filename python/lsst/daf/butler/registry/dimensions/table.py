@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ["TableDimensionRecordStorage"]
 
 import dataclasses
@@ -36,19 +38,18 @@ from typing import Any
 import sqlalchemy
 from lsst.daf.relation import Join, Relation, sql
 
-from ...core import (
+from ..._column_tags import DimensionKeyColumnTag
+from ..._column_type_info import LogicalColumn
+from ..._named import NamedKeyMapping
+from ..._timespan import TimespanDatabaseRepresentation
+from ...dimensions import (
     DatabaseDimensionElement,
     DataCoordinate,
     DimensionElement,
-    DimensionKeyColumnTag,
     DimensionRecord,
     GovernorDimension,
-    LogicalColumn,
-    NamedKeyMapping,
     SkyPixDimension,
-    TimespanDatabaseRepresentation,
     addDimensionForeignKey,
-    ddl,
 )
 from .. import queries
 from ..interfaces import (

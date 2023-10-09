@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 from lsst.sphgeom import ConvexPolygon, LonLat, Region
 
-from ...core import ddl
+from ... import ddl
 from ._spatial import RegionTypeError, SpatialObsCorePlugin
 
 if TYPE_CHECKING:

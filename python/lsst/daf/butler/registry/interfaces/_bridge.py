@@ -35,12 +35,14 @@ from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import immutable
 
-from ...core import DatasetId, DatasetRef
+from ..._dataset_ref import DatasetId, DatasetRef
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from ...core import DatasetType, DimensionUniverse, StoredDatastoreItemInfo
-    from ...core.datastore import DatastoreTransaction
+    from ..._dataset_type import DatasetType
+    from ...datastore import DatastoreTransaction
+    from ...datastore.stored_file_info import StoredDatastoreItemInfo
+    from ...dimensions import DimensionUniverse
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
     from ._opaque import OpaqueTableStorage, OpaqueTableStorageManager

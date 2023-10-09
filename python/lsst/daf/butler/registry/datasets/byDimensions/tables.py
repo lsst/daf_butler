@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from .... import ddl
+
 __all__ = (
     "addDatasetForeignKey",
     "makeCalibTableName",
@@ -42,14 +44,9 @@ from typing import Any
 
 import sqlalchemy
 
-from ....core import (
-    DatasetType,
-    DimensionUniverse,
-    GovernorDimension,
-    TimespanDatabaseRepresentation,
-    addDimensionForeignKey,
-    ddl,
-)
+from ...._dataset_type import DatasetType
+from ...._timespan import TimespanDatabaseRepresentation
+from ....dimensions import DimensionUniverse, GovernorDimension, addDimensionForeignKey
 from ...interfaces import CollectionManager, VersionTuple
 
 DATASET_TYPE_NAME_LENGTH = 128

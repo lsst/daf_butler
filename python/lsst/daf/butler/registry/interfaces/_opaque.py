@@ -37,12 +37,12 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any
 
-from ...core.ddl import TableSpec
+from ...ddl import TableSpec
 from ._database import Database, StaticTablesContext
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from ...core.datastore import DatastoreTransaction
+    from ...datastore import DatastoreTransaction
 
 
 class OpaqueTableStorage(ABC):

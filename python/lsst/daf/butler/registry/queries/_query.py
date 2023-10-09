@@ -35,19 +35,11 @@ from typing import Any, cast, final
 
 from lsst.daf.relation import ColumnError, ColumnTag, Diagnostics, Relation, Sort, SortTerm
 
-from ...core import (
-    DataCoordinate,
-    DatasetColumnTag,
-    DatasetRef,
-    DatasetType,
-    Dimension,
-    DimensionElement,
-    DimensionGraph,
-    DimensionKeyColumnTag,
-    DimensionRecord,
-    DimensionRecordColumnTag,
-)
-from .._collectionType import CollectionType
+from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
+from ..._dataset_ref import DatasetRef
+from ..._dataset_type import DatasetType
+from ...dimensions import DataCoordinate, Dimension, DimensionElement, DimensionGraph, DimensionRecord
+from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._query_backend import QueryBackend
 from ._query_context import QueryContext

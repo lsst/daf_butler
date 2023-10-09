@@ -32,12 +32,12 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-from ...core import DatasetId
+from ..._dataset_ref import DatasetId
 from ..interfaces import DatasetIdRef, DatastoreRegistryBridge, FakeDatasetRef, OpaqueTableStorage
 
 if TYPE_CHECKING:
-    from ...core import StoredDatastoreItemInfo
-    from ...core.datastore import DatastoreTransaction
+    from ...datastore import DatastoreTransaction
+    from ...datastore.stored_file_info import StoredDatastoreItemInfo
 
 
 class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):

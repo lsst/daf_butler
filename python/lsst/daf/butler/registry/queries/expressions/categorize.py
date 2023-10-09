@@ -31,7 +31,7 @@ __all__ = ()  # all symbols intentionally private; for internal package use.
 import enum
 from typing import cast
 
-from ....core import Dimension, DimensionElement, DimensionGraph, DimensionUniverse
+from ....dimensions import Dimension, DimensionElement, DimensionGraph, DimensionUniverse
 
 
 class ExpressionConstant(enum.Enum):

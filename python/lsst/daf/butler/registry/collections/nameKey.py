@@ -26,13 +26,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from ... import ddl
+
 __all__ = ["NameKeyCollectionManager"]
 
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
-from ...core import TimespanDatabaseRepresentation, ddl
+from ..._timespan import TimespanDatabaseRepresentation
 from ..interfaces import VersionTuple
 from ._base import (
     CollectionTablesTuple,

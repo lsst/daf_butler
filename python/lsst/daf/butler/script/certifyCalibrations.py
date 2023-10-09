@@ -29,7 +29,7 @@ from __future__ import annotations
 import astropy.time
 
 from .._butler import Butler
-from ..core import Timespan
+from .._timespan import Timespan
 from ..registry import CollectionType
 
 

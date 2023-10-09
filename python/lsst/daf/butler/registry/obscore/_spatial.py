@@ -37,7 +37,7 @@ from lsst.sphgeom import Region
 from lsst.utils import doImportType
 
 if TYPE_CHECKING:
-    from ...core import ddl
+    from ... import ddl
     from ..interfaces import Database
     from ._config import SpatialPluginConfig
     from ._records import Record

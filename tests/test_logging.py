@@ -32,7 +32,7 @@ import unittest
 from logging import FileHandler, StreamHandler
 
 import lsst.utils.logging
-from lsst.daf.butler.core.logging import (
+from lsst.daf.butler.logging import (
     ButlerLogRecord,
     ButlerLogRecordHandler,
     ButlerLogRecords,
