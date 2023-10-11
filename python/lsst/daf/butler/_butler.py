@@ -1182,62 +1182,42 @@ class Butler(LimitedButler):
         TypeError
             Raised if the butler is read-only or if no run has been provided.
         """
-        if not self.isWriteable():
-            raise TypeError("Butler is read-only.")
-
         if isinstance(datasetRefOrType, DatasetRef):
             # This is a direct put of predefined DatasetRef.
             log.debug("Butler put direct: %s", datasetRefOrType)
             if run is not None:
                 warnings.warn("Run collection is not used for DatasetRef", stacklevel=3)
-            ref = datasetRefOrType
-
             # If registry already has a dataset with the same dataset ID,
             # dataset type and DataId, then _importDatasets will do nothing and
             # just return an original ref. We have to raise in this case, there
             # is a datastore check below for that.
-            self._registry._importDatasets([ref], expand=True)
+            self._registry._importDatasets([datasetRefOrType], expand=True)
             # Before trying to write to the datastore check that it does not
             # know this dataset. This is prone to races, of course.
-            if self._datastore.knows(ref):
-                raise ConflictingDefinitionError(f"Datastore already contains dataset: {ref}")
+            if self._datastore.knows(datasetRefOrType):
+                raise ConflictingDefinitionError(f"Datastore already contains dataset: {datasetRefOrType}")
             # Try to write dataset to the datastore, if it fails due to a race
             # with another write, the content of stored data may be
             # unpredictable.
             try:
-                stored_refs = self._datastore.put_new(obj, ref)
+                self._datastore.put(obj, datasetRefOrType)
             except IntegrityError as e:
                 raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
-            # TODO: we should re-order calls to datastore and registry and
-            # store records in _importDatasets()
-            self._registry.store_datastore_records(stored_refs)
+            return datasetRefOrType
 
-        else:
-            log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
-            if not self.isWriteable():
-                raise TypeError("Butler is read-only.")
-            datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
+        log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
 
-            # Handle dimension records in dataId
-            dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
+        # Handle dimension records in dataId
+        dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
 
-            # Add Registry Dataset entry.
-            dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
+        # Add Registry Dataset entry.
+        dataId = self._registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
+        (ref,) = self._registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
+        self._datastore.put(obj, ref)
 
-            # Add Registry Dataset entry.
-            dataId = self._registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
-            (ref,) = self._registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
-            stored_refs = self._datastore.put_new(obj, ref)
-            # TODO: we should re-order calls to datastore and registry and
-            # store records in insertDatasets()
-            self._registry.store_datastore_records(stored_refs)
-
-        # We probably want to return a ref with datastore records, take any one
-        # from the stored refs (in case it's not empty).
-        # TODO: Disabled for now, this messes up logic in datastore.exists()
-        # and breaks unit tests.
-        # if stored_refs:
-        #     ref = next(iter(stored_refs.values()))
         return ref
 
     # TODO: remove on DM-40067.
