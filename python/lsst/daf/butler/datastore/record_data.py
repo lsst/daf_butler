@@ -239,7 +239,18 @@ class DatastoreRecordData:
         for dataset_id in simple.dataset_ids:
             records[dataset_id] = {}
         for class_name, table_data in simple.records.items():
-            klass = doImportType(class_name)
+            try:
+                klass = doImportType(class_name)
+            except ImportError:
+                # Prior to DM-41043 we were embedding a lsst.daf.butler.core
+                # path in the serialized form, which we never wanted; fix this
+                # one case.
+                if class_name == "lsst.daf.butler.core.storedFileInfo.StoredFileInfo":
+                    from .stored_file_info import StoredFileInfo
+
+                    klass = StoredFileInfo
+                else:
+                    raise
             if not issubclass(klass, StoredDatastoreItemInfo):
                 raise RuntimeError(
                     "The class specified in the SerializedDatastoreRecordData "
