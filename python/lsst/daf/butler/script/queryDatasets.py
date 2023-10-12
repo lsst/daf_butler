@@ -175,7 +175,7 @@ class QueryDatasets:
             raise RuntimeError("One of repo and butler must be provided and the other must be None.")
         # show_uri requires a datastore.
         without_datastore = not show_uri
-        self.butler = butler or Butler(repo, without_datastore=without_datastore)
+        self.butler = butler or Butler.from_config(repo, without_datastore=without_datastore)
         self._getDatasets(glob, collections, where, find_first)
         self.showUri = show_uri
 

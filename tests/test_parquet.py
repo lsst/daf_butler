@@ -306,7 +306,9 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
         self.run = "test_run"
-        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run=self.run)
+        self.butler = Butler.from_config(
+            Butler.makeRepo(self.root, config=config), writeable=True, run=self.run
+        )
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -726,7 +728,9 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
         self.run = "test_run"
-        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run=self.run)
+        self.butler = Butler.from_config(
+            Butler.makeRepo(self.root, config=config), writeable=True, run=self.run
+        )
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -1053,7 +1057,9 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
-        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        self.butler = Butler.from_config(
+            Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
+        )
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -1313,7 +1319,9 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
-        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        self.butler = Butler.from_config(
+            Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
+        )
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -1634,7 +1642,9 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
-        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        self.butler = Butler.from_config(
+            Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
+        )
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -1787,7 +1797,9 @@ class ParquetFormatterArrowSchemaTestCase(unittest.TestCase):
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
         config = Config(self.configFile)
-        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
+        self.butler = Butler.from_config(
+            Butler.makeRepo(self.root, config=config), writeable=True, run="test_run"
+        )
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(

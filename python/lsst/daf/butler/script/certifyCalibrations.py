@@ -69,7 +69,7 @@ def certifyCalibrations(
         Search all children of the inputCollection if it is a CHAINED
         collection, instead of just the most recent one.
     """
-    butler = Butler(repo, writeable=True, without_datastore=True)
+    butler = Butler.from_config(repo, writeable=True, without_datastore=True)
     registry = butler.registry
     timespan = Timespan(
         begin=astropy.time.Time(begin_date, scale="tai") if begin_date is not None else None,

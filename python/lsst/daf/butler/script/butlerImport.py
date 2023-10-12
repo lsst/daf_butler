@@ -59,7 +59,7 @@ def butlerImport(
     skip_dimensions : `list`, or `None`
         Dimensions that should be skipped.
     """
-    butler = Butler(repo, writeable=True)
+    butler = Butler.from_config(repo, writeable=True)
 
     if skip_dimensions is not None:
         skip_dimensions = set(skip_dimensions)

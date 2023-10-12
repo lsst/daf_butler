@@ -70,7 +70,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         """Load registry test data from ``TESTDIR/data/registry/<filename>``,
         which should be a YAML import/export file.
         """
-        butler = Butler(self.repo, writeable=True)
+        butler = Butler.from_config(self.repo, writeable=True)
         for filename in filenames:
             with open(os.path.join(TESTDIR, "data", "registry", filename)) as stream:
                 # Go behind the back of the import code a bit to deal with

@@ -65,7 +65,7 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testMatplotlibFormatter(self):
-        butler = Butler(self.root, run="testrun")
+        butler = Butler.from_config(self.root, run="testrun")
         datasetType = DatasetType("test_plot", [], "Plot", universe=butler.dimensions)
         butler.registry.registerDatasetType(datasetType)
         # Does not have to be a random image

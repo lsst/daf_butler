@@ -116,7 +116,7 @@ def makeTestRepo(
     # not be ignored.
     # newConfig guards against location-related keywords like outfile
     newConfig = Butler.makeRepo(root, config=defaults, forceConfigRoot=False, **kwargs)
-    butler = Butler(newConfig, writeable=True)
+    butler = Butler.from_config(newConfig, writeable=True)
     dimensionRecords = _makeRecords(dataIds, butler.dimensions)
     for dimension, records in dimensionRecords.items():
         if butler.dimensions[dimension].viewOf is None:
@@ -154,7 +154,7 @@ def makeTestCollection(repo: Butler, uniqueId: str | None = None) -> Butler:
         # Speed matters more than cryptographic guarantees
         uniqueId = str(random.randrange(1_000_000_000))
     collection = "test_" + uniqueId
-    return Butler(butler=repo, run=collection)
+    return Butler.from_config(butler=repo, run=collection)
 
 
 def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -> Mapping[str, Iterable]:

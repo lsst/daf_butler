@@ -122,7 +122,7 @@ def exportCalibs(
     RuntimeError :
         Raised if the output directory already exists.
     """
-    butler = Butler(repo, writeable=False)
+    butler = Butler.from_config(repo, writeable=False)
 
     dataset_type_query = dataset_type or ...
     collections_query = collections or ...

@@ -69,7 +69,7 @@ def register_dataset_type(
         be created by this command. They are always derived from the composite
         dataset type.
     """
-    butler = Butler(repo, writeable=True, without_datastore=True)
+    butler = Butler.from_config(repo, writeable=True, without_datastore=True)
 
     composite, component = DatasetType.splitDatasetTypeName(dataset_type)
     if component:

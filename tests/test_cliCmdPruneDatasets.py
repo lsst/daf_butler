@@ -35,7 +35,6 @@ from unittest.mock import patch
 import lsst.daf.butler.registries.sql
 import lsst.daf.butler.script
 from astropy.table import Table
-from lsst.daf.butler import Butler
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cmd.commands import (
     pruneDatasets_askContinueMsg,
@@ -54,6 +53,7 @@ from lsst.daf.butler.cli.cmd.commands import (
     pruneDatasets_wouldRemoveMsg,
 )
 from lsst.daf.butler.cli.utils import LogCliRunner, astropyTablesToStr, clickResultMsg
+from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry import CollectionType
 from lsst.daf.butler.script import QueryDatasets
 
@@ -118,7 +118,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
     @patch.object(lsst.daf.butler.script._pruneDatasets, "QueryDatasets", side_effect=makeQueryDatasets)
     # Mock the pruneDatasets butler command so we can test for expected calls
     # to it, without dealing with setting up a full repo with data for it.
-    @patch.object(Butler, "pruneDatasets")
+    @patch.object(DirectButler, "pruneDatasets")
     def run_test(
         self,
         mockPruneDatasets,

@@ -74,8 +74,8 @@ def transferDatasets(
         datasets. It can be more efficient to disable this if it is known
         that all dimensions exist.
     """
-    source_butler = Butler(source, writeable=False)
-    dest_butler = Butler(dest, writeable=True)
+    source_butler = Butler.from_config(source, writeable=False)
+    dest_butler = Butler.from_config(dest, writeable=True)
 
     dataset_type_expr = dataset_type or ...
     collections_expr: tuple[str, ...] | EllipsisType = collections or ...

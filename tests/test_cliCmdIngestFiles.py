@@ -104,7 +104,7 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
             )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-            butler = Butler(self.root)
+            butler = Butler.from_config(self.root)
             refs = list(butler.registry.queryDatasets("test_metric_comp", collections=run))
             self.assertEqual(len(refs), 2)
 

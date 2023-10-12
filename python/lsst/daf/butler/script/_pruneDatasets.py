@@ -218,7 +218,7 @@ def pruneDatasets(
     if not collections:
         return PruneDatasetsResult(state=PruneDatasetsResult.State.ERR_NO_COLLECTION_RESTRICTION)
 
-    butler = Butler(repo)
+    butler = Butler.from_config(repo)
 
     # If purging, verify that the collection to purge is RUN type collection.
     if purge_run:
@@ -253,7 +253,7 @@ def pruneDatasets(
         return result
 
     def doPruneDatasets() -> PruneDatasetsResult:
-        butler = Butler(repo, writeable=True)
+        butler = Butler.from_config(repo, writeable=True)
         butler.pruneDatasets(
             refs=datasets_found.getDatasets(),
             disassociate=disassociate,

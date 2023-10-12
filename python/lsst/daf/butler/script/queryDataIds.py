@@ -34,8 +34,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 from astropy.table import Table as AstropyTable
 
-from .._butler import Butler, DataCoordinate
+from .._butler import Butler
 from ..cli.utils import sortAstropyTable
+from ..dimensions import DataCoordinate
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DimensionGraph
@@ -109,7 +110,7 @@ def queryDataIds(
     Docstring for supported parameters is the same as
     `~lsst.daf.butler.Registry.queryDataIds`.
     """
-    butler = Butler(repo, without_datastore=True)
+    butler = Butler.from_config(repo, without_datastore=True)
 
     if datasets and collections and not dimensions:
         # Determine the dimensions relevant to all given dataset types.

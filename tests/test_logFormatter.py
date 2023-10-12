@@ -49,7 +49,7 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         Butler.makeRepo(self.root)
 
         self.run = "testrun"
-        self.butler = Butler(self.root, run=self.run)
+        self.butler = Butler.from_config(self.root, run=self.run)
         self.datasetType = DatasetType("test_logs", [], "ButlerLogRecords", universe=self.butler.dimensions)
 
         self.butler.registry.registerDatasetType(self.datasetType)

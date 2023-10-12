@@ -220,7 +220,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
 
         # verify chained-run-1 was removed:
 
-        butler = Butler(self.root)
+        butler = Butler.from_config(self.root)
         collections = butler.registry.queryCollections(
             collectionTypes=frozenset(
                 (

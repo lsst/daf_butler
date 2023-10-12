@@ -68,7 +68,7 @@ def _getTable(
         names=("Name", typeCol, descriptionCol),
         dtype=(str, str, str),
     )
-    butler = Butler(repo)
+    butler = Butler.from_config(repo)
     names = sorted(
         butler.registry.queryCollections(collectionTypes=frozenset(collection_type), expression=glob or ...)
     )
@@ -140,7 +140,7 @@ def _getTree(
         names=("Name", "Type"),
         dtype=(str, str),
     )
-    butler = Butler(repo, without_datastore=True)
+    butler = Butler.from_config(repo, without_datastore=True)
 
     def addCollection(name: str, level: int = 0) -> None:
         collectionType = butler.registry.getCollectionType(name)
@@ -168,7 +168,7 @@ def _getFlatten(
     glob: Iterable[str],
     collection_type: Iterable[CollectionType],
 ) -> Table:
-    butler = Butler(repo)
+    butler = Butler.from_config(repo)
     collectionNames = list(
         butler.registry.queryCollections(
             collectionTypes=frozenset(collection_type), flattenChains=True, expression=glob or ...

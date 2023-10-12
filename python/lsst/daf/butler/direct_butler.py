@@ -30,7 +30,7 @@
 from __future__ import annotations
 
 __all__ = (
-    "Butler",
+    "DirectButler",
     "ButlerValidationError",
 )
 
@@ -47,14 +47,13 @@ from typing import TYPE_CHECKING, Any, ClassVar, TextIO
 
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
-from lsst.utils import doImportType
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
 from sqlalchemy.exc import IntegrityError
 
+from ._butler import Butler
 from ._butler_config import ButlerConfig
-from ._butler_repo_index import ButlerRepoIndex
-from ._config import Config, ConfigSubset
+from ._config import Config
 from ._dataset_existence import DatasetExistence
 from ._dataset_ref import DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
@@ -71,7 +70,6 @@ from .dimensions import (
     DataId,
     DataIdValue,
     Dimension,
-    DimensionConfig,
     DimensionElement,
     DimensionRecord,
     DimensionUniverse,
@@ -84,12 +82,10 @@ from .registry import (
     MissingDatasetTypeError,
     NoDefaultCollectionError,
     Registry,
-    RegistryConfig,
     RegistryDefaults,
     _ButlerRegistry,
     _RegistryFactory,
 )
-from .repo_relocation import BUTLER_ROOT_TAG
 from .transfers import RepoExportContext
 from .utils import transactional
 
@@ -107,7 +103,7 @@ class ButlerValidationError(ValidationError):
     pass
 
 
-class Butler(LimitedButler):
+class DirectButler(Butler):
     """Main entry point for the data access system.
 
     Parameters
@@ -117,7 +113,7 @@ class Butler(LimitedButler):
         `ButlerConfig` constructor.  If a directory path
         is given the configuration will be read from a ``butler.yaml`` file in
         that location.  If `None` is given default values will be used.
-    butler : `Butler`, optional.
+    butler : `DirectButler`, optional.
         If provided, construct a new Butler that uses the same registry and
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
@@ -202,7 +198,7 @@ class Butler(LimitedButler):
         self,
         config: Config | ResourcePathExpression | None = None,
         *,
-        butler: Butler | None = None,
+        butler: DirectButler | None = None,
         collections: Any = None,
         run: str | None = None,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
@@ -276,212 +272,6 @@ class Butler(LimitedButler):
             return None
 
     @classmethod
-    def get_repo_uri(cls, label: str, return_label: bool = False) -> ResourcePath:
-        """Look up the label in a butler repository index.
-
-        Parameters
-        ----------
-        label : `str`
-            Label of the Butler repository to look up.
-        return_label : `bool`, optional
-            If ``label`` cannot be found in the repository index (either
-            because index is not defined or ``label`` is not in the index) and
-            ``return_label`` is `True` then return ``ResourcePath(label)``.
-            If ``return_label`` is `False` (default) then an exception will be
-            raised instead.
-
-        Returns
-        -------
-        uri : `lsst.resources.ResourcePath`
-            URI to the Butler repository associated with the given label or
-            default value if it is provided.
-
-        Raises
-        ------
-        KeyError
-            Raised if the label is not found in the index, or if an index
-            is not defined, and ``return_label`` is `False`.
-
-        Notes
-        -----
-        See `~lsst.daf.butler.ButlerRepoIndex` for details on how the
-        information is discovered.
-        """
-        return ButlerRepoIndex.get_repo_uri(label, return_label)
-
-    @classmethod
-    def get_known_repos(cls) -> set[str]:
-        """Retrieve the list of known repository labels.
-
-        Returns
-        -------
-        repos : `set` of `str`
-            All the known labels. Can be empty if no index can be found.
-
-        Notes
-        -----
-        See `~lsst.daf.butler.ButlerRepoIndex` for details on how the
-        information is discovered.
-        """
-        return ButlerRepoIndex.get_known_repos()
-
-    @staticmethod
-    def makeRepo(
-        root: ResourcePathExpression,
-        config: Config | str | None = None,
-        dimensionConfig: Config | str | None = None,
-        standalone: bool = False,
-        searchPaths: list[str] | None = None,
-        forceConfigRoot: bool = True,
-        outfile: ResourcePathExpression | None = None,
-        overwrite: bool = False,
-    ) -> Config:
-        """Create an empty data repository by adding a butler.yaml config
-        to a repository root directory.
-
-        Parameters
-        ----------
-        root : `lsst.resources.ResourcePathExpression`
-            Path or URI to the root location of the new repository. Will be
-            created if it does not exist.
-        config : `Config` or `str`, optional
-            Configuration to write to the repository, after setting any
-            root-dependent Registry or Datastore config options.  Can not
-            be a `ButlerConfig` or a `ConfigSubset`.  If `None`, default
-            configuration will be used.  Root-dependent config options
-            specified in this config are overwritten if ``forceConfigRoot``
-            is `True`.
-        dimensionConfig : `Config` or `str`, optional
-            Configuration for dimensions, will be used to initialize registry
-            database.
-        standalone : `bool`
-            If True, write all expanded defaults, not just customized or
-            repository-specific settings.
-            This (mostly) decouples the repository from the default
-            configuration, insulating it from changes to the defaults (which
-            may be good or bad, depending on the nature of the changes).
-            Future *additions* to the defaults will still be picked up when
-            initializing `Butlers` to repos created with ``standalone=True``.
-        searchPaths : `list` of `str`, optional
-            Directory paths to search when calculating the full butler
-            configuration.
-        forceConfigRoot : `bool`, optional
-            If `False`, any values present in the supplied ``config`` that
-            would normally be reset are not overridden and will appear
-            directly in the output config.  This allows non-standard overrides
-            of the root directory for a datastore or registry to be given.
-            If this parameter is `True` the values for ``root`` will be
-            forced into the resulting config if appropriate.
-        outfile : `lss.resources.ResourcePathExpression`, optional
-            If not-`None`, the output configuration will be written to this
-            location rather than into the repository itself. Can be a URI
-            string.  Can refer to a directory that will be used to write
-            ``butler.yaml``.
-        overwrite : `bool`, optional
-            Create a new configuration file even if one already exists
-            in the specified output location. Default is to raise
-            an exception.
-
-        Returns
-        -------
-        config : `Config`
-            The updated `Config` instance written to the repo.
-
-        Raises
-        ------
-        ValueError
-            Raised if a ButlerConfig or ConfigSubset is passed instead of a
-            regular Config (as these subclasses would make it impossible to
-            support ``standalone=False``).
-        FileExistsError
-            Raised if the output config file already exists.
-        os.error
-            Raised if the directory does not exist, exists but is not a
-            directory, or cannot be created.
-
-        Notes
-        -----
-        Note that when ``standalone=False`` (the default), the configuration
-        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
-        construct the repository should also be used to construct any Butlers
-        to avoid configuration inconsistencies.
-        """
-        if isinstance(config, ButlerConfig | ConfigSubset):
-            raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
-
-        # Ensure that the root of the repository exists or can be made
-        root_uri = ResourcePath(root, forceDirectory=True)
-        root_uri.mkdir()
-
-        config = Config(config)
-
-        # If we are creating a new repo from scratch with relative roots,
-        # do not propagate an explicit root from the config file
-        if "root" in config:
-            del config["root"]
-
-        full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
-        imported_class = doImportType(full["datastore", "cls"])
-        if not issubclass(imported_class, Datastore):
-            raise TypeError(f"Imported datastore class {full['datastore', 'cls']} is not a Datastore")
-        datastoreClass: type[Datastore] = imported_class
-        datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
-
-        # if key exists in given config, parse it, otherwise parse the defaults
-        # in the expanded config
-        if config.get(("registry", "db")):
-            registryConfig = RegistryConfig(config)
-        else:
-            registryConfig = RegistryConfig(full)
-        defaultDatabaseUri = registryConfig.makeDefaultDatabaseUri(BUTLER_ROOT_TAG)
-        if defaultDatabaseUri is not None:
-            Config.updateParameters(
-                RegistryConfig, config, full, toUpdate={"db": defaultDatabaseUri}, overwrite=forceConfigRoot
-            )
-        else:
-            Config.updateParameters(RegistryConfig, config, full, toCopy=("db",), overwrite=forceConfigRoot)
-
-        if standalone:
-            config.merge(full)
-        else:
-            # Always expand the registry.managers section into the per-repo
-            # config, because after the database schema is created, it's not
-            # allowed to change anymore.  Note that in the standalone=True
-            # branch, _everything_ in the config is expanded, so there's no
-            # need to special case this.
-            Config.updateParameters(RegistryConfig, config, full, toMerge=("managers",), overwrite=False)
-        configURI: ResourcePathExpression
-        if outfile is not None:
-            # When writing to a separate location we must include
-            # the root of the butler repo in the config else it won't know
-            # where to look.
-            config["root"] = root_uri.geturl()
-            configURI = outfile
-        else:
-            configURI = root_uri
-        # Strip obscore configuration, if it is present, before writing config
-        # to a file, obscore config will be stored in registry.
-        if (obscore_config_key := ("registry", "managers", "obscore", "config")) in config:
-            config_to_write = config.copy()
-            del config_to_write[obscore_config_key]
-            config_to_write.dumpToUri(configURI, overwrite=overwrite)
-            # configFile attribute is updated, need to copy it to original.
-            config.configFile = config_to_write.configFile
-        else:
-            config.dumpToUri(configURI, overwrite=overwrite)
-
-        # Create Registry and populate tables
-        registryConfig = RegistryConfig(config.get("registry"))
-        dimensionConfig = DimensionConfig(dimensionConfig)
-        _RegistryFactory(registryConfig).create_from_config(
-            dimensionConfig=dimensionConfig, butlerRoot=root_uri
-        )
-
-        log.verbose("Wrote new Butler configuration file to %s", configURI)
-
-        return config
-
-    @classmethod
     def _unpickle(
         cls,
         config: ButlerConfig,
@@ -489,7 +279,7 @@ class Butler(LimitedButler):
         run: str | None,
         defaultDataId: dict[str, str],
         writeable: bool,
-    ) -> Butler:
+    ) -> DirectButler:
         """Callable used to unpickle a Butler.
 
         We prefer not to use ``Butler.__init__`` directly so we can force some
@@ -529,7 +319,7 @@ class Butler(LimitedButler):
     def __reduce__(self) -> tuple:
         """Support pickling."""
         return (
-            Butler._unpickle,
+            DirectButler._unpickle,
             (
                 self._config,
                 self.collections,
@@ -545,7 +335,7 @@ class Butler(LimitedButler):
         )
 
     def isWriteable(self) -> bool:
-        """Return `True` if this `Butler` supports write operations."""
+        # Docstring inherited.
         return self._registry.isWriteable()
 
     @contextlib.contextmanager
@@ -1268,7 +1058,7 @@ class Butler(LimitedButler):
         self,
         ref: DatasetRef,
         *,
-        parameters: dict | None = None,
+        parameters: dict[str, Any] | None = None,
         storageClass: str | StorageClass | None = None,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
@@ -1571,41 +1361,7 @@ class Butler(LimitedButler):
         preserve_path: bool = True,
         overwrite: bool = False,
     ) -> list[ResourcePath]:
-        """Retrieve the artifacts associated with the supplied refs.
-
-        Parameters
-        ----------
-        refs : iterable of `DatasetRef`
-            The datasets for which artifacts are to be retrieved.
-            A single ref can result in multiple artifacts. The refs must
-            be resolved.
-        destination : `lsst.resources.ResourcePath` or `str`
-            Location to write the artifacts.
-        transfer : `str`, optional
-            Method to use to transfer the artifacts. Must be one of the options
-            supported by `~lsst.resources.ResourcePath.transfer_from()`.
-            "move" is not allowed.
-        preserve_path : `bool`, optional
-            If `True` the full path of the artifact within the datastore
-            is preserved. If `False` the final file component of the path
-            is used.
-        overwrite : `bool`, optional
-            If `True` allow transfers to overwrite existing files at the
-            destination.
-
-        Returns
-        -------
-        targets : `list` of `lsst.resources.ResourcePath`
-            URIs of file artifacts in destination location. Order is not
-            preserved.
-
-        Notes
-        -----
-        For non-file datastores the artifacts written to the destination
-        may not match the representation inside the datastore. For example
-        a hierarchical data structure in a NoSQL database may well be stored
-        as a JSON file.
-        """
+        # Docstring inherited.
         return self._datastore.retrieveArtifacts(
             refs,
             ResourcePath(destination),
@@ -1624,40 +1380,7 @@ class Butler(LimitedButler):
         collections: Any = None,
         **kwargs: Any,
     ) -> DatasetExistence:
-        """Indicate whether a dataset is known to Butler registry and
-        datastore.
-
-        Parameters
-        ----------
-        dataset_ref_or_type : `DatasetRef`, `DatasetType`, or `str`
-            When `DatasetRef` the `dataId` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
-        data_id : `dict` or `DataCoordinate`
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument.
-        full_check : `bool`, optional
-            If `True`, an additional check will be made for dataset artifact
-            existence. This will involve additional overhead due to the need
-            to query an external system. If `False` registry and datastore
-            will solely be asked if they know about the dataset but no
-            check for the artifact will be performed.
-        collections : Any, optional
-            Collections to be searched, overriding ``self.collections``.
-            Can be any of the types supported by the ``collections`` argument
-            to butler construction.
-        **kwargs
-            Additional keyword arguments used to augment or construct a
-            `DataCoordinate`.  See `DataCoordinate.standardize`
-            parameters.
-
-        Returns
-        -------
-        existence : `DatasetExistence`
-            Object indicating whether the dataset is known to registry and
-            datastore. Evaluates to `True` if the dataset is present and known
-            to both.
-        """
+        # Docstring inherited.
         existence = DatasetExistence.UNRECOGNIZED
 
         if isinstance(dataset_ref_or_type, DatasetRef):
@@ -1708,30 +1431,7 @@ class Butler(LimitedButler):
         *,
         full_check: bool = True,
     ) -> dict[DatasetRef, DatasetExistence]:
-        """Indicate whether multiple datasets are known to Butler registry and
-        datastore.
-
-        This is an experimental API that may change at any moment.
-
-        Parameters
-        ----------
-        refs : iterable of `DatasetRef`
-            The datasets to be checked.
-        full_check : `bool`, optional
-            If `True`, an additional check will be made for dataset artifact
-            existence. This will involve additional overhead due to the need
-            to query an external system. If `False` registry and datastore
-            will solely be asked if they know about the dataset but no
-            check for the artifact will be performed.
-
-        Returns
-        -------
-        existence : dict of [`DatasetRef`, `DatasetExistence`]
-            Mapping from the given dataset refs to an enum indicating the
-            status of the dataset in registry and datastore.
-            Each value evaluates to `True` if the dataset is present and known
-            to both.
-        """
+        # Docstring inherited.
         existence = {ref: DatasetExistence.UNRECOGNIZED for ref in refs}
 
         # Registry does not have a bulk API to check for a ref.
@@ -1824,26 +1524,7 @@ class Butler(LimitedButler):
         return self._datastore.exists(ref)
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
-        """Remove one or more `~CollectionType.RUN` collections and the
-        datasets within them.
-
-        Parameters
-        ----------
-        names : `~collections.abc.Iterable` [ `str` ]
-            The names of the collections to remove.
-        unstore : `bool`, optional
-            If `True` (default), delete datasets from all datastores in which
-            they are present, and attempt to rollback the registry deletions if
-            datastore deletions fail (which may not always be possible).  If
-            `False`, datastore records for these datasets are still removed,
-            but any artifacts (e.g. files) will not be.
-
-        Raises
-        ------
-        TypeError
-            Raised if one or more collections are not of type
-            `~CollectionType.RUN`.
-        """
+        # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         names = list(names)
@@ -1938,66 +1619,7 @@ class Butler(LimitedButler):
         idGenerationMode: DatasetIdGenEnum | None = None,
         record_validation_info: bool = True,
     ) -> None:
-        """Store and register one or more datasets that already exist on disk.
-
-        Parameters
-        ----------
-        datasets : `FileDataset`
-            Each positional argument is a struct containing information about
-            a file to be ingested, including its URI (either absolute or
-            relative to the datastore root, if applicable), a resolved
-            `DatasetRef`, and optionally a formatter class or its
-            fully-qualified string name.  If a formatter is not provided, the
-            formatter that would be used for `put` is assumed.  On successful
-            ingest all `FileDataset.formatter` attributes will be set to the
-            formatter class used. `FileDataset.path` attributes may be modified
-            to put paths in whatever the datastore considers a standardized
-            form.
-        transfer : `str`, optional
-            If not `None`, must be one of 'auto', 'move', 'copy', 'direct',
-            'split', 'hardlink', 'relsymlink' or 'symlink', indicating how to
-            transfer the file.
-        run : `str`, optional
-            The name of the run ingested datasets should be added to,
-            overriding ``self.run``. This parameter is now deprecated since
-            the run is encoded in the ``FileDataset``.
-        idGenerationMode : `DatasetIdGenEnum`, optional
-            Specifies option for generating dataset IDs. Parameter is
-            deprecated.
-        record_validation_info : `bool`, optional
-            If `True`, the default, the datastore can record validation
-            information associated with the file. If `False` the datastore
-            will not attempt to track any information such as checksums
-            or file sizes. This can be useful if such information is tracked
-            in an external system or if the file is to be compressed in place.
-            It is up to the datastore whether this parameter is relevant.
-
-        Raises
-        ------
-        TypeError
-            Raised if the butler is read-only or if no run was provided.
-        NotImplementedError
-            Raised if the `Datastore` does not support the given transfer mode.
-        DatasetTypeNotSupportedError
-            Raised if one or more files to be ingested have a dataset type that
-            is not supported by the `Datastore`..
-        FileNotFoundError
-            Raised if one of the given files does not exist.
-        FileExistsError
-            Raised if transfer is not `None` but the (internal) location the
-            file would be moved to is already occupied.
-
-        Notes
-        -----
-        This operation is not fully exception safe: if a database operation
-        fails, the given `FileDataset` instances may be only partially updated.
-
-        It is atomic in terms of database operations (they will either all
-        succeed or all fail) providing the database engine implements
-        transactions correctly.  It will attempt to be atomic in terms of
-        filesystem operations as well, but this cannot be implemented
-        rigorously for most datastores.
-        """
+        # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
 
@@ -2122,49 +1744,7 @@ class Butler(LimitedButler):
         format: str | None = None,
         transfer: str | None = None,
     ) -> Iterator[RepoExportContext]:
-        """Export datasets from the repository represented by this `Butler`.
-
-        This method is a context manager that returns a helper object
-        (`RepoExportContext`) that is used to indicate what information from
-        the repository should be exported.
-
-        Parameters
-        ----------
-        directory : `str`, optional
-            Directory dataset files should be written to if ``transfer`` is not
-            `None`.
-        filename : `str`, optional
-            Name for the file that will include database information associated
-            with the exported datasets.  If this is not an absolute path and
-            ``directory`` is not `None`, it will be written to ``directory``
-            instead of the current working directory.  Defaults to
-            "export.{format}".
-        format : `str`, optional
-            File format for the database information file.  If `None`, the
-            extension of ``filename`` will be used.
-        transfer : `str`, optional
-            Transfer mode passed to `Datastore.export`.
-
-        Raises
-        ------
-        TypeError
-            Raised if the set of arguments passed is inconsistent.
-
-        Examples
-        --------
-        Typically the `Registry.queryDataIds` and `Registry.queryDatasets`
-        methods are used to provide the iterables over data IDs and/or datasets
-        to be exported::
-
-            with butler.export("exports.yaml") as export:
-                # Export all flats, but none of the dimension element rows
-                # (i.e. data ID information) associated with them.
-                export.saveDatasets(butler.registry.queryDatasets("flat"),
-                                    elements=())
-                # Export all datasets that start with "deepCoadd_" and all of
-                # their associated data ID information.
-                export.saveDatasets(butler.registry.queryDatasets("deepCoadd_*"))
-        """
+        # Docstring inherited.
         if directory is None and transfer is not None:
             raise TypeError("Cannot transfer without providing a directory.")
         if transfer == "move":
@@ -2206,37 +1786,7 @@ class Butler(LimitedButler):
         transfer: str | None = None,
         skip_dimensions: set | None = None,
     ) -> None:
-        """Import datasets into this repository that were exported from a
-        different butler repository via `~lsst.daf.butler.Butler.export`.
-
-        Parameters
-        ----------
-        directory : `~lsst.resources.ResourcePathExpression`, optional
-            Directory containing dataset files to import from. If `None`,
-            ``filename`` and all dataset file paths specified therein must
-            be absolute.
-        filename : `~lsst.resources.ResourcePathExpression` or `TextIO`
-            A stream or name of file that contains database information
-            associated with the exported datasets, typically generated by
-            `~lsst.daf.butler.Butler.export`.  If this a string (name) or
-            `~lsst.resources.ResourcePath` and is not an absolute path,
-            it will first be looked for relative to  ``directory`` and if not
-            found there it will be looked for in the current working
-            directory. Defaults to "export.{format}".
-        format : `str`, optional
-            File format for ``filename``.  If `None`, the extension of
-            ``filename`` will be used.
-        transfer : `str`, optional
-            Transfer mode passed to `~lsst.daf.butler.Datastore.ingest`.
-        skip_dimensions : `set`, optional
-            Names of dimensions that should be skipped and not imported.
-
-        Raises
-        ------
-        TypeError
-            Raised if the set of arguments passed is inconsistent, or if the
-            butler is read-only.
-        """
+        # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         if format is None:
@@ -2306,48 +1856,7 @@ class Butler(LimitedButler):
         register_dataset_types: bool = False,
         transfer_dimensions: bool = False,
     ) -> collections.abc.Collection[DatasetRef]:
-        """Transfer datasets to this Butler from a run in another Butler.
-
-        Parameters
-        ----------
-        source_butler : `LimitedButler`
-            Butler from which the datasets are to be transferred. If data IDs
-            in ``source_refs`` are not expanded then this has to be a full
-            `Butler` whose registry will be used to expand data IDs.
-        source_refs : iterable of `DatasetRef`
-            Datasets defined in the source butler that should be transferred to
-            this butler.
-        transfer : `str`, optional
-            Transfer mode passed to `~lsst.daf.butler.Datastore.transfer_from`.
-        skip_missing : `bool`
-            If `True`, datasets with no datastore artifact associated with
-            them are not transferred. If `False` a registry entry will be
-            created even if no datastore record is created (and so will
-            look equivalent to the dataset being unstored).
-        register_dataset_types : `bool`
-            If `True` any missing dataset types are registered. Otherwise
-            an exception is raised.
-        transfer_dimensions : `bool`, optional
-            If `True`, dimension record data associated with the new datasets
-            will be transferred.
-
-        Returns
-        -------
-        refs : `list` of `DatasetRef`
-            The refs added to this Butler.
-
-        Notes
-        -----
-        The datastore artifact has to exist for a transfer
-        to be made but non-existence is not an error.
-
-        Datasets that already exist in this run will be skipped.
-
-        The datasets are imported as part of a transaction, although
-        dataset types are registered before the transaction is started.
-        This means that it is possible for a dataset type to be registered
-        even though transfer has failed.
-        """
+        # Docstring inherited.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         progress = Progress("lsst.daf.butler.Butler.transfer_from", level=VERBOSE)
@@ -2519,30 +2028,7 @@ class Butler(LimitedButler):
         datasetTypeNames: Iterable[str] | None = None,
         ignore: Iterable[str] | None = None,
     ) -> None:
-        """Validate butler configuration.
-
-        Checks that each `DatasetType` can be stored in the `Datastore`.
-
-        Parameters
-        ----------
-        logFailures : `bool`, optional
-            If `True`, output a log message for every validation error
-            detected.
-        datasetTypeNames : iterable of `str`, optional
-            The `DatasetType` names that should be checked.  This allows
-            only a subset to be selected.
-        ignore : iterable of `str`, optional
-            Names of DatasetTypes to skip over.  This can be used to skip
-            known problems. If a named `DatasetType` corresponds to a
-            composite, all components of that `DatasetType` will also be
-            ignored.
-
-        Raises
-        ------
-        ButlerValidationError
-            Raised if there is some inconsistency with how this Butler
-            is configured.
-        """
+        # Docstring inherited.
         if datasetTypeNames:
             datasetTypes = [self._registry.getDatasetType(name) for name in datasetTypeNames]
         else:
