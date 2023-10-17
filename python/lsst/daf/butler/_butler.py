@@ -237,6 +237,10 @@ class Butler(LimitedButler):
                     self._datastore = Datastore.fromConfig(
                         self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
                     )
+                # TODO: Once datastore drops dependency on registry we can
+                # construct datastore first and pass opaque tables to registry
+                # constructor.
+                self._registry.make_datastore_tables(self._datastore.get_opaque_table_definitions())
                 self.storageClasses = StorageClassFactory()
                 self.storageClasses.addFromConfig(self._config)
             except Exception:
@@ -1004,6 +1008,7 @@ class Butler(LimitedButler):
         collections: Any = None,
         predict: bool = False,
         run: str | None = None,
+        datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef:
         """Shared logic for methods that start with a search for a dataset in
@@ -1029,6 +1034,8 @@ class Butler(LimitedButler):
         run : `str`, optional
             Run collection name to use for creating `DatasetRef` for predicted
             datasets. Only used if ``predict`` is `True`.
+        datastore_records : `bool`, optional
+            If `True` add datastore records to returned `DatasetRef`.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -1055,6 +1062,9 @@ class Butler(LimitedButler):
         if isinstance(datasetRefOrType, DatasetRef):
             if collections is not None:
                 warnings.warn("Collections should not be specified with DatasetRef", stacklevel=3)
+            # May need to retrieve datastore records if requested.
+            if datastore_records and datasetRefOrType._datastore_records is None:
+                datasetRefOrType = self._registry.get_datastore_records(datasetRefOrType)
             return datasetRefOrType
         timespan: Timespan | None = None
 
@@ -1081,7 +1091,13 @@ class Butler(LimitedButler):
             )
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self._registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
+        ref = self._registry.findDataset(
+            datasetType,
+            dataId,
+            collections=collections,
+            timespan=timespan,
+            datastore_records=datastore_records,
+        )
         if ref is None:
             if predict:
                 if run is None:
@@ -1102,7 +1118,9 @@ class Butler(LimitedButler):
             # registry definition. The DatasetRef must therefore be recreated
             # using the user definition such that the expected type is
             # returned.
-            ref = DatasetRef(datasetType, ref.dataId, run=ref.run, id=ref.id)
+            ref = DatasetRef(
+                datasetType, ref.dataId, run=ref.run, id=ref.id, datastore_records=ref._datastore_records
+            )
 
         return ref
 
@@ -1419,7 +1437,9 @@ class Butler(LimitedButler):
         ``exposure`` is a temporal dimension.
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+        ref = self._findDatasetRef(
+            datasetRefOrType, dataId, collections=collections, datastore_records=True, **kwargs
+        )
         return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 
     def getURIs(

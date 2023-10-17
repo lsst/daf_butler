@@ -39,6 +39,7 @@ from lsst.daf.butler import (
     StorageClass,
     StorageClassFactory,
 )
+from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
 
 """Tests for datasets module.
 """
@@ -522,11 +523,33 @@ class DatasetRefTestCase(unittest.TestCase):
         self.parentStorageClass = StorageClass(
             "Parent", components={"a": self.componentStorageClass1, "b": self.componentStorageClass2}
         )
+        sc_factory = StorageClassFactory()
+        sc_factory.registerStorageClass(self.componentStorageClass1)
+        sc_factory.registerStorageClass(self.componentStorageClass2)
+        sc_factory.registerStorageClass(self.parentStorageClass)
         dimensions = self.universe.extract(("instrument", "visit"))
         self.dataId = DataCoordinate.standardize(
             dict(instrument="DummyCam", visit=42), universe=self.universe
         )
         self.datasetType = DatasetType(datasetTypeName, dimensions, self.parentStorageClass)
+
+    def _make_datastore_records(self, ref: DatasetRef, *paths: str) -> DatasetRef:
+        """Return an updated dataset ref with datastore records."""
+        opaque_table_name = "datastore_records"
+        datastore_records = {
+            opaque_table_name: [
+                StoredFileInfo(
+                    formatter="",
+                    path=path,
+                    storageClass=ref.datasetType.storageClass,
+                    component=None,
+                    checksum=None,
+                    file_size=1,
+                )
+                for path in paths
+            ]
+        }
+        return ref.replace(datastore_records=datastore_records)
 
     def testConstructor(self) -> None:
         """Test that construction preserves and validates values."""
@@ -670,6 +693,12 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref5.run, "somerun")
         self.assertEqual(ref5, ref)
 
+        self.assertIsNone(ref5._datastore_records)
+        ref5 = ref5.replace(datastore_records={})
+        self.assertEqual(ref5._datastore_records, {})
+        ref5 = ref5.replace(datastore_records=None)
+        self.assertIsNone(ref5._datastore_records)
+
     def testPickle(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = pickle.dumps(ref)
@@ -679,6 +708,14 @@ class DatasetRefTestCase(unittest.TestCase):
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
         s = ref.to_json()
         self.assertEqual(DatasetRef.from_json(s, universe=self.universe), ref)
+
+        # Also test ref with datastore records
+        ref = self._make_datastore_records(ref, "/path1", "/path2")
+        s = ref.to_json()
+        ref2 = DatasetRef.from_json(s, universe=self.universe)
+        self.assertEqual(ref2, ref)
+        self.assertIsNotNone(ref2._datastore_records)
+        self.assertEqual(ref2._datastore_records, ref._datastore_records)
 
     def testFileDataset(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")

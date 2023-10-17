@@ -30,18 +30,20 @@ from __future__ import annotations
 __all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from lsst.resources import ResourcePath
+from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
 
 from .._formatter import Formatter, FormatterParameter
 from .._location import Location, LocationFactory
 from .._storage_class import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
-    from .. import DatasetId, DatasetRef
+    from .._dataset_ref import DatasetRef
 
 # String to use when a Python None is encountered
 NULLSTR = "__NULL_STRING__"
@@ -87,13 +89,14 @@ class StoredDatastoreItemInfo:
         """
         raise NotImplementedError()
 
-    def to_record(self) -> dict[str, Any]:
-        """Convert record contents to a dictionary."""
-        raise NotImplementedError()
+    def to_record(self, **kwargs: Any) -> dict[str, Any]:
+        """Convert record contents to a dictionary.
 
-    @property
-    def dataset_id(self) -> DatasetId:
-        """Dataset ID associated with this record (`DatasetId`)."""
+        Parameters
+        ----------
+        **kwargs
+            Additional items to add to returned record.
+        """
         raise NotImplementedError()
 
     def update(self, **kwargs: Any) -> StoredDatastoreItemInfo:
@@ -102,12 +105,74 @@ class StoredDatastoreItemInfo:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def to_records(
+        cls, records: Iterable[StoredDatastoreItemInfo], **kwargs: Any
+    ) -> tuple[str, Iterable[Mapping[str, Any]]]:
+        """Convert a collection of records to dictionaries.
 
-@dataclass(frozen=True)
+        Parameters
+        ----------
+        records : `~collections.abc.Iterable` [ `StoredDatastoreItemInfo` ]
+            A collection of records, all records must be of the same type.
+        **kwargs
+            Additional items to add to each returned record.
+
+        Returns
+        -------
+        class_name : `str`
+            Name of the record class.
+        records : `list` [ `dict` ]
+            Records in their dictionary representation.
+        """
+        if not records:
+            return "", []
+        classes = {record.__class__ for record in records}
+        assert len(classes) == 1, f"Records have to be of the same class: {classes}"
+        return get_full_type_name(classes.pop()), [record.to_record(**kwargs) for record in records]
+
+    @classmethod
+    def from_records(
+        cls, class_name: str, records: Iterable[Mapping[str, Any]]
+    ) -> list[StoredDatastoreItemInfo]:
+        """Convert collection of dictionaries to records.
+
+        Parameters
+        ----------
+        class_name : `str`
+            Name of the record class.
+        records : `~collections.abc.Iterable` [ `dict` ]
+            Records in their dictionary representation.
+
+        Returns
+        -------
+        infos : `list` [`StoredDatastoreItemInfo`]
+            Sequence of records converted to typed representation.
+
+        Raises
+        ------
+        TypeError
+            Raised if ``class_name`` is not a sub-class of
+            `StoredDatastoreItemInfo`.
+        """
+        try:
+            klass = doImportType(class_name)
+        except ImportError:
+            # Prior to DM-41043 we were embedding a lsst.daf.butler.core
+            # path in the serialized form, which we never wanted; fix this
+            # one case.
+            if class_name == "lsst.daf.butler.core.storedFileInfo.StoredFileInfo":
+                klass = StoredFileInfo
+            else:
+                raise
+        if not issubclass(klass, StoredDatastoreItemInfo):
+            raise TypeError(f"Class {class_name} is not a subclass of StoredDatastoreItemInfo")
+        return [klass.from_record(record) for record in records]
+
+
+@dataclass(frozen=True, slots=True)
 class StoredFileInfo(StoredDatastoreItemInfo):
     """Datastore-private metadata associated with a Datastore file."""
-
-    __slots__ = {"formatter", "path", "storageClass", "component", "checksum", "file_size", "dataset_id"}
 
     storageClassFactory = StorageClassFactory()
 
@@ -119,7 +184,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         component: str | None,
         checksum: str | None,
         file_size: int,
-        dataset_id: DatasetId,
     ):
         # Use these shenanigans to allow us to use a frozen dataclass
         object.__setattr__(self, "path", path)
@@ -127,7 +191,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         object.__setattr__(self, "component", component)
         object.__setattr__(self, "checksum", checksum)
         object.__setattr__(self, "file_size", file_size)
-        object.__setattr__(self, "dataset_id", dataset_id)
 
         if isinstance(formatter, str):
             # We trust that this string refers to a Formatter
@@ -160,9 +223,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     file_size: int
     """Size of the serialized dataset in bytes."""
 
-    dataset_id: DatasetId
-    """DatasetId associated with this record."""
-
     def rebase(self, ref: DatasetRef) -> StoredFileInfo:
         """Return a copy of the record suitable for a specified reference.
 
@@ -177,14 +237,13 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         record : `StoredFileInfo`
             New record instance.
         """
-        # take component and dataset_id from the ref, rest comes from self
+        # take component from the ref, rest comes from self
         component = ref.datasetType.component()
         if component is None:
             component = self.component
-        dataset_id = ref.id
-        return self.update(dataset_id=dataset_id, component=component)
+        return self.update(component=component)
 
-    def to_record(self) -> dict[str, Any]:
+    def to_record(self, **kwargs: Any) -> dict[str, Any]:
         """Convert the supplied ref to a database record."""
         component = self.component
         if component is None:
@@ -192,13 +251,13 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             # primary key.
             component = NULLSTR
         return dict(
-            dataset_id=self.dataset_id,
             formatter=self.formatter,
             path=self.path,
             storage_class=self.storageClass.name,
             component=component,
             checksum=self.checksum,
             file_size=self.file_size,
+            **kwargs,
         )
 
     def file_location(self, factory: LocationFactory) -> Location:
@@ -238,7 +297,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         # Convert name of StorageClass to instance
         storageClass = cls.storageClassFactory.getStorageClass(record["storage_class"])
         component = record["component"] if (record["component"] and record["component"] != NULLSTR) else None
-
         info = cls(
             formatter=record["formatter"],
             path=record["path"],
@@ -246,7 +304,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             component=component,
             checksum=record["checksum"],
             file_size=record["file_size"],
-            dataset_id=record["dataset_id"],
         )
         return info
 

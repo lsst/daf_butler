@@ -70,6 +70,7 @@ from ..server_models import (
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
+    from ..datastore._datastore import DatastoreOpaqueTable
     from ..registry._registry import CollectionArgType
     from ..registry.interfaces import CollectionRecord, DatastoreRegistryBridgeManager
 
@@ -666,6 +667,19 @@ class RemoteRegistry(_ButlerRegistry):
     ) -> Iterator[DatasetAssociation]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
+
+    def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
+        # Docstring inherited from base class.
+        # For now this does not do anything and just returns the ref.
+        return ref
+
+    def store_datastore_records(self, refs: Mapping[str, DatasetRef]) -> None:
+        # Docstring inherited from base class.
+        return
+
+    def make_datastore_tables(self, tables: Mapping[str, DatastoreOpaqueTable]) -> None:
+        # Docstring inherited from base class.
+        return
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).

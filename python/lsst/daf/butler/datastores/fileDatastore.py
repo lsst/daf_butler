@@ -37,7 +37,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from lsst.daf.butler import (
     Config,
@@ -45,7 +45,6 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     DatasetTypeNotSupportedError,
-    Datastore,
     FileDataset,
     FileDescriptor,
     Formatter,
@@ -56,7 +55,13 @@ from lsst.daf.butler import (
     StorageClass,
     ddl,
 )
-from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError
+from lsst.daf.butler.datastore import (
+    DatasetRefURIs,
+    Datastore,
+    DatastoreConfig,
+    DatastoreOpaqueTable,
+    DatastoreValidationError,
+)
 from lsst.daf.butler.datastore.cache_manager import (
     AbstractDatastoreCacheManager,
     DatastoreCacheManager,
@@ -64,6 +69,7 @@ from lsst.daf.butler.datastore.cache_manager import (
 )
 from lsst.daf.butler.datastore.composites import CompositesMap
 from lsst.daf.butler.datastore.file_templates import FileTemplates, FileTemplateValidationError
+from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo, StoredFileInfo
 from lsst.daf.butler.registry.interfaces import (
@@ -82,8 +88,6 @@ from lsst.utils.iteration import chunk_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
-
-from ..datastore.generic_base import GenericBaseDatastore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import LookupKey
@@ -134,7 +138,7 @@ class DatastoreFileGetInformation:
     """The `StorageClass` of the dataset being read."""
 
 
-class FileDatastore(GenericBaseDatastore):
+class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     """Generic Datastore for file-based implementations.
 
     Should always be sub-classed since key abstract methods are missing.
@@ -253,8 +257,6 @@ class FileDatastore(GenericBaseDatastore):
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
 
-        self._bridgeManager = bridgeManager
-
         # Name ourselves either using an explicit name or a name
         # derived from the (unexpanded) root
         if "name" in self.config:
@@ -282,11 +284,11 @@ class FileDatastore(GenericBaseDatastore):
         # See if composites should be disassembled
         self.composites = CompositesMap(self.config["composites"], universe=bridgeManager.universe)
 
-        tableName = self.config["records", "table"]
+        self._opaque_table_name = self.config["records", "table"]
         try:
             # Storage of paths and formatters, keyed by dataset_id
             self._table = bridgeManager.opaque.register(
-                tableName, self.makeTableSpec(bridgeManager.datasetIdColumnType)
+                self._opaque_table_name, self.makeTableSpec(bridgeManager.datasetIdColumnType)
             )
             # Interface to Registry.
             self._bridge = bridgeManager.register(self.name)
@@ -295,7 +297,7 @@ class FileDatastore(GenericBaseDatastore):
             # create a table, it means someone is trying to create a read-only
             # butler client for an empty repo.  That should be okay, as long
             # as they then try to get any datasets before some other client
-            # creates the table.  Chances are they'rejust validating
+            # creates the table.  Chances are they're just validating
             # configuration.
             pass
 
@@ -380,8 +382,24 @@ class FileDatastore(GenericBaseDatastore):
         infos: Iterable[StoredFileInfo],
         insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
     ) -> None:
-        # Docstring inherited from GenericBaseDatastore
-        records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos, strict=True)]
+        """Record internal storage information associated with one or more
+        datasets.
+
+        Parameters
+        ----------
+        refs : sequence of `DatasetRef`
+            The datasets that have been stored.
+        infos : sequence of `StoredDatastoreItemInfo`
+            Metadata associated with the stored datasets.
+        insert_mode : `~lsst.daf.butler.registry.interfaces.DatabaseInsertMode`
+            Mode to use to insert the new records into the table. The
+            options are ``INSERT`` (error if pre-existing), ``REPLACE``
+            (replace content with new values), and ``ENSURE`` (skip if the row
+            already exists).
+        """
+        records = [
+            info.rebase(ref).to_record(dataset_id=ref.id) for ref, info in zip(refs, infos, strict=True)
+        ]
         match insert_mode:
             case DatabaseInsertMode.INSERT:
                 self._table.insert(*records, transaction=self._transaction)
@@ -392,16 +410,81 @@ class FileDatastore(GenericBaseDatastore):
             case _:
                 raise ValueError(f"Unknown insert mode of '{insert_mode}'")
 
-    def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredFileInfo]:
-        # Docstring inherited from GenericBaseDatastore
+    def getStoredItemsInfo(
+        self, ref: DatasetIdRef, ignore_datastore_records: bool = False
+    ) -> list[StoredFileInfo]:
+        """Retrieve information associated with files stored in this
+        `Datastore` associated with this dataset ref.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            The dataset that is to be queried.
+        ignore_datastore_records : `bool`
+            If `True` then do not use datastore records stored in refs.
+
+        Returns
+        -------
+        items : `~collections.abc.Iterable` [`StoredDatastoreItemInfo`]
+            Stored information about the files and associated formatters
+            associated with this dataset. Only one file will be returned
+            if the dataset has not been disassembled. Can return an empty
+            list if no matching datasets can be found.
+        """
+        # Try to get them from the ref first.
+        if ref._datastore_records is not None and not ignore_datastore_records:
+            if (ref_records := ref._datastore_records.get(self._table.name)) is not None:
+                # Need to make sure they have correct type.
+                for record in ref_records:
+                    if not isinstance(record, StoredFileInfo):
+                        raise TypeError(f"Datastore record has unexpected type {record.__class__.__name__}")
+                return cast(list[StoredFileInfo], ref_records)
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
         records = self._table.fetch(dataset_id=ref.id)
         return [StoredFileInfo.from_record(record) for record in records]
 
+    def _register_datasets(
+        self,
+        refsAndInfos: Iterable[tuple[DatasetRef, StoredFileInfo]],
+        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
+    ) -> None:
+        """Update registry to indicate that one or more datasets have been
+        stored.
+
+        Parameters
+        ----------
+        refsAndInfos : sequence `tuple` [`DatasetRef`,
+                                         `StoredDatastoreItemInfo`]
+            Datasets to register and the internal datastore metadata associated
+            with them.
+        insert_mode : `str`, optional
+            Indicate whether the new records should be new ("insert", default),
+            or allowed to exists ("ensure") or be replaced if already present
+            ("replace").
+        """
+        expandedRefs: list[DatasetRef] = []
+        expandedItemInfos: list[StoredFileInfo] = []
+
+        for ref, itemInfo in refsAndInfos:
+            expandedRefs.append(ref)
+            expandedItemInfos.append(itemInfo)
+
+        # Dataset location only cares about registry ID so if we have
+        # disassembled in datastore we have to deduplicate. Since they
+        # will have different datasetTypes we can't use a set
+        registryRefs = {r.id: r for r in expandedRefs}
+        if insert_mode == DatabaseInsertMode.INSERT:
+            self.bridge.insert(registryRefs.values())
+        else:
+            # There are only two columns and all that matters is the
+            # dataset ID.
+            self.bridge.ensure(registryRefs.values())
+        self.addStoredItemInfo(expandedRefs, expandedItemInfos, insert_mode=insert_mode)
+
     def _get_stored_records_associated_with_refs(
-        self, refs: Iterable[DatasetIdRef]
+        self, refs: Iterable[DatasetIdRef], ignore_datastore_records: bool = False
     ) -> dict[DatasetId, list[StoredFileInfo]]:
         """Retrieve all records associated with the provided refs.
 
@@ -409,6 +492,8 @@ class FileDatastore(GenericBaseDatastore):
         ----------
         refs : iterable of `DatasetIdRef`
             The refs for which records are to be retrieved.
+        ignore_datastore_records : `bool`
+            If `True` then do not use datastore records stored in refs.
 
         Returns
         -------
@@ -416,11 +501,27 @@ class FileDatastore(GenericBaseDatastore):
             The matching records indexed by the ref ID.  The number of entries
             in the dict can be smaller than the number of requested refs.
         """
-        records = self._table.fetch(dataset_id=[ref.id for ref in refs])
+        # Check datastore records in refs first.
+        records_by_ref: defaultdict[DatasetId, list[StoredFileInfo]] = defaultdict(list)
+        refs_with_no_records = []
+        for ref in refs:
+            if ignore_datastore_records or ref._datastore_records is None:
+                refs_with_no_records.append(ref)
+            else:
+                if (ref_records := ref._datastore_records.get(self._table.name)) is not None:
+                    # Need to make sure they have correct type.
+                    for ref_record in ref_records:
+                        if not isinstance(ref_record, StoredFileInfo):
+                            raise TypeError(
+                                f"Datastore record has unexpected type {ref_record.__class__.__name__}"
+                            )
+                        records_by_ref[ref.id].append(ref_record)
+
+        # If there were any refs without datastore records, check opaque table.
+        records = self._table.fetch(dataset_id=[ref.id for ref in refs_with_no_records])
 
         # Uniqueness is dataset_id + component so can have multiple records
         # per ref.
-        records_by_ref = defaultdict(list)
         for record in records:
             records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
         return records_by_ref
@@ -462,10 +563,21 @@ class FileDatastore(GenericBaseDatastore):
         return ids
 
     def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
-        # Docstring inherited from GenericBaseDatastore
+        """Remove information about the file associated with this dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            The dataset that has been removed.
+        """
+        # Note that this method is actually not used by this implementation,
+        # we depend on bridge to delete opaque records. But there are some
+        # tests that check that this method works, so we keep it for now.
         self._table.delete(["dataset_id"], {"dataset_id": ref.id})
 
-    def _get_dataset_locations_info(self, ref: DatasetIdRef) -> list[tuple[Location, StoredFileInfo]]:
+    def _get_dataset_locations_info(
+        self, ref: DatasetIdRef, ignore_datastore_records: bool = False
+    ) -> list[tuple[Location, StoredFileInfo]]:
         r"""Find all the `Location`\ s  of the requested dataset in the
         `Datastore` and the associated stored file information.
 
@@ -473,6 +585,8 @@ class FileDatastore(GenericBaseDatastore):
         ----------
         ref : `DatasetRef`
             Reference to the required `Dataset`.
+        ignore_datastore_records : `bool`
+            If `True` then do not use datastore records stored in refs.
 
         Returns
         -------
@@ -481,7 +595,7 @@ class FileDatastore(GenericBaseDatastore):
             stored information about each file and its formatter.
         """
         # Get the file information (this will fail if no file)
-        records = self.getStoredItemsInfo(ref)
+        records = self.getStoredItemsInfo(ref, ignore_datastore_records)
 
         # Use the path to determine the location -- we need to take
         # into account absolute URIs in the datastore record
@@ -583,7 +697,6 @@ class FileDatastore(GenericBaseDatastore):
                     component=component,
                     checksum=None,
                     file_size=-1,
-                    dataset_id=ref.id,
                 ),
             )
             for location, formatter, storageClass, component in all_info
@@ -1013,7 +1126,6 @@ class FileDatastore(GenericBaseDatastore):
             component=ref.datasetType.component(),
             file_size=size,
             checksum=checksum,
-            dataset_id=ref.id,
         )
 
     def _prepIngest(self, *datasets: FileDataset, transfer: str | None = None) -> _IngestPrepData:
@@ -1416,7 +1528,9 @@ class FileDatastore(GenericBaseDatastore):
         exists : `bool`
             `True` if the dataset is known to the datastore.
         """
-        fileLocations = self._get_dataset_locations_info(ref)
+        # We cannot trust datastore records from ref, as many unit tests delete
+        # datasets and check their existence.
+        fileLocations = self._get_dataset_locations_info(ref, ignore_datastore_records=True)
         if fileLocations:
             return True
         return False
@@ -1425,7 +1539,7 @@ class FileDatastore(GenericBaseDatastore):
         # Docstring inherited from the base class.
 
         # The records themselves. Could be missing some entries.
-        records = self._get_stored_records_associated_with_refs(refs)
+        records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
 
         return {ref: ref.id in records for ref in refs}
 
@@ -1650,7 +1764,9 @@ class FileDatastore(GenericBaseDatastore):
         requested_ids = set(id_to_ref.keys())
 
         # The records themselves. Could be missing some entries.
-        records = self._get_stored_records_associated_with_refs(id_to_ref.values())
+        records = self._get_stored_records_associated_with_refs(
+            id_to_ref.values(), ignore_datastore_records=True
+        )
 
         dataset_existence = self._process_mexists_records(
             id_to_ref, records, True, artifact_existence=artifact_existence
@@ -1746,7 +1862,9 @@ class FileDatastore(GenericBaseDatastore):
         though it is present in the local cache.
         """
         ref = self._cast_storage_class(ref)
-        fileLocations = self._get_dataset_locations_info(ref)
+        # We cannot trust datastore records from ref, as many unit tests delete
+        # datasets and check their existence.
+        fileLocations = self._get_dataset_locations_info(ref, ignore_datastore_records=True)
 
         # if we are being asked to trust that registry might not be correct
         # we ask for the expected locations and check them explicitly
@@ -2281,7 +2399,7 @@ class FileDatastore(GenericBaseDatastore):
             # be looking at the composite ref itself.
             cache_ref = ref.makeCompositeRef() if isComponent else ref
 
-            # For a disassembled component we can validate parametersagainst
+            # For a disassembled component we can validate parameters against
             # the component storage class directly
             if isDisassembled:
                 refStorageClass.validateParameters(parameters)
@@ -2349,6 +2467,38 @@ class FileDatastore(GenericBaseDatastore):
         self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
 
     @transactional
+    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+        doDisassembly = self.composites.shouldBeDisassembled(ref)
+        # doDisassembly = True
+
+        artifacts = []
+        if doDisassembly:
+            components = ref.datasetType.storageClass.delegate().disassemble(inMemoryDataset)
+            if components is None:
+                raise RuntimeError(
+                    f"Inconsistent configuration: dataset type {ref.datasetType.name} "
+                    f"with storage class {ref.datasetType.storageClass.name} "
+                    "is configured to be disassembled, but cannot be."
+                )
+            for component, componentInfo in components.items():
+                # Don't recurse because we want to take advantage of
+                # bulk insert -- need a new DatasetRef that refers to the
+                # same dataset_id but has the component DatasetType
+                # DatasetType does not refer to the types of components
+                # So we construct one ourselves.
+                compRef = ref.makeComponentRef(component)
+                storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
+                artifacts.append((compRef, storedInfo))
+        else:
+            # Write the entire thing out
+            storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
+            artifacts.append((ref, storedInfo))
+
+        ref_records = {self._opaque_table_name: [info for _, info in artifacts]}
+        ref = ref.replace(datastore_records=ref_records)
+        return {self.name: ref}
+
+    @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = True) -> None:
         # At this point can safely remove these datasets from the cache
         # to avoid confusion later on. If they are not trashed later
@@ -2368,7 +2518,7 @@ class FileDatastore(GenericBaseDatastore):
 
             # Determine which datasets are known to datastore directly.
             id_to_ref = {ref.id: ref for ref in refs}
-            existing_ids = self._get_stored_records_associated_with_refs(refs)
+            existing_ids = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
             existing_refs = {id_to_ref[ref_id] for ref_id in existing_ids}
 
             missing = refs - existing_refs
@@ -2613,7 +2763,9 @@ class FileDatastore(GenericBaseDatastore):
         # What we really want is all the records in the source datastore
         # associated with these refs. Or derived ones if they don't exist
         # in the source.
-        source_records = source_datastore._get_stored_records_associated_with_refs(refs)
+        source_records = source_datastore._get_stored_records_associated_with_refs(
+            refs, ignore_datastore_records=True
+        )
 
         # The source dataset_ids are the keys in these records
         source_ids = set(source_records)
@@ -2688,7 +2840,7 @@ class FileDatastore(GenericBaseDatastore):
                     source_records[missing].extend(dataset_records)
 
         # See if we already have these records
-        target_records = self._get_stored_records_associated_with_refs(refs)
+        target_records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
 
         # The artifacts to register
         artifacts = []
@@ -2993,12 +3145,12 @@ class FileDatastore(GenericBaseDatastore):
 
         # TODO: Verify that there are no unexpected table names in the dict?
         unpacked_records = []
-        for dataset_data in record_data.records.values():
+        for dataset_id, dataset_data in record_data.records.items():
             records = dataset_data.get(self._table.name)
             if records:
                 for info in records:
                     assert isinstance(info, StoredFileInfo), "Expecting StoredFileInfo records"
-                    unpacked_records.append(info.to_record())
+                    unpacked_records.append(info.to_record(dataset_id=dataset_id))
         if unpacked_records:
             self._table.insert(*unpacked_records, transaction=self._transaction)
 
@@ -3009,7 +3161,7 @@ class FileDatastore(GenericBaseDatastore):
         records: dict[DatasetId, dict[str, list[StoredDatastoreItemInfo]]] = {id: {} for id in ids}
         for row in self._table.fetch(dataset_id=ids):
             info: StoredDatastoreItemInfo = StoredFileInfo.from_record(row)
-            dataset_records = records.setdefault(info.dataset_id, {})
+            dataset_records = records.setdefault(row["dataset_id"], {})
             dataset_records.setdefault(self._table.name, []).append(info)
 
         record_data = DatastoreRecordData(records=records)
@@ -3029,3 +3181,7 @@ class FileDatastore(GenericBaseDatastore):
         if dataset_type is not None:
             ref = ref.overrideStorageClass(dataset_type.storageClass)
         return ref
+
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
+        # Docstring inherited from the base class.
+        return {self._opaque_table_name: DatastoreOpaqueTable(self.makeTableSpec(ddl.GUID), StoredFileInfo)}

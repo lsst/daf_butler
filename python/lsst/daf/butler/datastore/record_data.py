@@ -37,8 +37,6 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
-from lsst.utils import doImportType
-from lsst.utils.introspection import get_full_type_name
 
 from .._dataset_ref import DatasetId
 from ..dimensions import DimensionUniverse
@@ -63,15 +61,17 @@ class SerializedDatastoreRecordData(_BaseModelCompat):
     dataset_ids: list[uuid.UUID]
     """List of dataset IDs"""
 
-    records: Mapping[str, Mapping[str, list[_Record]]]
-    """List of records indexed by record class name and table name."""
+    records: Mapping[str, Mapping[str, Mapping[str, list[_Record]]]]
+    """List of records indexed by record class name, dataset ID (encoded as
+    str, because JSON), and opaque table name.
+    """
 
     @classmethod
     def direct(
         cls,
         *,
         dataset_ids: list[str | uuid.UUID],
-        records: dict[str, dict[str, list[_Record]]],
+        records: dict[str, dict[str, dict[str, list[_Record]]]],
     ) -> SerializedDatastoreRecordData:
         """Construct a `SerializedDatastoreRecordData` directly without
         validators.
@@ -83,15 +83,6 @@ class SerializedDatastoreRecordData(_BaseModelCompat):
 
         This method should only be called when the inputs are trusted.
         """
-        # See also comments in record_ids_to_uuid()
-        for table_data in records.values():
-            for table_records in table_data.values():
-                for record in table_records:
-                    # This only checks dataset_id value, if there are any other
-                    # columns that are UUIDs we'd need more generic approach.
-                    if (id := record.get("dataset_id")) is not None:
-                        record["dataset_id"] = uuid.UUID(id) if isinstance(id, str) else id
-
         data = cls.model_construct(
             _fields_set={"dataset_ids", "records"},
             # JSON makes strings out of UUIDs, need to convert them back
@@ -182,26 +173,13 @@ class DatastoreRecordData:
         simple : `dict`
             Representation of this instance as a simple dictionary.
         """
-
-        def _class_name(records: list[StoredDatastoreItemInfo]) -> str:
-            """Get fully qualified class name for the records. Empty string
-            returned if list is empty. Exception is raised if records are of
-            different classes.
-            """
-            if not records:
-                return ""
-            classes = {record.__class__ for record in records}
-            assert len(classes) == 1, f"Records have to be of the same class: {classes}"
-            return get_full_type_name(classes.pop())
-
-        records: dict[str, dict[str, list[_Record]]] = {}
-        for table_data in self.records.values():
+        records: dict[str, dict[str, dict[str, list[_Record]]]] = {}
+        for dataset_id, table_data in self.records.items():
             for table_name, table_records in table_data.items():
-                class_name = _class_name(table_records)
+                class_name, infos = StoredDatastoreItemInfo.to_records(table_records)
                 class_records = records.setdefault(class_name, {})
-                class_records.setdefault(table_name, []).extend(
-                    [record.to_record() for record in table_records]
-                )
+                dataset_records = class_records.setdefault(dataset_id.hex, {})
+                dataset_records.setdefault(table_name, []).extend(dict(info) for info in infos)
         return SerializedDatastoreRecordData(dataset_ids=list(self.records.keys()), records=records)
 
     @classmethod
@@ -238,29 +216,18 @@ class DatastoreRecordData:
         # have records.
         for dataset_id in simple.dataset_ids:
             records[dataset_id] = {}
-        for class_name, table_data in simple.records.items():
-            try:
-                klass = doImportType(class_name)
-            except ImportError:
-                # Prior to DM-41043 we were embedding a lsst.daf.butler.core
-                # path in the serialized form, which we never wanted; fix this
-                # one case.
-                if class_name == "lsst.daf.butler.core.storedFileInfo.StoredFileInfo":
-                    from .stored_file_info import StoredFileInfo
-
-                    klass = StoredFileInfo
-                else:
-                    raise
-            if not issubclass(klass, StoredDatastoreItemInfo):
-                raise RuntimeError(
-                    "The class specified in the SerializedDatastoreRecordData "
-                    f"({get_full_type_name(klass)}) is not a StoredDatastoreItemInfo."
-                )
-            for table_name, table_records in table_data.items():
-                for record in table_records:
-                    info = klass.from_record(record)
-                    dataset_type_records = records.setdefault(info.dataset_id, {})
-                    dataset_type_records.setdefault(table_name, []).append(info)
+        for class_name, class_data in simple.records.items():
+            for dataset_id_str, dataset_data in class_data.items():
+                for table_name, table_records in dataset_data.items():
+                    try:
+                        infos = StoredDatastoreItemInfo.from_records(class_name, table_records)
+                    except TypeError as exc:
+                        raise RuntimeError(
+                            "The class specified in the SerializedDatastoreRecordData "
+                            f"({class_name}) is not a StoredDatastoreItemInfo."
+                        ) from exc
+                    dataset_records = records.setdefault(uuid.UUID(dataset_id_str), {})
+                    dataset_records.setdefault(table_name, []).extend(infos)
         newRecord = cls(records=records)
         if cache is not None:
             cache[key] = newRecord

@@ -38,8 +38,14 @@ import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, Datastore, FileDataset
-from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig, DatastoreValidationError
+from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, FileDataset
+from lsst.daf.butler.datastore import (
+    DatasetRefURIs,
+    Datastore,
+    DatastoreConfig,
+    DatastoreOpaqueTable,
+    DatastoreValidationError,
+)
 from lsst.daf.butler.datastore.constraints import Constraints
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.resources import ResourcePath
@@ -206,12 +212,7 @@ class ChainedDatastore(Datastore):
 
         # We declare we are ephemeral if all our child datastores declare
         # they are ephemeral
-        isEphemeral = True
-        for d in self.datastores:
-            if not d.isEphemeral:
-                isEphemeral = False
-                break
-        self.isEphemeral = isEphemeral
+        self.isEphemeral = all(d.isEphemeral for d in self.datastores)
 
         # per-datastore override constraints
         if "datastore_constraints" in self.config:
@@ -443,6 +444,53 @@ class ChainedDatastore(Datastore):
 
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
+
+    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+        # Docstring inherited from base class.
+        log.debug("Put %s", ref)
+
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(
+                f"Dataset {ref} has been rejected by this datastore via configuration."
+            )
+
+        isPermanent = False
+        nsuccess = 0
+        npermanent = 0
+        nephemeral = 0
+        stored_refs: dict[str, DatasetRef] = {}
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+            if (
+                constraints is not None and not constraints.isAcceptable(ref)
+            ) or not datastore.constraints.isAcceptable(ref):
+                log.debug("Datastore %s skipping put via configuration for ref %s", datastore.name, ref)
+                continue
+
+            if datastore.isEphemeral:
+                nephemeral += 1
+            else:
+                npermanent += 1
+            try:
+                stored_ref_map = datastore.put_new(inMemoryDataset, ref)
+                stored_refs.update(stored_ref_map)
+                nsuccess += 1
+                if not datastore.isEphemeral:
+                    isPermanent = True
+            except DatasetTypeNotSupportedError:
+                pass
+
+        if nsuccess == 0:
+            raise DatasetTypeNotSupportedError(f"None of the chained datastores supported ref {ref}")
+
+        if not isPermanent and npermanent > 0:
+            warnings.warn(f"Put of {ref} only succeeded in ephemeral databases", stacklevel=2)
+
+        if self._transaction is not None:
+            self._transaction.registerUndo("put", self.remove, ref)
+
+        return stored_refs
 
     def _overrideTransferMode(self, *datasets: Any, transfer: str | None = None) -> str | None:
         # Docstring inherited from base class.
@@ -1130,3 +1178,10 @@ class ChainedDatastore(Datastore):
             raise TypeError(f"None of the child datastores could accept transfers from {source_datastore!r}")
 
         return all_accepted, remaining_refs
+
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
+        # Docstring inherited from the base class.
+        tables: dict[str, DatastoreOpaqueTable] = {}
+        for datastore in self.datastores:
+            tables.update(datastore.get_opaque_table_definitions())
+        return tables

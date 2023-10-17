@@ -1928,18 +1928,15 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
             formatter="lsst.daf.butler.Formatter",
             path="a/b/c.txt",
             component="component",
-            dataset_id=ref.id,
             checksum=None,
             file_size=5,
         )
         info = StoredFileInfo.from_record(record)
 
-        self.assertEqual(info.dataset_id, ref.id)
         self.assertEqual(info.to_record(), record)
 
         ref2 = self.makeDatasetRef("metric", DimensionUniverse().extract(()), storageClass, {})
         rebased = info.rebase(ref2)
-        self.assertEqual(rebased.dataset_id, ref2.id)
         self.assertEqual(rebased.rebase(ref), info)
 
         with self.assertRaises(TypeError):

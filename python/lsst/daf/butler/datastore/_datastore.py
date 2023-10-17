@@ -30,10 +30,11 @@
 from __future__ import annotations
 
 __all__ = (
-    "DatastoreConfig",
-    "Datastore",
-    "DatastoreValidationError",
     "DatasetRefURIs",
+    "Datastore",
+    "DatastoreConfig",
+    "DatastoreOpaqueTable",
+    "DatastoreValidationError",
     "NullDatastore",
     "DatastoreTransaction",
 )
@@ -58,12 +59,14 @@ from .constraints import Constraints
 if TYPE_CHECKING:
     from lsst.resources import ResourcePath, ResourcePathExpression
 
+    from .. import ddl
     from .._config_support import LookupKey
     from .._dataset_ref import DatasetRef
     from .._dataset_type import DatasetType
     from .._storage_class import StorageClass
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from .record_data import DatastoreRecordData
+    from .stored_file_info import StoredDatastoreItemInfo
 
 _LOG = logging.getLogger(__name__)
 
@@ -91,6 +94,19 @@ class Event:
     undoFunc: Callable
     args: tuple
     kwargs: dict
+
+
+@dataclasses.dataclass(frozen=True)
+class DatastoreOpaqueTable:
+    """Definition of the opaque table which stores datastore records.
+
+    Table definition contains `.ddl.TableSpec` for a table and a class
+    of a record which must be a subclass of `StoredDatastoreItemInfo`.
+    """
+
+    __slots__ = {"table_spec", "record_class"}
+    table_spec: ddl.TableSpec
+    record_class: type[StoredDatastoreItemInfo]
 
 
 class IngestPrepData:
@@ -534,6 +550,26 @@ class Datastore(metaclass=ABCMeta):
             The Dataset to store.
         datasetRef : `DatasetRef`
             Reference to the associated Dataset.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def put_new(self, in_memory_dataset: Any, dataset_ref: DatasetRef) -> Mapping[str, DatasetRef]:
+        """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            The Dataset to store.
+        datasetRef : `DatasetRef`
+            Reference to the associated Dataset.
+
+        Returns
+        -------
+        datastore_refs : `~collections.abc.Mapping` [`str`, `DatasetRef`]
+            Mapping of a datastore name to dataset reference stored in that
+            datastore, reference will include datastore records. Only
+            non-ephemeral datastores will appear in this mapping.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -1227,6 +1263,19 @@ class Datastore(metaclass=ABCMeta):
         """
         pass
 
+    @abstractmethod
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
+        """Make definitions of the opaque tables used by this Datastore.
+
+        Returns
+        -------
+        tables : `~collections.abc.Mapping` [ `str`, `.ddl.TableSpec` ]
+            Mapping of opaque table names to their definitions. This can be an
+            empty mapping if Datastore does not use opaque tables to keep
+            datastore records.
+        """
+        raise NotImplementedError()
+
 
 class NullDatastore(Datastore):
     """A datastore that implements the `Datastore` API but always fails when
@@ -1266,6 +1315,9 @@ class NullDatastore(Datastore):
         raise FileNotFoundError("This is a no-op datastore that can not access a real datastore")
 
     def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
+        raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def put_new(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> Mapping[str, DatasetRef]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def ingest(
@@ -1345,3 +1397,6 @@ class NullDatastore(Datastore):
         refs: Iterable[DatasetIdRef],
     ) -> Mapping[str, DatastoreRecordData]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
+
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
+        return {}

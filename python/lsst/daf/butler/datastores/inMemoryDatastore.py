@@ -40,29 +40,25 @@ from urllib.parse import urlencode
 
 from lsst.daf.butler import DatasetId, DatasetRef, StorageClass
 from lsst.daf.butler.datastore import DatasetRefURIs
+from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo
-from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath
 
-from ..datastore.generic_base import GenericBaseDatastore
-from ..registry.interfaces import DatabaseInsertMode
-
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey
+    from lsst.daf.butler.datastore import DatastoreOpaqueTable
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     """Internal InMemoryDatastore Metadata associated with a stored
     DatasetRef.
     """
-
-    __slots__ = {"timestamp", "storageClass", "parentID", "dataset_id"}
 
     timestamp: float
     """Unix timestamp indicating the time the dataset was stored."""
@@ -76,11 +72,8 @@ class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     virtual component of a composite
     """
 
-    dataset_id: DatasetId
-    """DatasetId associated with this record."""
 
-
-class InMemoryDatastore(GenericBaseDatastore):
+class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
     """Basic Datastore for writing to an in memory cache.
 
     This datastore is ephemeral in that the contents of the datastore
@@ -139,7 +132,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Related records that share the same parent
         self.related: dict[DatasetId, set[DatasetId]] = {}
 
-        self._bridge = bridgeManager.register(self.name, ephemeral=True)
+        self._trashedIds: set[DatasetId] = set()
 
     @classmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
@@ -176,42 +169,37 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         return
 
-    @property
-    def bridge(self) -> DatastoreRegistryBridge:
+    def _get_stored_item_info(self, dataset_id: DatasetId) -> StoredMemoryItemInfo:
         # Docstring inherited from GenericBaseDatastore.
-        return self._bridge
+        return self.records[dataset_id]
 
-    def addStoredItemInfo(
-        self,
-        refs: Iterable[DatasetRef],
-        infos: Iterable[StoredMemoryItemInfo],
-        insert_mode: DatabaseInsertMode = DatabaseInsertMode.INSERT,
-    ) -> None:
-        # Docstring inherited from GenericBaseDatastore.
-        for ref, info in zip(refs, infos, strict=True):
-            self.records[ref.id] = info
-            self.related.setdefault(info.parentID, set()).add(ref.id)
-
-    def getStoredItemInfo(self, ref: DatasetIdRef) -> StoredMemoryItemInfo:
-        # Docstring inherited from GenericBaseDatastore.
-        return self.records[ref.id]
-
-    def getStoredItemsInfo(self, ref: DatasetIdRef) -> list[StoredMemoryItemInfo]:
-        # Docstring inherited from GenericBaseDatastore.
-        return [self.getStoredItemInfo(ref)]
-
-    def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
+    def _remove_stored_item_info(self, dataset_id: DatasetId) -> None:
         # Docstring inherited from GenericBaseDatastore.
         # If a component has been removed previously then we can sometimes
         # be asked to remove it again. Other datastores ignore this
         # so also ignore here
-        if ref.id not in self.records:
+        if dataset_id not in self.records:
             return
-        record = self.records[ref.id]
-        del self.records[ref.id]
-        self.related[record.parentID].remove(ref.id)
+        record = self.records[dataset_id]
+        del self.records[dataset_id]
+        self.related[record.parentID].remove(dataset_id)
 
-    def _get_dataset_info(self, ref: DatasetIdRef) -> tuple[DatasetId, StoredMemoryItemInfo]:
+    def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
+        """Remove information about the file associated with this dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            The dataset that has been removed.
+
+        Notes
+        -----
+        This method is actually not used by this implementation, but there are
+        some tests that check that this method works, so we keep it for now.
+        """
+        self._remove_stored_item_info(ref.id)
+
+    def _get_dataset_info(self, dataset_id: DatasetId) -> tuple[DatasetId, StoredMemoryItemInfo]:
         """Check that the dataset is present and return the real ID and
         associated information.
 
@@ -234,15 +222,15 @@ class InMemoryDatastore(GenericBaseDatastore):
             Raised if the dataset is not present in this datastore.
         """
         try:
-            storedItemInfo = self.getStoredItemInfo(ref)
+            storedItemInfo = self._get_stored_item_info(dataset_id)
         except KeyError:
-            raise FileNotFoundError(f"No such file dataset in memory: {ref}") from None
-        realID = ref.id
+            raise FileNotFoundError(f"No such file dataset in memory: {dataset_id}") from None
+        realID = dataset_id
         if storedItemInfo.parentID is not None:
             realID = storedItemInfo.parentID
 
         if realID not in self.datasets:
-            raise FileNotFoundError(f"No such file dataset in memory: {ref}")
+            raise FileNotFoundError(f"No such file dataset in memory: {dataset_id}")
 
         return realID, storedItemInfo
 
@@ -278,7 +266,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             `True` if the entity exists in the `Datastore`.
         """
         try:
-            self._get_dataset_info(ref)
+            self._get_dataset_info(ref.id)
         except FileNotFoundError:
             return False
         return True
@@ -321,7 +309,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
-        realID, storedItemInfo = self._get_dataset_info(ref)
+        realID, storedItemInfo = self._get_dataset_info(ref.id)
 
         # We have a write storage class and a read storage class and they
         # can be different for concrete composites or if overridden.
@@ -405,17 +393,22 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Store time we received this content, to allow us to optionally
         # expire it. Instead of storing a filename here, we include the
         # ID of this datasetRef so we can find it from components.
-        itemInfo = StoredMemoryItemInfo(
-            time.time(), ref.datasetType.storageClass, parentID=ref.id, dataset_id=ref.id
-        )
+        itemInfo = StoredMemoryItemInfo(time.time(), ref.datasetType.storageClass, parentID=ref.id)
 
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries
-        # TODO: Add to ephemeral part of registry
-        self._register_datasets([(ref, itemInfo)])
+        self.records[ref.id] = itemInfo
+        self.related.setdefault(itemInfo.parentID, set()).add(ref.id)
 
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
+
+    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+        # It is OK to call put() here because registry is not populating
+        # bridges as we return empty dict from this method.
+        self.put(inMemoryDataset, ref)
+        # As ephemeral we return empty dict.
+        return {}
 
     def getURIs(self, ref: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.
@@ -451,7 +444,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             name = f"{ref.datasetType.name}"
             fragment = "#predicted"
         else:
-            realID, _ = self._get_dataset_info(ref)
+            realID, _ = self._get_dataset_info(ref.id)
             name = f"{id(self.datasets[realID])}?{query}"
             fragment = ""
 
@@ -517,9 +510,8 @@ class InMemoryDatastore(GenericBaseDatastore):
     def forget(self, refs: Iterable[DatasetRef]) -> None:
         # Docstring inherited.
         refs = list(refs)
-        self._bridge.forget(refs)
         for ref in refs:
-            self.removeStoredItemInfo(ref)
+            self._remove_stored_item_info(ref.id)
 
     @transactional
     def trash(self, ref: DatasetRef | Iterable[DatasetRef], ignore_errors: bool = False) -> None:
@@ -544,26 +536,30 @@ class InMemoryDatastore(GenericBaseDatastore):
         since all internal changes are isolated to solely this process and
         the registry only changes rows associated with this process.
         """
-        if not isinstance(ref, DatasetRef):
+        if isinstance(ref, DatasetRef):
+            # Check that this dataset is known to datastore
+            try:
+                self._get_dataset_info(ref.id)
+            except Exception as e:
+                if ignore_errors:
+                    log.warning(
+                        "Error encountered moving dataset %s to trash in datastore %s: %s", ref, self.name, e
+                    )
+                else:
+                    raise
+            log.debug("Trash %s in datastore %s", ref, self.name)
+            ref_list = [ref]
+        else:
+            ref_list = list(ref)
             log.debug("Bulk trashing of datasets in datastore %s", self.name)
-            self.bridge.moveToTrash(ref, transaction=self._transaction)
-            return
 
-        log.debug("Trash %s in datastore %s", ref, self.name)
+        def _rollbackMoveToTrash(refs: Iterable[DatasetIdRef]) -> None:
+            for ref in refs:
+                self._trashedIds.remove(ref.id)
 
-        # Check that this dataset is known to datastore
-        try:
-            self._get_dataset_info(ref)
-
-            # Move datasets to trash table
-            self.bridge.moveToTrash([ref], transaction=self._transaction)
-        except Exception as e:
-            if ignore_errors:
-                log.warning(
-                    "Error encountered moving dataset %s to trash in datastore %s: %s", ref, self.name, e
-                )
-            else:
-                raise
+        assert self._transaction is not None, "Must be in transaction"
+        with self._transaction.undoWith(f"Trash {len(ref_list)} datasets", _rollbackMoveToTrash, ref_list):
+            self._trashedIds.update(ref.id for ref in ref_list)
 
     def emptyTrash(self, ignore_errors: bool = False) -> None:
         """Remove all datasets from the trash.
@@ -584,36 +580,38 @@ class InMemoryDatastore(GenericBaseDatastore):
         the registry only changes rows associated with this process.
         """
         log.debug("Emptying trash in datastore %s", self.name)
-        with self._bridge.emptyTrash() as trash_data:
-            trashed, _ = trash_data
-            for ref, _ in trashed:
-                try:
-                    realID, _ = self._get_dataset_info(ref)
-                except FileNotFoundError:
-                    # Dataset already removed so ignore it
+
+        for dataset_id in self._trashedIds:
+            try:
+                realID, _ = self._get_dataset_info(dataset_id)
+            except FileNotFoundError:
+                # Dataset already removed so ignore it
+                continue
+            except Exception as e:
+                if ignore_errors:
+                    log.warning(
+                        "Emptying trash in datastore %s but encountered an error with dataset %s: %s",
+                        self.name,
+                        dataset_id,
+                        e,
+                    )
                     continue
-                except Exception as e:
-                    if ignore_errors:
-                        log.warning(
-                            "Emptying trash in datastore %s but encountered an error with dataset %s: %s",
-                            self.name,
-                            ref.id,
-                            e,
-                        )
-                        continue
-                    else:
-                        raise
+                else:
+                    raise
 
-                # Determine whether all references to this dataset have been
-                # removed and we can delete the dataset itself
-                allRefs = self.related[realID]
-                remainingRefs = allRefs - {ref.id}
-                if not remainingRefs:
-                    log.debug("Removing artifact %s from datastore %s", realID, self.name)
-                    del self.datasets[realID]
+            # Determine whether all references to this dataset have been
+            # removed and we can delete the dataset itself
+            allRefs = self.related[realID]
+            remainingRefs = allRefs - {dataset_id}
+            if not remainingRefs:
+                log.debug("Removing artifact %s from datastore %s", realID, self.name)
+                del self.datasets[realID]
 
-                # Remove this entry
-                self.removeStoredItemInfo(ref)
+            # Remove this entry
+            self._remove_stored_item_info(dataset_id)
+
+        # Empty the trash table
+        self._trashedIds = set()
 
     def validateConfiguration(
         self, entities: Iterable[DatasetRef | DatasetType | StorageClass], logFailures: bool = False
@@ -669,4 +667,8 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from the base class.
 
         # In-memory Datastore records cannot be exported or imported
+        return {}
+
+    def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
+        # Docstring inherited from the base class.
         return {}

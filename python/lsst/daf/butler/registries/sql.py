@@ -81,13 +81,15 @@ from ..registry import (
     _ButlerRegistry,
     queries,
 )
-from ..registry.interfaces import ChainedCollectionRecord, RunRecord
+from ..registry.interfaces import ChainedCollectionRecord, ReadOnlyDatabaseError, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 from ..utils import transactional
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
+    from ..datastore._datastore import DatastoreOpaqueTable
+    from ..datastore.stored_file_info import StoredDatastoreItemInfo
     from ..registry._registry import CollectionArgType
     from ..registry.interfaces import (
         CollectionRecord,
@@ -218,6 +220,11 @@ class SqlRegistry(_ButlerRegistry):
         # can only be done after most of the rest of Registry has already been
         # initialized, and must be done before the property getter is used.
         self.defaults = defaults
+
+        # TODO: This is currently initialized by `make_datastore_tables`,
+        # eventually we'll need to do it during construction.
+        # The mapping is indexed by the opaque table name.
+        self._datastore_record_classes: Mapping[str, type[StoredDatastoreItemInfo]] = {}
 
     def __str__(self) -> str:
         return str(self._db)
@@ -450,6 +457,7 @@ class SqlRegistry(_ButlerRegistry):
         *,
         collections: CollectionArgType | None = None,
         timespan: Timespan | None = None,
+        datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -544,6 +552,9 @@ class SqlRegistry(_ButlerRegistry):
         ref = reader.read(best_row, data_id=dataId)
         if component is not None:
             ref = ref.makeComponentRef(component)
+        if datastore_records:
+            ref = self.get_datastore_records(ref)
+
         return ref
 
     @transactional
@@ -1338,6 +1349,48 @@ class SqlRegistry(_ButlerRegistry):
                         # timespan.
                         timespan = None
                     yield DatasetAssociation(ref=ref, collection=collection_record.name, timespan=timespan)
+
+    def get_datastore_records(self, ref: DatasetRef) -> DatasetRef:
+        # Docstring inherited from base class.
+
+        datastore_records: dict[str, list[StoredDatastoreItemInfo]] = {}
+        for opaque, record_class in self._datastore_record_classes.items():
+            records = self.fetchOpaqueData(opaque, dataset_id=ref.id)
+            datastore_records[opaque] = [record_class.from_record(record) for record in records]
+        return ref.replace(datastore_records=datastore_records)
+
+    def store_datastore_records(self, refs: Mapping[str, DatasetRef]) -> None:
+        # Docstring inherited from base class.
+
+        for datastore_name, ref in refs.items():
+            # Store ref IDs in the bridge table.
+            bridge = self._managers.datastores.register(datastore_name)
+            bridge.insert([ref])
+
+            # store records in opaque tables
+            assert ref._datastore_records is not None, "Dataset ref must have datastore records"
+            for table_name, records in ref._datastore_records.items():
+                opaque_table = self._managers.opaque.get(table_name)
+                assert opaque_table is not None, f"Unexpected opaque table name {table_name}"
+                opaque_table.insert(*(record.to_record(dataset_id=ref.id) for record in records))
+
+    def make_datastore_tables(self, tables: Mapping[str, DatastoreOpaqueTable]) -> None:
+        # Docstring inherited from base class.
+
+        datastore_record_classes = {}
+        for table_name, table_def in tables.items():
+            datastore_record_classes[table_name] = table_def.record_class
+            try:
+                self._managers.opaque.register(table_name, table_def.table_spec)
+            except ReadOnlyDatabaseError:
+                # If the database is read only and we just tried and failed to
+                # create a table, it means someone is trying to create a
+                # read-only butler client for an empty repo.  That should be
+                # okay, as long as they then try to get any datasets before
+                # some other client creates the table.  Chances are they're
+                # just validating configuration.
+                pass
+        self._datastore_record_classes = datastore_record_classes
 
     @property
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:

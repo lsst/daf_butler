@@ -521,6 +521,7 @@ class Registry(ABC):
         *,
         collections: CollectionArgType | None = None,
         timespan: Timespan | None = None,
+        datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
         """Find a dataset given its `DatasetType` and data ID.

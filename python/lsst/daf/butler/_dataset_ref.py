@@ -28,6 +28,7 @@ from __future__ import annotations
 
 __all__ = [
     "AmbiguousDatasetError",
+    "DatasetDatastoreRecords",
     "DatasetId",
     "DatasetIdFactory",
     "DatasetIdGenEnum",
@@ -38,8 +39,8 @@ __all__ = [
 import enum
 import sys
 import uuid
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeAlias, runtime_checkable
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, TypeAlias, runtime_checkable
 
 import pydantic
 from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
@@ -49,6 +50,7 @@ from pydantic import StrictStr
 from ._config_support import LookupKey
 from ._dataset_type import DatasetType, SerializedDatasetType
 from ._named import NamedKeyDict
+from .datastore.stored_file_info import StoredDatastoreItemInfo
 from .dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
 from .json import from_json_pydantic, to_json_pydantic
 from .persistence_context import PersistenceContextVars
@@ -56,6 +58,10 @@ from .persistence_context import PersistenceContextVars
 if TYPE_CHECKING:
     from ._storage_class import StorageClass
     from .registry import Registry
+
+# Per-dataset records grouped by opaque table name, usually there is just one
+# opaque table.
+DatasetDatastoreRecords: TypeAlias = Mapping[str, Iterable[StoredDatastoreItemInfo]]
 
 
 class AmbiguousDatasetError(Exception):
@@ -176,6 +182,10 @@ class DatasetIdFactory:
 # This is constant, so don't recreate a set for each instance
 _serializedDatasetRefFieldsSet = {"id", "datasetType", "dataId", "run", "component"}
 
+# Serialized representation of StoredDatastoreItemInfo collection, first item
+# is the record class name.
+_DatastoreRecords: TypeAlias = tuple[str, list[Mapping[str, Any]]]
+
 
 class SerializedDatasetRef(_BaseModelCompat):
     """Simplified model of a `DatasetRef` suitable for serialization."""
@@ -185,6 +195,8 @@ class SerializedDatasetRef(_BaseModelCompat):
     dataId: SerializedDataCoordinate | None = None
     run: StrictStr | None = None
     component: StrictStr | None = None
+    datastore_records: Mapping[str, _DatastoreRecords] | None = None
+    """Maps opaque table name to datastore records."""
 
     if PYDANTIC_V2:
         # Can not use "after" validator since in some cases the validator
@@ -225,6 +237,7 @@ class SerializedDatasetRef(_BaseModelCompat):
         datasetType: dict[str, Any] | None = None,
         dataId: dict[str, Any] | None = None,
         component: str | None = None,
+        datastore_records: Mapping[str, _DatastoreRecords] | None = None,
     ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.
 
@@ -251,6 +264,7 @@ class SerializedDatasetRef(_BaseModelCompat):
             dataId=serialized_dataId,
             run=sys.intern(run),
             component=component,
+            datastore_records=datastore_records,
         )
 
         return node
@@ -306,6 +320,7 @@ class DatasetRef:
         "datasetType",
         "dataId",
         "run",
+        "_datastore_records",
     )
 
     def __init__(
@@ -317,6 +332,7 @@ class DatasetRef:
         id: DatasetId | None = None,
         conform: bool = True,
         id_generation_mode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        datastore_records: DatasetDatastoreRecords | None = None,
     ):
         self.datasetType = datasetType
         if conform:
@@ -332,6 +348,7 @@ class DatasetRef:
                 .makeDatasetId(self.run, self.datasetType, self.dataId, id_generation_mode)
                 .int
             )
+        self._datastore_records = datastore_records
 
     @property
     def id(self) -> DatasetId:
@@ -413,11 +430,19 @@ class DatasetRef:
                 simple["component"] = self.datasetType.component()
             return SerializedDatasetRef(**simple)
 
+        datastore_records: Mapping[str, _DatastoreRecords] | None = None
+        if self._datastore_records is not None:
+            datastore_records = {}
+            for opaque_name, records in self._datastore_records.items():
+                class_name, record_dicts = StoredDatastoreItemInfo.to_records(records)
+                datastore_records[opaque_name] = class_name, list(record_dicts)
+
         return SerializedDatasetRef(
             datasetType=self.datasetType.to_simple(minimal=minimal),
             dataId=self.dataId.to_simple(),
             run=self.run,
             id=self.id,
+            datastore_records=datastore_records,
         )
 
     @classmethod
@@ -512,7 +537,21 @@ class DatasetRef:
                 f"Encountered with {simple!r}{dstr}."
             )
 
-        newRef = cls(datasetType, dataId, id=simple.id, run=simple.run)
+        # rebuild datastore records
+        datastore_records: DatasetDatastoreRecords | None = None
+        if simple.datastore_records is not None:
+            datastore_records = {}
+            for opaque_name, (class_name, records) in simple.datastore_records.items():
+                infos = StoredDatastoreItemInfo.from_records(class_name, records)
+                datastore_records[opaque_name] = infos
+
+        newRef = cls(
+            datasetType,
+            dataId,
+            id=simple.id,
+            run=simple.run,
+            datastore_records=datastore_records,
+        )
         if cache is not None:
             cache[key] = newRef
         return newRef
@@ -527,16 +566,20 @@ class DatasetRef:
         dataId: DataCoordinate,
         id: DatasetId,
         run: str,
+        datastore_records: DatasetDatastoreRecords | None,
     ) -> DatasetRef:
         """Create new `DatasetRef`.
 
         A custom factory method for use by `__reduce__` as a workaround for
         its lack of support for keyword arguments.
         """
-        return cls(datasetType, dataId, id=id, run=run)
+        return cls(datasetType, dataId, id=id, run=run, datastore_records=datastore_records)
 
     def __reduce__(self) -> tuple:
-        return (self._unpickle, (self.datasetType, self.dataId, self.id, self.run))
+        return (
+            self._unpickle,
+            (self.datasetType, self.dataId, self.id, self.run, self._datastore_records),
+        )
 
     def __deepcopy__(self, memo: dict) -> DatasetRef:
         # DatasetRef is recursively immutable; see note in @immutable
@@ -559,7 +602,12 @@ class DatasetRef:
         """
         assert dataId == self.dataId
         return DatasetRef(
-            datasetType=self.datasetType, dataId=dataId, id=self.id, run=self.run, conform=False
+            datasetType=self.datasetType,
+            dataId=dataId,
+            id=self.id,
+            run=self.run,
+            conform=False,
+            datastore_records=self._datastore_records,
         )
 
     def isComponent(self) -> bool:
@@ -669,7 +717,12 @@ class DatasetRef:
         # Assume that the data ID does not need to be standardized
         # and should match whatever this ref already has.
         return DatasetRef(
-            self.datasetType.makeCompositeDatasetType(), self.dataId, id=self.id, run=self.run, conform=False
+            self.datasetType.makeCompositeDatasetType(),
+            self.dataId,
+            id=self.id,
+            run=self.run,
+            conform=False,
+            datastore_records=self._datastore_records,
         )
 
     def makeComponentRef(self, name: str) -> DatasetRef:
@@ -695,6 +748,7 @@ class DatasetRef:
             id=self.id,
             run=self.run,
             conform=False,
+            datastore_records=self._datastore_records,
         )
 
     def overrideStorageClass(self, storageClass: str | StorageClass) -> DatasetRef:
@@ -720,6 +774,7 @@ class DatasetRef:
         id: DatasetId | None = None,
         run: str | None = None,
         storage_class: str | StorageClass | None = None,
+        datastore_records: DatasetDatastoreRecords | None | Literal[False] = False,
     ) -> DatasetRef:
         """Create a new `DatasetRef` from this one, but with some modified
         attributes.
@@ -734,12 +789,17 @@ class DatasetRef:
         storage_class : `str` or `StorageClass` or `None`.
             The new storage class. If not `None`, replaces existing storage
             class.
+        datastore_records : `DatasetDatastoreRecords` or `None`
+            New datastore records. If `None` remove all records. By default
+            datastore records are preserved.
 
         Returns
         -------
         modified : `DatasetRef`
             A new dataset reference with updated attributes.
         """
+        if datastore_records is False:
+            datastore_records = self._datastore_records
         if storage_class is None:
             datasetType = self.datasetType
         else:
@@ -755,6 +815,7 @@ class DatasetRef:
             run=run,
             id=id,
             conform=False,
+            datastore_records=datastore_records,
         )
 
     def is_compatible_with(self, ref: DatasetRef) -> bool:
@@ -818,6 +879,12 @@ class DatasetRef:
 
     run: str
     """The name of the run that produced the dataset.
+
+    Cannot be changed after a `DatasetRef` is constructed.
+    """
+
+    datastore_records: DatasetDatastoreRecords | None
+    """Optional datastore records (`DatasetDatastoreRecords`).
 
     Cannot be changed after a `DatasetRef` is constructed.
     """
