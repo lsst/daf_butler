@@ -170,11 +170,9 @@ class StoredDatastoreItemInfo:
         return [klass.from_record(record) for record in records]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StoredFileInfo(StoredDatastoreItemInfo):
     """Datastore-private metadata associated with a Datastore file."""
-
-    __slots__ = {"formatter", "path", "storageClass", "component", "checksum", "file_size"}
 
     storageClassFactory = StorageClassFactory()
 

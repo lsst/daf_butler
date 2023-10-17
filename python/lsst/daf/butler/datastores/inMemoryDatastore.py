@@ -54,13 +54,11 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     """Internal InMemoryDatastore Metadata associated with a stored
     DatasetRef.
     """
-
-    __slots__ = {"timestamp", "storageClass", "parentID"}
 
     timestamp: float
     """Unix timestamp indicating the time the dataset was stored."""
