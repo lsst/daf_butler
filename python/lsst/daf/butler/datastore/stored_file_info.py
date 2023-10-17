@@ -297,9 +297,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         # Convert name of StorageClass to instance
         storageClass = cls.storageClassFactory.getStorageClass(record["storage_class"])
         component = record["component"] if (record["component"] and record["component"] != NULLSTR) else None
-
-        # UUID may be converted to string, e.g. in round-trip through JSON,
-        # convert it back to UUID.
         info = cls(
             formatter=record["formatter"],
             path=record["path"],

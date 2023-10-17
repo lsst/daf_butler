@@ -554,7 +554,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def put_new(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, dataset_ref: DatasetRef) -> Mapping[str, DatasetRef]:
         """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
 
         Parameters

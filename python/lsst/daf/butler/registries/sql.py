@@ -223,6 +223,7 @@ class SqlRegistry(_ButlerRegistry):
 
         # TODO: This is currently initialized by `make_datastore_tables`,
         # eventually we'll need to do it during construction.
+        # The mapping is indexed by the opaque table name.
         self._datastore_record_classes: Mapping[str, type[StoredDatastoreItemInfo]] = {}
 
     def __str__(self) -> str:
