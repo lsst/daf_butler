@@ -153,45 +153,6 @@ class DirectButler(Butler):
     **kwargs : `str`
         Default data ID key-value pairs.  These may only identify "governor"
         dimensions like ``instrument`` and ``skymap``.
-
-    Examples
-    --------
-    While there are many ways to control exactly how a `Butler` interacts with
-    the collections in its `Registry`, the most common cases are still simple.
-
-    For a read-only `Butler` that searches one collection, do::
-
-        butler = Butler("/path/to/repo", collections=["u/alice/DM-50000"])
-
-    For a read-write `Butler` that writes to and reads from a
-    `~CollectionType.RUN` collection::
-
-        butler = Butler("/path/to/repo", run="u/alice/DM-50000/a")
-
-    The `Butler` passed to a ``PipelineTask`` is often much more complex,
-    because we want to write to one `~CollectionType.RUN` collection but read
-    from several others (as well)::
-
-        butler = Butler("/path/to/repo", run="u/alice/DM-50000/a",
-                        collections=["u/alice/DM-50000/a",
-                                     "u/bob/DM-49998",
-                                     "HSC/defaults"])
-
-    This butler will `put` new datasets to the run ``u/alice/DM-50000/a``.
-    Datasets will be read first from that run (since it appears first in the
-    chain), and then from ``u/bob/DM-49998`` and finally ``HSC/defaults``.
-
-    Finally, one can always create a `Butler` with no collections::
-
-        butler = Butler("/path/to/repo", writeable=True)
-
-    This can be extremely useful when you just want to use ``butler.registry``,
-    e.g. for inserting dimension data or managing collections, or when the
-    collections you want to use with the butler are not consistent.
-    Passing ``writeable`` explicitly here is only necessary if you want to be
-    able to make changes to the repo - usually the value for ``writeable`` can
-    be guessed from the collection arguments provided, but it defaults to
-    `False` when there are not collection arguments.
     """
 
     def __init__(

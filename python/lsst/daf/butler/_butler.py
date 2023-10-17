@@ -69,8 +69,37 @@ class Butler(LimitedButler):
         values will be used. If ``config`` contains "cls" key then its value is
         used as a name of butler class and it must be a sub-class of this
         class, otherwise `DirectButler` is instantiated.
+    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
+        An expression specifying the collections to be searched (in order) when
+        reading datasets.
+        This may be a `str` collection name or an iterable thereof.
+        See :ref:`daf_butler_collection_expressions` for more information.
+        These collections are not registered automatically and must be
+        manually registered before they are used by any method, but they may be
+        manually registered after the `Butler` is initialized.
+    run : `str`, optional
+        Name of the `~CollectionType.RUN` collection new datasets should be
+        inserted into.  If ``collections`` is `None` and ``run`` is not `None`,
+        ``collections`` will be set to ``[run]``.  If not `None`, this
+        collection will automatically be registered.  If this is not set (and
+        ``writeable`` is not set either), a read-only butler will be created.
+    searchPaths : `list` of `str`, optional
+        Directory paths to search when calculating the full Butler
+        configuration.  Not used if the supplied config is already a
+        `ButlerConfig`.
+    writeable : `bool`, optional
+        Explicitly sets whether the butler supports write operations.  If not
+        provided, a read-write butler is created if any of ``run``, ``tags``,
+        or ``chains`` is non-empty.
+    inferDefaults : `bool`, optional
+        If `True` (default) infer default data ID values from the values
+        present in the datasets in ``collections``: if all collections have the
+        same value (or no value) for a governor dimension, that value will be
+        the default for that dimension.  Nonexistent collections are ignored.
+        If a default value is provided explicitly for a governor dimension via
+        ``**kwargs``, no default will be inferred for that dimension.
     **kwargs : `Any`
-        Optional keyword arguments passed to a constructor of actual butler
+        Additional keyword arguments passed to a constructor of actual butler
         class.
 
     Notes
@@ -80,23 +109,34 @@ class Butler(LimitedButler):
     but ``mypy`` will complain about the former.
     """
 
-    def __new__(cls, config: Config | ResourcePathExpression | None = None, **kwargs: Any) -> Butler:
+    def __new__(
+        cls,
+        config: Config | ResourcePathExpression | None = None,
+        *,
+        collections: Any = None,
+        run: str | None = None,
+        searchPaths: Sequence[ResourcePathExpression] | None = None,
+        writeable: bool | None = None,
+        inferDefaults: bool = True,
+        **kwargs: Any,
+    ) -> Butler:
         if cls is Butler:
-            cls = cls._find_butler_class(config, **kwargs)
+            cls = cls._find_butler_class(config, searchPaths)
         # Note: we do not pass any parameters to __new__, Python will pass them
         # to __init__ after __new__ returns sub-class instance.
         return super().__new__(cls)
 
     @staticmethod
     def _find_butler_class(
-        config: Config | ResourcePathExpression | None = None, **kwargs: Any
+        config: Config | ResourcePathExpression | None = None,
+        searchPaths: Sequence[ResourcePathExpression] | None = None,
     ) -> type[Butler]:
         """Find actual class to instantiate."""
         butler_class_name: str | None = None
         if config is not None:
             # Check for optional "cls" key in config.
             if not isinstance(config, Config):
-                config = ButlerConfig(config, searchPaths=kwargs.get("searchPaths"))
+                config = ButlerConfig(config, searchPaths=searchPaths)
             butler_class_name = config.get("cls")
 
         # Make DirectButler if class is not specified.
@@ -112,7 +152,17 @@ class Butler(LimitedButler):
         return butler_class
 
     @classmethod
-    def from_config(cls, config: Config | ResourcePathExpression | None = None, **kwargs: Any) -> Butler:
+    def from_config(
+        cls,
+        config: Config | ResourcePathExpression | None = None,
+        *,
+        collections: Any = None,
+        run: str | None = None,
+        searchPaths: Sequence[ResourcePathExpression] | None = None,
+        writeable: bool | None = None,
+        inferDefaults: bool = True,
+        **kwargs: Any,
+    ) -> Butler:
         """Create butler instance from configuration.
 
         Parameters
@@ -124,18 +174,106 @@ class Butler(LimitedButler):
             given default values will be used. If ``config`` contains "cls" key
             then its value is used as a name of butler class and it must be a
             sub-class of this class, otherwise `DirectButler` is instantiated.
+        collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            An expression specifying the collections to be searched (in order)
+            when reading datasets.
+            This may be a `str` collection name or an iterable thereof.
+            See :ref:`daf_butler_collection_expressions` for more information.
+            These collections are not registered automatically and must be
+            manually registered before they are used by any method, but they
+            may be manually registered after the `Butler` is initialized.
+        run : `str`, optional
+            Name of the `~CollectionType.RUN` collection new datasets should be
+            inserted into.  If ``collections`` is `None` and ``run`` is not
+            `None`, ``collections`` will be set to ``[run]``.  If not `None`,
+            this collection will automatically be registered.  If this is not
+            set (and ``writeable`` is not set either), a read-only butler will
+            be created.
+        searchPaths : `list` of `str`, optional
+            Directory paths to search when calculating the full Butler
+            configuration.  Not used if the supplied config is already a
+            `ButlerConfig`.
+        writeable : `bool`, optional
+            Explicitly sets whether the butler supports write operations.  If
+            not provided, a read-write butler is created if any of ``run``,
+            ``tags``, or ``chains`` is non-empty.
+        inferDefaults : `bool`, optional
+            If `True` (default) infer default data ID values from the values
+            present in the datasets in ``collections``: if all collections have
+            the same value (or no value) for a governor dimension, that value
+            will be the default for that dimension.  Nonexistent collections
+            are ignored.  If a default value is provided explicitly for a
+            governor dimension via ``**kwargs``, no default will be inferred
+            for that dimension.
         **kwargs : `Any`
-            Optional keyword arguments passed to a constructor of actual butler
-            class.
+            Additional keyword arguments passed to a constructor of actual
+            butler class.
 
         Notes
         -----
         Calling this factory method is identical to calling
         ``Butler(config, ...)``. Its only raison d'être is that ``mypy``
         complains about ``Butler()`` call.
+
+        Examples
+        --------
+        While there are many ways to control exactly how a `Butler` interacts
+        with the collections in its `Registry`, the most common cases are still
+        simple.
+
+        For a read-only `Butler` that searches one collection, do::
+
+            butler = Butler.from_config(
+                "/path/to/repo", collections=["u/alice/DM-50000"]
+            )
+
+        For a read-write `Butler` that writes to and reads from a
+        `~CollectionType.RUN` collection::
+
+            butler = Butler.from_config(
+                "/path/to/repo", run="u/alice/DM-50000/a"
+            )
+
+        The `Butler` passed to a ``PipelineTask`` is often much more complex,
+        because we want to write to one `~CollectionType.RUN` collection but
+        read from several others (as well)::
+
+            butler = Butler.from_config(
+                "/path/to/repo",
+                run="u/alice/DM-50000/a",
+                collections=[
+                    "u/alice/DM-50000/a", "u/bob/DM-49998", "HSC/defaults"
+                ]
+            )
+
+        This butler will `put` new datasets to the run ``u/alice/DM-50000/a``.
+        Datasets will be read first from that run (since it appears first in
+        the chain), and then from ``u/bob/DM-49998`` and finally
+        ``HSC/defaults``.
+
+        Finally, one can always create a `Butler` with no collections::
+
+            butler = Butler.from_config("/path/to/repo", writeable=True)
+
+        This can be extremely useful when you just want to use
+        ``butler.registry``, e.g. for inserting dimension data or managing
+        collections, or when the collections you want to use with the butler
+        are not consistent. Passing ``writeable`` explicitly here is only
+        necessary if you want to be able to make changes to the repo - usually
+        the value for ``writeable`` can be guessed from the collection
+        arguments provided, but it defaults to `False` when there are not
+        collection arguments.
         """
-        cls = cls._find_butler_class(config, **kwargs)
-        return cls(config, **kwargs)
+        cls = cls._find_butler_class(config, searchPaths)
+        return cls(
+            config,
+            collections=collections,
+            run=run,
+            searchPaths=searchPaths,
+            writeable=writeable,
+            inferDefaults=inferDefaults,
+            **kwargs,
+        )
 
     @staticmethod
     def makeRepo(
