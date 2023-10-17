@@ -54,7 +54,7 @@ from .registry import Registry, RegistryConfig, _RegistryFactory
 from .repo_relocation import BUTLER_ROOT_TAG
 from .transfers import RepoExportContext
 
-log = getLogger(__name__)
+_LOG = getLogger(__name__)
 
 
 class Butler(LimitedButler):
@@ -427,7 +427,7 @@ class Butler(LimitedButler):
             dimensionConfig=dimensionConfig, butlerRoot=root_uri
         )
 
-        log.verbose("Wrote new Butler configuration file to %s", configURI)
+        _LOG.verbose("Wrote new Butler configuration file to %s", configURI)
 
         return config
 

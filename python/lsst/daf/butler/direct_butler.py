@@ -94,7 +94,7 @@ if TYPE_CHECKING:
 
     from .transfers import RepoImportBackend
 
-log = getLogger(__name__)
+_LOG = getLogger(__name__)
 
 
 class ButlerValidationError(ValidationError):
@@ -203,7 +203,7 @@ class DirectButler(Butler):
             except Exception:
                 # Failures here usually mean that configuration is incomplete,
                 # just issue an error message which includes config file URI.
-                log.error(f"Failed to instantiate Butler from config {self._config.configFile}.")
+                _LOG.error(f"Failed to instantiate Butler from config {self._config.configFile}.")
                 raise
 
         # For execution butler the datastore needs a special
@@ -496,7 +496,7 @@ class DirectButler(Butler):
                         if isinstance(value, alternate.getPythonType()):
                             byRecord[dimensionName][alternate.name] = value
                             del dataIdDict[dimensionName]
-                            log.debug(
+                            _LOG.debug(
                                 "Converting dimension %s to %s.%s=%s",
                                 dimensionName,
                                 dimensionName,
@@ -505,7 +505,7 @@ class DirectButler(Butler):
                             )
                             break
                     else:
-                        log.warning(
+                        _LOG.warning(
                             "Type mismatch found for value '%r' provided for dimension %s. "
                             "Could not find matching alternative (primary key has type %s) "
                             "so attempting to use as-is.",
@@ -519,7 +519,7 @@ class DirectButler(Butler):
         # are dimensions in both (rather than calling update).
         for k, v in kwargs.items():
             if k in newDataId and newDataId[k] != v:
-                log.debug(
+                _LOG.debug(
                     "Keyword arg %s overriding explicit value in dataId of %s with %s", k, newDataId[k], v
                 )
             newDataId[k] = v
@@ -617,7 +617,7 @@ class DirectButler(Butler):
                     # Returns a list of tuples
                     selected = duplicatesCounter.most_common(1)[0][0]
 
-                    log.debug(
+                    _LOG.debug(
                         "Ambiguous dataId entry '%s' associated with multiple dimensions: %s."
                         " Removed ambiguity by choosing dimension %s.",
                         fieldName,
@@ -632,7 +632,9 @@ class DirectButler(Butler):
             # Update the record look up dict with the new associations
             for dimensionName, values in guessedAssociation.items():
                 if values:  # A dict might now be empty
-                    log.debug("Assigned non-dimension dataId keys to dimension %s: %s", dimensionName, values)
+                    _LOG.debug(
+                        "Assigned non-dimension dataId keys to dimension %s: %s", dimensionName, values
+                    )
                     byRecord[dimensionName].update(values)
 
         if byRecord:
@@ -640,7 +642,7 @@ class DirectButler(Butler):
             # them to the Id form
             for dimensionName, values in byRecord.items():
                 if dimensionName in newDataId:
-                    log.debug(
+                    _LOG.debug(
                         "DataId specified explicit %s dimension value of %s in addition to"
                         " general record specifiers for it of %s.  Ignoring record information.",
                         dimensionName,
@@ -727,9 +729,11 @@ class DirectButler(Butler):
 
                         # The ambiguity may have been resolved so check again.
                         if len(records) > 1:
-                            log.debug("Received %d records from constraints of %s", len(records), str(values))
+                            _LOG.debug(
+                                "Received %d records from constraints of %s", len(records), str(values)
+                            )
                             for r in records:
-                                log.debug("- %s", str(r))
+                                _LOG.debug("- %s", str(r))
                             raise ValueError(
                                 f"DataId specification for dimension {dimensionName} is not"
                                 f" uniquely constrained to a single dataset by {values}."
@@ -935,7 +939,7 @@ class DirectButler(Butler):
         """
         if isinstance(datasetRefOrType, DatasetRef):
             # This is a direct put of predefined DatasetRef.
-            log.debug("Butler put direct: %s", datasetRefOrType)
+            _LOG.debug("Butler put direct: %s", datasetRefOrType)
             if run is not None:
                 warnings.warn("Run collection is not used for DatasetRef", stacklevel=3)
             # If registry already has a dataset with the same dataset ID,
@@ -956,7 +960,7 @@ class DirectButler(Butler):
                 raise ConflictingDefinitionError(f"Datastore already contains dataset: {e}") from e
             return datasetRefOrType
 
-        log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
+        _LOG.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
@@ -1187,7 +1191,7 @@ class DirectButler(Butler):
         fetched with a ``{instrument, detector, exposure}`` data ID, because
         ``exposure`` is a temporal dimension.
         """
-        log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
+        _LOG.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(
             datasetRefOrType, dataId, collections=collections, datastore_records=True, **kwargs
         )
@@ -1584,7 +1588,7 @@ class DirectButler(Butler):
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
 
-        log.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
+        _LOG.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
         if not datasets:
             return
 
@@ -1664,7 +1668,7 @@ class DirectButler(Butler):
                 refs_to_import.extend(dataset.refs)
 
             n_refs = len(refs_to_import)
-            log.verbose(
+            _LOG.verbose(
                 "Importing %d ref%s of dataset type %r into run %r",
                 n_refs,
                 "" if n_refs == 1 else "s",
@@ -1767,7 +1771,7 @@ class DirectButler(Butler):
                 exists_in_cwd = filename.exists()
                 exists_in_dir = potential.exists()
                 if exists_in_cwd and exists_in_dir:
-                    log.warning(
+                    _LOG.warning(
                         "A relative path for filename was specified (%s) which exists relative to cwd. "
                         "Additionally, the file exists relative to the given search directory (%s). "
                         "Using the export file in the given directory.",
@@ -1828,7 +1832,7 @@ class DirectButler(Butler):
             source_refs = list(source_refs)
 
         original_count = len(source_refs)
-        log.info("Transferring %d datasets into %s", original_count, str(self))
+        _LOG.info("Transferring %d datasets into %s", original_count, str(self))
 
         # In some situations the datastore artifact may be missing
         # and we do not want that registry entry to be imported.
@@ -1844,7 +1848,7 @@ class DirectButler(Butler):
             source_refs = [ref for ref, exists in dataset_existence.items() if exists]
             filtered_count = len(source_refs)
             n_missing = original_count - filtered_count
-            log.verbose(
+            _LOG.verbose(
                 "%d dataset%s removed because the artifact does not exist. Now have %d.",
                 n_missing,
                 "" if n_missing == 1 else "s",
@@ -1883,13 +1887,12 @@ class DirectButler(Butler):
         if newly_registered_dataset_types:
             # We may have registered some even if there were inconsistencies
             # but should let people know (or else remove them again).
-            log.log(
-                VERBOSE,
+            _LOG.verbose(
                 "Registered the following dataset types in the target Butler: %s",
                 ", ".join(d.name for d in newly_registered_dataset_types),
             )
         else:
-            log.log(VERBOSE, "All required dataset types are known to the target Butler")
+            _LOG.verbose("All required dataset types are known to the target Butler")
 
         dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
         if transfer_dimensions:
@@ -1922,7 +1925,7 @@ class DirectButler(Butler):
         # Do all the importing in a single transaction.
         with self.transaction():
             if dimension_records:
-                log.verbose("Ensuring that dimension records exist for transferred datasets.")
+                _LOG.verbose("Ensuring that dimension records exist for transferred datasets.")
                 for element, r in dimension_records.items():
                     records = [r[dataId] for dataId in r]
                     # Assume that if the record is already present that we can
@@ -1943,10 +1946,10 @@ class DirectButler(Butler):
                     registered = self._registry.registerRun(run, doc=run_doc)
                     handled_collections.add(run)
                     if registered:
-                        log.log(VERBOSE, "Creating output run %s", run)
+                        _LOG.verbose("Creating output run %s", run)
 
                 n_refs = len(refs_to_import)
-                log.verbose(
+                _LOG.verbose(
                     "Importing %d ref%s of dataset type %s into run %s",
                     n_refs,
                     "" if n_refs == 1 else "s",
@@ -1961,7 +1964,7 @@ class DirectButler(Butler):
                 n_imported += len(imported_refs)
 
             assert len(source_refs) == n_imported
-            log.verbose("Imported %d datasets into destination butler", n_imported)
+            _LOG.verbose("Imported %d datasets into destination butler", n_imported)
 
             # Ask the datastore to transfer. The datastore has to check that
             # the source datastore is compatible with the target datastore.
@@ -1973,7 +1976,7 @@ class DirectButler(Butler):
             )
             if rejected:
                 # For now, accept the registry entries but not the files.
-                log.warning(
+                _LOG.warning(
                     "%d datasets were rejected and %d accepted for dataset type %s in run %r.",
                     len(rejected),
                     len(accepted),
@@ -2064,7 +2067,9 @@ class DirectButler(Butler):
                         self._registry.getDatasetType(key.name)
                     except KeyError:
                         if logFailures:
-                            log.critical("Key '%s' does not correspond to a DatasetType or StorageClass", key)
+                            _LOG.critical(
+                                "Key '%s' does not correspond to a DatasetType or StorageClass", key
+                            )
                         failedNames.add(key)
             else:
                 # Dimensions are checked for consistency when the Butler
@@ -2077,11 +2082,11 @@ class DirectButler(Butler):
                 dataIdKeys = set(key.dataId)
                 if {"instrument"} != dataIdKeys:
                     if logFailures:
-                        log.critical("Key '%s' has unsupported DataId override", key)
+                        _LOG.critical("Key '%s' has unsupported DataId override", key)
                     failedDataId.add(key)
                 elif key.dataId["instrument"] not in instruments:
                     if logFailures:
-                        log.critical("Key '%s' has unknown instrument", key)
+                        _LOG.critical("Key '%s' has unknown instrument", key)
                     failedDataId.add(key)
 
         messages = []
