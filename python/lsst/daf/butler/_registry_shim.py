@@ -54,7 +54,7 @@ from .registry._defaults import RegistryDefaults
 from .registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 
 if TYPE_CHECKING:
-    from ._butler import Butler
+    from .direct_butler import DirectButler
     from .registry._registry import CollectionArgType
     from .registry.interfaces import ObsCoreTableManager
 
@@ -64,7 +64,7 @@ class RegistryShim(Registry):
 
     Parameters
     ----------
-    butler : `Butler`
+    butler : `DirectButler`
         Data butler instance.
 
     Notes
@@ -75,7 +75,7 @@ class RegistryShim(Registry):
     while we perform re-structuring of Registry and Butler implementations.
     """
 
-    def __init__(self, butler: Butler):
+    def __init__(self, butler: DirectButler):
         self._butler = butler
         self._registry = butler._registry
 

@@ -86,7 +86,7 @@ def retrieveArtifacts(
     query_types = dataset_type or ...
     query_collections: tuple[str, ...] | EllipsisType = collections or ...
 
-    butler = Butler(repo, writeable=False)
+    butler = Butler.from_config(repo, writeable=False)
 
     # Need to store in list so we can count the number to give some feedback
     # to caller.

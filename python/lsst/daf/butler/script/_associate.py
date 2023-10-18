@@ -42,7 +42,7 @@ def associate(
     find_first: bool,
 ) -> None:
     """Add existing datasets to a CHAINED collection."""
-    butler = Butler(repo, writeable=True)
+    butler = Butler.from_config(repo, writeable=True)
 
     butler.registry.registerCollection(collection, CollectionType.TAGGED)
 

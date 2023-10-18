@@ -84,21 +84,21 @@ GLOBAL_READONLY_BUTLER: Butler | None = None
 def _make_global_butler() -> None:
     global GLOBAL_READONLY_BUTLER, GLOBAL_READWRITE_BUTLER
     if GLOBAL_READONLY_BUTLER is None:
-        GLOBAL_READONLY_BUTLER = Butler(BUTLER_ROOT, writeable=False)
+        GLOBAL_READONLY_BUTLER = Butler.from_config(BUTLER_ROOT, writeable=False)
     if GLOBAL_READWRITE_BUTLER is None:
-        GLOBAL_READWRITE_BUTLER = Butler(BUTLER_ROOT, writeable=True)
+        GLOBAL_READWRITE_BUTLER = Butler.from_config(BUTLER_ROOT, writeable=True)
 
 
 def butler_readonly_dependency() -> Butler:
     """Return global read-only butler."""
     _make_global_butler()
-    return Butler(butler=GLOBAL_READONLY_BUTLER)
+    return Butler.from_config(butler=GLOBAL_READONLY_BUTLER)
 
 
 def butler_readwrite_dependency() -> Butler:
     """Return read-write butler."""
     _make_global_butler()
-    return Butler(butler=GLOBAL_READWRITE_BUTLER)
+    return Butler.from_config(butler=GLOBAL_READWRITE_BUTLER)
 
 
 def unpack_dataId(butler: Butler, data_id: SerializedDataCoordinate | None) -> DataCoordinate | None:

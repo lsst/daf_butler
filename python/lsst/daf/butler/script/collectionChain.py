@@ -71,7 +71,7 @@ def collectionChain(
     chain : `tuple` of `str`
         The collections in the chain following this command.
     """
-    butler = Butler(repo, writeable=True, without_datastore=True)
+    butler = Butler.from_config(repo, writeable=True, without_datastore=True)
 
     # Every mode needs children except pop.
     if not children and mode != "pop":

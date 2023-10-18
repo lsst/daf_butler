@@ -166,7 +166,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
     def testCollection(self):
-        butler = Butler(self.root, run="foo")
+        butler = Butler.from_config(self.root, run="foo")
 
         # try replacing the testRepo's butler with the one with the "foo" run.
         self.testRepo.butler = butler
@@ -273,7 +273,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
     def testSkymap(self):
-        butler = Butler(self.root, run="foo")
+        butler = Butler.from_config(self.root, run="foo")
         # try replacing the testRepo's butler with the one with the "foo" run.
         self.testRepo.butler = butler
 

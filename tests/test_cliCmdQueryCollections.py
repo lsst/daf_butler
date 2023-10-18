@@ -98,7 +98,7 @@ class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
         with self.runner.isolated_filesystem():
             butlerCfg = Butler.makeRepo("here")
             # the purpose of this call is to create some collections
-            butler = Butler(butlerCfg, run=run, collections=[tag], writeable=True)
+            butler = Butler.from_config(butlerCfg, run=run, collections=[tag], writeable=True)
             butler.registry.registerCollection(tag, CollectionType.TAGGED)
 
             # Verify collections that were created are found by
@@ -140,7 +140,7 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             # Create a butler and add some chained collections:
             butlerCfg = Butler.makeRepo("here")
 
-            butler1 = Butler(butlerCfg, writeable=True)
+            butler1 = Butler.from_config(butlerCfg, writeable=True)
 
             # Replace datastore functions with mocks:
             DatastoreMock.apply(butler1)

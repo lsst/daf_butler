@@ -211,7 +211,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             ]
 
             repo = lsst.daf.butler.Butler.makeRepo(temp, config=config)
-            butler = lsst.daf.butler.Butler(repo, run="chainedExample")
+            butler = lsst.daf.butler.Butler.from_config(repo, run="chainedExample")
             registerMetricsExample(butler)
             addDatasetType(butler, "DummyType", {}, "StructuredDataNoComponents")
 

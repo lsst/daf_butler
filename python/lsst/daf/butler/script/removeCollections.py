@@ -82,7 +82,7 @@ def _getCollectionInfo(
     collectionInfo : `CollectionInfo`
         Contains tables with run and non-run collection info.
     """
-    butler = Butler(repo, without_datastore=True)
+    butler = Butler.from_config(repo, without_datastore=True)
     try:
         names = sorted(
             butler.registry.queryCollections(
@@ -135,7 +135,7 @@ def removeCollections(
 
     def doRemove(collections: Table) -> None:
         """Perform the prune collection step."""
-        butler = Butler(repo, writeable=True, without_datastore=True)
+        butler = Butler.from_config(repo, writeable=True, without_datastore=True)
         for name in collections["Collection"]:
             butler.registry.removeCollection(name)
 

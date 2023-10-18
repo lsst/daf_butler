@@ -52,7 +52,7 @@ def configValidate(repo: str, quiet: bool, dataset_type: list[str], ignore: list
         error.
     """
     logFailures = not quiet
-    butler = Butler(config=repo)
+    butler = Butler.from_config(config=repo)
     is_good = True
     try:
         butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=dataset_type, ignore=ignore)

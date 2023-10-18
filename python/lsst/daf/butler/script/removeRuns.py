@@ -85,7 +85,7 @@ def _getCollectionInfo(
     datasets : `dict` [`str`, `int`]
         The dataset types and and how many will be removed.
     """
-    butler = Butler(repo)
+    butler = Butler.from_config(repo)
     try:
         collectionNames = list(
             butler.registry.queryCollections(
@@ -132,7 +132,7 @@ def removeRuns(
 
     def doRemove(runs: Sequence[RemoveRun]) -> None:
         """Perform the remove step."""
-        butler = Butler(repo, writeable=True)
+        butler = Butler.from_config(repo, writeable=True)
         with butler.transaction():
             for run in runs:
                 for parent in run.parents:

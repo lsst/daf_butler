@@ -661,7 +661,7 @@ class QuantumProvenanceData(_BaseModelCompat):
     def collect_and_transfer(
         butler: Butler, quanta: Iterable[Quantum], provenance: Iterable[QuantumProvenanceData]
     ) -> None:
-        """Transfer output datasets from multiple quanta to a more permantent
+        """Transfer output datasets from multiple quanta to a more permanent
         `Butler` repository.
 
         Parameters

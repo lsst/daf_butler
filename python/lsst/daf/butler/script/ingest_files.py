@@ -105,7 +105,7 @@ def ingest_files(
     id_gen_mode = DatasetIdGenEnum.__members__[id_generation_mode]
 
     # Create the butler with the relevant run attached.
-    butler = Butler(repo, run=run)
+    butler = Butler.from_config(repo, run=run)
 
     datasetType = butler.registry.getDatasetType(dataset_type)
 

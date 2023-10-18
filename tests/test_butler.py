@@ -87,6 +87,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
+from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registries.sql import SqlRegistry
 from lsst.daf.butler.registry import (
     CollectionError,
@@ -210,8 +211,9 @@ class ButlerPutGetTests(TestCaseMixin):
 
     def create_butler(
         self, run: str, storageClass: StorageClass | str, datasetTypeName: str
-    ) -> tuple[Butler, DatasetType]:
-        butler = Butler(self.tmpConfigFile, run=run)
+    ) -> tuple[DirectButler, DatasetType]:
+        butler = Butler.from_config(self.tmpConfigFile, run=run)
+        assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
 
         collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, {run})
@@ -258,7 +260,7 @@ class ButlerPutGetTests(TestCaseMixin):
             )
         return butler, datasetType
 
-    def runPutGetTest(self, storageClass: StorageClass, datasetTypeName: str) -> Butler:
+    def runPutGetTest(self, storageClass: StorageClass, datasetTypeName: str) -> DirectButler:
         # New datasets will be added to run and tag, but we will only look in
         # tag when looking up datasets.
         run = self.default_run
@@ -512,7 +514,7 @@ class ButlerPutGetTests(TestCaseMixin):
 
     def testDeferredCollectionPassing(self) -> None:
         # Construct a butler with no run or collection, but make it writeable.
-        butler = Butler(self.tmpConfigFile, writeable=True)
+        butler = Butler.from_config(self.tmpConfigFile, writeable=True)
         # Create and register a DatasetType
         dimensions = butler.dimensions.extract(["instrument", "visit"])
         datasetType = self.addDatasetType(
@@ -576,17 +578,17 @@ class ButlerTests(ButlerPutGetTests):
 
     def testConstructor(self) -> None:
         """Independent test of constructor."""
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
         self.assertIsInstance(butler, Butler)
 
         # Check that butler.yaml is added automatically.
         if self.tmpConfigFile.endswith(end := "/butler.yaml"):
             config_dir = self.tmpConfigFile[: -len(end)]
-            butler = Butler(config_dir, run=self.default_run)
+            butler = Butler.from_config(config_dir, run=self.default_run)
             self.assertIsInstance(butler, Butler)
 
             # Even with a ResourcePath.
-            butler = Butler(ResourcePath(config_dir, forceDirectory=True), run=self.default_run)
+            butler = Butler.from_config(ResourcePath(config_dir, forceDirectory=True), run=self.default_run)
             self.assertIsInstance(butler, Butler)
 
         collections = set(butler.registry.queryCollections())
@@ -594,11 +596,11 @@ class ButlerTests(ButlerPutGetTests):
 
         # Check that some special characters can be included in run name.
         special_run = "u@b.c-A"
-        butler_special = Butler(butler=butler, run=special_run)
+        butler_special = Butler.from_config(butler=butler, run=special_run)
         collections = set(butler_special.registry.queryCollections("*@*"))
         self.assertEqual(collections, {special_run})
 
-        butler2 = Butler(butler=butler, collections=["other"])
+        butler2 = Butler.from_config(butler=butler, collections=["other"])
         self.assertEqual(butler2.collections, ("other",))
         self.assertIsNone(butler2.run)
         self.assertIs(butler._datastore, butler2._datastore)
@@ -619,17 +621,17 @@ class ButlerTests(ButlerPutGetTests):
                     uri = Butler.get_repo_uri("bad_label")
                     self.assertEqual(uri, ResourcePath(bad_label))
                     uri = Butler.get_repo_uri("label")
-                    butler = Butler(uri, writeable=False)
+                    butler = Butler.from_config(uri, writeable=False)
                     self.assertIsInstance(butler, Butler)
-                    butler = Butler("label", writeable=False)
+                    butler = Butler.from_config("label", writeable=False)
                     self.assertIsInstance(butler, Butler)
                     with self.assertRaisesRegex(FileNotFoundError, "aliases:.*bad_label"):
-                        Butler("not_there", writeable=False)
+                        Butler.from_config("not_there", writeable=False)
                     with self.assertRaisesRegex(FileNotFoundError, "resolved from alias 'bad_label'"):
-                        Butler("bad_label")
+                        Butler.from_config("bad_label")
                     with self.assertRaises(FileNotFoundError):
                         # Should ignore aliases.
-                        Butler(ResourcePath("label", forceAbsolute=False))
+                        Butler.from_config(ResourcePath("label", forceAbsolute=False))
                     with self.assertRaises(KeyError) as cm:
                         Butler.get_repo_uri("missing")
                     self.assertEqual(
@@ -644,24 +646,24 @@ class ButlerTests(ButlerPutGetTests):
             butler_index.dumpToUri(temp_file)
             with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
                 with self.assertRaisesRegex(FileNotFoundError, "(no known aliases)"):
-                    Butler("label")
+                    Butler.from_config("label")
         with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
             # Now with bad contents.
             with open(temp_file.ospath, "w") as fh:
                 print("'", file=fh)
             with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
                 with self.assertRaisesRegex(FileNotFoundError, "(no known aliases:.*could not be read)"):
-                    Butler("label")
+                    Butler.from_config("label")
         with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
             with self.assertRaises(FileNotFoundError):
                 Butler.get_repo_uri("label")
             self.assertEqual(Butler.get_known_repos(), set())
 
             with self.assertRaisesRegex(FileNotFoundError, "index file not found"):
-                Butler("label")
+                Butler.from_config("label")
 
             # Check that we can create Butler when the alias file is not found.
-            butler = Butler(self.tmpConfigFile, writeable=False)
+            butler = Butler.from_config(self.tmpConfigFile, writeable=False)
             self.assertIsInstance(butler, Butler)
         with self.assertRaises(KeyError) as cm:
             # No environment variable set.
@@ -670,7 +672,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertIn("No repository index defined", str(cm.exception))
         with self.assertRaisesRegex(FileNotFoundError, "no known aliases.*No repository index"):
             # No aliases registered.
-            Butler("not_there")
+            Butler.from_config("not_there")
         self.assertEqual(Butler.get_known_repos(), set())
 
     def testBasicPutGet(self) -> None:
@@ -842,7 +844,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(get_full_type_name(test_dict3), "dict")
 
     def testIngest(self) -> None:
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
 
         # Create and register a DatasetType
         dimensions = butler.dimensions.extract(["instrument", "visit", "detector"])
@@ -994,7 +996,8 @@ class ButlerTests(ButlerPutGetTests):
 
     def testPickle(self) -> None:
         """Test pickle support."""
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut._config, butler._config)
@@ -1002,7 +1005,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self) -> None:
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
         dimensions = butler.dimensions.extract(["instrument", "visit", "physical_filter"])
         dimensionEntries: list[tuple[str, list[Mapping[str, Any]]]] = [
             (
@@ -1076,7 +1079,7 @@ class ButlerTests(ButlerPutGetTests):
         )
 
     def testTransaction(self) -> None:
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
         datasetTypeName = "test_metric"
         dimensions = butler.dimensions.extract(["instrument", "visit"])
         dimensionEntries: tuple[tuple[str, Mapping[str, Any]], ...] = (
@@ -1133,10 +1136,12 @@ class ButlerTests(ButlerPutGetTests):
 
         butlerConfig = Butler.makeRepo(root1, config=Config(self.configFile))
         limited = Config(self.configFile)
-        butler1 = Butler(butlerConfig)
+        butler1 = Butler.from_config(butlerConfig)
+        assert isinstance(butler1, DirectButler), "Expect DirectButler in configuration"
         butlerConfig = Butler.makeRepo(root2, standalone=True, config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
-        butler2 = Butler(butlerConfig)
+        butler2 = Butler.from_config(butlerConfig)
+        assert isinstance(butler2, DirectButler), "Expect DirectButler in configuration"
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
         self.assertEqual(butler1._config, butler2._config)
@@ -1156,13 +1161,13 @@ class ButlerTests(ButlerPutGetTests):
         # work properly with relocatable Butler repo
         butlerConfig.configFile = None
         with self.assertRaises(ValueError):
-            Butler(butlerConfig)
+            Butler.from_config(butlerConfig)
 
         with self.assertRaises(FileExistsError):
             Butler.makeRepo(self.root, standalone=True, config=Config(self.configFile), overwrite=False)
 
     def testStringification(self) -> None:
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
         butlerStr = str(butler)
 
         if self.datastoreStr is not None:
@@ -1178,7 +1183,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def testButlerRewriteDataId(self) -> None:
         """Test that dataIds can be rewritten based on dimension records."""
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
 
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
         datasetTypeName = "random_data"
@@ -1244,7 +1249,7 @@ class FileDatastoreButlerTests(ButlerTests):
 
     def testPutTemplates(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
 
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
@@ -1380,7 +1385,7 @@ class FileDatastoreButlerTests(ButlerTests):
                         transfer="auto",
                         skip_dimensions=None,
                     )
-                importButler = Butler(importDir, run=self.default_run)
+                importButler = Butler.from_config(importDir, run=self.default_run)
                 for ref in datasets:
                     with self.subTest(ref=ref):
                         # Test for existence by passing in the DatasetType and
@@ -1393,7 +1398,7 @@ class FileDatastoreButlerTests(ButlerTests):
 
     def testRemoveRuns(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler(self.tmpConfigFile, writeable=True)
+        butler = Butler.from_config(self.tmpConfigFile, writeable=True)
         # Load registry data with dimensions to hang datasets off of.
         registryDataDir = os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
         butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
@@ -1453,12 +1458,12 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
     def testPathConstructor(self) -> None:
         """Independent test of constructor using PathLike."""
-        butler = Butler(self.tmpConfigFile, run=self.default_run)
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
         self.assertIsInstance(butler, Butler)
 
         # And again with a Path object with the butler yaml
         path = pathlib.Path(self.tmpConfigFile)
-        butler = Butler(path, writeable=False)
+        butler = Butler.from_config(path, writeable=False)
         self.assertIsInstance(butler, Butler)
 
         # And again with a Path object without the butler yaml
@@ -1466,7 +1471,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # in butler.yaml -- which is the case for a subclass)
         if self.tmpConfigFile.endswith("butler.yaml"):
             path = pathlib.Path(os.path.dirname(self.tmpConfigFile))
-            butler = Butler(path, writeable=False)
+            butler = Butler.from_config(path, writeable=False)
             self.assertIsInstance(butler, Butler)
 
     def testExportTransferCopy(self) -> None:
@@ -1500,7 +1505,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
     def testPruneDatasets(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler(self.tmpConfigFile, writeable=True)
+        butler = Butler.from_config(self.tmpConfigFile, writeable=True)
         assert isinstance(butler._datastore, FileDatastore)
         # Load registry data with dimensions to hang datasets off of.
         registryDataDir = os.path.normpath(os.path.join(TESTDIR, "data", "registry"))
@@ -2064,7 +2069,9 @@ class PosixDatastoreTransfers(unittest.TestCase):
     def create_butler(self, manager: str, label: str) -> Butler:
         config = Config(self.configFile)
         config["registry", "managers", "datasets"] = manager
-        return Butler(Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True)
+        return Butler.from_config(
+            Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True
+        )
 
     def create_butlers(self, manager1: str | None = None, manager2: str | None = None) -> None:
         default = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
@@ -2192,7 +2199,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # we are rewriting integer dataset ids in the target if necessary.
         # Will not be relevant for UUID.
         run = "distraction"
-        butler = Butler(butler=self.source_butler, run=run)
+        butler = Butler.from_config(butler=self.source_butler, run=run)
         butler.put(
             makeExampleMetrics(),
             datasetTypeName,
@@ -2202,7 +2209,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         )
 
         # Write some example metrics to the source
-        butler = Butler(butler=self.source_butler)
+        butler = Butler.from_config(butler=self.source_butler)
 
         # Set of DatasetRefs that should be in the list of refs to transfer
         # but which will not be transferred.
@@ -2383,9 +2390,9 @@ class NullDatastoreTestCase(unittest.TestCase):
         bad_config["datastore", "cls"] = "lsst.not.a.datastore.Datastore"
 
         with self.assertRaises(RuntimeError):
-            Butler(bad_config)
+            Butler.from_config(bad_config)
 
-        butler = Butler(bad_config, writeable=True, without_datastore=True)
+        butler = Butler.from_config(bad_config, writeable=True, without_datastore=True)
         self.assertIsInstance(butler._datastore, NullDatastore)
 
         # Check that registry is working.

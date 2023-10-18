@@ -79,7 +79,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         registryConfig = RegistryConfig(config.get("registry"))
         _RegistryFactory(registryConfig).create_from_config()
 
-        butler = Butler(config, **kwargs)
+        butler = Butler.from_config(config, **kwargs)
         DatastoreMock.apply(butler)
         return butler
 
@@ -549,13 +549,13 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Initialize a new butler with `imported_g` as its default run.
         # This should not have a default instrument, because there are two.
         # Pass run instead of collections; this should set both.
-        butler2 = Butler(butler=butler, run="imported_g")
+        butler2 = Butler.from_config(butler=butler, run="imported_g")
         self.assertEqual(list(butler2.registry.defaults.collections), ["imported_g"])
         self.assertEqual(butler2.registry.defaults.run, "imported_g")
         self.assertFalse(butler2.registry.defaults.dataId)
         # Initialize a new butler with an instrument default explicitly given.
         # Set collections instead of run, which should then be None.
-        butler3 = Butler(butler=butler, collections=["imported_g"], instrument="Cam2")
+        butler3 = Butler.from_config(butler=butler, collections=["imported_g"], instrument="Cam2")
         self.assertEqual(list(butler3.registry.defaults.collections), ["imported_g"])
         self.assertIsNone(butler3.registry.defaults.run, None)
         self.assertEqual(butler3.registry.defaults.dataId.byName(), {"instrument": "Cam2"})
