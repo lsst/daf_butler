@@ -1111,7 +1111,8 @@ class Butler(LimitedButler):
             `Butler` whose registry will be used to expand data IDs.
         source_refs : iterable of `DatasetRef`
             Datasets defined in the source butler that should be transferred to
-            this butler.
+            this butler. In most circumstances, ``transfer_from`` is faster if
+            the dataset refs are expanded.
         transfer : `str`, optional
             Transfer mode passed to `~lsst.daf.butler.Datastore.transfer_from`.
         skip_missing : `bool`

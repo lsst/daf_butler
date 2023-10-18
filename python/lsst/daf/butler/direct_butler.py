@@ -1959,7 +1959,7 @@ class DirectButler(Butler):
 
                 # Assume we are using UUIDs and the source refs will match
                 # those imported.
-                imported_refs = self._registry._importDatasets(refs_to_import, expand=False)
+                imported_refs = self._registry._importDatasets(refs_to_import)
                 assert set(imported_refs) == set(refs_to_import)
                 n_imported += len(imported_refs)
 
