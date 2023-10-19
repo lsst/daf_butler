@@ -709,13 +709,13 @@ class DatasetRefTestCase(unittest.TestCase):
         s = ref.to_json()
         self.assertEqual(DatasetRef.from_json(s, universe=self.universe), ref)
 
-        # Also test ref with datastore records
+        # Also test ref with datastore records, serialization does not
+        # preserve those.
         ref = self._make_datastore_records(ref, "/path1", "/path2")
         s = ref.to_json()
         ref2 = DatasetRef.from_json(s, universe=self.universe)
         self.assertEqual(ref2, ref)
-        self.assertIsNotNone(ref2._datastore_records)
-        self.assertEqual(ref2._datastore_records, ref._datastore_records)
+        self.assertIsNone(ref2._datastore_records)
 
     def testFileDataset(self) -> None:
         ref = DatasetRef(self.datasetType, self.dataId, run="somerun")
