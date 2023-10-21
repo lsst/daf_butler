@@ -75,6 +75,7 @@ from .dimensions import (
     DimensionUniverse,
 )
 from .progress import Progress
+from .registries.sql import SqlRegistry
 from .registry import (
     CollectionType,
     ConflictingDefinitionError,
@@ -83,7 +84,6 @@ from .registry import (
     NoDefaultCollectionError,
     Registry,
     RegistryDefaults,
-    _ButlerRegistry,
     _RegistryFactory,
 )
 from .transfers import RepoExportContext
@@ -2145,12 +2145,12 @@ class DirectButler(Butler):
         # Docstring inherited.
         return self._registry.dimensions
 
-    _registry: _ButlerRegistry
+    _registry: SqlRegistry
     """The object that manages dataset metadata and relationships
-    (`_ButlerRegistry`).
+    (`SqlRegistry`).
 
     Most operations that don't involve reading or writing butler datasets are
-    accessible only via `Registry` methods.
+    accessible only via `SqlRegistry` methods.
     """
 
     datastore: Datastore

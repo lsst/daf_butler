@@ -44,7 +44,6 @@ from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetId, Datastore, Dimension, DimensionGraph
-    from lsst.daf.butler.registry import _ButlerRegistry
 
 
 class DatasetTestHelper:
@@ -108,7 +107,7 @@ class DatastoreTestHelper:
     datastoreType: type[Datastore]
     configFile: str
 
-    def setUpDatastoreTests(self, registryClass: type[_ButlerRegistry], configClass: type[Config]) -> None:
+    def setUpDatastoreTests(self, registryClass: type, configClass: type[Config]) -> None:
         """Shared setUp code for all Datastore tests."""
         self.registry = registryClass()
         self.config = configClass(self.configFile)

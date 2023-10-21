@@ -79,11 +79,11 @@ from .._exceptions import (
 from ..interfaces import ButlerAttributeExistsError
 
 if TYPE_CHECKING:
-    from .._registry import Registry
+    from ...registries.sql import SqlRegistry
 
 
 class RegistryTests(ABC):
-    """Generic tests for the `Registry` class that can be subclassed to
+    """Generic tests for the `SqlRegistry` class that can be subclassed to
     generate tests for different configurations.
     """
 
@@ -122,25 +122,25 @@ class RegistryTests(ABC):
         return config
 
     @abstractmethod
-    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry | None:
-        """Return the Registry instance to be tested.
+    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry | None:
+        """Return the SqlRegistry instance to be tested.
 
         Parameters
         ----------
-        share_repo_with : `Registry`, optional
+        share_repo_with : `SqlRegistry`, optional
             If provided, the new registry should point to the same data
             repository as this existing registry.
 
         Returns
         -------
-        registry : `Registry`
-            New `Registry` instance, or `None` *only* if `share_repo_with` is
-            not `None` and this test case does not support that argument
+        registry : `SqlRegistry`
+            New `SqlRegistry` instance, or `None` *only* if `share_repo_with`
+            is not `None` and this test case does not support that argument
             (e.g. it is impossible with in-memory SQLite DBs).
         """
         raise NotImplementedError()
 
-    def loadData(self, registry: Registry, filename: str):
+    def loadData(self, registry: SqlRegistry, filename: str):
         """Load registry test data from ``getDataDir/<filename>``,
         which should be a YAML import/export file.
         """
@@ -170,9 +170,9 @@ class RegistryTests(ABC):
             self.assertFalse(results.any())
 
     def testOpaque(self):
-        """Tests for `Registry.registerOpaqueTable`,
-        `Registry.insertOpaqueData`, `Registry.fetchOpaqueData`, and
-        `Registry.deleteOpaqueData`.
+        """Tests for `SqlRegistry.registerOpaqueTable`,
+        `SqlRegistry.insertOpaqueData`, `SqlRegistry.fetchOpaqueData`, and
+        `SqlRegistry.deleteOpaqueData`.
         """
         registry = self.makeRegistry()
         table = "opaque_table_for_testing"
@@ -221,8 +221,8 @@ class RegistryTests(ABC):
         self.assertEqual([], list(registry.fetchOpaqueData(table)))
 
     def testDatasetType(self):
-        """Tests for `Registry.registerDatasetType` and
-        `Registry.getDatasetType`.
+        """Tests for `SqlRegistry.registerDatasetType` and
+        `SqlRegistry.getDatasetType`.
         """
         registry = self.makeRegistry()
         # Check valid insert
@@ -258,8 +258,8 @@ class RegistryTests(ABC):
         self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
 
     def testDimensions(self):
-        """Tests for `Registry.insertDimensionData`,
-        `Registry.syncDimensionData`, and `Registry.expandDataId`.
+        """Tests for `SqlRegistry.insertDimensionData`,
+        `SqlRegistry.syncDimensionData`, and `SqlRegistry.expandDataId`.
         """
         registry = self.makeRegistry()
         dimensionName = "instrument"
@@ -355,8 +355,8 @@ class RegistryTests(ABC):
                 self.assertIsInstance(expanded["visit"], int)
 
     def testDataIdRelationships(self):
-        """Test that `Registry.expandDataId` raises an exception when the given
-        keys are inconsistent.
+        """Test that `SqlRegistry.expandDataId` raises an exception when the
+        given keys are inconsistent.
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
@@ -387,8 +387,8 @@ class RegistryTests(ABC):
             )
 
     def testDataset(self):
-        """Basic tests for `Registry.insertDatasets`, `Registry.getDataset`,
-        and `Registry.removeDatasets`.
+        """Basic tests for `SqlRegistry.insertDatasets`,
+        `SqlRegistry.getDataset`, and `SqlRegistry.removeDatasets`.
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
@@ -406,7 +406,7 @@ class RegistryTests(ABC):
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
     def testFindDataset(self):
-        """Tests for `Registry.findDataset`."""
+        """Tests for `SqlRegistry.findDataset`."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         run = "tésτ"
@@ -496,7 +496,7 @@ class RegistryTests(ABC):
         )
 
     def testRemoveDatasetTypeSuccess(self):
-        """Test that Registry.removeDatasetType works when there are no
+        """Test that SqlRegistry.removeDatasetType works when there are no
         datasets of that type present.
         """
         registry = self.makeRegistry()
@@ -506,8 +506,9 @@ class RegistryTests(ABC):
             registry.getDatasetType("flat")
 
     def testRemoveDatasetTypeFailure(self):
-        """Test that Registry.removeDatasetType raises when there are datasets
-        of that type present or if the dataset type is for a component.
+        """Test that SqlRegistry.removeDatasetType raises when there are
+        datasets of that type present or if the dataset type is for a
+        component.
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
@@ -518,7 +519,7 @@ class RegistryTests(ABC):
             registry.removeDatasetType(DatasetType.nameWithComponent("flat", "image"))
 
     def testImportDatasetsUUID(self):
-        """Test for `Registry._importDatasets` with UUID dataset ID."""
+        """Test for `SqlRegistry._importDatasets` with UUID dataset ID."""
         if isinstance(self.datasetsManager, str):
             if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
                 self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
@@ -899,7 +900,9 @@ class RegistryTests(ABC):
             registry.getCollectionType(tag1)
 
     def testCollectionChainFlatten(self):
-        """Test that Registry.setCollectionChain obeys its 'flatten' option."""
+        """Test that `SqlRegistry.setCollectionChain` obeys its 'flatten'
+        option.
+        """
         registry = self.makeRegistry()
         registry.registerCollection("inner", CollectionType.CHAINED)
         registry.registerCollection("innermost", CollectionType.RUN)
@@ -2030,8 +2033,8 @@ class RegistryTests(ABC):
 
     def testCalibrationCollections(self):
         """Test operations on `~CollectionType.CALIBRATION` collections,
-        including `Registry.certify`, `Registry.decertify`,
-        `Registry.findDataset`, and
+        including `SqlRegistry.certify`, `SqlRegistry.decertify`,
+        `SqlRegistry.findDataset`, and
         `DataCoordinateQueryResults.findRelatedDatasets`.
         """
         # Setup - make a Registry, fill it with some datasets in
@@ -2635,7 +2638,7 @@ class RegistryTests(ABC):
         expected2.dataset_types.discard("bias")
         self.assertEqual(registry.getCollectionSummary(tag), expected2)
         self.assertEqual(registry.getCollectionSummary(calibs), expected2)
-        # Explicitly calling Registry.refresh() should load those same
+        # Explicitly calling SqlRegistry.refresh() should load those same
         # summaries, via a totally different code path.
         registry.refresh()
         self.assertEqual(registry.getCollectionSummary("imported_g"), expected1)
