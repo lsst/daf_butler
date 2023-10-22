@@ -37,10 +37,10 @@ from .._config import Config
 from ..dimensions import DimensionConfig
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
+from .sql_registry import SqlRegistry
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
-    from ..registries.sql import SqlRegistry
 
 
 class _RegistryFactory:
@@ -73,13 +73,16 @@ class _RegistryFactory:
         self._config = config
 
         registry_cls_name = config.get("cls")
-        # Check that config does not specify unknown registry type.
-        if registry_cls_name not in ("lsst.daf.butler.registries.sql.SqlRegistry", None):
+        # Check that config does not specify unknown registry type, and allow
+        # both old and new location of SqlRegistry.
+        if registry_cls_name not in (
+            "lsst.daf.butler.registries.sql.SqlRegistry",
+            "lsst.daf.butler.registry.sql_registry.SqlRegistry",
+            None,
+        ):
             raise TypeError(
                 f"Registry class obtained from config {registry_cls_name} is not a SqlRegistry class."
             )
-        from ..registries.sql import SqlRegistry
-
         self._registry_cls = SqlRegistry
 
     def create_from_config(

@@ -75,7 +75,6 @@ from .dimensions import (
     DimensionUniverse,
 )
 from .progress import Progress
-from .registries.sql import SqlRegistry
 from .registry import (
     CollectionType,
     ConflictingDefinitionError,
@@ -86,6 +85,7 @@ from .registry import (
     RegistryDefaults,
     _RegistryFactory,
 )
+from .registry.sql_registry import SqlRegistry
 from .transfers import RepoExportContext
 from .utils import transactional
 

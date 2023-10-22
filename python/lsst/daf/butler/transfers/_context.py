@@ -45,7 +45,7 @@ from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 if TYPE_CHECKING:
     from lsst.resources import ResourcePathExpression
 
-    from ..registries.sql import SqlRegistry
+    from ..registry.sql_registry import SqlRegistry
     from ._interfaces import RepoExportBackend
 
 

@@ -48,8 +48,8 @@ except ImportError:
 
 import sqlalchemy
 from lsst.daf.butler import Timespan, ddl
-from lsst.daf.butler.registries.sql import SqlRegistry
 from lsst.daf.butler.registry import _RegistryFactory
+from lsst.daf.butler.registry.sql_registry import SqlRegistry
 
 try:
     from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType

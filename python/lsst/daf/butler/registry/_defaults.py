@@ -41,7 +41,7 @@ from ._exceptions import MissingCollectionError
 from .wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
-    from ..registries.sql import SqlRegistry
+    from .sql_registry import SqlRegistry
 
 
 @immutable

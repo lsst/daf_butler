@@ -51,9 +51,9 @@ from .._named import NamedValueSet
 from .._timespan import Timespan
 from ..datastore import Datastore
 from ..dimensions import DimensionElement, DimensionRecord, DimensionUniverse
-from ..registries.sql import SqlRegistry
 from ..registry import CollectionType
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
+from ..registry.sql_registry import SqlRegistry
 from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
 

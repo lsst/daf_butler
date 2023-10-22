@@ -43,7 +43,6 @@ from lsst.daf.butler import (
     DatasetType,
     StorageClassFactory,
 )
-from lsst.daf.butler.registries.sql import SqlRegistry
 from lsst.daf.butler.registry import RegistryConfig, _RegistryFactory
 from lsst.daf.butler.registry.obscore import (
     DatasetTypeConfig,
@@ -52,6 +51,7 @@ from lsst.daf.butler.registry.obscore import (
     ObsCoreSchema,
 )
 from lsst.daf.butler.registry.obscore._schema import _STATIC_COLUMNS
+from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
 from lsst.sphgeom import Box, ConvexPolygon, LonLat, UnitVector3d
 

@@ -79,7 +79,7 @@ from .._exceptions import (
 from ..interfaces import ButlerAttributeExistsError
 
 if TYPE_CHECKING:
-    from ...registries.sql import SqlRegistry
+    from ..sql_registry import SqlRegistry
 
 
 class RegistryTests(ABC):
