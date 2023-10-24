@@ -25,45 +25,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import annotations
-
-__all__ = ()
-
-import logging
-from functools import cache
-from typing import Any
-
-from fastapi import Depends, FastAPI
-from fastapi.middleware.gzip import GZipMiddleware
 from lsst.daf.butler import Butler
 
-from ._factory import Factory
 
-BUTLER_ROOT = "ci_hsc_gen3/DATA"
+class Factory:
+    def __init__(self, *, butler: Butler):
+        self._butler = butler
 
-log = logging.getLogger("excalibur")
-
-app = FastAPI()
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-
-@cache
-def _make_global_butler() -> Butler:
-    return Butler.from_config(BUTLER_ROOT)
-
-
-def factory_dependency() -> Factory:
-    return Factory(butler=_make_global_butler())
-
-
-@app.get("/butler/")
-def read_root() -> str:
-    """Return message when accessing the root URL."""
-    return "Welcome to Excalibur... aka your Butler Server"
-
-
-@app.get("/butler/v1/universe", response_model=dict[str, Any])
-def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> dict[str, Any]:
-    """Allow remote client to get dimensions definition."""
-    butler = factory.create_butler()
-    return butler.dimensions.dimensionConfig.toDict()
+    def create_butler(self) -> Butler:
+        return self._butler

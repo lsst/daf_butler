@@ -29,17 +29,15 @@ import os.path
 import unittest
 
 try:
-    import lsst.daf.butler.remote_butler.server._server
-
     # Failing to import any of these should disable the tests.
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler
-    from lsst.daf.butler.remote_butler.server._server import app
+    from lsst.daf.butler.remote_butler.server import Factory, app, factory_dependency
 except ImportError:
     TestClient = None
     app = None
 
-from lsst.daf.butler import CollectionType
+from lsst.daf.butler import Butler
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -67,21 +65,21 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # First create a butler and populate it.
         cls.root = makeTestTempDir(TESTDIR)
         cls.repo = MetricTestRepo(root=cls.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+        # Override the server's Butler initialization to point at our test repo
+        server_butler = Butler.from_config(cls.root)
 
-        # Add a collection chain.
-        cls.repo.butler.registry.registerCollection("chain", CollectionType.CHAINED)
-        cls.repo.butler.registry.setCollectionChain("chain", ["ingest"])
+        def create_factory_dependency():
+            return Factory(butler=server_butler)
 
-        # Globally change where the server thinks its butler repository
-        # is located. This will prevent any other server tests and is
-        # not a long term fix.
-        lsst.daf.butler.remote_butler.server._server.BUTLER_ROOT = cls.root
+        app.dependency_overrides[factory_dependency] = create_factory_dependency
+
+        # Set up the RemoteButler that will connect to the server
         cls.client = TestClient(app)
-
         cls.butler = _make_remote_butler(cls.client)
 
     @classmethod
     def tearDownClass(cls):
+        del app.dependency_overrides[factory_dependency]
         removeTestTempDir(cls.root)
 
     def test_simple(self):
