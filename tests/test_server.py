@@ -32,19 +32,31 @@ try:
     # Failing to import any of these should disable the tests.
     import lsst.daf.butler.server
     from fastapi.testclient import TestClient
+    from lsst.daf.butler.remote_butler import RemoteButler
     from lsst.daf.butler.server import app
 except ImportError:
     TestClient = None
     app = None
 
-from lsst.daf.butler import Butler, CollectionType, Config, DataCoordinate, DatasetRef
-from lsst.daf.butler.tests import addDatasetType
+from lsst.daf.butler import CollectionType
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-@unittest.skip("Test does not work after RemoteRegistry removal, to be fixed later.")
+def _make_remote_butler(http_client):
+    return RemoteButler(
+        config={
+            "remote_butler": {
+                # This URL is ignored because we override the HTTP client, but
+                # must be valid to satisfy the config validation
+                "url": "https://test.example"
+            }
+        },
+        http_client=http_client,
+    )
+
+
 @unittest.skipIf(TestClient is None or app is None, "FastAPI not installed.")
 class ButlerClientServerTestCase(unittest.TestCase):
     """Test for Butler client/server."""
@@ -65,16 +77,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         lsst.daf.butler.server.BUTLER_ROOT = cls.root
         cls.client = TestClient(app)
 
-        # Create a client butler. We need to modify the contents of the
-        # server configuration to reflect the use of the test client.
-        response = cls.client.get("/butler/butler.json")
-        config = Config(response.json())
-        config["registry", "db"] = cls.client
-
-        # Since there is no client datastore we also need to specify
-        # the datastore root.
-        config["datastore", "root"] = cls.root
-        cls.butler = Butler(config)
+        cls.butler = _make_remote_butler(cls.client)
 
     @classmethod
     def tearDownClass(cls):
@@ -93,72 +96,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("namespace", response.json())
 
-    def test_registry(self):
+    def test_remote_butler(self):
         universe = self.butler.dimensions
         self.assertEqual(universe.namespace, "daf_butler")
-
-        dataset_type = self.butler.registry.getDatasetType("test_metric_comp")
-        self.assertEqual(dataset_type.name, "test_metric_comp")
-
-        dataset_types = list(self.butler.registry.queryDatasetTypes(...))
-        self.assertIn("test_metric_comp", [ds.name for ds in dataset_types])
-        dataset_types = list(self.butler.registry.queryDatasetTypes("test_*"))
-        self.assertEqual(len(dataset_types), 1)
-
-        collections = self.butler.registry.queryCollections(
-            ..., collectionTypes={CollectionType.RUN, CollectionType.TAGGED}
-        )
-        self.assertEqual(len(collections), 2, collections)
-
-        collection_type = self.butler.registry.getCollectionType("ingest")
-        self.assertEqual(collection_type.name, "TAGGED")
-
-        chain = self.butler.registry.getCollectionChain("chain")
-        self.assertEqual(list(chain), ["ingest"])
-
-        datasets = list(self.butler.registry.queryDatasets("test_metric_comp", collections=...))
-        self.assertEqual(len(datasets), 2)
-
-        ref = self.butler.registry.getDataset(datasets[0].id)
-        self.assertEqual(ref, datasets[0])
-
-        locations = self.butler.registry.getDatasetLocations(ref)
-        self.assertEqual(locations[0], "FileDatastore@<butlerRoot>")
-
-        fake_ref = DatasetRef(
-            dataset_type,
-            dataId={"instrument": "DummyCamComp", "physical_filter": "d-r", "visit": 424},
-            run="missing",
-        )
-        locations = self.butler.registry.getDatasetLocations(fake_ref)
-        self.assertEqual(locations, [])
-
-        dataIds = list(self.butler.registry.queryDataIds("visit", dataId={"instrument": "DummyCamComp"}))
-        self.assertEqual(len(dataIds), 2)
-
-        # Create a DataCoordinate to test the alternate path for specifying
-        # a data ID.
-        data_id = DataCoordinate.standardize({"instrument": "DummyCamComp"}, universe=self.butler.dimensions)
-        records = list(self.butler.registry.queryDimensionRecords("physical_filter", dataId=data_id))
-        self.assertEqual(len(records), 1)
-
-    def test_experimental(self):
-        """Experimental interfaces."""
-        # Got URI testing we can not yet support disassembly so must
-        # add a dataset with a different dataset type.
-        datasetType = addDatasetType(
-            self.repo.butler, "metric", {"instrument", "visit"}, "StructuredCompositeReadCompNoDisassembly"
-        )
-
-        self.repo.addDataset({"instrument": "DummyCamComp", "visit": 424}, datasetType=datasetType)
-        self.butler.registry.refresh()
-
-        # Need a DatasetRef.
-        datasets = list(self.butler.registry.queryDatasets("metric", collections=...))
-
-        response = self.client.get(f"/butler/v1/uri/{datasets[0].id}")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("file://", response.json())
 
 
 if __name__ == "__main__":

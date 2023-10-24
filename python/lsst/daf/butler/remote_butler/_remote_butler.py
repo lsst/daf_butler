@@ -29,7 +29,10 @@ from collections.abc import Collection, Iterable, Sequence
 from contextlib import AbstractContextManager
 from typing import Any, TextIO
 
+import httpx
+from lsst.daf.butler import __version__
 from lsst.resources import ResourcePath, ResourcePathExpression
+from lsst.utils.introspection import get_full_type_name
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig
@@ -42,7 +45,7 @@ from .._file_dataset import FileDataset
 from .._limited_butler import LimitedButler
 from .._storage_class import StorageClass
 from ..datastore import DatasetRefURIs
-from ..dimensions import DataId, DimensionUniverse
+from ..dimensions import DataId, DimensionConfig, DimensionUniverse
 from ..registry import Registry
 from ..transfers import RepoExportContext
 from ._config import RemoteButlerConfigModel
@@ -51,12 +54,25 @@ from ._config import RemoteButlerConfigModel
 class RemoteButler(Butler):
     def __init__(
         self,
+        # These parameters are inherited from the Butler() constructor
         config: Config | ResourcePathExpression | None = None,
+        *,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
+        # Parameters unique to RemoteButler
+        http_client: httpx.Client | None = None,
         **kwargs: Any,
     ):
         butler_config = ButlerConfig(config, searchPaths, without_datastore=True)
         self._config = RemoteButlerConfigModel.model_validate(butler_config)
+        self._dimensions: DimensionUniverse | None = None
+
+        if http_client is not None:
+            # We have injected a client explicitly in to the class.
+            # This is generally done for testing.
+            self._client = http_client
+        else:
+            headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
+            self._client = httpx.Client(headers=headers, base_url=str(self._config.remote_butler.url))
 
     def isWriteable(self) -> bool:
         # Docstring inherited.
@@ -64,6 +80,18 @@ class RemoteButler(Butler):
 
     @property
     def dimensions(self) -> DimensionUniverse:
+        # Docstring inherited.
+        if self._dimensions is not None:
+            return self._dimensions
+
+        response = self._client.get(self._get_url("universe"))
+        response.raise_for_status()
+
+        config = DimensionConfig.fromString(response.text, format="json")
+        self._dimensions = DimensionUniverse(config)
+        return self._dimensions
+
+    def getDatasetType(self, name: str) -> DatasetType:
         # Docstring inherited.
         raise NotImplementedError()
 
@@ -261,3 +289,22 @@ class RemoteButler(Butler):
     ) -> None:
         # Docstring inherited.
         raise NotImplementedError()
+
+    def _get_url(self, path: str, version: str = "v1") -> str:
+        """Form the complete path to an endpoint on the server
+
+        Parameters
+        ----------
+        path : `str`
+            The relative path to the server endpoint. Should not include the
+            "/butler" prefix.
+        version : `str`, optional
+            Version string to prepend to path. Defaults to "v1".
+
+        Returns
+        -------
+        path : `str`
+            The full path to the endpoint
+        """
+        prefix = "butler"
+        return f"{prefix}/{version}/{path}"
