@@ -29,11 +29,12 @@ import os.path
 import unittest
 
 try:
+    import lsst.daf.butler.remote_butler.server._server
+
     # Failing to import any of these should disable the tests.
-    import lsst.daf.butler.server
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler
-    from lsst.daf.butler.server import app
+    from lsst.daf.butler.remote_butler.server._server import app
 except ImportError:
     TestClient = None
     app = None
@@ -74,7 +75,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Globally change where the server thinks its butler repository
         # is located. This will prevent any other server tests and is
         # not a long term fix.
-        lsst.daf.butler.server.BUTLER_ROOT = cls.root
+        lsst.daf.butler.remote_butler.server._server.BUTLER_ROOT = cls.root
         cls.client = TestClient(app)
 
         cls.butler = _make_remote_butler(cls.client)
