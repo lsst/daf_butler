@@ -46,7 +46,7 @@ from .._limited_butler import LimitedButler
 from .._storage_class import StorageClass
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataId, DimensionConfig, DimensionUniverse
-from ..registry import Registry
+from ..registry import Registry, RegistryDefaults
 from ..transfers import RepoExportContext
 from ._config import RemoteButlerConfigModel
 
@@ -57,7 +57,11 @@ class RemoteButler(Butler):
         # These parameters are inherited from the Butler() constructor
         config: Config | ResourcePathExpression | None = None,
         *,
+        collections: Any = None,
+        run: str | None = None,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
+        writeable: bool | None = None,
+        inferDefaults: bool = True,
         # Parameters unique to RemoteButler
         http_client: httpx.Client | None = None,
         **kwargs: Any,
@@ -65,6 +69,9 @@ class RemoteButler(Butler):
         butler_config = ButlerConfig(config, searchPaths, without_datastore=True)
         self._config = RemoteButlerConfigModel.model_validate(butler_config)
         self._dimensions: DimensionUniverse | None = None
+        # TODO: RegistryDefaults should have finish() called on it, but this
+        # requires getCollectionSummary() which is not yet implemented
+        self._registry_defaults = RegistryDefaults(collections, run, inferDefaults, **kwargs)
 
         if http_client is not None:
             # We have injected a client explicitly in to the class.
@@ -266,12 +273,12 @@ class RemoteButler(Butler):
     @property
     def collections(self) -> Sequence[str]:
         # Docstring inherited.
-        raise NotImplementedError()
+        return self._registry_defaults.collections
 
     @property
     def run(self) -> str | None:
         # Docstring inherited.
-        raise NotImplementedError()
+        return self._registry_defaults.run
 
     @property
     def registry(self) -> Registry:

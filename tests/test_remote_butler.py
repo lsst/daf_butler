@@ -47,9 +47,13 @@ class RemoteButlerConfigTests(unittest.TestCase):
             {
                 "cls": "lsst.daf.butler.remote_butler.RemoteButler",
                 "remote_butler": {"url": "https://validurl.example"},
-            }
+            },
+            collections=["collection1", "collection2"],
+            run="collection2",
         )
         assert isinstance(butler, RemoteButler)
+        self.assertEqual(butler.collections, ("collection1", "collection2"))
+        self.assertEqual(butler.run, "collection2")
 
     def test_bad_config(self):
         with self.assertRaises(ValidationError):
