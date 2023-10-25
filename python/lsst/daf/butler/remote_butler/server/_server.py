@@ -41,7 +41,7 @@ from ._factory import Factory
 
 BUTLER_ROOT = "ci_hsc_gen3/DATA"
 
-log = logging.getLogger("excalibur")
+log = logging.getLogger(__name__)
 
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -54,12 +54,6 @@ def _make_global_butler() -> Butler:
 
 def factory_dependency() -> Factory:
     return Factory(butler=_make_global_butler())
-
-
-@app.get("/butler/")
-def read_root() -> str:
-    """Return message when accessing the root URL."""
-    return "Welcome to Excalibur... aka your Butler Server"
 
 
 @app.get("/butler/v1/universe", response_model=dict[str, Any])
