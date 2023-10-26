@@ -773,6 +773,32 @@ class Butler(LimitedButler):
         raise NotImplementedError()
 
     @abstractmethod
+    def get_dataset_type(self, name: str) -> DatasetType:
+        """Get the `DatasetType`.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the type.
+
+        Returns
+        -------
+        type : `DatasetType`
+            The `DatasetType` associated with the given name.
+
+        Raises
+        ------
+        lsst.daf.butler.MissingDatasetTypeError
+            Raised if the requested dataset type has not been registered.
+
+        Notes
+        -----
+        This method handles component dataset types automatically, though most
+        other operations do not.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],

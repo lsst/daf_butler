@@ -228,7 +228,7 @@ class DirectButler(Butler):
     def _retrieve_dataset_type(self, name: str) -> DatasetType | None:
         """Return DatasetType defined in registry given dataset type name."""
         try:
-            return self._registry.getDatasetType(name)
+            return self.get_dataset_type(name)
         except MissingDatasetTypeError:
             return None
 
@@ -369,11 +369,11 @@ class DirectButler(Butler):
             if isinstance(datasetRefOrType, DatasetType):
                 externalDatasetType = datasetRefOrType
             else:
-                internalDatasetType = self._registry.getDatasetType(datasetRefOrType)
+                internalDatasetType = self.get_dataset_type(datasetRefOrType)
 
         # Check that they are self-consistent
         if externalDatasetType is not None:
-            internalDatasetType = self._registry.getDatasetType(externalDatasetType.name)
+            internalDatasetType = self.get_dataset_type(externalDatasetType.name)
             if externalDatasetType != internalDatasetType:
                 # We can allow differences if they are compatible, depending
                 # on whether this is a get or a put. A get requires that
@@ -1318,6 +1318,9 @@ class DirectButler(Butler):
             )
         return primary
 
+    def get_dataset_type(self, name: str) -> DatasetType:
+        return self._registry.getDatasetType(name)
+
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
@@ -1877,7 +1880,7 @@ class DirectButler(Butler):
                     newly_registered_dataset_types.add(datasetType)
             else:
                 # If the dataset type is missing, let it fail immediately.
-                target_dataset_type = self._registry.getDatasetType(datasetType.name)
+                target_dataset_type = self.get_dataset_type(datasetType.name)
                 if target_dataset_type != datasetType:
                     raise ConflictingDefinitionError(
                         "Source butler dataset type differs from definition"
@@ -1994,7 +1997,7 @@ class DirectButler(Butler):
     ) -> None:
         # Docstring inherited.
         if datasetTypeNames:
-            datasetTypes = [self._registry.getDatasetType(name) for name in datasetTypeNames]
+            datasetTypes = [self.get_dataset_type(name) for name in datasetTypeNames]
         else:
             datasetTypes = list(self._registry.queryDatasetTypes())
 
@@ -2064,7 +2067,7 @@ class DirectButler(Butler):
                     pass
                 else:
                     try:
-                        self._registry.getDatasetType(key.name)
+                        self.get_dataset_type(key.name)
                     except KeyError:
                         if logFailures:
                             _LOG.critical(

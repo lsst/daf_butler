@@ -822,7 +822,7 @@ class ButlerTests(ButlerPutGetTests):
 
         # Check that the put still works if a DatasetType is given with
         # a definition matching this python type.
-        registry_type = butler.registry.getDatasetType(datasetTypeName)
+        registry_type = butler.get_dataset_type(datasetTypeName)
         this_type = DatasetType(datasetTypeName, registry_type.dimensions, "StructuredDataDictJson")
         metric2_ref = butler.put(test_dict, this_type, dataId=dataId, visit=425)
         self.assertEqual(metric2_ref.datasetType, registry_type)
@@ -1708,7 +1708,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         metric = butler.get(datasetTypeName, dataId=dataId)
         self.assertEqual(get_full_type_name(metric), "lsst.daf.butler.tests.MetricsExample")
 
-        datasetType_ori = butler.registry.getDatasetType(datasetTypeName)
+        datasetType_ori = butler.get_dataset_type(datasetTypeName)
         self.assertEqual(datasetType_ori.storageClass.name, "StructuredDataNoComponents")
 
         # Now need to hack the registry dataset type definition.
@@ -1725,7 +1725,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Force reset of dataset type cache
         butler.registry.refresh()
 
-        datasetType_new = butler.registry.getDatasetType(datasetTypeName)
+        datasetType_new = butler.get_dataset_type(datasetTypeName)
         self.assertEqual(datasetType_new.name, datasetType_ori.name)
         self.assertEqual(datasetType_new.storageClass.name, "StructuredDataNoComponentsModel")
 
