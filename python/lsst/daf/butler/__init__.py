@@ -79,7 +79,16 @@ from .progress import Progress
 
 # Do not import or lift symbols from 'server' or 'server_models'.
 # Import the registry subpackage directly for other symbols.
-from .registry import CollectionSearch, CollectionType, MissingDatasetTypeError, Registry, RegistryConfig
+from .registry import (
+    CollectionArgType,
+    CollectionSearch,
+    CollectionType,
+    MissingCollectionError,
+    MissingDatasetTypeError,
+    NoDefaultCollectionError,
+    Registry,
+    RegistryConfig,
+)
 from .transfers import RepoExportContext, YamlRepoExportBackend, YamlRepoImportBackend
 from .version import *
 

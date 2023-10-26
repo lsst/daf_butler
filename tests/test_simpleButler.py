@@ -277,7 +277,7 @@ class SimpleButlerTestCase(unittest.TestCase):
 
         # Find the DatasetRef for a flat
         coll = "imported_g"
-        flat2g = butler.registry.findDataset(
+        flat2g = butler.find_dataset(
             "flat", instrument="Cam1", detector=2, physical_filter="Cam1-G", collections=coll
         )
 
@@ -512,7 +512,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # input collections.
         butler.registry.defaults = RegistryDefaults(collections=["imported_g"])
         # Use findDataset without collections or instrument.
-        ref = butler.registry.findDataset("flat", detector=2, physical_filter="Cam1-G")
+        ref = butler.find_dataset("flat", detector=2, physical_filter="Cam1-G")
         # Do the same with Butler.get; this should ultimately invoke a lot of
         # the same code, so it's a bit circular, but mostly we're checking that
         # it works at all.
@@ -583,7 +583,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # input collections.
         butler.registry.defaults = RegistryDefaults(collections=["imported_g"])
         # Use findDataset without collections or instrument.
-        ref = butler.registry.findDataset("flat", detector=2, physical_filter="Cam1-G")
+        ref = butler.find_dataset("flat", detector=2, physical_filter="Cam1-G")
 
         # Transform the ref and dataset type to and from JSON
         # and check that it can be reconstructed properly

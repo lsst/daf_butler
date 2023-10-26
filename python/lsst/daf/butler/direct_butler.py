@@ -76,6 +76,7 @@ from .dimensions import (
 )
 from .progress import Progress
 from .registry import (
+    CollectionArgType,
     CollectionType,
     ConflictingDefinitionError,
     DataIdError,
@@ -846,7 +847,7 @@ class DirectButler(Butler):
             )
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self._registry.findDataset(
+        ref = self.find_dataset(
             datasetType,
             dataId,
             collections=collections,
@@ -1320,6 +1321,25 @@ class DirectButler(Butler):
 
     def get_dataset_type(self, name: str) -> DatasetType:
         return self._registry.getDatasetType(name)
+
+    def find_dataset(
+        self,
+        datasetType: DatasetType | str,
+        dataId: DataId | None = None,
+        *,
+        collections: CollectionArgType | None = None,
+        timespan: Timespan | None = None,
+        datastore_records: bool = False,
+        **kwargs: Any,
+    ) -> DatasetRef | None:
+        return self._registry.findDataset(
+            datasetType,
+            dataId,
+            collections=collections,
+            timespan=timespan,
+            dataset_records=datastore_records,
+            **kwargs,
+        )
 
     def retrieveArtifacts(
         self,

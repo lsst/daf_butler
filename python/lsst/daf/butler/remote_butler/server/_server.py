@@ -35,9 +35,16 @@ from typing import Any
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
-from lsst.daf.butler import Butler, SerializedDatasetType
+from lsst.daf.butler import (
+    Butler,
+    DataCoordinate,
+    SerializedDataCoordinate,
+    SerializedDatasetRef,
+    SerializedDatasetType,
+)
 
 from ._factory import Factory
+from ._server_models import FindDatasetModel
 
 BUTLER_ROOT = "ci_hsc_gen3/DATA"
 
@@ -54,6 +61,26 @@ def _make_global_butler() -> Butler:
 
 def factory_dependency() -> Factory:
     return Factory(butler=_make_global_butler())
+
+
+def unpack_dataId(butler: Butler, data_id: SerializedDataCoordinate | None) -> DataCoordinate | None:
+    """Convert the serialized dataId back to full DataCoordinate.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The butler to use for registry and universe.
+    data_id : `SerializedDataCoordinate` or `None`
+        The serialized form.
+
+    Returns
+    -------
+    dataId : `DataCoordinate` or `None`
+        The DataId usable by registry.
+    """
+    if data_id is None:
+        return None
+    return DataCoordinate.from_simple(data_id, registry=butler.registry)
 
 
 @app.get("/butler/v1/universe", response_model=dict[str, Any])
@@ -78,3 +105,27 @@ def get_dataset_type(
     butler = factory.create_butler()
     datasetType = butler.get_dataset_type(dataset_type_name)
     return datasetType.to_simple()
+
+
+# Not yet supported: TimeSpan is not yet a pydantic model.
+# collections parameter assumes client-side has resolved regexes.
+@app.post(
+    "/butler/v1/find_dataset/{dataset_type}",
+    summary="Retrieve this dataset definition from collection, dataset type, and dataId",
+    response_model=SerializedDatasetRef,
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
+def find_dataset(
+    dataset_type: str,
+    query: FindDatasetModel,
+    factory: Factory = Depends(factory_dependency),
+) -> SerializedDatasetRef | None:
+    collection_query = query.collections if query.collections else None
+
+    butler = factory.create_butler()
+    ref = butler.find_dataset(
+        dataset_type, dataId=unpack_dataId(butler, query.dataId), collections=collection_query
+    )
+    return ref.to_simple() if ref else None

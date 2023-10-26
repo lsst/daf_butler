@@ -442,7 +442,7 @@ class ButlerPutGetTests(TestCaseMixin):
                 )
                 self.assertEqual(count, stop)
 
-            compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
+            compRef = butler.find_dataset(compNameS, dataId, collections=butler.collections)
             assert compRef is not None
             summary = butler.get(compRef)
             self.assertEqual(summary, metric.summary)
@@ -928,7 +928,7 @@ class ButlerTests(ButlerPutGetTests):
             datasets[0].refs = [
                 cast(
                     DatasetRef,
-                    butler.registry.findDataset(ref.datasetType, dataId=ref.dataId, collections=ref.run),
+                    butler.find_dataset(ref.datasetType, dataId=ref.dataId, collections=ref.run),
                 )
                 for ref in datasets[0].refs
             ]
@@ -938,7 +938,7 @@ class ButlerTests(ButlerPutGetTests):
                 for ref in dataset.refs:
                     # Create a dict from the dataId to drop the records.
                     new_data_id = {str(k): v for k, v in ref.dataId.items()}
-                    new_ref = butler.registry.findDataset(ref.datasetType, new_data_id, collections=ref.run)
+                    new_ref = butler.find_dataset(ref.datasetType, new_data_id, collections=ref.run)
                     assert new_ref is not None
                     self.assertFalse(new_ref.dataId.hasRecords())
                     refs.append(new_ref)
@@ -1115,7 +1115,7 @@ class ButlerTests(ButlerPutGetTests):
         with self.assertRaises(LookupError, msg=f"Check can't get by {datasetTypeName} and {dataId}"):
             butler.get(datasetTypeName, dataId)
         # Also check explicitly if Dataset entry is missing
-        self.assertIsNone(butler.registry.findDataset(datasetType, dataId, collections=butler.collections))
+        self.assertIsNone(butler.find_dataset(datasetType, dataId, collections=butler.collections))
         # Direct retrieval should not find the file in the Datastore
         with self.assertRaises(FileNotFoundError, msg=f"Check {ref} can't be retrieved directly"):
             butler.get(ref)

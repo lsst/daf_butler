@@ -48,9 +48,10 @@ from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._file_dataset import FileDataset
 from ._limited_butler import LimitedButler
 from ._storage_class import StorageClass
+from ._timespan import Timespan
 from .datastore import DatasetRefURIs, Datastore
 from .dimensions import DataId, DimensionConfig
-from .registry import Registry, RegistryConfig, _RegistryFactory
+from .registry import CollectionArgType, Registry, RegistryConfig, _RegistryFactory
 from .repo_relocation import BUTLER_ROOT_TAG
 from .transfers import RepoExportContext
 
@@ -795,6 +796,83 @@ class Butler(LimitedButler):
         -----
         This method handles component dataset types automatically, though most
         other operations do not.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def find_dataset(
+        self,
+        datasetType: DatasetType | str,
+        dataId: DataId | None = None,
+        *,
+        collections: CollectionArgType | None = None,
+        timespan: Timespan | None = None,
+        datastore_records: bool = False,
+        **kwargs: Any,
+    ) -> DatasetRef | None:
+        """Find a dataset given its `DatasetType` and data ID.
+
+        This can be used to obtain a `DatasetRef` that permits the dataset to
+        be read from a `Datastore`. If the dataset is a component and can not
+        be found using the provided dataset type, a dataset ref for the parent
+        will be returned instead but with the correct dataset type.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` or `str`
+            A `DatasetType` or the name of one.  If this is a `DatasetType`
+            instance, its storage class will be respected and propagated to
+            the output, even if it differs from the dataset type definition
+            in the registry, as long as the storage classes are convertible.
+        dataId : `dict` or `DataCoordinate`, optional
+            A `dict`-like object containing the `Dimension` links that identify
+            the dataset within a collection.
+        collections : collection expression, optional
+            An expression that fully or partially identifies the collections to
+            search for the dataset; see
+            :ref:`daf_butler_collection_expressions` for more information.
+            Defaults to ``self.defaults.collections``.
+        timespan : `Timespan`, optional
+            A timespan that the validity range of the dataset must overlap.
+            If not provided, any `~CollectionType.CALIBRATION` collections
+            matched by the ``collections`` argument will not be searched.
+        **kwargs
+            Additional keyword arguments passed to
+            `DataCoordinate.standardize` to convert ``dataId`` to a true
+            `DataCoordinate` or augment an existing one.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A reference to the dataset, or `None` if no matching Dataset
+            was found.
+
+        Raises
+        ------
+        lsst.daf.butler.NoDefaultCollectionError
+            Raised if ``collections`` is `None` and
+            ``self.collections`` is `None`.
+        LookupError
+            Raised if one or more data ID keys are missing.
+        lsst.daf.butler.registry.MissingDatasetTypeError
+            Raised if the dataset type does not exist.
+        lsst.daf.butler.MissingCollectionError
+            Raised if any of ``collections`` does not exist in the registry.
+
+        Notes
+        -----
+        This method simply returns `None` and does not raise an exception even
+        when the set of collections searched is intrinsically incompatible with
+        the dataset type, e.g. if ``datasetType.isCalibration() is False``, but
+        only `~CollectionType.CALIBRATION` collections are being searched.
+        This may make it harder to debug some lookup failures, but the behavior
+        is intentional; we consider it more important that failed searches are
+        reported consistently, regardless of the reason, and that adding
+        additional collections that do not contain a match to the search path
+        never changes the behavior.
+
+        This method handles component dataset types automatically, though most
+        other registry operations do not.
         """
         raise NotImplementedError()
 

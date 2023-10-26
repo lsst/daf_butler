@@ -27,6 +27,7 @@
 
 import os.path
 import unittest
+import uuid
 
 try:
     # Failing to import any of these should disable the tests.
@@ -37,7 +38,8 @@ except ImportError:
     TestClient = None
     app = None
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, DataCoordinate, DatasetRef
+from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -68,6 +70,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Override the server's Butler initialization to point at our test repo
         server_butler = Butler.from_config(cls.root, writeable=True)
 
+        # Not yet testing butler.get()
+        DatastoreMock.apply(server_butler)
+
         def create_factory_dependency():
             return Factory(butler=server_butler)
 
@@ -79,6 +84,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # Populate the test server.
         server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets-uuid.yaml"))
 
     @classmethod
     def tearDownClass(cls):
@@ -97,6 +103,27 @@ class ButlerClientServerTestCase(unittest.TestCase):
     def test_get_dataset_type(self):
         bias_type = self.butler.get_dataset_type("bias")
         self.assertEqual(bias_type.name, "bias")
+
+    def test_find_dataset(self):
+        ref = self.butler.find_dataset("bias", collections="imported_g", detector=1, instrument="Cam1")
+        self.assertIsInstance(ref, DatasetRef)
+        self.assertEqual(ref.id, uuid.UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
+
+        # Try again with variation of parameters.
+        ref_new = self.butler.find_dataset(
+            "bias",
+            {"detector": 1},
+            collections="imported_g",
+            instrument="Cam1",
+        )
+        self.assertEqual(ref_new, ref)
+
+        ref_new = self.butler.find_dataset(
+            ref.datasetType,
+            DataCoordinate.standardize(detector=1, instrument="Cam1", universe=self.butler.dimensions),
+            collections="imported_g",
+        )
+        self.assertEqual(ref_new, ref)
 
 
 if __name__ == "__main__":
