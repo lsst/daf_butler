@@ -27,6 +27,8 @@
 
 from lsst.daf.butler import Butler
 
+__all__ = ("Factory",)
+
 
 class Factory:
     def __init__(self, *, butler: Butler):

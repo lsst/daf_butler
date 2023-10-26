@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ()
+__all__ = ("app", "factory_dependency")
 
 import logging
 from functools import cache

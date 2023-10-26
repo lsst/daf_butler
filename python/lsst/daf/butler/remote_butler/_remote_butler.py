@@ -25,6 +25,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("RemoteButler",)
+
 from collections.abc import Collection, Iterable, Sequence
 from contextlib import AbstractContextManager
 from typing import Any, TextIO
