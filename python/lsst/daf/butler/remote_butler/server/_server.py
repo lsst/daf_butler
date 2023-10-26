@@ -35,7 +35,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, SerializedDatasetType
 
 from ._factory import Factory
 
@@ -61,3 +61,20 @@ def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> di
     """Allow remote client to get dimensions definition."""
     butler = factory.create_butler()
     return butler.dimensions.dimensionConfig.toDict()
+
+
+@app.get(
+    "/butler/v1/dataset_type/{dataset_type_name}",
+    summary="Retrieve this dataset type definition.",
+    response_model=SerializedDatasetType,
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
+def get_dataset_type(
+    dataset_type_name: str, factory: Factory = Depends(factory_dependency)
+) -> SerializedDatasetType:
+    """Return the dataset type."""
+    butler = factory.create_butler()
+    datasetType = butler.get_dataset_type(dataset_type_name)
+    return datasetType.to_simple()

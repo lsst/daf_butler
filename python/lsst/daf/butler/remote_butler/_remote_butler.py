@@ -41,7 +41,7 @@ from .._butler_config import ButlerConfig
 from .._config import Config
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetIdGenEnum, DatasetRef
-from .._dataset_type import DatasetType
+from .._dataset_type import DatasetType, SerializedDatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._file_dataset import FileDataset
 from .._limited_butler import LimitedButler
@@ -99,10 +99,6 @@ class RemoteButler(Butler):
         config = DimensionConfig.fromString(response.text, format="json")
         self._dimensions = DimensionUniverse(config)
         return self._dimensions
-
-    def getDatasetType(self, name: str) -> DatasetType:
-        # Docstring inherited.
-        raise NotImplementedError()
 
     def transaction(self) -> AbstractContextManager[None]:
         """Will always raise NotImplementedError.
@@ -178,6 +174,14 @@ class RemoteButler(Butler):
     ) -> ResourcePath:
         # Docstring inherited.
         raise NotImplementedError()
+
+    def get_dataset_type(self, name: str) -> DatasetType:
+        # In future implementation this should directly access the cache
+        # and only go to the server if the dataset type is not known.
+        path = f"dataset_type/{name}"
+        response = self._client.get(self._get_url(path))
+        response.raise_for_status()
+        return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def retrieveArtifacts(
         self,

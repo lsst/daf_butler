@@ -66,7 +66,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         cls.root = makeTestTempDir(TESTDIR)
         cls.repo = MetricTestRepo(root=cls.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
         # Override the server's Butler initialization to point at our test repo
-        server_butler = Butler.from_config(cls.root)
+        server_butler = Butler.from_config(cls.root, writeable=True)
 
         def create_factory_dependency():
             return Factory(butler=server_butler)
@@ -76,6 +76,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Set up the RemoteButler that will connect to the server
         cls.client = TestClient(app)
         cls.butler = _make_remote_butler(cls.client)
+
+        # Populate the test server.
+        server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
 
     @classmethod
     def tearDownClass(cls):
@@ -90,6 +93,10 @@ class ButlerClientServerTestCase(unittest.TestCase):
     def test_remote_butler(self):
         universe = self.butler.dimensions
         self.assertEqual(universe.namespace, "daf_butler")
+
+    def test_get_dataset_type(self):
+        bias_type = self.butler.get_dataset_type("bias")
+        self.assertEqual(bias_type.name, "bias")
 
 
 if __name__ == "__main__":
