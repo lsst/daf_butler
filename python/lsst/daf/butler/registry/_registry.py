@@ -37,8 +37,6 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any
 
-from lsst.resources import ResourcePathExpression
-
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
@@ -49,7 +47,6 @@ from ..dimensions import (
     DataCoordinate,
     DataId,
     Dimension,
-    DimensionConfig,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
@@ -57,7 +54,6 @@ from ..dimensions import (
 )
 from ._collection_summary import CollectionSummary
 from ._collection_type import CollectionType
-from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from .wildcards import CollectionWildcard
@@ -79,45 +75,6 @@ class Registry(ABC):
     implementations.
     """
 
-    @classmethod
-    def createFromConfig(
-        cls,
-        config: RegistryConfig | str | None = None,
-        dimensionConfig: DimensionConfig | str | None = None,
-        butlerRoot: ResourcePathExpression | None = None,
-    ) -> Registry:
-        """Create registry database and return `Registry` instance.
-
-        This method initializes database contents, database must be empty
-        prior to calling this method.
-
-        Parameters
-        ----------
-        config : `RegistryConfig` or `str`, optional
-            Registry configuration, if missing then default configuration will
-            be loaded from registry.yaml.
-        dimensionConfig : `DimensionConfig` or `str`, optional
-            Dimensions configuration, if missing then default configuration
-            will be loaded from dimensions.yaml.
-        butlerRoot : convertible to `lsst.resources.ResourcePath`, optional
-            Path to the repository root this `Registry` will manage.
-
-        Returns
-        -------
-        registry : `Registry`
-            A new `Registry` instance.
-
-        Notes
-        -----
-        This method is for backward compatibility only, until all clients
-        migrate to use new `~lsst.daf.butler.registry._RegistryFactory` factory
-        class. Regular clients of registry class do not use this method, it is
-        only used by tests in multiple packages.
-        """
-        from ._registry_factory import _RegistryFactory
-
-        return _RegistryFactory(config).create_from_config(dimensionConfig, butlerRoot)
-
     @abstractmethod
     def isWriteable(self) -> bool:
         """Return `True` if this registry allows write operations, and `False`
@@ -134,6 +91,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @property
+    @abstractmethod
     def defaults(self) -> RegistryDefaults:
         """Default collection search path and/or output `~CollectionType.RUN`
         collection (`~lsst.daf.butler.registry.RegistryDefaults`).
@@ -142,14 +100,12 @@ class Registry(ABC):
         individually, but the entire struct can be set by assigning to this
         property.
         """
-        return self._defaults
+        raise NotImplementedError()
 
     @defaults.setter
+    @abstractmethod
     def defaults(self, value: RegistryDefaults) -> None:
-        if value.run is not None:
-            self.registerRun(value.run)
-        value.finish(self)
-        self._defaults = value
+        raise NotImplementedError()
 
     @abstractmethod
     def refresh(self) -> None:

@@ -26,7 +26,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from . import interfaces, managers, queries, wildcards
-from ._butler_registry import _ButlerRegistry
 from ._collection_summary import *
 from ._collection_type import *
 from ._config import *

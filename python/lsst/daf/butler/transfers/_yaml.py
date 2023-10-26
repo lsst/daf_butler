@@ -51,8 +51,9 @@ from .._named import NamedValueSet
 from .._timespan import Timespan
 from ..datastore import Datastore
 from ..dimensions import DimensionElement, DimensionRecord, DimensionUniverse
-from ..registry import CollectionType, Registry
+from ..registry import CollectionType
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
+from ..registry.sql_registry import SqlRegistry
 from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
 
@@ -228,13 +229,13 @@ class YamlRepoImportBackend(RepoImportBackend):
     ----------
     stream
         A readable file-like object.
-    registry : `Registry`
+    registry : `SqlRegistry`
         The registry datasets will be imported into.  Only used to retreive
         dataset types during construction; all write happen in `register`
         and `load`.
     """
 
-    def __init__(self, stream: IO, registry: Registry):
+    def __init__(self, stream: IO, registry: SqlRegistry):
         # We read the file fully and convert its contents to Python objects
         # instead of loading incrementally so we can spot some problems early;
         # because `register` can't be put inside a transaction, we'd rather not
@@ -265,7 +266,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         self.tagAssociations: dict[str, list[DatasetId]] = defaultdict(list)
         self.calibAssociations: dict[str, dict[Timespan, list[DatasetId]]] = defaultdict(dict)
         self.refsByFileId: dict[DatasetId, DatasetRef] = {}
-        self.registry: Registry = registry
+        self.registry: SqlRegistry = registry
 
         universe_version = wrapper.get("universe_version", 0)
         universe_namespace = wrapper.get("universe_namespace", "daf_butler")

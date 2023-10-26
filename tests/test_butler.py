@@ -88,7 +88,6 @@ from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.datastore.file_templates import FileTemplate, FileTemplateValidationError
 from lsst.daf.butler.datastores.fileDatastore import FileDatastore
 from lsst.daf.butler.direct_butler import DirectButler
-from lsst.daf.butler.registries.sql import SqlRegistry
 from lsst.daf.butler.registry import (
     CollectionError,
     CollectionTypeError,
@@ -97,6 +96,7 @@ from lsst.daf.butler.registry import (
     MissingCollectionError,
     OrphanedRecordError,
 )
+from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
@@ -1441,7 +1441,7 @@ class FileDatastoreButlerTests(ButlerTests):
         # dataset type
         butler.registry.removeDatasetType(datasetType.name)
 
-        with self.assertLogs("lsst.daf.butler.registries", "INFO") as cm:
+        with self.assertLogs("lsst.daf.butler.registry", "INFO") as cm:
             butler.registry.removeDatasetType(("test*", "test*"))
         self.assertIn("not defined", "\n".join(cm.output))
 

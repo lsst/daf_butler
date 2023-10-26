@@ -48,7 +48,8 @@ except ImportError:
 
 import sqlalchemy
 from lsst.daf.butler import Timespan, ddl
-from lsst.daf.butler.registry import _ButlerRegistry, _RegistryFactory
+from lsst.daf.butler.registry import _RegistryFactory
+from lsst.daf.butler.registry.sql_registry import SqlRegistry
 
 try:
     from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType
@@ -248,7 +249,7 @@ class PostgresqlRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: _ButlerRegistry | None = None) -> _ButlerRegistry:
+    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry:
         if share_repo_with is None:
             namespace = f"namespace_{secrets.token_hex(8).lower()}"
         else:

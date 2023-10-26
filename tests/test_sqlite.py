@@ -34,8 +34,9 @@ from contextlib import contextmanager
 
 import sqlalchemy
 from lsst.daf.butler import ddl
-from lsst.daf.butler.registry import _ButlerRegistry, _RegistryFactory
+from lsst.daf.butler.registry import _RegistryFactory
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
+from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -202,7 +203,7 @@ class SqliteFileRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: _ButlerRegistry | None = None) -> _ButlerRegistry:
+    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry:
         if share_repo_with is None:
             _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         else:
@@ -248,7 +249,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self, share_repo_with: _ButlerRegistry | None = None) -> _ButlerRegistry | None:
+    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry | None:
         if share_repo_with is not None:
             return None
         config = self.makeRegistryConfig()

@@ -43,8 +43,7 @@ from lsst.daf.butler import (
     DatasetType,
     StorageClassFactory,
 )
-from lsst.daf.butler.registries.sql import SqlRegistry
-from lsst.daf.butler.registry import Registry, RegistryConfig, _ButlerRegistry, _RegistryFactory
+from lsst.daf.butler.registry import RegistryConfig, _RegistryFactory
 from lsst.daf.butler.registry.obscore import (
     DatasetTypeConfig,
     ObsCoreConfig,
@@ -52,6 +51,7 @@ from lsst.daf.butler.registry.obscore import (
     ObsCoreSchema,
 )
 from lsst.daf.butler.registry.obscore._schema import _STATIC_COLUMNS
+from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
 from lsst.sphgeom import Box, ConvexPolygon, LonLat, UnitVector3d
 
@@ -70,7 +70,7 @@ class ObsCoreTests(TestCaseMixin):
 
     def make_registry(
         self, collections: list[str] | None = None, collection_type: str | None = None
-    ) -> _ButlerRegistry:
+    ) -> SqlRegistry:
         """Create new empty Registry."""
         config = self.make_registry_config(collections, collection_type)
         registry = _RegistryFactory(config).create_from_config(butlerRoot=self.root)
@@ -84,7 +84,7 @@ class ObsCoreTests(TestCaseMixin):
         """Make Registry configuration."""
         raise NotImplementedError()
 
-    def initialize_registry(self, registry: Registry) -> None:
+    def initialize_registry(self, registry: SqlRegistry) -> None:
         """Populate Registry with the things that we need for tests."""
         registry.insertDimensionData("instrument", {"name": "DummyCam"})
         registry.insertDimensionData(
@@ -222,7 +222,7 @@ class ObsCoreTests(TestCaseMixin):
         return obscore_config
 
     def _insert_dataset(
-        self, registry: Registry, run: str, dataset_type: str, do_import: bool = False, **kwargs
+        self, registry: SqlRegistry, run: str, dataset_type: str, do_import: bool = False, **kwargs
     ) -> DatasetRef:
         """Insert or import one dataset into a specified run collection."""
         data_id = {"instrument": "DummyCam", "physical_filter": "d-r"}
@@ -236,7 +236,7 @@ class ObsCoreTests(TestCaseMixin):
             [ref] = registry.insertDatasets(dataset_type, [data_id], run=run)
         return ref
 
-    def _insert_datasets(self, registry: Registry, do_import: bool = False) -> list[DatasetRef]:
+    def _insert_datasets(self, registry: SqlRegistry, do_import: bool = False) -> list[DatasetRef]:
         """Inset a small bunch of datasets into every run collection."""
         return [
             self._insert_dataset(registry, "run1", "raw", detector=1, exposure=1, do_import=do_import),
@@ -609,7 +609,7 @@ class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
             rows = list(result)
             self.assertEqual(len(rows), 6)
 
-        db = cast(SqlRegistry, registry)._db
+        db = registry._db
         assert registry.obsCoreTableManager is not None
         table = cast(ObsCoreLiveTableManager, registry.obsCoreTableManager).table
 

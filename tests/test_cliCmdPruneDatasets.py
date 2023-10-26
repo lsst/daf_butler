@@ -32,7 +32,7 @@ import unittest
 from unittest.mock import patch
 
 # Tests require the SqlRegistry
-import lsst.daf.butler.registries.sql
+import lsst.daf.butler.registry.sql_registry
 import lsst.daf.butler.script
 from astropy.table import Table
 from lsst.daf.butler.cli.butler import cli as butlerCli
@@ -400,7 +400,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         )
 
     @patch.object(
-        lsst.daf.butler.registries.sql.SqlRegistry,
+        lsst.daf.butler.registry.sql_registry.SqlRegistry,
         "getCollectionType",
         side_effect=lambda x: CollectionType.RUN,
     )
@@ -432,7 +432,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         )
 
     @patch.object(
-        lsst.daf.butler.registries.sql.SqlRegistry,
+        lsst.daf.butler.registry.sql_registry.SqlRegistry,
         "getCollectionType",
         side_effect=lambda x: CollectionType.RUN,
     )
@@ -457,7 +457,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         )
 
     @patch.object(
-        lsst.daf.butler.registries.sql.SqlRegistry,
+        lsst.daf.butler.registry.sql_registry.SqlRegistry,
         "getCollectionType",
         side_effect=lambda x: CollectionType.TAGGED,
     )

@@ -83,9 +83,9 @@ from .registry import (
     NoDefaultCollectionError,
     Registry,
     RegistryDefaults,
-    _ButlerRegistry,
     _RegistryFactory,
 )
+from .registry.sql_registry import SqlRegistry
 from .transfers import RepoExportContext
 from .utils import transactional
 
@@ -2145,12 +2145,12 @@ class DirectButler(Butler):
         # Docstring inherited.
         return self._registry.dimensions
 
-    _registry: _ButlerRegistry
+    _registry: SqlRegistry
     """The object that manages dataset metadata and relationships
-    (`_ButlerRegistry`).
+    (`SqlRegistry`).
 
     Most operations that don't involve reading or writing butler datasets are
-    accessible only via `Registry` methods.
+    accessible only via `SqlRegistry` methods.
     """
 
     datastore: Datastore

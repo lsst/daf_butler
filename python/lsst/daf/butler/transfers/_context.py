@@ -39,12 +39,14 @@ from .._dataset_type import DatasetType
 from .._file_dataset import FileDataset
 from ..datastore import Datastore
 from ..dimensions import DataCoordinate, DimensionElement, DimensionRecord
-from ..registry import CollectionType, _ButlerRegistry
+from ..registry import CollectionType
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
-from ._interfaces import RepoExportBackend
 
 if TYPE_CHECKING:
     from lsst.resources import ResourcePathExpression
+
+    from ..registry.sql_registry import SqlRegistry
+    from ._interfaces import RepoExportBackend
 
 
 class RepoExportContext:
@@ -59,7 +61,7 @@ class RepoExportContext:
 
     Parameters
     ----------
-    registry : `_ButlerRegistry`
+    registry : `SqlRegistry`
         Registry to export from.
     datastore : `Datastore`
         Datastore to export from.
@@ -74,7 +76,7 @@ class RepoExportContext:
 
     def __init__(
         self,
-        registry: _ButlerRegistry,
+        registry: SqlRegistry,
         datastore: Datastore,
         backend: RepoExportBackend,
         *,
