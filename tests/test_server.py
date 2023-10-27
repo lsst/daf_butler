@@ -99,6 +99,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
     def test_remote_butler(self):
         universe = self.butler.dimensions
         self.assertEqual(universe.namespace, "daf_butler")
+        self.assertFalse(self.butler.isWriteable())
 
     def test_get_dataset_type(self):
         bias_type = self.butler.get_dataset_type("bias")
