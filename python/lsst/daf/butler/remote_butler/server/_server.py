@@ -30,6 +30,7 @@ from __future__ import annotations
 __all__ = ("app", "factory_dependency")
 
 import logging
+import uuid
 from functools import cache
 from typing import Any
 
@@ -105,6 +106,25 @@ def get_dataset_type(
     butler = factory.create_butler()
     datasetType = butler.get_dataset_type(dataset_type_name)
     return datasetType.to_simple()
+
+
+@app.get(
+    "/butler/v1/dataset/{id}",
+    summary="Retrieve this dataset definition.",
+    response_model=SerializedDatasetRef | None,
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
+def get_dataset(id: uuid.UUID, factory: Factory = Depends(factory_dependency)) -> SerializedDatasetRef | None:
+    """Return a single dataset reference."""
+    butler = factory.create_butler()
+    ref = butler.get_dataset(id)
+    if ref is not None:
+        return ref.to_simple()
+    # This could raise a 404 since id is not found. The standard implementation
+    # get_dataset method returns without error so follow that example here.
+    return ref
 
 
 # Not yet supported: TimeSpan is not yet a pydantic model.

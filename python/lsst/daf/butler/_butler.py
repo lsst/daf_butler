@@ -42,7 +42,7 @@ from ._butler_config import ButlerConfig
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
 from ._dataset_existence import DatasetExistence
-from ._dataset_ref import DatasetIdGenEnum, DatasetRef
+from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._file_dataset import FileDataset
@@ -796,6 +796,23 @@ class Butler(LimitedButler):
         -----
         This method handles component dataset types automatically, though most
         other operations do not.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_dataset(self, id: DatasetId) -> DatasetRef | None:
+        """Retrieve a Dataset entry.
+
+        Parameters
+        ----------
+        id : `DatasetId`
+            The unique identifier for the dataset.
+
+        Returns
+        -------
+        ref : `DatasetRef` or `None`
+            A ref to the Dataset, or `None` if no matching Dataset
+            was found.
         """
         raise NotImplementedError()
 

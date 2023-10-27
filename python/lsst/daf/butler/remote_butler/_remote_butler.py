@@ -40,7 +40,7 @@ from .._butler import Butler
 from .._butler_config import ButlerConfig
 from .._config import Config
 from .._dataset_existence import DatasetExistence
-from .._dataset_ref import DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
+from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._file_dataset import FileDataset
@@ -218,6 +218,14 @@ class RemoteButler(Butler):
         response = self._client.get(self._get_url(path))
         response.raise_for_status()
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
+
+    def get_dataset(self, id: DatasetId) -> DatasetRef | None:
+        path = f"dataset/{id}"
+        response = self._client.get(self._get_url(path))
+        response.raise_for_status()
+        if response.json() is None:
+            return None
+        return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
 
     def find_dataset(
         self,

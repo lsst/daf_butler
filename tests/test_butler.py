@@ -384,7 +384,7 @@ class ButlerPutGetTests(TestCaseMixin):
                 with self.assertRaises(FileNotFoundError):
                     butler.get(ref)
                 # Registry shouldn't be able to find it by dataset_id anymore.
-                self.assertIsNone(butler.registry.getDataset(ref.id))
+                self.assertIsNone(butler.get_dataset(ref.id))
 
                 # Do explicit registry removal since we know they are
                 # empty

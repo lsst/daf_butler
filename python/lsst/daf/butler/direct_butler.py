@@ -55,7 +55,7 @@ from ._butler import Butler
 from ._butler_config import ButlerConfig
 from ._config import Config
 from ._dataset_existence import DatasetExistence
-from ._dataset_ref import DatasetIdGenEnum, DatasetRef
+from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._exceptions import ValidationError
@@ -1321,6 +1321,9 @@ class DirectButler(Butler):
 
     def get_dataset_type(self, name: str) -> DatasetType:
         return self._registry.getDatasetType(name)
+
+    def get_dataset(self, id: DatasetId) -> DatasetRef | None:
+        return self._registry.getDataset(id)
 
     def find_dataset(
         self,

@@ -125,6 +125,12 @@ class ButlerClientServerTestCase(unittest.TestCase):
         )
         self.assertEqual(ref_new, ref)
 
+        ref2 = self.butler.get_dataset(ref.id)
+        self.assertEqual(ref2, ref)
+
+        # Unknown dataset should not fail.
+        self.assertIsNone(self.butler.get_dataset(uuid.uuid4()))
+
 
 if __name__ == "__main__":
     unittest.main()
