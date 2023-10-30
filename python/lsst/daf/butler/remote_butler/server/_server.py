@@ -46,10 +46,9 @@ from lsst.daf.butler import (
     SerializedDatasetType,
 )
 
+from ._config import get_config_from_env
 from ._factory import Factory
 from ._server_models import FindDatasetModel
-
-BUTLER_ROOT = "ci_hsc_gen3/DATA"
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +69,8 @@ def missing_dataset_type_exception_handler(request: Request, exc: MissingDataset
 
 @cache
 def _make_global_butler() -> Butler:
-    return Butler.from_config(BUTLER_ROOT)
+    config = get_config_from_env()
+    return Butler.from_config(config.config_uri)
 
 
 def factory_dependency() -> Factory:
