@@ -76,7 +76,6 @@ from .dimensions import (
 )
 from .progress import Progress
 from .registry import (
-    CollectionArgType,
     CollectionType,
     ConflictingDefinitionError,
     DataIdError,
@@ -1327,17 +1326,17 @@ class DirectButler(Butler):
 
     def find_dataset(
         self,
-        datasetType: DatasetType | str,
-        dataId: DataId | None = None,
+        dataset_type: DatasetType | str,
+        data_id: DataId | None = None,
         *,
-        collections: CollectionArgType | None = None,
+        collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
         return self._registry.findDataset(
-            datasetType,
-            dataId,
+            dataset_type,
+            data_id,
             collections=collections,
             timespan=timespan,
             dataset_records=datastore_records,

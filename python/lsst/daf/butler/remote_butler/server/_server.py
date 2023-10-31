@@ -146,6 +146,6 @@ def find_dataset(
 
     butler = factory.create_butler()
     ref = butler.find_dataset(
-        dataset_type, dataId=unpack_dataId(butler, query.dataId), collections=collection_query
+        dataset_type, data_id=unpack_dataId(butler, query.data_id), collections=collection_query
     )
     return ref.to_simple() if ref else None

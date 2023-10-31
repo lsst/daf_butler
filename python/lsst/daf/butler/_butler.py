@@ -51,7 +51,7 @@ from ._storage_class import StorageClass
 from ._timespan import Timespan
 from .datastore import DatasetRefURIs, Datastore
 from .dimensions import DataId, DimensionConfig
-from .registry import CollectionArgType, Registry, RegistryConfig, _RegistryFactory
+from .registry import Registry, RegistryConfig, _RegistryFactory
 from .repo_relocation import BUTLER_ROOT_TAG
 from .transfers import RepoExportContext
 
@@ -819,10 +819,10 @@ class Butler(LimitedButler):
     @abstractmethod
     def find_dataset(
         self,
-        datasetType: DatasetType | str,
-        dataId: DataId | None = None,
+        dataset_type: DatasetType | str,
+        data_id: DataId | None = None,
         *,
-        collections: CollectionArgType | None = None,
+        collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
         datastore_records: bool = False,
         **kwargs: Any,
@@ -836,18 +836,16 @@ class Butler(LimitedButler):
 
         Parameters
         ----------
-        datasetType : `DatasetType` or `str`
+        dataset_type : `DatasetType` or `str`
             A `DatasetType` or the name of one.  If this is a `DatasetType`
             instance, its storage class will be respected and propagated to
             the output, even if it differs from the dataset type definition
             in the registry, as long as the storage classes are convertible.
-        dataId : `dict` or `DataCoordinate`, optional
+        data_id : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
-        collections : collection expression, optional
-            An expression that fully or partially identifies the collections to
-            search for the dataset; see
-            :ref:`daf_butler_collection_expressions` for more information.
+        collections : `str` or `list` [`str`], optional
+            A an ordered list of collections to search for the dataset.
             Defaults to ``self.defaults.collections``.
         timespan : `Timespan`, optional
             A timespan that the validity range of the dataset must overlap.
@@ -871,7 +869,7 @@ class Butler(LimitedButler):
             ``self.collections`` is `None`.
         LookupError
             Raised if one or more data ID keys are missing.
-        lsst.daf.butler.registry.MissingDatasetTypeError
+        lsst.daf.butler.MissingDatasetTypeError
             Raised if the dataset type does not exist.
         lsst.daf.butler.MissingCollectionError
             Raised if any of ``collections`` does not exist in the registry.
@@ -889,7 +887,7 @@ class Butler(LimitedButler):
         never changes the behavior.
 
         This method handles component dataset types automatically, though most
-        other registry operations do not.
+        other query operations do not.
         """
         raise NotImplementedError()
 

@@ -35,5 +35,5 @@ from ..._compat import _BaseModelCompat
 
 
 class FindDatasetModel(_BaseModelCompat):
-    dataId: SerializedDataCoordinate
+    data_id: SerializedDataCoordinate
     collections: list[str]

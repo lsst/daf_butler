@@ -928,7 +928,7 @@ class ButlerTests(ButlerPutGetTests):
             datasets[0].refs = [
                 cast(
                     DatasetRef,
-                    butler.find_dataset(ref.datasetType, dataId=ref.dataId, collections=ref.run),
+                    butler.find_dataset(ref.datasetType, data_id=ref.dataId, collections=ref.run),
                 )
                 for ref in datasets[0].refs
             ]

@@ -49,7 +49,7 @@ from .._storage_class import StorageClass
 from .._timespan import Timespan
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataId, DimensionConfig, DimensionUniverse, SerializedDataCoordinate
-from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
+from ..registry import NoDefaultCollectionError, Registry, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
 from ..transfers import RepoExportContext
 from ._config import RemoteButlerConfigModel
@@ -229,10 +229,10 @@ class RemoteButler(Butler):
 
     def find_dataset(
         self,
-        datasetType: DatasetType | str,
-        dataId: DataId | None = None,
+        dataset_type: DatasetType | str,
+        data_id: DataId | None = None,
         *,
-        collections: CollectionArgType | None = None,
+        collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
         datastore_records: bool = False,
         **kwargs: Any,
@@ -248,14 +248,14 @@ class RemoteButler(Butler):
         # cache to generate list of collection names.
         wildcards = CollectionWildcard.from_expression(collections)
 
-        if isinstance(datasetType, DatasetType):
-            datasetType = datasetType.name
+        if isinstance(dataset_type, DatasetType):
+            dataset_type = dataset_type.name
 
         query = FindDatasetModel(
-            dataId=self._simplify_dataId(dataId, **kwargs), collections=wildcards.strings
+            data_id=self._simplify_dataId(data_id, **kwargs), collections=wildcards.strings
         )
 
-        path = f"find_dataset/{datasetType}"
+        path = f"find_dataset/{dataset_type}"
         response = self._client.post(
             self._get_url(path), json=query.model_dump(mode="json", exclude_unset=True)
         )
