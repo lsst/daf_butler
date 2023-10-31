@@ -59,7 +59,8 @@ apt-get update
 # is sometimes needed to build cffi (a cryptography dependency).
 # Git is needed because we still have some Python dependencies pointing
 # directly at Git repos
-apt-get -y install --no-install-recommends build-essential libffi-dev git
+# Libpq-dev is needed to build psycopg2, the postgres bindings for python
+apt-get -y install --no-install-recommends build-essential libffi-dev git libpq-dev
 
 # Delete cached files we don't need anymore:
 apt-get clean

@@ -56,8 +56,8 @@ apt-get update
 # Install security updates:
 apt-get -y upgrade
 
-# Example of installing a new package, without unnecessary packages:
-#apt-get -y install --no-install-recommends git
+# libpq is required for psycopg2, the Python postgres bindings
+apt-get -y install --no-install-recommends libpq5
 
 # Delete cached files we don't need anymore:
 apt-get clean
