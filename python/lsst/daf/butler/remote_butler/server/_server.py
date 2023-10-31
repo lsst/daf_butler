@@ -144,8 +144,11 @@ def find_dataset(
 ) -> SerializedDatasetRef | None:
     collection_query = query.collections if query.collections else None
 
+    # Get the simple dict from the SerializedDataCoordinate. We do not know
+    # if it is a well-defined DataCoordinate or needs some massaging first.
+    # find_dataset will use dimension record queries if necessary.
+    data_id = query.data_id.dataId
+
     butler = factory.create_butler()
-    ref = butler.find_dataset(
-        dataset_type, data_id=unpack_dataId(butler, query.data_id), collections=collection_query
-    )
+    ref = butler.find_dataset(dataset_type, None, collections=collection_query, **data_id)
     return ref.to_simple() if ref else None

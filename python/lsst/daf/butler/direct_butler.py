@@ -1334,6 +1334,14 @@ class DirectButler(Butler):
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
+        # Handle any parts of the dataID that are not using primary dimension
+        # keys.
+        if isinstance(dataset_type, str):
+            actual_type = self.get_dataset_type(dataset_type)
+        else:
+            actual_type = dataset_type
+        data_id, kwargs = self._rewrite_data_id(data_id, actual_type, **kwargs)
+
         return self._registry.findDataset(
             dataset_type,
             data_id,

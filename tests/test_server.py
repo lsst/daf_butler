@@ -129,6 +129,15 @@ class ButlerClientServerTestCase(unittest.TestCase):
         ref2 = self.butler.get_dataset(ref.id)
         self.assertEqual(ref2, ref)
 
+        # Use detector name to find it.
+        ref3 = self.butler.find_dataset(
+            ref.datasetType,
+            collections="imported_g",
+            instrument="Cam1",
+            full_name="Aa",
+        )
+        self.assertEqual(ref2, ref3)
+
         # Unknown dataset should not fail.
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4()))
 

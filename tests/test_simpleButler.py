@@ -278,7 +278,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Find the DatasetRef for a flat
         coll = "imported_g"
         flat2g = butler.find_dataset(
-            "flat", instrument="Cam1", detector=2, physical_filter="Cam1-G", collections=coll
+            "flat", instrument="Cam1", full_name="Ab", physical_filter="Cam1-G", collections=coll
         )
 
         # Create a numpy integer to check that works fine

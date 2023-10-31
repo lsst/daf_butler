@@ -843,7 +843,10 @@ class Butler(LimitedButler):
             in the registry, as long as the storage classes are convertible.
         data_id : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
-            the dataset within a collection.
+            the dataset within a collection. If it is a `dict` the dataId
+            can include dimension record values such as ``day_obs`` and
+            ``seq_num`` or ``full_name`` that can be used to derive the
+            primary dimension.
         collections : `str` or `list` [`str`], optional
             A an ordered list of collections to search for the dataset.
             Defaults to ``self.defaults.collections``.
@@ -854,7 +857,9 @@ class Butler(LimitedButler):
         **kwargs
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true
-            `DataCoordinate` or augment an existing one.
+            `DataCoordinate` or augment an existing one. This can also include
+            dimension record metadata that can be used to derive a primary
+            dimension value.
 
         Returns
         -------
