@@ -33,8 +33,8 @@ import logging
 import math
 import pickle
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
+from collections.abc import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
 
 from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
@@ -432,7 +432,17 @@ class DimensionUniverse:
                 names.add(item)
         return DimensionGraph(universe=self, names=names)
 
-    def sorted(self, elements: Iterable[E | str], *, reverse: bool = False) -> list[E]:
+    @overload
+    def sorted(self, elements: Iterable[Dimension], *, reverse: bool = False) -> Sequence[Dimension]:
+        ...
+
+    @overload
+    def sorted(
+        self, elements: Iterable[DimensionElement | str], *, reverse: bool = False
+    ) -> Sequence[DimensionElement]:
+        ...
+
+    def sorted(self, elements: Iterable[Any], *, reverse: bool = False) -> list[Any]:
         """Return a sorted version of the given iterable of dimension elements.
 
         The universe's sort order is topological (an element's dependencies
@@ -448,16 +458,15 @@ class DimensionUniverse:
 
         Returns
         -------
-        sorted : `list` of `DimensionElement`
-            A sorted list containing the same elements that were given.
+        sorted : `~collections.abc.Sequence` [ `Dimension` or \
+                `DimensionElement` ]
+            A sorted sequence containing the same elements that were given.
         """
         s = set(elements)
         result = [element for element in self._elements if element in s or element.name in s]
         if reverse:
             result.reverse()
-        # mypy thinks this can return DimensionElements even if all the user
-        # passed it was Dimensions; we know better.
-        return result  # type: ignore
+        return result
 
     # TODO: Remove this method on DM-38687.
     @deprecated(
