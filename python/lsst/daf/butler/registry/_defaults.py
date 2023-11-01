@@ -120,7 +120,7 @@ class RegistryDefaults:
             Raised if a non-governor dimension was included in ``**kwargs``
             at construction.
         """
-        allGovernorDimensions = registry.dimensions.getGovernorDimensions()
+        allGovernorDimensions = registry.dimensions.governor_dimensions
         if not self._kwargs.keys() <= allGovernorDimensions.names:
             raise TypeError(
                 "Only governor dimensions may be identified by a default data "

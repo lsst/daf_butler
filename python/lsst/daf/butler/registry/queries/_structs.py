@@ -464,28 +464,34 @@ class QuerySummary:
         if self.order_by is not None:
             tags.update(self.order_by.columns_required)
         region = self.where.region
-        for dimension in self.where.data_id.graph:
-            dimension_tag = DimensionKeyColumnTag(dimension.name)
+        for dimension_name in self.where.data_id.graph.names:
+            dimension_tag = DimensionKeyColumnTag(dimension_name)
             if dimension_tag in tags:
                 continue
-            if dimension == self.universe.commonSkyPix or not isinstance(dimension, SkyPixDimension):
+            if skypix_dimension := self.universe.skypix_dimensions.get(dimension_name):
+                if skypix_dimension == self.universe.commonSkyPix:
+                    # Common skypix dimension is should be available from
+                    # spatial join tables.
+                    tags.add(dimension_tag)
+                else:
+                    # This is a SkyPixDimension other than the common one.  If
+                    # it's not already present in the query (e.g. from a
+                    # dataset join), this is a pure spatial constraint, which
+                    # we can only apply by modifying the 'region' for the
+                    # query.  That will also require that we join in the common
+                    # skypix dimension.
+                    pixel = skypix_dimension.pixelization.pixel(self.where.data_id[dimension_name])
+                    if region is None:
+                        region = pixel
+                    else:
+                        region = IntersectionRegion(region, pixel)
+            else:
                 # If a dimension in the data ID is available from dimension
                 # tables or dimension spatial-join tables in the database,
-                # include it in the set of dimensions whose tables should be
-                # joined.  This makes these data ID constraints work just like
-                # simple 'where' constraints, which is good.
+                # include it in the set of dimensions whose tables should
+                # be joined.  This makes these data ID constraints work
+                # just like simple 'where' constraints, which is good.
                 tags.add(dimension_tag)
-            else:
-                # This is a SkyPixDimension other than the common one.  If it's
-                # not already present in the query (e.g. from a dataset join),
-                # this is a pure spatial constraint, which we can only apply by
-                # modifying the 'region' for the query.  That will also require
-                # that we join in the common skypix dimension.
-                pixel = dimension.pixelization.pixel(self.where.data_id[dimension])
-                if region is None:
-                    region = pixel
-                else:
-                    region = IntersectionRegion(region, pixel)
         # Make sure the dimension keys are expanded self-consistently in what
         # we return by passing them through DimensionGraph.
         dimensions = DimensionGraph(

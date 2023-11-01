@@ -293,7 +293,6 @@ class DimensionUniverse:
         """
         return self._dimensions
 
-    @cached_getter
     def getGovernorDimensions(self) -> NamedValueAbstractSet[GovernorDimension]:
         """Return a set of all `GovernorDimension` instances in this universe.
 
@@ -302,9 +301,8 @@ class DimensionUniverse:
         governors : `NamedValueAbstractSet` [ `GovernorDimension` ]
             A frozen set of `GovernorDimension` instances.
         """
-        return NamedValueSet(d for d in self._dimensions if isinstance(d, GovernorDimension)).freeze()
+        return self.governor_dimensions
 
-    @cached_getter
     def getDatabaseElements(self) -> NamedValueAbstractSet[DatabaseDimensionElement]:
         """Return set of all `DatabaseDimensionElement` instances in universe.
 
@@ -315,6 +313,51 @@ class DimensionUniverse:
         -------
         elements : `NamedValueAbstractSet` [ `DatabaseDimensionElement` ]
             A frozen set of `DatabaseDimensionElement` instances.
+        """
+        return self.database_elements
+
+    @property
+    def elements(self) -> NamedValueAbstractSet[DimensionElement]:
+        """All dimension elements defined in this universe."""
+        return self._elements
+
+    @property
+    def dimensions(self) -> NamedValueAbstractSet[Dimension]:
+        """All dimensions defined in this universe."""
+        return self._dimensions
+
+    @property
+    @cached_getter
+    def governor_dimensions(self) -> NamedValueAbstractSet[GovernorDimension]:
+        """All governor dimensions defined in this universe.
+
+        Governor dimensions serve as special required dependencies of other
+        dimensions, with special handling in dimension query expressions and
+        collection summaries.  Governor dimension records are stored in the
+        database but the set of such values is expected to be small enough
+        for all values to be cached by all clients.
+        """
+        return NamedValueSet(d for d in self._dimensions if isinstance(d, GovernorDimension)).freeze()
+
+    @property
+    @cached_getter
+    def skypix_dimensions(self) -> NamedValueAbstractSet[SkyPixDimension]:
+        """All skypix dimensions defined in this universe.
+
+        Skypix dimension records are always generated on-the-fly rather than
+        stored in the database, and they always represent a tiling of the sky
+        with no overlaps.
+        """
+        result = NamedValueSet[SkyPixDimension]()
+        for system in self.skypix:
+            result.update(system)
+        return result.freeze()
+
+    @property
+    @cached_getter
+    def database_elements(self) -> NamedValueAbstractSet[DatabaseDimensionElement]:
+        """All dimension elements whose records are stored in the database,
+        except governor dimensions.
         """
         return NamedValueSet(d for d in self._elements if isinstance(d, DatabaseDimensionElement)).freeze()
 

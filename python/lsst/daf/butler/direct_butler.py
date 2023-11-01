@@ -483,7 +483,7 @@ class DirectButler(Butler):
             for dimensionName in list(dataIdDict):
                 value = dataIdDict[dimensionName]
                 try:
-                    dimension = self.dimensions.getStaticDimensions()[dimensionName]
+                    dimension = self.dimensions.dimensions[dimensionName]
                 except KeyError:
                     # This is not a real dimension
                     not_dimensions[dimensionName] = value
@@ -555,7 +555,7 @@ class DirectButler(Butler):
             # fail but they are going to fail anyway because of the
             # ambiguousness of the dataId...
             if datasetType.isCalibration():
-                for dim in self.dimensions.getStaticDimensions():
+                for dim in self.dimensions.dimensions:
                     if dim.temporal:
                         candidateDimensions.add(str(dim))
 
@@ -571,7 +571,7 @@ class DirectButler(Butler):
             # given names with records within those dimensions
             matched_dims = set()
             for dimensionName in candidateDimensions:
-                dimension = self.dimensions.getStaticDimensions()[dimensionName]
+                dimension = self.dimensions.dimensions[dimensionName]
                 fields = dimension.metadata.names | dimension.uniqueKeys.names
                 for field in not_dimensions:
                     if field in fields:
@@ -750,7 +750,7 @@ class DirectButler(Butler):
                         )
 
                 # Get the primary key from the real dimension object
-                dimension = self.dimensions.getStaticDimensions()[dimensionName]
+                dimension = self.dimensions.dimensions[dimensionName]
                 if not isinstance(dimension, Dimension):
                     raise RuntimeError(
                         f"{dimension.name} is not a true dimension, and cannot be used in data IDs."
@@ -1959,7 +1959,7 @@ class DirectButler(Butler):
             # come from this butler's universe.
             elements = frozenset(
                 element
-                for element in self.dimensions.getStaticElements()
+                for element in self.dimensions.elements
                 if element.hasTable() and element.viewOf is None
             )
             dataIds = {ref.dataId for ref in source_refs}

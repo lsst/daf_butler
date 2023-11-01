@@ -173,11 +173,12 @@ class DimensionGroup:
         # Make a set that includes both the dimensions and any
         # DimensionElements whose dependencies are in self.dimensions.
         self.elements = SortedSequenceSet(
-            tuple(e.name for e in universe.getStaticElements() if e.required.names <= self.names)
+            tuple(e.name for e in universe.elements if e.required.names <= self.names)
         )
         self.governors = SortedSequenceSet(
-            tuple(d for d in self.names if d in universe.getGovernorDimensions().names)
+            tuple(d for d in self.names if d in universe.governor_dimensions.names)
         )
+        self.skypix = SortedSequenceSet(tuple(d for d in self.names if d in universe.skypix_dimensions.names))
         # Split dependencies up into "required" and "implied" subsets.
         # Note that a dimension may be required in one group and implied in
         # another.
@@ -408,8 +409,13 @@ class DimensionGroup:
     """
 
     governors: SortedSequenceSet
-    """A true `~collections.abc.Set` of all true governor dimension names in
-    the group.
+    """A true `~collections.abc.Set` of all governor dimension names in the
+    group.
+    """
+
+    skypix: SortedSequenceSet
+    """A true `~collections.abc.Set` of all skypix dimension names in the "
+    group.
     """
 
     required: SortedSequenceSet

@@ -1244,7 +1244,7 @@ class RegistryTests(ABC):
         families = defaultdict(set)
         # Dictionary of {element.name: {dataId: region}}.
         regions = {}
-        for element in registry.dimensions.getDatabaseElements():
+        for element in registry.dimensions.database_elements:
             if element.spatial is not None:
                 families[element.spatial.name].add(element)
                 regions[element.name] = {

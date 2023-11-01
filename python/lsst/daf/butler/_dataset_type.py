@@ -201,7 +201,7 @@ class DatasetType:
                 )
             dimensions = universe.extract(dimensions)
         self._dimensions = dimensions
-        if name in self._dimensions.universe.getGovernorDimensions().names:
+        if name in self._dimensions.universe.governor_dimensions.names:
             raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
         if not isinstance(storageClass, StorageClass | str):
             raise ValueError(f"StorageClass argument must be StorageClass or str. Got {storageClass}")

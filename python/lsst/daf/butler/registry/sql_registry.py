@@ -2352,8 +2352,7 @@ class SqlRegistry:
                 element = self.dimensions[element]
             except KeyError as e:
                 raise DimensionNameError(
-                    f"No such dimension '{element}', available dimensions: "
-                    + str(self.dimensions.getStaticElements())
+                    f"No such dimension '{element}', available dimensions: " + str(self.dimensions.elements)
                 ) from e
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)

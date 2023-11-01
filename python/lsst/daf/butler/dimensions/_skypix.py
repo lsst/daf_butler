@@ -32,7 +32,7 @@ __all__ = (
     "SkyPixSystem",
 )
 
-from collections.abc import Mapping, Set
+from collections.abc import Iterator, Mapping, Set
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -96,6 +96,12 @@ class SkyPixSystem(TopologicalFamily):
 
     def __getitem__(self, level: int) -> SkyPixDimension:
         return self._members[level]
+
+    def __iter__(self) -> Iterator[SkyPixDimension]:
+        return iter(self._members.values())
+
+    def __len__(self) -> int:
+        return len(self._members)
 
 
 class SkyPixDimension(Dimension):

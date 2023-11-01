@@ -229,7 +229,7 @@ class DimensionTestCase(unittest.TestCase):
 
     def testConfigRead(self):
         self.assertEqual(
-            set(self.universe.getStaticDimensions().names),
+            set(self.universe.dimensions.names),
             {
                 "instrument",
                 "visit",
@@ -249,7 +249,7 @@ class DimensionTestCase(unittest.TestCase):
 
     def testGraphs(self):
         self.checkGraphInvariants(self.universe.empty)
-        for element in self.universe.getStaticElements():
+        for element in self.universe.elements:
             self.checkGraphInvariants(element.graph)
 
     def testInstrumentDimensions(self):
@@ -329,7 +329,7 @@ class DimensionTestCase(unittest.TestCase):
 
     def testSchemaGeneration(self):
         tableSpecs = NamedKeyDict({})
-        for element in self.universe.getStaticElements():
+        for element in self.universe.elements:
             if element.hasTable and element.viewOf is None:
                 tableSpecs[element] = element.RecordClass.fields.makeTableSpec(
                     TimespanReprClass=TimespanDatabaseRepresentation.Compound,
@@ -389,7 +389,7 @@ class DimensionTestCase(unittest.TestCase):
         self.assertIs(universe1, universe2)
         self.assertIs(universe1, universe3)
         self.assertIs(universe1, universe4)
-        for element1 in universe1.getStaticElements():
+        for element1 in universe1.elements:
             element2 = pickle.loads(pickle.dumps(element1))
             self.assertIs(element1, element2)
             graph1 = element1.graph
@@ -674,7 +674,7 @@ class DataCoordinateTestCase(unittest.TestCase):
                 # dimensions if hasFull is False (see
                 # `DataCoordinate.subset` docs).
                 newDimensions = self.randomDimensionSubset(n=1, graph=dataId.graph)
-                if dataId.hasFull() or dataId.graph.required.issuperset(newDimensions.required):
+                if dataId.hasFull() or dataId.graph.required >= newDimensions.required:
                     newDataIds = [
                         dataId.subset(newDimensions),
                         DataCoordinate.standardize(dataId, graph=newDimensions),

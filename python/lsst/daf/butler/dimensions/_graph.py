@@ -47,6 +47,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
     from ._elements import Dimension, DimensionElement
     from ._governor import GovernorDimension
+    from ._skypix import SkyPixDimension
     from ._universe import DimensionUniverse
 
 
@@ -273,6 +274,14 @@ class DimensionGraph:
 
     @property
     @cached_getter
+    def skypix(self) -> NamedValueAbstractSet[SkyPixDimension]:
+        """A true `~collections.abc.Set` of all `SkyPixDimension` instances
+        in the graph.
+        """
+        return _DimensionGraphNamedValueSet(self._group.skypix, self._group.universe)
+
+    @property
+    @cached_getter
     def required(self) -> NamedValueAbstractSet[Dimension]:
         """The subset of `dimensions` whose elements must be directly
         identified via their primary keys in a data ID in order to identify the
@@ -433,13 +442,9 @@ class DimensionGraph:
 
     def __eq__(self, other: Any) -> bool:
         """Test the arguments have exactly the same dimensions & elements."""
-        match other:
-            case DimensionGraph():
-                return self.as_group == other.as_group()
-        if isinstance(other, DimensionGraph):
-            return self._group == other._group
-        else:
-            return False
+        if isinstance(other, (DimensionGraph, DimensionGroup)):
+            return self._group == other.as_group()
+        return False
 
     def __hash__(self) -> int:
         return hash(self.as_group())

@@ -465,7 +465,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
             # pulled from defaults in _all_ branches.  This is the set we will
             # be able to bound overall; any dimensions not referenced by even
             # one branch could be unbounded.
-            dimensions_in_all_branches = set(self.graph.universe.getStaticDimensions().names)
+            dimensions_in_all_branches = set(self.graph.universe.dimensions.names)
             for branch in branches:
                 summary.update(branch)
                 summary.defaultsNeeded.update(branch.defaultsNeeded)

@@ -36,7 +36,7 @@ from lsst.daf.relation import ColumnError, ColumnExpression, ColumnTag, Join, Pr
 from ..._column_categorization import ColumnCategorization
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionGraph, DimensionRecord, DimensionUniverse, SkyPixDimension
+from ...dimensions import DataCoordinate, DimensionGraph, DimensionRecord, DimensionUniverse
 from .._collection_type import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, Database
@@ -236,12 +236,10 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         # spatial join, since we need all dimension key columns present in the
         # SQL engine and skypix regions are added by postprocessing in the
         # native iteration engine.
-        for dimension in dimensions:
-            if DimensionKeyColumnTag(dimension.name) not in relation.columns and isinstance(
-                dimension, SkyPixDimension
-            ):
+        for skypix_dimension in dimensions.skypix:
+            if DimensionKeyColumnTag(skypix_dimension.name) not in relation.columns:
                 raise NotImplementedError(
-                    f"Cannot construct query involving skypix dimension {dimension.name} unless "
+                    f"Cannot construct query involving skypix dimension {skypix_dimension.name} unless "
                     "it is part of a dataset subquery, spatial join, or other initial relation."
                 )
 

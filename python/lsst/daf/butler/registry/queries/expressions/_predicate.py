@@ -140,10 +140,10 @@ def make_string_expression_predicate(
         bind = {}
     if bind:
         for identifier in bind:
-            if identifier in dimensions.universe.getStaticElements().names:
+            if identifier in dimensions.universe.elements.names:
                 raise RuntimeError(f"Bind parameter key {identifier!r} conflicts with a dimension element.")
             table, _, column = identifier.partition(".")
-            if column and table in dimensions.universe.getStaticElements().names:
+            if column and table in dimensions.universe.elements.names:
                 raise RuntimeError(f"Bind parameter key {identifier!r} looks like a dimension column.")
     if defaults is None:
         defaults = DataCoordinate.makeEmpty(dimensions.universe)
@@ -168,7 +168,7 @@ def make_string_expression_predicate(
             msg = f'Error in query expression "{exprOriginal}" (normalized to "{exprNormal}"): {err}'
         raise UserExpressionError(msg) from None
     for dimension_name, values in summary.dimension_constraints.items():
-        if dimension_name in dimensions.universe.getGovernorDimensions().names:
+        if dimension_name in dimensions.universe.governor_dimensions.names:
             governor_constraints[dimension_name] = cast(Set[str], values)
     converter = PredicateConversionVisitor(bind, dataset_type_name, dimensions.universe, column_types)
     predicate = tree.visit(converter)

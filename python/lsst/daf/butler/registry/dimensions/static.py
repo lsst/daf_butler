@@ -44,7 +44,6 @@ from ...dimensions import (
     DimensionGraph,
     DimensionUniverse,
     GovernorDimension,
-    SkyPixDimension,
 )
 from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import (
@@ -124,7 +123,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # can pass in when initializing storage for DatabaseDimensionElements.
         governors = NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage]()
         records = NamedKeyDict[DimensionElement, DimensionRecordStorage]()
-        for dimension in universe.getGovernorDimensions():
+        for dimension in universe.governor_dimensions:
             governorStorage = dimension.makeStorage(db, context=context)
             governors[dimension] = governorStorage
             records[dimension] = governorStorage
@@ -133,14 +132,12 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # to gather a mapping from the names of those targets back to their
         # views.
         view_targets = {
-            element.viewOf: element
-            for element in universe.getDatabaseElements()
-            if element.viewOf is not None
+            element.viewOf: element for element in universe.database_elements if element.viewOf is not None
         }
         # We remember the spatial ones (grouped by family) so we can go back
         # and initialize overlap storage for them later.
         spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DatabaseDimensionRecordStorage]]()
-        for element in universe.getDatabaseElements():
+        for element in universe.database_elements:
             if element.viewOf is not None:
                 # We'll initialize this storage when the view's target is
                 # initialized.
@@ -200,10 +197,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         r = self._records.get(element)
         if r is None:
-            if isinstance(element, str):
-                element = self.universe[element]
-            if isinstance(element, SkyPixDimension):
-                return self.universe.skypix[element.system][element.level].makeStorage()
+            if (dimension := self.universe.skypix_dimensions.get(element)) is not None:
+                return dimension.makeStorage()
         return r
 
     def register(self, element: DimensionElement) -> DimensionRecordStorage:

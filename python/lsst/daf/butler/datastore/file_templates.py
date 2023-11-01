@@ -43,7 +43,7 @@ from .._config_support import LookupKey, processLookupConfigs
 from .._dataset_ref import DatasetRef
 from .._exceptions import ValidationError
 from .._storage_class import StorageClass
-from ..dimensions import DataCoordinate, SkyPixDimension
+from ..dimensions import DataCoordinate
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType
@@ -735,7 +735,6 @@ class FileTemplate:
         # not be true in some test code, but that test code is a pain to
         # update to be more like the real world while still providing our
         # only tests of important behavior.
-        skypix = [dimension for dimension in entity.dimensions if isinstance(dimension, SkyPixDimension)]
-        if len(skypix) == 1:
-            alias = skypix[0].name
+        if len(entity.dimensions.skypix) == 1:
+            (alias,) = entity.dimensions.skypix.names
         return alias

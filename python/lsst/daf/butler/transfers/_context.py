@@ -171,7 +171,7 @@ class RepoExportContext:
         if elements is None:
             standardized_elements = frozenset(
                 element
-                for element in self._registry.dimensions.getStaticElements()
+                for element in self._registry.dimensions.elements
                 if element.hasTable() and element.viewOf is None
             )
         else:
