@@ -93,6 +93,11 @@ class ButlerClientServerTestCase(unittest.TestCase):
         del app.dependency_overrides[factory_dependency]
         removeTestTempDir(cls.root)
 
+    def test_health_check(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "butler")
+
     def test_simple(self):
         response = self.client.get("/butler/v1/universe")
         self.assertEqual(response.status_code, 200)

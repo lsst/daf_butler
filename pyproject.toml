@@ -40,6 +40,10 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 postgres = ["psycopg2"]
+server = [
+    "fastapi",
+    "safir >= 3.4.0"
+]
 test = [
     "pytest >= 3.2",
     "pytest-openfiles >= 0.5.0",

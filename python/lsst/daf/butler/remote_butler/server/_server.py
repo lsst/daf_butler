@@ -45,6 +45,7 @@ from lsst.daf.butler import (
     SerializedDatasetRef,
     SerializedDatasetType,
 )
+from safir.metadata import Metadata, get_metadata
 
 from ._config import get_config_from_env
 from ._factory import Factory
@@ -95,6 +96,26 @@ def unpack_dataId(butler: Butler, data_id: SerializedDataCoordinate | None) -> D
     if data_id is None:
         return None
     return DataCoordinate.from_simple(data_id, registry=butler.registry)
+
+
+@app.get(
+    "/",
+    description=(
+        "Return metadata about the running application. Can also be used as"
+        " a health check. This route is not exposed outside the cluster and"
+        " therefore cannot be used by external clients."
+    ),
+    include_in_schema=False,
+    response_model=Metadata,
+    response_model_exclude_none=True,
+    summary="Application metadata",
+)
+async def get_index() -> Metadata:
+    """GET ``/`` (the app's internal root).
+
+    By convention, this endpoint returns only the application's metadata.
+    """
+    return get_metadata(package_name="lsst.daf.butler", application_name="butler")
 
 
 @app.get("/butler/v1/universe", response_model=dict[str, Any])
