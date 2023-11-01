@@ -1321,8 +1321,13 @@ class DirectButler(Butler):
     def get_dataset_type(self, name: str) -> DatasetType:
         return self._registry.getDatasetType(name)
 
-    def get_dataset(self, id: DatasetId) -> DatasetRef | None:
-        return self._registry.getDataset(id)
+    def get_dataset(
+        self, id: DatasetId, storage_class: str | StorageClass | None = None
+    ) -> DatasetRef | None:
+        ref = self._registry.getDataset(id)
+        if ref is not None and storage_class:
+            ref = ref.overrideStorageClass(storage_class)
+        return ref
 
     def find_dataset(
         self,
@@ -1331,6 +1336,7 @@ class DirectButler(Butler):
         *,
         collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
+        storage_class: str | StorageClass | None = None,
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
@@ -1342,7 +1348,7 @@ class DirectButler(Butler):
             actual_type = dataset_type
         data_id, kwargs = self._rewrite_data_id(data_id, actual_type, **kwargs)
 
-        return self._registry.findDataset(
+        ref = self._registry.findDataset(
             dataset_type,
             data_id,
             collections=collections,
@@ -1350,6 +1356,9 @@ class DirectButler(Butler):
             dataset_records=datastore_records,
             **kwargs,
         )
+        if ref is not None and storage_class is not None:
+            ref = ref.overrideStorageClass(storage_class)
+        return ref
 
     def retrieveArtifacts(
         self,

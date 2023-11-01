@@ -219,9 +219,18 @@ class RemoteButler(Butler):
         response.raise_for_status()
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
-    def get_dataset(self, id: DatasetId) -> DatasetRef | None:
+    def get_dataset(
+        self, id: DatasetId, storage_class: str | StorageClass | None = None
+    ) -> DatasetRef | None:
         path = f"dataset/{id}"
-        response = self._client.get(self._get_url(path))
+        if isinstance(storage_class, StorageClass):
+            storage_class_name = storage_class.name
+        elif storage_class:
+            storage_class_name = storage_class
+        params: dict[str, str] = {}
+        if storage_class:
+            params["storage_class"] = storage_class_name
+        response = self._client.get(self._get_url(path), params=params)
         response.raise_for_status()
         if response.json() is None:
             return None
@@ -234,6 +243,7 @@ class RemoteButler(Butler):
         *,
         collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
+        storage_class: str | StorageClass | None = None,
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
@@ -251,13 +261,18 @@ class RemoteButler(Butler):
         if isinstance(dataset_type, DatasetType):
             dataset_type = dataset_type.name
 
+        if isinstance(storage_class, StorageClass):
+            storage_class = storage_class.name
+
         query = FindDatasetModel(
-            data_id=self._simplify_dataId(data_id, **kwargs), collections=wildcards.strings
+            data_id=self._simplify_dataId(data_id, **kwargs),
+            collections=wildcards.strings,
+            storage_class=storage_class,
         )
 
         path = f"find_dataset/{dataset_type}"
         response = self._client.post(
-            self._get_url(path), json=query.model_dump(mode="json", exclude_unset=True)
+            self._get_url(path), json=query.model_dump(mode="json", exclude_unset=True, exclude_defaults=True)
         )
         response.raise_for_status()
 

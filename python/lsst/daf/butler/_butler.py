@@ -800,13 +800,16 @@ class Butler(LimitedButler):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_dataset(self, id: DatasetId) -> DatasetRef | None:
+    def get_dataset(self, id: DatasetId, storage_class: str | StorageClass | None) -> DatasetRef | None:
         """Retrieve a Dataset entry.
 
         Parameters
         ----------
         id : `DatasetId`
             The unique identifier for the dataset.
+        storage_class : `str` or `StorageClass` or `None`
+            A storage class to use when creating the returned entry. If given
+            it must be compatible with the default storage class.
 
         Returns
         -------
@@ -824,6 +827,7 @@ class Butler(LimitedButler):
         *,
         collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
+        storage_class: str | StorageClass | None = None,
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
@@ -854,6 +858,9 @@ class Butler(LimitedButler):
             A timespan that the validity range of the dataset must overlap.
             If not provided, any `~CollectionType.CALIBRATION` collections
             matched by the ``collections`` argument will not be searched.
+        storage_class : `str` or `StorageClass` or `None`
+            A storage class to use when creating the returned entry. If given
+            it must be compatible with the default storage class.
         **kwargs
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true

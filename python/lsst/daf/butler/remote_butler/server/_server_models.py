@@ -37,3 +37,4 @@ from ..._compat import _BaseModelCompat
 class FindDatasetModel(_BaseModelCompat):
     data_id: SerializedDataCoordinate
     collections: list[str]
+    storage_class: str | None

@@ -116,10 +116,12 @@ def get_dataset_type(
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
-def get_dataset(id: uuid.UUID, factory: Factory = Depends(factory_dependency)) -> SerializedDatasetRef | None:
+def get_dataset(
+    id: uuid.UUID, storage_class: str | None = None, factory: Factory = Depends(factory_dependency)
+) -> SerializedDatasetRef | None:
     """Return a single dataset reference."""
     butler = factory.create_butler()
-    ref = butler.get_dataset(id)
+    ref = butler.get_dataset(id, storage_class=storage_class)
     if ref is not None:
         return ref.to_simple()
     # This could raise a 404 since id is not found. The standard implementation
@@ -150,5 +152,7 @@ def find_dataset(
     data_id = query.data_id.dataId
 
     butler = factory.create_butler()
-    ref = butler.find_dataset(dataset_type, None, collections=collection_query, **data_id)
+    ref = butler.find_dataset(
+        dataset_type, None, collections=collection_query, storage_class=query.storage_class, **data_id
+    )
     return ref.to_simple() if ref else None

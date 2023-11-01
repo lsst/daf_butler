@@ -38,7 +38,7 @@ except ImportError:
     TestClient = None
     app = None
 
-from lsst.daf.butler import Butler, DataCoordinate, DatasetRef
+from lsst.daf.butler import Butler, DataCoordinate, DatasetRef, StorageClassFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
 
@@ -64,6 +64,8 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.storageClassFactory = StorageClassFactory()
+
         # First create a butler and populate it.
         cls.root = makeTestTempDir(TESTDIR)
         cls.repo = MetricTestRepo(root=cls.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
@@ -106,6 +108,8 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(bias_type.name, "bias")
 
     def test_find_dataset(self):
+        storage_class = self.storageClassFactory.getStorageClass("Exposure")
+
         ref = self.butler.find_dataset("bias", collections="imported_g", detector=1, instrument="Cam1")
         self.assertIsInstance(ref, DatasetRef)
         self.assertEqual(ref.id, uuid.UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
@@ -123,6 +127,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
             ref.datasetType,
             DataCoordinate.standardize(detector=1, instrument="Cam1", universe=self.butler.dimensions),
             collections="imported_g",
+            storage_class=storage_class,
         )
         self.assertEqual(ref_new, ref)
 
@@ -138,8 +143,15 @@ class ButlerClientServerTestCase(unittest.TestCase):
         )
         self.assertEqual(ref2, ref3)
 
+        # The test datasets are all Exposure so storage class conversion
+        # can not be tested until we fix that. For now at least test the
+        # code paths.
+        bias = self.butler.get_dataset(ref.id, storage_class=storage_class)
+        self.assertEqual(bias.datasetType.storageClass, storage_class)
+
         # Unknown dataset should not fail.
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4()))
+        self.assertIsNone(self.butler.get_dataset(uuid.uuid4(), storage_class="NumpyArray"))
 
 
 if __name__ == "__main__":
