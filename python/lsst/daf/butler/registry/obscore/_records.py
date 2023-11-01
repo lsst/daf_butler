@@ -211,7 +211,7 @@ class RecordFactory:
         if self.band in dataId:
             em_range = None
             if (label := dataId.get(self.physical_filter)) is not None:
-                em_range = self.config.spectral_ranges.get(label)
+                em_range = self.config.spectral_ranges.get(cast(str, label))
             if not em_range:
                 band_name = dataId[self.band]
                 assert isinstance(band_name, str), "Band name must be string"

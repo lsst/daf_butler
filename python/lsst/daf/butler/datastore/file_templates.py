@@ -448,7 +448,7 @@ class FileTemplate:
         # the case where only required dimensions are present (which in this
         # context should only happen in unit tests; in general we need all
         # dimensions to fill out templates).
-        fields = {
+        fields: dict[str, object] = {
             k: ref.dataId.get(k) for k in ref.datasetType.dimensions.names if ref.dataId.get(k) is not None
         }
         # Extra information that can be included using . syntax
