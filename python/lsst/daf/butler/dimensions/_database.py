@@ -43,7 +43,7 @@ from lsst.utils.classes import cached_getter
 
 from .. import ddl
 from .._named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
-from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
+from .._topology import TopologicalFamily, TopologicalSpace
 from ._elements import Dimension, DimensionCombination, DimensionElement
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
@@ -55,6 +55,7 @@ if TYPE_CHECKING:
         StaticTablesContext,
     )
     from ._governor import GovernorDimension
+    from ._universe import DimensionUniverse
 
 
 class DatabaseTopologicalFamily(TopologicalFamily):
@@ -85,10 +86,10 @@ class DatabaseTopologicalFamily(TopologicalFamily):
         super().__init__(name, space)
         self.members = members
 
-    def choose(self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]) -> DimensionElement:
+    def choose(self, endpoints: Set[str], universe: DimensionUniverse) -> DimensionElement:
         # Docstring inherited from TopologicalFamily.
         for member in self.members:
-            if member in endpoints:
+            if member.name in endpoints:
                 return member
         raise RuntimeError(f"No recognized endpoints for {self.name} in {endpoints}.")
 

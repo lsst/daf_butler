@@ -42,12 +42,13 @@ from lsst.utils import doImportType
 
 from .. import ddl
 from .._named import NamedValueAbstractSet, NamedValueSet
-from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
+from .._topology import TopologicalFamily, TopologicalSpace
 from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
     from ..registry.interfaces import SkyPixDimensionRecordStorage
+    from ._universe import DimensionUniverse
 
 
 class SkyPixSystem(TopologicalFamily):
@@ -81,10 +82,11 @@ class SkyPixSystem(TopologicalFamily):
         for level in range(maxLevel + 1):
             self._members[level] = SkyPixDimension(self, level)
 
-    def choose(self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]) -> SkyPixDimension:
+    def choose(self, endpoints: Set[str], universe: DimensionUniverse) -> SkyPixDimension:
         # Docstring inherited from TopologicalFamily.
         best: SkyPixDimension | None = None
-        for endpoint in endpoints:
+        for endpoint_name in endpoints:
+            endpoint = universe[endpoint_name]
             if endpoint not in self:
                 continue
             assert isinstance(endpoint, SkyPixDimension)

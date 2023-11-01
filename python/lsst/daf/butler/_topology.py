@@ -35,12 +35,13 @@ __all__ = (
 
 import enum
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Mapping, Set
+from typing import TYPE_CHECKING, Any
 
 from lsst.utils.classes import immutable
 
-from ._named import NamedValueAbstractSet
+if TYPE_CHECKING:
+    from .dimensions import DimensionUniverse
 
 
 @enum.unique
@@ -106,9 +107,7 @@ class TopologicalFamily(ABC):
         return other.topology.get(self.space) == self
 
     @abstractmethod
-    def choose(
-        self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]
-    ) -> TopologicalRelationshipEndpoint:
+    def choose(self, endpoints: Set[str], universe: DimensionUniverse) -> TopologicalRelationshipEndpoint:
         """Select the best member of this family to use.
 
         These are to be used in a query join or data ID when more than one
@@ -118,9 +117,11 @@ class TopologicalFamily(ABC):
 
         Parameters
         ----------
-        endpoints : `NamedValueAbstractSet` [`TopologicalRelationshipEndpoint`]
+        endpoints : `~collections.abc.Set` [`str`]
             Endpoints to choose from.  May include endpoints that are not
             members of this family (which should be ignored).
+        universe : `DimensionUniverse`
+            Object that manages all known dimensions.
 
         Returns
         -------
