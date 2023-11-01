@@ -163,7 +163,9 @@ class _FullDataCoordinateReader(DataCoordinateReader):
 
     def __init__(self, dimensions: DimensionGraph):
         self._dimensions = dimensions
-        self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions._dataCoordinateIndices)
+        self._tags = tuple(
+            DimensionKeyColumnTag(name) for name in self._dimensions._group._data_coordinate_indices
+        )
 
     __slots__ = ("_dimensions", "_tags")
 

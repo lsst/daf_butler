@@ -34,7 +34,7 @@ import math
 import pickle
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast, overload
 
 from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
@@ -47,6 +47,7 @@ from ._database import DatabaseDimensionElement
 from ._elements import Dimension, DimensionElement
 from ._governor import GovernorDimension
 from ._graph import DimensionGraph
+from ._group import DimensionGroup
 from ._skypix import SkyPixDimension, SkyPixSystem
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
@@ -143,7 +144,7 @@ class DimensionUniverse:
         # copying from builder.
         self = object.__new__(cls)
         assert self is not None
-        self._cache = {}
+        self._cached_groups = {}
         self._dimensions = builder.dimensions
         self._elements = builder.elements
         self._topology = builder.topology
@@ -158,7 +159,7 @@ class DimensionUniverse:
             element.universe = self
 
         # Add attribute for special subsets of the graph.
-        self.empty = DimensionGraph(self, (), conform=False)
+        self._empty = DimensionGroup(self, (), _conform=False)
 
         # Use the version number and namespace from the config as a key in
         # the singleton dict containing all instances; that will let us
@@ -403,6 +404,13 @@ class DimensionUniverse:
             else:
                 oldSize = len(names)
 
+    # TODO: remove on DM-41326.
+    @deprecated(
+        "DimensionUniverse.extract and DimensionGraph are deprecated in favor of DimensionUniverse.conform "
+        "and DimensionGroup, and will be removed after v27.",
+        version="v27",
+        category=FutureWarning,
+    )
     def extract(self, iterable: Iterable[Dimension | str]) -> DimensionGraph:
         """Construct graph from iterable.
 
@@ -424,13 +432,40 @@ class DimensionUniverse:
         graph : `DimensionGraph`
             A `DimensionGraph` instance containing all given dimensions.
         """
-        names = set()
-        for item in iterable:
-            try:
-                names.add(item.name)  # type: ignore
-            except AttributeError:
-                names.add(item)
-        return DimensionGraph(universe=self, names=names)
+        return self.conform(iterable)._as_graph()
+
+    def conform(
+        self,
+        dimensions: Iterable[str | Dimension] | DimensionGroup | DimensionGraph,
+        /,
+    ) -> DimensionGroup:
+        """Construct a dimension group from an iterable of dimension names.
+
+        Parameters
+        ----------
+        dimensions : `~collections.abc.Iterable` [ `str` or `Dimension` ], \
+                `DimensionGroup`, or `DimensionGraph`
+            Dimensions that must be included in the returned group; their
+            dependencies will be as well.  Support for `Dimension`,
+            `DimensionGraph` objects is deprecated and will be removed after
+            v27.  Passing `DimensionGraph` objects will not yield a deprecation
+            warning to allow non-deprecated methods and properties that return
+            `DimensionGraph` objects to be passed though, since these will be
+            changed to return `DimensionGroup` in the future.
+
+        Returns
+        -------
+        group : `DimensionGroup`
+            A `DimensionGroup` instance containing all given dimensions.
+        """
+        match dimensions:
+            case DimensionGroup():
+                return dimensions
+            case DimensionGraph():
+                return dimensions.as_group()
+            case iterable:
+                names: set[str] = {getattr(d, "name", cast(str, d)) for d in iterable}
+                return DimensionGroup(self, names)
 
     @overload
     def sorted(self, elements: Iterable[Dimension], *, reverse: bool = False) -> Sequence[Dimension]:
@@ -510,6 +545,14 @@ class DimensionUniverse:
         """
         return self._populates[dimension.name]
 
+    @property
+    def empty(self) -> DimensionGraph:
+        """The `DimensionGraph` that contains no dimensions.
+
+        After v27 this will be a `DimensionGroup`.
+        """
+        return self._empty._as_graph()
+
     @classmethod
     def _unpickle(cls, version: int, namespace: str | None = None) -> DimensionUniverse:
         """Return an unpickled dimension universe.
@@ -543,10 +586,6 @@ class DimensionUniverse:
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
 
-    empty: DimensionGraph
-    """The `DimensionGraph` that contains no dimensions (`DimensionGraph`).
-    """
-
     commonSkyPix: SkyPixDimension
     """The special skypix dimension that is used to relate all other spatial
     dimensions in the `Registry` database (`SkyPixDimension`).
@@ -555,11 +594,13 @@ class DimensionUniverse:
     dimensionConfig: DimensionConfig
     """The configuration used to create this Universe (`DimensionConfig`)."""
 
-    _cache: dict[frozenset[str], DimensionGraph]
+    _cached_groups: dict[frozenset[str], DimensionGroup]
 
     _dimensions: NamedValueAbstractSet[Dimension]
 
     _elements: NamedValueAbstractSet[DimensionElement]
+
+    _empty: DimensionGroup
 
     _topology: Mapping[TopologicalSpace, NamedValueAbstractSet[TopologicalFamily]]
 

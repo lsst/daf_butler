@@ -29,17 +29,19 @@ from __future__ import annotations
 
 __all__ = ["DimensionGraph", "SerializedDimensionGraph"]
 
-import itertools
+import warnings
 from collections.abc import Iterable, Iterator, Mapping, Set
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast
 
+from deprecated.sphinx import deprecated
 from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils.classes import cached_getter, immutable
+from lsst.utils.introspection import find_outside_stacklevel
 
-from .._named import NamedValueAbstractSet, NamedValueSet
+from .._named import NamedValueAbstractSet, NameMappingSetView
 from .._topology import TopologicalFamily, TopologicalSpace
 from ..json import from_json_pydantic, to_json_pydantic
+from ._group import DimensionGroup
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
@@ -66,33 +68,138 @@ class SerializedDimensionGraph(_BaseModelCompat):
         return cls.model_construct(names=names)
 
 
+_T = TypeVar("_T", bound="DimensionElement", covariant=True)
+
+
+# TODO: Remove on DM-41326.
+_NVAS_DEPRECATION_MSG = """DimensionGraph is deprecated in favor of
+DimensionGroup, which uses sets of str names instead of NamedValueAbstractSets
+of Dimension or DimensionElement instances.  Support for the
+NamedValueAbstractSet interfaces on this object will be dropped after v27.
+"""
+
+
+class _DimensionGraphNamedValueSet(NameMappingSetView[_T]):
+    def __init__(self, keys: Set[str], universe: DimensionUniverse):
+        super().__init__({k: cast(_T, universe[k]) for k in keys})
+
+    # TODO: Remove on DM-41326.
+    @deprecated(
+        _NVAS_DEPRECATION_MSG
+        + "Use a dict comprehension and DimensionUniverse indexing to construct a mapping when needed.",
+        version="v27",
+        category=FutureWarning,
+    )
+    def asMapping(self) -> Mapping[str, _T]:
+        return super().asMapping()
+
+    # TODO: Remove on DM-41326.
+    @deprecated(
+        _NVAS_DEPRECATION_MSG + "Use DimensionUniverse for DimensionElement lookups.",
+        version="v27",
+        category=FutureWarning,
+    )
+    def __getitem__(self, key: str | _T) -> _T:
+        return super().__getitem__(key)
+
+    def __contains__(self, key: Any) -> bool:
+        from ._elements import DimensionElement
+
+        if isinstance(key, DimensionElement):
+            warnings.warn(
+                _NVAS_DEPRECATION_MSG + "'in' expressions must use str keys.",
+                category=FutureWarning,
+                stacklevel=find_outside_stacklevel("lsst.daf.butler."),
+            )
+        return super().__contains__(key)
+
+    def __iter__(self) -> Iterator[_T]:
+        # TODO: Remove on DM-41326.
+        warnings.warn(
+            _NVAS_DEPRECATION_MSG
+            + (
+                "In the future, iteration will yield str names; for now, use .names "
+                "to do the same without triggering this warning."
+            ),
+            category=FutureWarning,
+            stacklevel=find_outside_stacklevel("lsst.daf.butler."),
+        )
+        return super().__iter__()
+
+    def __eq__(self, other: Any) -> bool:
+        # TODO: Remove on DM-41326.
+        warnings.warn(
+            _NVAS_DEPRECATION_MSG
+            + (
+                "In the future, set-equality will assume str keys; for now, use .names "
+                "to do the same without triggering this warning."
+            ),
+            category=FutureWarning,
+            stacklevel=find_outside_stacklevel("lsst.daf.butler."),
+        )
+        return super().__eq__(other)
+
+    def __le__(self, other: Set[Any]) -> bool:
+        # TODO: Remove on DM-41326.
+        warnings.warn(
+            _NVAS_DEPRECATION_MSG
+            + (
+                "In the future, subset tests will assume str keys; for now, use .names "
+                "to do the same without triggering this warning."
+            ),
+            category=FutureWarning,
+            stacklevel=find_outside_stacklevel("lsst.daf.butler."),
+        )
+        return super().__le__(other)
+
+    def __ge__(self, other: Set[Any]) -> bool:
+        # TODO: Remove on DM-41326.
+        warnings.warn(
+            _NVAS_DEPRECATION_MSG
+            + (
+                "In the future, superset tests will assume str keys; for now, use .names "
+                "to do the same without triggering this warning."
+            ),
+            category=FutureWarning,
+            stacklevel=find_outside_stacklevel("lsst.daf.butler."),
+        )
+        return super().__ge__(other)
+
+
+# TODO: Remove on DM-41326.
+@deprecated(
+    "DimensionGraph is deprecated in favor of DimensionGroup and will be removed after v27.",
+    category=FutureWarning,
+    version="v27",
+)
 @immutable
 class DimensionGraph:
     """An immutable, dependency-complete collection of dimensions.
 
-    `DimensionGraph` behaves in many respects like a set of `Dimension`
-    instances that maintains several special subsets and supersets of
-    related `DimensionElement` instances.  It does not fully implement the
-    `collections.abc.Set` interface, as its automatic expansion of dependencies
-    would make set difference and XOR operations behave surprisingly.
-
-    It also provides dict-like lookup of `DimensionElement` instances from
-    their names.
+    `DimensionGraph` is deprecated in favor of `DimensionGroup` and will be
+    removed after v27.  The two types have very similar interfaces, but
+    `DimensionGroup` does not support direct iteration and its set-like
+    attributes are of dimension element names, not `DimensionElement`
+    instances.  `DimensionGraph` objects are still returned by certain
+    non-deprecated methods and properties (most prominently
+    `DatasetType.dimensions`), and to handle these cases deprecation warnings
+    are only emitted for operations on `DimensionGraph` that are not
+    supported by `DimensionGroup` as well.
 
     Parameters
     ----------
     universe : `DimensionUniverse`
-        The special graph of all known dimensions of which this graph will be
-        a subset.
+        The special graph of all known dimensions of which this graph will be a
+        subset.
     dimensions : iterable of `Dimension`, optional
         An iterable of `Dimension` instances that must be included in the
-        graph.  All (recursive) dependencies of these dimensions will also
-        be included.  At most one of ``dimensions`` and ``names`` must be
+        graph.  All (recursive) dependencies of these dimensions will also be
+        included.  At most one of ``dimensions`` and ``names`` must be
         provided.
     names : iterable of `str`, optional
         An iterable of the names of dimensions that must be included in the
-        graph.  All (recursive) dependencies of these dimensions will also
-        be included.  At most one of ``dimensions`` and ``names`` must be
+        graph.  All (recursive) dependencies of these dimensions will also be
+        included.  At most one of ``dimensions`` and ``names`` must be
         provided.
     conform : `bool`, optional
         If `True` (default), expand to include dependencies.  `False` should
@@ -118,86 +225,71 @@ class DimensionGraph:
         names: Iterable[str] | None = None,
         conform: bool = True,
     ) -> DimensionGraph:
-        conformedNames: set[str]
         if names is None:
             if dimensions is None:
-                conformedNames = set()
+                group = DimensionGroup(universe)
             else:
-                try:
-                    # Optimize for NamedValueSet/NamedKeyDict, though that's
-                    # not required.
-                    conformedNames = set(dimensions.names)  # type: ignore
-                except AttributeError:
-                    conformedNames = {d.name for d in dimensions}
+                group = DimensionGroup(universe, {d.name for d in dimensions}, _conform=conform)
         else:
             if dimensions is not None:
                 raise TypeError("Only one of 'dimensions' and 'names' may be provided.")
-            conformedNames = set(names)
-        if conform:
-            universe.expandDimensionNameSet(conformedNames)
-        # Look in the cache of existing graphs, with the expanded set of names.
-        cacheKey = frozenset(conformedNames)
-        self = universe._cache.get(cacheKey, None)
-        if self is not None:
-            return self
-        # This is apparently a new graph.  Create it, and add it to the cache.
-        self = super().__new__(cls)
-        universe._cache[cacheKey] = self
-        self.universe = universe
-        # Reorder dimensions by iterating over the universe (which is
-        # ordered already) and extracting the ones in the set.
-        self.dimensions = NamedValueSet(universe.sorted(conformedNames)).freeze()
-        # Make a set that includes both the dimensions and any
-        # DimensionElements whose dependencies are in self.dimensions.
-        self.elements = NamedValueSet(
-            e for e in universe.getStaticElements() if e.required.names <= self.dimensions.names
-        ).freeze()
-        self._finish()
-        return self
+            group = DimensionGroup(universe, names, _conform=conform)
+        return group._as_graph()
 
-    def _finish(self) -> None:
-        # Make a set containing just the governor dimensions in this graph.
-        # Need local import to avoid cycle.
-        from ._governor import GovernorDimension
+    @property
+    def universe(self) -> DimensionUniverse:
+        """Object that manages all known dimensions."""
+        return self._group.universe
 
-        self.governors = NamedValueSet(
-            d for d in self.dimensions if isinstance(d, GovernorDimension)
-        ).freeze()
-        # Split dependencies up into "required" and "implied" subsets.
-        # Note that a dimension may be required in one graph and implied in
-        # another.
-        required: NamedValueSet[Dimension] = NamedValueSet()
-        implied: NamedValueSet[Dimension] = NamedValueSet()
-        for dim1 in self.dimensions:
-            for dim2 in self.dimensions:
-                if dim1.name in dim2.implied.names:
-                    implied.add(dim1)
-                    break
-            else:
-                # If no other dimension implies dim1, it's required.
-                required.add(dim1)
-        self.required = required.freeze()
-        self.implied = implied.freeze()
+    @property
+    @deprecated(
+        _NVAS_DEPRECATION_MSG + "Use '.names' instead of '.dimensions' or '.dimensions.names'.",
+        version="v27",
+        category=FutureWarning,
+    )
+    @cached_getter
+    def dimensions(self) -> NamedValueAbstractSet[Dimension]:
+        """A true `~collections.abc.Set` of all true `Dimension` instances in
+        the graph.
+        """
+        return _DimensionGraphNamedValueSet(self._group.names, self._group.universe)
 
-        self.topology = MappingProxyType(
-            {
-                space: NamedValueSet(e.topology[space] for e in self.elements if space in e.topology).freeze()
-                for space in TopologicalSpace.__members__.values()
-            }
-        )
+    @property
+    @cached_getter
+    def elements(self) -> NamedValueAbstractSet[DimensionElement]:
+        """A true `~collections.abc.Set` of all `DimensionElement` instances in
+        the graph; a superset of `dimensions` (`NamedValueAbstractSet` of
+        `DimensionElement`).
+        """
+        return _DimensionGraphNamedValueSet(self._group.elements, self._group.universe)
 
-        # Build mappings from dimension to index; this is really for
-        # DataCoordinate, but we put it in DimensionGraph because many
-        # (many!) DataCoordinates will share the same DimensionGraph, and
-        # we want them to be lightweight.  The order here is what's convenient
-        # for DataCoordinate: all required dimensions before all implied
-        # dimensions.
-        self._dataCoordinateIndices: dict[str, int] = {
-            name: i for i, name in enumerate(itertools.chain(self.required.names, self.implied.names))
-        }
+    @property
+    @cached_getter
+    def governors(self) -> NamedValueAbstractSet[GovernorDimension]:
+        """A true `~collections.abc.Set` of all `GovernorDimension` instances
+        in the graph.
+        """
+        return _DimensionGraphNamedValueSet(self._group.governors, self._group.universe)
+
+    @property
+    @cached_getter
+    def required(self) -> NamedValueAbstractSet[Dimension]:
+        """The subset of `dimensions` whose elements must be directly
+        identified via their primary keys in a data ID in order to identify the
+        rest of the elements in the graph.
+        """
+        return _DimensionGraphNamedValueSet(self._group.required, self._group.universe)
+
+    @property
+    @cached_getter
+    def implied(self) -> NamedValueAbstractSet[Dimension]:
+        """The subset of `dimensions` whose elements need not be directly
+        identified via their primary keys in a data ID.
+        """
+        return _DimensionGraphNamedValueSet(self._group.implied, self._group.universe)
 
     def __getnewargs__(self) -> tuple:
-        return (self.universe, None, tuple(self.dimensions.names), False)
+        return (self.universe, None, tuple(self._group.names), False)
 
     def __deepcopy__(self, memo: dict) -> DimensionGraph:
         # DimensionGraph is recursively immutable; see note in @immutable
@@ -206,8 +298,8 @@ class DimensionGraph:
 
     @property
     def names(self) -> Set[str]:
-        """Set of the names of all dimensions in the graph (`KeysView`)."""
-        return self.dimensions.names
+        """Set of the names of all dimensions in the graph."""
+        return self._group.names
 
     def to_simple(self, minimal: bool = False) -> SerializedDimensionGraph:
         """Convert this class to a simple python type.
@@ -280,7 +372,7 @@ class DimensionGraph:
 
         (and true `Dimension` instances only).
         """
-        return len(self.dimensions)
+        return len(self._group)
 
     def __contains__(self, element: str | DimensionElement) -> bool:
         """Return `True` if the given element or element name is in the graph.
@@ -307,59 +399,68 @@ class DimensionGraph:
         return self.elements.get(name, default)
 
     def __str__(self) -> str:
-        return str(self.dimensions)
+        return str(self.as_group())
 
     def __repr__(self) -> str:
         return f"DimensionGraph({str(self)})"
 
-    def isdisjoint(self, other: DimensionGraph) -> bool:
+    def as_group(self) -> DimensionGroup:
+        """Return a `DimensionGroup` that represents the same set of
+        dimensions.
+        """
+        return self._group
+
+    def isdisjoint(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether the intersection of two graphs is empty.
 
         Returns `True` if either operand is the empty.
         """
-        return self.dimensions.isdisjoint(other.dimensions)
+        return self._group.isdisjoint(other.as_group())
 
-    def issubset(self, other: DimensionGraph) -> bool:
+    def issubset(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether all dimensions in ``self`` are also in ``other``.
 
         Returns `True` if ``self`` is empty.
         """
-        return self.dimensions <= other.dimensions
+        return self._group <= other.as_group()
 
-    def issuperset(self, other: DimensionGraph) -> bool:
+    def issuperset(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether all dimensions in ``other`` are also in ``self``.
 
         Returns `True` if ``other`` is empty.
         """
-        return self.dimensions >= other.dimensions
+        return self._group >= other.as_group()
 
     def __eq__(self, other: Any) -> bool:
         """Test the arguments have exactly the same dimensions & elements."""
+        match other:
+            case DimensionGraph():
+                return self.as_group == other.as_group()
         if isinstance(other, DimensionGraph):
-            return self.dimensions == other.dimensions
+            return self._group == other._group
         else:
             return False
 
     def __hash__(self) -> int:
-        return hash(tuple(self.dimensions.names))
+        return hash(self.as_group())
 
-    def __le__(self, other: DimensionGraph) -> bool:
+    def __le__(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether ``self`` is a subset of ``other``."""
-        return self.dimensions <= other.dimensions
+        return self._group <= other.as_group()
 
-    def __ge__(self, other: DimensionGraph) -> bool:
+    def __ge__(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether ``self`` is a superset of ``other``."""
-        return self.dimensions >= other.dimensions
+        return self._group >= other.as_group()
 
-    def __lt__(self, other: DimensionGraph) -> bool:
+    def __lt__(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether ``self`` is a strict subset of ``other``."""
-        return self.dimensions < other.dimensions
+        return self._group < other.as_group()
 
-    def __gt__(self, other: DimensionGraph) -> bool:
+    def __gt__(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether ``self`` is a strict superset of ``other``."""
-        return self.dimensions > other.dimensions
+        return self._group > other.as_group()
 
-    def union(self, *others: DimensionGraph) -> DimensionGraph:
+    def union(self, *others: DimensionGroup | DimensionGraph) -> DimensionGraph:
         """Construct a new graph with all dimensions in any of the operands.
 
         The elements of the returned graph may exceed the naive union of
@@ -368,119 +469,73 @@ class DimensionGraph:
         dependency dimensions could have been provided by different operands.
         """
         names = set(self.names).union(*[other.names for other in others])
-        return DimensionGraph(self.universe, names=names)
+        return self.universe.conform(names)._as_graph()
 
-    def intersection(self, *others: DimensionGraph) -> DimensionGraph:
+    def intersection(self, *others: DimensionGroup | DimensionGraph) -> DimensionGraph:
         """Construct a new graph with only dimensions in all of the operands.
 
         See also `union`.
         """
         names = set(self.names).intersection(*[other.names for other in others])
-        return DimensionGraph(self.universe, names=names)
+        return self.universe.conform(names)._as_graph()
 
-    def __or__(self, other: DimensionGraph) -> DimensionGraph:
+    def __or__(self, other: DimensionGroup | DimensionGraph) -> DimensionGraph:
         """Construct a new graph with all dimensions in any of the operands.
 
         See `union`.
         """
         return self.union(other)
 
-    def __and__(self, other: DimensionGraph) -> DimensionGraph:
+    def __and__(self, other: DimensionGroup | DimensionGraph) -> DimensionGraph:
         """Construct a new graph with only dimensions in all of the operands.
 
         See `intersection`.
         """
         return self.intersection(other)
 
+    # TODO: Remove on DM-41326.
     @property
-    @cached_getter
+    @deprecated(
+        "DimensionGraph is deprecated in favor of DimensionGroup, which does not have this attribute; "
+        "use .lookup_order.  DimensionGraph will be removed after v27.",
+        category=FutureWarning,
+        version="v27",
+    )
     def primaryKeyTraversalOrder(self) -> tuple[DimensionElement, ...]:
-        """Return a tuple of all elements in specific order.
+        """A tuple of all elements in specific order.
 
-        The order allows records to be
-        found given their primary keys, starting from only the primary keys of
-        required dimensions (`tuple` [ `DimensionRecord` ]).
+        The order allows records to be found given their primary keys, starting
+        from only the primary keys of required dimensions (`tuple` [
+        `DimensionRecord` ]).
 
         Unlike the table definition/topological order (which is what
-        DimensionUniverse.sorted gives you), when dimension A implies
-        dimension B, dimension A appears first.
+        DimensionUniverse.sorted gives you), when dimension A implies dimension
+        B, dimension A appears first.
         """
-        done: set[str] = set()
-        order = []
-
-        def addToOrder(element: DimensionElement) -> None:
-            if element.name in done:
-                return
-            predecessors = set(element.required.names)
-            predecessors.discard(element.name)
-            if not done.issuperset(predecessors):
-                return
-            order.append(element)
-            done.add(element.name)
-            for other in element.implied:
-                addToOrder(other)
-
-        while not done.issuperset(self.required):
-            for dimension in self.required:
-                addToOrder(dimension)
-
-        order.extend(element for element in self.elements if element.name not in done)
-        return tuple(order)
+        return tuple(self.universe[element_name] for element_name in self._group.lookup_order)
 
     @property
     def spatial(self) -> NamedValueAbstractSet[TopologicalFamily]:
         """Families represented by the spatial elements in this graph."""
-        return self.topology[TopologicalSpace.SPATIAL]
+        return self._group.spatial
 
     @property
     def temporal(self) -> NamedValueAbstractSet[TopologicalFamily]:
         """Families represented by the temporal elements in this graph."""
-        return self.topology[TopologicalSpace.TEMPORAL]
+        return self._group.temporal
 
-    # Class attributes below are shadowed by instance attributes, and are
-    # present just to hold the docstrings for those instance attributes.
+    # TODO: Remove on DM-41326.
+    @property
+    @deprecated(
+        "DimensionGraph is deprecated in favor of DimensionGroup, which does not have this attribute; "
+        "use .spatial or .temporal.  DimensionGraph will be removed after v27.",
+        category=FutureWarning,
+        version="v27",
+    )
+    def topology(self) -> Mapping[TopologicalSpace, NamedValueAbstractSet[TopologicalFamily]]:
+        """Families of elements in this graph that can participate in
+        topological relationships.
+        """
+        return self._group._space_families
 
-    universe: DimensionUniverse
-    """The set of all known dimensions, of which this graph is a subset
-    (`DimensionUniverse`).
-    """
-
-    dimensions: NamedValueAbstractSet[Dimension]
-    """A true `~collections.abc.Set` of all true `Dimension` instances in the
-    graph (`NamedValueAbstractSet` of `Dimension`).
-
-    This is the set used for iteration, ``len()``, and most set-like operations
-    on `DimensionGraph` itself.
-    """
-
-    elements: NamedValueAbstractSet[DimensionElement]
-    """A true `~collections.abc.Set` of all `DimensionElement` instances in the
-    graph; a superset of `dimensions` (`NamedValueAbstractSet` of
-    `DimensionElement`).
-
-    This is the set used for dict-like lookups, including the ``in`` operator,
-    on `DimensionGraph` itself.
-    """
-
-    governors: NamedValueAbstractSet[GovernorDimension]
-    """A true `~collections.abc.Set` of all true `GovernorDimension` instances
-    in the graph (`NamedValueAbstractSet` of `GovernorDimension`).
-    """
-
-    required: NamedValueAbstractSet[Dimension]
-    """The subset of `dimensions` whose elements must be directly identified
-    via their primary keys in a data ID in order to identify the rest of the
-    elements in the graph (`NamedValueAbstractSet` of `Dimension`).
-    """
-
-    implied: NamedValueAbstractSet[Dimension]
-    """The subset of `dimensions` whose elements need not be directly
-    identified via their primary keys in a data ID (`NamedValueAbstractSet` of
-    `Dimension`).
-    """
-
-    topology: Mapping[TopologicalSpace, NamedValueAbstractSet[TopologicalFamily]]
-    """Families of elements in this graph that can participate in topological
-    relationships (`~collections.abc.Mapping` from `TopologicalSpace` to
-    `NamedValueAbstractSet` of `TopologicalFamily`).
-    """
+    _group: DimensionGroup

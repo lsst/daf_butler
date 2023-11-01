@@ -31,15 +31,11 @@ There are two kinds of relationships:
    For example, the visit dimension has an implied dependency on the physical filter dimension, because a visit is observed through exactly one filter and hence each visit ID determines a filter name.
    When both dimensions are associated with database tables, an implied dependency involves having a foreign key field in the dependent table that is not part of a primary key in the dependent table.
 
-A `DimensionGraph` is an immutable, set-like container of dimensions that is guaranteed to (recursively) include all dependencies of any dimension in the graph.
-It also categorizes those dimensions into `~DimensionGraph.required` and `~DimensionGraph.implied` subsets, which have roughly the same meaning for a set of dimensions as they do for a single dimension: once the primary key values of all of the required dimensions are known, the primary key values of all implied dimensions are known as well.
-`DimensionGraph` also guarantees a deterministic and topological sort order for its elements.
+A `DimensionGroup` is an immutable, set-like container of dimensions that is guaranteed to (recursively) include all dependencies of any dimension in the set.
+It also categorizes those dimensions into `~DimensionGroup.required` and `~DimensionGroup.implied` subsets, which have roughly the same meaning for a set of dimensions as they do for a single dimension: once the primary key values of all of the required dimensions are known, the primary key values of all implied dimensions are known as well.
+`DimensionGroup` also guarantees a deterministic and topological sort order for its elements.
 
-Because `Dimension` instances have a `~Dimension.name` attribute, we typically
-use `~lsst.daf.butler.NamedValueSet` and `~lsst.daf.butler.NamedKeyDict` as containers when immutability is needed or the guarantees of `DimensionGraph`.
-This allows the string names of dimensions to be used as well in most places where `Dimension` instances are expected.
-
-The complete set of all compatible dimensions is held by a special subclass of `DimensionGraph`, `DimensionUniverse`.
+The complete set of all recognized dimensions is managed by a `DimensionUniverse`.
 A dimension universe is constructed from configuration, and is responsible for constructing all `Dimension` and `DimensionElement` instances; within a universe, there is exactly one `Dimension` instance that is always used to represent a particular dimension.
 
 `DimensionUniverse` instances themselves are held in a global map keyed by the version number in the configuration used for construction, so they behave somewhat like singletons.
@@ -50,15 +46,15 @@ Data IDs
 --------
 
 The most common way butler users encounter dimensions is as the keys in a *data ID*, a dictionary that maps dimensions to their primary key values.
-Different datasets with the same `DatasetType` are always identified by the same set of dimensions (i.e. the same set of data ID keys), and hence a `DatasetType` instance holds a `DimensionGraph` that contains exactly those keys.
+Different datasets with the same `DatasetType` are always identified by the same set of dimensions (i.e. the same set of data ID keys), and hence a `DatasetType` instance holds a `DimensionGroup` that contains exactly those keys.
 
 Many data IDs are simply Python dictionaries that use the string names of dimensions or actual `Dimension` instances as keys.
 Most `Butler` and `Registry` APIs that accept data IDs as input accept both dictionaries and keyword arguments that are added to these dictionaries automatically.
 
 The data IDs returned by the `Butler` or `Registry` (and most of those used internally) are usually instances of the `DataCoordinate` class.
 `DataCoordinate` instances can have different states of knowledge about the dimensions they identify.
-They always contain at least the key-value pairs that correspond to its `DimensionGraph`\ 's `~DimensionGraph.required` subset -- that is, the minimal set of keys needed to fully identify all other dimensions in the graph.
-They can also contain key-value pairs for the `~DimensionGraph.implied` subset (a state indicated by `DataCoordinate.hasFull()` returning `True`).
+They always contain at least the key-value pairs that correspond to its `DimensionGroup`\ 's `~DimensionGroup.required` subset -- that is, the minimal set of keys needed to fully identify all other dimensions in the set.
+They can also contain key-value pairs for the `~DimensionGroup.implied` subset (a state indicated by `DataCoordinate.hasFull()` returning `True`).
 And if `DataCoordinate.hasRecords` returns `True`, the data ID also holds all of the metadata records associated with its dimensions, both as a mapping in
 the `~DataCoordinate.records` attribute and via dynamic attribute access, e.g.
 ``data_id.exposure.day_obs``.

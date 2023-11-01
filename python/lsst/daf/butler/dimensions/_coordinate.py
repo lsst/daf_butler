@@ -254,7 +254,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                 for k, v in defaults.items():
                     d.setdefault(k.name, v)
         if d.keys() >= graph.dimensions.names:
-            values = tuple(d[name] for name in graph._dataCoordinateIndices)
+            values = tuple(d[name] for name in graph._group._data_coordinate_indices)
         else:
             try:
                 values = tuple(d[name] for name in graph.required.names)
@@ -880,9 +880,9 @@ class _BasicTupleDataCoordinate(DataCoordinate):
     graph : `DimensionGraph`
         The dimensions to be identified.
     values : `tuple` [ `int` or `str` ]
-        Data ID values, ordered to match ``graph._dataCoordinateIndices``.  May
-        include values for just required dimensions (which always come first)
-        or all dimensions.
+        Data ID values, ordered like the concatenation of ``graph.required``
+        and ``graph.implied``.  May include values for just required dimensions
+        (which is why these always come first) or all dimensions.
     """
 
     def __init__(self, graph: DimensionGraph, values: tuple[DataIdValue, ...]):
@@ -900,7 +900,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         # Docstring inherited from DataCoordinate.
         if isinstance(key, Dimension):
             key = key.name
-        index = self._graph._dataCoordinateIndices[key]
+        index = self._graph._group._data_coordinate_indices[key]
         try:
             return self._values[index]
         except IndexError:
@@ -922,7 +922,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         elif self.hasFull() or self._graph.required >= graph.dimensions:
             return _BasicTupleDataCoordinate(
                 graph,
-                tuple(self[k] for k in graph._dataCoordinateIndices),
+                tuple(self[k] for k in graph._group._data_coordinate_indices),
             )
         else:
             return _BasicTupleDataCoordinate(graph, tuple(self[k] for k in graph.required.names))
@@ -977,7 +977,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
 
     def hasFull(self) -> bool:
         # Docstring inherited from DataCoordinate.
-        return len(self._values) == len(self._graph._dataCoordinateIndices)
+        return len(self._values) == len(self._graph._group._data_coordinate_indices)
 
     def hasRecords(self) -> bool:
         # Docstring inherited from DataCoordinate.
@@ -1014,16 +1014,15 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
     graph : `DimensionGraph`
         The dimensions to be identified.
     values : `tuple` [ `int` or `str` ]
-        Data ID values, ordered to match ``graph._dataCoordinateIndices``.
-        May include values for just required dimensions (which always come
-        first) or all dimensions.
+       Data ID values, ordered like the concatenation of ``graph.required``
+        and ``graph.implied``.
     records : `~collections.abc.Mapping` [ `str`, `DimensionRecord` or `None` ]
         A `NamedKeyMapping` with `DimensionElement` keys or a regular
         `~collections.abc.Mapping` with `str` (`DimensionElement` name) keys
         and `DimensionRecord` values.  Keys must cover all elements in
         ``self.graph.elements``.  Values may be `None`, but only to reflect
-        actual NULL values in the database, not just records that have not
-        been fetched.
+        actual NULL values in the database, not just records that have not been
+        fetched.
     """
 
     def __init__(
@@ -1043,7 +1042,7 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         if self._graph == graph:
             return self
         return _ExpandedTupleDataCoordinate(
-            graph, tuple(self[k] for k in graph._dataCoordinateIndices), records=self._records
+            graph, tuple(self[k] for k in graph._group._data_coordinate_indices), records=self._records
         )
 
     def expanded(
