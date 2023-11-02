@@ -36,7 +36,7 @@ from lsst.daf.relation import ColumnError, ColumnExpression, ColumnTag, Join, Pr
 from ..._column_categorization import ColumnCategorization
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionGraph, DimensionRecord, DimensionUniverse
+from ...dimensions import DataCoordinate, DimensionGroup, DimensionRecord, DimensionUniverse
 from .._collection_type import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, Database
@@ -174,7 +174,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
 
     def make_dimension_relation(
         self,
-        dimensions: DimensionGraph,
+        dimensions: DimensionGroup,
         columns: Set[ColumnTag],
         context: SqlQueryContext,
         *,
@@ -236,10 +236,10 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         # spatial join, since we need all dimension key columns present in the
         # SQL engine and skypix regions are added by postprocessing in the
         # native iteration engine.
-        for skypix_dimension in dimensions.skypix:
-            if DimensionKeyColumnTag(skypix_dimension.name) not in relation.columns:
+        for skypix_dimension_name in dimensions.skypix:
+            if DimensionKeyColumnTag(skypix_dimension_name) not in relation.columns:
                 raise NotImplementedError(
-                    f"Cannot construct query involving skypix dimension {skypix_dimension.name} unless "
+                    f"Cannot construct query involving skypix dimension {skypix_dimension_name} unless "
                     "it is part of a dataset subquery, spatial join, or other initial relation."
                 )
 
@@ -272,8 +272,9 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         # Iterate over all dimension elements whose relations definitely have
         # to be joined in.  The order doesn't matter as long as we can assume
         # the database query optimizer is going to try to reorder them anyway.
-        for element in dimensions.elements:
-            columns_still_needed = missing_columns.dimension_records[element.name]
+        for element_name in dimensions.elements:
+            columns_still_needed = missing_columns.dimension_records[element_name]
+            element = self.universe[element_name]
             # Two separate conditions in play here:
             # - if we need a record column (not just key columns) from this
             #   element, we have to join in its relation;
@@ -286,19 +287,19 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                 (element.alwaysJoin or element.implied)
                 and frozenset(element.dimensions.names) not in relationships
             ):
-                storage = self._managers.dimensions[element]
+                storage = self._managers.dimensions[element_name]
                 relation = storage.join(relation, default_join, context)
         # At this point we've joined in all of the element relations that
         # definitely need to be included, but we may not have all of the
         # dimension key columns in the query that we want.  To fill out that
-        # set, we iterate over just the given DimensionGraph's dimensions (not
+        # set, we iterate over just the given DimensionGroup's dimensions (not
         # all dimension *elements*) in reverse topological order.  That order
         # should reduce the total number of tables we bring in, since each
         # dimension will bring in keys for its required dependencies before we
         # get to those required dependencies.
-        for dimension in self.universe.sorted(dimensions, reverse=True):
-            if DimensionKeyColumnTag(dimension.name) not in relation.columns:
-                storage = self._managers.dimensions[dimension]
+        for dimension_name in reversed(dimensions.names.as_tuple()):
+            if DimensionKeyColumnTag(dimension_name) not in relation.columns:
+                storage = self._managers.dimensions[dimension_name]
                 relation = storage.join(relation, default_join, context)
 
         # Add the predicates we constructed earlier, with a transfer to native
@@ -320,24 +321,24 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         return relation
 
     def resolve_governor_constraints(
-        self, dimensions: DimensionGraph, constraints: Mapping[str, Set[str]], context: SqlQueryContext
+        self, dimensions: DimensionGroup, constraints: Mapping[str, Set[str]], context: SqlQueryContext
     ) -> Mapping[str, Set[str]]:
         # Docstring inherited.
         result: dict[str, Set[str]] = {}
-        for dimension in dimensions.governors:
-            storage = self._managers.dimensions[dimension]
+        for dimension_name in dimensions.governors:
+            storage = self._managers.dimensions[dimension_name]
             records = storage.get_record_cache(context)
             assert records is not None, "Governor dimensions are always cached."
-            all_values = {cast(str, data_id[dimension.name]) for data_id in records}
-            if (constraint_values := constraints.get(dimension.name)) is not None:
+            all_values = {cast(str, data_id[dimension_name]) for data_id in records}
+            if (constraint_values := constraints.get(dimension_name)) is not None:
                 if not (constraint_values <= all_values):
                     raise DataIdValueError(
-                        f"Unknown values specified for governor dimension {dimension.name}: "
+                        f"Unknown values specified for governor dimension {dimension_name}: "
                         f"{constraint_values - all_values}."
                     )
-                result[dimension.name] = constraint_values
+                result[dimension_name] = constraint_values
             else:
-                result[dimension.name] = all_values
+                result[dimension_name] = all_values
         return result
 
     def get_dimension_record_cache(

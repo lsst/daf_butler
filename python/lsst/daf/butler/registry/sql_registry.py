@@ -2092,11 +2092,11 @@ class SqlRegistry:
             # if any.
             dimension_names = set(parent_dataset_type.dimensions.names)
             if dimensions is not None:
-                dimension_names.update(self.dimensions.extract(dimensions).names)
+                dimension_names.update(self.dimensions.conform(dimensions).names)
             # Construct the summary structure needed to construct a
             # QueryBuilder.
             summary = queries.QuerySummary(
-                requested=DimensionGraph(self.dimensions, names=dimension_names),
+                requested=self.dimensions.conform(dimension_names),
                 column_types=self._managers.column_types,
                 data_id=data_id,
                 expression=where,
@@ -2237,8 +2237,7 @@ class SqlRegistry:
         lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
         """
-        dimensions = ensure_iterable(dimensions)
-        requestedDimensions = self.dimensions.extract(dimensions)
+        requested_dimensions = self.dimensions.conform(dimensions)
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
         dataset_composition, collection_wildcard = self._standardize_query_dataset_args(
@@ -2247,7 +2246,7 @@ class SqlRegistry:
         if collection_wildcard is not None and collection_wildcard.empty():
             doomed_by.append("No data coordinates can be found because collection list is empty.")
         summary = queries.QuerySummary(
-            requested=requestedDimensions,
+            requested=requested_dimensions,
             column_types=self._managers.column_types,
             data_id=data_id,
             expression=where,
@@ -2362,7 +2361,7 @@ class SqlRegistry:
         if collection_wildcard is not None and collection_wildcard.empty():
             doomed_by.append("No dimension records can be found because collection list is empty.")
         summary = queries.QuerySummary(
-            requested=element.graph,
+            requested=element.minimal_group,
             column_types=self._managers.column_types,
             data_id=data_id,
             expression=where,
@@ -2374,7 +2373,7 @@ class SqlRegistry:
         builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
         for datasetType in dataset_composition:
             builder.joinDataset(datasetType, collection_wildcard, isResult=False)
-        query = builder.finish().with_record_columns(element)
+        query = builder.finish().with_record_columns(element.name)
         return queries.DatabaseDimensionRecordQueryResults(query, element)
 
     def queryDatasetAssociations(

@@ -33,12 +33,17 @@ __all__ = (
     "DataCoordinateSequence",
 )
 
+import warnings
 from abc import abstractmethod
 from collections.abc import Collection, Iterable, Iterator, Sequence, Set
 from typing import Any, overload
 
+from deprecated.sphinx import deprecated
+from lsst.utils.introspection import find_outside_stacklevel
+
 from ._coordinate import DataCoordinate
 from ._graph import DimensionGraph
+from ._group import DimensionGroup
 from ._universe import DimensionUniverse
 
 
@@ -73,10 +78,21 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
         """
         return _ScalarDataCoordinateIterable(dataId)
 
+    # TODO: remove on DM-41326.
     @property
-    @abstractmethod
+    @deprecated(
+        "Deprecated in favor of .dimensions; will be removed after v26.",
+        category=FutureWarning,
+        version="v27",
+    )
     def graph(self) -> DimensionGraph:
         """Dimensions identified by these data IDs (`DimensionGraph`)."""
+        return self.dimensions._as_graph()
+
+    @property
+    @abstractmethod
+    def dimensions(self) -> DimensionGroup:
+        """Dimensions identified by these data IDs (`DimensionGroup`)."""
         raise NotImplementedError()
 
     @property
@@ -85,7 +101,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
         (`DimensionUniverse`).
         """
-        return self.graph.universe
+        return self.dimensions.universe
 
     @abstractmethod
     def hasFull(self) -> bool:
@@ -125,7 +141,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
         """
         return DataCoordinateSet(
             frozenset(self),
-            graph=self.graph,
+            dimensions=self.dimensions,
             hasFull=self.hasFull(),
             hasRecords=self.hasRecords(),
             check=False,
@@ -142,11 +158,15 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             `DataCoordinateSequence`.
         """
         return DataCoordinateSequence(
-            tuple(self), graph=self.graph, hasFull=self.hasFull(), hasRecords=self.hasRecords(), check=False
+            tuple(self),
+            dimensions=self.dimensions,
+            hasFull=self.hasFull(),
+            hasRecords=self.hasRecords(),
+            check=False,
         )
 
     @abstractmethod
-    def subset(self, graph: DimensionGraph) -> DataCoordinateIterable:
+    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinateIterable:
         """Return a subset iterable.
 
         This subset iterable returns data IDs that identify a subset of the
@@ -154,15 +174,17 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
         Parameters
         ----------
-        graph : `DimensionGraph`
+        dimensions : `DimensionGraph`, `DimensionGroup`, or \
+                `~collections.abc.Iterable` [ `str` ]
             Dimensions to be identified by the data IDs in the returned
-            iterable.  Must be a subset of ``self.graph``.
+            iterable.  Must be a subset of ``self.dimensions``.
 
         Returns
         -------
         iterable : `DataCoordinateIterable`
-            A `DataCoordinateIterable` with ``iterable.graph == graph``.
-            May be ``self`` if ``graph == self.graph``.  Elements are
+            A `DataCoordinateIterable` with
+            ``iterable.dimensions == dimensions``.
+            May be ``self`` if ``dimensions == self.dimensions``.  Elements are
             equivalent to those that would be created by calling
             `DataCoordinate.subset` on all elements in ``self``, possibly
             with deduplication and/or reordering (depending on the subclass,
@@ -205,9 +227,9 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
             return False
 
     @property
-    def graph(self) -> DimensionGraph:
+    def dimensions(self) -> DimensionGroup:
         # Docstring inherited from DataCoordinateIterable.
-        return self._dataId.graph
+        return self._dataId.dimensions
 
     def hasFull(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
@@ -217,9 +239,12 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
         # Docstring inherited from DataCoordinateIterable.
         return self._dataId.hasRecords()
 
-    def subset(self, graph: DimensionGraph) -> _ScalarDataCoordinateIterable:
+    def subset(
+        self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]
+    ) -> _ScalarDataCoordinateIterable:
         # Docstring inherited from DataCoordinateIterable.
-        return _ScalarDataCoordinateIterable(self._dataId.subset(graph))
+        dimensions = self.universe.conform(dimensions)
+        return _ScalarDataCoordinateIterable(self._dataId.subset(dimensions))
 
 
 class _DataCoordinateCollectionBase(DataCoordinateIterable):
@@ -236,9 +261,14 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
     ----------
     dataIds : `collections.abc.Collection` [ `DataCoordinate` ]
          A collection of `DataCoordinate` instances, with dimensions equal to
-        ``graph``.
-    graph : `DimensionGraph`
-        Dimensions identified by all data IDs in the set.
+        ``dimensions``.
+    graph : `DimensionGraph`, optional
+        Dimensions identified by all data IDs in the collection.  Ignored if
+        ``dimensions`` is provided, and deprecated with removal after v27.
+    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`, \
+            or `DimensionGraph`, optional
+        Dimensions identified by all data IDs in the collection.  Must be
+        provided unless ``graph`` is.
     hasFull : `bool`, optional
         If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
         `True` for all given data IDs.  If `False`, no such guarantee is made,
@@ -256,27 +286,56 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         If `True` (default) check that all data IDs are consistent with the
         given ``graph`` and state flags at construction.  If `False`, no
         checking will occur.
+    universe : `DimensionUniverse`
+        Object that manages all dimension definitions.
     """
 
     def __init__(
         self,
         dataIds: Collection[DataCoordinate],
-        graph: DimensionGraph,
+        graph: DimensionGraph | None = None,
         *,
+        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
         hasFull: bool | None = None,
         hasRecords: bool | None = None,
         check: bool = True,
+        universe: DimensionUniverse | None = None,
     ):
+        universe = (
+            universe
+            or getattr(dimensions, "universe", None)
+            or getattr(graph, "universe", None)
+            or getattr(dataIds, "universe", None)
+        )
+        if universe is None:
+            raise TypeError(
+                "universe must be provided, either directly or via dimensions, dataIds, or graph."
+            )
+        if graph is not None:
+            warnings.warn(
+                "The 'graph' argument to DataCoordinateIterable constructors is deprecated in favor of "
+                " passing an iterable of dimension names as the 'dimensions' argument, and wil be removed "
+                "after v27.",
+                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+                category=FutureWarning,
+            )
+        if dimensions is not None:
+            dimensions = universe.conform(dimensions)
+        elif graph is not None:
+            dimensions = graph.as_group()
+        del graph  # Avoid accidental use later.
+        if dimensions is None:
+            raise TypeError("Exactly one of 'graph' or (preferably) 'dimensions' must be provided.")
         self._dataIds = dataIds
-        self._graph = graph
+        self._dimensions = dimensions
         if check:
             for dataId in self._dataIds:
                 if hasFull and not dataId.hasFull():
                     raise ValueError(f"{dataId} is not complete, but is required to be.")
                 if hasRecords and not dataId.hasRecords():
                     raise ValueError(f"{dataId} has no records, but is required to.")
-                if dataId.graph != self._graph:
-                    raise ValueError(f"Bad dimensions {dataId.graph}; expected {self._graph}.")
+                if dataId.dimensions != self._dimensions:
+                    raise ValueError(f"Bad dimensions {dataId.dimensions}; expected {self._dimensions}.")
             if hasFull is None:
                 hasFull = all(dataId.hasFull() for dataId in self._dataIds)
             if hasRecords is None:
@@ -284,12 +343,12 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         self._hasFull = hasFull
         self._hasRecords = hasRecords
 
-    __slots__ = ("_graph", "_dataIds", "_hasFull", "_hasRecords")
+    __slots__ = ("_dimensions", "_dataIds", "_hasFull", "_hasRecords")
 
     @property
-    def graph(self) -> DimensionGraph:
+    def dimensions(self) -> DimensionGroup:
         # Docstring inherited from DataCoordinateIterable.
-        return self._graph
+        return self._dimensions
 
     def hasFull(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
@@ -310,7 +369,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         # and hence defer checking if that's what the user originally wanted.
         return DataCoordinateSet(
             frozenset(self._dataIds),
-            graph=self._graph,
+            dimensions=self._dimensions,
             hasFull=self._hasFull,
             hasRecords=self._hasRecords,
             check=False,
@@ -323,7 +382,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         # and hence defer checking if that's what the user originally wanted.
         return DataCoordinateSequence(
             tuple(self._dataIds),
-            graph=self._graph,
+            dimensions=self._dimensions,
             hasFull=self._hasFull,
             hasRecords=self._hasRecords,
             check=False,
@@ -339,12 +398,12 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         key = DataCoordinate.standardize(key, universe=self.universe)
         return key in self._dataIds
 
-    def _subsetKwargs(self, graph: DimensionGraph) -> dict[str, Any]:
+    def _subsetKwargs(self, dimensions: DimensionGroup) -> dict[str, Any]:
         """Return constructor kwargs useful for subclasses implementing subset.
 
         Parameters
         ----------
-        graph : `DimensionGraph`
+        dimensions : `DimensionGroup`
             Dimensions passed to `subset`.
 
         Returns
@@ -355,7 +414,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
             dimensions.
         """
         hasFull: bool | None
-        if graph.dimensions <= self.graph.required:
+        if dimensions.names <= self.dimensions.required:
             hasFull = True
         else:
             hasFull = self._hasFull
@@ -374,8 +433,13 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         A set of `DataCoordinate` instances, with dimensions equal to
         ``graph``.  If this is a mutable object, the caller must be able to
         guarantee that it will not be modified by any other holders.
-    graph : `DimensionGraph`
-        Dimensions identified by all data IDs in the set.
+    graph : `DimensionGraph`, optional
+        Dimensions identified by all data IDs in the collection.  Ignored if
+        ``dimensions`` is provided, and deprecated with removal after v27.
+    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`, \
+            or `DimensionGraph`, optional
+        Dimensions identified by all data IDs in the collection.  Must be
+        provided unless ``graph`` is.
     hasFull : `bool`, optional
         If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
         `True` for all given data IDs.  If `False`, no such guarantee is made,
@@ -394,6 +458,8 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         If `True` (default) check that all data IDs are consistent with the
         given ``graph`` and state flags at construction.  If `False`, no
         checking will occur.
+    universe : `DimensionUniverse`
+        Object that manages all dimension definitions.
 
     Notes
     -----
@@ -411,7 +477,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
 
     - subset/superset comparison _operators_ (``<``, ``>``, ``<=``, ``>=``)
       require both operands to be `DataCoordinateSet` instances that have the
-      same dimensions (i.e. ``graph`` attribute);
+      same dimensions (i.e. `dimensions` attribute);
 
     - `issubset`, `issuperset`, and `isdisjoint` require the other argument to
       be a `DataCoordinateIterable` with the same dimensions;
@@ -435,13 +501,23 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
     def __init__(
         self,
         dataIds: Set[DataCoordinate],
-        graph: DimensionGraph,
+        graph: DimensionGraph | None = None,
         *,
+        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
         hasFull: bool | None = None,
         hasRecords: bool | None = None,
         check: bool = True,
+        universe: DimensionUniverse | None = None,
     ):
-        super().__init__(dataIds, graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
+        super().__init__(
+            dataIds,
+            graph,
+            dimensions=dimensions,
+            hasFull=hasFull,
+            hasRecords=hasRecords,
+            check=check,
+            universe=universe,
+        )
 
     _dataIds: Set[DataCoordinate]
 
@@ -452,33 +528,41 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
 
     def __repr__(self) -> str:
         return (
-            f"DataCoordinateSet({set(self._dataIds)}, {self._graph!r}, "
+            f"DataCoordinateSet({set(self._dataIds)}, {self._dimensions!r}, "
             f"hasFull={self._hasFull}, hasRecords={self._hasRecords})"
         )
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, DataCoordinateSet):
-            return self._graph == other._graph and self._dataIds == other._dataIds
+            return self._dimensions == other._dimensions and self._dataIds == other._dataIds
         return False
 
     def __le__(self, other: DataCoordinateSet) -> bool:
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set comparision: {self.graph} != {other.graph}.")
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set comparision: {self.dimensions} != {other.dimensions}."
+            )
         return self._dataIds <= other._dataIds
 
     def __ge__(self, other: DataCoordinateSet) -> bool:
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set comparision: {self.graph} != {other.graph}.")
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set comparision: {self.dimensions} != {other.dimensions}."
+            )
         return self._dataIds >= other._dataIds
 
     def __lt__(self, other: DataCoordinateSet) -> bool:
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set comparision: {self.graph} != {other.graph}.")
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set comparision: {self.dimensions} != {other.dimensions}."
+            )
         return self._dataIds < other._dataIds
 
     def __gt__(self, other: DataCoordinateSet) -> bool:
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set comparision: {self.graph} != {other.graph}.")
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set comparision: {self.dimensions} != {other.dimensions}."
+            )
         return self._dataIds > other._dataIds
 
     def issubset(self, other: DataCoordinateIterable) -> bool:
@@ -495,8 +579,10 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
             `True` if all data IDs in ``self`` are also in ``other``, and
             `False` otherwise.
         """
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set comparision: {self.graph} != {other.graph}.")
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set comparision: {self.dimensions} != {other.dimensions}."
+            )
         return self._dataIds <= other.toSet()._dataIds
 
     def issuperset(self, other: DataCoordinateIterable) -> bool:
@@ -505,7 +591,8 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         Parameters
         ----------
         other : `DataCoordinateIterable`
-            An iterable of data IDs with ``other.graph == self.graph``.
+            An iterable of data IDs with
+            ``other.dimensions == self.dimensions``.
 
         Returns
         -------
@@ -513,8 +600,10 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
             `True` if all data IDs in ``other`` are also in ``self``, and
             `False` otherwise.
         """
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set comparision: {self.graph} != {other.graph}.")
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set comparision: {self.dimensions} != {other.dimensions}."
+            )
         return self._dataIds >= other.toSet()._dataIds
 
     def isdisjoint(self, other: DataCoordinateIterable) -> bool:
@@ -523,7 +612,8 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         Parameters
         ----------
         other : `DataCoordinateIterable`
-            An iterable of data IDs with ``other.graph == self.graph``.
+            An iterable of data IDs with
+            ``other._dimensions == self._dimensions``.
 
         Returns
         -------
@@ -531,29 +621,39 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
             `True` if there are no data IDs in both ``self`` and ``other``, and
             `False` otherwise.
         """
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set comparision: {self.graph} != {other.graph}.")
+        if self._dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set comparision: {self._dimensions} != {other.dimensions}."
+            )
         return self._dataIds.isdisjoint(other.toSet()._dataIds)
 
     def __and__(self, other: DataCoordinateSet) -> DataCoordinateSet:
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set operation: {self.graph} != {other.graph}.")
-        return DataCoordinateSet(self._dataIds & other._dataIds, self.graph, check=False)
+        if self._dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set operation: {self._dimensions} != {other.dimensions}."
+            )
+        return DataCoordinateSet(self._dataIds & other._dataIds, dimensions=self._dimensions, check=False)
 
     def __or__(self, other: DataCoordinateSet) -> DataCoordinateSet:
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set operation: {self.graph} != {other.graph}.")
-        return DataCoordinateSet(self._dataIds | other._dataIds, self.graph, check=False)
+        if self._dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set operation: {self._dimensions} != {other.dimensions}."
+            )
+        return DataCoordinateSet(self._dataIds | other._dataIds, dimensions=self._dimensions, check=False)
 
     def __xor__(self, other: DataCoordinateSet) -> DataCoordinateSet:
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set operation: {self.graph} != {other.graph}.")
-        return DataCoordinateSet(self._dataIds ^ other._dataIds, self.graph, check=False)
+        if self._dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set operation: {self._dimensions} != {other.dimensions}."
+            )
+        return DataCoordinateSet(self._dataIds ^ other._dataIds, dimensions=self._dimensions, check=False)
 
     def __sub__(self, other: DataCoordinateSet) -> DataCoordinateSet:
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set operation: {self.graph} != {other.graph}.")
-        return DataCoordinateSet(self._dataIds - other._dataIds, self.graph, check=False)
+        if self._dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set operation: {self._dimensions} != {other.dimensions}."
+            )
+        return DataCoordinateSet(self._dataIds - other._dataIds, dimensions=self._dimensions, check=False)
 
     def intersection(self, other: DataCoordinateIterable) -> DataCoordinateSet:
         """Return a new set that contains all data IDs from parameters.
@@ -561,16 +661,21 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         Parameters
         ----------
         other : `DataCoordinateIterable`
-            An iterable of data IDs with ``other.graph == self.graph``.
+            An iterable of data IDs with
+            ``other.dimensions == self.dimensions``.
 
         Returns
         -------
         intersection : `DataCoordinateSet`
             A new `DataCoordinateSet` instance.
         """
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set operation: {self.graph} != {other.graph}.")
-        return DataCoordinateSet(self._dataIds & other.toSet()._dataIds, self.graph, check=False)
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set operation: {self.dimensions} != {other.dimensions}."
+            )
+        return DataCoordinateSet(
+            self._dataIds & other.toSet()._dataIds, dimensions=self.dimensions, check=False
+        )
 
     def union(self, other: DataCoordinateIterable) -> DataCoordinateSet:
         """Return a new set that contains all data IDs in either parameters.
@@ -578,16 +683,21 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         Parameters
         ----------
         other : `DataCoordinateIterable`
-            An iterable of data IDs with ``other.graph == self.graph``.
+            An iterable of data IDs with
+            ``other.dimensions == self.dimensions``.
 
         Returns
         -------
         intersection : `DataCoordinateSet`
             A new `DataCoordinateSet` instance.
         """
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set operation: {self.graph} != {other.graph}.")
-        return DataCoordinateSet(self._dataIds | other.toSet()._dataIds, self.graph, check=False)
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set operation: {self.dimensions} != {other.dimensions}."
+            )
+        return DataCoordinateSet(
+            self._dataIds | other.toSet()._dataIds, dimensions=self.dimensions, check=False
+        )
 
     def symmetric_difference(self, other: DataCoordinateIterable) -> DataCoordinateSet:
         """Return a new set with all data IDs in either parameters, not both.
@@ -595,16 +705,21 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         Parameters
         ----------
         other : `DataCoordinateIterable`
-            An iterable of data IDs with ``other.graph == self.graph``.
+            An iterable of data IDs with
+            ``other.dimensions == self.dimensions``.
 
         Returns
         -------
         intersection : `DataCoordinateSet`
             A new `DataCoordinateSet` instance.
         """
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set operation: {self.graph} != {other.graph}.")
-        return DataCoordinateSet(self._dataIds ^ other.toSet()._dataIds, self.graph, check=False)
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set operation: {self.dimensions} != {other.dimensions}."
+            )
+        return DataCoordinateSet(
+            self._dataIds ^ other.toSet()._dataIds, dimensions=self.dimensions, check=False
+        )
 
     def difference(self, other: DataCoordinateIterable) -> DataCoordinateSet:
         """Return a new set with all data IDs in this that are not in other.
@@ -612,43 +727,52 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         Parameters
         ----------
         other : `DataCoordinateIterable`
-            An iterable of data IDs with ``other.graph == self.graph``.
+            An iterable of data IDs with
+            ``other.dimensions == self.dimensions``.
 
         Returns
         -------
         intersection : `DataCoordinateSet`
             A new `DataCoordinateSet` instance.
         """
-        if self.graph != other.graph:
-            raise ValueError(f"Inconsistent dimensions in set operation: {self.graph} != {other.graph}.")
-        return DataCoordinateSet(self._dataIds - other.toSet()._dataIds, self.graph, check=False)
+        if self.dimensions != other.dimensions:
+            raise ValueError(
+                f"Inconsistent dimensions in set operation: {self.dimensions} != {other.dimensions}."
+            )
+        return DataCoordinateSet(
+            self._dataIds - other.toSet()._dataIds, dimensions=self.dimensions, check=False
+        )
 
     def toSet(self) -> DataCoordinateSet:
         # Docstring inherited from DataCoordinateIterable.
         return self
 
-    def subset(self, graph: DimensionGraph) -> DataCoordinateSet:
+    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinateSet:
         """Return a set whose data IDs identify a subset.
 
         Parameters
         ----------
-        graph : `DimensionGraph`
+        dimensions : `DimensionGraph`, `DimensionGroup`, or \
+                `~collections.abc.Iterable` [ `str` ]
             Dimensions to be identified by the data IDs in the returned
-            iterable.  Must be a subset of ``self.graph``.
+            iterable.  Must be a subset of ``self.dimensions``.
 
         Returns
         -------
         set : `DataCoordinateSet`
-            A `DataCoordinateSet` with ``set.graph == graph``.
-            Will be ``self`` if ``graph == self.graph``.  Elements are
+            A `DataCoordinateSet` with ``set.dimensions == dimensions``. Will
+            be ``self`` if ``dimensions == self.dimensions``.  Elements are
             equivalent to those that would be created by calling
             `DataCoordinate.subset` on all elements in ``self``, with
-            deduplication but and in arbitrary order.
+            deduplication and in arbitrary order.
         """
-        if graph == self.graph:
+        dimensions = self.universe.conform(dimensions)
+        if dimensions == self.dimensions:
             return self
         return DataCoordinateSet(
-            {dataId.subset(graph) for dataId in self._dataIds}, graph, **self._subsetKwargs(graph)
+            {dataId.subset(dimensions) for dataId in self._dataIds},
+            dimensions=dimensions,
+            **self._subsetKwargs(dimensions),
         )
 
 
@@ -663,8 +787,13 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     dataIds : `collections.abc.Sequence` [ `DataCoordinate` ]
         A sequence of `DataCoordinate` instances, with dimensions equal to
         ``graph``.
-    graph : `DimensionGraph`
-        Dimensions identified by all data IDs in the set.
+    graph : `DimensionGraph`, optional
+        Dimensions identified by all data IDs in the collection.  Ignored if
+        ``dimensions`` is provided, and deprecated with removal after v27.
+    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`, \
+            `DimensionGraph`, optional
+        Dimensions identified by all data IDs in the collection.  Must be
+        provided unless ``graph`` is.
     hasFull : `bool`, optional
         If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
         `True` for all given data IDs.  If `False`, no such guarantee is made,
@@ -683,18 +812,30 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         If `True` (default) check that all data IDs are consistent with the
         given ``graph`` and state flags at construction.  If `False`, no
         checking will occur.
+    universe : `DimensionUniverse`
+        Object that manages all dimension definitions.
     """
 
     def __init__(
         self,
         dataIds: Sequence[DataCoordinate],
-        graph: DimensionGraph,
+        graph: DimensionGraph | None = None,
         *,
+        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
         hasFull: bool | None = None,
         hasRecords: bool | None = None,
         check: bool = True,
+        universe: DimensionUniverse | None = None,
     ):
-        super().__init__(tuple(dataIds), graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
+        super().__init__(
+            tuple(dataIds),
+            graph,
+            dimensions=dimensions,
+            hasFull=hasFull,
+            hasRecords=hasRecords,
+            check=check,
+            universe=universe,
+        )
 
     _dataIds: Sequence[DataCoordinate]
 
@@ -705,13 +846,13 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
 
     def __repr__(self) -> str:
         return (
-            f"DataCoordinateSequence({tuple(self._dataIds)}, {self._graph!r}, "
+            f"DataCoordinateSequence({tuple(self._dataIds)}, {self._dimensions!r}, "
             f"hasFull={self._hasFull}, hasRecords={self._hasRecords})"
         )
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, DataCoordinateSequence):
-            return self._graph == other._graph and self._dataIds == other._dataIds
+            return self._dimensions == other._dimensions and self._dataIds == other._dataIds
         return False
 
     @overload
@@ -726,7 +867,11 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         r = self._dataIds[index]
         if isinstance(index, slice):
             return DataCoordinateSequence(
-                r, self._graph, hasFull=self._hasFull, hasRecords=self._hasRecords, check=False
+                r,
+                dimensions=self._dimensions,
+                hasFull=self._hasFull,
+                hasRecords=self._hasRecords,
+                check=False,
             )
         return r
 
@@ -734,14 +879,15 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         # Docstring inherited from DataCoordinateIterable.
         return self
 
-    def subset(self, graph: DimensionGraph) -> DataCoordinateSequence:
+    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinateSequence:
         """Return a sequence whose data IDs identify a subset.
 
         Parameters
         ----------
-        graph : `DimensionGraph`
+        dimensions : `DimensionGraph`, `DimensionGroup`, \
+                or `~collections.abc.Iterable` [ `str` ]
             Dimensions to be identified by the data IDs in the returned
-            iterable.  Must be a subset of ``self.graph``.
+            iterable.  Must be a subset of ``self.dimensions``.
 
         Returns
         -------
@@ -752,8 +898,11 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
             `DataCoordinate.subset` on all elements in ``self``, in the same
             order and with no deduplication.
         """
-        if graph == self.graph:
+        dimensions = self.universe.conform(dimensions)
+        if dimensions == self.dimensions:
             return self
         return DataCoordinateSequence(
-            tuple(dataId.subset(graph) for dataId in self._dataIds), graph, **self._subsetKwargs(graph)
+            tuple(dataId.subset(dimensions) for dataId in self._dataIds),
+            dimensions=dimensions,
+            **self._subsetKwargs(dimensions),
         )

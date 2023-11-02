@@ -53,7 +53,7 @@ from lsst.daf.relation import (
 from .... import _timespan
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
 from ...._column_type_info import ColumnTypeInfo
-from ....dimensions import DataCoordinate, Dimension, DimensionGraph, DimensionUniverse
+from ....dimensions import DataCoordinate, Dimension, DimensionGroup, DimensionUniverse
 from ..._exceptions import UserExpressionError, UserExpressionSyntaxError
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .check import CheckVisitor
@@ -76,7 +76,7 @@ class ExpressionTypeError(TypeError):
 
 def make_string_expression_predicate(
     string: str,
-    dimensions: DimensionGraph,
+    dimensions: DimensionGroup,
     *,
     column_types: ColumnTypeInfo,
     bind: Mapping[str, Any] | None = None,
@@ -91,7 +91,7 @@ def make_string_expression_predicate(
     ----------
     string : `str`
         String to parse.
-    dimensions : `DimensionGraph`
+    dimensions : `DimensionGroup`
         The dimensions the query would include in the absence of this WHERE
         expression.
     column_types : `ColumnTypeInfo`

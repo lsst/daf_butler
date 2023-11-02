@@ -243,7 +243,7 @@ class InspectionVisitorTestCase(unittest.TestCase):
         tree = parser.parse("instrument = 'LSST'")
         bind = {}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertEqual(summary.dimensions, {"instrument"})
         self.assertFalse(summary.columns)
         self.assertFalse(summary.hasIngestDate)
         self.assertEqual(summary.dataIdKey, universe["instrument"])
@@ -251,23 +251,21 @@ class InspectionVisitorTestCase(unittest.TestCase):
 
         tree = parser.parse("instrument != 'LSST'")
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertEqual(summary.dimensions, {"instrument"})
         self.assertFalse(summary.columns)
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("instrument = 'LSST' AND visit = 1")
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
         self.assertFalse(summary.columns)
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("instrument = 'LSST' AND visit = 1 AND skymap = 'x'")
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(
-            summary.dimensions.names, {"instrument", "visit", "band", "physical_filter", "skymap"}
-        )
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "skymap"})
         self.assertFalse(summary.columns)
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
@@ -280,13 +278,13 @@ class InspectionVisitorTestCase(unittest.TestCase):
         tree = parser.parse("instrument = instr")
         bind = {"instr": "LSST"}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertEqual(summary.dimensions, {"instrument"})
         self.assertFalse(summary.hasIngestDate)
         self.assertEqual(summary.dataIdKey, universe["instrument"])
         self.assertEqual(summary.dataIdValue, "LSST")
 
         tree = parser.parse("instrument != instr")
-        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertEqual(summary.dimensions, {"instrument"})
         summary = tree.visit(InspectionVisitor(universe, bind))
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
@@ -294,16 +292,14 @@ class InspectionVisitorTestCase(unittest.TestCase):
         tree = parser.parse("instrument = instr AND visit = visit_id")
         bind = {"instr": "LSST", "visit_id": 1}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("instrument = 'LSST' AND visit = 1 AND skymap = skymap_name")
         bind = {"instr": "LSST", "visit_id": 1, "skymap_name": "x"}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(
-            summary.dimensions.names, {"instrument", "visit", "band", "physical_filter", "skymap"}
-        )
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "skymap"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
@@ -315,7 +311,7 @@ class InspectionVisitorTestCase(unittest.TestCase):
         tree = parser.parse("instrument IN ('LSST')")
         bind = {}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertEqual(summary.dimensions, {"instrument"})
         self.assertFalse(summary.hasIngestDate)
         # we do not handle IN with a single item as `=`
         self.assertIsNone(summary.dataIdKey)
@@ -324,28 +320,28 @@ class InspectionVisitorTestCase(unittest.TestCase):
         tree = parser.parse("instrument IN (instr)")
         bind = {"instr": "LSST"}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument"})
+        self.assertEqual(summary.dimensions, {"instrument"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("visit IN (1,2,3)")
         bind = {}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("visit IN (visit1, visit2, visit3)")
         bind = {"visit1": 1, "visit2": 2, "visit3": 3}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("visit IN (visits)")
         bind = {"visits": (1, 2, 3)}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions.names, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 

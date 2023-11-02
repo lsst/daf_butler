@@ -41,6 +41,8 @@ from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from typing import Any
 
+from deprecated.sphinx import deprecated
+
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
 from ...dimensions import (
@@ -48,6 +50,7 @@ from ...dimensions import (
     DataCoordinateIterable,
     DimensionElement,
     DimensionGraph,
+    DimensionGroup,
     DimensionRecord,
 )
 from ._query import Query
@@ -83,8 +86,18 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         return f"<DataCoordinate iterator with dimensions={self.graph}>"
 
     @property
+    @deprecated(
+        "Deprecated in favor of .dimensions.  Will be removed after v27.",
+        version="v27",
+        category=FutureWarning,
+    )
     def graph(self) -> DimensionGraph:
         # Docstring inherited from DataCoordinateIterable.
+        return self._query.dimensions._as_graph()
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        """The dimensions of the data IDs returned by this query."""
         return self._query.dimensions
 
     def hasFull(self) -> bool:
@@ -93,7 +106,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def hasRecords(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
-        return self._query.has_record_columns is True or not self.graph
+        return self._query.has_record_columns is True or not self.dimensions
 
     @contextmanager
     def materialize(self) -> Iterator[DataCoordinateQueryResults]:
@@ -151,7 +164,10 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         return DataCoordinateQueryResults(self._query.with_record_columns(defer=True))
 
     def subset(
-        self, graph: DimensionGraph | None = None, *, unique: bool = False
+        self,
+        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        *,
+        unique: bool = False,
     ) -> DataCoordinateQueryResults:
         """Return a results object containing a subset of the dimensions of
         this one, and/or a unique near-subset of its rows.
@@ -161,9 +177,10 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
         Parameters
         ----------
-        graph : `DimensionGraph`, optional
+        dimensions : `DimensionGroup`, `DimensionGraph`, or \
+                `~collections.abc.Iterable` [ `str`], optional
             Dimensions to include in the new results object.  If `None`,
-            ``self.graph`` is used.
+            ``self.dimensions`` is used.
         unique : `bool`, optional
             If `True` (`False` is default), the query should only return unique
             data IDs.  This is implemented in the database; to obtain unique
@@ -180,7 +197,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         Raises
         ------
         ValueError
-            Raised when ``graph`` is not a subset of the dimension graph in
+            Raised when ``dimensions`` is not a subset of the dimensions in
             this result.
 
         Notes
@@ -193,23 +210,21 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         it may be much more efficient to call `materialize` first.  For
         example::
 
-            dimensions1 = DimensionGraph(...)
-            dimensions2 = DimensionGraph(...)
+            dimensions1 = DimensionGroup(...)
+            dimensions2 = DimensionGroup(...)
             with registry.queryDataIds(...).materialize() as tempDataIds:
-                for dataId1 in tempDataIds.subset(
-                        graph=dimensions1,
-                        unique=True):
+                for dataId1 in tempDataIds.subset(dimensions1, unique=True):
                     ...
-                for dataId2 in tempDataIds.subset(
-                        graph=dimensions2,
-                        unique=True):
+                for dataId2 in tempDataIds.subset(dimensions2, unique=True):
                     ...
         """
-        if graph is None:
-            graph = self.graph
-        if not graph.issubset(self.graph):
-            raise ValueError(f"{graph} is not a subset of {self.graph}")
-        query = self._query.projected(graph, unique=unique, defer=True, drop_postprocessing=True)
+        if dimensions is None:
+            dimensions = self.dimensions
+        else:
+            dimensions = self.dimensions.universe.conform(dimensions)
+            if not dimensions.issubset(self.dimensions):
+                raise ValueError(f"{dimensions} is not a subset of {self.dimensions}")
+        query = self._query.projected(dimensions.names, unique=unique, defer=True, drop_postprocessing=True)
         return DataCoordinateQueryResults(query)
 
     def findDatasets(
@@ -278,7 +293,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         collections: Any,
         *,
         findFirst: bool = True,
-        dimensions: DimensionGraph | None = None,
+        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
     ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
         """Find datasets using the data IDs identified by this query, and
         return them along with the original data IDs.
@@ -306,7 +321,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             expressions and may not be ``...``.  Note that this is not the
             same as yielding one `DatasetRef` for each yielded data ID if
             ``dimensions`` is not `None`.
-        dimensions : `DimensionGraph`, optional
+        dimensions : `DimensionGroup`, `DimensionGraph`, or \
+                `~collections.abc.Iterable` [ `str` ], optional
             The dimensions of the data IDs returned.  Must be a subset of
             ``self.dimensions``.
 
@@ -322,7 +338,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             Raised if the given dataset type is not registered.
         """
         if dimensions is None:
-            dimensions = self.graph
+            dimensions = self.dimensions
+        else:
+            dimensions = self.universe.conform(dimensions)
         parent_dataset_type, _ = self._query.backend.resolve_single_dataset_type_wildcard(
             datasetType, components=False, explicit_only=True
         )

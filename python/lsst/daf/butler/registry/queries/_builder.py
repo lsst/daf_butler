@@ -176,7 +176,7 @@ class QueryBuilder:
                 require_preferred_engine=True,
             )
         if self.summary.where.data_id:
-            known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.dimensions)
+            known_dimensions = self.summary.where.data_id.dimensions.intersection(self.summary.dimensions)
             known_data_id = self.summary.where.data_id.subset(known_dimensions)
             self.relation = self.relation.with_rows_satisfying(
                 self._context.make_data_coordinate_predicate(known_data_id),

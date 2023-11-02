@@ -47,7 +47,7 @@ from lsst.daf.relation import (
 
 from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionGraph, DimensionRecord, DimensionUniverse
+from ...dimensions import DataCoordinate, DimensionGroup, DimensionRecord, DimensionUniverse
 from .._collection_type import CollectionType
 from .._exceptions import DatasetTypeError, MissingDatasetTypeError
 from ..wildcards import CollectionWildcard
@@ -576,15 +576,15 @@ class QueryBackend(Generic[_C]):
         if len(collections) <= 1:
             return base
         # We filter the dimension keys in the given relation through
-        # DimensionGraph.required.names to minimize the set we partition on
+        # DimensionGroup.required.names to minimize the set we partition on
         # and order it in a more index-friendly way.  More precisely, any
         # index we define on dimensions will be consistent with this order, but
         # any particular index may not have the same dimension columns.
-        dimensions = self.universe.extract(
+        dimensions = self.universe.conform(
             [tag.dimension for tag in DimensionKeyColumnTag.filter_from(base.columns)]
         )
         find_first = FindFirstDataset(
-            dimensions=DimensionKeyColumnTag.generate(dimensions.required.names),
+            dimensions=DimensionKeyColumnTag.generate(dimensions.required),
             rank=DatasetColumnTag(dataset_type.name, "rank"),
         )
         return find_first.apply(
@@ -627,7 +627,7 @@ class QueryBackend(Generic[_C]):
     @abstractmethod
     def make_dimension_relation(
         self,
-        dimensions: DimensionGraph,
+        dimensions: DimensionGroup,
         columns: Set[ColumnTag],
         context: _C,
         *,
@@ -642,7 +642,7 @@ class QueryBackend(Generic[_C]):
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`
+        dimensions : `DimensionGroup`
             Dimensions to include.  The key columns for all dimensions (both
             required and implied) will be included in the returned relation.
         columns : `~collections.abc.Set` [ `ColumnTag` ]
@@ -691,14 +691,14 @@ class QueryBackend(Generic[_C]):
 
     @abstractmethod
     def resolve_governor_constraints(
-        self, dimensions: DimensionGraph, constraints: Mapping[str, Set[str]], context: _C
+        self, dimensions: DimensionGroup, constraints: Mapping[str, Set[str]], context: _C
     ) -> Mapping[str, Set[str]]:
         """Resolve governor dimension constraints provided by user input to
         a query against the content in the `Registry`.
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`
+        dimensions : `DimensionGroup`
             Dimensions that bound the governor dimensions to consider (via
             ``dimensions.governors``, more specifically).
         constraints : `~collections.abc.Mapping` [ `str`, \

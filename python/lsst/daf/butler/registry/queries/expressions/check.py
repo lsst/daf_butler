@@ -37,15 +37,7 @@ from collections.abc import Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
-from ...._named import NamedKeyDict, NamedValueSet
-from ....dimensions import (
-    DataCoordinate,
-    DataIdValue,
-    Dimension,
-    DimensionElement,
-    DimensionGraph,
-    DimensionUniverse,
-)
+from ....dimensions import DataCoordinate, DataIdValue, Dimension, DimensionGroup, DimensionUniverse
 from ..._exceptions import UserExpressionError
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .normalForm import NormalForm, NormalFormVisitor
@@ -75,14 +67,14 @@ class InspectionSummary:
             self.columns.setdefault(element, set()).update(columns)
         self.hasIngestDate = self.hasIngestDate or other.hasIngestDate
 
-    dimensions: NamedValueSet[Dimension] = dataclasses.field(default_factory=NamedValueSet)
-    """Dimensions whose primary keys or dependencies were referenced anywhere
-    in this branch (`NamedValueSet` [ `Dimension` ]).
+    dimensions: set[str] = dataclasses.field(default_factory=set)
+    """Names of dimensions whose primary keys or dependencies were referenced
+    anywhere in this branch (`set` [ `str` ]).
     """
 
-    columns: NamedKeyDict[DimensionElement, set[str]] = dataclasses.field(default_factory=NamedKeyDict)
-    """Dimension element tables whose columns were referenced anywhere in this
-    branch (`NamedKeyDict` [ `DimensionElement`, `set` [ `str` ] ]).
+    columns: dict[str, set[str]] = dataclasses.field(default_factory=dict)
+    """Names of dimension element tables whose columns were referenced anywhere
+    in this branch (`dict` [ `str`, `set` [ `str` ] ]).
     """
 
     hasIngestDate: bool = False
@@ -112,9 +104,9 @@ class InspectionSummary:
                     "Expression requires an ingest date, which requires exactly one dataset type."
                 )
             result.add(DatasetColumnTag(dataset_type_name, "ingest_date"))
-        result.update(DimensionKeyColumnTag.generate(self.dimensions.names))
+        result.update(DimensionKeyColumnTag.generate(self.dimensions))
         for dimension_element, columns in self.columns.items():
-            result.update(DimensionRecordColumnTag.generate(dimension_element.name, columns))
+            result.update(DimensionRecordColumnTag.generate(dimension_element, columns))
         return result
 
 
@@ -239,13 +231,11 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         if column is None:
             assert isinstance(element, Dimension)
             return TreeSummary(
-                dimensions=NamedValueSet(element.graph.dimensions),
+                dimensions=set(element.minimal_group.names),
                 dataIdKey=element,
             )
         else:
-            return TreeSummary(
-                dimensions=NamedValueSet(element.graph.dimensions), columns=NamedKeyDict({element: {column}})
-            )
+            return TreeSummary(dimensions=set(element.minimal_group.names), columns={element.name: {column}})
 
     def visitUnaryOp(self, operator: str, operand: TreeSummary, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitUnaryOp
@@ -334,7 +324,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
     ----------
     dataId : `DataCoordinate`
         Dimension values that are fully known in advance.
-    graph : `DimensionGraph`
+    dimensions : `DimensionGroup`
         The dimensions the query would include in the absence of this
         expression.
     bind : `~collections.abc.Mapping` [ `str`, `object` ]
@@ -352,16 +342,21 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
     def __init__(
         self,
         dataId: DataCoordinate,
-        graph: DimensionGraph,
+        dimensions: DimensionGroup,
         bind: Mapping[str, Any],
         defaults: DataCoordinate,
         allow_orphans: bool = False,
     ):
         self.dataId = dataId
-        self.graph = graph
+        self.dimensions = dimensions
         self.defaults = defaults
         self._branchVisitor = InspectionVisitor(dataId.universe, bind)
         self._allow_orphans = allow_orphans
+
+    @property
+    def universe(self) -> DimensionUniverse:
+        """Object that defines all dimensions."""
+        return self.dimensions.universe
 
     def visitBranch(self, node: Node) -> TreeSummary:
         # Docstring inherited from NormalFormVisitor.
@@ -406,7 +401,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
                     # Expression says something like "instrument='HSC' AND
                     # instrument='DECam'", or data ID has one and expression
                     # has the other.
-                    if branch.dataIdKey in self.dataId:
+                    if branch.dataIdKey.name in self.dataId:
                         raise UserExpressionError(
                             f"Conflict between expression containing {branch.dataIdKey.name}={new_value!r} "
                             f"and data ID with {branch.dataIdKey.name}={value!r}."
@@ -437,7 +432,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         # after all).
         governorsNeededInBranch: set[str] = set()
         for dimension in summary.dimensions:
-            governorsNeededInBranch.update(dimension.graph.governors.names)
+            governorsNeededInBranch.update(self.universe.dimensions[dimension].minimal_group.governors)
         if not governorsNeededInBranch.issubset(summary.dimension_values.keys()):
             missing = governorsNeededInBranch - summary.dimension_values.keys()
             if missing <= self.defaults.names:
@@ -465,7 +460,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
             # pulled from defaults in _all_ branches.  This is the set we will
             # be able to bound overall; any dimensions not referenced by even
             # one branch could be unbounded.
-            dimensions_in_all_branches = set(self.graph.universe.dimensions.names)
+            dimensions_in_all_branches = set(self.universe.dimensions.names)
             for branch in branches:
                 summary.update(branch)
                 summary.defaultsNeeded.update(branch.defaultsNeeded)
@@ -482,11 +477,8 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         # lets a user say "tract=X" on the command line (well, "skymap=Y AND
         # tract=X" - logic in visitInner checks for that) when running a task
         # like ISR that has nothing to do with skymaps.
-        if not summary.dimensions.issubset(self.graph.dimensions):
-            self.graph = DimensionGraph(
-                self.graph.universe,
-                dimensions=(summary.dimensions | self.graph.dimensions),
-            )
+        if not summary.dimensions.issubset(self.dimensions.names):
+            self.dimensions = self.universe.conform(summary.dimensions | self.dimensions.names)
         for dimension, values in summary.dimension_constraints.items():
             if dimension in summary.defaultsNeeded:
                 # One branch contained an explicit value for this dimension
@@ -503,7 +495,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         # If any default data ID values were needed, update self.dataId with
         # them, and then update the governor restriction with them.
         if summary.defaultsNeeded:
-            defaultsNeededGraph = DimensionGraph(self.graph.universe, names=summary.defaultsNeeded)
+            defaultsNeededGraph = self.universe.conform(summary.defaultsNeeded)
             self.dataId = self.dataId.union(self.defaults.subset(defaultsNeededGraph))
             for dimension in summary.defaultsNeeded:
                 summary.dimension_constraints[dimension] = {self.defaults[dimension]}
