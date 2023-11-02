@@ -38,9 +38,12 @@ except ImportError:
     TestClient = None
     app = None
 
+from unittest.mock import patch
+
 from lsst.daf.butler import Butler, DataCoordinate, DatasetRef, MissingDatasetTypeError, StorageClassFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.resources.http import HttpResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -168,6 +171,29 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Unknown dataset should not fail.
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4()))
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4(), storage_class="NumpyArray"))
+
+    def test_instantiate_via_butler_http_search(self):
+        """Ensure that the primary Butler constructor's automatic search logic
+        correctly locates and reads the configuration file and ends up with a
+        RemoteButler pointing to the correct URL
+        """
+
+        # This is kind of a fragile test.  Butler's search logic does a lot of
+        # manipulations involving creating new ResourcePaths, and ResourcePath
+        # doesn't use httpx so we can't easily inject the TestClient in there.
+        # We don't have an actual valid HTTP URL to give to the constructor
+        # because the test instance of the server is accessed via ASGI.
+        #
+        # Instead we just monkeypatch the HTTPResourcePath 'read' method and
+        # hope that all ResourcePath HTTP reads during construction are going
+        # to the server under test.
+        def override_read(http_resource_path):
+            return self.client.get(http_resource_path.geturl()).content
+
+        with patch.object(HttpResourcePath, "read", override_read):
+            butler = Butler("https://test.example/butler")
+        assert isinstance(butler, RemoteButler)
+        assert str(butler._config.remote_butler.url) == "https://test.example/butler/"
 
 
 if __name__ == "__main__":

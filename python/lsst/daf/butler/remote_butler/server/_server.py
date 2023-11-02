@@ -118,6 +118,30 @@ async def get_index() -> Metadata:
     return get_metadata(package_name="lsst.daf.butler", application_name="butler")
 
 
+@app.get(
+    "/butler/butler.yaml",
+    description=(
+        "Returns a Butler YAML configuration file that can be used to instantiate a Butler client"
+        " pointing at this server"
+    ),
+    summary="Client configuration file",
+    response_model=dict[str, Any],
+)
+@app.get(
+    "/butler/butler.json",
+    description=(
+        "Returns a Butler JSON configuration file that can be used to instantiate a Butler client"
+        " pointing at this server"
+    ),
+    summary="Client configuration file",
+    response_model=dict[str, Any],
+)
+async def get_client_config() -> dict[str, Any]:
+    # We can return JSON data for both the YAML and JSON case because all JSON
+    # files are parseable as YAML.
+    return {"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "<butlerRoot>"}}
+
+
 @app.get("/butler/v1/universe", response_model=dict[str, Any])
 def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> dict[str, Any]:
     """Allow remote client to get dimensions definition."""

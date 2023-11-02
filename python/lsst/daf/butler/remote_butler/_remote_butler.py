@@ -33,6 +33,7 @@ from typing import Any, TextIO
 
 import httpx
 from lsst.daf.butler import __version__
+from lsst.daf.butler.repo_relocation import replaceRoot
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
 
@@ -72,6 +73,16 @@ class RemoteButler(Butler):
         **kwargs: Any,
     ):
         butler_config = ButlerConfig(config, searchPaths, without_datastore=True)
+        # There is a convention in Butler config files where <butlerRoot> in a
+        # configuration option refers to the directory containing the
+        # configuration file.  We allow this for the remote butler's URL so
+        # that the server doesn't have to know which hostname it is being
+        # accessed from
+        server_url_key = ("remote_butler", "url")
+        if server_url_key in butler_config:
+            butler_config[server_url_key] = replaceRoot(
+                butler_config[server_url_key], butler_config.configDir
+            )
         self._config = RemoteButlerConfigModel.model_validate(butler_config)
         self._dimensions: DimensionUniverse | None = None
         # TODO: RegistryDefaults should have finish() called on it, but this
