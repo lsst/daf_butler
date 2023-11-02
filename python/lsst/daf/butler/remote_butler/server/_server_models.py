@@ -38,3 +38,5 @@ class FindDatasetModel(_BaseModelCompat):
     data_id: SerializedDataCoordinate
     collections: list[str]
     storage_class: str | None
+    dimension_records: bool = False
+    datastore_records: bool = False

@@ -113,6 +113,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         ref = self.butler.find_dataset("bias", collections="imported_g", detector=1, instrument="Cam1")
         self.assertIsInstance(ref, DatasetRef)
         self.assertEqual(ref.id, uuid.UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
+        self.assertFalse(ref.dataId.hasRecords())
 
         # Try again with variation of parameters.
         ref_new = self.butler.find_dataset(
@@ -120,8 +121,10 @@ class ButlerClientServerTestCase(unittest.TestCase):
             {"detector": 1},
             collections="imported_g",
             instrument="Cam1",
+            dimension_records=True,
         )
         self.assertEqual(ref_new, ref)
+        self.assertTrue(ref_new.dataId.hasRecords())
 
         ref_new = self.butler.find_dataset(
             ref.datasetType,
@@ -142,6 +145,11 @@ class ButlerClientServerTestCase(unittest.TestCase):
             full_name="Aa",
         )
         self.assertEqual(ref2, ref3)
+
+        # Try expanded refs.
+        self.assertFalse(ref.dataId.hasRecords())
+        expanded = self.butler.get_dataset(ref.id, dimension_records=True)
+        self.assertTrue(expanded.dataId.hasRecords())
 
         # The test datasets are all Exposure so storage class conversion
         # can not be tested until we fix that. For now at least test the

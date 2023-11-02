@@ -800,7 +800,13 @@ class Butler(LimitedButler):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_dataset(self, id: DatasetId, storage_class: str | StorageClass | None) -> DatasetRef | None:
+    def get_dataset(
+        self,
+        id: DatasetId,
+        storage_class: str | StorageClass | None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
+    ) -> DatasetRef | None:
         """Retrieve a Dataset entry.
 
         Parameters
@@ -810,6 +816,10 @@ class Butler(LimitedButler):
         storage_class : `str` or `StorageClass` or `None`
             A storage class to use when creating the returned entry. If given
             it must be compatible with the default storage class.
+        dimension_records: `bool`, optional
+            If `True` the ref will be expanded and contain dimension records.
+        datastore_records: `bool`, optional.
+            If `True` the ref will contain associated datastore records.
 
         Returns
         -------
@@ -828,6 +838,7 @@ class Butler(LimitedButler):
         collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
         storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
@@ -861,6 +872,10 @@ class Butler(LimitedButler):
         storage_class : `str` or `StorageClass` or `None`
             A storage class to use when creating the returned entry. If given
             it must be compatible with the default storage class.
+        dimension_records: `bool`, optional
+            If `True` the ref will be expanded and contain dimension records.
+        datastore_records: `bool`, optional.
+            If `True` the ref will contain associated datastore records.
         **kwargs
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true

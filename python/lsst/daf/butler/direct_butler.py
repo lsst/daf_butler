@@ -1322,11 +1322,20 @@ class DirectButler(Butler):
         return self._registry.getDatasetType(name)
 
     def get_dataset(
-        self, id: DatasetId, storage_class: str | StorageClass | None = None
+        self,
+        id: DatasetId,
+        storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
     ) -> DatasetRef | None:
         ref = self._registry.getDataset(id)
-        if ref is not None and storage_class:
-            ref = ref.overrideStorageClass(storage_class)
+        if ref is not None:
+            if dimension_records:
+                ref = ref.expanded(self._registry.expandDataId(ref.dataId, graph=ref.datasetType.dimensions))
+            if storage_class:
+                ref = ref.overrideStorageClass(storage_class)
+            if datastore_records:
+                ref = self._registry.get_datastore_records(ref)
         return ref
 
     def find_dataset(
@@ -1337,6 +1346,7 @@ class DirectButler(Butler):
         collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
         storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
@@ -1353,9 +1363,11 @@ class DirectButler(Butler):
             data_id,
             collections=collections,
             timespan=timespan,
-            dataset_records=datastore_records,
+            datastore_records=datastore_records,
             **kwargs,
         )
+        if ref is not None and dimension_records:
+            ref = ref.expanded(self._registry.expandDataId(ref.dataId, graph=ref.datasetType.dimensions))
         if ref is not None and storage_class is not None:
             ref = ref.overrideStorageClass(storage_class)
         return ref

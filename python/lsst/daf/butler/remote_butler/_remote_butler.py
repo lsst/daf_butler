@@ -220,14 +220,23 @@ class RemoteButler(Butler):
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def get_dataset(
-        self, id: DatasetId, storage_class: str | StorageClass | None = None
+        self,
+        id: DatasetId,
+        storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
     ) -> DatasetRef | None:
         path = f"dataset/{id}"
         if isinstance(storage_class, StorageClass):
             storage_class_name = storage_class.name
         elif storage_class:
             storage_class_name = storage_class
-        params: dict[str, str] = {}
+        params: dict[str, str | bool] = {
+            "dimension_records": dimension_records,
+            "datastore_records": datastore_records,
+        }
+        if datastore_records:
+            raise ValueError("Datastore records can not yet be returned in client/server butler.")
         if storage_class:
             params["storage_class"] = storage_class_name
         response = self._client.get(self._get_url(path), params=params)
@@ -244,6 +253,7 @@ class RemoteButler(Butler):
         collections: str | Sequence[str] | None = None,
         timespan: Timespan | None = None,
         storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
@@ -258,6 +268,11 @@ class RemoteButler(Butler):
         # cache to generate list of collection names.
         wildcards = CollectionWildcard.from_expression(collections)
 
+        if datastore_records:
+            raise ValueError("Datastore records can not yet be returned in client/server butler.")
+        if timespan:
+            raise ValueError("Timespan can not yet be used in butler client/server.")
+
         if isinstance(dataset_type, DatasetType):
             dataset_type = dataset_type.name
 
@@ -268,6 +283,8 @@ class RemoteButler(Butler):
             data_id=self._simplify_dataId(data_id, **kwargs),
             collections=wildcards.strings,
             storage_class=storage_class,
+            dimension_records=dimension_records,
+            datastore_records=datastore_records,
         )
 
         path = f"find_dataset/{dataset_type}"
