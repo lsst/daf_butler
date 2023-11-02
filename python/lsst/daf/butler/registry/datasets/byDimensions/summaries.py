@@ -31,7 +31,7 @@ from .... import ddl
 
 __all__ = ("CollectionSummaryManager",)
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Generic, TypeVar
 
 import sqlalchemy
@@ -42,13 +42,13 @@ from ....dimensions import GovernorDimension, addDimensionForeignKey
 from ..._collection_summary import CollectionSummary
 from ..._collection_type import CollectionType
 from ...interfaces import (
-    ChainedCollectionRecord,
     CollectionManager,
     CollectionRecord,
     Database,
     DimensionRecordStorageManager,
     StaticTablesContext,
 )
+from ...wildcards import CollectionWildcard
 
 _T = TypeVar("_T")
 
@@ -148,7 +148,6 @@ class CollectionSummaryManager:
         self._collectionKeyName = collections.getCollectionForeignKeyName()
         self._dimensions = dimensions
         self._tables = tables
-        self._cache: dict[Any, CollectionSummary] = {}
 
     @classmethod
     def initialize(
@@ -237,38 +236,53 @@ class CollectionSummaryManager:
                     self._tables.dimensions[dimension],
                     *[{self._collectionKeyName: collection.key, dimension: v} for v in values],
                 )
-        # Update the in-memory cache, too.  These changes will remain even if
-        # the database inserts above are rolled back by some later exception in
-        # the same transaction, but that's okay: we never promise that a
-        # CollectionSummary has _just_ the dataset types and governor dimension
-        # values that are actually present, only that it is guaranteed to
-        # contain any dataset types or governor dimension values that _may_ be
-        # present.
-        # That guarantee (and the possibility of rollbacks) means we can't get
-        # away with checking the cache before we try the database inserts,
-        # however; if someone had attempted to insert datasets of some dataset
-        # type previously, and that rolled back, and we're now trying to insert
-        # some more datasets of that same type, it would not be okay to skip
-        # the DB summary table insertions because we found entries in the
-        # in-memory cache.
-        self.get(collection).update(summary)
 
-    def refresh(self, dataset_types: Mapping[int, DatasetType]) -> None:
-        """Load all collection summary information from the database.
+    def fetch_summaries(
+        self,
+        collections: Iterable[CollectionRecord],
+        dataset_type_ids: Iterable[int] | None,
+        dataset_type_factory: Callable[[int], DatasetType],
+    ) -> Mapping[Any, CollectionSummary]:
+        """Fetch collection summaries given their names and dataset types.
 
         Parameters
         ----------
-        dataset_types : `~collections.abc.Mapping` [`int`, `DatasetType`]
-            Mapping of an `int` dataset_type_id value to `DatasetType`
-            instance. Summaries are only loaded for dataset types that appear
-            in this mapping.
+        collections : `~collections.abc.Iterable` [`CollectionRecord`]
+            Collection records to query.
+        dataset_type_ids : `~collections.abc.Iterable` [`int`]
+            IDs of dataset types to include into returned summaries. If `None`
+            then all dataset types will be included.
+        dataset_type_factory : `Callable`
+            Method that returns `DatasetType` instance given its dataset type
+            ID.
+
+        Returns
+        -------
+        summaries : `~collections.abc.Mapping` [`Any`, `CollectionSummary`]
+            Collection summaries indexed by collection record key. This mapping
+            will also contain all nested non-chained collections of the chained
+            collections.
         """
+        # Need to expand all chained collections first.
+        non_chains: list[CollectionRecord] = []
+        chains: dict[CollectionRecord, list[CollectionRecord]] = {}
+        for collection in collections:
+            if collection.type is CollectionType.CHAINED:
+                children = self._collections.resolve_wildcard(
+                    CollectionWildcard.from_names([collection.name]),
+                    flatten_chains=True,
+                    include_chains=False,
+                )
+                non_chains += children
+                chains[collection] = children
+            else:
+                non_chains.append(collection)
+
         # Set up the SQL query we'll use to fetch all of the summary
         # information at once.
-        columns = [
-            self._tables.datasetType.columns[self._collectionKeyName].label(self._collectionKeyName),
-            self._tables.datasetType.columns.dataset_type_id.label("dataset_type_id"),
-        ]
+        coll_col = self._tables.datasetType.columns[self._collectionKeyName].label(self._collectionKeyName)
+        dataset_type_id_col = self._tables.datasetType.columns.dataset_type_id.label("dataset_type_id")
+        columns = [coll_col, dataset_type_id_col]
         fromClause: sqlalchemy.sql.expression.FromClause = self._tables.datasetType
         for dimension, table in self._tables.dimensions.items():
             columns.append(table.columns[dimension.name].label(dimension.name))
@@ -280,7 +294,12 @@ class CollectionSummaryManager:
                 ),
                 isouter=True,
             )
+
         sql = sqlalchemy.sql.select(*columns).select_from(fromClause)
+        sql = sql.where(coll_col.in_([coll.key for coll in non_chains]))
+        if dataset_type_ids is not None:
+            sql = sql.where(dataset_type_id_col.in_(dataset_type_ids))
+
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
         # with no datasets.
@@ -293,59 +312,29 @@ class CollectionSummaryManager:
             collectionKey = row[self._collectionKeyName]
             # dataset_type_id should also never be None/NULL; it's in the first
             # table we joined.
-            if datasetType := dataset_types.get(row["dataset_type_id"]):
-                # See if we have a summary already for this collection; if not,
-                # make one.
-                summary = summaries.get(collectionKey)
-                if summary is None:
-                    summary = CollectionSummary()
-                    summaries[collectionKey] = summary
-                # Update the dimensions with the values in this row that
-                # aren't None/NULL (many will be in general, because these
-                # enter the query via LEFT OUTER JOIN).
-                summary.dataset_types.add(datasetType)
-                for dimension in self._tables.dimensions:
-                    value = row[dimension.name]
-                    if value is not None:
-                        summary.governors.setdefault(dimension.name, set()).add(value)
-        self._cache = summaries
-
-    def get(self, collection: CollectionRecord) -> CollectionSummary:
-        """Return a summary for the given collection.
-
-        Parameters
-        ----------
-        collection : `CollectionRecord`
-            Record describing the collection for which a summary is to be
-            retrieved.
-
-        Returns
-        -------
-        summary : `CollectionSummary`
-            Summary of the dataset types and governor dimension values in
-            this collection.
-        """
-        summary = self._cache.get(collection.key)
-        if summary is None:
-            # When we load the summary information from the database, we don't
-            # create summaries for CHAINED collections; those are created here
-            # as needed, and *never* cached - we have no good way to update
-            # those summaries when some a new dataset is added to a child
-            # colletion.
-            if collection.type is CollectionType.CHAINED:
-                assert isinstance(collection, ChainedCollectionRecord)
-                child_summaries = [self.get(self._collections.find(child)) for child in collection.children]
-                if child_summaries:
-                    summary = CollectionSummary.union(*child_summaries)
-                else:
-                    summary = CollectionSummary()
-            else:
-                # Either this collection doesn't have any datasets yet, or the
-                # only datasets it has were created by some other process since
-                # the last call to refresh.  We assume the former; the user is
-                # responsible for calling refresh if they want to read
-                # concurrently-written things.  We do remember this in the
-                # cache.
+            dataset_type = dataset_type_factory(row["dataset_type_id"])
+            # See if we have a summary already for this collection; if not,
+            # make one.
+            summary = summaries.get(collectionKey)
+            if summary is None:
                 summary = CollectionSummary()
-                self._cache[collection.key] = summary
-        return summary
+                summaries[collectionKey] = summary
+            # Update the dimensions with the values in this row that
+            # aren't None/NULL (many will be in general, because these
+            # enter the query via LEFT OUTER JOIN).
+            summary.dataset_types.add(dataset_type)
+            for dimension in self._tables.dimensions:
+                value = row[dimension.name]
+                if value is not None:
+                    summary.governors.setdefault(dimension.name, set()).add(value)
+
+        # Add empty summary for any missing collection.
+        for collection in non_chains:
+            if collection.key not in summaries:
+                summaries[collection.key] = CollectionSummary()
+
+        # Merge children into their chains summaries.
+        for chain, children in chains.items():
+            summaries[chain.key] = CollectionSummary.union(*(summaries[child.key] for child in children))
+
+        return summaries

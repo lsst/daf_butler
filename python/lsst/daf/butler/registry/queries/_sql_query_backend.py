@@ -121,6 +121,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         result: dict[DatasetType, list[CollectionRecord]] = {
             dataset_type: [] for dataset_type in dataset_types
         }
+        summaries = self._managers.datasets.fetch_summaries(collections, result.keys())
         for dataset_type, filtered_collections in result.items():
             for collection_record in collections:
                 if not dataset_type.isCalibration() and collection_record.type is CollectionType.CALIBRATION:
@@ -130,7 +131,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                             f"in CALIBRATION collection {collection_record.name!r}."
                         )
                 else:
-                    collection_summary = self._managers.datasets.getCollectionSummary(collection_record)
+                    collection_summary = summaries[collection_record.key]
                     if collection_summary.is_compatible_with(
                         dataset_type,
                         governor_constraints,

@@ -7,6 +7,7 @@ __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 import logging
 import warnings
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
@@ -207,7 +208,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         byName: dict[str, ByDimensionsDatasetRecordStorage] = {}
         byId: dict[int, ByDimensionsDatasetRecordStorage] = {}
-        dataset_types: dict[int, DatasetType] = {}
         c = self._static.dataset_type.columns
         with self._db.query(self._static.dataset_type.select()) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
@@ -255,10 +255,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             )
             byName[datasetType.name] = storage
             byId[storage._dataset_type_id] = storage
-            dataset_types[row["id"]] = datasetType
         self._byName = byName
         self._byId = byId
-        self._summaries.refresh(dataset_types)
 
     def remove(self, name: str) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -496,9 +494,29 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             run=self._collections[row[self._collections.getRunForeignKeyName()]].name,
         )
 
+    def _dataset_type_factory(self, dataset_type_id: int) -> DatasetType:
+        """Return dataset type given its ID."""
+        return self._byId[dataset_type_id].datasetType
+
     def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
         # Docstring inherited from DatasetRecordStorageManager.
-        return self._summaries.get(collection)
+        summaries = self._summaries.fetch_summaries([collection], None, self._dataset_type_factory)
+        return summaries[collection.key]
+
+    def fetch_summaries(
+        self, collections: Iterable[CollectionRecord], dataset_types: Iterable[DatasetType] | None = None
+    ) -> Mapping[Any, CollectionSummary]:
+        # Docstring inherited from DatasetRecordStorageManager.
+        dataset_type_ids: list[int] | None = None
+        if dataset_types is not None:
+            dataset_type_ids = []
+            for dataset_type in dataset_types:
+                if dataset_type.isComponent():
+                    dataset_type = dataset_type.makeCompositeDatasetType()
+                # Assume we know all possible names.
+                dataset_type_id = self._byName[dataset_type.name]._dataset_type_id
+                dataset_type_ids.append(dataset_type_id)
+        return self._summaries.fetch_summaries(collections, dataset_type_ids, self._dataset_type_factory)
 
     _versions: list[VersionTuple]
     """Schema version for this class."""

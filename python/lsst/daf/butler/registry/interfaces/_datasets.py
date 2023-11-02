@@ -32,7 +32,7 @@ from ... import ddl
 __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Iterator, Set
+from collections.abc import Iterable, Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Relation
@@ -600,6 +600,29 @@ class DatasetRecordStorageManager(VersionedExtension):
         summary : `CollectionSummary`
             Summary of the dataset types and governor dimension values in
             this collection.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def fetch_summaries(
+        self, collections: Iterable[CollectionRecord], dataset_types: Iterable[DatasetType] | None = None
+    ) -> Mapping[Any, CollectionSummary]:
+        """Fetch collection summaries given their names and dataset types.
+
+        Parameters
+        ----------
+        collections : `~collections.abc.Iterable` [`CollectionRecord`]
+            Collection records to query.
+        dataset_types : `~collections.abc.Iterable` [`DatasetType`] or `None`
+            Dataset types to include into returned summaries. If `None` then
+            all dataset types will be included.
+
+        Returns
+        -------
+        summaries : `~collections.abc.Mapping` [`Any`, `CollectionSummary`]
+            Collection summaries indexed by collection record key. This mapping
+            will also contain all nested non-chained collections of the chained
+            collections.
         """
         raise NotImplementedError()
 

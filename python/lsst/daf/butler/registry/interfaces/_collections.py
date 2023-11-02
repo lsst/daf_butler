@@ -632,10 +632,10 @@ class CollectionManager(VersionedExtension):
             If `True` (default) recursively yield the child collections of
             `~CollectionType.CHAINED` collections.
         include_chains : `bool`, optional
-            If `False`, return records for `~CollectionType.CHAINED`
+            If `True`, return records for `~CollectionType.CHAINED`
             collections themselves.  The default is the opposite of
-            ``flattenChains``: either return records for CHAINED collections or
-            their children, but not both.
+            ``flatten_chains``: either return records for CHAINED collections
+            or their children, but not both.
 
         Returns
         -------
