@@ -40,7 +40,7 @@ from pydantic import StrictBool, StrictStr
 
 from ._config_support import LookupKey
 from ._storage_class import StorageClass, StorageClassFactory
-from .dimensions import DimensionGraph, SerializedDimensionGraph
+from .dimensions import DimensionGraph, DimensionGroup, SerializedDimensionGraph
 from .json import from_json_pydantic, to_json_pydantic
 from .persistence_context import PersistenceContextVars
 
@@ -60,7 +60,7 @@ class SerializedDatasetType(_BaseModelCompat):
 
     name: StrictStr
     storageClass: StrictStr | None = None
-    dimensions: SerializedDimensionGraph | None = None
+    dimensions: SerializedDimensionGraph | list[StrictStr] | None = None
     parentStorageClass: StrictStr | None = None
     isCalibration: StrictBool = False
 
@@ -70,15 +70,16 @@ class SerializedDatasetType(_BaseModelCompat):
         *,
         name: str,
         storageClass: str | None = None,
-        dimensions: dict | None = None,
+        dimensions: list | dict | None = None,
         parentStorageClass: str | None = None,
         isCalibration: bool = False,
     ) -> SerializedDatasetType:
         """Construct a `SerializedDatasetType` directly without validators.
 
-        This differs from PyDantics construct method in that the arguments are
-        explicitly what the model requires, and it will recurse through
-        members, constructing them from their corresponding `direct` methods.
+        This differs from Pydantic's model_construct method in that the
+        arguments are explicitly what the model requires, and it will recurse
+        through members, constructing them from their corresponding `direct`
+        methods.
 
         This method should only be called when the inputs are trusted.
         """
@@ -87,9 +88,14 @@ class SerializedDatasetType(_BaseModelCompat):
         if cache is not None and (type_ := cache.get(key, None)) is not None:
             return type_
 
-        serialized_dimensions = (
-            SerializedDimensionGraph.direct(**dimensions) if dimensions is not None else None
-        )
+        serialized_dimensions: list[str] | None
+        match dimensions:
+            case list():
+                serialized_dimensions = dimensions
+            case dict():
+                serialized_dimensions = SerializedDimensionGraph.direct(**dimensions).names
+            case None:
+                serialized_dimensions = None
 
         node = cls.model_construct(
             name=name,
@@ -125,9 +131,11 @@ class DatasetType:
         and underscores.  Component dataset types should contain a single
         period separating the base dataset type name from the component name
         (and may be recursive).
-    dimensions : `DimensionGraph` or iterable of `Dimension` or `str`
+    dimensions : `DimensionGroup`, `DimensionGraph`, or \
+            `~collections.abc.Iterable` [ `Dimension` or `str` ]
         Dimensions used to label and relate instances of this `DatasetType`.
-        If not a `DimensionGraph`, ``universe`` must be provided as well.
+        If not a `DimensionGraph` or `DimensionGroup`, ``universe`` must be
+        provided as well.
     storageClass : `StorageClass` or `str`
         Instance of a `StorageClass` or name of `StorageClass` that defines
         how this `DatasetType` is persisted.
@@ -184,7 +192,7 @@ class DatasetType:
     def __init__(
         self,
         name: str,
-        dimensions: DimensionGraph | Iterable[Dimension | str],
+        dimensions: DimensionGroup | DimensionGraph | Iterable[Dimension | str],
         storageClass: StorageClass | str,
         parentStorageClass: StorageClass | str | None = None,
         *,
@@ -194,14 +202,13 @@ class DatasetType:
         if self.VALID_NAME_REGEX.match(name) is None:
             raise ValueError(f"DatasetType name '{name}' is invalid.")
         self._name = name
-        if not isinstance(dimensions, DimensionGraph):
-            if universe is None:
-                raise ValueError(
-                    "If dimensions is not a normalized DimensionGraph, a universe must be provided."
-                )
-            dimensions = universe.extract(dimensions)
-        self._dimensions = dimensions
-        if name in self._dimensions.universe.governor_dimensions.names:
+        universe = universe or getattr(dimensions, "universe", None)
+        if universe is None:
+            raise ValueError(
+                "If dimensions is not a DimensionGroup or DimensionGraph, a universe must be provided."
+            )
+        self._dimensions = universe.conform(dimensions)
+        if name in self._dimensions.universe.governor_dimensions:
             raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
         if not isinstance(storageClass, StorageClass | str):
             raise ValueError(f"StorageClass argument must be StorageClass or str. Got {storageClass}")
@@ -250,7 +257,7 @@ class DatasetType:
             extra = f", parentStorageClass={self._parentStorageClassName}"
         if self._isCalibration:
             extra += ", isCalibration=True"
-        return f"DatasetType({self.name!r}, {self.dimensions}, {self._storageClassName}{extra})"
+        return f"DatasetType({self.name!r}, {self._dimensions}, {self._storageClassName}{extra})"
 
     def _equal_ignoring_storage_class(self, other: Any) -> bool:
         """Check everything is equal except the storage class.
@@ -350,12 +357,11 @@ class DatasetType:
 
     @property
     def dimensions(self) -> DimensionGraph:
-        r"""Return the `Dimension`\ s fir this dataset type.
+        """Return the dimensions of this dataset type (`DimensionGraph`).
 
-        The dimensions label and relate instances of this
-        `DatasetType` (`DimensionGraph`).
+        The dimensions of a define the keys of its datasets' data IDs..
         """
-        return self._dimensions
+        return self._dimensions._as_graph()
 
     @property
     def storageClass(self) -> StorageClass:
@@ -501,7 +507,7 @@ class DatasetType:
             )
         return DatasetType(
             composite_name,
-            dimensions=self.dimensions,
+            dimensions=self._dimensions,
             storageClass=self.parentStorageClass,
             isCalibration=self.isCalibration(),
         )
@@ -524,7 +530,7 @@ class DatasetType:
         # The component could be a read/write or read component
         return DatasetType(
             self.componentTypeName(component),
-            dimensions=self.dimensions,
+            dimensions=self._dimensions,
             storageClass=self.storageClass.allComponents()[component],
             parentStorageClass=self.storageClass,
             isCalibration=self.isCalibration(),
@@ -570,7 +576,7 @@ class DatasetType:
         parent = self._parentStorageClass if self._parentStorageClass else self._parentStorageClassName
         new = DatasetType(
             self.name,
-            dimensions=self.dimensions,
+            dimensions=self._dimensions,
             storageClass=storageClass,
             parentStorageClass=parent,
             isCalibration=self.isCalibration(),
@@ -625,9 +631,9 @@ class DatasetType:
         if componentName is not None:
             lookups = lookups + (LookupKey(name=rootName),)
 
-        if self.dimensions:
+        if self._dimensions:
             # Dimensions are a lower priority than dataset type name
-            lookups = lookups + (LookupKey(dimensions=self.dimensions),)
+            lookups = lookups + (LookupKey(dimensions=self._dimensions),)
 
         storageClasses = self.storageClass._lookupNames()
         if componentName is not None and self.parentStorageClass is not None:
@@ -661,7 +667,7 @@ class DatasetType:
                 "name": self.name,
                 "storageClass": self._storageClassName,
                 "isCalibration": self._isCalibration,
-                "dimensions": self.dimensions.to_simple(),
+                "dimensions": list(self._dimensions.names),
             }
 
             if self._parentStorageClassName is not None:
@@ -722,13 +728,17 @@ class DatasetType:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
 
-        if simple.dimensions is None:
-            # mypy hint
-            raise ValueError(f"Dimensions must be specified in {simple}")
+        match simple.dimensions:
+            case list():
+                dimensions = universe.conform(simple.dimensions)
+            case SerializedDimensionGraph():
+                dimensions = universe.conform(simple.dimensions.names)
+            case None:
+                raise ValueError(f"Dimensions must be specified in {simple}")
 
         newType = cls(
             name=simple.name,
-            dimensions=DimensionGraph.from_simple(simple.dimensions, universe=universe),
+            dimensions=dimensions,
             storageClass=simple.storageClass,
             isCalibration=simple.isCalibration,
             parentStorageClass=simple.parentStorageClass,
@@ -744,7 +754,7 @@ class DatasetType:
     def __reduce__(
         self,
     ) -> tuple[
-        Callable, tuple[type[DatasetType], tuple[str, DimensionGraph, str, str | None], dict[str, bool]]
+        Callable, tuple[type[DatasetType], tuple[str, DimensionGroup, str, str | None], dict[str, bool]]
     ]:
         """Support pickling.
 
@@ -753,7 +763,7 @@ class DatasetType:
         """
         return _unpickle_via_factory, (
             self.__class__,
-            (self.name, self.dimensions, self._storageClassName, self._parentStorageClassName),
+            (self.name, self._dimensions, self._storageClassName, self._parentStorageClassName),
             {"isCalibration": self._isCalibration},
         )
 
@@ -768,7 +778,7 @@ class DatasetType:
         """
         return DatasetType(
             name=deepcopy(self.name, memo),
-            dimensions=deepcopy(self.dimensions, memo),
+            dimensions=deepcopy(self._dimensions, memo),
             storageClass=deepcopy(self._storageClass or self._storageClassName, memo),
             parentStorageClass=deepcopy(self._parentStorageClass or self._parentStorageClassName, memo),
             isCalibration=deepcopy(self._isCalibration, memo),

@@ -36,11 +36,11 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from .dimensions import DimensionGraph
+from .dimensions import DimensionGroup
 
 if TYPE_CHECKING:
     from ._config import Config
-    from .dimensions import Dimension, DimensionUniverse
+    from .dimensions import DimensionUniverse
 
 log = logging.getLogger(__name__)
 
@@ -58,9 +58,9 @@ class LookupKey:
     name : `str`, optional
         Primary index string for lookup.  If this string looks like it
         represents dimensions (via ``dim1+dim2+dim3`` syntax) the name
-        is converted to a `DimensionGraph` and stored in ``dimensions``
+        is converted to a `DimensionGroup` and stored in ``dimensions``
         property.
-    dimensions : `DimensionGraph`, optional
+    dimensions : `DimensionGroup`, optional
         Dimensions that are relevant for lookup. Should not be specified
         if ``name`` is also specified.
     dataId : `dict`, optional
@@ -68,13 +68,13 @@ class LookupKey:
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to expand and validate ``name`` or
         ``dimensions``.  Required if the key represents dimensions and a
-        full `DimensionGraph` is not provided.
+        full `DimensionGroup` is not provided.
     """
 
     def __init__(
         self,
         name: str | None = None,
-        dimensions: Iterable[str | Dimension] | None = None,
+        dimensions: DimensionGroup | None = None,
         dataId: dict[str, Any] | None = None,
         *,
         universe: DimensionUniverse | None = None,
@@ -100,7 +100,7 @@ class LookupKey:
                 # indicate this but have to filter out the empty value
                 dimension_names = [n for n in name.split("+") if n]
                 try:
-                    self._dimensions = universe.extract(dimension_names)
+                    self._dimensions = universe.conform(dimension_names)
                 except KeyError:
                     # One or more of the dimensions is not known to the
                     # universe. This could be a typo or it could be that
@@ -122,15 +122,7 @@ class LookupKey:
                 self._name = name
 
         elif dimensions is not None:
-            if not isinstance(dimensions, DimensionGraph):
-                if universe is None:
-                    raise ValueError(
-                        f"Cannot construct LookupKey for dimensions={dimensions} without universe."
-                    )
-                else:
-                    self._dimensions = universe.extract(dimensions)
-            else:
-                self._dimensions = dimensions
+            self._dimensions = dimensions
         else:
             # mypy cannot work this out on its own
             raise ValueError("Name was None but dimensions is also None")
@@ -181,8 +173,8 @@ class LookupKey:
         return self._name
 
     @property
-    def dimensions(self) -> DimensionGraph | None:
-        """Dimensions associated with lookup (`DimensionGraph`)."""
+    def dimensions(self) -> DimensionGroup | None:
+        """Dimensions associated with lookup (`DimensionGroup`)."""
         return self._dimensions
 
     @property
@@ -203,7 +195,7 @@ class LookupKey:
     def clone(
         self,
         name: str | None = None,
-        dimensions: DimensionGraph | None = None,
+        dimensions: DimensionGroup | None = None,
         dataId: dict[str, Any] | None = None,
     ) -> LookupKey:
         """Clone the object, overriding some options.
@@ -216,7 +208,7 @@ class LookupKey:
         name : `str`, optional
             Primary index string for lookup.  Will override ``dimensions``
             if ``dimensions`` are set.
-        dimensions : `DimensionGraph`, optional
+        dimensions : `DimensionGroup`, optional
             Dimensions that are relevant for lookup. Will override ``name``
             if ``name`` is already set.
         dataId : `dict`, optional

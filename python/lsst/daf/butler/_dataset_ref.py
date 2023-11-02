@@ -173,7 +173,7 @@ class DatasetIdFactory:
             else:
                 raise ValueError(f"Unexpected ID generation mode: {idGenerationMode}")
 
-            for name, value in sorted(dataId.byName().items()):
+            for name, value in sorted(dataId.required.items()):
                 items.append((name, str(value)))
             data = ",".join(f"{key}={value}" for key, value in items)
             return uuid.uuid5(self.NS_UUID, data)
@@ -328,7 +328,7 @@ class DatasetRef:
     ):
         self.datasetType = datasetType
         if conform:
-            self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
+            self.dataId = DataCoordinate.standardize(dataId, dimensions=datasetType.dimensions)
         else:
             self.dataId = dataId
         self.run = run
