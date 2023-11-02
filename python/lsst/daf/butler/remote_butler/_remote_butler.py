@@ -77,9 +77,9 @@ class RemoteButler(Butler):
         butler_config = ButlerConfig(config, searchPaths, without_datastore=True)
         # There is a convention in Butler config files where <butlerRoot> in a
         # configuration option refers to the directory containing the
-        # configuration file.  We allow this for the remote butler's URL so
+        # configuration file. We allow this for the remote butler's URL so
         # that the server doesn't have to know which hostname it is being
-        # accessed from
+        # accessed from.
         server_url_key = ("remote_butler", "url")
         if server_url_key in butler_config:
             butler_config[server_url_key] = replaceRoot(
@@ -442,20 +442,18 @@ class RemoteButler(Butler):
         raise NotImplementedError()
 
     def _get_url(self, path: str, version: str = "v1") -> str:
-        """Form the complete path to an endpoint on the server
+        """Form the complete path to an endpoint on the server.
 
         Parameters
         ----------
         path : `str`
-            The relative path to the server endpoint. Should not include the
-            "/butler" prefix.
+            The relative path to the server endpoint.
         version : `str`, optional
             Version string to prepend to path. Defaults to "v1".
 
         Returns
         -------
         path : `str`
-            The full path to the endpoint
+            The full path to the endpoint.
         """
-        prefix = "butler"
-        return f"{prefix}/{version}/{path}"
+        return f"{version}/{path}"

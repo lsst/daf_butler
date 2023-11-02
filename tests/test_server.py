@@ -85,6 +85,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # Set up the RemoteButler that will connect to the server
         cls.client = TestClient(app)
+        cls.client.base_url = "http://text.example/butler/"
         cls.butler = _make_remote_butler(cls.client)
 
         # Populate the test server.
