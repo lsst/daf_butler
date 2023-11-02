@@ -479,7 +479,7 @@ class DimensionUniverse:
 
     def conform(
         self,
-        dimensions: Iterable[str | Dimension] | DimensionGroup | DimensionGraph,
+        dimensions: Iterable[str | Dimension] | str | DimensionElement | DimensionGroup | DimensionGraph,
         /,
     ) -> DimensionGroup:
         """Construct a dimension group from an iterable of dimension names.
@@ -487,14 +487,16 @@ class DimensionUniverse:
         Parameters
         ----------
         dimensions : `~collections.abc.Iterable` [ `str` or `Dimension` ], \
-                `DimensionGroup`, or `DimensionGraph`
+                `str`, `DimensionElement`, `DimensionGroup`, or \
+                `DimensionGraph`
             Dimensions that must be included in the returned group; their
             dependencies will be as well.  Support for `Dimension`,
-            `DimensionGraph` objects is deprecated and will be removed after
-            v27.  Passing `DimensionGraph` objects will not yield a deprecation
-            warning to allow non-deprecated methods and properties that return
-            `DimensionGraph` objects to be passed though, since these will be
-            changed to return `DimensionGroup` in the future.
+            `DimensionElement` and `DimensionGraph` objects is deprecated and
+            will be removed after v27.  Passing `DimensionGraph` objects will
+            not yield a deprecation warning to allow non-deprecated methods and
+            properties that return `DimensionGraph` objects to be passed
+            though, since these will be changed to return `DimensionGroup` in
+            the future.
 
         Returns
         -------
@@ -506,6 +508,10 @@ class DimensionUniverse:
                 return dimensions
             case DimensionGraph():
                 return dimensions.as_group()
+            case DimensionElement() as d:
+                return d.minimal_group
+            case str() as name:
+                return self[name].minimal_group
             case iterable:
                 names: set[str] = {getattr(d, "name", cast(str, d)) for d in iterable}
                 return DimensionGroup(self, names)
