@@ -80,7 +80,6 @@ from .progress import Progress
 # Do not import or lift symbols from 'server' or 'server_models'.
 # Import the registry subpackage directly for other symbols.
 from .registry import (
-    CollectionArgType,
     CollectionSearch,
     CollectionType,
     MissingCollectionError,
