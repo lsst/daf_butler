@@ -49,7 +49,7 @@ from .._storage_class import StorageClass
 from .._timespan import Timespan
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataId, DimensionConfig, DimensionUniverse, SerializedDataCoordinate
-from ..registry import NoDefaultCollectionError, Registry, RegistryDefaults
+from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Registry, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
 from ..transfers import RepoExportContext
 from ._config import RemoteButlerConfigModel
@@ -216,6 +216,10 @@ class RemoteButler(Butler):
         # and only go to the server if the dataset type is not known.
         path = f"dataset_type/{name}"
         response = self._client.get(self._get_url(path))
+        if response.status_code != httpx.codes.OK:
+            content = response.json()
+            if content["exception"] == "MissingDatasetTypeError":
+                raise MissingDatasetTypeError(content["detail"])
         response.raise_for_status()
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 

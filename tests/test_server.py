@@ -38,7 +38,7 @@ except ImportError:
     TestClient = None
     app = None
 
-from lsst.daf.butler import Butler, DataCoordinate, DatasetRef, StorageClassFactory
+from lsst.daf.butler import Butler, DataCoordinate, DatasetRef, MissingDatasetTypeError, StorageClassFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
 
@@ -106,6 +106,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
     def test_get_dataset_type(self):
         bias_type = self.butler.get_dataset_type("bias")
         self.assertEqual(bias_type.name, "bias")
+
+        with self.assertRaises(MissingDatasetTypeError):
+            self.butler.get_dataset_type("not_bias")
 
     def test_find_dataset(self):
         storage_class = self.storageClassFactory.getStorageClass("Exposure")

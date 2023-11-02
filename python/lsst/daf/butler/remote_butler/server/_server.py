@@ -34,11 +34,13 @@ import uuid
 from functools import cache
 from typing import Any
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from lsst.daf.butler import (
     Butler,
     DataCoordinate,
+    MissingDatasetTypeError,
     SerializedDataCoordinate,
     SerializedDatasetRef,
     SerializedDatasetType,
@@ -53,6 +55,17 @@ log = logging.getLogger(__name__)
 
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+@app.exception_handler(MissingDatasetTypeError)
+def missing_dataset_type_exception_handler(request: Request, exc: MissingDatasetTypeError) -> JSONResponse:
+    # Remove the double quotes around the string form. These confuse
+    # the JSON serialization when single quotes are in the message.
+    message = str(exc).strip('"')
+    return JSONResponse(
+        status_code=404,
+        content={"detail": message, "exception": "MissingDatasetTypeError"},
+    )
 
 
 @cache
