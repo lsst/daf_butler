@@ -38,7 +38,7 @@ from deprecated.sphinx import deprecated
 from lsst.utils import doImportType
 
 from ._coordinate import DataCoordinate, DataId
-from ._graph import DimensionGraph
+from ._graph import DimensionGraph, DimensionGroup
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
@@ -58,18 +58,28 @@ class DimensionPacker(metaclass=ABCMeta):
         (to these values) in all calls to `pack`, and are used in the results
         of calls to `unpack`.  Subclasses are permitted to require that
         ``fixed.hasRecords()`` return `True`.
-    dimensions : `DimensionGraph`
-        The dimensions of data IDs packed by this instance.
+    dimensions : `DimensionGroup` or `DimensionGraph`
+        The dimensions of data IDs packed by this instance.  Only
+        `DimensionGroup` will be supported after v27.
     """
 
-    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGraph):
+    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGroup | DimensionGraph):
         self.fixed = fixed
-        self.dimensions = dimensions
+        self._dimensions = self.fixed.universe.conform(dimensions)
 
     @property
     def universe(self) -> DimensionUniverse:
         """Graph containing all known dimensions (`DimensionUniverse`)."""
         return self.fixed.universe
+
+    @property
+    def dimensions(self) -> DimensionGraph:
+        """The dimensions of data IDs packed by this instance
+        (`DimensionGraph`).
+
+        After v27 this will be a `DimensionGroup`.
+        """
+        return self._dimensions._as_graph()
 
     @property
     @abstractmethod
@@ -137,7 +147,7 @@ class DimensionPacker(metaclass=ABCMeta):
         dataId = DataCoordinate.standardize(
             dataId, **kwargs, universe=self.fixed.universe, defaults=self.fixed
         )
-        if dataId.subset(self.fixed.graph) != self.fixed:
+        if dataId.subset(self.fixed.dimensions) != self.fixed:
             raise ValueError(f"Data ID packer expected a data ID consistent with {self.fixed}, got {dataId}.")
         packed = self._pack(dataId)
         if returnMaxBits:
@@ -176,10 +186,6 @@ class DimensionPacker(metaclass=ABCMeta):
     dimensions held fixed.
     """
 
-    dimensions: DimensionGraph
-    """The dimensions of data IDs packed by this instance (`DimensionGraph`).
-    """
-
 
 # TODO: Remove this class on DM-38687.
 @deprecated(
@@ -200,11 +206,11 @@ class DimensionPackerFactory:
         Fully-qualified name of the packer class this factory constructs.
     fixed : `~collections.abc.Set` [ `str` ]
         Names of dimensions whose values must be provided to the packer when it
-        is constructed.  This will be expanded lazily into a `DimensionGraph`
+        is constructed.  This will be expanded lazily into a `DimensionGroup`
         prior to `DimensionPacker` construction.
     dimensions : `~collections.abc.Set` [ `str` ]
         Names of dimensions whose values are passed to `DimensionPacker.pack`.
-        This will be expanded lazily into a `DimensionGraph` prior to
+        This will be expanded lazily into a `DimensionGroup` prior to
         `DimensionPacker` construction.
     """
 
@@ -214,11 +220,11 @@ class DimensionPackerFactory:
         fixed: Set[str],
         dimensions: Set[str],
     ):
-        # We defer turning these into DimensionGraph objects until first use
+        # We defer turning these into DimensionGroup objects until first use
         # because __init__ is called before a DimensionUniverse exists, and
-        # DimensionGraph instances can only be constructed afterwards.
-        self._fixed: Set[str] | DimensionGraph = fixed
-        self._dimensions: Set[str] | DimensionGraph = dimensions
+        # DimensionGroup instances can only be constructed afterwards.
+        self._fixed: Set[str] | DimensionGroup = fixed
+        self._dimensions: Set[str] | DimensionGroup = dimensions
         self._clsName = clsName
         self._cls: type[DimensionPacker] | None = None
 
@@ -232,12 +238,10 @@ class DimensionPackerFactory:
             packer.  Must be expanded with all metadata known to the
             `Registry`.  ``fixed.hasRecords()`` must return `True`.
         """
-        # Construct DimensionGraph instances if necessary on first use.
+        # Construct DimensionGroup instances if necessary on first use.
         # See related comment in __init__.
-        if not isinstance(self._fixed, DimensionGraph):
-            self._fixed = universe.extract(self._fixed)
-        if not isinstance(self._dimensions, DimensionGraph):
-            self._dimensions = universe.extract(self._dimensions)
+        self._fixed = universe.conform(self._fixed)
+        self._dimensions = universe.conform(self._dimensions)
         assert fixed.graph.issuperset(self._fixed)
         if self._cls is None:
             packer_class = doImportType(self._clsName)
@@ -270,11 +274,11 @@ class DimensionPackerConstructionVisitor(DimensionConstructionVisitor):
         Fully-qualified name of a `DimensionPacker` subclass.
     fixed : `~collections.abc.Iterable` [ `str` ]
         Names of dimensions whose values must be provided to the packer when it
-        is constructed.  This will be expanded lazily into a `DimensionGraph`
+        is constructed.  This will be expanded lazily into a `DimensionGroup`
         prior to `DimensionPacker` construction.
     dimensions : `~collections.abc.Iterable` [ `str` ]
         Names of dimensions whose values are passed to `DimensionPacker.pack`.
-        This will be expanded lazily into a `DimensionGraph` prior to
+        This will be expanded lazily into a `DimensionGroup` prior to
         `DimensionPacker` construction.
     """
 

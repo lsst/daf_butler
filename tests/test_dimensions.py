@@ -44,6 +44,7 @@ from lsst.daf.butler import (
     Dimension,
     DimensionConfig,
     DimensionGraph,
+    DimensionGroup,
     DimensionPacker,
     DimensionUniverse,
     NamedKeyDict,
@@ -85,7 +86,7 @@ class ConcreteTestDimensionPacker(DimensionPacker):
     This class just returns the detector ID as-is.
     """
 
-    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGraph):
+    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGroup):
         super().__init__(fixed, dimensions)
         self._n_detectors = fixed.records["instrument"].detector_max
         self._max_bits = (self._n_detectors - 1).bit_length()
@@ -106,7 +107,7 @@ class ConcreteTestDimensionPacker(DimensionPacker):
                 "instrument": self.fixed["instrument"],
                 "detector": packedId,
             },
-            graph=self.dimensions,
+            dimensions=self._dimensions,
         )
 
 

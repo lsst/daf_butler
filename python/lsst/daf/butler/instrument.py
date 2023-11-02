@@ -30,7 +30,7 @@ __all__ = ["ObservationDimensionPacker"]
 # TODO: Remove this entire module on DM-38687.
 
 from deprecated.sphinx import deprecated
-from lsst.daf.butler import DataCoordinate, DimensionGraph, DimensionPacker
+from lsst.daf.butler import DataCoordinate, DimensionGraph, DimensionGroup, DimensionPacker
 
 
 # TODO: remove on DM-38687.
@@ -44,12 +44,12 @@ class ObservationDimensionPacker(DimensionPacker):
     instrument.
     """
 
-    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGraph):
+    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGraph | DimensionGroup):
         super().__init__(fixed, dimensions)
         self._instrumentName = fixed["instrument"]
         record = fixed.records["instrument"]
         assert record is not None
-        if self.dimensions.required.names == {"instrument", "visit", "detector"}:
+        if self._dimensions.required.names == {"instrument", "visit", "detector"}:
             self._observationName = "visit"
             obsMax = record.visit_max
         elif dimensions.required.names == {"instrument", "exposure", "detector"}:
@@ -78,5 +78,5 @@ class ObservationDimensionPacker(DimensionPacker):
                 "detector": detector,
                 self._observationName: observation,
             },
-            graph=self.dimensions,
+            dimensions=self._dimensions,
         )
