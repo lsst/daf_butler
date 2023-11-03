@@ -33,6 +33,7 @@ from typing import Any, TextIO
 
 import httpx
 from lsst.daf.butler import __version__
+from lsst.daf.butler.repo_relocation import replaceRoot
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
 
@@ -52,6 +53,7 @@ from ..dimensions import DataCoordinate, DataId, DimensionConfig, DimensionUnive
 from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Registry, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
 from ..transfers import RepoExportContext
+from ._authentication import get_authentication_headers, get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
 from .server import FindDatasetModel
 
@@ -69,10 +71,22 @@ class RemoteButler(Butler):
         inferDefaults: bool = True,
         # Parameters unique to RemoteButler
         http_client: httpx.Client | None = None,
+        access_token: str | None = None,
         **kwargs: Any,
     ):
         butler_config = ButlerConfig(config, searchPaths, without_datastore=True)
+        # There is a convention in Butler config files where <butlerRoot> in a
+        # configuration option refers to the directory containing the
+        # configuration file. We allow this for the remote butler's URL so
+        # that the server doesn't have to know which hostname it is being
+        # accessed from.
+        server_url_key = ("remote_butler", "url")
+        if server_url_key in butler_config:
+            butler_config[server_url_key] = replaceRoot(
+                butler_config[server_url_key], butler_config.configDir
+            )
         self._config = RemoteButlerConfigModel.model_validate(butler_config)
+
         self._dimensions: DimensionUniverse | None = None
         # TODO: RegistryDefaults should have finish() called on it, but this
         # requires getCollectionSummary() which is not yet implemented
@@ -83,8 +97,16 @@ class RemoteButler(Butler):
             # This is generally done for testing.
             self._client = http_client
         else:
+            server_url = str(self._config.remote_butler.url)
+            auth_headers = {}
+            if access_token is None:
+                access_token = get_authentication_token_from_environment(server_url)
+            if access_token is not None:
+                auth_headers = get_authentication_headers(access_token)
+
             headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
-            self._client = httpx.Client(headers=headers, base_url=str(self._config.remote_butler.url))
+            headers.update(auth_headers)
+            self._client = httpx.Client(headers=headers, base_url=server_url)
 
     def isWriteable(self) -> bool:
         # Docstring inherited.
@@ -420,20 +442,18 @@ class RemoteButler(Butler):
         raise NotImplementedError()
 
     def _get_url(self, path: str, version: str = "v1") -> str:
-        """Form the complete path to an endpoint on the server
+        """Form the complete path to an endpoint on the server.
 
         Parameters
         ----------
         path : `str`
-            The relative path to the server endpoint. Should not include the
-            "/butler" prefix.
+            The relative path to the server endpoint.
         version : `str`, optional
             Version string to prepend to path. Defaults to "v1".
 
         Returns
         -------
         path : `str`
-            The full path to the endpoint
+            The full path to the endpoint.
         """
-        prefix = "butler"
-        return f"{prefix}/{version}/{path}"
+        return f"{version}/{path}"

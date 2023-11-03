@@ -33,14 +33,18 @@ try:
     # Failing to import any of these should disable the tests.
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler
-    from lsst.daf.butler.remote_butler.server import Factory, app, factory_dependency
+    from lsst.daf.butler.remote_butler.server import Factory, app
+    from lsst.daf.butler.remote_butler.server._dependencies import factory_dependency
 except ImportError:
     TestClient = None
     app = None
 
+from unittest.mock import patch
+
 from lsst.daf.butler import Butler, DataCoordinate, DatasetRef, MissingDatasetTypeError, StorageClassFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.resources.http import HttpResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -82,6 +86,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # Set up the RemoteButler that will connect to the server
         cls.client = TestClient(app)
+        cls.client.base_url = "http://test.example/api/butler/"
         cls.butler = _make_remote_butler(cls.client)
 
         # Populate the test server.
@@ -93,8 +98,13 @@ class ButlerClientServerTestCase(unittest.TestCase):
         del app.dependency_overrides[factory_dependency]
         removeTestTempDir(cls.root)
 
+    def test_health_check(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "butler")
+
     def test_simple(self):
-        response = self.client.get("/butler/v1/universe")
+        response = self.client.get("/api/butler/v1/universe")
         self.assertEqual(response.status_code, 200)
         self.assertIn("namespace", response.json())
 
@@ -163,6 +173,29 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Unknown dataset should not fail.
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4()))
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4(), storage_class="NumpyArray"))
+
+    def test_instantiate_via_butler_http_search(self):
+        """Ensure that the primary Butler constructor's automatic search logic
+        correctly locates and reads the configuration file and ends up with a
+        RemoteButler pointing to the correct URL
+        """
+
+        # This is kind of a fragile test.  Butler's search logic does a lot of
+        # manipulations involving creating new ResourcePaths, and ResourcePath
+        # doesn't use httpx so we can't easily inject the TestClient in there.
+        # We don't have an actual valid HTTP URL to give to the constructor
+        # because the test instance of the server is accessed via ASGI.
+        #
+        # Instead we just monkeypatch the HTTPResourcePath 'read' method and
+        # hope that all ResourcePath HTTP reads during construction are going
+        # to the server under test.
+        def override_read(http_resource_path):
+            return self.client.get(http_resource_path.geturl()).content
+
+        with patch.object(HttpResourcePath, "read", override_read):
+            butler = Butler("https://test.example/api/butler")
+        assert isinstance(butler, RemoteButler)
+        assert str(butler._config.remote_butler.url) == "https://test.example/api/butler/"
 
 
 if __name__ == "__main__":

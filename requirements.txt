@@ -21,3 +21,4 @@ pyarrow >= 0.16
 responses >= 0.12.0
 urllib3 >= 1.25.10
 fastapi
+safir >= 3.4.0
