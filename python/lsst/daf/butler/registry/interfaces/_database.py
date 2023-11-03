@@ -140,10 +140,6 @@ class StaticTablesContext:
         relationships.
         """
         name = self._db._mangleTableName(name)
-        if name in self._tableNames:
-            _checkExistingTableDefinition(
-                name, spec, self._inspector.get_columns(name, schema=self._db.namespace)
-            )
         metadata = self._db._metadata
         assert metadata is not None, "Guaranteed by context manager that returns this object."
         table = self._db._convertTableSpec(name, spec, metadata)

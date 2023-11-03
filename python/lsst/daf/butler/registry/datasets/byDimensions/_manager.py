@@ -55,6 +55,36 @@ class MissingDatabaseTableError(RuntimeError):
     """Exception raised when a table is not found in a database."""
 
 
+class _ExistingTableFactory:
+    """Factory for `sqlalchemy.schema.Table` instances that returns already
+    existing table instance.
+    """
+
+    def __init__(self, table: sqlalchemy.schema.Table):
+        self._table = table
+
+    def __call__(self) -> sqlalchemy.schema.Table:
+        return self._table
+
+
+class _SpecTableFactory:
+    """Factory for `sqlalchemy.schema.Table` instances that builds table
+    instances using provided `ddl.TableSpec` definition and verifies that
+    table exists in the database.
+    """
+
+    def __init__(self, db: Database, name: str, spec: ddl.TableSpec):
+        self._db = db
+        self._name = name
+        self._spec = spec
+
+    def __call__(self) -> sqlalchemy.schema.Table:
+        table = self._db.getExistingTable(self._name, self._spec)
+        if table is None:
+            raise MissingDatabaseTableError(f"Table {self._name} is missing from database schema.")
+        return table
+
+
 class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     """A manager class for datasets that uses one dataset-collection table for
     each group of dataset types that share the same dimensions.
@@ -218,37 +248,24 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             datasetType = DatasetType(
                 name, dimensions, row[c.storage_class], isCalibration=(calibTableName is not None)
             )
-            tags = self._db.getExistingTable(
-                row[c.tag_association_table],
-                makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()),
-            )
-            if tags is None:
-                raise MissingDatabaseTableError(
-                    f"Table {row[c.tag_association_table]} is missing from database schema."
-                )
+            tags_spec = makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType())
+            tags_table_factory = _SpecTableFactory(self._db, row[c.tag_association_table], tags_spec)
+            calibs_table_factory = None
             if calibTableName is not None:
-                calibs = self._db.getExistingTable(
-                    row[c.calibration_association_table],
-                    makeCalibTableSpec(
-                        datasetType,
-                        type(self._collections),
-                        self._db.getTimespanRepresentation(),
-                        self.getIdColumnType(),
-                    ),
+                calibs_spec = makeCalibTableSpec(
+                    datasetType,
+                    type(self._collections),
+                    self._db.getTimespanRepresentation(),
+                    self.getIdColumnType(),
                 )
-                if calibs is None:
-                    raise MissingDatabaseTableError(
-                        f"Table {row[c.calibration_association_table]} is missing from database schema."
-                    )
-            else:
-                calibs = None
+                calibs_table_factory = _SpecTableFactory(self._db, calibTableName, calibs_spec)
             storage = self._recordStorageType(
                 db=self._db,
                 datasetType=datasetType,
                 static=self._static,
                 summaries=self._summaries,
-                tags=tags,
-                calibs=calibs,
+                tags_table_factory=tags_table_factory,
+                calibs_table_factory=calibs_table_factory,
                 dataset_type_id=row["id"],
                 collections=self._collections,
                 use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
@@ -302,6 +319,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 tagTableName,
                 makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()),
             )
+            tags_table_factory = _ExistingTableFactory(tags)
+            calibs_table_factory = None
             if calibTableName is not None:
                 calibs = self._db.ensureTableExists(
                     calibTableName,
@@ -312,8 +331,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                         self.getIdColumnType(),
                     ),
                 )
-            else:
-                calibs = None
+                calibs_table_factory = _ExistingTableFactory(calibs)
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": datasetType.name},
@@ -335,8 +353,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 datasetType=datasetType,
                 static=self._static,
                 summaries=self._summaries,
-                tags=tags,
-                calibs=calibs,
+                tags_table_factory=tags_table_factory,
+                calibs_table_factory=calibs_table_factory,
                 dataset_type_id=row["id"],
                 collections=self._collections,
                 use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
