@@ -435,7 +435,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         provide an indication of the associated dataset.
         """
         # Include the dataID as a URI query
-        query = urlencode(ref.dataId)
+        query = urlencode(ref.dataId.required)
 
         # if this has never been written then we have to guess
         if not self.exists(ref):

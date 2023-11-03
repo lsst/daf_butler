@@ -69,7 +69,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
 
         # make all dataset types
-        graph = self.universe.extract(("instrument", "detector"))
+        graph = self.universe.conform(("instrument", "detector"))
         storageClass = StorageClass("StructuredDataDict")
         self.datasetTypeInit = DatasetType("test_ds_init", graph, storageClass)
         self.datasetTypeInput = DatasetType("test_ds_input", graph, storageClass)

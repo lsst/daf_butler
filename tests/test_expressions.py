@@ -354,7 +354,7 @@ class CheckVisitorTestCase(unittest.TestCase):
         parser = ParserYacc()
 
         universe = DimensionUniverse()
-        graph = universe.extract(("instrument", "visit"))
+        dimensions = universe.conform(("instrument", "visit"))
         dataId = DataCoordinate.makeEmpty(universe)
         defaults = DataCoordinate.makeEmpty(universe)
 
@@ -362,20 +362,20 @@ class CheckVisitorTestCase(unittest.TestCase):
         tree = parser.parse("instrument = 'LSST'")
         expr = NormalFormExpression.fromTree(tree, NormalForm.DISJUNCTIVE)
         binds = {}
-        visitor = CheckVisitor(dataId, graph, binds, defaults)
+        visitor = CheckVisitor(dataId, dimensions, binds, defaults)
         expr.visit(visitor)
 
         tree = parser.parse("'LSST' = instrument")
         expr = NormalFormExpression.fromTree(tree, NormalForm.DISJUNCTIVE)
         binds = {}
-        visitor = CheckVisitor(dataId, graph, binds, defaults)
+        visitor = CheckVisitor(dataId, dimensions, binds, defaults)
         expr.visit(visitor)
 
         # use bind for governor
         tree = parser.parse("instrument = instr")
         expr = NormalFormExpression.fromTree(tree, NormalForm.DISJUNCTIVE)
         binds = {"instr": "LSST"}
-        visitor = CheckVisitor(dataId, graph, binds, defaults)
+        visitor = CheckVisitor(dataId, dimensions, binds, defaults)
         expr.visit(visitor)
 
 

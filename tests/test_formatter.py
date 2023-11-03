@@ -36,7 +36,6 @@ from lsst.daf.butler import (
     Config,
     DataCoordinate,
     DatasetType,
-    DimensionGraph,
     DimensionUniverse,
     FileDescriptor,
     Formatter,
@@ -195,7 +194,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
         # Create a DatasetRef with and without instrument matching the
         # one in the config file.
-        dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
+        dimensions = self.universe.conform(("visit", "physical_filter", "instrument"))
         constant_dataId = {"physical_filter": "v", "visit": 1}
         sc = StorageClass("DummySC", dict, None)
         refPviHsc = self.makeDatasetRef(
@@ -230,7 +229,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertIn("PickleFormatter", refPvixNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using StorageClass
-        dimensionsNoV = DimensionGraph(self.universe, names=("physical_filter", "instrument"))
+        dimensionsNoV = self.universe.conform(("physical_filter", "instrument"))
         refPvixNotHscDims = self.makeDatasetRef(
             "pvix",
             dimensionsNoV,

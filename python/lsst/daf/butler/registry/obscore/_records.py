@@ -188,12 +188,12 @@ class RecordFactory:
                 record["t_max"] = t_max.mjd
 
         region = dataId.region
-        if self.exposure in dataId:
-            if (dimension_record := dataId.records[self.exposure]) is not None:
+        if self.exposure.name in dataId:
+            if (dimension_record := dataId.records[self.exposure.name]) is not None:
                 self._exposure_records(dimension_record, record)
                 if self.exposure_region_factory is not None:
                     region = self.exposure_region_factory.exposure_region(dataId, context)
-        elif self.visit in dataId and (dimension_record := dataId.records[self.visit]) is not None:
+        elif self.visit.name in dataId and (dimension_record := dataId.records[self.visit.name]) is not None:
             self._visit_records(dimension_record, record)
 
         # ask each plugin for its values to add to a record.
@@ -208,12 +208,12 @@ class RecordFactory:
         else:
             record.update(plugin_records)
 
-        if self.band in dataId:
+        if self.band.name in dataId:
             em_range = None
-            if (label := dataId.get(self.physical_filter)) is not None:
+            if (label := dataId.get(self.physical_filter.name)) is not None:
                 em_range = self.config.spectral_ranges.get(cast(str, label))
             if not em_range:
-                band_name = dataId[self.band]
+                band_name = dataId[self.band.name]
                 assert isinstance(band_name, str), "Band name must be string"
                 em_range = self.config.spectral_ranges.get(band_name)
             if em_range:
@@ -225,7 +225,7 @@ class RecordFactory:
         # Dictionary to use for substitutions when formatting various
         # strings.
         fmt_kws: dict[str, Any] = dict(records=dataId.records)
-        fmt_kws.update(dataId.full.byName())
+        fmt_kws.update(dataId.mapping)
         fmt_kws.update(id=ref.id)
         fmt_kws.update(run=ref.run)
         fmt_kws.update(dataset_type=dataset_type_name)

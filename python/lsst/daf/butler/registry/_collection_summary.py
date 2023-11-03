@@ -80,7 +80,7 @@ class CollectionSummary:
         """
         for ref in refs:
             self.dataset_types.add(ref.datasetType)
-            for gov in ref.dataId.graph.governors.names:
+            for gov in ref.dataId.dimensions.governors:
                 self.governors.setdefault(gov, set()).add(cast(str, ref.dataId[gov]))
             yield ref
 
@@ -123,7 +123,7 @@ class CollectionSummary:
         """
         self.dataset_types.add(dataset_type)
         for data_id in data_ids:
-            for gov in data_id.graph.governors.names:
+            for gov in data_id.dimensions.governors:
                 self.governors.setdefault(gov, set()).add(cast(str, data_id[gov]))
             yield data_id
 

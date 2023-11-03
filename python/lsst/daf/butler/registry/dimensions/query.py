@@ -82,7 +82,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self._db = db
         self._element = element
         self._target = view_target
-        if element not in self._target.element.graph.dimensions:
+        if element.name not in self._target.element.minimal_group:
             raise NotImplementedError("Query-backed dimension must be a dependency of its target.")
         if element.metadata:
             raise NotImplementedError("Cannot use query to back dimension with metadata.")
@@ -148,7 +148,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.
         # Given the restrictions imposed at construction, we know there's
         # nothing to actually fetch: everything we need is in the data ID.
-        return self.element.RecordClass(**data_id.byName())
+        return self.element.RecordClass(**data_id.required)
 
     def digestTables(self) -> list[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

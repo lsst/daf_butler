@@ -95,7 +95,10 @@ class _Table:
             raise RuntimeError(f"No DatasetRefs were provided for dataset type {datasetTypeName}")
 
         refInfo = next(iter(self.datasetRefs))
-        dimensions = list(refInfo.datasetRef.dataId.full.keys())
+        dimensions = [
+            refInfo.datasetRef.dataId.universe.dimensions[k]
+            for k in refInfo.datasetRef.dataId.dimensions.data_coordinate_keys
+        ]
         columnNames = ["type", "run", "id", *[str(item) for item in dimensions]]
 
         # Need to hint the column types for numbers since the per-row
@@ -106,7 +109,7 @@ class _Table:
             None,
             None,
             str,
-            *[typeMap.get(type(value)) for value in refInfo.datasetRef.dataId.full.values()],
+            *[typeMap.get(type(value)) for value in refInfo.datasetRef.dataId.full_values],
         ]
         if refInfo.uri:
             columnNames.append("URI")
@@ -118,7 +121,7 @@ class _Table:
                 datasetTypeName,
                 refInfo.datasetRef.run,
                 str(refInfo.datasetRef.id),
-                *list(refInfo.datasetRef.dataId.full.values()),
+                *refInfo.datasetRef.dataId.full_values,
             ]
             if refInfo.uri:
                 row.append(refInfo.uri)

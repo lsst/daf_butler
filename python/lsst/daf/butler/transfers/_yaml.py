@@ -151,7 +151,7 @@ class YamlRepoExportBackend(RepoExportBackend):
             {
                 "type": "dataset_type",
                 "name": datasetType.name,
-                "dimensions": [d.name for d in datasetType.dimensions],
+                "dimensions": list(datasetType.dimensions.names),
                 "storage_class": datasetType.storageClass_name,
                 "is_calibration": datasetType.isCalibration(),
             }
@@ -164,7 +164,7 @@ class YamlRepoExportBackend(RepoExportBackend):
                 "records": [
                     {
                         "dataset_id": [ref.id for ref in sorted(dataset.refs)],
-                        "data_id": [ref.dataId.byName() for ref in sorted(dataset.refs)],
+                        "data_id": [dict(ref.dataId.required) for ref in sorted(dataset.refs)],
                         "path": dataset.path,
                         "formatter": dataset.formatter,
                         # TODO: look up and save other collections

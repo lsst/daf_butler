@@ -45,8 +45,8 @@ from ._elements import Dimension, DimensionElement
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
     from ._coordinate import DataCoordinate
-    from ._graph import DimensionUniverse
     from ._schema import DimensionElementFields
+    from ._universe import DimensionUniverse
 
 
 def _reconstructDimensionRecord(definition: DimensionElement, mapping: dict[str, Any]) -> DimensionRecord:
@@ -283,8 +283,8 @@ class DimensionRecord:
         object.__setattr__(
             self,
             "dataId",
-            DataCoordinate.fromRequiredValues(
-                self.definition.graph,
+            DataCoordinate.from_required_values(
+                self.definition.minimal_group,
                 tuple(kwargs[dimension] for dimension in self.definition.required.names),
             ),
         )
@@ -317,7 +317,7 @@ class DimensionRecord:
         return self.dataId == other.dataId
 
     def __hash__(self) -> int:
-        return hash(self.dataId)
+        return hash(self.dataId.required_values)
 
     def __str__(self) -> str:
         lines = [f"{self.definition.name}:"]

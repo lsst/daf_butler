@@ -180,7 +180,7 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
         tableSpec : `ddl.TableSpec`
             Table specification.
         """
-        assert elements[0].graph.required.isdisjoint(elements[1].graph.required)
+        assert elements[0].minimal_group.required.isdisjoint(elements[1].minimal_group.required)
         tableSpec = ddl.TableSpec(fields=[])
         # Add governor dimensions first, so they appear first in the primary
         # key; we may often (in the future, perhaps always) know these at

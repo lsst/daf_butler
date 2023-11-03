@@ -188,7 +188,8 @@ class RepoExportContext:
             # least start to add / unblock) query functionality that should
             # let us speed this up internally as well.
             dataId = self._registry.expandDataId(dataId)
-            for record in dataId.records.values():
+            for element_name in dataId.dimensions.elements:
+                record = dataId.records[element_name]
                 if record is not None and record.definition in standardized_elements:
                     self._records[record.definition].setdefault(record.dataId, record)
 

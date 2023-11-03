@@ -323,7 +323,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             )
         record = self._fetch_dataset_type_record(datasetType.name)
         if record is None:
-            dimensionsKey = self._dimensions.saveDimensionGraph(datasetType.dimensions)
+            dimensionsKey = self._dimensions.save_dimension_group(datasetType.dimensions.as_group())
             tagTableName = makeTagTableName(datasetType, dimensionsKey)
             self._db.ensureTableExists(
                 tagTableName,
@@ -541,7 +541,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def _record_from_row(self, row: Mapping) -> _DatasetTypeRecord:
         name = row["name"]
-        dimensions = self._dimensions.loadDimensionGraph(row["dimensions_key"])
+        dimensions = self._dimensions.load_dimension_group(row["dimensions_key"])
         calibTableName = row["calibration_association_table"]
         datasetType = DatasetType(
             name, dimensions, row["storage_class"], isCalibration=(calibTableName is not None)

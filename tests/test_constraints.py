@@ -42,7 +42,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
 
         # Create DatasetRefs to test against constraints model
         self.universe = DimensionUniverse()
-        dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
+        dimensions = self.universe.conform(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
         self.calexpA = self.makeDatasetRef(
             "calexp",
@@ -51,7 +51,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
             {"instrument": "A", "physical_filter": "u", "visit": 3},
         )
 
-        dimensions = self.universe.extract(("visit", "detector", "instrument"))
+        dimensions = self.universe.conform(("visit", "detector", "instrument"))
         self.pviA = self.makeDatasetRef(
             "pvi",
             dimensions,

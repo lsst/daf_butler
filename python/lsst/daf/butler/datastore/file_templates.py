@@ -455,7 +455,7 @@ class FileTemplate:
         extras = {}
         if isinstance(ref.dataId, DataCoordinate):
             if ref.dataId.hasRecords():
-                extras = ref.dataId.records.byName()
+                extras = {k: ref.dataId.records[k] for k in ref.dataId.dimensions.elements}
             skypix_alias = self._determine_skypix_alias(ref)
             if skypix_alias is not None:
                 fields["skypix"] = fields[skypix_alias]

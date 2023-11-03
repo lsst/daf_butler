@@ -59,7 +59,7 @@ from ..._dataset_type import DatasetType
 from ..._named import NamedValueSet
 from ..._storage_class import StorageClass
 from ..._timespan import Timespan
-from ...dimensions import DataCoordinate, DataCoordinateSet, DimensionGraph, SkyPixDimension
+from ...dimensions import DataCoordinate, DataCoordinateSet, SkyPixDimension
 from .._collection_summary import CollectionSummary
 from .._collection_type import CollectionType
 from .._config import RegistryConfig
@@ -229,8 +229,8 @@ class RegistryTests(ABC):
         datasetTypeName = "test"
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
-        dimensions = registry.dimensions.extract(("instrument", "visit"))
-        differentDimensions = registry.dimensions.extract(("instrument", "patch"))
+        dimensions = registry.dimensions.conform(("instrument", "visit"))
+        differentDimensions = registry.dimensions.conform(("instrument", "patch"))
         inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         # Inserting for the first time should return True
         self.assertTrue(registry.registerDatasetType(inDatasetType))
@@ -248,7 +248,7 @@ class RegistryTests(ABC):
         datasetTypeName = "testNoneTemplate"
         storageClass = StorageClass("testDatasetType2")
         registry.storageClasses.registerStorageClass(storageClass)
-        dimensions = registry.dimensions.extract(("instrument", "visit"))
+        dimensions = registry.dimensions.conform(("instrument", "visit"))
         inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         registry.registerDatasetType(inDatasetType)
         outDatasetType2 = registry.getDatasetType(datasetTypeName)
@@ -278,14 +278,14 @@ class RegistryTests(ABC):
             registry.insertDimensionData(dimensionName, dimensionValue)
         # expandDataId should retrieve the record we just inserted
         self.assertEqual(
-            registry.expandDataId(instrument="DummyCam", graph=dimension.graph)
+            registry.expandDataId(instrument="DummyCam", dimensions=dimension.minimal_group)
             .records[dimensionName]
             .toDict(),
             dimensionValue,
         )
         # expandDataId should raise if there is no record with the given ID.
         with self.assertRaises(DataIdValueError):
-            registry.expandDataId({"instrument": "Unknown"}, graph=dimension.graph)
+            registry.expandDataId({"instrument": "Unknown"}, dimensions=dimension.minimal_group)
         # band doesn't have a table; insert should fail.
         with self.assertRaises(TypeError):
             registry.insertDimensionData("band", {"band": "i"})
@@ -300,7 +300,9 @@ class RegistryTests(ABC):
         registry.insertDimensionData(dimensionName2, dimensionValue2)
         # expandDataId should retrieve the record we just inserted.
         self.assertEqual(
-            registry.expandDataId(instrument="DummyCam", physical_filter="DummyCam_i", graph=dimension2.graph)
+            registry.expandDataId(
+                instrument="DummyCam", physical_filter="DummyCam_i", dimensions=dimension2.minimal_group
+            )
             .records[dimensionName2]
             .toDict(),
             dimensionValue2,
@@ -721,10 +723,12 @@ class RegistryTests(ABC):
             dataIds,
             DataCoordinateSet(
                 {
-                    DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
+                    DataCoordinate.standardize(
+                        instrument="Cam1", detector=d, dimensions=parentType.dimensions
+                    )
                     for d in (1, 2, 3)
                 },
-                parentType.dimensions,
+                dimensions=parentType.dimensions,
             ),
         )
         # Search for multiple datasets of a single type with queryDatasets.
@@ -959,9 +963,9 @@ class RegistryTests(ABC):
                     # block.
                     registry.insertDimensionData(dimension, dataId1)
         self.assertTrue(checkpointReached)
-        self.assertIsNotNone(registry.expandDataId(dataId1, graph=dimension.graph))
+        self.assertIsNotNone(registry.expandDataId(dataId1, dimensions=dimension.minimal_group))
         with self.assertRaises(DataIdValueError):
-            registry.expandDataId(dataId2, graph=dimension.graph)
+            registry.expandDataId(dataId2, dimensions=dimension.minimal_group)
 
     def testInstrumentDimensions(self):
         """Test queries involving only instrument dimensions, with no joins to
@@ -1023,13 +1027,13 @@ class RegistryTests(ABC):
         registry.storageClasses.registerStorageClass(storageClass)
         rawType = DatasetType(
             name="RAW",
-            dimensions=registry.dimensions.extract(("instrument", "exposure", "detector")),
+            dimensions=registry.dimensions.conform(("instrument", "exposure", "detector")),
             storageClass=storageClass,
         )
         registry.registerDatasetType(rawType)
         calexpType = DatasetType(
             name="CALEXP",
-            dimensions=registry.dimensions.extract(("instrument", "visit", "detector")),
+            dimensions=registry.dimensions.conform(("instrument", "visit", "detector")),
             storageClass=storageClass,
         )
         registry.registerDatasetType(calexpType)
@@ -1055,8 +1059,8 @@ class RegistryTests(ABC):
                 (ref,) = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
                 registry.associate(tagged2, [ref])
 
-        dimensions = DimensionGraph(
-            registry.dimensions, dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
+        dimensions = registry.dimensions.conform(
+            rawType.dimensions.required.names | calexpType.dimensions.required.names
         )
         # Test that single dim string works as well as list of str
         rows = registry.queryDataIds("visit", datasets=rawType, collections=run1).expanded().toSet()
@@ -1073,7 +1077,7 @@ class RegistryTests(ABC):
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=tagged2).toSet()
         self.assertEqual(len(rows), 4 * 3)  # 4 exposures times 3 detectors
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
+            self.assertCountEqual(dataId.dimensions.required, ("instrument", "detector", "exposure", "visit"))
         self.assertCountEqual({dataId["exposure"] for dataId in rows}, (100, 101, 200, 201))
         self.assertCountEqual({dataId["visit"] for dataId in rows}, (10, 20))
         self.assertCountEqual({dataId["detector"] for dataId in rows}, (1, 2, 3, 4, 5))
@@ -1082,7 +1086,7 @@ class RegistryTests(ABC):
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=[run1, tagged2]).toSet()
         self.assertEqual(len(set(rows)), 6 * 3)  # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
+            self.assertCountEqual(dataId.dimensions.required, ("instrument", "detector", "exposure", "visit"))
         self.assertCountEqual({dataId["exposure"] for dataId in rows}, (100, 101, 110, 111, 200, 201))
         self.assertCountEqual({dataId["visit"] for dataId in rows}, (10, 11, 20))
         self.assertCountEqual({dataId["detector"] for dataId in rows}, (1, 2, 3, 4, 5))
@@ -1163,28 +1167,27 @@ class RegistryTests(ABC):
         registry.storageClasses.registerStorageClass(storageClass)
         calexpType = DatasetType(
             name="deepCoadd_calexp",
-            dimensions=registry.dimensions.extract(("skymap", "tract", "patch", "band")),
+            dimensions=registry.dimensions.conform(("skymap", "tract", "patch", "band")),
             storageClass=storageClass,
         )
         registry.registerDatasetType(calexpType)
         mergeType = DatasetType(
             name="deepCoadd_mergeDet",
-            dimensions=registry.dimensions.extract(("skymap", "tract", "patch")),
+            dimensions=registry.dimensions.conform(("skymap", "tract", "patch")),
             storageClass=storageClass,
         )
         registry.registerDatasetType(mergeType)
         measType = DatasetType(
             name="deepCoadd_meas",
-            dimensions=registry.dimensions.extract(("skymap", "tract", "patch", "band")),
+            dimensions=registry.dimensions.conform(("skymap", "tract", "patch", "band")),
             storageClass=storageClass,
         )
         registry.registerDatasetType(measType)
 
-        dimensions = DimensionGraph(
-            registry.dimensions,
-            dimensions=(
-                calexpType.dimensions.required | mergeType.dimensions.required | measType.dimensions.required
-            ),
+        dimensions = registry.dimensions.conform(
+            calexpType.dimensions.required.names
+            | mergeType.dimensions.required.names
+            | measType.dimensions.required.names
         )
 
         # add pre-existing datasets
@@ -1200,7 +1203,7 @@ class RegistryTests(ABC):
         rows = registry.queryDataIds(dimensions, datasets=[calexpType, mergeType], collections=run).toSet()
         self.assertEqual(len(rows), 3 * 4 * 2)  # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "band"))
+            self.assertCountEqual(dataId.dimensions.required, ("skymap", "tract", "patch", "band"))
         self.assertCountEqual({dataId["tract"] for dataId in rows}, (1, 3, 5))
         self.assertCountEqual({dataId["patch"] for dataId in rows}, (2, 4, 6, 7))
         self.assertCountEqual({dataId["band"] for dataId in rows}, ("i", "r"))
@@ -1260,33 +1263,37 @@ class RegistryTests(ABC):
         # Overlap DatabaseDimensionElements with each other.
         for family1, family2 in itertools.combinations(families, 2):
             for element1, element2 in itertools.product(families[family1], families[family2]):
-                graph = DimensionGraph.union(element1.graph, element2.graph)
+                dimensions = element1.minimal_group | element2.minimal_group
                 # Construct expected set of overlapping data IDs via a
                 # brute-force comparison of the regions we've already fetched.
                 expected = {
-                    DataCoordinate.standardize({**dataId1.byName(), **dataId2.byName()}, graph=graph)
+                    DataCoordinate.standardize(
+                        {**dataId1.required, **dataId2.required}, dimensions=dimensions
+                    )
                     for (dataId1, region1), (dataId2, region2) in itertools.product(
                         regions[element1.name].items(), regions[element2.name].items()
                     )
                     if not region1.isDisjointFrom(region2)
                 }
                 self.assertGreater(len(expected), 2, msg="Test that we aren't just comparing empty sets.")
-                queried = set(registry.queryDataIds(graph))
+                queried = set(registry.queryDataIds(dimensions))
                 self.assertEqual(expected, queried)
 
         # Overlap each DatabaseDimensionElement with the commonSkyPix system.
         commonSkyPix = registry.dimensions.commonSkyPix
         for elementName, these_regions in regions.items():
-            graph = DimensionGraph.union(registry.dimensions[elementName].graph, commonSkyPix.graph)
+            dimensions = registry.dimensions[elementName].minimal_group | commonSkyPix.minimal_group
             expected = set()
             for dataId, region in these_regions.items():
                 for begin, end in commonSkyPix.pixelization.envelope(region):
                     expected.update(
-                        DataCoordinate.standardize({commonSkyPix.name: index, **dataId.byName()}, graph=graph)
+                        DataCoordinate.standardize(
+                            {commonSkyPix.name: index, **dataId.required}, dimensions=dimensions
+                        )
                         for index in range(begin, end)
                     )
             self.assertGreater(len(expected), 2, msg="Test that we aren't just comparing empty sets.")
-            queried = set(registry.queryDataIds(graph))
+            queried = set(registry.queryDataIds(dimensions))
             self.assertEqual(expected, queried)
 
     def testAbstractQuery(self):
@@ -1413,9 +1420,9 @@ class RegistryTests(ABC):
         # Obtain expected results from methods other than those we're testing
         # here.  That includes:
         # - the dimensions of the data IDs we want to query:
-        expectedGraph = DimensionGraph(registry.dimensions, names=["detector", "physical_filter"])
+        expected_dimensions = registry.dimensions.conform(["detector", "physical_filter"])
         # - the dimensions of some other data IDs we'll extract from that:
-        expectedSubsetGraph = DimensionGraph(registry.dimensions, names=["detector"])
+        expected_subset_dimensions = registry.dimensions.conform(["detector"])
         # - the data IDs we expect to obtain from the first queries:
         expectedDataIds = DataCoordinateSet(
             {
@@ -1424,7 +1431,7 @@ class RegistryTests(ABC):
                 )
                 for d, p in itertools.product({1, 2, 3}, {"Cam1-G", "Cam1-R1", "Cam1-R2"})
             },
-            graph=expectedGraph,
+            dimensions=expected_dimensions,
             hasFull=False,
             hasRecords=False,
         )
@@ -1442,7 +1449,7 @@ class RegistryTests(ABC):
             ),
         ]
         # - the data IDs we expect to extract from that:
-        expectedSubsetDataIds = expectedDataIds.subset(expectedSubsetGraph)
+        expectedSubsetDataIds = expectedDataIds.subset(expected_subset_dimensions)
         # - the bias datasets we expect to find from those data IDs, after we
         #   subset-out the physical_filter dimension, both with duplicates:
         expectedAllBiases = [
@@ -1466,7 +1473,7 @@ class RegistryTests(ABC):
             where="detector.purpose = 'SCIENCE'",  # this rejects detector=4
             instrument="Cam1",
         )
-        self.assertEqual(dataIds.graph, expectedGraph)
+        self.assertEqual(dataIds.dimensions, expected_dimensions)
         self.assertEqual(dataIds.toSet(), expectedDataIds)
         self.assertCountEqual(
             list(
@@ -1477,8 +1484,8 @@ class RegistryTests(ABC):
             ),
             expectedFlats,
         )
-        subsetDataIds = dataIds.subset(expectedSubsetGraph, unique=True)
-        self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
+        subsetDataIds = dataIds.subset(expected_subset_dimensions, unique=True)
+        self.assertEqual(subsetDataIds.dimensions, expected_subset_dimensions)
         self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
         self.assertCountEqual(
             list(subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=False)),
@@ -1538,7 +1545,7 @@ class RegistryTests(ABC):
             self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the data ID subset query, but not the dataset queries.
         with subsetDataIds.materialize() as subsetDataIds:
-            self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
+            self.assertEqual(subsetDataIds.dimensions, expected_subset_dimensions)
             self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
             self.assertCountEqual(
                 list(
@@ -1565,7 +1572,7 @@ class RegistryTests(ABC):
                 self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the original query, but none of the follow-up queries.
         with dataIds.materialize() as dataIds:
-            self.assertEqual(dataIds.graph, expectedGraph)
+            self.assertEqual(dataIds.dimensions, expected_dimensions)
             self.assertEqual(dataIds.toSet(), expectedDataIds)
             self.assertCountEqual(
                 list(
@@ -1576,8 +1583,8 @@ class RegistryTests(ABC):
                 ),
                 expectedFlats,
             )
-            subsetDataIds = dataIds.subset(expectedSubsetGraph, unique=True)
-            self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
+            subsetDataIds = dataIds.subset(expected_subset_dimensions, unique=True)
+            self.assertEqual(subsetDataIds.dimensions, expected_subset_dimensions)
             self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
             self.assertCountEqual(
                 list(
@@ -1605,7 +1612,7 @@ class RegistryTests(ABC):
             # Materialize the subset data ID query, but not the dataset
             # queries.
             with subsetDataIds.materialize() as subsetDataIds:
-                self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
+                self.assertEqual(subsetDataIds.dimensions, expected_subset_dimensions)
                 self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
                 self.assertCountEqual(
                     list(
@@ -3244,7 +3251,9 @@ class RegistryTests(ABC):
             storageClass="int",
         )
         run = "run"
-        data_id = DataCoordinate.standardize(instrument="Cam1", detector=1, graph=dataset_type.dimensions)
+        data_id = DataCoordinate.standardize(
+            instrument="Cam1", detector=1, dimensions=dataset_type.dimensions
+        )
 
         datasetId = factory.makeDatasetId(run, dataset_type, data_id, DatasetIdGenEnum.UNIQUE)
         self.assertIsInstance(datasetId, uuid.UUID)

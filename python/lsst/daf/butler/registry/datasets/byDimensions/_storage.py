@@ -132,10 +132,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         rows = []
         summary = CollectionSummary()
         for dataset in summary.add_datasets_generator(datasets):
-            row = dict(protoRow, dataset_id=dataset.id)
-            for dimension, value in dataset.dataId.items():
-                row[dimension.name] = value
-            rows.append(row)
+            rows.append(dict(protoRow, dataset_id=dataset.id, **dataset.dataId.required))
         # Update the summary tables for this collection in case this is the
         # first time this dataset type or these governor values will be
         # inserted there.
@@ -210,9 +207,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         )
         summary = CollectionSummary()
         for dataset in summary.add_datasets_generator(datasets):
-            row = dict(protoRow, dataset_id=dataset.id)
-            for dimension, value in dataset.dataId.items():
-                row[dimension.name] = value
+            row = dict(protoRow, dataset_id=dataset.id, **dataset.dataId.required)
             TimespanReprClass.update(timespan, result=row)
             rows.append(row)
             if dataIds is not None:
@@ -565,9 +560,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         with self._db.query(sql) as sql_result:
             row = sql_result.mappings().fetchone()
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
-        return DataCoordinate.standardize(
-            {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},
-            graph=self.datasetType.dimensions,
+        return DataCoordinate.from_required_values(
+            self.datasetType.dimensions.as_group(),
+            tuple(row[dimension] for dimension in self.datasetType.dimensions.required.names),
         )
 
 
@@ -601,7 +596,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
 
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
-        dataIdList = []
+        dataIdList: list[DataCoordinate] = []
         rows = []
         summary = CollectionSummary()
         for dataId in summary.add_data_ids_generator(self.datasetType, dataIds):
@@ -629,7 +624,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 self._collections.getCollectionForeignKeyName(): run.key,
             }
             tagsRows = [
-                dict(protoTagsRow, dataset_id=row["id"], **dataId.byName())
+                dict(protoTagsRow, dataset_id=row["id"], **dataId.required)
                 for dataId, row in zip(dataIdList, rows, strict=True)
             ]
             # Insert those rows into the tags table.
@@ -660,7 +655,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
 
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
-        dataIds = {}
+        dataIds: dict[DatasetId, DataCoordinate] = {}
         summary = CollectionSummary()
         for dataset in summary.add_datasets_generator(datasets):
             dataIds[dataset.id] = dataset.dataId
@@ -673,7 +668,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             collFkName: run.key,
         }
         tmpRows = [
-            dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
+            dict(protoTagsRow, dataset_id=dataset_id, **dataId.required)
             for dataset_id, dataId in dataIds.items()
         ]
         with self._db.transaction(for_temp_tables=True), self._db.temporary_table(tableSpec) as tmp_tags:

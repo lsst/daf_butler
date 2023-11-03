@@ -128,8 +128,8 @@ def make_string_expression_predicate(
     if data_id is None:
         data_id = DataCoordinate.makeEmpty(dimensions.universe)
     if not string:
-        for dimension in data_id.graph.governors:
-            governor_constraints[dimension.name] = {cast(str, data_id[dimension])}
+        for dimension in data_id.dimensions.governors:
+            governor_constraints[dimension] = {cast(str, data_id[dimension])}
         return None, governor_constraints
     try:
         parser = ParserYacc()

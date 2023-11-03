@@ -43,7 +43,7 @@ from lsst.daf.butler import (
     DataCoordinateSet,
     Dimension,
     DimensionConfig,
-    DimensionGraph,
+    DimensionElement,
     DimensionGroup,
     DimensionPacker,
     DimensionUniverse,
@@ -51,6 +51,7 @@ from lsst.daf.butler import (
     NamedValueSet,
     TimespanDatabaseRepresentation,
     YamlRepoImportBackend,
+    ddl,
 )
 from lsst.daf.butler.registry import RegistryConfig, _RegistryFactory
 
@@ -76,7 +77,7 @@ def loadDimensionData() -> DataCoordinateSequence:
         backend = YamlRepoImportBackend(stream, registry)
     backend.register()
     backend.load(datastore=None)
-    dimensions = DimensionGraph(registry.dimensions, names=["visit", "detector", "tract", "patch"])
+    dimensions = registry.dimensions.conform(["visit", "detector", "tract", "patch"])
     return registry.queryDataIds(dimensions).expanded().toSequence()
 
 
@@ -122,47 +123,51 @@ class DimensionTestCase(unittest.TestCase):
     def setUp(self):
         self.universe = DimensionUniverse()
 
-    def checkGraphInvariants(self, graph):
-        elements = list(graph.elements)
-        for n, element in enumerate(elements):
+    def checkGroupInvariants(self, group: DimensionGroup):
+        elements = list(group.elements)
+        for n, element_name in enumerate(elements):
+            element = self.universe[element_name]
             # Ordered comparisons on graphs behave like sets.
-            self.assertLessEqual(element.graph, graph)
+            self.assertLessEqual(element.minimal_group, group)
             # Ordered comparisons on elements correspond to the ordering within
             # a DimensionUniverse (topological, with deterministic
             # tiebreakers).
-            for other in elements[:n]:
+            for other_name in elements[:n]:
+                other = self.universe[other_name]
                 self.assertLess(other, element)
                 self.assertLessEqual(other, element)
-            for other in elements[n + 1 :]:
+            for other_name in elements[n + 1 :]:
+                other = self.universe[other_name]
                 self.assertGreater(other, element)
                 self.assertGreaterEqual(other, element)
             if isinstance(element, Dimension):
-                self.assertEqual(element.graph.required, element.required)
-        self.assertEqual(DimensionGraph(self.universe, graph.required), graph)
+                self.assertEqual(element.minimal_group.required, element.required)
+        self.assertEqual(self.universe.conform(group.required), group)
         self.assertCountEqual(
-            graph.required,
+            group.required,
             [
-                dimension
-                for dimension in graph.dimensions
-                if not any(dimension in other.graph.implied for other in graph.elements)
+                dimension_name
+                for dimension_name in group.names
+                if not any(
+                    dimension_name in self.universe[other_name].minimal_group.implied
+                    for other_name in group.elements
+                )
             ],
         )
-        self.assertCountEqual(graph.implied, graph.dimensions - graph.required)
-        self.assertCountEqual(
-            graph.dimensions, [element for element in graph.elements if isinstance(element, Dimension)]
-        )
-        self.assertCountEqual(graph.dimensions, itertools.chain(graph.required, graph.implied))
+        self.assertCountEqual(group.implied, group.names - group.required)
+        self.assertCountEqual(group.names, itertools.chain(group.required, group.implied))
         # Check primary key traversal order: each element should follow any it
         # requires, and element that is implied by any other in the graph
         # follow at least one of those.
-        seen = NamedValueSet()
-        for element in graph.primaryKeyTraversalOrder:
-            with self.subTest(required=graph.required, implied=graph.implied, element=element):
-                seen.add(element)
-                self.assertLessEqual(element.graph.required, seen)
-                if element in graph.implied:
-                    self.assertTrue(any(element in s.implied for s in seen))
-        self.assertCountEqual(seen, graph.elements)
+        seen: set[str] = set()
+        for element_name in group.lookup_order:
+            element = self.universe[element_name]
+            with self.subTest(required=group.required, implied=group.implied, element=element):
+                seen.add(element_name)
+                self.assertLessEqual(element.minimal_group.required, seen)
+                if element_name in group.implied:
+                    self.assertTrue(any(element_name in self.universe[s].implied for s in seen))
+        self.assertCountEqual(seen, group.elements)
 
     def testConfigPresent(self):
         config = self.universe.dimensionConfig
@@ -230,7 +235,7 @@ class DimensionTestCase(unittest.TestCase):
 
     def testConfigRead(self):
         self.assertEqual(
-            set(self.universe.dimensions.names),
+            set(self.universe.getStaticDimensions().names),
             {
                 "instrument",
                 "visit",
@@ -249,49 +254,45 @@ class DimensionTestCase(unittest.TestCase):
         )
 
     def testGraphs(self):
-        self.checkGraphInvariants(self.universe.empty)
-        for element in self.universe.elements:
-            self.checkGraphInvariants(element.graph)
+        self.checkGroupInvariants(self.universe.empty.as_group())
+        for element in self.universe.getStaticElements():
+            self.checkGroupInvariants(element.minimal_group)
 
     def testInstrumentDimensions(self):
-        graph = DimensionGraph(self.universe, names=("exposure", "detector", "visit"))
+        group = self.universe.conform(["exposure", "detector", "visit"])
         self.assertCountEqual(
-            graph.dimensions.names,
+            group.names,
             ("instrument", "exposure", "detector", "visit", "physical_filter", "band"),
         )
-        self.assertCountEqual(graph.required.names, ("instrument", "exposure", "detector", "visit"))
-        self.assertCountEqual(graph.implied.names, ("physical_filter", "band"))
-        self.assertCountEqual(
-            graph.elements.names - graph.dimensions.names, ("visit_detector_region", "visit_definition")
-        )
-        self.assertCountEqual(graph.governors.names, {"instrument"})
+        self.assertCountEqual(group.required, ("instrument", "exposure", "detector", "visit"))
+        self.assertCountEqual(group.implied, ("physical_filter", "band"))
+        self.assertCountEqual(group.elements - group.names, ("visit_detector_region", "visit_definition"))
+        self.assertCountEqual(group.governors, {"instrument"})
 
     def testCalibrationDimensions(self):
-        graph = DimensionGraph(self.universe, names=("physical_filter", "detector"))
-        self.assertCountEqual(graph.dimensions.names, ("instrument", "detector", "physical_filter", "band"))
-        self.assertCountEqual(graph.required.names, ("instrument", "detector", "physical_filter"))
-        self.assertCountEqual(graph.implied.names, ("band",))
-        self.assertCountEqual(graph.elements.names, graph.dimensions.names)
-        self.assertCountEqual(graph.governors.names, {"instrument"})
+        group = self.universe.conform(["physical_filter", "detector"])
+        self.assertCountEqual(group.names, ("instrument", "detector", "physical_filter", "band"))
+        self.assertCountEqual(group.required, ("instrument", "detector", "physical_filter"))
+        self.assertCountEqual(group.implied, ("band",))
+        self.assertCountEqual(group.elements, group.names)
+        self.assertCountEqual(group.governors, {"instrument"})
 
     def testObservationDimensions(self):
-        graph = DimensionGraph(self.universe, names=("exposure", "detector", "visit"))
+        group = self.universe.conform(["exposure", "detector", "visit"])
         self.assertCountEqual(
-            graph.dimensions.names,
+            group.names,
             ("instrument", "detector", "visit", "exposure", "physical_filter", "band"),
         )
-        self.assertCountEqual(graph.required.names, ("instrument", "detector", "exposure", "visit"))
-        self.assertCountEqual(graph.implied.names, ("physical_filter", "band"))
-        self.assertCountEqual(
-            graph.elements.names - graph.dimensions.names, ("visit_detector_region", "visit_definition")
-        )
-        self.assertCountEqual(graph.spatial.names, ("observation_regions",))
-        self.assertCountEqual(graph.temporal.names, ("observation_timespans",))
-        self.assertCountEqual(graph.governors.names, {"instrument"})
-        self.assertEqual(graph.spatial.names, {"observation_regions"})
-        self.assertEqual(graph.temporal.names, {"observation_timespans"})
-        self.assertEqual(next(iter(graph.spatial)).governor, self.universe["instrument"])
-        self.assertEqual(next(iter(graph.temporal)).governor, self.universe["instrument"])
+        self.assertCountEqual(group.required, ("instrument", "detector", "exposure", "visit"))
+        self.assertCountEqual(group.implied, ("physical_filter", "band"))
+        self.assertCountEqual(group.elements - group.names, ("visit_detector_region", "visit_definition"))
+        self.assertCountEqual(group.spatial.names, ("observation_regions",))
+        self.assertCountEqual(group.temporal.names, ("observation_timespans",))
+        self.assertCountEqual(group.governors, {"instrument"})
+        self.assertEqual(group.spatial.names, {"observation_regions"})
+        self.assertEqual(group.temporal.names, {"observation_timespans"})
+        self.assertEqual(next(iter(group.spatial)).governor, self.universe["instrument"])
+        self.assertEqual(next(iter(group.temporal)).governor, self.universe["instrument"])
         self.assertEqual(self.universe["visit_definition"].populated_by, self.universe["visit"])
         self.assertEqual(self.universe["visit_system_membership"].populated_by, self.universe["visit"])
         self.assertEqual(self.universe["visit_detector_region"].populated_by, self.universe["visit"])
@@ -308,29 +309,26 @@ class DimensionTestCase(unittest.TestCase):
         )
 
     def testSkyMapDimensions(self):
-        graph = DimensionGraph(self.universe, names=("patch",))
-        self.assertCountEqual(graph.dimensions.names, ("skymap", "tract", "patch"))
-        self.assertCountEqual(graph.required.names, ("skymap", "tract", "patch"))
-        self.assertCountEqual(graph.implied.names, ())
-        self.assertCountEqual(graph.elements.names, graph.dimensions.names)
-        self.assertCountEqual(graph.spatial.names, ("skymap_regions",))
-        self.assertCountEqual(graph.governors.names, {"skymap"})
-        self.assertEqual(graph.spatial.names, {"skymap_regions"})
-        self.assertEqual(next(iter(graph.spatial)).governor, self.universe["skymap"])
+        group = self.universe.conform(["patch"])
+        self.assertEqual(group.names, {"skymap", "tract", "patch"})
+        self.assertEqual(group.required, {"skymap", "tract", "patch"})
+        self.assertEqual(group.implied, set())
+        self.assertEqual(group.elements, group.names)
+        self.assertEqual(group.governors, {"skymap"})
+        self.assertEqual(group.spatial.names, {"skymap_regions"})
+        self.assertEqual(next(iter(group.spatial)).governor, self.universe["skymap"])
 
     def testSubsetCalculation(self):
         """Test that independent spatial and temporal options are computed
         correctly.
         """
-        graph = DimensionGraph(
-            self.universe, names=("visit", "detector", "tract", "patch", "htm7", "exposure")
-        )
-        self.assertCountEqual(graph.spatial.names, ("observation_regions", "skymap_regions", "htm"))
-        self.assertCountEqual(graph.temporal.names, ("observation_timespans",))
+        group = self.universe.conform(["visit", "detector", "tract", "patch", "htm7", "exposure"])
+        self.assertCountEqual(group.spatial.names, ("observation_regions", "skymap_regions", "htm"))
+        self.assertCountEqual(group.temporal.names, ("observation_timespans",))
 
     def testSchemaGeneration(self):
-        tableSpecs = NamedKeyDict({})
-        for element in self.universe.elements:
+        tableSpecs: NamedKeyDict[DimensionElement, ddl.TableSpec] = NamedKeyDict({})
+        for element in self.universe.getStaticElements():
             if element.hasTable and element.viewOf is None:
                 tableSpecs[element] = element.RecordClass.fields.makeTableSpec(
                     TimespanReprClass=TimespanDatabaseRepresentation.Compound,
@@ -365,7 +363,7 @@ class DimensionTestCase(unittest.TestCase):
                     self.assertFalse(tableSpec.fields[dep.name].primaryKey)
             for foreignKey in tableSpec.foreignKeys:
                 self.assertIn(foreignKey.table, tableSpecs)
-                self.assertIn(foreignKey.table, element.graph.dimensions.names)
+                self.assertIn(foreignKey.table, element.dimensions)
                 self.assertEqual(len(foreignKey.source), len(foreignKey.target))
                 for source, target in zip(foreignKey.source, foreignKey.target, strict=True):
                     self.assertIn(source, tableSpec.fields.names)
@@ -390,12 +388,12 @@ class DimensionTestCase(unittest.TestCase):
         self.assertIs(universe1, universe2)
         self.assertIs(universe1, universe3)
         self.assertIs(universe1, universe4)
-        for element1 in universe1.elements:
+        for element1 in universe1.getStaticElements():
             element2 = pickle.loads(pickle.dumps(element1))
             self.assertIs(element1, element2)
-            graph1 = element1.graph
-            graph2 = pickle.loads(pickle.dumps(graph1))
-            self.assertIs(graph1, graph2)
+            group1 = element1.minimal_group
+            group2 = pickle.loads(pickle.dumps(group1))
+            self.assertIs(group1, group2)
 
 
 @dataclass
@@ -408,7 +406,7 @@ class SplitByStateFlags:
     """Data IDs that only contain values for required dimensions.
 
     `DataCoordinateSequence.hasFull()` will return `True` for this if and only
-    if ``minimal.graph.implied`` has no elements.
+    if ``minimal.dimensions.implied`` has no elements.
     `DataCoordinate.hasRecords()` will always return `False`.
     """
 
@@ -426,7 +424,7 @@ class SplitByStateFlags:
     always return `True` for this attribute.
     """
 
-    def chain(self, n: int | None = None) -> Iterator:
+    def chain(self, n: int | None = None) -> Iterator[DataCoordinate]:
         """Iterate over the data IDs of different types.
 
         Parameters
@@ -483,35 +481,34 @@ class DataCoordinateTestCase(unittest.TestCase):
             dataIds = self.allDataIds
         return DataCoordinateSequence(
             self.rng.sample(dataIds, n),
-            graph=dataIds.graph,
+            dimensions=dataIds.dimensions,
             hasFull=dataIds.hasFull(),
             hasRecords=dataIds.hasRecords(),
             check=False,
         )
 
-    def randomDimensionSubset(self, n: int = 3, graph: DimensionGraph | None = None) -> DimensionGraph:
-        """Generate a random `DimensionGraph` that has a subset of the
+    def randomDimensionSubset(self, n: int = 3, group: DimensionGroup | None = None) -> DimensionGroup:
+        """Generate a random `DimensionGroup` that has a subset of the
         dimensions in a given one.
 
         Parameters
         ----------
         n : `int`
              Number of dimensions to select, before automatic expansion by
-             `DimensionGraph`.
-        dataIds : `DimensionGraph`, optional
-            Dimensions to select from.  Defaults to ``self.allDataIds.graph``.
+             `DimensionGroup`.
+        group : `DimensionGroup`, optional
+            Dimensions to select from.  Defaults to
+            ``self.allDataIds.dimensions``.
 
         Returns
         -------
-        selected : `DimensionGraph`
-            ``n`` or more dimensions randomly selected from ``graph`` with
+        selected : `DimensionGroup`
+            ``n`` or more dimensions randomly selected from ``group`` with
             replacement.
         """
-        if graph is None:
-            graph = self.allDataIds.graph
-        return DimensionGraph(
-            graph.universe, names=self.rng.sample(list(graph.dimensions.names), max(n, len(graph.dimensions)))
-        )
+        if group is None:
+            group = self.allDataIds.dimensions
+        return group.universe.conform(self.rng.sample(list(group.names), max(n, len(group))))
 
     def splitByStateFlags(
         self,
@@ -552,26 +549,32 @@ class DataCoordinateTestCase(unittest.TestCase):
         result = SplitByStateFlags(expanded=dataIds)
         if complete:
             result.complete = DataCoordinateSequence(
-                [DataCoordinate.standardize(e.full.byName(), graph=dataIds.graph) for e in result.expanded],
-                graph=dataIds.graph,
+                [
+                    DataCoordinate.standardize(e.mapping, dimensions=dataIds.dimensions)
+                    for e in result.expanded
+                ],
+                dimensions=dataIds.dimensions,
             )
             self.assertTrue(result.complete.hasFull())
             self.assertFalse(result.complete.hasRecords())
         if minimal:
             result.minimal = DataCoordinateSequence(
-                [DataCoordinate.standardize(e.byName(), graph=dataIds.graph) for e in result.expanded],
-                graph=dataIds.graph,
+                [
+                    DataCoordinate.standardize(e.required, dimensions=dataIds.dimensions)
+                    for e in result.expanded
+                ],
+                dimensions=dataIds.dimensions,
             )
-            self.assertEqual(result.minimal.hasFull(), not dataIds.graph.implied)
+            self.assertEqual(result.minimal.hasFull(), not dataIds.dimensions.implied)
             self.assertFalse(result.minimal.hasRecords())
         if not expanded:
             result.expanded = None
         return result
 
-    def testMappingInterface(self):
-        """Test that the mapping interface in `DataCoordinate` and (when
-        applicable) its ``full`` property are self-consistent and consistent
-        with the ``graph`` property.
+    def testMappingViews(self):
+        """Test that the ``mapping`` and ``required`` attributes in
+        `DataCoordinate` are self-consistent and consistent with the
+        ``dimensions`` property.
         """
         for _ in range(5):
             dimensions = self.randomDimensionSubset()
@@ -579,14 +582,21 @@ class DataCoordinateTestCase(unittest.TestCase):
             split = self.splitByStateFlags(dataIds)
             for dataId in split.chain():
                 with self.subTest(dataId=dataId):
-                    self.assertEqual(list(dataId.values()), [dataId[d] for d in dataId])
-                    self.assertEqual(list(dataId.values()), [dataId[d.name] for d in dataId])
-                    self.assertEqual(dataId.keys(), dataId.graph.required)
+                    self.assertEqual(dataId.required.keys(), dataId.dimensions.required)
+                    self.assertEqual(
+                        list(dataId.required.values()), [dataId[d] for d in dataId.dimensions.required]
+                    )
+                    self.assertEqual(
+                        list(dataId.required_values), [dataId[d] for d in dataId.dimensions.required]
+                    )
+                    self.assertEqual(dataId.required.keys(), dataId.dimensions.required)
             for dataId in itertools.chain(split.complete, split.expanded):
                 with self.subTest(dataId=dataId):
                     self.assertTrue(dataId.hasFull())
-                    self.assertEqual(dataId.graph.dimensions, dataId.full.keys())
-                    self.assertEqual(list(dataId.full.values()), [dataId[k] for k in dataId.graph.dimensions])
+                    self.assertEqual(dataId.dimensions.names, dataId.mapping.keys())
+                    self.assertEqual(
+                        list(dataId.mapping.values()), [dataId[k] for k in dataId.mapping.keys()]
+                    )
 
     def test_pickle(self):
         for _ in range(5):
@@ -595,14 +605,17 @@ class DataCoordinateTestCase(unittest.TestCase):
             split = self.splitByStateFlags(dataIds)
             for data_id in split.chain():
                 s = pickle.dumps(data_id)
-                read_data_id = pickle.loads(s)
+                read_data_id: DataCoordinate = pickle.loads(s)
                 self.assertEqual(data_id, read_data_id)
                 self.assertEqual(data_id.hasFull(), read_data_id.hasFull())
                 self.assertEqual(data_id.hasRecords(), read_data_id.hasRecords())
                 if data_id.hasFull():
-                    self.assertEqual(data_id.full, read_data_id.full)
+                    self.assertEqual(data_id.mapping, read_data_id.mapping)
                     if data_id.hasRecords():
-                        self.assertEqual(data_id.records, read_data_id.records)
+                        for element_name in data_id.dimensions.elements:
+                            self.assertEqual(
+                                data_id.records[element_name], read_data_id.records[element_name]
+                            )
 
     def test_record_attributes(self):
         """Test that dimension records are available as attributes on expanded
@@ -613,15 +626,15 @@ class DataCoordinateTestCase(unittest.TestCase):
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
             for data_id in split.expanded:
-                for element in data_id.graph.elements:
-                    self.assertIs(getattr(data_id, element.name), data_id.records[element.name])
-                    self.assertIn(element.name, dir(data_id))
+                for element_name in data_id.dimensions.elements:
+                    self.assertIs(getattr(data_id, element_name), data_id.records[element_name])
+                    self.assertIn(element_name, dir(data_id))
                 with self.assertRaisesRegex(AttributeError, "^not_a_dimension_name$"):
                     data_id.not_a_dimension_name
             for data_id in itertools.chain(split.minimal, split.complete):
-                for element in data_id.graph.elements:
+                for element_name in data_id.dimensions.elements:
                     with self.assertRaisesRegex(AttributeError, "only available on expanded DataCoordinates"):
-                        getattr(data_id, element.name)
+                        getattr(data_id, element_name)
                 with self.assertRaisesRegex(AttributeError, "^not_a_dimension_name$"):
                     data_id.not_a_dimension_name
 
@@ -635,22 +648,14 @@ class DataCoordinateTestCase(unittest.TestCase):
         # with the same underlying data ID values.
         for a0, b0 in itertools.combinations(split.chain(0), 2):
             self.assertEqual(a0, b0)
-            self.assertEqual(a0, b0.byName())
-            self.assertEqual(a0.byName(), b0)
         # Same thing, for a different data ID value.
         for a1, b1 in itertools.combinations(split.chain(1), 2):
             self.assertEqual(a1, b1)
-            self.assertEqual(a1, b1.byName())
-            self.assertEqual(a1.byName(), b1)
         # Iterate over all combinations of different states of DataCoordinate,
         # with different underlying data ID values.
         for a0, b1 in itertools.product(split.chain(0), split.chain(1)):
             self.assertNotEqual(a0, b1)
             self.assertNotEqual(a1, b0)
-            self.assertNotEqual(a0, b1.byName())
-            self.assertNotEqual(a0.byName(), b1)
-            self.assertNotEqual(a1, b0.byName())
-            self.assertNotEqual(a1.byName(), b0)
 
     def testStandardize(self):
         """Test constructing a DataCoordinate from many different kinds of
@@ -665,25 +670,27 @@ class DataCoordinateTestCase(unittest.TestCase):
                 # that object.
                 self.assertIs(dataId, DataCoordinate.standardize(dataId))
                 # Same if we also explicitly pass the dimensions we want.
-                self.assertIs(dataId, DataCoordinate.standardize(dataId, graph=dataId.graph))
+                self.assertIs(dataId, DataCoordinate.standardize(dataId, dimensions=dataId.dimensions))
                 # Same if we pass the dimensions and some irrelevant
                 # kwargs.
-                self.assertIs(dataId, DataCoordinate.standardize(dataId, graph=dataId.graph, htm7=12))
+                self.assertIs(
+                    dataId, DataCoordinate.standardize(dataId, dimensions=dataId.dimensions, htm7=12)
+                )
                 # Test constructing a new data ID from this one with a
                 # subset of the dimensions.
                 # This is not possible for some combinations of
                 # dimensions if hasFull is False (see
                 # `DataCoordinate.subset` docs).
-                newDimensions = self.randomDimensionSubset(n=1, graph=dataId.graph)
-                if dataId.hasFull() or dataId.graph.required >= newDimensions.required:
+                newDimensions = self.randomDimensionSubset(n=1, group=dataId.dimensions)
+                if dataId.hasFull() or dataId.dimensions.required >= newDimensions.required:
                     newDataIds = [
                         dataId.subset(newDimensions),
-                        DataCoordinate.standardize(dataId, graph=newDimensions),
-                        DataCoordinate.standardize(dataId, graph=newDimensions, htm7=12),
+                        DataCoordinate.standardize(dataId, dimensions=newDimensions),
+                        DataCoordinate.standardize(dataId, dimensions=newDimensions, htm7=12),
                     ]
                     for newDataId in newDataIds:
                         with self.subTest(newDataId=newDataId, type=type(dataId)):
-                            commonKeys = dataId.keys() & newDataId.keys()
+                            commonKeys = dataId.dimensions.required & newDataId.dimensions.required
                             self.assertTrue(commonKeys)
                             self.assertEqual(
                                 [newDataId[k] for k in commonKeys],
@@ -700,30 +707,30 @@ class DataCoordinateTestCase(unittest.TestCase):
             for dataId in split.complete:
                 # Split the keys (dimension names) into two random subsets, so
                 # we can pass some as kwargs below.
-                keys1 = set(
-                    self.rng.sample(list(dataId.graph.dimensions.names), len(dataId.graph.dimensions) // 2)
-                )
-                keys2 = dataId.graph.dimensions.names - keys1
+                keys1 = set(self.rng.sample(list(dataId.dimensions.names), len(dataId.dimensions) // 2))
+                keys2 = dataId.dimensions.names - keys1
                 newCompleteDataIds = [
-                    DataCoordinate.standardize(dataId.full.byName(), universe=dataId.universe),
-                    DataCoordinate.standardize(dataId.full.byName(), graph=dataId.graph),
+                    DataCoordinate.standardize(dataId.mapping, universe=dataId.universe),
+                    DataCoordinate.standardize(dataId.mapping, dimensions=dataId.dimensions),
                     DataCoordinate.standardize(
-                        DataCoordinate.makeEmpty(dataId.graph.universe), **dataId.full.byName()
+                        DataCoordinate.makeEmpty(dataId.dimensions.universe), **dataId.mapping
                     ),
                     DataCoordinate.standardize(
-                        DataCoordinate.makeEmpty(dataId.graph.universe),
-                        graph=dataId.graph,
-                        **dataId.full.byName(),
+                        DataCoordinate.makeEmpty(dataId.dimensions.universe),
+                        dimensions=dataId.dimensions,
+                        **dataId.mapping,
                     ),
-                    DataCoordinate.standardize(**dataId.full.byName(), universe=dataId.universe),
-                    DataCoordinate.standardize(graph=dataId.graph, **dataId.full.byName()),
+                    DataCoordinate.standardize(**dataId.mapping, universe=dataId.universe),
+                    DataCoordinate.standardize(dimensions=dataId.dimensions, **dataId.mapping),
                     DataCoordinate.standardize(
                         {k: dataId[k] for k in keys1},
                         universe=dataId.universe,
                         **{k: dataId[k] for k in keys2},
                     ),
                     DataCoordinate.standardize(
-                        {k: dataId[k] for k in keys1}, graph=dataId.graph, **{k: dataId[k] for k in keys2}
+                        {k: dataId[k] for k in keys1},
+                        dimensions=dataId.dimensions,
+                        **{k: dataId[k] for k in keys2},
                     ),
                 ]
                 for newDataId in newCompleteDataIds:
@@ -733,43 +740,43 @@ class DataCoordinateTestCase(unittest.TestCase):
 
     def testUnion(self):
         """Test `DataCoordinate.union`."""
-        # Make test graphs to combine; mostly random, but with a few explicit
+        # Make test groups to combine; mostly random, but with a few explicit
         # cases to make sure certain edge cases are covered.
-        graphs = [self.randomDimensionSubset(n=2) for i in range(2)]
-        graphs.append(self.allDataIds.universe["visit"].graph)
-        graphs.append(self.allDataIds.universe["detector"].graph)
-        graphs.append(self.allDataIds.universe["physical_filter"].graph)
-        graphs.append(self.allDataIds.universe["band"].graph)
+        groups = [self.randomDimensionSubset(n=2) for i in range(2)]
+        groups.append(self.allDataIds.universe["visit"].minimal_group)
+        groups.append(self.allDataIds.universe["detector"].minimal_group)
+        groups.append(self.allDataIds.universe["physical_filter"].minimal_group)
+        groups.append(self.allDataIds.universe["band"].minimal_group)
         # Iterate over all combinations, including the same graph with itself.
-        for graph1, graph2 in itertools.product(graphs, repeat=2):
+        for group1, group2 in itertools.product(groups, repeat=2):
             parentDataIds = self.randomDataIds(n=1)
-            split1 = self.splitByStateFlags(parentDataIds.subset(graph1))
-            split2 = self.splitByStateFlags(parentDataIds.subset(graph2))
+            split1 = self.splitByStateFlags(parentDataIds.subset(group1))
+            split2 = self.splitByStateFlags(parentDataIds.subset(group2))
             (parentDataId,) = parentDataIds
             for lhs, rhs in itertools.product(split1.chain(), split2.chain()):
                 unioned = lhs.union(rhs)
                 with self.subTest(lhs=lhs, rhs=rhs, unioned=unioned):
-                    self.assertEqual(unioned.graph, graph1.union(graph2))
-                    self.assertEqual(unioned, parentDataId.subset(unioned.graph))
+                    self.assertEqual(unioned.dimensions, group1.union(group2))
+                    self.assertEqual(unioned, parentDataId.subset(unioned.dimensions))
                     if unioned.hasFull():
-                        self.assertEqual(unioned.subset(lhs.graph), lhs)
-                        self.assertEqual(unioned.subset(rhs.graph), rhs)
+                        self.assertEqual(unioned.subset(lhs.dimensions), lhs)
+                        self.assertEqual(unioned.subset(rhs.dimensions), rhs)
                     if lhs.hasFull() and rhs.hasFull():
                         self.assertTrue(unioned.hasFull())
-                    if lhs.graph >= unioned.graph and lhs.hasFull():
+                    if lhs.dimensions >= unioned.dimensions and lhs.hasFull():
                         self.assertTrue(unioned.hasFull())
                         if lhs.hasRecords():
                             self.assertTrue(unioned.hasRecords())
-                    if rhs.graph >= unioned.graph and rhs.hasFull():
+                    if rhs.dimensions >= unioned.dimensions and rhs.hasFull():
                         self.assertTrue(unioned.hasFull())
                         if rhs.hasRecords():
                             self.assertTrue(unioned.hasRecords())
-                    if lhs.graph.required | rhs.graph.required >= unioned.graph.dimensions:
+                    if lhs.dimensions.required | rhs.dimensions.required >= unioned.dimensions.names:
                         self.assertTrue(unioned.hasFull())
                     if (
                         lhs.hasRecords()
                         and rhs.hasRecords()
-                        and lhs.graph.elements | rhs.graph.elements >= unioned.graph.elements
+                        and lhs.dimensions.elements | rhs.dimensions.elements >= unioned.dimensions.elements
                     ):
                         self.assertTrue(unioned.hasRecords())
 
@@ -777,33 +784,23 @@ class DataCoordinateTestCase(unittest.TestCase):
         """Test that data IDs for a few known dimensions have the expected
         regions.
         """
-        for dataId in self.randomDataIds(n=4).subset(
-            DimensionGraph(self.allDataIds.universe, names=["visit"])
-        ):
+        for dataId in self.randomDataIds(n=4).subset(self.allDataIds.universe.conform(["visit"])):
             self.assertIsNotNone(dataId.region)
-            self.assertEqual(dataId.graph.spatial.names, {"observation_regions"})
+            self.assertEqual(dataId.dimensions.spatial.names, {"observation_regions"})
             self.assertEqual(dataId.region, dataId.records["visit"].region)
-        for dataId in self.randomDataIds(n=4).subset(
-            DimensionGraph(self.allDataIds.universe, names=["visit", "detector"])
-        ):
+        for dataId in self.randomDataIds(n=4).subset(self.allDataIds.universe.conform(["visit", "detector"])):
             self.assertIsNotNone(dataId.region)
-            self.assertEqual(dataId.graph.spatial.names, {"observation_regions"})
+            self.assertEqual(dataId.dimensions.spatial.names, {"observation_regions"})
             self.assertEqual(dataId.region, dataId.records["visit_detector_region"].region)
-        for dataId in self.randomDataIds(n=4).subset(
-            DimensionGraph(self.allDataIds.universe, names=["tract"])
-        ):
+        for dataId in self.randomDataIds(n=4).subset(self.allDataIds.universe.conform(["tract"])):
             self.assertIsNotNone(dataId.region)
-            self.assertEqual(dataId.graph.spatial.names, {"skymap_regions"})
+            self.assertEqual(dataId.dimensions.spatial.names, {"skymap_regions"})
             self.assertEqual(dataId.region, dataId.records["tract"].region)
-        for dataId in self.randomDataIds(n=4).subset(
-            DimensionGraph(self.allDataIds.universe, names=["patch"])
-        ):
+        for dataId in self.randomDataIds(n=4).subset(self.allDataIds.universe.conform(["patch"])):
             self.assertIsNotNone(dataId.region)
-            self.assertEqual(dataId.graph.spatial.names, {"skymap_regions"})
+            self.assertEqual(dataId.dimensions.spatial.names, {"skymap_regions"})
             self.assertEqual(dataId.region, dataId.records["patch"].region)
-        for data_id in self.randomDataIds(n=1).subset(
-            DimensionGraph(self.allDataIds.universe, names=["visit", "tract"])
-        ):
+        for data_id in self.randomDataIds(n=1).subset(self.allDataIds.universe.conform(["visit", "tract"])):
             self.assertEqual(data_id.region.relate(data_id.records["visit"].region), lsst.sphgeom.WITHIN)
             self.assertEqual(data_id.region.relate(data_id.records["tract"].region), lsst.sphgeom.WITHIN)
 
@@ -811,17 +808,13 @@ class DataCoordinateTestCase(unittest.TestCase):
         """Test that data IDs for a few known dimensions have the expected
         timespans.
         """
-        for dataId in self.randomDataIds(n=4).subset(
-            DimensionGraph(self.allDataIds.universe, names=["visit"])
-        ):
+        for dataId in self.randomDataIds(n=4).subset(self.allDataIds.universe.conform(["visit"])):
             self.assertIsNotNone(dataId.timespan)
-            self.assertEqual(dataId.graph.temporal.names, {"observation_timespans"})
+            self.assertEqual(dataId.dimensions.temporal.names, {"observation_timespans"})
             self.assertEqual(dataId.timespan, dataId.records["visit"].timespan)
             self.assertEqual(dataId.timespan, dataId.visit.timespan)
         # Also test the case for non-temporal DataIds.
-        for dataId in self.randomDataIds(n=4).subset(
-            DimensionGraph(self.allDataIds.universe, names=["patch"])
-        ):
+        for dataId in self.randomDataIds(n=4).subset(self.allDataIds.universe.conform(["patch"])):
             self.assertIsNone(dataId.timespan)
 
     def testIterableStatusFlags(self):
@@ -831,29 +824,31 @@ class DataCoordinateTestCase(unittest.TestCase):
         dataIds = self.randomDataIds(n=10)
         split = self.splitByStateFlags(dataIds)
         for cls in (DataCoordinateSet, DataCoordinateSequence):
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).hasFull())
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).hasFull())
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).hasRecords())
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).hasRecords())
-            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=True).hasFull())
-            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=False).hasFull())
-            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=True).hasRecords())
-            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=False).hasRecords())
+            self.assertTrue(cls(split.expanded, dimensions=dataIds.dimensions, check=True).hasFull())
+            self.assertTrue(cls(split.expanded, dimensions=dataIds.dimensions, check=False).hasFull())
+            self.assertTrue(cls(split.expanded, dimensions=dataIds.dimensions, check=True).hasRecords())
+            self.assertTrue(cls(split.expanded, dimensions=dataIds.dimensions, check=False).hasRecords())
+            self.assertTrue(cls(split.complete, dimensions=dataIds.dimensions, check=True).hasFull())
+            self.assertTrue(cls(split.complete, dimensions=dataIds.dimensions, check=False).hasFull())
+            self.assertFalse(cls(split.complete, dimensions=dataIds.dimensions, check=True).hasRecords())
+            self.assertFalse(cls(split.complete, dimensions=dataIds.dimensions, check=False).hasRecords())
             with self.assertRaises(ValueError):
-                cls(split.complete, graph=dataIds.graph, hasRecords=True, check=True)
+                cls(split.complete, dimensions=dataIds.dimensions, hasRecords=True, check=True)
             self.assertEqual(
-                cls(split.minimal, graph=dataIds.graph, check=True).hasFull(), not dataIds.graph.implied
+                cls(split.minimal, dimensions=dataIds.dimensions, check=True).hasFull(),
+                not dataIds.dimensions.implied,
             )
             self.assertEqual(
-                cls(split.minimal, graph=dataIds.graph, check=False).hasFull(), not dataIds.graph.implied
+                cls(split.minimal, dimensions=dataIds.dimensions, check=False).hasFull(),
+                not dataIds.dimensions.implied,
             )
-            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=True).hasRecords())
-            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=False).hasRecords())
+            self.assertFalse(cls(split.minimal, dimensions=dataIds.dimensions, check=True).hasRecords())
+            self.assertFalse(cls(split.minimal, dimensions=dataIds.dimensions, check=False).hasRecords())
             with self.assertRaises(ValueError):
-                cls(split.minimal, graph=dataIds.graph, hasRecords=True, check=True)
-            if dataIds.graph.implied:
+                cls(split.minimal, dimensions=dataIds.dimensions, hasRecords=True, check=True)
+            if dataIds.dimensions.implied:
                 with self.assertRaises(ValueError):
-                    cls(split.minimal, graph=dataIds.graph, hasFull=True, check=True)
+                    cls(split.minimal, dimensions=dataIds.dimensions, hasFull=True, check=True)
 
     def testSetOperations(self):
         """Test for self-consistency across DataCoordinateSet's operations."""
@@ -887,10 +882,10 @@ class DataCoordinateTestCase(unittest.TestCase):
 
     def testPackers(self):
         (instrument_data_id,) = self.allDataIds.subset(
-            self.allDataIds.universe.extract(["instrument"])
+            self.allDataIds.universe.conform(["instrument"])
         ).toSet()
-        (detector_data_id,) = self.randomDataIds(n=1).subset(self.allDataIds.universe.extract(["detector"]))
-        packer = ConcreteTestDimensionPacker(instrument_data_id, detector_data_id.graph)
+        (detector_data_id,) = self.randomDataIds(n=1).subset(self.allDataIds.universe.conform(["detector"]))
+        packer = ConcreteTestDimensionPacker(instrument_data_id, detector_data_id.dimensions)
         packed_id, max_bits = packer.pack(detector_data_id, returnMaxBits=True)
         self.assertEqual(packed_id, detector_data_id["detector"])
         self.assertEqual(max_bits, packer.maxBits)

@@ -44,6 +44,7 @@ from .dimensions import (
     Dimension,
     DimensionElement,
     DimensionGraph,
+    DimensionGroup,
     DimensionRecord,
     DimensionUniverse,
 )
@@ -242,6 +243,7 @@ class RegistryShim(Registry):
         self,
         dataId: DataId | None = None,
         *,
+        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
         graph: DimensionGraph | None = None,
         records: NameLookupMapping[DimensionElement, DimensionRecord | None] | None = None,
         withDefaults: bool = True,
@@ -249,7 +251,7 @@ class RegistryShim(Registry):
     ) -> DataCoordinate:
         # Docstring inherited from a base class.
         return self._registry.expandDataId(
-            dataId, graph=graph, records=records, withDefaults=withDefaults, **kwargs
+            dataId, dimensions=dimensions, graph=graph, records=records, withDefaults=withDefaults, **kwargs
         )
 
     def insertDimensionData(
