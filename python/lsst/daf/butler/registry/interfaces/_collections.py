@@ -36,11 +36,10 @@ __all__ = [
 ]
 
 from abc import abstractmethod
-from collections.abc import Iterator, Set
-from typing import TYPE_CHECKING, Any
+from collections.abc import Iterable, Iterator, Set
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from ..._timespan import Timespan
-from ...dimensions import DimensionUniverse
 from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._versioning import VersionedExtension, VersionTuple
@@ -50,7 +49,10 @@ if TYPE_CHECKING:
     from ._dimensions import DimensionRecordStorageManager
 
 
-class CollectionRecord:
+_Key = TypeVar("_Key")
+
+
+class CollectionRecord(Generic[_Key]):
     """A struct used to represent a collection in internal `Registry` APIs.
 
     User-facing code should always just use a `str` to represent collections.
@@ -75,7 +77,7 @@ class CollectionRecord:
     participate in some subclass equality definition.
     """
 
-    def __init__(self, key: Any, name: str, type: CollectionType):
+    def __init__(self, key: _Key, name: str, type: CollectionType):
         self.key = key
         self.name = name
         self.type = type
@@ -85,7 +87,7 @@ class CollectionRecord:
     """Name of the collection (`str`).
     """
 
-    key: Any
+    key: _Key
     """The primary/foreign key value for this collection.
     """
 
@@ -110,184 +112,85 @@ class CollectionRecord:
         return self.name
 
 
-class RunRecord(CollectionRecord):
+class RunRecord(CollectionRecord[_Key]):
     """A subclass of `CollectionRecord` that adds execution information and
     an interface for updating it.
+
+    Parameters
+    ----------
+    key: `object`
+        Unique collection key.
+    name : `str`
+        Name of the collection.
+    host : `str`, optional
+        Name of the host or system on which this run was produced.
+    timespan: `Timespan`, optional
+        Begin and end timestamps for the period over which the run was
+        produced.
     """
 
-    @abstractmethod
-    def update(self, host: str | None = None, timespan: Timespan | None = None) -> None:
-        """Update the database record for this run with new execution
-        information.
+    host: str | None
+    """Name of the host or system on which this run was produced (`str` or
+    `None`).
+    """
 
-        Values not provided will set to ``NULL`` in the database, not ignored.
+    timespan: Timespan
+    """Begin and end timestamps for the period over which the run was produced.
+     None`/``NULL`` values are interpreted as infinite bounds.
+    """
 
-        Parameters
-        ----------
-        host : `str`, optional
-            Name of the host or system on which this run was produced.
-            Detailed form to be set by higher-level convention; from the
-            `Registry` perspective, this is an entirely opaque value.
-        timespan : `Timespan`, optional
-            Begin and end timestamps for the period over which the run was
-            produced.  `None`/``NULL`` values are interpreted as infinite
-            bounds.
-        """
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def host(self) -> str | None:
-        """Return the name of the host or system on which this run was
-        produced (`str` or `None`).
-        """
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def timespan(self) -> Timespan:
-        """Begin and end timestamps for the period over which the run was
-        produced.  `None`/``NULL`` values are interpreted as infinite
-        bounds.
-        """
-        raise NotImplementedError()
+    def __init__(
+        self,
+        key: _Key,
+        name: str,
+        *,
+        host: str | None = None,
+        timespan: Timespan | None = None,
+    ):
+        super().__init__(key=key, name=name, type=CollectionType.RUN)
+        self.host = host
+        if timespan is None:
+            timespan = Timespan(begin=None, end=None)
+        self.timespan = timespan
 
     def __repr__(self) -> str:
         return f"RunRecord(key={self.key!r}, name={self.name!r})"
 
 
-class ChainedCollectionRecord(CollectionRecord):
+class ChainedCollectionRecord(CollectionRecord[_Key]):
     """A subclass of `CollectionRecord` that adds the list of child collections
     in a ``CHAINED`` collection.
 
     Parameters
     ----------
-    key
-        Unique collection ID, can be the same as ``name`` if ``name`` is used
-        for identification. Usually this is an integer or string, but can be
-        other database-specific type.
+    key: `object`
+        Unique collection key.
     name : `str`
         Name of the collection.
+    children: Iterable[str],
+        Ordered sequence of names of child collections.
     """
 
-    def __init__(self, key: Any, name: str, universe: DimensionUniverse):
+    children: tuple[str, ...]
+    """The ordered search path of child collections that define this chain
+    (`tuple` [ `str` ]).
+    """
+
+    def __init__(
+        self,
+        key: Any,
+        name: str,
+        *,
+        children: Iterable[str],
+    ):
         super().__init__(key=key, name=name, type=CollectionType.CHAINED)
-        self._children: tuple[str, ...] = ()
-
-    @property
-    def children(self) -> tuple[str, ...]:
-        """The ordered search path of child collections that define this chain
-        (`tuple` [ `str` ]).
-        """
-        return self._children
-
-    def update(self, manager: CollectionManager, children: tuple[str, ...], flatten: bool) -> None:
-        """Redefine this chain to search the given child collections.
-
-        This method should be used by all external code to set children.  It
-        delegates to `_update`, which is what should be overridden by
-        subclasses.
-
-        Parameters
-        ----------
-        manager : `CollectionManager`
-            The object that manages this records instance and all records
-            instances that may appear as its children.
-        children : `tuple` [ `str` ]
-            A collection search path that should be resolved to set the child
-            collections of this chain.
-        flatten : `bool`
-            If `True`, recursively flatten out any nested
-            `~CollectionType.CHAINED` collections in ``children`` first.
-
-        Raises
-        ------
-        ValueError
-            Raised when the child collections contain a cycle.
-        """
-        children_as_wildcard = CollectionWildcard.from_names(children)
-        for record in manager.resolve_wildcard(
-            children_as_wildcard,
-            flatten_chains=True,
-            include_chains=True,
-            collection_types={CollectionType.CHAINED},
-        ):
-            if record == self:
-                raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
-        if flatten:
-            children = tuple(
-                record.name for record in manager.resolve_wildcard(children_as_wildcard, flatten_chains=True)
-            )
-        # Delegate to derived classes to do the database updates.
-        self._update(manager, children)
-        # Actually set this instances sequence of children.
-        self._children = children
-
-    def refresh(self, manager: CollectionManager) -> None:
-        """Load children from the database, using the given manager to resolve
-        collection primary key values into records.
-
-        This method exists to ensure that all collections that may appear in a
-        chain are known to the manager before any particular chain tries to
-        retrieve their records from it.  `ChainedCollectionRecord` subclasses
-        can rely on it being called sometime after their own ``__init__`` to
-        finish construction.
-
-        Parameters
-        ----------
-        manager : `CollectionManager`
-            The object that manages this records instance and all records
-            instances that may appear as its children.
-        """
-        self._children = self._load(manager)
-
-    @abstractmethod
-    def _update(self, manager: CollectionManager, children: tuple[str, ...]) -> None:
-        """Protected implementation hook for `update`.
-
-        This method should be implemented by subclasses to update the database
-        to reflect the children given.  It should never be called by anything
-        other than `update`, which should be used by all external code.
-
-        Parameters
-        ----------
-        manager : `CollectionManager`
-            The object that manages this records instance and all records
-            instances that may appear as its children.
-        children : `tuple` [ `str` ]
-            A collection search path that should be resolved to set the child
-            collections of this chain.  Guaranteed not to contain cycles.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def _load(self, manager: CollectionManager) -> tuple[str, ...]:
-        """Protected implementation hook for `refresh`.
-
-        This method should be implemented by subclasses to retrieve the chain's
-        child collections from the database and return them.  It should never
-        be called by anything other than `refresh`, which should be used by all
-        external code.
-
-        Parameters
-        ----------
-        manager : `CollectionManager`
-            The object that manages this records instance and all records
-            instances that may appear as its children.
-
-        Returns
-        -------
-        children : `tuple` [ `str` ]
-            The ordered sequence of collection names that defines the chained
-            collection.  Guaranteed not to contain cycles.
-        """
-        raise NotImplementedError()
+        self.children = tuple(children)
 
     def __repr__(self) -> str:
         return f"ChainedCollectionRecord(key={self.key!r}, name={self.name!r}, children={self.children!r})"
 
 
-class CollectionManager(VersionedExtension):
+class CollectionManager(Generic[_Key], VersionedExtension):
     """An interface for managing the collections (including runs) in a
     `Registry`.
 
@@ -467,7 +370,7 @@ class CollectionManager(VersionedExtension):
     @abstractmethod
     def register(
         self, name: str, type: CollectionType, doc: str | None = None
-    ) -> tuple[CollectionRecord, bool]:
+    ) -> tuple[CollectionRecord[_Key], bool]:
         """Ensure that a collection of the given name and type are present
         in the layer this manager is associated with.
 
@@ -533,7 +436,7 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def find(self, name: str) -> CollectionRecord:
+    def find(self, name: str) -> CollectionRecord[_Key]:
         """Return the collection record associated with the given name.
 
         Parameters
@@ -562,7 +465,7 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def __getitem__(self, key: Any) -> CollectionRecord:
+    def __getitem__(self, key: Any) -> CollectionRecord[_Key]:
         """Return the collection record associated with the given
         primary/foreign key value.
 
@@ -600,7 +503,7 @@ class CollectionManager(VersionedExtension):
         done: set[str] | None = None,
         flatten_chains: bool = True,
         include_chains: bool | None = None,
-    ) -> list[CollectionRecord]:
+    ) -> list[CollectionRecord[_Key]]:
         """Iterate over collection records that match a wildcard.
 
         Parameters
@@ -631,7 +534,7 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDocumentation(self, key: Any) -> str | None:
+    def getDocumentation(self, key: _Key) -> str | None:
         """Retrieve the documentation string for a collection.
 
         Parameters
@@ -647,7 +550,7 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def setDocumentation(self, key: Any, doc: str | None) -> None:
+    def setDocumentation(self, key: _Key, doc: str | None) -> None:
         """Set the documentation string for a collection.
 
         Parameters
@@ -659,7 +562,8 @@ class CollectionManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def getParentChains(self, key: Any) -> Iterator[ChainedCollectionRecord]:
+    @abstractmethod
+    def getParentChains(self, key: _Key) -> Iterator[ChainedCollectionRecord[_Key]]:
         """Find all CHAINED collections that directly contain the given
         collection.
 
@@ -667,5 +571,23 @@ class CollectionManager(VersionedExtension):
         ----------
         key
             Internal primary key value for the collection.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def update_chain(
+        self, record: ChainedCollectionRecord[_Key], children: Iterable[str], flatten: bool = False
+    ) -> ChainedCollectionRecord[_Key]:
+        """Update chained collection composition.
+
+        Parameters
+        ----------
+        record : `ChainedCollectionRecord`
+            Chained collection record.
+        children : `~collections.abc.Iterable` [`str`]
+            Ordered names of children collections.
+        flatten : `bool`, optional
+            If `True`, recursively flatten out any nested
+            `~CollectionType.CHAINED` collections in ``children`` first.
         """
         raise NotImplementedError()

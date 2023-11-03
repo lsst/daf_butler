@@ -33,14 +33,13 @@ __all__ = ()
 import contextlib
 import itertools
 from abc import abstractmethod
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from collections.abc import Iterable, Iterator, Set
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import sqlalchemy
 
-from ..._timespan import Timespan, TimespanDatabaseRepresentation
-from ...dimensions import DimensionUniverse
+from ..._timespan import TimespanDatabaseRepresentation
 from .._collection_type import CollectionType
 from .._exceptions import MissingCollectionError
 from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord, VersionTuple
@@ -158,150 +157,10 @@ def makeCollectionChainTableSpec(collectionIdName: str, collectionIdType: type) 
     )
 
 
-class DefaultRunRecord(RunRecord):
-    """Default `RunRecord` implementation.
-
-    This method assumes the same run table definition as produced by
-    `makeRunTableSpec` method. The only non-fixed name in the schema
-    is the PK column name, this needs to be passed in a constructor.
-
-    Parameters
-    ----------
-    db : `Database`
-        Registry database.
-    key
-        Unique collection ID, can be the same as ``name`` if ``name`` is used
-        for identification. Usually this is an integer or string, but can be
-        other database-specific type.
-    name : `str`
-        Run collection name.
-    table : `sqlalchemy.schema.Table`
-        Table for run records.
-    idColumnName : `str`
-        Name of the identifying column in run table.
-    host : `str`, optional
-        Name of the host where run was produced.
-    timespan : `Timespan`, optional
-        Timespan for this run.
-    """
-
-    def __init__(
-        self,
-        db: Database,
-        key: Any,
-        name: str,
-        *,
-        table: sqlalchemy.schema.Table,
-        idColumnName: str,
-        host: str | None = None,
-        timespan: Timespan | None = None,
-    ):
-        super().__init__(key=key, name=name, type=CollectionType.RUN)
-        self._db = db
-        self._table = table
-        self._host = host
-        if timespan is None:
-            timespan = Timespan(begin=None, end=None)
-        self._timespan = timespan
-        self._idName = idColumnName
-
-    def update(self, host: str | None = None, timespan: Timespan | None = None) -> None:
-        # Docstring inherited from RunRecord.
-        if timespan is None:
-            timespan = Timespan(begin=None, end=None)
-        row = {
-            self._idName: self.key,
-            "host": host,
-        }
-        self._db.getTimespanRepresentation().update(timespan, result=row)
-        count = self._db.update(self._table, {self._idName: self.key}, row)
-        if count != 1:
-            raise RuntimeError(f"Run update affected {count} records; expected exactly one.")
-        self._host = host
-        self._timespan = timespan
-
-    @property
-    def host(self) -> str | None:
-        # Docstring inherited from RunRecord.
-        return self._host
-
-    @property
-    def timespan(self) -> Timespan:
-        # Docstring inherited from RunRecord.
-        return self._timespan
-
-
-class DefaultChainedCollectionRecord(ChainedCollectionRecord):
-    """Default `ChainedCollectionRecord` implementation.
-
-    This method assumes the same chain table definition as produced by
-    `makeCollectionChainTableSpec` method. All column names in the table are
-    fixed and hard-coded in the methods.
-
-    Parameters
-    ----------
-    db : `Database`
-        Registry database.
-    key
-        Unique collection ID, can be the same as ``name`` if ``name`` is used
-        for identification. Usually this is an integer or string, but can be
-        other database-specific type.
-    name : `str`
-        Collection name.
-    table : `sqlalchemy.schema.Table`
-        Table for chain relationship records.
-    universe : `DimensionUniverse`
-        Object managing all known dimensions.
-    """
-
-    def __init__(
-        self,
-        db: Database,
-        key: Any,
-        name: str,
-        *,
-        table: sqlalchemy.schema.Table,
-        universe: DimensionUniverse,
-    ):
-        super().__init__(key=key, name=name, universe=universe)
-        self._db = db
-        self._table = table
-        self._universe = universe
-
-    def _update(self, manager: CollectionManager, children: tuple[str, ...]) -> None:
-        # Docstring inherited from ChainedCollectionRecord.
-        rows = []
-        position = itertools.count()
-        for child in manager.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False):
-            rows.append(
-                {
-                    "parent": self.key,
-                    "child": child.key,
-                    "position": next(position),
-                }
-            )
-        with self._db.transaction():
-            self._db.delete(self._table, ["parent"], {"parent": self.key})
-            self._db.insert(self._table, *rows)
-
-    def _load(self, manager: CollectionManager) -> tuple[str, ...]:
-        # Docstring inherited from ChainedCollectionRecord.
-        sql = (
-            sqlalchemy.sql.select(
-                self._table.columns.child,
-            )
-            .select_from(self._table)
-            .where(self._table.columns.parent == self.key)
-            .order_by(self._table.columns.position)
-        )
-        with self._db.query(sql) as sql_result:
-            return tuple(manager[row[self._table.columns.child]].name for row in sql_result.mappings())
-
-
 K = TypeVar("K")
 
 
-class DefaultCollectionManager(Generic[K], CollectionManager):
+class DefaultCollectionManager(CollectionManager[K]):
     """Default `CollectionManager` implementation.
 
     This implementation uses record classes defined in this module and is
@@ -338,7 +197,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         self._db = db
         self._tables = tables
         self._collectionIdName = collectionIdName
-        self._records: dict[K, CollectionRecord] = {}  # indexed by record ID
+        self._records: dict[K, CollectionRecord[K]] = {}  # indexed by record ID
         self._dimensions = dimensions
 
     def refresh(self) -> None:
@@ -346,54 +205,62 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         sql = sqlalchemy.sql.select(
             *(list(self._tables.collection.columns) + list(self._tables.run.columns))
         ).select_from(self._tables.collection.join(self._tables.run, isouter=True))
+        # Extract _all_ chain mappings as well
+        chain_sql = sqlalchemy.sql.select(
+            self._tables.collection_chain.columns["parent"],
+            self._tables.collection_chain.columns["position"],
+            self._tables.collection_chain.columns["child"],
+        ).select_from(self._tables.collection_chain)
+
+        with self._db.transaction():
+            with self._db.query(sql) as sql_result:
+                sql_rows = sql_result.mappings().fetchall()
+            with self._db.query(chain_sql) as sql_result:
+                chain_rows = sql_result.mappings().fetchall()
+
+        # Build all chain definitions.
+        chains_defs: dict[K, list[tuple[int, K]]] = defaultdict(list)
+        for row in chain_rows:
+            chains_defs[row["parent"]].append((row["position"], row["child"]))
+
         # Put found records into a temporary instead of updating self._records
         # in place, for exception safety.
-        records = []
-        chains = []
+        records: list[CollectionRecord] = []
         TimespanReprClass = self._db.getTimespanRepresentation()
-        with self._db.query(sql) as sql_result:
-            sql_rows = sql_result.mappings().fetchall()
+        id_to_name: dict[K, str] = {}
+        chained_ids: list[K] = []
         for row in sql_rows:
             collection_id = row[self._tables.collection.columns[self._collectionIdName]]
             name = row[self._tables.collection.columns.name]
+            id_to_name[collection_id] = name
             type = CollectionType(row["type"])
             record: CollectionRecord
             if type is CollectionType.RUN:
-                record = DefaultRunRecord(
+                record = RunRecord(
                     key=collection_id,
                     name=name,
-                    db=self._db,
-                    table=self._tables.run,
-                    idColumnName=self._collectionIdName,
                     host=row[self._tables.run.columns.host],
                     timespan=TimespanReprClass.extract(row),
                 )
+                records.append(record)
             elif type is CollectionType.CHAINED:
-                record = DefaultChainedCollectionRecord(
-                    db=self._db,
-                    key=collection_id,
-                    table=self._tables.collection_chain,
-                    name=name,
-                    universe=self._dimensions.universe,
-                )
-                chains.append(record)
+                # Need to delay chained collection construction until all names
+                # are known.
+                chained_ids.append(collection_id)
             else:
                 record = CollectionRecord(key=collection_id, name=name, type=type)
+                records.append(record)
+
+        for chained_id in chained_ids:
+            children_names = [id_to_name[child_id] for _, child_id in sorted(chains_defs[chained_id])]
+            record = ChainedCollectionRecord(
+                key=chained_id,
+                name=id_to_name[chained_id],
+                children=children_names,
+            )
             records.append(record)
+
         self._setRecordCache(records)
-        for chain in chains:
-            try:
-                chain.refresh(self)
-            except MissingCollectionError:
-                # This indicates a race condition in which some other client
-                # created a new collection and added it as a child of this
-                # (pre-existing) chain between the time we fetched all
-                # collections and the time we queried for parent-child
-                # relationships.
-                # Because that's some other unrelated client, we shouldn't care
-                # about that parent collection anyway, so we just drop it on
-                # the floor (a manual refresh can be used to get it back).
-                self._removeCachedRecord(chain)
 
     def register(
         self, name: str, type: CollectionType, doc: str | None = None
@@ -412,7 +279,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
             assert isinstance(inserted_or_updated, bool)
             registered = inserted_or_updated
             assert row is not None
-            collection_id = row[self._collectionIdName]
+            collection_id = cast(K, row[self._collectionIdName])
             if type is CollectionType.RUN:
                 TimespanReprClass = self._db.getTimespanRepresentation()
                 row, _ = self._db.sync(
@@ -421,25 +288,20 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                     returning=("host",) + TimespanReprClass.getFieldNames(),
                 )
                 assert row is not None
-                record = DefaultRunRecord(
-                    db=self._db,
+                record = RunRecord[K](
                     key=collection_id,
                     name=name,
-                    table=self._tables.run,
-                    idColumnName=self._collectionIdName,
                     host=row["host"],
                     timespan=TimespanReprClass.extract(row),
                 )
             elif type is CollectionType.CHAINED:
-                record = DefaultChainedCollectionRecord(
-                    db=self._db,
+                record = ChainedCollectionRecord[K](
                     key=collection_id,
                     name=name,
-                    table=self._tables.collection_chain,
-                    universe=self._dimensions.universe,
+                    children=[],
                 )
             else:
-                record = CollectionRecord(key=collection_id, name=name, type=type)
+                record = CollectionRecord[K](key=collection_id, name=name, type=type)
             self._addCachedRecord(record)
         return record, registered
 
@@ -454,14 +316,14 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         )
         self._removeCachedRecord(record)
 
-    def find(self, name: str) -> CollectionRecord:
+    def find(self, name: str) -> CollectionRecord[K]:
         # Docstring inherited from CollectionManager.
         result = self._getByName(name)
         if result is None:
             raise MissingCollectionError(f"No collection with name '{name}' found.")
         return result
 
-    def __getitem__(self, key: Any) -> CollectionRecord:
+    def __getitem__(self, key: Any) -> CollectionRecord[K]:
         # Docstring inherited from CollectionManager.
         try:
             return self._records[key]
@@ -476,13 +338,13 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         done: set[str] | None = None,
         flatten_chains: bool = True,
         include_chains: bool | None = None,
-    ) -> list[CollectionRecord]:
+    ) -> list[CollectionRecord[K]]:
         # Docstring inherited
         if done is None:
             done = set()
         include_chains = include_chains if include_chains is not None else not flatten_chains
 
-        def resolve_nested(record: CollectionRecord, done: set[str]) -> Iterator[CollectionRecord]:
+        def resolve_nested(record: CollectionRecord, done: set[str]) -> Iterator[CollectionRecord[K]]:
             if record.name in done:
                 return
             if record.type in collection_types:
@@ -491,12 +353,12 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                     yield record
             if flatten_chains and record.type is CollectionType.CHAINED:
                 done.add(record.name)
-                for name in cast(ChainedCollectionRecord, record).children:
+                for name in cast(ChainedCollectionRecord[K], record).children:
                     # flake8 can't tell that we only delete this closure when
                     # we're totally done with it.
                     yield from resolve_nested(self.find(name), done)  # noqa: F821
 
-        result: list[CollectionRecord] = []
+        result: list[CollectionRecord[K]] = []
 
         if wildcard.patterns is ...:
             for record in self._records.values():
@@ -526,7 +388,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         # Docstring inherited from CollectionManager.
         self._db.update(self._tables.collection, {self._collectionIdName: "key"}, {"key": key, "doc": doc})
 
-    def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:
+    def _setRecordCache(self, records: Iterable[CollectionRecord[K]]) -> None:
         """Set internal record cache to contain given records,
         old cached records will be removed.
         """
@@ -534,20 +396,20 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         for record in records:
             self._records[record.key] = record
 
-    def _addCachedRecord(self, record: CollectionRecord) -> None:
+    def _addCachedRecord(self, record: CollectionRecord[K]) -> None:
         """Add single record to cache."""
         self._records[record.key] = record
 
-    def _removeCachedRecord(self, record: CollectionRecord) -> None:
+    def _removeCachedRecord(self, record: CollectionRecord[K]) -> None:
         """Remove single record from cache."""
         del self._records[record.key]
 
     @abstractmethod
-    def _getByName(self, name: str) -> CollectionRecord | None:
+    def _getByName(self, name: str) -> CollectionRecord[K] | None:
         """Find collection record given collection name."""
         raise NotImplementedError()
 
-    def getParentChains(self, key: Any) -> Iterator[ChainedCollectionRecord]:
+    def getParentChains(self, key: Any) -> Iterator[ChainedCollectionRecord[K]]:
         # Docstring inherited from CollectionManager.
         table = self._tables.collection_chain
         sql = (
@@ -561,4 +423,42 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
             # TODO: Just in case cached records miss new parent collections.
             # This is temporary, will replace with non-cached records soon.
             with contextlib.suppress(KeyError):
-                yield cast(ChainedCollectionRecord, self._records[key])
+                yield cast(ChainedCollectionRecord[K], self._records[key])
+
+    def update_chain(
+        self, chain: ChainedCollectionRecord[K], children: Iterable[str], flatten: bool = False
+    ) -> ChainedCollectionRecord[K]:
+        # Docstring inherited from CollectionManager.
+        children_as_wildcard = CollectionWildcard.from_names(children)
+        for record in self.resolve_wildcard(
+            children_as_wildcard,
+            flatten_chains=True,
+            include_chains=True,
+            collection_types={CollectionType.CHAINED},
+        ):
+            if record == chain:
+                raise ValueError(f"Cycle in collection chaining when defining '{chain.name}'.")
+        if flatten:
+            children = tuple(
+                record.name for record in self.resolve_wildcard(children_as_wildcard, flatten_chains=True)
+            )
+
+        rows = []
+        position = itertools.count()
+        names = []
+        for child in self.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False):
+            rows.append(
+                {
+                    "parent": chain.key,
+                    "child": child.key,
+                    "position": next(position),
+                }
+            )
+            names.append(child.name)
+        with self._db.transaction():
+            self._db.delete(self._tables.collection_chain, ["parent"], {"parent": chain.key})
+            self._db.insert(self._tables.collection_chain, *rows)
+
+        record = ChainedCollectionRecord[K](chain.key, chain.name, children=tuple(names))
+        self._addCachedRecord(record)
+        return record

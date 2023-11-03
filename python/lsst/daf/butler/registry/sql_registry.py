@@ -603,7 +603,7 @@ class SqlRegistry:
         assert isinstance(record, ChainedCollectionRecord)
         children = CollectionWildcard.from_expression(children).require_ordered()
         if children != record.children or flatten:
-            record.update(self._managers.collections, children, flatten=flatten)
+            self._managers.collections.update_chain(record, children, flatten=flatten)
 
     def getCollectionParentChains(self, collection: str) -> set[str]:
         """Return the CHAINED collections that directly contain the given one.
