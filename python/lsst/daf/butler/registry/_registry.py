@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Registry",)
+__all__ = ("Registry", "CollectionArgType")
 
 import contextlib
 import logging
@@ -35,7 +35,7 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from types import EllipsisType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
@@ -64,7 +64,9 @@ if TYPE_CHECKING:
 _LOG = logging.getLogger(__name__)
 
 # TYpe alias for `collections` arguments.
-CollectionArgType = str | re.Pattern | Iterable[str | re.Pattern] | EllipsisType | CollectionWildcard
+CollectionArgType: TypeAlias = (
+    str | re.Pattern | Iterable[str | re.Pattern] | EllipsisType | CollectionWildcard
+)
 
 
 class Registry(ABC):

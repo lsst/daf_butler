@@ -13,6 +13,7 @@ data:
       -
         name: Cam1
         visit_max: 1024
+        visit_system: 1
         exposure_max: 512
         detector_max: 4
         class_name: lsst.obs.base.Instrument

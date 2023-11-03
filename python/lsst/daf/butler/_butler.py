@@ -42,12 +42,13 @@ from ._butler_config import ButlerConfig
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
 from ._dataset_existence import DatasetExistence
-from ._dataset_ref import DatasetIdGenEnum, DatasetRef
+from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._file_dataset import FileDataset
 from ._limited_butler import LimitedButler
 from ._storage_class import StorageClass
+from ._timespan import Timespan
 from .datastore import DatasetRefURIs, Datastore
 from .dimensions import DataId, DimensionConfig
 from .registry import Registry, RegistryConfig, _RegistryFactory
@@ -769,6 +770,151 @@ class Butler(LimitedButler):
         RuntimeError
             Raised if a URI is requested for a dataset that consists of
             multiple artifacts.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_dataset_type(self, name: str) -> DatasetType:
+        """Get the `DatasetType`.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the type.
+
+        Returns
+        -------
+        type : `DatasetType`
+            The `DatasetType` associated with the given name.
+
+        Raises
+        ------
+        lsst.daf.butler.MissingDatasetTypeError
+            Raised if the requested dataset type has not been registered.
+
+        Notes
+        -----
+        This method handles component dataset types automatically, though most
+        other operations do not.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_dataset(
+        self,
+        id: DatasetId,
+        storage_class: str | StorageClass | None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
+    ) -> DatasetRef | None:
+        """Retrieve a Dataset entry.
+
+        Parameters
+        ----------
+        id : `DatasetId`
+            The unique identifier for the dataset.
+        storage_class : `str` or `StorageClass` or `None`
+            A storage class to use when creating the returned entry. If given
+            it must be compatible with the default storage class.
+        dimension_records: `bool`, optional
+            If `True` the ref will be expanded and contain dimension records.
+        datastore_records: `bool`, optional.
+            If `True` the ref will contain associated datastore records.
+
+        Returns
+        -------
+        ref : `DatasetRef` or `None`
+            A ref to the Dataset, or `None` if no matching Dataset
+            was found.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def find_dataset(
+        self,
+        dataset_type: DatasetType | str,
+        data_id: DataId | None = None,
+        *,
+        collections: str | Sequence[str] | None = None,
+        timespan: Timespan | None = None,
+        storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
+        **kwargs: Any,
+    ) -> DatasetRef | None:
+        """Find a dataset given its `DatasetType` and data ID.
+
+        This can be used to obtain a `DatasetRef` that permits the dataset to
+        be read from a `Datastore`. If the dataset is a component and can not
+        be found using the provided dataset type, a dataset ref for the parent
+        will be returned instead but with the correct dataset type.
+
+        Parameters
+        ----------
+        dataset_type : `DatasetType` or `str`
+            A `DatasetType` or the name of one.  If this is a `DatasetType`
+            instance, its storage class will be respected and propagated to
+            the output, even if it differs from the dataset type definition
+            in the registry, as long as the storage classes are convertible.
+        data_id : `dict` or `DataCoordinate`, optional
+            A `dict`-like object containing the `Dimension` links that identify
+            the dataset within a collection. If it is a `dict` the dataId
+            can include dimension record values such as ``day_obs`` and
+            ``seq_num`` or ``full_name`` that can be used to derive the
+            primary dimension.
+        collections : `str` or `list` [`str`], optional
+            A an ordered list of collections to search for the dataset.
+            Defaults to ``self.defaults.collections``.
+        timespan : `Timespan`, optional
+            A timespan that the validity range of the dataset must overlap.
+            If not provided, any `~CollectionType.CALIBRATION` collections
+            matched by the ``collections`` argument will not be searched.
+        storage_class : `str` or `StorageClass` or `None`
+            A storage class to use when creating the returned entry. If given
+            it must be compatible with the default storage class.
+        dimension_records: `bool`, optional
+            If `True` the ref will be expanded and contain dimension records.
+        datastore_records: `bool`, optional.
+            If `True` the ref will contain associated datastore records.
+        **kwargs
+            Additional keyword arguments passed to
+            `DataCoordinate.standardize` to convert ``dataId`` to a true
+            `DataCoordinate` or augment an existing one. This can also include
+            dimension record metadata that can be used to derive a primary
+            dimension value.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A reference to the dataset, or `None` if no matching Dataset
+            was found.
+
+        Raises
+        ------
+        lsst.daf.butler.NoDefaultCollectionError
+            Raised if ``collections`` is `None` and
+            ``self.collections`` is `None`.
+        LookupError
+            Raised if one or more data ID keys are missing.
+        lsst.daf.butler.MissingDatasetTypeError
+            Raised if the dataset type does not exist.
+        lsst.daf.butler.MissingCollectionError
+            Raised if any of ``collections`` does not exist in the registry.
+
+        Notes
+        -----
+        This method simply returns `None` and does not raise an exception even
+        when the set of collections searched is intrinsically incompatible with
+        the dataset type, e.g. if ``datasetType.isCalibration() is False``, but
+        only `~CollectionType.CALIBRATION` collections are being searched.
+        This may make it harder to debug some lookup failures, but the behavior
+        is intentional; we consider it more important that failed searches are
+        reported consistently, regardless of the reason, and that adding
+        additional collections that do not contain a match to the search path
+        never changes the behavior.
+
+        This method handles component dataset types automatically, though most
+        other query operations do not.
         """
         raise NotImplementedError()
 

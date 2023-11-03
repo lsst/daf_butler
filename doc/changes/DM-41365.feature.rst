@@ -1,0 +1,1 @@
+Added new ``Butler`` APIs migrated from registry: ``Butler.get_dataset_type()``, ``Butler.get_dataset()``, and ``Butler.find_dataset()``.

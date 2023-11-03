@@ -30,14 +30,24 @@ from __future__ import annotations
 __all__ = ("app", "factory_dependency")
 
 import logging
+import uuid
 from functools import cache
 from typing import Any
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from lsst.daf.butler import Butler
+from fastapi.responses import JSONResponse
+from lsst.daf.butler import (
+    Butler,
+    DataCoordinate,
+    MissingDatasetTypeError,
+    SerializedDataCoordinate,
+    SerializedDatasetRef,
+    SerializedDatasetType,
+)
 
 from ._factory import Factory
+from ._server_models import FindDatasetModel
 
 BUTLER_ROOT = "ci_hsc_gen3/DATA"
 
@@ -45,6 +55,17 @@ log = logging.getLogger(__name__)
 
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+@app.exception_handler(MissingDatasetTypeError)
+def missing_dataset_type_exception_handler(request: Request, exc: MissingDatasetTypeError) -> JSONResponse:
+    # Remove the double quotes around the string form. These confuse
+    # the JSON serialization when single quotes are in the message.
+    message = str(exc).strip('"')
+    return JSONResponse(
+        status_code=404,
+        content={"detail": message, "exception": "MissingDatasetTypeError"},
+    )
 
 
 @cache
@@ -56,8 +77,111 @@ def factory_dependency() -> Factory:
     return Factory(butler=_make_global_butler())
 
 
+def unpack_dataId(butler: Butler, data_id: SerializedDataCoordinate | None) -> DataCoordinate | None:
+    """Convert the serialized dataId back to full DataCoordinate.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The butler to use for registry and universe.
+    data_id : `SerializedDataCoordinate` or `None`
+        The serialized form.
+
+    Returns
+    -------
+    dataId : `DataCoordinate` or `None`
+        The DataId usable by registry.
+    """
+    if data_id is None:
+        return None
+    return DataCoordinate.from_simple(data_id, registry=butler.registry)
+
+
 @app.get("/butler/v1/universe", response_model=dict[str, Any])
 def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> dict[str, Any]:
     """Allow remote client to get dimensions definition."""
     butler = factory.create_butler()
     return butler.dimensions.dimensionConfig.toDict()
+
+
+@app.get(
+    "/butler/v1/dataset_type/{dataset_type_name}",
+    summary="Retrieve this dataset type definition.",
+    response_model=SerializedDatasetType,
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
+def get_dataset_type(
+    dataset_type_name: str, factory: Factory = Depends(factory_dependency)
+) -> SerializedDatasetType:
+    """Return the dataset type."""
+    butler = factory.create_butler()
+    datasetType = butler.get_dataset_type(dataset_type_name)
+    return datasetType.to_simple()
+
+
+@app.get(
+    "/butler/v1/dataset/{id}",
+    summary="Retrieve this dataset definition.",
+    response_model=SerializedDatasetRef | None,
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
+def get_dataset(
+    id: uuid.UUID,
+    storage_class: str | None = None,
+    dimension_records: bool = False,
+    datastore_records: bool = False,
+    factory: Factory = Depends(factory_dependency),
+) -> SerializedDatasetRef | None:
+    """Return a single dataset reference."""
+    butler = factory.create_butler()
+    ref = butler.get_dataset(
+        id,
+        storage_class=storage_class,
+        dimension_records=dimension_records,
+        datastore_records=datastore_records,
+    )
+    if ref is not None:
+        return ref.to_simple()
+    # This could raise a 404 since id is not found. The standard implementation
+    # get_dataset method returns without error so follow that example here.
+    return ref
+
+
+# Not yet supported: TimeSpan is not yet a pydantic model.
+# collections parameter assumes client-side has resolved regexes.
+@app.post(
+    "/butler/v1/find_dataset/{dataset_type}",
+    summary="Retrieve this dataset definition from collection, dataset type, and dataId",
+    response_model=SerializedDatasetRef,
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
+def find_dataset(
+    dataset_type: str,
+    query: FindDatasetModel,
+    factory: Factory = Depends(factory_dependency),
+) -> SerializedDatasetRef | None:
+    collection_query = query.collections if query.collections else None
+
+    # Get the simple dict from the SerializedDataCoordinate. We do not know
+    # if it is a well-defined DataCoordinate or needs some massaging first.
+    # find_dataset will use dimension record queries if necessary.
+    data_id = query.data_id.dataId
+
+    butler = factory.create_butler()
+    ref = butler.find_dataset(
+        dataset_type,
+        None,
+        collections=collection_query,
+        storage_class=query.storage_class,
+        timespan=None,
+        dimension_records=query.dimension_records,
+        datastore_records=query.datastore_records,
+        **data_id,
+    )
+    return ref.to_simple() if ref else None

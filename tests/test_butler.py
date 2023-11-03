@@ -384,7 +384,7 @@ class ButlerPutGetTests(TestCaseMixin):
                 with self.assertRaises(FileNotFoundError):
                     butler.get(ref)
                 # Registry shouldn't be able to find it by dataset_id anymore.
-                self.assertIsNone(butler.registry.getDataset(ref.id))
+                self.assertIsNone(butler.get_dataset(ref.id))
 
                 # Do explicit registry removal since we know they are
                 # empty
@@ -442,7 +442,7 @@ class ButlerPutGetTests(TestCaseMixin):
                 )
                 self.assertEqual(count, stop)
 
-            compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
+            compRef = butler.find_dataset(compNameS, dataId, collections=butler.collections)
             assert compRef is not None
             summary = butler.get(compRef)
             self.assertEqual(summary, metric.summary)
@@ -822,7 +822,7 @@ class ButlerTests(ButlerPutGetTests):
 
         # Check that the put still works if a DatasetType is given with
         # a definition matching this python type.
-        registry_type = butler.registry.getDatasetType(datasetTypeName)
+        registry_type = butler.get_dataset_type(datasetTypeName)
         this_type = DatasetType(datasetTypeName, registry_type.dimensions, "StructuredDataDictJson")
         metric2_ref = butler.put(test_dict, this_type, dataId=dataId, visit=425)
         self.assertEqual(metric2_ref.datasetType, registry_type)
@@ -928,7 +928,7 @@ class ButlerTests(ButlerPutGetTests):
             datasets[0].refs = [
                 cast(
                     DatasetRef,
-                    butler.registry.findDataset(ref.datasetType, dataId=ref.dataId, collections=ref.run),
+                    butler.find_dataset(ref.datasetType, data_id=ref.dataId, collections=ref.run),
                 )
                 for ref in datasets[0].refs
             ]
@@ -938,7 +938,7 @@ class ButlerTests(ButlerPutGetTests):
                 for ref in dataset.refs:
                     # Create a dict from the dataId to drop the records.
                     new_data_id = {str(k): v for k, v in ref.dataId.items()}
-                    new_ref = butler.registry.findDataset(ref.datasetType, new_data_id, collections=ref.run)
+                    new_ref = butler.find_dataset(ref.datasetType, new_data_id, collections=ref.run)
                     assert new_ref is not None
                     self.assertFalse(new_ref.dataId.hasRecords())
                     refs.append(new_ref)
@@ -1115,7 +1115,7 @@ class ButlerTests(ButlerPutGetTests):
         with self.assertRaises(LookupError, msg=f"Check can't get by {datasetTypeName} and {dataId}"):
             butler.get(datasetTypeName, dataId)
         # Also check explicitly if Dataset entry is missing
-        self.assertIsNone(butler.registry.findDataset(datasetType, dataId, collections=butler.collections))
+        self.assertIsNone(butler.find_dataset(datasetType, dataId, collections=butler.collections))
         # Direct retrieval should not find the file in the Datastore
         with self.assertRaises(FileNotFoundError, msg=f"Check {ref} can't be retrieved directly"):
             butler.get(ref)
@@ -1708,7 +1708,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         metric = butler.get(datasetTypeName, dataId=dataId)
         self.assertEqual(get_full_type_name(metric), "lsst.daf.butler.tests.MetricsExample")
 
-        datasetType_ori = butler.registry.getDatasetType(datasetTypeName)
+        datasetType_ori = butler.get_dataset_type(datasetTypeName)
         self.assertEqual(datasetType_ori.storageClass.name, "StructuredDataNoComponents")
 
         # Now need to hack the registry dataset type definition.
@@ -1725,7 +1725,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Force reset of dataset type cache
         butler.registry.refresh()
 
-        datasetType_new = butler.registry.getDatasetType(datasetTypeName)
+        datasetType_new = butler.get_dataset_type(datasetTypeName)
         self.assertEqual(datasetType_new.name, datasetType_ori.name)
         self.assertEqual(datasetType_new.storageClass.name, "StructuredDataNoComponentsModel")
 

@@ -40,17 +40,20 @@ from .._butler import Butler
 from .._butler_config import ButlerConfig
 from .._config import Config
 from .._dataset_existence import DatasetExistence
-from .._dataset_ref import DatasetIdGenEnum, DatasetRef
-from .._dataset_type import DatasetType
+from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
+from .._dataset_type import DatasetType, SerializedDatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._file_dataset import FileDataset
 from .._limited_butler import LimitedButler
 from .._storage_class import StorageClass
+from .._timespan import Timespan
 from ..datastore import DatasetRefURIs
-from ..dimensions import DataId, DimensionConfig, DimensionUniverse
-from ..registry import Registry, RegistryDefaults
+from ..dimensions import DataCoordinate, DataId, DimensionConfig, DimensionUniverse, SerializedDataCoordinate
+from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Registry, RegistryDefaults
+from ..registry.wildcards import CollectionWildcard
 from ..transfers import RepoExportContext
 from ._config import RemoteButlerConfigModel
+from .server import FindDatasetModel
 
 
 class RemoteButler(Butler):
@@ -100,9 +103,38 @@ class RemoteButler(Butler):
         self._dimensions = DimensionUniverse(config)
         return self._dimensions
 
-    def getDatasetType(self, name: str) -> DatasetType:
-        # Docstring inherited.
-        raise NotImplementedError()
+    def _simplify_dataId(
+        self, dataId: DataId | None, **kwargs: dict[str, int | str]
+    ) -> SerializedDataCoordinate | None:
+        """Take a generic Data ID and convert it to a serializable form.
+
+        Parameters
+        ----------
+        dataId : `dict`, `None`, `DataCoordinate`
+            The data ID to serialize.
+        **kwargs : `dict`
+            Additional values that should be included if this is not
+            a `DataCoordinate`.
+
+        Returns
+        -------
+        data_id : `SerializedDataCoordinate` or `None`
+            A serializable form.
+        """
+        if dataId is None and not kwargs:
+            return None
+        if isinstance(dataId, DataCoordinate):
+            return dataId.to_simple()
+
+        if dataId is None:
+            data_id = kwargs
+        elif kwargs:
+            # Change variable because DataId is immutable and mypy complains.
+            data_id = dict(dataId)
+            data_id.update(kwargs)
+
+        # Assume we can treat it as a dict.
+        return SerializedDataCoordinate(dataId=data_id)
 
     def transaction(self) -> AbstractContextManager[None]:
         """Will always raise NotImplementedError.
@@ -178,6 +210,94 @@ class RemoteButler(Butler):
     ) -> ResourcePath:
         # Docstring inherited.
         raise NotImplementedError()
+
+    def get_dataset_type(self, name: str) -> DatasetType:
+        # In future implementation this should directly access the cache
+        # and only go to the server if the dataset type is not known.
+        path = f"dataset_type/{name}"
+        response = self._client.get(self._get_url(path))
+        if response.status_code != httpx.codes.OK:
+            content = response.json()
+            if content["exception"] == "MissingDatasetTypeError":
+                raise MissingDatasetTypeError(content["detail"])
+        response.raise_for_status()
+        return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
+
+    def get_dataset(
+        self,
+        id: DatasetId,
+        storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
+    ) -> DatasetRef | None:
+        path = f"dataset/{id}"
+        if isinstance(storage_class, StorageClass):
+            storage_class_name = storage_class.name
+        elif storage_class:
+            storage_class_name = storage_class
+        params: dict[str, str | bool] = {
+            "dimension_records": dimension_records,
+            "datastore_records": datastore_records,
+        }
+        if datastore_records:
+            raise ValueError("Datastore records can not yet be returned in client/server butler.")
+        if storage_class:
+            params["storage_class"] = storage_class_name
+        response = self._client.get(self._get_url(path), params=params)
+        response.raise_for_status()
+        if response.json() is None:
+            return None
+        return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
+
+    def find_dataset(
+        self,
+        dataset_type: DatasetType | str,
+        data_id: DataId | None = None,
+        *,
+        collections: str | Sequence[str] | None = None,
+        timespan: Timespan | None = None,
+        storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
+        **kwargs: Any,
+    ) -> DatasetRef | None:
+        if collections is None:
+            if not self.collections:
+                raise NoDefaultCollectionError(
+                    "No collections provided to find_dataset, and no defaults from butler construction."
+                )
+            collections = self.collections
+        # Temporary hack. Assume strings for collections. In future
+        # want to construct CollectionWildcard and filter it through collection
+        # cache to generate list of collection names.
+        wildcards = CollectionWildcard.from_expression(collections)
+
+        if datastore_records:
+            raise ValueError("Datastore records can not yet be returned in client/server butler.")
+        if timespan:
+            raise ValueError("Timespan can not yet be used in butler client/server.")
+
+        if isinstance(dataset_type, DatasetType):
+            dataset_type = dataset_type.name
+
+        if isinstance(storage_class, StorageClass):
+            storage_class = storage_class.name
+
+        query = FindDatasetModel(
+            data_id=self._simplify_dataId(data_id, **kwargs),
+            collections=wildcards.strings,
+            storage_class=storage_class,
+            dimension_records=dimension_records,
+            datastore_records=datastore_records,
+        )
+
+        path = f"find_dataset/{dataset_type}"
+        response = self._client.post(
+            self._get_url(path), json=query.model_dump(mode="json", exclude_unset=True, exclude_defaults=True)
+        )
+        response.raise_for_status()
+
+        return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
 
     def retrieveArtifacts(
         self,

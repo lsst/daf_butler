@@ -55,7 +55,7 @@ from ._butler import Butler
 from ._butler_config import ButlerConfig
 from ._config import Config
 from ._dataset_existence import DatasetExistence
-from ._dataset_ref import DatasetIdGenEnum, DatasetRef
+from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._exceptions import ValidationError
@@ -228,7 +228,7 @@ class DirectButler(Butler):
     def _retrieve_dataset_type(self, name: str) -> DatasetType | None:
         """Return DatasetType defined in registry given dataset type name."""
         try:
-            return self._registry.getDatasetType(name)
+            return self.get_dataset_type(name)
         except MissingDatasetTypeError:
             return None
 
@@ -369,11 +369,11 @@ class DirectButler(Butler):
             if isinstance(datasetRefOrType, DatasetType):
                 externalDatasetType = datasetRefOrType
             else:
-                internalDatasetType = self._registry.getDatasetType(datasetRefOrType)
+                internalDatasetType = self.get_dataset_type(datasetRefOrType)
 
         # Check that they are self-consistent
         if externalDatasetType is not None:
-            internalDatasetType = self._registry.getDatasetType(externalDatasetType.name)
+            internalDatasetType = self.get_dataset_type(externalDatasetType.name)
             if externalDatasetType != internalDatasetType:
                 # We can allow differences if they are compatible, depending
                 # on whether this is a get or a put. A get requires that
@@ -846,7 +846,7 @@ class DirectButler(Butler):
             )
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self._registry.findDataset(
+        ref = self.find_dataset(
             datasetType,
             dataId,
             collections=collections,
@@ -1317,6 +1317,60 @@ class DirectButler(Butler):
                 "Use Butler.getURIs() instead."
             )
         return primary
+
+    def get_dataset_type(self, name: str) -> DatasetType:
+        return self._registry.getDatasetType(name)
+
+    def get_dataset(
+        self,
+        id: DatasetId,
+        storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
+    ) -> DatasetRef | None:
+        ref = self._registry.getDataset(id)
+        if ref is not None:
+            if dimension_records:
+                ref = ref.expanded(self._registry.expandDataId(ref.dataId, graph=ref.datasetType.dimensions))
+            if storage_class:
+                ref = ref.overrideStorageClass(storage_class)
+            if datastore_records:
+                ref = self._registry.get_datastore_records(ref)
+        return ref
+
+    def find_dataset(
+        self,
+        dataset_type: DatasetType | str,
+        data_id: DataId | None = None,
+        *,
+        collections: str | Sequence[str] | None = None,
+        timespan: Timespan | None = None,
+        storage_class: str | StorageClass | None = None,
+        dimension_records: bool = False,
+        datastore_records: bool = False,
+        **kwargs: Any,
+    ) -> DatasetRef | None:
+        # Handle any parts of the dataID that are not using primary dimension
+        # keys.
+        if isinstance(dataset_type, str):
+            actual_type = self.get_dataset_type(dataset_type)
+        else:
+            actual_type = dataset_type
+        data_id, kwargs = self._rewrite_data_id(data_id, actual_type, **kwargs)
+
+        ref = self._registry.findDataset(
+            dataset_type,
+            data_id,
+            collections=collections,
+            timespan=timespan,
+            datastore_records=datastore_records,
+            **kwargs,
+        )
+        if ref is not None and dimension_records:
+            ref = ref.expanded(self._registry.expandDataId(ref.dataId, graph=ref.datasetType.dimensions))
+        if ref is not None and storage_class is not None:
+            ref = ref.overrideStorageClass(storage_class)
+        return ref
 
     def retrieveArtifacts(
         self,
@@ -1877,7 +1931,7 @@ class DirectButler(Butler):
                     newly_registered_dataset_types.add(datasetType)
             else:
                 # If the dataset type is missing, let it fail immediately.
-                target_dataset_type = self._registry.getDatasetType(datasetType.name)
+                target_dataset_type = self.get_dataset_type(datasetType.name)
                 if target_dataset_type != datasetType:
                     raise ConflictingDefinitionError(
                         "Source butler dataset type differs from definition"
@@ -1994,7 +2048,7 @@ class DirectButler(Butler):
     ) -> None:
         # Docstring inherited.
         if datasetTypeNames:
-            datasetTypes = [self._registry.getDatasetType(name) for name in datasetTypeNames]
+            datasetTypes = [self.get_dataset_type(name) for name in datasetTypeNames]
         else:
             datasetTypes = list(self._registry.queryDatasetTypes())
 
@@ -2064,7 +2118,7 @@ class DirectButler(Butler):
                     pass
                 else:
                     try:
-                        self._registry.getDatasetType(key.name)
+                        self.get_dataset_type(key.name)
                     except KeyError:
                         if logFailures:
                             _LOG.critical(

@@ -26,3 +26,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Models used for client/server communication."""
+
+__all__ = ["FindDatasetModel"]
+
+from lsst.daf.butler import SerializedDataCoordinate
+
+from ..._compat import _BaseModelCompat
+
+
+class FindDatasetModel(_BaseModelCompat):
+    data_id: SerializedDataCoordinate
+    collections: list[str]
+    storage_class: str | None
+    dimension_records: bool = False
+    datastore_records: bool = False

@@ -107,7 +107,7 @@ def ingest_files(
     # Create the butler with the relevant run attached.
     butler = Butler.from_config(repo, run=run)
 
-    datasetType = butler.registry.getDatasetType(dataset_type)
+    datasetType = butler.get_dataset_type(dataset_type)
 
     # Convert the k=v strings into a dataId dict.
     universe = butler.dimensions

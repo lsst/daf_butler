@@ -176,8 +176,8 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         # Testing the DatasetType objects is not practical, because all tests
         # need a DimensionUniverse. So just check that we have the dataset
         # types we expect.
-        self.butler.registry.getDatasetType("DataType1")
-        self.butler.registry.getDatasetType("DataType2")
+        self.butler.get_dataset_type("DataType1")
+        self.butler.get_dataset_type("DataType2")
 
         with self.assertRaises(ValueError):
             addDatasetType(self.butler, "DataType3", {"4thDimension"}, "NumpyArray")
