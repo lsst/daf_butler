@@ -33,7 +33,8 @@ try:
     # Failing to import any of these should disable the tests.
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler
-    from lsst.daf.butler.remote_butler.server import Factory, app, factory_dependency
+    from lsst.daf.butler.remote_butler.server import Factory, app
+    from lsst.daf.butler.remote_butler.server._dependencies import factory_dependency
 except ImportError:
     TestClient = None
     app = None
@@ -85,7 +86,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # Set up the RemoteButler that will connect to the server
         cls.client = TestClient(app)
-        cls.client.base_url = "http://text.example/butler/"
+        cls.client.base_url = "http://test.example/api/butler/"
         cls.butler = _make_remote_butler(cls.client)
 
         # Populate the test server.
@@ -103,7 +104,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(response.json()["name"], "butler")
 
     def test_simple(self):
-        response = self.client.get("/butler/v1/universe")
+        response = self.client.get("/api/butler/v1/universe")
         self.assertEqual(response.status_code, 200)
         self.assertIn("namespace", response.json())
 
@@ -192,9 +193,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
             return self.client.get(http_resource_path.geturl()).content
 
         with patch.object(HttpResourcePath, "read", override_read):
-            butler = Butler("https://test.example/butler")
+            butler = Butler("https://test.example/api/butler")
         assert isinstance(butler, RemoteButler)
-        assert str(butler._config.remote_butler.url) == "https://test.example/butler/"
+        assert str(butler._config.remote_butler.url) == "https://test.example/api/butler/"
 
 
 if __name__ == "__main__":
