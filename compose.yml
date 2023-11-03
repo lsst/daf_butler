@@ -1,0 +1,13 @@
+# Provides a configuration for running Butler Server in docker against
+# test data from the ci_hsc_gen3 package.  Assumes that ci_hsc_gen3
+# has been built via lsstsw in a directory adjacent to the directory
+# containing this file.
+services:
+  butler:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      BUTLER_SERVER_CONFIG_URI: "/butler_root"
+    volumes:
+      - ../ci_hsc_gen3/DATA:/butler_root
