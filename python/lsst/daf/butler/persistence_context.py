@@ -117,10 +117,12 @@ class PersistenceContextVars:
     r"""A cache of `DataCoordinate`\ s.
     """
 
-    datasetRefs: ContextVar[dict[tuple[int, str], DatasetRef] | None] = ContextVar(
-        "datasetRefs", default=None
-    )
+    datasetRefs: ContextVar[dict[int, DatasetRef] | None] = ContextVar("datasetRefs", default=None)
     r"""A cache of `DatasetRef`\ s.
+
+    Keys are UUID converted to int, but only refs of parent dataset types are
+    cached AND THE STORAGE CLASS IS UNSPECIFIED; consumers of this cache must
+    call overrideStorageClass on the result.
     """
 
     dimensionRecords: ContextVar[dict[Hashable, DimensionRecord] | None] = ContextVar(
