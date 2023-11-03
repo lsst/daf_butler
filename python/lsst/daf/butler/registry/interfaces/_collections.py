@@ -36,7 +36,6 @@ __all__ = [
 ]
 
 from abc import abstractmethod
-from collections import defaultdict
 from collections.abc import Iterator, Set
 from typing import TYPE_CHECKING, Any
 
@@ -221,12 +220,6 @@ class ChainedCollectionRecord(CollectionRecord):
             )
         # Delegate to derived classes to do the database updates.
         self._update(manager, children)
-        # Update the reverse mapping (from child to parents) in the manager,
-        # by removing the old relationships and adding back in the new ones.
-        for old_child in self._children:
-            manager._parents_by_child[manager.find(old_child).key].discard(self.key)
-        for new_child in children:
-            manager._parents_by_child[manager.find(new_child).key].add(self.key)
         # Actually set this instances sequence of children.
         self._children = children
 
@@ -246,13 +239,7 @@ class ChainedCollectionRecord(CollectionRecord):
             The object that manages this records instance and all records
             instances that may appear as its children.
         """
-        # Clear out the old reverse mapping (from child to parents).
-        for child in self._children:
-            manager._parents_by_child[manager.find(child).key].discard(self.key)
         self._children = self._load(manager)
-        # Update the reverse mapping (from child to parents) in the manager.
-        for child in self._children:
-            manager._parents_by_child[manager.find(child).key].add(self.key)
 
     @abstractmethod
     def _update(self, manager: CollectionManager, children: tuple[str, ...]) -> None:
@@ -315,7 +302,6 @@ class CollectionManager(VersionedExtension):
 
     def __init__(self, *, registry_schema_version: VersionTuple | None = None) -> None:
         super().__init__(registry_schema_version=registry_schema_version)
-        self._parents_by_child: defaultdict[Any, set[Any]] = defaultdict(set)
 
     @classmethod
     @abstractmethod
@@ -682,7 +668,4 @@ class CollectionManager(VersionedExtension):
         key
             Internal primary key value for the collection.
         """
-        for parent_key in self._parents_by_child[key]:
-            result = self[parent_key]
-            assert isinstance(result, ChainedCollectionRecord)
-            yield result
+        raise NotImplementedError()

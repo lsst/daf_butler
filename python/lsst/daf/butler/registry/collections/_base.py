@@ -30,6 +30,7 @@ from ... import ddl
 
 __all__ = ()
 
+import contextlib
 import itertools
 from abc import abstractmethod
 from collections import namedtuple
@@ -545,3 +546,19 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
     def _getByName(self, name: str) -> CollectionRecord | None:
         """Find collection record given collection name."""
         raise NotImplementedError()
+
+    def getParentChains(self, key: Any) -> Iterator[ChainedCollectionRecord]:
+        # Docstring inherited from CollectionManager.
+        table = self._tables.collection_chain
+        sql = (
+            sqlalchemy.sql.select(table.columns["parent"])
+            .select_from(table)
+            .where(table.columns["child"] == key)
+        )
+        with self._db.query(sql) as sql_result:
+            parent_keys = sql_result.scalars().all()
+        for key in parent_keys:
+            # TODO: Just in case cached records miss new parent collections.
+            # This is temporary, will replace with non-cached records soon.
+            with contextlib.suppress(KeyError):
+                yield cast(ChainedCollectionRecord, self._records[key])
