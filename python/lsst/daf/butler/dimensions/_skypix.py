@@ -215,18 +215,17 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
         Fully-qualified name of the class whose instances represent a
         particular level of this pixelization.
     maxLevel : `int`, optional
-        Maximum level (inclusive) of the hierarchy.  If not provided,
-        an attempt will be made to obtain it from a ``MAX_LEVEL`` attribute
-        of the pixelization class.
+        Maximum level (inclusive) of the hierarchy.  If not provided, an
+        attempt will be made to obtain it from a ``MAX_LEVEL`` attribute of the
+        pixelization class.
 
     Notes
     -----
     At present, this class adds both a new `SkyPixSystem` instance all possible
     `SkyPixDimension` to the builder that invokes it.  In the future, it may
-    add only the `SkyPixSystem`, with dimension instances created on-the-fly
-    by the `DimensionUniverse`; this depends on `DimensionGraph.encode` going
-    away or otherwise eliminating assumptions about the set of dimensions in a
-    universe being static.
+    add only the `SkyPixSystem`, with dimension instances created on-the-fly by
+    the `DimensionUniverse`; this depends on eliminating assumptions about the
+    set of dimensions in a universe being static.
     """
 
     def __init__(self, name: str, pixelizationClassName: str, maxLevel: int | None = None):
