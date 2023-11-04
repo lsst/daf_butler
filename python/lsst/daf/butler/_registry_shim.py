@@ -330,7 +330,8 @@ class RegistryShim(Registry):
 
     def queryDataIds(
         self,
-        dimensions: Iterable[Dimension | str] | Dimension | str,
+        # TODO: Drop Dimension support on DM-41326.
+        dimensions: DimensionGroup | Iterable[Dimension | str] | Dimension | str,
         *,
         dataId: DataId | None = None,
         datasets: Any = None,

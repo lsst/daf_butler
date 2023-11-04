@@ -2147,7 +2147,8 @@ class SqlRegistry:
 
     def queryDataIds(
         self,
-        dimensions: Iterable[Dimension | str] | Dimension | str,
+        # TODO: Drop Dimension support on DM-41326.
+        dimensions: DimensionGroup | Iterable[Dimension | str] | Dimension | str,
         *,
         dataId: DataId | None = None,
         datasets: Any = None,
@@ -2162,10 +2163,12 @@ class SqlRegistry:
 
         Parameters
         ----------
-        dimensions : `Dimension` or `str`, or iterable thereof
+        dimensions : `DimensionGroup`, `Dimension`, or `str`, or \
+                `~collections.abc.Iterable` [ `Dimension` or `str` ]
             The dimensions of the data IDs to yield, as either `Dimension`
             instances or `str`.  Will be automatically expanded to a complete
-            `DimensionGraph`.
+            `DimensionGroup`.  Support for `Dimension` instances is deprecated
+            and will not be supported after v27.
         dataId : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints
             in the query.
