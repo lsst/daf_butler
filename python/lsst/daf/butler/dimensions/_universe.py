@@ -418,6 +418,12 @@ class DimensionUniverse:
         """
         return self._dimensionIndices[name]
 
+    # TODO: remove on DM-41326.
+    @deprecated(
+        "Deprecated in favor of DimensionUniverse.conform, and will be removed after v27.",
+        version="v27",
+        category=FutureWarning,
+    )
     def expandDimensionNameSet(self, names: set[str]) -> None:
         """Expand a set of dimension names in-place.
 
