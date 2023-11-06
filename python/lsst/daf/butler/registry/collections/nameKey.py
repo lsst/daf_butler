@@ -26,16 +26,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from ... import ddl
-
 __all__ = ["NameKeyCollectionManager"]
 
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
+from ... import ddl
 from ..._timespan import TimespanDatabaseRepresentation
-from ..interfaces import VersionTuple
+from .._collection_type import CollectionType
+from ..interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
 from ._base import (
     CollectionTablesTuple,
     DefaultCollectionManager,
@@ -44,7 +45,7 @@ from ._base import (
 )
 
 if TYPE_CHECKING:
-    from ..interfaces import CollectionRecord, Database, DimensionRecordStorageManager, StaticTablesContext
+    from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext
 
 
 _KEY_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True)
@@ -68,7 +69,7 @@ def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> 
     )
 
 
-class NameKeyCollectionManager(DefaultCollectionManager):
+class NameKeyCollectionManager(DefaultCollectionManager[str]):
     """A `CollectionManager` implementation that uses collection names for
     primary/foreign keys and aggressively loads all collection/run records in
     the database into memory.
@@ -152,9 +153,109 @@ class NameKeyCollectionManager(DefaultCollectionManager):
             )
         return copy
 
-    def _getByName(self, name: str) -> CollectionRecord | None:
-        # Docstring inherited from DefaultCollectionManager.
+    def _get_cached_name(self, name: str) -> CollectionRecord[str] | None:
+        # Docstring inherited from base class.
         return self._records.get(name)
+
+    def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[str]]:
+        # Docstring inherited from base class.
+        return self._fetch_by_key(names)
+
+    def _fetch_by_key(self, collection_ids: Iterable[str] | None) -> list[CollectionRecord[str]]:
+        # Docstring inherited from base class.
+        sql = sqlalchemy.sql.select(*self._tables.collection.columns, *self._tables.run.columns).select_from(
+            self._tables.collection.join(self._tables.run, isouter=True)
+        )
+
+        chain_sql = sqlalchemy.sql.select(
+            self._tables.collection_chain.columns["parent"],
+            self._tables.collection_chain.columns["position"],
+            self._tables.collection_chain.columns["child"],
+        )
+
+        records: list[CollectionRecord[str]] = []
+        # We want to keep transactions as short as possible. When we fetch
+        # everything we want to quickly fetch things into memory and finish
+        # transaction. When we fetch just few records we need to process result
+        # of the first query before we can run the second one.
+        if collection_ids is not None:
+            sql = sql.where(self._tables.collection.columns[self._collectionIdName].in_(collection_ids))
+            with self._db.transaction():
+                with self._db.query(sql) as sql_result:
+                    sql_rows = sql_result.mappings().fetchall()
+
+                records, chained_ids = self._rows_to_records(sql_rows)
+
+                if chained_ids:
+                    # Retrieve chained collection compositions
+                    chain_sql = chain_sql.where(
+                        self._tables.collection_chain.columns["parent"].in_(chained_ids)
+                    )
+                    with self._db.query(chain_sql) as sql_result:
+                        chain_rows = sql_result.mappings().fetchall()
+
+                    records += self._rows_to_chains(chain_rows, chained_ids)
+
+        else:
+            with self._db.transaction():
+                with self._db.query(sql) as sql_result:
+                    sql_rows = sql_result.mappings().fetchall()
+                with self._db.query(chain_sql) as sql_result:
+                    chain_rows = sql_result.mappings().fetchall()
+
+            records, chained_ids = self._rows_to_records(sql_rows)
+            records += self._rows_to_chains(chain_rows, chained_ids)
+
+        return records
+
+    def _rows_to_records(self, rows: Iterable[Mapping]) -> tuple[list[CollectionRecord[str]], list[str]]:
+        """Convert rows returned from collection query to a list of records
+        and a list chained collection names.
+        """
+        records: list[CollectionRecord[str]] = []
+        TimespanReprClass = self._db.getTimespanRepresentation()
+        chained_ids: list[str] = []
+        for row in rows:
+            name = row[self._tables.collection.columns.name]
+            type = CollectionType(row["type"])
+            record: CollectionRecord[str]
+            if type is CollectionType.RUN:
+                record = RunRecord[str](
+                    key=name,
+                    name=name,
+                    host=row[self._tables.run.columns.host],
+                    timespan=TimespanReprClass.extract(row),
+                )
+                records.append(record)
+            elif type is CollectionType.CHAINED:
+                # Need to delay chained collection construction until to
+                # fetch their children names.
+                chained_ids.append(name)
+            else:
+                record = CollectionRecord[str](key=name, name=name, type=type)
+                records.append(record)
+
+        return records, chained_ids
+
+    def _rows_to_chains(self, rows: Iterable[Mapping], chained_ids: list[str]) -> list[CollectionRecord[str]]:
+        """Convert rows returned from collection chain query to a list of
+        records.
+        """
+        chains_defs: dict[str, list[tuple[int, str]]] = {chain_id: [] for chain_id in chained_ids}
+        for row in rows:
+            chains_defs[row["parent"]].append((row["position"], row["child"]))
+
+        records: list[CollectionRecord[str]] = []
+        for name, children in chains_defs.items():
+            children_names = [child for _, child in sorted(children)]
+            record = ChainedCollectionRecord[str](
+                key=name,
+                name=name,
+                children=children_names,
+            )
+            records.append(record)
+
+        return records
 
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:
