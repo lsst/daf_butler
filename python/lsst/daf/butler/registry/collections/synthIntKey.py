@@ -185,6 +185,20 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
             )
         return copy
 
+    def getParentChains(self, key: int) -> set[str]:
+        # Docstring inherited from CollectionManager.
+        chain = self._tables.collection_chain
+        collection = self._tables.collection
+        sql = (
+            sqlalchemy.sql.select(collection.columns["name"])
+            .select_from(collection)
+            .join(chain, onclause=collection.columns[self._collectionIdName] == chain.columns["parent"])
+            .where(chain.columns["child"] == key)
+        )
+        with self._db.query(sql) as sql_result:
+            parent_names = set(sql_result.scalars().all())
+        return parent_names
+
     def _setRecordCache(self, records: Iterable[CollectionRecord[int]]) -> None:
         """Set internal record cache to contain given records,
         old cached records will be removed.

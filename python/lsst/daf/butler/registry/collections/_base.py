@@ -405,24 +405,6 @@ class DefaultCollectionManager(CollectionManager[K]):
         """
         raise NotImplementedError()
 
-    def getParentChains(self, key: K) -> Iterator[ChainedCollectionRecord[K]]:
-        # Docstring inherited from CollectionManager.
-        table = self._tables.collection_chain
-        sql = (
-            sqlalchemy.sql.select(table.columns["parent"])
-            .select_from(table)
-            .where(table.columns["child"] == key)
-        )
-        with self._db.query(sql) as sql_result:
-            parent_keys = sql_result.scalars().all()
-        # TODO: It would be more efficient to write a single query that both
-        # finds parents and all their children, but for now we do not care
-        # much about efficiency. Also the only client of this method does not
-        # need full records, only parent collection names, maybe we should
-        # change this method to return names instead.
-        for record in self._fetch_by_key(parent_keys):
-            yield cast(ChainedCollectionRecord[K], record)
-
     def update_chain(
         self, chain: ChainedCollectionRecord[K], children: Iterable[str], flatten: bool = False
     ) -> ChainedCollectionRecord[K]:

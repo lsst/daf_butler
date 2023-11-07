@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 from abc import abstractmethod
-from collections.abc import Iterable, Iterator, Set
+from collections.abc import Iterable, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from ..._timespan import Timespan
@@ -563,14 +563,19 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def getParentChains(self, key: _Key) -> Iterator[ChainedCollectionRecord[_Key]]:
-        """Find all CHAINED collections that directly contain the given
+    def getParentChains(self, key: _Key) -> set[str]:
+        """Find all CHAINED collection names that directly contain the given
         collection.
 
         Parameters
         ----------
         key
             Internal primary key value for the collection.
+
+        Returns
+        -------
+        names : `set` [`str`]
+            Parent collection names.
         """
         raise NotImplementedError()
 

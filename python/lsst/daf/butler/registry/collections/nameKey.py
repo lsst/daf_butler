@@ -153,6 +153,18 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
             )
         return copy
 
+    def getParentChains(self, key: str) -> set[str]:
+        # Docstring inherited from CollectionManager.
+        table = self._tables.collection_chain
+        sql = (
+            sqlalchemy.sql.select(table.columns["parent"])
+            .select_from(table)
+            .where(table.columns["child"] == key)
+        )
+        with self._db.query(sql) as sql_result:
+            parent_names = set(sql_result.scalars().all())
+        return parent_names
+
     def _get_cached_name(self, name: str) -> CollectionRecord[str] | None:
         # Docstring inherited from base class.
         return self._records.get(name)

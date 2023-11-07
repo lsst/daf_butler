@@ -618,12 +618,7 @@ class SqlRegistry:
         chains : `set` of `str`
             Set of `~CollectionType.CHAINED` collection names.
         """
-        return {
-            record.name
-            for record in self._managers.collections.getParentChains(
-                self._managers.collections.find(collection).key
-            )
-        }
+        return self._managers.collections.getParentChains(self._managers.collections.find(collection).key)
 
     def getCollectionDocumentation(self, collection: str) -> str | None:
         """Retrieve the documentation string for a collection.
