@@ -464,17 +464,25 @@ class DatasetRef:
             Newly-constructed object.
         """
         cache = PersistenceContextVars.datasetRefs.get()
-        localName = sys.intern(
-            datasetType.name
-            if datasetType is not None
-            else (x.name if (x := simple.datasetType) is not None else "")
-        )
-        key = (simple.id.int, localName)
-        if cache is not None and (cachedRef := cache.get(key, None)) is not None:
-            return cachedRef
+        key = simple.id.int
+        if cache is not None and (ref := cache.get(key, None)) is not None:
+            if datasetType is not None:
+                if (component := datasetType.component()) is not None:
+                    ref = ref.makeComponentRef(component)
+                ref = ref.overrideStorageClass(datasetType.storageClass_name)
+                return ref
+            if simple.datasetType is not None:
+                _, component = DatasetType.splitDatasetTypeName(simple.datasetType.name)
+                if component is not None:
+                    ref = ref.makeComponentRef(component)
+                if simple.datasetType.storageClass is not None:
+                    ref = ref.overrideStorageClass(simple.datasetType.storageClass)
+                    return ref
+            # If dataset type is not given ignore the cache, because we can't
+            # reliably return the right storage class.
         # Minimalist component will just specify component and id and
         # require registry to reconstruct
-        if not (simple.datasetType is not None or simple.dataId is not None or simple.run is not None):
+        if simple.datasetType is None and simple.dataId is None and simple.run is None:
             if registry is None:
                 raise ValueError("Registry is required to construct component DatasetRef from integer id")
             if simple.id is None:
@@ -484,52 +492,42 @@ class DatasetRef:
                 raise RuntimeError(f"No matching dataset found in registry for id {simple.id}")
             if simple.component:
                 ref = ref.makeComponentRef(simple.component)
-            if cache is not None:
-                cache[key] = ref
-            return ref
-
-        if universe is None and registry is None:
-            raise ValueError("One of universe or registry must be provided.")
-
-        if universe is None and registry is not None:
-            universe = registry.dimensions
-
-        if universe is None:
-            # this is for mypy
-            raise ValueError("Unable to determine a usable universe")
-
-        if simple.datasetType is None and datasetType is None:
-            # mypy
-            raise ValueError("The DatasetType must be specified to construct a DatasetRef")
-        if datasetType is None:
-            if simple.datasetType is None:
-                raise ValueError("Cannot determine Dataset type of this serialized class")
-            datasetType = DatasetType.from_simple(simple.datasetType, universe=universe, registry=registry)
-
-        if simple.dataId is None:
-            # mypy
-            raise ValueError("The DataId must be specified to construct a DatasetRef")
-        dataId = DataCoordinate.from_simple(simple.dataId, universe=universe)
-
-        # Check that simple ref is resolved.
-        if simple.run is None:
-            dstr = ""
-            if simple.datasetType is None:
-                dstr = f" (datasetType={datasetType.name!r})"
-            raise ValueError(
-                "Run collection name is missing from serialized representation. "
-                f"Encountered with {simple!r}{dstr}."
+        else:
+            if universe is None:
+                if registry is None:
+                    raise ValueError("One of universe or registry must be provided.")
+                universe = registry.dimensions
+            if datasetType is None:
+                if simple.datasetType is None:
+                    raise ValueError("Cannot determine Dataset type of this serialized class")
+                datasetType = DatasetType.from_simple(
+                    simple.datasetType, universe=universe, registry=registry
+                )
+            if simple.dataId is None:
+                # mypy
+                raise ValueError("The DataId must be specified to construct a DatasetRef")
+            dataId = DataCoordinate.from_simple(simple.dataId, universe=universe)
+            # Check that simple ref is resolved.
+            if simple.run is None:
+                dstr = ""
+                if simple.datasetType is None:
+                    dstr = f" (datasetType={datasetType.name!r})"
+                raise ValueError(
+                    "Run collection name is missing from serialized representation. "
+                    f"Encountered with {simple!r}{dstr}."
+                )
+            ref = cls(
+                datasetType,
+                dataId,
+                id=simple.id,
+                run=simple.run,
             )
-
-        newRef = cls(
-            datasetType,
-            dataId,
-            id=simple.id,
-            run=simple.run,
-        )
         if cache is not None:
-            cache[key] = newRef
-        return newRef
+            if ref.datasetType.component() is not None:
+                cache[key] = ref.makeCompositeRef()
+            else:
+                cache[key] = ref
+        return ref
 
     to_json = to_json_pydantic
     from_json: ClassVar = classmethod(from_json_pydantic)
