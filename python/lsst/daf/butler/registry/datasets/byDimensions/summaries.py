@@ -133,6 +133,8 @@ class CollectionSummaryManager:
         Manager object for the dimensions in this `Registry`.
     tables : `CollectionSummaryTables`
         Struct containing the tables that hold collection summaries.
+    dataset_type_table : `sqlalchemy.schema.Table`
+        Table containing dataset type definitions.
     """
 
     def __init__(
@@ -142,12 +144,14 @@ class CollectionSummaryManager:
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
         tables: CollectionSummaryTables[sqlalchemy.schema.Table],
+        dataset_type_table: sqlalchemy.schema.Table,
     ):
         self._db = db
         self._collections = collections
         self._collectionKeyName = collections.getCollectionForeignKeyName()
         self._dimensions = dimensions
         self._tables = tables
+        self._dataset_type_table = dataset_type_table
 
     @classmethod
     def initialize(
@@ -157,6 +161,7 @@ class CollectionSummaryManager:
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        dataset_type_table: sqlalchemy.schema.Table,
     ) -> CollectionSummaryManager:
         """Create all summary tables (or check that they have been created),
         returning an object to manage them.
@@ -172,6 +177,8 @@ class CollectionSummaryManager:
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
+        dataset_type_table : `sqlalchemy.schema.Table`
+            Table containing dataset type definitions.
 
         Returns
         -------
@@ -193,6 +200,7 @@ class CollectionSummaryManager:
             collections=collections,
             dimensions=dimensions,
             tables=tables,
+            dataset_type_table=dataset_type_table,
         )
 
     def update(
@@ -240,8 +248,8 @@ class CollectionSummaryManager:
     def fetch_summaries(
         self,
         collections: Iterable[CollectionRecord],
-        dataset_type_ids: Iterable[int] | None,
-        dataset_type_factory: Callable[[int], DatasetType],
+        dataset_type_names: Iterable[str] | None,
+        dataset_type_factory: Callable[[sqlalchemy.engine.RowMapping], DatasetType],
     ) -> Mapping[Any, CollectionSummary]:
         """Fetch collection summaries given their names and dataset types.
 
@@ -249,12 +257,12 @@ class CollectionSummaryManager:
         ----------
         collections : `~collections.abc.Iterable` [`CollectionRecord`]
             Collection records to query.
-        dataset_type_ids : `~collections.abc.Iterable` [`int`]
-            IDs of dataset types to include into returned summaries. If `None`
-            then all dataset types will be included.
+        dataset_type_names : `~collections.abc.Iterable` [`str`]
+            Names of dataset types to include into returned summaries. If
+            `None` then all dataset types will be included.
         dataset_type_factory : `Callable`
-            Method that returns `DatasetType` instance given its dataset type
-            ID.
+            Method that takes a table row and make `DatasetType` instance out
+            of it.
 
         Returns
         -------
@@ -282,8 +290,10 @@ class CollectionSummaryManager:
         # information at once.
         coll_col = self._tables.datasetType.columns[self._collectionKeyName].label(self._collectionKeyName)
         dataset_type_id_col = self._tables.datasetType.columns.dataset_type_id.label("dataset_type_id")
-        columns = [coll_col, dataset_type_id_col]
-        fromClause: sqlalchemy.sql.expression.FromClause = self._tables.datasetType
+        columns = [coll_col, dataset_type_id_col] + list(self._dataset_type_table.columns)
+        fromClause: sqlalchemy.sql.expression.FromClause = self._tables.datasetType.join(
+            self._dataset_type_table
+        )
         for dimension, table in self._tables.dimensions.items():
             columns.append(table.columns[dimension.name].label(dimension.name))
             fromClause = fromClause.join(
@@ -297,8 +307,8 @@ class CollectionSummaryManager:
 
         sql = sqlalchemy.sql.select(*columns).select_from(fromClause)
         sql = sql.where(coll_col.in_([coll.key for coll in non_chains]))
-        if dataset_type_ids is not None:
-            sql = sql.where(dataset_type_id_col.in_(dataset_type_ids))
+        if dataset_type_names is not None:
+            sql = sql.where(self._dataset_type_table.columns["name"].in_(dataset_type_names))
 
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
@@ -306,13 +316,16 @@ class CollectionSummaryManager:
         summaries: dict[Any, CollectionSummary] = {}
         with self._db.query(sql) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
+        dataset_type_ids: dict[int, DatasetType] = {}
         for row in sql_rows:
             # Collection key should never be None/NULL; it's what we join on.
             # Extract that and then turn it into a collection name.
             collectionKey = row[self._collectionKeyName]
             # dataset_type_id should also never be None/NULL; it's in the first
             # table we joined.
-            dataset_type = dataset_type_factory(row["dataset_type_id"])
+            dataset_type_id = row["dataset_type_id"]
+            if (dataset_type := dataset_type_ids.get(dataset_type_id)) is None:
+                dataset_type_ids[dataset_type_id] = dataset_type = dataset_type_factory(row)
             # See if we have a summary already for this collection; if not,
             # make one.
             summary = summaries.get(collectionKey)

@@ -697,8 +697,7 @@ class SqlRegistry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        _, inserted = self._managers.datasets.register(datasetType)
-        return inserted
+        return self._managers.datasets.register(datasetType)
 
     def removeDatasetType(self, name: str | tuple[str, ...]) -> None:
         """Remove the named `DatasetType` from the registry.

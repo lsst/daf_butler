@@ -487,7 +487,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def register(self, datasetType: DatasetType) -> tuple[DatasetRecordStorage, bool]:
+    def register(self, datasetType: DatasetType) -> bool:
         """Ensure that this `Registry` can hold records for the given
         `DatasetType`, creating new tables as necessary.
 
@@ -499,8 +499,6 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Returns
         -------
-        records : `DatasetRecordStorage`
-            The object representing the records for the given dataset type.
         inserted : `bool`
             `True` if the dataset type did not exist in the registry before.
 
