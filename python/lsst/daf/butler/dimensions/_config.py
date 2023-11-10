@@ -210,6 +210,7 @@ class DimensionConfig(ConfigSubset):
                     storage=subconfig["storage"],
                     metadata=metadata,
                     uniqueKeys=uniqueKeys,
+                    doc=subconfig.get("doc", ""),
                 )
             else:
                 yield DatabaseDimensionElementConstructionVisitor(
@@ -221,6 +222,7 @@ class DimensionConfig(ConfigSubset):
                     alwaysJoin=subconfig.get("always_join", False),
                     uniqueKeys=uniqueKeys,
                     populated_by=subconfig.get("populated_by", None),
+                    doc=subconfig.get("doc", ""),
                 )
 
     def _extractTopologyVisitors(self) -> Iterator[DimensionConstructionVisitor]:

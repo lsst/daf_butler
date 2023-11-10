@@ -367,6 +367,12 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         """
         raise NotImplementedError()
 
+    @property
+    @abstractmethod
+    def documentation(self) -> str:
+        """Extended description of this dimension element."""
+        raise NotImplementedError()
+
 
 class Dimension(DimensionElement):
     """A dimension.

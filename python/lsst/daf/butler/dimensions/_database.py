@@ -180,6 +180,8 @@ class DatabaseDimensionElement(DimensionElement):
         table as foreign keys.
     metadata : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this dimension's table.
+    doc : `str`
+        Extended description of this element.
     """
 
     def __init__(
@@ -189,12 +191,14 @@ class DatabaseDimensionElement(DimensionElement):
         *,
         implied: NamedValueAbstractSet[Dimension],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
+        doc: str,
     ):
         self._name = name
         self._storage = storage
         self._implied = implied
         self._metadata = metadata
         self._topology: dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
+        self._doc = doc
 
     @property
     def name(self) -> str:
@@ -223,6 +227,11 @@ class DatabaseDimensionElement(DimensionElement):
         if storage is None:
             storage = self._storage
         return storage.get("view_of")
+
+    @property
+    def documentation(self) -> str:
+        # Docstring inherited from DimensionElement.
+        return self._doc
 
     @property
     def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
@@ -312,6 +321,8 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used
         to define unique constraints.
+    doc : `str`
+        Extended description of this element.
 
     Notes
     -----
@@ -330,8 +341,9 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
         implied: NamedValueAbstractSet[Dimension],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
         uniqueKeys: NamedValueAbstractSet[ddl.FieldSpec],
+        doc: str,
     ):
-        super().__init__(name, storage=storage, implied=implied, metadata=metadata)
+        super().__init__(name, storage=storage, implied=implied, metadata=metadata, doc=doc)
         required.add(self)
         self._required = required.freeze()
         self._uniqueKeys = uniqueKeys
@@ -375,6 +387,8 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     populated_by : `Dimension` or `None`
         The dimension that this element's records are always inserted,
         exported, and imported alongside.
+    doc : `str`
+        Extended description of this element.
 
     Notes
     -----
@@ -401,8 +415,9 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
         alwaysJoin: bool,
         populated_by: Dimension | None,
+        doc: str,
     ):
-        super().__init__(name, storage=storage, implied=implied, metadata=metadata)
+        super().__init__(name, storage=storage, implied=implied, metadata=metadata, doc=doc)
         self._required = required
         self._alwaysJoin = alwaysJoin
         self._populated_by = populated_by
@@ -461,6 +476,8 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
     populated_by : `Dimension`, optional
         The dimension that this element's records are always inserted,
         exported, and imported alongside.
+    doc : `str`
+        Extended description of this element.
     """
 
     def __init__(
@@ -469,6 +486,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         storage: dict,
         required: set[str],
         implied: set[str],
+        doc: str,
         metadata: Iterable[ddl.FieldSpec] = (),
         uniqueKeys: Iterable[ddl.FieldSpec] = (),
         alwaysJoin: bool = False,
@@ -482,6 +500,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         self._uniqueKeys = NamedValueSet(uniqueKeys).freeze()
         self._alwaysJoin = alwaysJoin
         self._populated_by = populated_by
+        self._doc = doc
 
     def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
@@ -513,6 +532,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
                 implied=implied.freeze(),
                 metadata=self._metadata,
                 uniqueKeys=self._uniqueKeys,
+                doc=self._doc,
             )
             builder.dimensions.add(dimension)
             builder.elements.add(dimension)
@@ -523,6 +543,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
                 storage=self._storage,
                 required=required,
                 implied=implied.freeze(),
+                doc=self._doc,
                 metadata=self._metadata,
                 alwaysJoin=self._alwaysJoin,
                 populated_by=(
