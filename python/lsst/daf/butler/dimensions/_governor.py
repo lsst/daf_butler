@@ -66,6 +66,8 @@ class GovernorDimension(Dimension):
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used
         to define unique constraints.
+    doc : `str`
+        Extended description of this element.
 
     Notes
     -----
@@ -98,12 +100,14 @@ class GovernorDimension(Dimension):
         *,
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
         uniqueKeys: NamedValueAbstractSet[ddl.FieldSpec],
+        doc: str,
     ):
         self._name = name
         self._storage = storage
         self._required = NamedValueSet({self}).freeze()
         self._metadata = metadata
         self._uniqueKeys = uniqueKeys
+        self._doc = doc
         if self.primaryKey.getPythonType() is not str:
             raise TypeError(
                 f"Governor dimension '{name}' must have a string primary key (configured type "
@@ -146,6 +150,11 @@ class GovernorDimension(Dimension):
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
         # Docstring inherited from Dimension.
         return self._uniqueKeys
+
+    @property
+    def documentation(self) -> str:
+        # Docstring inherited from DimensionElement.
+        return self._doc
 
     def makeStorage(
         self,
@@ -196,6 +205,8 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used
         to define unique constraints.
+    doc : `str`
+        Extended description of this element.
     """
 
     def __init__(
@@ -205,11 +216,13 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         *,
         metadata: Iterable[ddl.FieldSpec] = (),
         uniqueKeys: Iterable[ddl.FieldSpec] = (),
+        doc: str,
     ):
         super().__init__(name)
         self._storage = storage
         self._metadata = NamedValueSet(metadata).freeze()
         self._uniqueKeys = NamedValueSet(uniqueKeys).freeze()
+        self._doc = doc
 
     def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
@@ -223,6 +236,7 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
             storage=self._storage,
             metadata=self._metadata,
             uniqueKeys=self._uniqueKeys,
+            doc=self._doc,
         )
         builder.dimensions.add(dimension)
         builder.elements.add(dimension)

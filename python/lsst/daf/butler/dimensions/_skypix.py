@@ -154,6 +154,11 @@ class SkyPixDimension(Dimension):
         # Docstring inherited from DimensionElement.
         return NamedValueSet().freeze()
 
+    @property
+    def documentation(self) -> str:
+        # Docstring inherited from DimensionElement.
+        return f"Level {self.level} of the {self.system.name!r} sky pixelization system."
+
     def hasTable(self) -> bool:
         # Docstring inherited from DimensionElement.hasTable.
         return False
