@@ -39,6 +39,7 @@ import sqlalchemy
 from ...._dataset_type import DatasetType
 from ...._named import NamedKeyDict, NamedKeyMapping
 from ....dimensions import GovernorDimension, addDimensionForeignKey
+from ..._caching_context import CachingContext
 from ..._collection_summary import CollectionSummary
 from ..._collection_type import CollectionType
 from ...interfaces import (
@@ -135,6 +136,8 @@ class CollectionSummaryManager:
         Struct containing the tables that hold collection summaries.
     dataset_type_table : `sqlalchemy.schema.Table`
         Table containing dataset type definitions.
+    caching_context : `CachingContext`
+        Object controlling caching of information returned by managers.
     """
 
     def __init__(
@@ -145,6 +148,7 @@ class CollectionSummaryManager:
         dimensions: DimensionRecordStorageManager,
         tables: CollectionSummaryTables[sqlalchemy.schema.Table],
         dataset_type_table: sqlalchemy.schema.Table,
+        caching_context: CachingContext,
     ):
         self._db = db
         self._collections = collections
@@ -152,6 +156,7 @@ class CollectionSummaryManager:
         self._dimensions = dimensions
         self._tables = tables
         self._dataset_type_table = dataset_type_table
+        self._caching_context = caching_context
 
     @classmethod
     def initialize(
@@ -162,6 +167,7 @@ class CollectionSummaryManager:
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
         dataset_type_table: sqlalchemy.schema.Table,
+        caching_context: CachingContext,
     ) -> CollectionSummaryManager:
         """Create all summary tables (or check that they have been created),
         returning an object to manage them.
@@ -179,6 +185,8 @@ class CollectionSummaryManager:
             Manager object for the dimensions in this `Registry`.
         dataset_type_table : `sqlalchemy.schema.Table`
             Table containing dataset type definitions.
+        caching_context : `CachingContext`
+            Object controlling caching of information returned by managers.
 
         Returns
         -------
@@ -201,6 +209,7 @@ class CollectionSummaryManager:
             dimensions=dimensions,
             tables=tables,
             dataset_type_table=dataset_type_table,
+            caching_context=caching_context,
         )
 
     def update(
@@ -271,6 +280,17 @@ class CollectionSummaryManager:
             will also contain all nested non-chained collections of the chained
             collections.
         """
+        summaries: dict[Any, CollectionSummary] = {}
+        # Check what we have in cache first.
+        if self._caching_context.collection_summaries is not None:
+            summaries, missing_keys = self._caching_context.collection_summaries.find_summaries(
+                [record.key for record in collections]
+            )
+            if not missing_keys:
+                return summaries
+            else:
+                collections = [record for record in collections if record.key in missing_keys]
+
         # Need to expand all chained collections first.
         non_chains: list[CollectionRecord] = []
         chains: dict[CollectionRecord, list[CollectionRecord]] = {}
@@ -307,13 +327,14 @@ class CollectionSummaryManager:
 
         sql = sqlalchemy.sql.select(*columns).select_from(fromClause)
         sql = sql.where(coll_col.in_([coll.key for coll in non_chains]))
-        if dataset_type_names is not None:
-            sql = sql.where(self._dataset_type_table.columns["name"].in_(dataset_type_names))
+        # For caching we need to fetch complete summaries.
+        if self._caching_context.collection_summaries is None:
+            if dataset_type_names is not None:
+                sql = sql.where(self._dataset_type_table.columns["name"].in_(dataset_type_names))
 
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
         # with no datasets.
-        summaries: dict[Any, CollectionSummary] = {}
         with self._db.query(sql) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
         dataset_type_ids: dict[int, DatasetType] = {}
@@ -349,5 +370,8 @@ class CollectionSummaryManager:
         # Merge children into their chains summaries.
         for chain, children in chains.items():
             summaries[chain.key] = CollectionSummary.union(*(summaries[child.key] for child in children))
+
+        if self._caching_context.collection_summaries is not None:
+            self._caching_context.collection_summaries.update(summaries)
 
         return summaries

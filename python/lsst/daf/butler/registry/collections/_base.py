@@ -45,6 +45,7 @@ from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionR
 from ..wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
+    from .._caching_context import CachingContext
     from ..interfaces import Database, DimensionRecordStorageManager
 
 
@@ -190,28 +191,30 @@ class DefaultCollectionManager(CollectionManager[K]):
         collectionIdName: str,
         *,
         dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
         self._tables = tables
         self._collectionIdName = collectionIdName
-        self._records: dict[K, CollectionRecord[K]] = {}  # indexed by record ID
         self._dimensions = dimensions
-        self._full_fetch = False  # True if cache contains everything.
+        self._caching_context = caching_context
 
     def refresh(self) -> None:
         # Docstring inherited from CollectionManager.
-        # We just reset the cache here but do not retrieve any records.
-        self._full_fetch = False
-        self._setRecordCache([])
+        if self._caching_context.collection_records is not None:
+            self._caching_context.collection_records.clear()
 
-    def _fetch_all(self) -> None:
+    def _fetch_all(self) -> list[CollectionRecord[K]]:
         """Retrieve all records into cache if not done so yet."""
-        if not self._full_fetch:
-            records = self._fetch_by_key(None)
-            self._setRecordCache(records)
-            self._full_fetch = True
+        if self._caching_context.collection_records is not None:
+            if self._caching_context.collection_records.full:
+                return list(self._caching_context.collection_records.records())
+        records = self._fetch_by_key(None)
+        if self._caching_context.collection_records is not None:
+            self._caching_context.collection_records.set(records, full=True)
+        return records
 
     def register(
         self, name: str, type: CollectionType, doc: str | None = None
@@ -278,12 +281,18 @@ class DefaultCollectionManager(CollectionManager[K]):
         """Return multiple records given their names."""
         names = list(names)
         # To protect against potential races in cache updates.
-        records = {}
-        for name in names:
-            records[name] = self._get_cached_name(name)
-        fetch_names = [name for name, record in records.items() if record is None]
-        for record in self._fetch_by_name(fetch_names):
-            records[record.name] = record
+        records: dict[str, CollectionRecord | None] = {}
+        if self._caching_context.collection_records is not None:
+            for name in names:
+                records[name] = self._caching_context.collection_records.get_by_name(name)
+            fetch_names = [name for name, record in records.items() if record is None]
+        else:
+            fetch_names = list(names)
+            records = {name: None for name in fetch_names}
+        if fetch_names:
+            for record in self._fetch_by_name(fetch_names):
+                records[record.name] = record
+                self._addCachedRecord(record)
         missing_names = [name for name, record in records.items() if record is None]
         if len(missing_names) == 1:
             raise MissingCollectionError(f"No collection with name '{missing_names[0]}' found.")
@@ -293,10 +302,14 @@ class DefaultCollectionManager(CollectionManager[K]):
 
     def __getitem__(self, key: Any) -> CollectionRecord[K]:
         # Docstring inherited from CollectionManager.
-        if (record := self._records.get(key)) is not None:
-            return record
+        if self._caching_context.collection_records is not None:
+            if (record := self._caching_context.collection_records.get_by_key(key)) is not None:
+                return record
         if records := self._fetch_by_key([key]):
-            return records[0]
+            record = records[0]
+            if self._caching_context.collection_records is not None:
+                self._caching_context.collection_records.add(record)
+            return record
         else:
             raise MissingCollectionError(f"Collection with key '{key}' not found.")
 
@@ -330,12 +343,8 @@ class DefaultCollectionManager(CollectionManager[K]):
 
         result: list[CollectionRecord[K]] = []
 
-        # If we have wildcard or ellipsis we need to read everything in memory.
-        if wildcard.patterns:
-            self._fetch_all()
-
         if wildcard.patterns is ...:
-            for record in self._records.values():
+            for record in self._fetch_all():
                 result.extend(resolve_nested(record, done))
             del resolve_nested
             return result
@@ -343,7 +352,7 @@ class DefaultCollectionManager(CollectionManager[K]):
             for record in self._find_many(wildcard.strings):
                 result.extend(resolve_nested(record, done))
         if wildcard.patterns:
-            for record in self._records.values():
+            for record in self._fetch_all():
                 if any(p.fullmatch(record.name) for p in wildcard.patterns):
                     result.extend(resolve_nested(record, done))
         del resolve_nested
@@ -363,35 +372,25 @@ class DefaultCollectionManager(CollectionManager[K]):
         # Docstring inherited from CollectionManager.
         self._db.update(self._tables.collection, {self._collectionIdName: "key"}, {"key": key, "doc": doc})
 
-    def _setRecordCache(self, records: Iterable[CollectionRecord[K]]) -> None:
-        """Set internal record cache to contain given records,
-        old cached records will be removed.
-        """
-        self._records = {}
-        for record in records:
-            self._records[record.key] = record
-
     def _addCachedRecord(self, record: CollectionRecord[K]) -> None:
         """Add single record to cache."""
-        self._records[record.key] = record
+        if self._caching_context.collection_records is not None:
+            self._caching_context.collection_records.add(record)
 
     def _removeCachedRecord(self, record: CollectionRecord[K]) -> None:
         """Remove single record from cache."""
-        del self._records[record.key]
+        if self._caching_context.collection_records is not None:
+            self._caching_context.collection_records.discard(record)
 
     def _getByName(self, name: str) -> CollectionRecord[K] | None:
         """Find collection record given collection name."""
-        if (record := self._get_cached_name(name)) is not None:
-            return record
+        if self._caching_context.collection_records is not None:
+            if (record := self._caching_context.collection_records.get_by_name(name)) is not None:
+                return record
         records = self._fetch_by_name([name])
         for record in records:
             self._addCachedRecord(record)
         return records[0] if records else None
-
-    @abstractmethod
-    def _get_cached_name(self, name: str) -> CollectionRecord[K] | None:
-        """Find cached collection record given its name."""
-        raise NotImplementedError()
 
     @abstractmethod
     def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[K]]:

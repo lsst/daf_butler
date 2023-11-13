@@ -46,6 +46,7 @@ from ._base import (
 )
 
 if TYPE_CHECKING:
+    from .._caching_context import CachingContext
     from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext
 
 
@@ -77,39 +78,7 @@ def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> 
 class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
     """A `CollectionManager` implementation that uses synthetic primary key
     (auto-incremented integer) for collections table.
-
-    Most of the logic, including caching policy, is implemented in the base
-    class, this class only adds customizations specific to this particular
-    table schema.
-
-    Parameters
-    ----------
-    db : `Database`
-        Interface to the underlying database engine and namespace.
-    tables : `NamedTuple`
-        Named tuple of SQLAlchemy table objects.
-    collectionIdName : `str`
-        Name of the column in collections table that identifies it (PK).
-    dimensions : `DimensionRecordStorageManager`
-        Manager object for the dimensions in this `Registry`.
     """
-
-    def __init__(
-        self,
-        db: Database,
-        tables: CollectionTablesTuple,
-        collectionIdName: str,
-        dimensions: DimensionRecordStorageManager,
-        registry_schema_version: VersionTuple | None = None,
-    ):
-        super().__init__(
-            db=db,
-            tables=tables,
-            collectionIdName=collectionIdName,
-            dimensions=dimensions,
-            registry_schema_version=registry_schema_version,
-        )
-        self._nameCache: dict[str, CollectionRecord] = {}  # indexed by collection name
 
     @classmethod
     def initialize(
@@ -118,6 +87,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
         context: StaticTablesContext,
         *,
         dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
@@ -126,6 +96,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
             collectionIdName="collection_id",
             dimensions=dimensions,
+            caching_context=caching_context,
             registry_schema_version=registry_schema_version,
         )
 
@@ -198,30 +169,6 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
         with self._db.query(sql) as sql_result:
             parent_names = set(sql_result.scalars().all())
         return parent_names
-
-    def _setRecordCache(self, records: Iterable[CollectionRecord[int]]) -> None:
-        """Set internal record cache to contain given records,
-        old cached records will be removed.
-        """
-        self._records = {}
-        self._nameCache = {}
-        for record in records:
-            self._records[record.key] = record
-            self._nameCache[record.name] = record
-
-    def _addCachedRecord(self, record: CollectionRecord[int]) -> None:
-        """Add single record to cache."""
-        self._records[record.key] = record
-        self._nameCache[record.name] = record
-
-    def _removeCachedRecord(self, record: CollectionRecord[int]) -> None:
-        """Remove single record from cache."""
-        del self._records[record.key]
-        del self._nameCache[record.name]
-
-    def _get_cached_name(self, name: str) -> CollectionRecord[int] | None:
-        # Docstring inherited from base class.
-        return self._nameCache.get(name)
 
     def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[int]]:
         # Docstring inherited from base class.

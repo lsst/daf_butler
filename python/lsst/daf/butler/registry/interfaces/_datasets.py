@@ -45,6 +45,7 @@ from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
+    from .._caching_context import CachingContext
     from .._collection_summary import CollectionSummary
     from ..queries import SqlQueryContext
     from ._collections import CollectionManager, CollectionRecord, RunRecord
@@ -329,6 +330,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         """Construct an instance of the manager.
@@ -344,6 +346,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
+        caching_context : `CachingContext`
+            Object controlling caching of information returned by managers.
         registry_schema_version : `VersionTuple` or `None`
             Schema version of this extension as defined in registry.
 

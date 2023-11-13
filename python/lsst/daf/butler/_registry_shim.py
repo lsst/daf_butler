@@ -103,6 +103,12 @@ class RegistryShim(Registry):
         self._registry.refresh()
 
     @contextlib.contextmanager
+    def caching_context(self) -> Iterator[None]:
+        # Docstring inherited from a base class.
+        with self._registry.caching_context():
+            yield
+
+    @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
         # Docstring inherited from a base class.
         with self._registry.transaction(savepoint=savepoint):

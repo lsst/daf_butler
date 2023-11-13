@@ -45,6 +45,7 @@ from ._base import (
 )
 
 if TYPE_CHECKING:
+    from .._caching_context import CachingContext
     from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext
 
 
@@ -86,6 +87,7 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
         context: StaticTablesContext,
         *,
         dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> NameKeyCollectionManager:
         # Docstring inherited from CollectionManager.
@@ -94,6 +96,7 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
             collectionIdName="name",
             dimensions=dimensions,
+            caching_context=caching_context,
             registry_schema_version=registry_schema_version,
         )
 
@@ -164,10 +167,6 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
         with self._db.query(sql) as sql_result:
             parent_names = set(sql_result.scalars().all())
         return parent_names
-
-    def _get_cached_name(self, name: str) -> CollectionRecord[str] | None:
-        # Docstring inherited from base class.
-        return self._records.get(name)
 
     def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[str]]:
         # Docstring inherited from base class.

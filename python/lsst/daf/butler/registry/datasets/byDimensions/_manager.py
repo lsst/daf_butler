@@ -32,6 +32,7 @@ from .tables import (
 )
 
 if TYPE_CHECKING:
+    from ..._caching_context import CachingContext
     from ...interfaces import (
         CollectionManager,
         CollectionRecord,
@@ -147,6 +148,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -160,6 +162,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             collections=collections,
             dimensions=dimensions,
             dataset_type_table=static.dataset_type,
+            caching_context=caching_context,
         )
         return cls(
             db=db,

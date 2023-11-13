@@ -120,6 +120,12 @@ class Registry(ABC):
 
     @contextlib.contextmanager
     @abstractmethod
+    def caching_context(self) -> Iterator[None]:
+        """Context manager that enables caching."""
+        raise NotImplementedError()
+
+    @contextlib.contextmanager
+    @abstractmethod
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
         """Return a context manager that represents a transaction."""
         raise NotImplementedError()
