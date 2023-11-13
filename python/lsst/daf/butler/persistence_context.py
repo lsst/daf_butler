@@ -33,7 +33,7 @@ __all__ = ("PersistenceContextVars",)
 import uuid
 from collections.abc import Callable, Hashable
 from contextvars import Context, ContextVar, Token, copy_context
-from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 if TYPE_CHECKING:
     from ._dataset_ref import DatasetRef
@@ -198,4 +198,4 @@ class PersistenceContextVars:
         # cast the result as we know this is exactly what the return type will
         # be.
         result = self._ctx.run(self._functionRunner, function, *args, **kwargs)  # type: ignore
-        return cast(_T, result)
+        return result
