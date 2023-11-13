@@ -121,6 +121,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         tables used by this class.
     summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
+    caching_context : `CachingContext`
+        Object controlling caching of information returned by managers.
     """
 
     def __init__(
@@ -131,6 +133,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
@@ -139,6 +142,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         self._dimensions = dimensions
         self._static = static
         self._summaries = summaries
+        self._caching_context = caching_context
 
     @classmethod
     def initialize(
@@ -170,6 +174,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             dimensions=dimensions,
             static=static,
             summaries=summaries,
+            caching_context=caching_context,
             registry_schema_version=registry_schema_version,
         )
 
@@ -237,7 +242,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
-        pass
+        if self._caching_context.dataset_types is not None:
+            self._caching_context.dataset_types.clear()
 
     def _make_storage(self, record: _DatasetTypeRecord) -> ByDimensionsDatasetRecordStorage:
         """Create storage instance for a dataset type record."""
@@ -286,8 +292,28 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def find(self, name: str) -> DatasetRecordStorage | None:
         # Docstring inherited from DatasetRecordStorageManager.
+        if self._caching_context.dataset_types is not None:
+            _, storage = self._caching_context.dataset_types.get(name)
+            if storage is not None:
+                return storage
+            else:
+                # On the first cache miss populate the cache with complete list
+                # of dataset types (if it was not done yet).
+                if not self._caching_context.dataset_types.full:
+                    self._fetch_dataset_types()
+                    # Try again
+                    _, storage = self._caching_context.dataset_types.get(name)
+                if self._caching_context.dataset_types.full:
+                    # If not in cache then dataset type is not defined.
+                    return storage
         record = self._fetch_dataset_type_record(name)
-        return self._make_storage(record) if record is not None else None
+        if record is not None:
+            storage = self._make_storage(record)
+            if self._caching_context.dataset_types is not None:
+                self._caching_context.dataset_types.add(storage.datasetType, storage)
+            return storage
+        else:
+            return None
 
     def register(self, datasetType: DatasetType) -> bool:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -316,7 +342,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                         self.getIdColumnType(),
                     ),
                 )
-            _, inserted = self._db.sync(
+            row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": datasetType.name},
                 compared={
@@ -331,6 +357,16 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 },
                 returning=["id", "tag_association_table"],
             )
+            # Make sure that cache is updated
+            if self._caching_context.dataset_types is not None and row is not None:
+                record = _DatasetTypeRecord(
+                    dataset_type=datasetType,
+                    dataset_type_id=row["id"],
+                    tag_table_name=tagTableName,
+                    calib_table_name=calibTableName,
+                )
+                storage = self._make_storage(record)
+                self._caching_context.dataset_types.add(datasetType, storage)
         else:
             if datasetType != record.dataset_type:
                 raise ConflictingDefinitionError(
@@ -338,9 +374,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                     f"with database definition {record.dataset_type}."
                 )
             inserted = False
-        # TODO: We return storage instance from this method, but the only
-        # client that uses this method ignores it. Maybe we should drop it
-        # and avoid making storage instance above.
+
         return bool(inserted)
 
     def resolve_wildcard(
@@ -472,7 +506,15 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             row = sql_result.mappings().fetchone()
         if row is None:
             return None
-        storage = self._make_storage(self._record_from_row(row))
+        record = self._record_from_row(row)
+        storage: DatasetRecordStorage | None = None
+        if self._caching_context.dataset_types is not None:
+            _, storage = self._caching_context.dataset_types.get(record.dataset_type.name)
+        if storage is None:
+            storage = self._make_storage(record)
+            if self._caching_context.dataset_types is not None:
+                self._caching_context.dataset_types.add(storage.datasetType, storage)
+        assert isinstance(storage, ByDimensionsDatasetRecordStorage), "Not expected storage class"
         return DatasetRef(
             storage.datasetType,
             dataId=storage.getDataId(id=id),
@@ -516,9 +558,17 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def _fetch_dataset_types(self) -> list[DatasetType]:
         """Fetch list of all defined dataset types."""
+        if self._caching_context.dataset_types is not None:
+            if self._caching_context.dataset_types.full:
+                return [dataset_type for dataset_type, _ in self._caching_context.dataset_types.items()]
         with self._db.query(self._static.dataset_type.select()) as sql_result:
             sql_rows = sql_result.mappings().fetchall()
-        return [self._record_from_row(row).dataset_type for row in sql_rows]
+        records = [self._record_from_row(row) for row in sql_rows]
+        # Cache everything and specify that cache is complete.
+        if self._caching_context.dataset_types is not None:
+            cache_data = [(record.dataset_type, self._make_storage(record)) for record in records]
+            self._caching_context.dataset_types.set(cache_data, full=True)
+        return [record.dataset_type for record in records]
 
     def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
         # Docstring inherited from DatasetRecordStorageManager.

@@ -29,8 +29,14 @@ from __future__ import annotations
 
 __all__ = ["CachingContext"]
 
+from typing import TYPE_CHECKING
+
 from ._collection_record_cache import CollectionRecordCache
 from ._collection_summary_cache import CollectionSummaryCache
+from ._dataset_type_cache import DatasetTypeCache
+
+if TYPE_CHECKING:
+    from .interfaces import DatasetRecordStorage
 
 
 class CachingContext:
@@ -45,6 +51,9 @@ class CachingContext:
     instances which will be `None` when caching is disabled. Instance of this
     class is passed to the relevant managers that can use it to query or
     populate caches when caching is enabled.
+
+    Dataset type cache is always enabled for now, this avoids the need for
+    explicitly enabling caching in pipetask executors.
     """
 
     collection_records: CollectionRecordCache | None = None
@@ -52,6 +61,12 @@ class CachingContext:
 
     collection_summaries: CollectionSummaryCache | None = None
     """Cache for collection summary records (`CollectionSummaryCache`)."""
+
+    dataset_types: DatasetTypeCache[DatasetRecordStorage]
+    """Cache for dataset types, never disabled (`DatasetTypeCache`)."""
+
+    def __init__(self) -> None:
+        self.dataset_types = DatasetTypeCache()
 
     def enable(self) -> None:
         """Enable caches, initializes all caches."""
