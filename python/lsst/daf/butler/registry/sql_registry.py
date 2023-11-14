@@ -325,6 +325,13 @@ class SqlRegistry:
             self._managers.refresh()
 
     @contextlib.contextmanager
+    def caching_context(self) -> Iterator[None]:
+        """Context manager that enables caching."""
+        self._managers.caching_context.enable()
+        yield
+        self._managers.caching_context.disable()
+
+    @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
         """Return a context manager that represents a transaction."""
         try:
@@ -603,7 +610,7 @@ class SqlRegistry:
         assert isinstance(record, ChainedCollectionRecord)
         children = CollectionWildcard.from_expression(children).require_ordered()
         if children != record.children or flatten:
-            record.update(self._managers.collections, children, flatten=flatten)
+            self._managers.collections.update_chain(record, children, flatten=flatten)
 
     def getCollectionParentChains(self, collection: str) -> set[str]:
         """Return the CHAINED collections that directly contain the given one.
@@ -618,12 +625,7 @@ class SqlRegistry:
         chains : `set` of `str`
             Set of `~CollectionType.CHAINED` collection names.
         """
-        return {
-            record.name
-            for record in self._managers.collections.getParentChains(
-                self._managers.collections.find(collection).key
-            )
-        }
+        return self._managers.collections.getParentChains(self._managers.collections.find(collection).key)
 
     def getCollectionDocumentation(self, collection: str) -> str | None:
         """Retrieve the documentation string for a collection.
@@ -702,8 +704,7 @@ class SqlRegistry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        _, inserted = self._managers.datasets.register(datasetType)
-        return inserted
+        return self._managers.datasets.register(datasetType)
 
     def removeDatasetType(self, name: str | tuple[str, ...]) -> None:
         """Remove the named `DatasetType` from the registry.

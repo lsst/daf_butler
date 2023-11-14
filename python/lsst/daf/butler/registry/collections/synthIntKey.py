@@ -30,13 +30,14 @@ from ... import ddl
 
 __all__ = ["SynthIntKeyCollectionManager"]
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
 from ..._timespan import TimespanDatabaseRepresentation
-from ..interfaces import CollectionRecord, VersionTuple
+from .._collection_type import CollectionType
+from ..interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
 from ._base import (
     CollectionTablesTuple,
     DefaultCollectionManager,
@@ -45,6 +46,7 @@ from ._base import (
 )
 
 if TYPE_CHECKING:
+    from .._caching_context import CachingContext
     from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext
 
 
@@ -73,42 +75,10 @@ def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> 
     )
 
 
-class SynthIntKeyCollectionManager(DefaultCollectionManager):
+class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
     """A `CollectionManager` implementation that uses synthetic primary key
     (auto-incremented integer) for collections table.
-
-    Most of the logic, including caching policy, is implemented in the base
-    class, this class only adds customizations specific to this particular
-    table schema.
-
-    Parameters
-    ----------
-    db : `Database`
-        Interface to the underlying database engine and namespace.
-    tables : `NamedTuple`
-        Named tuple of SQLAlchemy table objects.
-    collectionIdName : `str`
-        Name of the column in collections table that identifies it (PK).
-    dimensions : `DimensionRecordStorageManager`
-        Manager object for the dimensions in this `Registry`.
     """
-
-    def __init__(
-        self,
-        db: Database,
-        tables: CollectionTablesTuple,
-        collectionIdName: str,
-        dimensions: DimensionRecordStorageManager,
-        registry_schema_version: VersionTuple | None = None,
-    ):
-        super().__init__(
-            db=db,
-            tables=tables,
-            collectionIdName=collectionIdName,
-            dimensions=dimensions,
-            registry_schema_version=registry_schema_version,
-        )
-        self._nameCache: dict[str, CollectionRecord] = {}  # indexed by collection name
 
     @classmethod
     def initialize(
@@ -117,6 +87,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         context: StaticTablesContext,
         *,
         dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
@@ -125,6 +96,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
             collectionIdName="collection_id",
             dimensions=dimensions,
+            caching_context=caching_context,
             registry_schema_version=registry_schema_version,
         )
 
@@ -184,29 +156,134 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
             )
         return copy
 
-    def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:
-        """Set internal record cache to contain given records,
-        old cached records will be removed.
+    def getParentChains(self, key: int) -> set[str]:
+        # Docstring inherited from CollectionManager.
+        chain = self._tables.collection_chain
+        collection = self._tables.collection
+        sql = (
+            sqlalchemy.sql.select(collection.columns["name"])
+            .select_from(collection)
+            .join(chain, onclause=collection.columns[self._collectionIdName] == chain.columns["parent"])
+            .where(chain.columns["child"] == key)
+        )
+        with self._db.query(sql) as sql_result:
+            parent_names = set(sql_result.scalars().all())
+        return parent_names
+
+    def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[int]]:
+        # Docstring inherited from base class.
+        return self._fetch("name", names)
+
+    def _fetch_by_key(self, collection_ids: Iterable[int] | None) -> list[CollectionRecord[int]]:
+        # Docstring inherited from base class.
+        return self._fetch(self._collectionIdName, collection_ids)
+
+    def _fetch(
+        self, column_name: str, collections: Iterable[int | str] | None
+    ) -> list[CollectionRecord[int]]:
+        collection_chain = self._tables.collection_chain
+        collection = self._tables.collection
+        sql = sqlalchemy.sql.select(*collection.columns, *self._tables.run.columns).select_from(
+            collection.join(self._tables.run, isouter=True)
+        )
+
+        chain_sql = (
+            sqlalchemy.sql.select(
+                collection_chain.columns["parent"],
+                collection_chain.columns["position"],
+                collection.columns["name"].label("child_name"),
+            )
+            .select_from(collection_chain)
+            .join(
+                collection,
+                onclause=collection_chain.columns["child"] == collection.columns[self._collectionIdName],
+            )
+        )
+
+        records: list[CollectionRecord[int]] = []
+        # We want to keep transactions as short as possible. When we fetch
+        # everything we want to quickly fetch things into memory and finish
+        # transaction. When we fetch just few records we need to process first
+        # query before wi can run second one,
+        if collections is not None:
+            sql = sql.where(collection.columns[column_name].in_(collections))
+            with self._db.transaction():
+                with self._db.query(sql) as sql_result:
+                    sql_rows = sql_result.mappings().fetchall()
+
+                records, chained_ids = self._rows_to_records(sql_rows)
+
+                if chained_ids:
+                    chain_sql = chain_sql.where(collection_chain.columns["parent"].in_(list(chained_ids)))
+
+                    with self._db.query(chain_sql) as sql_result:
+                        chain_rows = sql_result.mappings().fetchall()
+
+                    records += self._rows_to_chains(chain_rows, chained_ids)
+
+        else:
+            with self._db.transaction():
+                with self._db.query(sql) as sql_result:
+                    sql_rows = sql_result.mappings().fetchall()
+                with self._db.query(chain_sql) as sql_result:
+                    chain_rows = sql_result.mappings().fetchall()
+
+            records, chained_ids = self._rows_to_records(sql_rows)
+            records += self._rows_to_chains(chain_rows, chained_ids)
+
+        return records
+
+    def _rows_to_records(self, rows: Iterable[Mapping]) -> tuple[list[CollectionRecord[int]], dict[int, str]]:
+        """Convert rows returned from collection query to a list of records
+        and a dict chained collection names.
         """
-        self._records = {}
-        self._nameCache = {}
-        for record in records:
-            self._records[record.key] = record
-            self._nameCache[record.name] = record
+        records: list[CollectionRecord[int]] = []
+        chained_ids: dict[int, str] = {}
+        TimespanReprClass = self._db.getTimespanRepresentation()
+        for row in rows:
+            key: int = row[self._collectionIdName]
+            name: str = row[self._tables.collection.columns.name]
+            type = CollectionType(row["type"])
+            record: CollectionRecord[int]
+            if type is CollectionType.RUN:
+                record = RunRecord[int](
+                    key=key,
+                    name=name,
+                    host=row[self._tables.run.columns.host],
+                    timespan=TimespanReprClass.extract(row),
+                )
+                records.append(record)
+            elif type is CollectionType.CHAINED:
+                # Need to delay chained collection construction until to
+                # fetch their children names.
+                chained_ids[key] = name
+            else:
+                record = CollectionRecord[int](key=key, name=name, type=type)
+                records.append(record)
+        return records, chained_ids
 
-    def _addCachedRecord(self, record: CollectionRecord) -> None:
-        """Add single record to cache."""
-        self._records[record.key] = record
-        self._nameCache[record.name] = record
+    def _rows_to_chains(
+        self, rows: Iterable[Mapping], chained_ids: dict[int, str]
+    ) -> list[CollectionRecord[int]]:
+        """Convert rows returned from collection chain query to a list of
+        records.
+        """
+        chains_defs: dict[int, list[tuple[int, str]]] = {chain_id: [] for chain_id in chained_ids}
+        for row in rows:
+            chains_defs[row["parent"]].append((row["position"], row["child_name"]))
 
-    def _removeCachedRecord(self, record: CollectionRecord) -> None:
-        """Remove single record from cache."""
-        del self._records[record.key]
-        del self._nameCache[record.name]
+        records: list[CollectionRecord[int]] = []
+        for key, children in chains_defs.items():
+            name = chained_ids[key]
+            children_names = [child for _, child in sorted(children)]
+            record = ChainedCollectionRecord[int](
+                key=key,
+                name=name,
+                children=children_names,
+            )
+            records.append(record)
 
-    def _getByName(self, name: str) -> CollectionRecord | None:
-        # Docstring inherited from DefaultCollectionManager.
-        return self._nameCache.get(name)
+        return records
 
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:

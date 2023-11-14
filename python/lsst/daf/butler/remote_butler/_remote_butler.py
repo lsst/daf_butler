@@ -158,6 +158,12 @@ class RemoteButler(Butler):
         # Assume we can treat it as a dict.
         return SerializedDataCoordinate(dataId=data_id)
 
+    def _caching_context(self) -> AbstractContextManager[None]:
+        # Docstring inherited.
+        # Not implemented for now, will have to think whether this needs to
+        # do something on client side and/or remote side.
+        raise NotImplementedError()
+
     def transaction(self) -> AbstractContextManager[None]:
         """Will always raise NotImplementedError.
         Transactions are not supported by RemoteButler.

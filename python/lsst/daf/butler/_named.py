@@ -266,7 +266,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
             to a new variable (and considering any previous references
             invalidated) should allow for more accurate static type checking.
         """
-        if not isinstance(self._dict, MappingProxyType):
+        if not isinstance(self._dict, MappingProxyType):  # type: ignore[unreachable]
             self._dict = MappingProxyType(self._dict)  # type: ignore
         return self
 
@@ -578,7 +578,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
             to a new variable (and considering any previous references
             invalidated) should allow for more accurate static type checking.
         """
-        if not isinstance(self._mapping, MappingProxyType):
+        if not isinstance(self._mapping, MappingProxyType):  # type: ignore[unreachable]
             self._mapping = MappingProxyType(self._mapping)  # type: ignore
         return self
 

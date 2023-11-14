@@ -32,7 +32,7 @@ from ... import ddl
 __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Iterator, Set
+from collections.abc import Iterable, Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Relation
@@ -45,6 +45,7 @@ from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
+    from .._caching_context import CachingContext
     from .._collection_summary import CollectionSummary
     from ..queries import SqlQueryContext
     from ._collections import CollectionManager, CollectionRecord, RunRecord
@@ -329,6 +330,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         """Construct an instance of the manager.
@@ -344,6 +346,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
+        caching_context : `CachingContext`
+            Object controlling caching of information returned by managers.
         registry_schema_version : `VersionTuple` or `None`
             Schema version of this extension as defined in registry.
 
@@ -487,7 +491,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def register(self, datasetType: DatasetType) -> tuple[DatasetRecordStorage, bool]:
+    def register(self, datasetType: DatasetType) -> bool:
         """Ensure that this `Registry` can hold records for the given
         `DatasetType`, creating new tables as necessary.
 
@@ -499,8 +503,6 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Returns
         -------
-        records : `DatasetRecordStorage`
-            The object representing the records for the given dataset type.
         inserted : `bool`
             `True` if the dataset type did not exist in the registry before.
 
@@ -600,6 +602,29 @@ class DatasetRecordStorageManager(VersionedExtension):
         summary : `CollectionSummary`
             Summary of the dataset types and governor dimension values in
             this collection.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def fetch_summaries(
+        self, collections: Iterable[CollectionRecord], dataset_types: Iterable[DatasetType] | None = None
+    ) -> Mapping[Any, CollectionSummary]:
+        """Fetch collection summaries given their names and dataset types.
+
+        Parameters
+        ----------
+        collections : `~collections.abc.Iterable` [`CollectionRecord`]
+            Collection records to query.
+        dataset_types : `~collections.abc.Iterable` [`DatasetType`] or `None`
+            Dataset types to include into returned summaries. If `None` then
+            all dataset types will be included.
+
+        Returns
+        -------
+        summaries : `~collections.abc.Mapping` [`Any`, `CollectionSummary`]
+            Collection summaries indexed by collection record key. This mapping
+            will also contain all nested non-chained collections of the chained
+            collections.
         """
         raise NotImplementedError()
 

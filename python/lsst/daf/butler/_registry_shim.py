@@ -102,6 +102,10 @@ class RegistryShim(Registry):
         # Docstring inherited from a base class.
         self._registry.refresh()
 
+    def caching_context(self) -> contextlib.AbstractContextManager[None]:
+        # Docstring inherited from a base class.
+        return self._butler._caching_context()
+
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
         # Docstring inherited from a base class.

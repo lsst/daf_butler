@@ -4,9 +4,11 @@ from .... import ddl
 
 __all__ = ("ByDimensionsDatasetRecordStorageManagerUUID",)
 
+import dataclasses
 import logging
 import warnings
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
@@ -30,6 +32,7 @@ from .tables import (
 )
 
 if TYPE_CHECKING:
+    from ..._caching_context import CachingContext
     from ...interfaces import (
         CollectionManager,
         CollectionRecord,
@@ -52,6 +55,34 @@ _LOG = logging.getLogger(__name__)
 
 class MissingDatabaseTableError(RuntimeError):
     """Exception raised when a table is not found in a database."""
+
+
+@dataclasses.dataclass
+class _DatasetTypeRecord:
+    """Contents of a single dataset type record."""
+
+    dataset_type: DatasetType
+    dataset_type_id: int
+    tag_table_name: str
+    calib_table_name: str | None
+
+
+class _SpecTableFactory:
+    """Factory for `sqlalchemy.schema.Table` instances that builds table
+    instances using provided `ddl.TableSpec` definition and verifies that
+    table exists in the database.
+    """
+
+    def __init__(self, db: Database, name: str, spec: ddl.TableSpec):
+        self._db = db
+        self._name = name
+        self._spec = spec
+
+    def __call__(self) -> sqlalchemy.schema.Table:
+        table = self._db.getExistingTable(self._name, self._spec)
+        if table is None:
+            raise MissingDatabaseTableError(f"Table {self._name} is missing from database schema.")
+        return table
 
 
 class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
@@ -90,6 +121,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         tables used by this class.
     summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
+    caching_context : `CachingContext`
+        Object controlling caching of information returned by managers.
     """
 
     def __init__(
@@ -100,6 +133,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
@@ -108,8 +142,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         self._dimensions = dimensions
         self._static = static
         self._summaries = summaries
-        self._byName: dict[str, ByDimensionsDatasetRecordStorage] = {}
-        self._byId: dict[int, ByDimensionsDatasetRecordStorage] = {}
+        self._caching_context = caching_context
 
     @classmethod
     def initialize(
@@ -119,6 +152,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -131,6 +165,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             context,
             collections=collections,
             dimensions=dimensions,
+            dataset_type_table=static.dataset_type,
+            caching_context=caching_context,
         )
         return cls(
             db=db,
@@ -138,6 +174,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             dimensions=dimensions,
             static=static,
             summaries=summaries,
+            caching_context=caching_context,
             registry_schema_version=registry_schema_version,
         )
 
@@ -205,60 +242,34 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
-        byName: dict[str, ByDimensionsDatasetRecordStorage] = {}
-        byId: dict[int, ByDimensionsDatasetRecordStorage] = {}
-        dataset_types: dict[int, DatasetType] = {}
-        c = self._static.dataset_type.columns
-        with self._db.query(self._static.dataset_type.select()) as sql_result:
-            sql_rows = sql_result.mappings().fetchall()
-        for row in sql_rows:
-            name = row[c.name]
-            dimensions = self._dimensions.loadDimensionGraph(row[c.dimensions_key])
-            calibTableName = row[c.calibration_association_table]
-            datasetType = DatasetType(
-                name, dimensions, row[c.storage_class], isCalibration=(calibTableName is not None)
+        if self._caching_context.dataset_types is not None:
+            self._caching_context.dataset_types.clear()
+
+    def _make_storage(self, record: _DatasetTypeRecord) -> ByDimensionsDatasetRecordStorage:
+        """Create storage instance for a dataset type record."""
+        tags_spec = makeTagTableSpec(record.dataset_type, type(self._collections), self.getIdColumnType())
+        tags_table_factory = _SpecTableFactory(self._db, record.tag_table_name, tags_spec)
+        calibs_table_factory = None
+        if record.calib_table_name is not None:
+            calibs_spec = makeCalibTableSpec(
+                record.dataset_type,
+                type(self._collections),
+                self._db.getTimespanRepresentation(),
+                self.getIdColumnType(),
             )
-            tags = self._db.getExistingTable(
-                row[c.tag_association_table],
-                makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()),
-            )
-            if tags is None:
-                raise MissingDatabaseTableError(
-                    f"Table {row[c.tag_association_table]} is missing from database schema."
-                )
-            if calibTableName is not None:
-                calibs = self._db.getExistingTable(
-                    row[c.calibration_association_table],
-                    makeCalibTableSpec(
-                        datasetType,
-                        type(self._collections),
-                        self._db.getTimespanRepresentation(),
-                        self.getIdColumnType(),
-                    ),
-                )
-                if calibs is None:
-                    raise MissingDatabaseTableError(
-                        f"Table {row[c.calibration_association_table]} is missing from database schema."
-                    )
-            else:
-                calibs = None
-            storage = self._recordStorageType(
-                db=self._db,
-                datasetType=datasetType,
-                static=self._static,
-                summaries=self._summaries,
-                tags=tags,
-                calibs=calibs,
-                dataset_type_id=row["id"],
-                collections=self._collections,
-                use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
-            )
-            byName[datasetType.name] = storage
-            byId[storage._dataset_type_id] = storage
-            dataset_types[row["id"]] = datasetType
-        self._byName = byName
-        self._byId = byId
-        self._summaries.refresh(dataset_types)
+            calibs_table_factory = _SpecTableFactory(self._db, record.calib_table_name, calibs_spec)
+        storage = self._recordStorageType(
+            db=self._db,
+            datasetType=record.dataset_type,
+            static=self._static,
+            summaries=self._summaries,
+            tags_table_factory=tags_table_factory,
+            calibs_table_factory=calibs_table_factory,
+            dataset_type_id=record.dataset_type_id,
+            collections=self._collections,
+            use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
+        )
+        return storage
 
     def remove(self, name: str) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -281,31 +292,48 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def find(self, name: str) -> DatasetRecordStorage | None:
         # Docstring inherited from DatasetRecordStorageManager.
-        return self._byName.get(name)
+        if self._caching_context.dataset_types is not None:
+            _, storage = self._caching_context.dataset_types.get(name)
+            if storage is not None:
+                return storage
+            else:
+                # On the first cache miss populate the cache with complete list
+                # of dataset types (if it was not done yet).
+                if not self._caching_context.dataset_types.full:
+                    self._fetch_dataset_types()
+                    # Try again
+                    _, storage = self._caching_context.dataset_types.get(name)
+                if self._caching_context.dataset_types.full:
+                    # If not in cache then dataset type is not defined.
+                    return storage
+        record = self._fetch_dataset_type_record(name)
+        if record is not None:
+            storage = self._make_storage(record)
+            if self._caching_context.dataset_types is not None:
+                self._caching_context.dataset_types.add(storage.datasetType, storage)
+            return storage
+        else:
+            return None
 
-    def register(self, datasetType: DatasetType) -> tuple[DatasetRecordStorage, bool]:
+    def register(self, datasetType: DatasetType) -> bool:
         # Docstring inherited from DatasetRecordStorageManager.
         if datasetType.isComponent():
             raise ValueError(
                 f"Component dataset types can not be stored in registry. Rejecting {datasetType.name}"
             )
-        storage = self._byName.get(datasetType.name)
-        if storage is None:
+        record = self._fetch_dataset_type_record(datasetType.name)
+        if record is None:
             dimensionsKey = self._dimensions.saveDimensionGraph(datasetType.dimensions)
             tagTableName = makeTagTableName(datasetType, dimensionsKey)
-            calibTableName = (
-                makeCalibTableName(datasetType, dimensionsKey) if datasetType.isCalibration() else None
-            )
-            # The order is important here, we want to create tables first and
-            # only register them if this operation is successful. We cannot
-            # wrap it into a transaction because database class assumes that
-            # DDL is not transaction safe in general.
-            tags = self._db.ensureTableExists(
+            self._db.ensureTableExists(
                 tagTableName,
                 makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()),
             )
+            calibTableName = (
+                makeCalibTableName(datasetType, dimensionsKey) if datasetType.isCalibration() else None
+            )
             if calibTableName is not None:
-                calibs = self._db.ensureTableExists(
+                self._db.ensureTableExists(
                     calibTableName,
                     makeCalibTableSpec(
                         datasetType,
@@ -314,8 +342,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                         self.getIdColumnType(),
                     ),
                 )
-            else:
-                calibs = None
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": datasetType.name},
@@ -331,28 +357,25 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 },
                 returning=["id", "tag_association_table"],
             )
-            assert row is not None
-            storage = self._recordStorageType(
-                db=self._db,
-                datasetType=datasetType,
-                static=self._static,
-                summaries=self._summaries,
-                tags=tags,
-                calibs=calibs,
-                dataset_type_id=row["id"],
-                collections=self._collections,
-                use_astropy_ingest_date=self.ingest_date_dtype() is ddl.AstropyTimeNsecTai,
-            )
-            self._byName[datasetType.name] = storage
-            self._byId[storage._dataset_type_id] = storage
+            # Make sure that cache is updated
+            if self._caching_context.dataset_types is not None and row is not None:
+                record = _DatasetTypeRecord(
+                    dataset_type=datasetType,
+                    dataset_type_id=row["id"],
+                    tag_table_name=tagTableName,
+                    calib_table_name=calibTableName,
+                )
+                storage = self._make_storage(record)
+                self._caching_context.dataset_types.add(datasetType, storage)
         else:
-            if datasetType != storage.datasetType:
+            if datasetType != record.dataset_type:
                 raise ConflictingDefinitionError(
                     f"Given dataset type {datasetType} is inconsistent "
-                    f"with database definition {storage.datasetType}."
+                    f"with database definition {record.dataset_type}."
                 )
             inserted = False
-        return storage, bool(inserted)
+
+        return bool(inserted)
 
     def resolve_wildcard(
         self,
@@ -406,15 +429,13 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 raise TypeError(
                     "Universal wildcard '...' is not permitted for dataset types in this context."
                 )
-            for storage in self._byName.values():
-                result[storage.datasetType].add(None)
+            for datasetType in self._fetch_dataset_types():
+                result[datasetType].add(None)
                 if components:
                     try:
-                        result[storage.datasetType].update(
-                            storage.datasetType.storageClass.allComponents().keys()
-                        )
+                        result[datasetType].update(datasetType.storageClass.allComponents().keys())
                         if (
-                            storage.datasetType.storageClass.allComponents()
+                            datasetType.storageClass.allComponents()
                             and not already_warned
                             and components_deprecated
                         ):
@@ -426,7 +447,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                             already_warned = True
                     except KeyError as err:
                         _LOG.warning(
-                            f"Could not load storage class {err} for {storage.datasetType.name}; "
+                            f"Could not load storage class {err} for {datasetType.name}; "
                             "if it has components they will not be included in query results.",
                         )
         elif wildcard.patterns:
@@ -438,29 +459,28 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                     FutureWarning,
                     stacklevel=find_outside_stacklevel("lsst.daf.butler"),
                 )
-            for storage in self._byName.values():
-                if any(p.fullmatch(storage.datasetType.name) for p in wildcard.patterns):
-                    result[storage.datasetType].add(None)
+            dataset_types = self._fetch_dataset_types()
+            for datasetType in dataset_types:
+                if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
+                    result[datasetType].add(None)
             if components is not False:
-                for storage in self._byName.values():
-                    if components is None and storage.datasetType in result:
+                for datasetType in dataset_types:
+                    if components is None and datasetType in result:
                         continue
                     try:
-                        components_for_parent = storage.datasetType.storageClass.allComponents().keys()
+                        components_for_parent = datasetType.storageClass.allComponents().keys()
                     except KeyError as err:
                         _LOG.warning(
-                            f"Could not load storage class {err} for {storage.datasetType.name}; "
+                            f"Could not load storage class {err} for {datasetType.name}; "
                             "if it has components they will not be included in query results."
                         )
                         continue
                     for component_name in components_for_parent:
                         if any(
-                            p.fullmatch(
-                                DatasetType.nameWithComponent(storage.datasetType.name, component_name)
-                            )
+                            p.fullmatch(DatasetType.nameWithComponent(datasetType.name, component_name))
                             for p in wildcard.patterns
                         ):
-                            result[storage.datasetType].add(component_name)
+                            result[datasetType].add(component_name)
                             if not already_warned and components_deprecated:
                                 warnings.warn(
                                     deprecation_message,
@@ -476,29 +496,93 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             sqlalchemy.sql.select(
                 self._static.dataset.columns.dataset_type_id,
                 self._static.dataset.columns[self._collections.getRunForeignKeyName()],
+                *self._static.dataset_type.columns,
             )
             .select_from(self._static.dataset)
+            .join(self._static.dataset_type)
             .where(self._static.dataset.columns.id == id)
         )
         with self._db.query(sql) as sql_result:
             row = sql_result.mappings().fetchone()
         if row is None:
             return None
-        recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
-        if recordsForType is None:
-            self.refresh()
-            recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
-            assert recordsForType is not None, "Should be guaranteed by foreign key constraints."
+        record = self._record_from_row(row)
+        storage: DatasetRecordStorage | None = None
+        if self._caching_context.dataset_types is not None:
+            _, storage = self._caching_context.dataset_types.get(record.dataset_type.name)
+        if storage is None:
+            storage = self._make_storage(record)
+            if self._caching_context.dataset_types is not None:
+                self._caching_context.dataset_types.add(storage.datasetType, storage)
+        assert isinstance(storage, ByDimensionsDatasetRecordStorage), "Not expected storage class"
         return DatasetRef(
-            recordsForType.datasetType,
-            dataId=recordsForType.getDataId(id=id),
+            storage.datasetType,
+            dataId=storage.getDataId(id=id),
             id=id,
             run=self._collections[row[self._collections.getRunForeignKeyName()]].name,
         )
 
+    def _fetch_dataset_type_record(self, name: str) -> _DatasetTypeRecord | None:
+        """Retrieve all dataset types defined in database.
+
+        Yields
+        ------
+        dataset_types : `_DatasetTypeRecord`
+            Information from a single database record.
+        """
+        c = self._static.dataset_type.columns
+        stmt = self._static.dataset_type.select().where(c.name == name)
+        with self._db.query(stmt) as sql_result:
+            row = sql_result.mappings().one_or_none()
+        if row is None:
+            return None
+        else:
+            return self._record_from_row(row)
+
+    def _record_from_row(self, row: Mapping) -> _DatasetTypeRecord:
+        name = row["name"]
+        dimensions = self._dimensions.loadDimensionGraph(row["dimensions_key"])
+        calibTableName = row["calibration_association_table"]
+        datasetType = DatasetType(
+            name, dimensions, row["storage_class"], isCalibration=(calibTableName is not None)
+        )
+        return _DatasetTypeRecord(
+            dataset_type=datasetType,
+            dataset_type_id=row["id"],
+            tag_table_name=row["tag_association_table"],
+            calib_table_name=calibTableName,
+        )
+
+    def _dataset_type_from_row(self, row: Mapping) -> DatasetType:
+        return self._record_from_row(row).dataset_type
+
+    def _fetch_dataset_types(self) -> list[DatasetType]:
+        """Fetch list of all defined dataset types."""
+        if self._caching_context.dataset_types is not None:
+            if self._caching_context.dataset_types.full:
+                return [dataset_type for dataset_type, _ in self._caching_context.dataset_types.items()]
+        with self._db.query(self._static.dataset_type.select()) as sql_result:
+            sql_rows = sql_result.mappings().fetchall()
+        records = [self._record_from_row(row) for row in sql_rows]
+        # Cache everything and specify that cache is complete.
+        if self._caching_context.dataset_types is not None:
+            cache_data = [(record.dataset_type, self._make_storage(record)) for record in records]
+            self._caching_context.dataset_types.set(cache_data, full=True)
+        return [record.dataset_type for record in records]
+
     def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
         # Docstring inherited from DatasetRecordStorageManager.
-        return self._summaries.get(collection)
+        summaries = self._summaries.fetch_summaries([collection], None, self._dataset_type_from_row)
+        return summaries[collection.key]
+
+    def fetch_summaries(
+        self, collections: Iterable[CollectionRecord], dataset_types: Iterable[DatasetType] | None = None
+    ) -> Mapping[Any, CollectionSummary]:
+        # Docstring inherited from DatasetRecordStorageManager.
+        dataset_type_names: Iterable[str] | None = None
+        if dataset_types is not None:
+            dataset_type_names = set(dataset_type.name for dataset_type in dataset_types)
+        return self._summaries.fetch_summaries(collections, dataset_type_names, self._dataset_type_from_row)
 
     _versions: list[VersionTuple]
     """Schema version for this class."""

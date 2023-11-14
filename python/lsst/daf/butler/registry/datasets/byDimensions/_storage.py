@@ -32,7 +32,7 @@ from .... import ddl
 
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
-from collections.abc import Iterable, Iterator, Sequence, Set
+from collections.abc import Callable, Iterable, Iterator, Sequence, Set
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -77,9 +77,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         collections: CollectionManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
-        tags: sqlalchemy.schema.Table,
+        tags_table_factory: Callable[[], sqlalchemy.schema.Table],
         use_astropy_ingest_date: bool,
-        calibs: sqlalchemy.schema.Table | None,
+        calibs_table_factory: Callable[[], sqlalchemy.schema.Table] | None,
     ):
         super().__init__(datasetType=datasetType)
         self._dataset_type_id = dataset_type_id
@@ -87,10 +87,26 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._collections = collections
         self._static = static
         self._summaries = summaries
-        self._tags = tags
-        self._calibs = calibs
+        self._tags_table_factory = tags_table_factory
+        self._calibs_table_factory = calibs_table_factory
         self._runKeyColumn = collections.getRunForeignKeyName()
         self._use_astropy = use_astropy_ingest_date
+        self._tags_table: sqlalchemy.schema.Table | None = None
+        self._calibs_table: sqlalchemy.schema.Table | None = None
+
+    @property
+    def _tags(self) -> sqlalchemy.schema.Table:
+        if self._tags_table is None:
+            self._tags_table = self._tags_table_factory()
+        return self._tags_table
+
+    @property
+    def _calibs(self) -> sqlalchemy.schema.Table | None:
+        if self._calibs_table is None:
+            if self._calibs_table_factory is None:
+                return None
+            self._calibs_table = self._calibs_table_factory()
+        return self._calibs_table
 
     def delete(self, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
