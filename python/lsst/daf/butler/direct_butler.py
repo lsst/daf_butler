@@ -299,6 +299,10 @@ class DirectButler(Butler):
         # Docstring inherited.
         return self._registry.isWriteable()
 
+    def _caching_context(self) -> contextlib.AbstractContextManager[None]:
+        """Context manager that enables caching."""
+        return self._registry.caching_context()
+
     @contextlib.contextmanager
     def transaction(self) -> Iterator[None]:
         """Context manager supporting `Butler` transactions.

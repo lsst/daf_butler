@@ -118,9 +118,8 @@ class Registry(ABC):
         """
         raise NotImplementedError()
 
-    @contextlib.contextmanager
     @abstractmethod
-    def caching_context(self) -> Iterator[None]:
+    def caching_context(self) -> contextlib.AbstractContextManager[None]:
         """Context manager that enables caching."""
         raise NotImplementedError()
 

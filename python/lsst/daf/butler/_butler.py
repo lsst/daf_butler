@@ -483,6 +483,11 @@ class Butler(LimitedButler):
         return ButlerRepoIndex.get_known_repos()
 
     @abstractmethod
+    def _caching_context(self) -> AbstractContextManager[None]:
+        """Context manager that enables caching."""
+        raise NotImplementedError()
+
+    @abstractmethod
     def transaction(self) -> AbstractContextManager[None]:
         """Context manager supporting `Butler` transactions.
 
