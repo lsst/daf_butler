@@ -118,10 +118,13 @@ class ObsCoreTests(TestCaseMixin):
                     "id": visit,
                     "name": f"visit{visit}",
                     "physical_filter": "d-r",
-                    "visit_system": 1,
                     "datetime_begin": visit_start,
                     "datetime_end": visit_end,
                 },
+            )
+            registry.insertDimensionData(
+                "visit_system_membership",
+                {"instrument": "DummyCam", "visit": visit, "visit_system": 1},
             )
 
         # Only couple of exposures are linked to visits.

@@ -240,7 +240,6 @@ class ButlerPutGetTests(TestCaseMixin):
                 "id": 423,
                 "name": "fourtwentythree",
                 "physical_filter": "d-r",
-                "visit_system": 1,
                 "datetime_begin": visit_start,
                 "datetime_end": visit_end,
             },
@@ -255,7 +254,6 @@ class ButlerPutGetTests(TestCaseMixin):
                     "id": visit_id,
                     "name": f"fourtwentyfour_{visit_id}",
                     "physical_filter": "d-r",
-                    "visit_system": 1,
                 },
             )
         return butler, datasetType
