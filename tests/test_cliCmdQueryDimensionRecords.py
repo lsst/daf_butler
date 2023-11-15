@@ -117,7 +117,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "(-∞, ∞)",
+                    "None",
                 ),
             )
         )
@@ -223,7 +223,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "(-∞, ∞)",
+                    "None",
                 ),
             )
         )
@@ -260,7 +260,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "(-∞, ∞)",
+                    "None",
                 ),
             )
         )

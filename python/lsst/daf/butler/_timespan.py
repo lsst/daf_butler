@@ -508,17 +508,17 @@ class Timespan:
     @classmethod
     def from_simple(
         cls,
-        simple: list[int],
+        simple: list[int] | None,
         universe: DimensionUniverse | None = None,
         registry: Registry | None = None,
-    ) -> Timespan:
+    ) -> Timespan | None:
         """Construct a new object from simplified form.
 
         Designed to use the data returned from the `to_simple` method.
 
         Parameters
         ----------
-        simple : `list` of `int`
+        simple : `list` of `int`, or `None`
             The values returned by `to_simple()`.
         universe : `DimensionUniverse`, optional
             Unused.
@@ -527,9 +527,11 @@ class Timespan:
 
         Returns
         -------
-        result : `Timespan`
+        result : `Timespan` or `None`
             Newly-constructed object.
         """
+        if simple is None:
+            return None
         nsec1, nsec2 = simple  # for mypy
         return cls(begin=None, end=None, _nsec=(nsec1, nsec2))
 

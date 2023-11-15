@@ -109,7 +109,7 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSe
             field_type = Optional[field_type]  # type: ignore
         members[field.name] = (field_type, ...)
     if definition.temporal:
-        members["timespan"] = (Tuple[int, int], ...)  # type: ignore
+        members["timespan"] = (Optional[Tuple[int, int]], ...)  # type: ignore
     if definition.spatial:
         members["region"] = (str, ...)
 
@@ -279,13 +279,13 @@ class DimensionRecord:
                     )
         for name in self.__slots__:
             object.__setattr__(self, name, kwargs.get(name))
-        if self.definition.temporal is not None and self.timespan is None:
+        if self.definition.temporal is not None and self.timespan is None and "datetime_begin" in kwargs:
             object.__setattr__(
                 self,
                 "timespan",
                 Timespan(
-                    kwargs.get("datetime_begin"),
-                    kwargs.get("datetime_end"),
+                    kwargs["datetime_begin"],
+                    kwargs["datetime_end"],
                 ),
             )
 
