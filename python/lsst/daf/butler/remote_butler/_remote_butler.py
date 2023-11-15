@@ -55,7 +55,7 @@ from ..registry.wildcards import CollectionWildcard
 from ..transfers import RepoExportContext
 from ._authentication import get_authentication_headers, get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
-from .server import FindDatasetModel
+from .server_models import FindDatasetModel
 
 
 class RemoteButler(Butler):

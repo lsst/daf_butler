@@ -32,10 +32,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from lsst.daf.butler import SerializedDatasetRef, SerializedDatasetType
+from lsst.daf.butler.remote_butler.server_models import FindDatasetModel
 
 from .._dependencies import factory_dependency
 from .._factory import Factory
-from .._server_models import FindDatasetModel
 
 external_router = APIRouter()
 
