@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 import astropy
 from astropy.table import Table as AstropyTable
 
-from .. import Butler, Config, StorageClassFactory
+from .. import Butler, Config, StorageClassFactory, Timespan
 from ..registry import CollectionType
 from ..tests import MetricsExample, addDatasetType
 
@@ -268,8 +268,7 @@ class MetricTestRepo:
                 id=423,
                 name="fourtwentythree",
                 physical_filter="d-r",
-                datetimeBegin=visitStart,
-                datetimeEnd=visitEnd,
+                timespan=Timespan(visitStart, visitEnd),
             ),
         )
         self.butler.registry.insertDimensionData(

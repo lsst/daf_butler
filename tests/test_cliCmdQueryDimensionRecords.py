@@ -101,7 +101,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "(-∞, ∞)",
+                    "[2020-01-01T08:00:00, 2020-01-01T08:00:36)",
                 ),
                 (
                     "DummyCamComp",
@@ -153,7 +153,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "(-∞, ∞)",
+                    "[2020-01-01T08:00:00, 2020-01-01T08:00:36)",
                 ),
             )
         )
@@ -207,7 +207,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "(-∞, ∞)",
+                    "[2020-01-01T08:00:00, 2020-01-01T08:00:36)",
                 ),
                 (
                     "DummyCamComp",
