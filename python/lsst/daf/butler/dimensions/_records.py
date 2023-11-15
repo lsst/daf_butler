@@ -277,17 +277,6 @@ class DimensionRecord:
                         "Multiple inconsistent values for "
                         f"{self.definition.name}.{self.definition.primaryKey.name}: {v!r} != {v2!r}."
                     )
-        for name in self.__slots__:
-            object.__setattr__(self, name, kwargs.get(name))
-        if self.definition.temporal is not None and self.timespan is None and "datetime_begin" in kwargs:
-            object.__setattr__(
-                self,
-                "timespan",
-                Timespan(
-                    kwargs["datetime_begin"],
-                    kwargs["datetime_end"],
-                ),
-            )
 
         from ._coordinate import DataCoordinate
 
@@ -299,6 +288,28 @@ class DimensionRecord:
                 tuple(kwargs[dimension] for dimension in self.definition.required.names),
             ),
         )
+        # Don't need the primary key value aliased to the dimension name
+        # anymore.
+        kwargs.pop(self.definition.name, None)
+
+        for name in self.__slots__:
+            # Note that we remove from kwargs as we go, to make sure there's
+            # nothing left at the end.
+            object.__setattr__(self, name, kwargs.pop(name, None))
+        # Support 'datetime_begin' and 'datetime_end' instead of 'timespan' for
+        # backwards compatibility, but if one is provided both must be.
+        if self.definition.temporal is not None and self.timespan is None and "datetime_begin" in kwargs:
+            object.__setattr__(
+                self,
+                "timespan",
+                Timespan(
+                    kwargs.pop("datetime_begin"),
+                    kwargs.pop("datetime_end"),
+                ),
+            )
+
+        if kwargs:
+            raise TypeError(f"Invalid fields for {self.definition} dimension record: {set(kwargs.keys())}.")
 
     def __eq__(self, other: Any) -> bool:
         if type(other) != type(self):
