@@ -32,6 +32,7 @@ from types import EllipsisType
 from typing import Any
 
 from astropy.table import Table
+from lsst.sphgeom import Region
 
 from .._butler import Butler
 from .._timespan import Timespan
@@ -78,13 +79,19 @@ def queryDimensionRecords(
         # use the dataId to sort the rows if not ordered already
         records.sort(key=lambda r: r.dataId)
 
-    keys = records[0].fields.names  # order the columns the same as the record's `field.names`
+    # order the columns the same as the record's `field.names`, and add units
+    # to timespans
+    keys = records[0].fields.names
+    headers = ["timespan (TAI)" if name == "timespan" else name for name in records[0].fields.names]
 
     def conform(v: Any) -> Any:
-        if isinstance(v, Timespan):
-            v = (v.begin, v.end)
-        elif isinstance(v, bytes):
-            v = "0x" + v.hex()
+        match v:
+            case Timespan():
+                v = str(v)
+            case bytes():
+                v = "0x" + v.hex()
+            case Region():
+                v = "(elided)"
         return v
 
-    return Table([[conform(getattr(record, key, None)) for record in records] for key in keys], names=keys)
+    return Table([[conform(getattr(record, key, None)) for record in records] for key in keys], names=headers)

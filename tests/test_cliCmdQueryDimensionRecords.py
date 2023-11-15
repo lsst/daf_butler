@@ -31,9 +31,7 @@
 import os
 import unittest
 
-import astropy
 from astropy.table import Table as AstropyTable
-from astropy.utils.introspection import minversion
 from lsst.daf.butler import Butler, StorageClassFactory
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
@@ -47,10 +45,6 @@ from lsst.daf.butler.tests.utils import (
 from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
-
-# Astropy changed the handling of numpy columns in v5.1 so anything
-# greater than 5.0 (two digit version) does not need the annotated column.
-timespan_columns = "" if minversion(astropy, "5.1") else " [2]"
 
 
 class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
@@ -75,7 +69,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
         "azimuth",
         "zenith_angle",
         "region",
-        f"timespan{timespan_columns}",
+        "timespan (TAI)",
     )
 
     def setUp(self):
@@ -107,7 +101,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "None .. None",
+                    "(-∞, ∞)",
                 ),
                 (
                     "DummyCamComp",
@@ -123,12 +117,13 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "None .. None",
+                    "(-∞, ∞)",
                 ),
             )
         )
         expected = AstropyTable(rows, names=self.expectedColumnNames)
-        self.assertAstropyTablesEqual(readTable(result.output), expected)
+        got = readTable(result.output)
+        self.assertAstropyTablesEqual(got, expected)
 
     def testWhere(self):
         result = self.runner.invoke(
@@ -158,7 +153,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "None .. None",
+                    "(-∞, ∞)",
                 ),
             )
         )
@@ -212,7 +207,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "None .. None",
+                    "(-∞, ∞)",
                 ),
                 (
                     "DummyCamComp",
@@ -228,7 +223,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "None .. None",
+                    "(-∞, ∞)",
                 ),
             )
         )
@@ -265,7 +260,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                     "None",
                     "None",
                     "None",
-                    "None .. None",
+                    "(-∞, ∞)",
                 ),
             )
         )
