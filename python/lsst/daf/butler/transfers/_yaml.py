@@ -284,7 +284,18 @@ class YamlRepoImportBackend(RepoImportBackend):
         ):
             migrate_visit_system = True
 
+        # Drop "seeing" from visits in files older than version 1.
+        migrate_visit_seeing = False
+        if (
+            universe_version < 1
+            and universe_namespace == "daf_butler"
+            and "visit" in self.registry.dimensions
+            and "seeing" not in self.registry.dimensions["visit"].metadata
+        ):
+            migrate_visit_seeing = True
+
         datasetData = []
+        RecordClass: type[DimensionRecord]
         for data in wrapper["data"]:
             if data["type"] == "dimension":
                 # convert all datetime values to astropy
@@ -296,18 +307,29 @@ class YamlRepoImportBackend(RepoImportBackend):
                         # class with special YAML tag.
                         if isinstance(record[key], datetime):
                             record[key] = astropy.time.Time(record[key], scale="utc")
-                element = self.registry.dimensions[data["element"]]
-                RecordClass: type[DimensionRecord] = element.RecordClass
-                self.dimensions[element].extend(RecordClass(**r) for r in data["records"])
 
-                if data["element"] == "visit" and migrate_visit_system:
-                    # Must create the visit_system_membership records.
-                    element = self.registry.dimensions["visit_system_membership"]
-                    RecordClass = element.RecordClass
-                    self.dimensions[element].extend(
-                        RecordClass(instrument=r["instrument"], visit_system=r["visit_system"], visit=r["id"])
-                        for r in data["records"]
-                    )
+                if data["element"] == "visit":
+                    if migrate_visit_system:
+                        # Must create the visit_system_membership records.
+                        # But first create empty list for visits since other
+                        # logic in this file depends on self.dimensions being
+                        # populated in an order consisteny with primary keys.
+                        self.dimensions[self.registry.dimensions["visit"]] = []
+                        element = self.registry.dimensions["visit_system_membership"]
+                        RecordClass = element.RecordClass
+                        self.dimensions[element].extend(
+                            RecordClass(
+                                instrument=r["instrument"], visit_system=r.pop("visit_system"), visit=r["id"]
+                            )
+                            for r in data["records"]
+                        )
+                    if migrate_visit_seeing:
+                        for record in data["records"]:
+                            record.pop("seeing", None)
+
+                element = self.registry.dimensions[data["element"]]
+                RecordClass = element.RecordClass
+                self.dimensions[element].extend(RecordClass(**r) for r in data["records"])
 
             elif data["type"] == "collection":
                 collectionType = CollectionType.from_name(data["collection_type"])
