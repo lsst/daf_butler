@@ -132,6 +132,9 @@ write_to = "python/lsst/daf/butler/version.py"
 # The matplotlib test may not release font files.
 # Some unit tests open registry database in setUpClass.
 open_files_ignore = ["*.ttf", "gen3.sqlite3"]
+# These require additional environment setup that isn't available during
+# normal unit test runs
+addopts = "--ignore=tests_integration"
 
 [tool.pydocstyle]
 convention = "numpy"
