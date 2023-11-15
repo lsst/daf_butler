@@ -279,6 +279,7 @@ class Timespan:
     def __str__(self) -> str:
         if self.isEmpty():
             return "(empty)"
+        fmt = "%Y-%m-%dT%H:%M:%S"
         # Trap dubious year warnings in case we have timespans from
         # simulated data in the future
         with warnings.catch_warnings():
@@ -289,12 +290,12 @@ class Timespan:
                 head = "(-∞, "
             else:
                 assert isinstance(self.begin, astropy.time.Time), "guaranteed by earlier checks and ctor"
-                head = f"[{self.begin.tai.isot}, "
+                head = f"[{self.begin.tai.strftime(fmt)}, "
             if self.end is None:
                 tail = "∞)"
             else:
                 assert isinstance(self.end, astropy.time.Time), "guaranteed by earlier checks and ctor"
-                tail = f"{self.end.tai.isot})"
+                tail = f"{self.end.tai.strftime(fmt)})"
         return head + tail
 
     def __repr__(self) -> str:
