@@ -47,11 +47,29 @@ jobs:
           # figure out version number
           fetch-depth: 0
 
-
       - uses: lsst-sqre/build-and-push-to-ghcr@v1
         id: build
         with:
           image: ${{ github.repository }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: echo Pushed ghcr.io/${{ github.repository }}:${{ steps.build.outputs.tag }}
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade setuptools wheel build
+          pip install -r requirements.txt
+          pip install testcontainers
+
+      - name: Install Butler client
+        run: |
+          pip install -v --no-deps -e .
+
+      - name: Run smoke test
+        run: |
+          export BUTLER_SERVER_DOCKER_IMAGE=${{ steps.build.outputs.fully_qualified_image_digest }}
+          python tests_integration/test_docker_container.py
