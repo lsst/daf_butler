@@ -375,11 +375,11 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "visit",
-            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G", "visit_system": 0},
+            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G"},
         )
         registry.insertDimensionData(
             "visit_definition",
-            {"instrument": "Cam1", "visit": 1, "exposure": 1, "visit_system": 0},
+            {"instrument": "Cam1", "visit": 1, "exposure": 1},
         )
         with self.assertRaises(InconsistentDataIdError):
             registry.expandDataId(
@@ -982,14 +982,10 @@ class RegistryTests(ABC):
             "detector", *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in range(1, 6)]
         )
         registry.insertDimensionData(
-            "visit_system",
-            dict(instrument="DummyCam", id=1, name="default"),
-        )
-        registry.insertDimensionData(
             "visit",
-            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i", visit_system=1),
-            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r", visit_system=1),
-            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r", visit_system=1),
+            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r"),
         )
         for i in range(1, 6):
             registry.insertDimensionData(
@@ -1009,12 +1005,12 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "visit_definition",
-            dict(instrument="DummyCam", exposure=100, visit_system=1, visit=10),
-            dict(instrument="DummyCam", exposure=101, visit_system=1, visit=10),
-            dict(instrument="DummyCam", exposure=110, visit_system=1, visit=11),
-            dict(instrument="DummyCam", exposure=111, visit_system=1, visit=11),
-            dict(instrument="DummyCam", exposure=200, visit_system=1, visit=20),
-            dict(instrument="DummyCam", exposure=201, visit_system=1, visit=20),
+            dict(instrument="DummyCam", exposure=100, visit=10),
+            dict(instrument="DummyCam", exposure=101, visit=10),
+            dict(instrument="DummyCam", exposure=110, visit=11),
+            dict(instrument="DummyCam", exposure=111, visit=11),
+            dict(instrument="DummyCam", exposure=200, visit=20),
+            dict(instrument="DummyCam", exposure=201, visit=20),
         )
         # dataset types
         run1 = "test1_r"

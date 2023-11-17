@@ -279,6 +279,7 @@ class Timespan:
     def __str__(self) -> str:
         if self.isEmpty():
             return "(empty)"
+        fmt = "%Y-%m-%dT%H:%M:%S"
         # Trap dubious year warnings in case we have timespans from
         # simulated data in the future
         with warnings.catch_warnings():
@@ -289,12 +290,12 @@ class Timespan:
                 head = "(-∞, "
             else:
                 assert isinstance(self.begin, astropy.time.Time), "guaranteed by earlier checks and ctor"
-                head = f"[{self.begin.tai.isot}, "
+                head = f"[{self.begin.tai.strftime(fmt)}, "
             if self.end is None:
                 tail = "∞)"
             else:
                 assert isinstance(self.end, astropy.time.Time), "guaranteed by earlier checks and ctor"
-                tail = f"{self.end.tai.isot})"
+                tail = f"{self.end.tai.strftime(fmt)})"
         return head + tail
 
     def __repr__(self) -> str:
@@ -507,17 +508,17 @@ class Timespan:
     @classmethod
     def from_simple(
         cls,
-        simple: list[int],
+        simple: list[int] | None,
         universe: DimensionUniverse | None = None,
         registry: Registry | None = None,
-    ) -> Timespan:
+    ) -> Timespan | None:
         """Construct a new object from simplified form.
 
         Designed to use the data returned from the `to_simple` method.
 
         Parameters
         ----------
-        simple : `list` of `int`
+        simple : `list` of `int`, or `None`
             The values returned by `to_simple()`.
         universe : `DimensionUniverse`, optional
             Unused.
@@ -526,9 +527,11 @@ class Timespan:
 
         Returns
         -------
-        result : `Timespan`
+        result : `Timespan` or `None`
             Newly-constructed object.
         """
+        if simple is None:
+            return None
         nsec1, nsec2 = simple  # for mypy
         return cls(begin=None, end=None, _nsec=(nsec1, nsec2))
 
