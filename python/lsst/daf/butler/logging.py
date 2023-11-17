@@ -112,6 +112,11 @@ class ButlerMDC:
         cls._MDC.pop(key, None)
 
     @classmethod
+    def clear_mdc(cls) -> None:
+        """Clear all MDC entries."""
+        cls._MDC.clear()
+
+    @classmethod
     @contextmanager
     def set_mdc(cls, mdc: dict[str, str]) -> Generator[None, None, None]:
         """Set the MDC key for this context.
