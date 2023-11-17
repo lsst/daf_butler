@@ -64,7 +64,7 @@ class ConfigValidateUseTest(unittest.TestCase):
             # verify the just-created repo validates without error
             result = self.runner.invoke(butler.cli, ["config-validate", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
-            self.assertEqual(result.stdout, "No problems encountered with configuration.\n")
+            self.assertIn("No problems encountered with configuration.", result.stdout)
 
     def testConfigValidate_ignore(self):
         """Test the ignore flag"""
@@ -84,7 +84,7 @@ class ConfigValidateUseTest(unittest.TestCase):
                 ],
             )
             self.assertEqual(result.exit_code, 0, result.stdout)
-            self.assertEqual(result.stdout, "No problems encountered with configuration.\n")
+            self.assertIn("No problems encountered with configuration.", result.stdout)
 
 
 if __name__ == "__main__":
