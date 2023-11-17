@@ -2300,7 +2300,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.target_butler.registry.refresh()
 
         # Now transfer them to the second butler, including dimensions.
-        with self.assertLogs(level=logging.DEBUG) as log_cm:
+        with self.assertLogs(logger="lsst", level=logging.DEBUG) as log_cm:
             transferred = self.target_butler.transfer_from(
                 self.source_butler,
                 source_refs,
