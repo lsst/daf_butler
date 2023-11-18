@@ -248,6 +248,16 @@ class DatabaseDimensionElement(DimensionElement):
         # Docstring inherited from TopologicalRelationshipEndpoint
         return self.topology.get(TopologicalSpace.TEMPORAL)
 
+    @property
+    def has_persistent_cache(self) -> bool:
+        # Docstring inherited from DimensionElement.
+        # Caching was supposed to be an implementation detail of the record
+        # storage class, but giving those classes (which won't exist on the
+        # client in RemoteButler) that responsibility is just not going to
+        # work anymore.  As we transition we'll use that particular type name
+        # as a trigger to do caching elsewhere.
+        return self._storage["cls"].endswith("CachingDimensionRecordStorage")
+
     def makeStorage(
         self,
         db: Database,

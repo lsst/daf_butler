@@ -147,6 +147,11 @@ class GovernorDimension(Dimension):
         return self._metadata
 
     @property
+    def has_persistent_cache(self) -> bool:
+        # Docstring inherited from DimensionElement.
+        return True
+
+    @property
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
         # Docstring inherited from Dimension.
         return self._uniqueKeys

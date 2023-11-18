@@ -363,6 +363,14 @@ class DimensionUniverse:  # numpydoc ignore=PR02
 
     @property
     @cached_getter
+    def persistent_cache_elements(self) -> NamedValueAbstractSet[DimensionElement]:
+        """All dimension elements whose records should be aggressively cached
+        (i.e. all records of these elements should be fetched when any are).
+        """
+        return NamedValueSet(d for d in self._elements if d.has_persistent_cache)
+
+    @property
+    @cached_getter
     def skypix(self) -> NamedValueAbstractSet[SkyPixSystem]:
         """All skypix systems known to this universe.
 

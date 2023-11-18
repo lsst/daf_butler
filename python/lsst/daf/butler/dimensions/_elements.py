@@ -342,6 +342,13 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         return None
 
     @property
+    def has_persistent_cache(self) -> bool:
+        """Whether all records for this dimension element should be cached
+        in memory.
+        """
+        return False
+
+    @property
     def alwaysJoin(self) -> bool:
         """Indicate if the element should always be included.
 
