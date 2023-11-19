@@ -34,8 +34,11 @@ from collections.abc import Iterable, Iterator, Mapping, Set
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+import pydantic
 from lsst.utils.classes import cached_getter, immutable
+from pydantic_core import core_schema
 
+from .. import pydantic_utils
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
 
@@ -143,6 +146,14 @@ class DimensionGroup:  # numpydoc ignore=PR02
     matters (and is different from the consistent ordering defined by the
     `DimensionUniverse`), or complete `~collection.abc.Set` semantics are
     required.
+
+    This class is not a Pydantic model, but it implements the
+    `__get_pydantic_core_schema__` special method and hence can be used as a
+    field in Pydantic models or [de]serialized directly via
+    `pydantic.TypeAdapter`, but validation requires a `DimensionUniverse` to be
+    passed as the "universe" key in the Pydantic validation context.  The
+    `.pydantic_utils.DeferredValidation` class can be used to defer validation
+    of this object or other types that use it until that context is available.
     """
 
     def __new__(
@@ -507,3 +518,43 @@ class DimensionGroup:  # numpydoc ignore=PR02
     """
 
     _data_coordinate_indices: dict[str, int]
+
+    @classmethod
+    def _validate(cls, data: Any, info: pydantic.ValidationInfo) -> DimensionGroup:
+        """Pydantic validator (deserializer) for `DimensionGroup`.
+
+        This satisfies the `pydantic.WithInfoPlainValidatorFunction` signature.
+        """
+        universe = pydantic_utils.get_universe_from_context(info.context)
+        return universe.conform(data)
+
+    def _serialize(self) -> list[str]:
+        """Pydantic serializer for `DimensionGroup`.
+
+        This satisfies the `pydantic.PlainSerializerFunction` signature.
+        """
+        return list(self.names)
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: pydantic.GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        # This is the Pydantic hook for overriding serialization, validation,
+        # and JSON schema generation.
+        list_of_str_schema = core_schema.list_schema(core_schema.str_schema())
+        from_list_of_str_schema = core_schema.chain_schema(
+            [list_of_str_schema, core_schema.with_info_plain_validator_function(cls._validate)]
+        )
+        return core_schema.json_or_python_schema(
+            # When deserializing from JSON, expect it to look like list[str].
+            json_schema=from_list_of_str_schema,
+            # When deserializing from Python, first see if it's already a
+            # DimensionGroup and then try conversion from list[str].
+            python_schema=core_schema.union_schema(
+                [core_schema.is_instance_schema(DimensionGroup), from_list_of_str_schema]
+            ),
+            # When serializing convert it to a `list[str]`.
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                cls._serialize, return_schema=list_of_str_schema
+            ),
+        )

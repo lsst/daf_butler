@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from random import Random
 
 import lsst.sphgeom
+import pydantic
 from lsst.daf.butler import (
     Config,
     DataCoordinate,
@@ -908,6 +909,22 @@ class DataCoordinateTestCase(unittest.TestCase):
         self.assertEqual(packer.pack(detector_data_id), packed_id)
         self.assertEqual(packer.pack(detector=detector_data_id["detector"]), detector_data_id["detector"])
         self.assertEqual(packer.unpack(packed_id), detector_data_id)
+
+    def test_dimension_group_pydantic(self):
+        """Test that DimensionGroup round-trips through Pydantic as long as
+        it's given the universe when validated.
+        """
+        dimensions = self.allDataIds.dimensions
+        adapter = pydantic.TypeAdapter(DimensionGroup)
+        json_str = adapter.dump_json(dimensions)
+        python_data = adapter.dump_python(dimensions)
+        self.assertEqual(
+            dimensions, adapter.validate_json(json_str, context=dict(universe=dimensions.universe))
+        )
+        self.assertEqual(
+            dimensions, adapter.validate_python(python_data, context=dict(universe=dimensions.universe))
+        )
+        self.assertEqual(dimensions, adapter.validate_python(dimensions))
 
 
 if __name__ == "__main__":
