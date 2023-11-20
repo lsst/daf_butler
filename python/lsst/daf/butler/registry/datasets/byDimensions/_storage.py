@@ -32,8 +32,8 @@ from .... import ddl
 
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
+import datetime
 from collections.abc import Callable, Iterable, Iterator, Sequence, Set
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 import astropy.time
@@ -586,13 +586,13 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         # Current timestamp, type depends on schema version. Use microsecond
         # precision for astropy time to keep things consistent with
         # TIMESTAMP(6) SQL type.
-        timestamp: datetime | astropy.time.Time
+        timestamp: datetime.datetime | astropy.time.Time
         if self._use_astropy:
-            # Astropy `now()` precision should be the same as `utcnow()` which
+            # Astropy `now()` precision should be the same as `now()` which
             # should mean microsecond.
             timestamp = astropy.time.Time.now()
         else:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.datetime.now(datetime.UTC)
 
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
@@ -647,11 +647,11 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
 
         # Current timestamp, type depends on schema version.
         if self._use_astropy:
-            # Astropy `now()` precision should be the same as `utcnow()` which
+            # Astropy `now()` precision should be the same as `now()` which
             # should mean microsecond.
             timestamp = sqlalchemy.sql.literal(astropy.time.Time.now(), type_=ddl.AstropyTimeNsecTai)
         else:
-            timestamp = sqlalchemy.sql.literal(datetime.utcnow())
+            timestamp = sqlalchemy.sql.literal(datetime.datetime.now(datetime.UTC))
 
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.

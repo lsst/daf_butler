@@ -78,7 +78,7 @@ _re_time_str = re.compile(
     (?P<value>
         (?P<number>-?(\d+(\.\d*)|(\.\d+)))   # floating point number
         |
-        (?P<iso>\d+-\d+-\d+([ T]\d+:\d+(:\d+([.]\d*)?)?)?)   # iso(t)
+        (?P<iso>\d+-\d+-\d+([ T]\d+:\d+(:\d+([.]\d*)?)?)?)   # iso(t) [no timezone]
         |
         (?P<fits>[+]\d+-\d+-\d+(T\d+:\d+:\d+([.]\d*)?)?)   # fits
         |
@@ -108,6 +108,11 @@ def _parseTimeString(time_str):
     ValueError
         Raised if input string has unexpected format
     """
+    # Check for time zone. Python datetime objects can be timezone-aware
+    # and if one has been stringified then there will be a +00:00 on the end.
+    # Special case UTC. Fail for other timezones.
+    time_str = time_str.replace("+00:00", "")
+
     match = _re_time_str.match(time_str)
     if not match:
         raise ValueError(f'Time string "{time_str}" does not match known formats')
