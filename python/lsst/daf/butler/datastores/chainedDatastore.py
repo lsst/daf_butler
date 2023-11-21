@@ -461,7 +461,7 @@ class ChainedDatastore(Datastore):
         npermanent = 0
         nephemeral = 0
         stored_refs: dict[str, DatasetRef] = {}
-        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints, strict=True):
             if (
                 constraints is not None and not constraints.isAcceptable(ref)
             ) or not datastore.constraints.isAcceptable(ref):
