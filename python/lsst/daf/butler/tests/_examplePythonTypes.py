@@ -77,6 +77,9 @@ def registerMetricsExample(butler: Butler) -> None:
         can be retrieved as dataset components.
     ``StructuredDataNoComponents``
         A monolithic write of a `MetricsExample`.
+
+    These definitions must match the equivalent definitions in the test YAML
+    files.
     """
     yamlDict = _addFullStorageClass(
         butler,
@@ -101,6 +104,7 @@ def registerMetricsExample(butler: Butler) -> None:
         pytype=MetricsExample,
         parameters={"slice"},
         delegate="lsst.daf.butler.tests.MetricsDelegate",
+        converters={"dict": "lsst.daf.butler.tests.MetricsExample.makeFromDict"},
     )
 
     _addFullStorageClass(
@@ -117,9 +121,7 @@ def registerMetricsExample(butler: Butler) -> None:
     )
 
 
-def _addFullStorageClass(
-    butler: Butler, name: str, formatter: str, *args: Any, **kwargs: Any
-) -> StorageClass:
+def _addFullStorageClass(butler: Butler, name: str, formatter: str, **kwargs: Any) -> StorageClass:
     """Create a storage class-formatter pair in a repository if it does not
     already exist.
 
@@ -132,7 +134,6 @@ def _addFullStorageClass(
     formatter : `str`
         The formatter to use with the storage class. Ignored if ``butler``
         does not use formatters.
-    *args
     **kwargs
         Arguments, other than ``name``, to the `~lsst.daf.butler.StorageClass`
         constructor.
@@ -145,7 +146,11 @@ def _addFullStorageClass(
     """
     storageRegistry = butler._datastore.storageClassFactory
 
-    storage = StorageClass(name, *args, **kwargs)
+    # Use the special constructor to allow a subclass of storage class
+    # to be created. This allows other test storage classes to inherit from
+    # this one.
+    storage_type = storageRegistry.makeNewStorageClass(name, None, **kwargs)
+    storage = storage_type()
     try:
         storageRegistry.registerStorageClass(storage)
     except ValueError:

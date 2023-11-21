@@ -724,11 +724,11 @@ StorageClasses
         # components or parents before their classes are defined
         # we have a helper function that we can call recursively
         # to extract definitions from the configuration.
-        def processStorageClass(name: str, sconfig: StorageClassConfig, msg: str = "") -> None:
+        def processStorageClass(name: str, _sconfig: StorageClassConfig, msg: str = "") -> None:
             # Maybe we've already processed this through recursion
-            if name not in sconfig:
+            if name not in _sconfig:
                 return
-            info = sconfig.pop(name)
+            info = _sconfig.pop(name)
 
             # Always create the storage class so we can ensure that
             # we are not trying to overwrite with a different definition
@@ -757,9 +757,31 @@ StorageClasses
             baseClass = None
             if "inheritsFrom" in info:
                 baseName = info["inheritsFrom"]
-                if baseName not in self:
+
+                # The inheritsFrom feature requires that the storage class
+                # being inherited from is itself a subclass of StorageClass
+                # that was created with makeNewStorageClass. If it was made
+                # and registered with a simple StorageClass constructor it
+                # cannot be used here and we try to recreate it.
+                if baseName in self:
+                    baseClass = type(self.getStorageClass(baseName))
+                    if baseClass is StorageClass:
+                        log.warning(
+                            "Storage class %s is requested to inherit from %s but that storage class "
+                            "has not been defined to be a subclass of StorageClass and so can not "
+                            "be used. Attempting to recreate parent class from current configuration.",
+                            name,
+                            baseName,
+                        )
+                        processStorageClass(baseName, sconfig, msg)
+                else:
                     processStorageClass(baseName, sconfig, msg)
                 baseClass = type(self.getStorageClass(baseName))
+                if baseClass is StorageClass:
+                    raise TypeError(
+                        f"Configuration for storage class {name} requests to inherit from "
+                        f" storage class {baseName} but that class is not defined correctly."
+                    )
 
             newStorageClassType = self.makeNewStorageClass(name, baseClass, **storageClassKwargs)
             newStorageClass = newStorageClassType()
@@ -942,6 +964,9 @@ StorageClasses
                     f"New definition for StorageClass {storageClass.name} ({storageClass!r}) "
                     f"differs from current definition ({existing!r}){errmsg}"
                 )
+            if type(existing) is StorageClass and type(storageClass) is not StorageClass:
+                # Replace generic with specialist subclass equivalent.
+                self._storageClasses[storageClass.name] = storageClass
         else:
             self._storageClasses[storageClass.name] = storageClass
 
