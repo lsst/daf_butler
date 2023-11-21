@@ -300,8 +300,6 @@ class RemoteButler(Butler):
         # cache to generate list of collection names.
         wildcards = CollectionWildcard.from_expression(collections)
 
-        if datastore_records:
-            raise ValueError("Datastore records can not yet be returned in client/server butler.")
         if timespan:
             raise ValueError("Timespan can not yet be used in butler client/server.")
 

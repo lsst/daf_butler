@@ -50,7 +50,7 @@ from pydantic import StrictStr
 from ._config_support import LookupKey
 from ._dataset_type import DatasetType, SerializedDatasetType
 from ._named import NamedKeyDict
-from .datastore.stored_file_info import StoredDatastoreItemInfo
+from .datastore.stored_file_info import StoredDatastoreItemInfo, SerializedStoredDatastoreItemInfo
 from .dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
 from .json import from_json_pydantic, to_json_pydantic
 from .persistence_context import PersistenceContextVars
@@ -62,6 +62,7 @@ if TYPE_CHECKING:
 # Per-dataset records grouped by opaque table name, usually there is just one
 # opaque table.
 DatasetDatastoreRecords: TypeAlias = Mapping[str, Iterable[StoredDatastoreItemInfo]]
+SerializedDatasetDatastoreRecords: TypeAlias = dict[str, list[SerializedStoredDatastoreItemInfo]]
 
 
 class AmbiguousDatasetError(Exception):
@@ -191,6 +192,7 @@ class SerializedDatasetRef(_BaseModelCompat):
     dataId: SerializedDataCoordinate | None = None
     run: StrictStr | None = None
     component: StrictStr | None = None
+    datastoreRecords: SerializedDatasetDatastoreRecords | None = None
 
     if PYDANTIC_V2:
         # Can not use "after" validator since in some cases the validator
@@ -231,6 +233,7 @@ class SerializedDatasetRef(_BaseModelCompat):
         datasetType: dict[str, Any] | None = None,
         dataId: dict[str, Any] | None = None,
         component: str | None = None,
+        datastoreRecords: dict[str, Any] | None = None,
     ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.
 
@@ -249,6 +252,11 @@ class SerializedDatasetRef(_BaseModelCompat):
             SerializedDatasetType.direct(**datasetType) if datasetType is not None else None
         )
         serialized_dataId = SerializedDataCoordinate.direct(**dataId) if dataId is not None else None
+        serialized_datastore_records = (
+            pydantic.parse_obj_as(SerializedDatasetDatastoreRecords, datastoreRecords)
+            if datastoreRecords is not None
+            else None
+        )
 
         node = cls.model_construct(
             _fields_set=_serializedDatasetRefFieldsSet,
@@ -257,6 +265,7 @@ class SerializedDatasetRef(_BaseModelCompat):
             dataId=serialized_dataId,
             run=sys.intern(run),
             component=component,
+            datastoreRecords=serialized_datastore_records,
         )
 
         return node
@@ -404,6 +413,9 @@ class DatasetRef:
             Use minimal serialization. Requires Registry to convert
             back to a full type.
 
+        datastore_records : `bool`, optional
+            Include the datastore records in the serialized object
+
         Returns
         -------
         simple : `dict` or `int`
@@ -427,6 +439,7 @@ class DatasetRef:
             dataId=self.dataId.to_simple(),
             run=self.run,
             id=self.id,
+            datastoreRecords=_serialize_datastore_records(self._datastore_records),
         )
 
     @classmethod
@@ -516,11 +529,13 @@ class DatasetRef:
                     "Run collection name is missing from serialized representation. "
                     f"Encountered with {simple!r}{dstr}."
                 )
+
             ref = cls(
                 datasetType,
                 dataId,
                 id=simple.id,
                 run=simple.run,
+                datastore_records=_deserialize_datastore_records(simple.datastoreRecords),
             )
         if cache is not None:
             if ref.datasetType.component() is not None:
@@ -856,8 +871,32 @@ class DatasetRef:
     Cannot be changed after a `DatasetRef` is constructed.
     """
 
-    datastore_records: DatasetDatastoreRecords | None
+    _datastore_records: DatasetDatastoreRecords | None
     """Optional datastore records (`DatasetDatastoreRecords`).
 
     Cannot be changed after a `DatasetRef` is constructed.
     """
+
+
+def _serialize_datastore_records(
+    datastore_records: DatasetDatastoreRecords | None,
+) -> SerializedDatasetDatastoreRecords | None:
+    if datastore_records is None:
+        return None
+
+    serialized_datastore_records: SerializedDatasetDatastoreRecords = {}
+    for opaque_name, records in datastore_records.items():
+        serialized_datastore_records[opaque_name] = [record.to_model() for record in records]
+    return serialized_datastore_records
+
+
+def _deserialize_datastore_records(
+    serialized_datastore_records: SerializedDatasetDatastoreRecords | None,
+) -> DatasetDatastoreRecords | None:
+    if serialized_datastore_records is None:
+        return None
+
+    datastore_records: dict[str, list[StoredDatastoreItemInfo]] = {}
+    for opaque_table, records in serialized_datastore_records.items():
+        datastore_records[opaque_table] = [StoredDatastoreItemInfo.from_model(r) for r in records]
+    return datastore_records

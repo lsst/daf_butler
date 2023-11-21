@@ -36,6 +36,7 @@ try:
     from lsst.daf.butler.remote_butler.server import Factory, app
     from lsst.daf.butler.remote_butler.server._dependencies import factory_dependency
 except ImportError:
+    raise
     TestClient = None
     app = None
 
@@ -144,6 +145,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
             DataCoordinate.standardize(detector=1, instrument="Cam1", universe=self.butler.dimensions),
             collections="imported_g",
             storage_class=storage_class,
+            datastore_records=True,  # !!! this is the feature I am trying to enable
         )
         self.assertEqual(ref_new, ref)
 
@@ -173,6 +175,12 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Unknown dataset should not fail.
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4()))
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4(), storage_class="NumpyArray"))
+
+    def test_find_dataset_datastore_records(self):
+        ref = self.butler.find_dataset(
+            "bias", collections="imported_g", detector=1, instrument="Cam1", datastore_records=True
+        )
+        self.assertIsNotNone(ref._datastore_records)
 
     def test_instantiate_via_butler_http_search(self):
         """Ensure that the primary Butler constructor's automatic search logic
