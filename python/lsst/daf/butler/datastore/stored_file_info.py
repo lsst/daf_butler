@@ -27,13 +27,19 @@
 
 from __future__ import annotations
 
-__all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
+__all__ = (
+    "StoredDatastoreItemInfo",
+    "StoredFileInfo",
+    "SerializedStoredFileInfo",
+    "SerializedStoredFileInfoData",
+)
 
 import inspect
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
@@ -98,6 +104,16 @@ class StoredDatastoreItemInfo:
             Additional items to add to returned record.
         """
         raise NotImplementedError()
+
+    def to_model(self) -> SerializedStoredDatastoreItemInfo:
+        """Return the record contents as a Pydantic model"""
+        raise NotImplementedError()
+
+    @classmethod
+    def from_model(cls, model: SerializedStoredDatastoreItemInfo) -> StoredDatastoreItemInfo:
+        # Currently the FileDatastore is the only Datastore that supports
+        # serialization of its datastore records
+        return StoredFileInfo.from_model(model)
 
     def update(self, **kwargs: Any) -> StoredDatastoreItemInfo:
         """Create a new class with everything retained apart from the
@@ -260,6 +276,14 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             **kwargs,
         )
 
+    def to_model(self) -> SerializedStoredDatastoreItemInfo:
+        record = self.to_record()
+        # We allow None on the model but the record contains a "null string"
+        # instead
+        record["component"] = self.component
+        data = SerializedStoredFileInfoData.model_validate(record)
+        return SerializedStoredFileInfo(type="file", data=data)
+
     def file_location(self, factory: LocationFactory) -> Location:
         """Return the location of artifact.
 
@@ -307,6 +331,10 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         )
         return info
 
+    @classmethod
+    def from_model(cls: type[StoredFileInfo], model: SerializedStoredFileInfo) -> StoredFileInfo:
+        return cls.from_record(dict(model.data))
+
     def update(self, **kwargs: Any) -> StoredFileInfo:
         new_args = {}
         for k in self.__slots__:
@@ -320,3 +348,38 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     def __reduce__(self) -> str | tuple[Any, ...]:
         return (self.from_record, (self.to_record(),))
+
+
+class SerializedStoredFileInfoData(_BaseModelCompat):
+    """Serialized representation of `StoredFileInfo` properties"""
+
+    formatter: str
+    """Fully-qualified name of Formatter."""
+
+    path: str
+    """Path to dataset within Datastore."""
+
+    storage_class: str
+    """Name of the StorageClass associated with Dataset."""
+
+    component: str | None
+    """Component associated with this file. Can be None if the file does
+    not refer to a component of a composite."""
+
+    checksum: str | None
+    """Checksum of the serialized dataset."""
+
+    file_size: int
+    """Size of the serialized dataset in bytes."""
+
+
+class SerializedStoredFileInfo(_BaseModelCompat):
+    """Serialized representation of `StoredFileInfo`"""
+
+    type: Literal["file"]
+    data: SerializedStoredFileInfoData
+
+
+# In theory this may become a discriminated union in the future, to support
+# multiple DataStore types.
+SerializedStoredDatastoreItemInfo = SerializedStoredFileInfo

@@ -29,6 +29,8 @@ import os.path
 import unittest
 import uuid
 
+from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
+
 try:
     # Failing to import any of these should disable the tests.
     from fastapi.testclient import TestClient
@@ -127,6 +129,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertIsInstance(ref, DatasetRef)
         self.assertEqual(ref.id, uuid.UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
         self.assertFalse(ref.dataId.hasRecords())
+        self.assertIsNone(ref._datastore_records)
 
         # Try again with variation of parameters.
         ref_new = self.butler.find_dataset(
@@ -173,6 +176,31 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Unknown dataset should not fail.
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4()))
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4(), storage_class="NumpyArray"))
+
+    def test_find_dataset_datastore_records(self):
+        def check_datastore_records(ref_to_check):
+            records = ref_to_check._datastore_records
+            self.assertIsNotNone(records)
+            file_info = records["file_datastore_records"]
+            self.assertEqual(len(file_info), 3)
+            for f in file_info:
+                self.assertIsInstance(f, StoredFileInfo)
+            self.assertEqual(
+                file_info[0].formatter, "lsst.daf.butler.tests.testFormatters.MetricsExampleDataFormatter"
+            )
+            self.assertEqual(file_info[0].component, "data")
+            self.assertEqual(file_info[0].storageClass.name, "StructuredDataDataTest")
+
+        ref = self.butler.find_dataset(
+            "test_metric_comp",
+            {"instrument": "DummyCamComp", "visit": 423},
+            collections="ingest/run",
+            datastore_records=True,
+        )
+        check_datastore_records(ref)
+
+        ref2 = self.butler.get_dataset(ref.id, datastore_records=True)
+        check_datastore_records(ref2)
 
     def test_instantiate_via_butler_http_search(self):
         """Ensure that the primary Butler constructor's automatic search logic
