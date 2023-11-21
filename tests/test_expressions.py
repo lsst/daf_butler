@@ -355,8 +355,8 @@ class CheckVisitorTestCase(unittest.TestCase):
 
         universe = DimensionUniverse()
         dimensions = universe.conform(("instrument", "visit"))
-        dataId = DataCoordinate.makeEmpty(universe)
-        defaults = DataCoordinate.makeEmpty(universe)
+        dataId = DataCoordinate.make_empty(universe)
+        defaults = DataCoordinate.make_empty(universe)
 
         # governor-only constraint
         tree = parser.parse("instrument = 'LSST'")

@@ -132,7 +132,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     `DataCoordinate` is an ABC, but it provides `staticmethod` factory
     functions for private concrete implementations that should be sufficient
     for most purposes.  `standardize` is the most flexible and safe of these;
-    the others (`makeEmpty`, `from_required_values`, and `from_full_values`)
+    the others (`make_empty`, `from_required_values`, and `from_full_values`)
     are more specialized and perform little or no checking of inputs.
 
     Lookups for implied dimensions (those in ``self.dimensions.implied``) are
@@ -260,7 +260,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                 raise TypeError("universe must be provided if graph is not.")
             dimensions = DimensionGroup(universe, new_mapping.keys())
         if not dimensions:
-            return DataCoordinate.makeEmpty(universe)
+            return DataCoordinate.make_empty(universe)
         # Some backends cannot handle numpy.int64 type which is a subclass of
         # numbers.Integral; convert that to int.
         for k, v in new_mapping.items():
@@ -336,6 +336,26 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             `hasRecords` are guaranteed to return `True`, because both `full`
             and `records` are just empty mappings.
         """
+        return DataCoordinate.make_empty(universe)
+
+    @staticmethod
+    def make_empty(universe: DimensionUniverse) -> DataCoordinate:
+        """Return an empty `DataCoordinate`.
+
+        It identifies the null set of dimensions.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            Universe to which this null dimension set belongs.
+
+        Returns
+        -------
+        data_id : `DataCoordinate`
+            A data ID object that identifies no dimensions.  `hasFull` and
+            `hasRecords` are guaranteed to return `True`, because both `full`
+            and `records` are just empty mappings.
+        """
         return _ExpandedTupleDataCoordinate(universe.empty.as_group(), (), {})
 
     # TODO: remove on DM-41326.
@@ -390,7 +410,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         Returns
         -------
-        dataId : `DataCoordinate`
+        data_id : `DataCoordinate`
             A data ID object that identifies the given dimensions.
             ``dataId.hasFull()`` will return `True` only if
             ``dimensions.implied`` is empty. ``dataId.hasRecords()`` will
@@ -400,7 +420,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             values
         ), f"Inconsistency between dimensions {dimensions.required} and required values {values}."
         if not dimensions:
-            return DataCoordinate.makeEmpty(dimensions.universe)
+            return DataCoordinate.make_empty(dimensions.universe)
         if not dimensions.implied:
             return _FullTupleDataCoordinate(dimensions, values)
         return _RequiredTupleDataCoordinate(dimensions, values)
@@ -461,7 +481,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         Returns
         -------
-        dataId : `DataCoordinate`
+        data_id : `DataCoordinate`
             A data ID object that identifies the given dimensions.
             ``dataId.hasFull()`` will always return `True`.
             ``dataId.hasRecords()`` will only return `True` if ``dimensions``
@@ -471,7 +491,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             values
         ), f"Inconsistency between dimensions {dimensions.data_coordinate_keys} and full values {values}."
         if not dimensions:
-            return DataCoordinate.makeEmpty(dimensions.universe)
+            return DataCoordinate.make_empty(dimensions.universe)
         return _FullTupleDataCoordinate(dimensions, values)
 
     def __bool__(self) -> bool:

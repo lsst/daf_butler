@@ -60,7 +60,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.id = 0
         self.factory = FormatterFactory()
         self.universe = DimensionUniverse()
-        self.dataId = DataCoordinate.makeEmpty(self.universe)
+        self.dataId = DataCoordinate.make_empty(self.universe)
 
         # Dummy FileDescriptor for testing getFormatter
         self.fileDescriptor = FileDescriptor(

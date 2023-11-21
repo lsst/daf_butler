@@ -1685,7 +1685,7 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         schema = DatasetType("schema", dimensions=registry.dimensions.empty, storageClass="Catalog")
         registry.registerDatasetType(schema)
-        dataId = DataCoordinate.makeEmpty(registry.dimensions)
+        dataId = DataCoordinate.make_empty(registry.dimensions)
         run1 = "run1"
         run2 = "run2"
         registry.registerRun(run1)
@@ -3339,8 +3339,8 @@ class RegistryTests(ABC):
         registry.registerRun(run1)
         run2 = "run2"
         registry.registerRun(run2)
-        (ref1,) = registry.insertDatasets(name, [DataCoordinate.makeEmpty(registry.dimensions)], run1)
-        registry.insertDatasets(name, [DataCoordinate.makeEmpty(registry.dimensions)], run2)
+        (ref1,) = registry.insertDatasets(name, [DataCoordinate.make_empty(registry.dimensions)], run1)
+        registry.insertDatasets(name, [DataCoordinate.make_empty(registry.dimensions)], run2)
         self.assertEqual(
             set(registry.queryDatasets(name, collections=[run1, run2], findFirst=True)),
             {ref1},

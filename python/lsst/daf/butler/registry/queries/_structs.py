@@ -108,9 +108,9 @@ class QueryWhereClause:
             An object representing the WHERE clause for a query.
         """
         if data_id is None:
-            data_id = DataCoordinate.makeEmpty(dimensions.universe)
+            data_id = DataCoordinate.make_empty(dimensions.universe)
         if defaults is None:
-            defaults = DataCoordinate.makeEmpty(dimensions.universe)
+            defaults = DataCoordinate.make_empty(dimensions.universe)
         expression_predicate, governor_constraints = make_string_expression_predicate(
             expression,
             dimensions,

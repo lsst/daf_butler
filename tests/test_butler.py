@@ -2138,7 +2138,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         metrics = makeExampleMetrics()
         with ResourcePath.temporary_uri(suffix=".json") as temp:
-            dataId = DataCoordinate.makeEmpty(self.source_butler.dimensions)
+            dataId = DataCoordinate.make_empty(self.source_butler.dimensions)
             source_refs = [DatasetRef(datasetType, dataId, run=run)]
             temp.write(json.dumps(metrics.exportAsDict()).encode())
             dataset = FileDataset(path=temp, refs=source_refs)

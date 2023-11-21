@@ -713,10 +713,10 @@ class DataCoordinateTestCase(unittest.TestCase):
                     DataCoordinate.standardize(dataId.mapping, universe=dataId.universe),
                     DataCoordinate.standardize(dataId.mapping, dimensions=dataId.dimensions),
                     DataCoordinate.standardize(
-                        DataCoordinate.makeEmpty(dataId.dimensions.universe), **dataId.mapping
+                        DataCoordinate.make_empty(dataId.dimensions.universe), **dataId.mapping
                     ),
                     DataCoordinate.standardize(
-                        DataCoordinate.makeEmpty(dataId.dimensions.universe),
+                        DataCoordinate.make_empty(dataId.dimensions.universe),
                         dimensions=dataId.dimensions,
                         **dataId.mapping,
                     ),

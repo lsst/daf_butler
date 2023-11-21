@@ -945,7 +945,7 @@ class DatastoreTests(DatastoreTestsBase):
             "store_as_model",
             dimensions=self.universe.empty,
             storageClass="DictConvertibleModel",
-            dataId=DataCoordinate.makeEmpty(self.universe),
+            dataId=DataCoordinate.make_empty(self.universe),
         )
         content = {"a": "one", "b": "two"}
         model = DictConvertibleModel.from_dict(content, extra="original content")
@@ -988,7 +988,7 @@ class DatastoreTests(DatastoreTestsBase):
                 f"stora_as_{x}",
                 dimensions=self.universe.empty,
                 storageClass=f"{storageClass_root}{x}",
-                dataId=DataCoordinate.makeEmpty(self.universe),
+                dataId=DataCoordinate.make_empty(self.universe),
             )
             for x in ["A", "B"]
         }

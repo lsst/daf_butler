@@ -126,7 +126,7 @@ def make_string_expression_predicate(
     """
     governor_constraints: dict[str, Set[str]] = {}
     if data_id is None:
-        data_id = DataCoordinate.makeEmpty(dimensions.universe)
+        data_id = DataCoordinate.make_empty(dimensions.universe)
     if not string:
         for dimension in data_id.dimensions.governors:
             governor_constraints[dimension] = {cast(str, data_id[dimension])}
@@ -146,7 +146,7 @@ def make_string_expression_predicate(
             if column and table in dimensions.universe.elements.names:
                 raise RuntimeError(f"Bind parameter key {identifier!r} looks like a dimension column.")
     if defaults is None:
-        defaults = DataCoordinate.makeEmpty(dimensions.universe)
+        defaults = DataCoordinate.make_empty(dimensions.universe)
     # Convert the expression to disjunctive normal form (ORs of ANDs).
     # That's potentially super expensive in the general case (where there's
     # a ton of nesting of ANDs and ORs).  That won't be the case for the
