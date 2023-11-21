@@ -128,6 +128,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertIsInstance(ref, DatasetRef)
         self.assertEqual(ref.id, uuid.UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
         self.assertFalse(ref.dataId.hasRecords())
+        self.assertIsNone(ref._datastore_records)
 
         # Try again with variation of parameters.
         ref_new = self.butler.find_dataset(
@@ -177,10 +178,14 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertIsNone(self.butler.get_dataset(uuid.uuid4(), storage_class="NumpyArray"))
 
     def test_find_dataset_datastore_records(self):
-        ref = self.butler.find_dataset(
-            "bias", collections="imported_g", detector=1, instrument="Cam1", datastore_records=True
-        )
+        ref = self.butler.find_dataset("bias", collections="imported_g", detector=1, instrument="Cam1", datastore_records=True)
         self.assertIsNotNone(ref._datastore_records)
+        records = ref._datastore_records
+        print("what")
+        print(records)
+
+        
+
 
     def test_instantiate_via_butler_http_search(self):
         """Ensure that the primary Butler constructor's automatic search logic
