@@ -56,7 +56,7 @@ class PrecisionLogFormatter(logging.Formatter):
 
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
         """Format the time as an aware datetime."""
-        ct: datetime.datetime = self.converter(record.created, tz=datetime.timezone.utc)  # type: ignore
+        ct: datetime.datetime = self.converter(record.created, tz=datetime.UTC)  # type: ignore
         if self.use_local:
             ct = ct.astimezone()
         if datefmt:

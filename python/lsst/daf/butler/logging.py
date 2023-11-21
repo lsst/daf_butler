@@ -236,7 +236,7 @@ class ButlerLogRecord(_BaseModelCompat):
         # Always use UTC because in distributed systems we can't be sure
         # what timezone localtime is and it's easier to compare logs if
         # every system is using the same time.
-        record_dict["asctime"] = datetime.datetime.fromtimestamp(record.created, tz=datetime.timezone.utc)
+        record_dict["asctime"] = datetime.datetime.fromtimestamp(record.created, tz=datetime.UTC)
 
         # Sometimes exception information is included so must be
         # extracted.
