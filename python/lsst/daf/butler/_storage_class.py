@@ -989,3 +989,13 @@ StorageClasses
         functionality and it is not expected to be required for normal usage.
         """
         del self._storageClasses[storageClassName]
+
+    def reset(self) -> None:
+        """Remove all storage class entries from factory and reset to
+        initial state.
+
+        This is useful for test code where a known start state is useful.
+        """
+        self._storageClasses.clear()
+        # Seed with the default config.
+        self.addFromConfig(StorageClassConfig())
