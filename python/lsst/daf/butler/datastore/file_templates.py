@@ -201,7 +201,7 @@ class FileTemplates:
                     log.critical("Template failure with key '%s': %s", matchKey, e)
 
         if logFailures and unmatchedKeys:
-            log.warning("Unchecked keys: %s", ", ".join([str(k) for k in unmatchedKeys]))
+            log.warning("Unchecked keys: '%s'", ", ".join([str(k) for k in unmatchedKeys]))
 
         if failed:
             if len(failed) == 1:

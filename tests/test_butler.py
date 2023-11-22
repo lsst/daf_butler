@@ -317,59 +317,68 @@ class ButlerPutGetTests(TestCaseMixin):
                         butler, ref, ("summary", "data", "output"), metric, collections=this_run
                     )
 
+                primary_uri, secondary_uris = butler.getURIs(ref)
+                n_uris = len(secondary_uris)
+                if primary_uri:
+                    n_uris += 1
+
                 # Can the artifacts themselves be retrieved?
                 if not butler._datastore.isEphemeral:
-                    root_uri = ResourcePath(self.root)
+                    # Create a temporary directory to hold the retrieved
+                    # artifacts.
+                    with tempfile.TemporaryDirectory(
+                        prefix="butler-artifacts-", ignore_cleanup_errors=True
+                    ) as artifact_root:
+                        root_uri = ResourcePath(artifact_root, forceDirectory=True)
 
-                    for preserve_path in (True, False):
-                        destination = root_uri.join(f"artifacts/{preserve_path}_{counter}/")
-                        # Use copy so that we can test that overwrite
-                        # protection works (using "auto" for File URIs would
-                        # use hard links and subsequent transfer would work
-                        # because it knows they are the same file).
-                        transferred = butler.retrieveArtifacts(
-                            [ref], destination, preserve_path=preserve_path, transfer="copy"
-                        )
-                        self.assertGreater(len(transferred), 0)
-                        artifacts = list(ResourcePath.findFileResources([destination]))
-                        self.assertEqual(set(transferred), set(artifacts))
-
-                        for artifact in transferred:
-                            path_in_destination = artifact.relative_to(destination)
-                            self.assertIsNotNone(path_in_destination)
-                            assert path_in_destination is not None
-
-                            # when path is not preserved there should not be
-                            # any path separators.
-                            num_seps = path_in_destination.count("/")
-                            if preserve_path:
-                                self.assertGreater(num_seps, 0)
-                            else:
-                                self.assertEqual(num_seps, 0)
-
-                        primary_uri, secondary_uris = butler.getURIs(ref)
-                        n_uris = len(secondary_uris)
-                        if primary_uri:
-                            n_uris += 1
-                        self.assertEqual(
-                            len(artifacts),
-                            n_uris,
-                            "Comparing expected artifacts vs actual:"
-                            f" {artifacts} vs {primary_uri} and {secondary_uris}",
-                        )
-
-                        if preserve_path:
-                            # No need to run these twice
-                            with self.assertRaises(ValueError):
-                                butler.retrieveArtifacts([ref], destination, transfer="move")
-
-                            with self.assertRaises(FileExistsError):
-                                butler.retrieveArtifacts([ref], destination)
-
-                            transferred_again = butler.retrieveArtifacts(
-                                [ref], destination, preserve_path=preserve_path, overwrite=True
+                        for preserve_path in (True, False):
+                            destination = root_uri.join(f"{preserve_path}_{counter}/")
+                            log = logging.getLogger("lsst.x")
+                            log.warning("Using destination %s for args %s", destination, args)
+                            # Use copy so that we can test that overwrite
+                            # protection works (using "auto" for File URIs
+                            # would use hard links and subsequent transfer
+                            # would work because it knows they are the same
+                            # file).
+                            transferred = butler.retrieveArtifacts(
+                                [ref], destination, preserve_path=preserve_path, transfer="copy"
                             )
-                            self.assertEqual(set(transferred_again), set(transferred))
+                            self.assertGreater(len(transferred), 0)
+                            artifacts = list(ResourcePath.findFileResources([destination]))
+                            self.assertEqual(set(transferred), set(artifacts))
+
+                            for artifact in transferred:
+                                path_in_destination = artifact.relative_to(destination)
+                                self.assertIsNotNone(path_in_destination)
+                                assert path_in_destination is not None
+
+                                # When path is not preserved there should not
+                                # be any path separators.
+                                num_seps = path_in_destination.count("/")
+                                if preserve_path:
+                                    self.assertGreater(num_seps, 0)
+                                else:
+                                    self.assertEqual(num_seps, 0)
+
+                            self.assertEqual(
+                                len(artifacts),
+                                n_uris,
+                                "Comparing expected artifacts vs actual:"
+                                f" {artifacts} vs {primary_uri} and {secondary_uris}",
+                            )
+
+                            if preserve_path:
+                                # No need to run these twice
+                                with self.assertRaises(ValueError):
+                                    butler.retrieveArtifacts([ref], destination, transfer="move")
+
+                                with self.assertRaises(FileExistsError):
+                                    butler.retrieveArtifacts([ref], destination)
+
+                                transferred_again = butler.retrieveArtifacts(
+                                    [ref], destination, preserve_path=preserve_path, overwrite=True
+                                )
+                                self.assertEqual(set(transferred_again), set(transferred))
 
                 # Now remove the dataset completely.
                 butler.pruneDatasets([ref], purge=True, unstore=True)
@@ -2300,7 +2309,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.target_butler.registry.refresh()
 
         # Now transfer them to the second butler, including dimensions.
-        with self.assertLogs(level=logging.DEBUG) as log_cm:
+        with self.assertLogs(logger="lsst", level=logging.DEBUG) as log_cm:
             transferred = self.target_butler.transfer_from(
                 self.source_butler,
                 source_refs,

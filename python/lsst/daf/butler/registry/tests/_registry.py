@@ -30,6 +30,7 @@ from ... import ddl
 
 __all__ = ["RegistryTests"]
 
+import datetime
 import itertools
 import logging
 import os
@@ -39,7 +40,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
 from collections.abc import Iterator
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import astropy.time
@@ -2481,9 +2482,9 @@ class RegistryTests(ABC):
     def testIngestTimeQuery(self):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
-        dt0 = datetime.utcnow()
+        dt0 = datetime.datetime.now(datetime.UTC)
         self.loadData(registry, "datasets.yaml")
-        dt1 = datetime.utcnow()
+        dt1 = datetime.datetime.now(datetime.UTC)
 
         datasets = list(registry.queryDatasets(..., collections=...))
         len0 = len(datasets)

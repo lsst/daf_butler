@@ -112,6 +112,11 @@ class ButlerMDC:
         cls._MDC.pop(key, None)
 
     @classmethod
+    def clear_mdc(cls) -> None:
+        """Clear all MDC entries."""
+        cls._MDC.clear()
+
+    @classmethod
     @contextmanager
     def set_mdc(cls, mdc: dict[str, str]) -> Generator[None, None, None]:
         """Set the MDC key for this context.
@@ -231,7 +236,7 @@ class ButlerLogRecord(_BaseModelCompat):
         # Always use UTC because in distributed systems we can't be sure
         # what timezone localtime is and it's easier to compare logs if
         # every system is using the same time.
-        record_dict["asctime"] = datetime.datetime.fromtimestamp(record.created, tz=datetime.timezone.utc)
+        record_dict["asctime"] = datetime.datetime.fromtimestamp(record.created, tz=datetime.UTC)
 
         # Sometimes exception information is included so must be
         # extracted.

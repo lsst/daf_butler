@@ -55,6 +55,7 @@ class LoggingTestCase(unittest.TestCase):
         if self.handler and self.log:
             self.log.removeHandler(self.handler)
         ButlerMDC.restore_log_record_factory()
+        ButlerMDC.clear_mdc()
 
     def testRecordCapture(self):
         """Test basic log capture and serialization."""

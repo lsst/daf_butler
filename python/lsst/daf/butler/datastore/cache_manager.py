@@ -167,7 +167,7 @@ class CacheEntry(_BaseModelCompat):
             size=stat.st_size,
             ref=id_,
             component=component,
-            ctime=datetime.datetime.utcfromtimestamp(stat.st_ctime),
+            ctime=datetime.datetime.fromtimestamp(stat.st_ctime, datetime.UTC),
         )
 
 
@@ -239,7 +239,7 @@ class CacheRegistry(_BaseModelCompat):
         name="marker",
         size=0,
         ref=uuid.UUID("{00000000-0000-0000-0000-000000000000}"),
-        ctime=datetime.datetime.utcfromtimestamp(0),
+        ctime=datetime.datetime.fromtimestamp(0, datetime.UTC),
     )
 
     def pop(self, key: str, default: CacheEntry | None = __marker) -> CacheEntry | None:
@@ -967,7 +967,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             return
 
         if self._expiration_mode == "age":
-            now = datetime.datetime.utcnow()
+            now = datetime.datetime.now(datetime.UTC)
             for key in self._sort_cache():
                 delta = now - self._cache_entries[key].ctime
                 if delta.seconds > self._expiration_threshold:
