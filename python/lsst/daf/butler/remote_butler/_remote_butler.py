@@ -159,14 +159,9 @@ class RemoteButler(Butler):
         if isinstance(dataId, DataCoordinate):
             return dataId.to_simple()
 
-        if dataId is None:
-            data_id = kwargs
-        elif kwargs:
-            # Change variable because DataId is immutable and mypy complains.
-            data_id = dict(dataId)
-            data_id.update(kwargs)
-
         # Assume we can treat it as a dict.
+        data_id = dict(dataId) if dataId is not None else {}
+        data_id.update(kwargs)
         return SerializedDataCoordinate(dataId=data_id)
 
     def _caching_context(self) -> AbstractContextManager[None]:
