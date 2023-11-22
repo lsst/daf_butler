@@ -148,11 +148,11 @@ class TestQueryRelationsTests(unittest.TestCase):
                         select(
                             Π[band, patch, patch.region, skymap, tract, visit_detector_region.region](
                                 σ[
-                                    band={self.band!r}
-                                    and instrument={self.instrument!r}
+                                    instrument={self.instrument!r}
                                     and detector={self.detector!r}
-                                    and physical_filter={self.physical_filter!r}
                                     and visit={self.visit!r}
+                                    and band={self.band!r}
+                                    and physical_filter={self.physical_filter!r}
                                 ](
                                     patch_htm7_overlap
                                     ⋈ visit_detector_region_htm7_overlap
@@ -173,11 +173,11 @@ class TestQueryRelationsTests(unittest.TestCase):
             self.registry.queryDataIds(
                 ["patch", "band"],
                 where=(
-                    f"band={self.band!r} "
-                    f"and instrument={self.instrument!r} "
+                    f"instrument={self.instrument!r} "
                     f"and detector={self.detector!r} "
-                    f"and physical_filter={self.physical_filter!r} "
                     f"and visit={self.visit!r}"
+                    f"and band={self.band!r} "
+                    f"and physical_filter={self.physical_filter!r} "
                 ),
             ),
         )
@@ -194,11 +194,11 @@ class TestQueryRelationsTests(unittest.TestCase):
             select(
                 Π[htm7](
                     σ[
-                        band={self.band!r}
-                        and instrument={self.instrument!r}
+                        instrument={self.instrument!r}
                         and detector={self.detector!r}
-                        and physical_filter={self.physical_filter!r}
                         and visit={self.visit!r}
+                        and band={self.band!r}
+                        and physical_filter={self.physical_filter!r}
                     ](
                         visit_detector_region_htm7_overlap
                         ⋈ physical_filter
@@ -217,11 +217,11 @@ class TestQueryRelationsTests(unittest.TestCase):
             self.registry.queryDataIds(
                 ["htm7"],
                 where=(
-                    f"band={self.band!r} "
-                    f"and instrument={self.instrument!r} "
+                    f"instrument={self.instrument!r} "
                     f"and detector={self.detector!r} "
-                    f"and physical_filter={self.physical_filter!r} "
                     f"and visit={self.visit!r}"
+                    f"and band={self.band!r} "
+                    f"and physical_filter={self.physical_filter!r} "
                 ),
             ),
         )
@@ -299,10 +299,10 @@ class TestQueryRelationsTests(unittest.TestCase):
                         select(
                             Π[detector, instrument, visit_detector_region.region](
                                 σ[
-                                    band={self.band!r}
-                                    and instrument={self.instrument!r}
-                                    and physical_filter={self.physical_filter!r}
+                                    instrument={self.instrument!r}
                                     and visit={self.visit!r}
+                                    and band={self.band!r}
+                                    and physical_filter={self.physical_filter!r}
                                     and htm7={self.htm7!r}
                                 ](
                                     visit_detector_region_htm7_overlap
@@ -330,11 +330,11 @@ class TestQueryRelationsTests(unittest.TestCase):
             select(
                 Π[detector, instrument](
                     σ[
-                        band={self.band!r}
-                        and htm7={self.htm7!r}
+                        htm7={self.htm7!r}
                         and instrument={self.instrument!r}
-                        and physical_filter={self.physical_filter!r}
                         and visit={self.visit!r}
+                        and band={self.band!r}
+                        and physical_filter={self.physical_filter!r}
                     ](
                         visit_detector_region_htm7_overlap
                         ⋈ physical_filter

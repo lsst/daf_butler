@@ -109,7 +109,7 @@ class CollectionSummaryTables(Generic[_T]):
         )
         # Specs for collection_summary_<dimension>.
         dimensionTableSpecs = NamedKeyDict[GovernorDimension, ddl.TableSpec]()
-        for dimension in dimensions.universe.getGovernorDimensions():
+        for dimension in dimensions.universe.governor_dimensions:
             tableSpec = ddl.TableSpec(fields=[])
             collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
             addDimensionForeignKey(tableSpec, dimension, primaryKey=True)

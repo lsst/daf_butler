@@ -285,7 +285,7 @@ class DirectButler(Butler):
                 self._config,
                 self.collections,
                 self.run,
-                self._registry.defaults.dataId.byName(),
+                dict(self._registry.defaults.dataId.required),
                 self._registry.isWriteable(),
             ),
         )
@@ -483,7 +483,7 @@ class DirectButler(Butler):
             for dimensionName in list(dataIdDict):
                 value = dataIdDict[dimensionName]
                 try:
-                    dimension = self.dimensions.getStaticDimensions()[dimensionName]
+                    dimension = self.dimensions.dimensions[dimensionName]
                 except KeyError:
                     # This is not a real dimension
                     not_dimensions[dimensionName] = value
@@ -555,7 +555,7 @@ class DirectButler(Butler):
             # fail but they are going to fail anyway because of the
             # ambiguousness of the dataId...
             if datasetType.isCalibration():
-                for dim in self.dimensions.getStaticDimensions():
+                for dim in self.dimensions.dimensions:
                     if dim.temporal:
                         candidateDimensions.add(str(dim))
 
@@ -571,7 +571,7 @@ class DirectButler(Butler):
             # given names with records within those dimensions
             matched_dims = set()
             for dimensionName in candidateDimensions:
-                dimension = self.dimensions.getStaticDimensions()[dimensionName]
+                dimension = self.dimensions.dimensions[dimensionName]
                 fields = dimension.metadata.names | dimension.uniqueKeys.names
                 for field in not_dimensions:
                     if field in fields:
@@ -750,7 +750,7 @@ class DirectButler(Butler):
                         )
 
                 # Get the primary key from the real dimension object
-                dimension = self.dimensions.getStaticDimensions()[dimensionName]
+                dimension = self.dimensions.dimensions[dimensionName]
                 if not isinstance(dimension, Dimension):
                     raise RuntimeError(
                         f"{dimension.name} is not a true dimension, and cannot be used in data IDs."
@@ -838,7 +838,7 @@ class DirectButler(Butler):
             dataId = DataCoordinate.standardize(
                 dataId, universe=self.dimensions, defaults=self._registry.defaults.dataId, **kwargs
             )
-            if dataId.graph.temporal:
+            if dataId.dimensions.temporal:
                 dataId = self._registry.expandDataId(dataId)
                 timespan = dataId.timespan
         else:
@@ -846,7 +846,10 @@ class DirectButler(Butler):
             # type instead of letting registry.findDataset do it, so we get the
             # result even if no dataset is found.
             dataId = DataCoordinate.standardize(
-                dataId, graph=datasetType.dimensions, defaults=self._registry.defaults.dataId, **kwargs
+                dataId,
+                dimensions=datasetType.dimensions,
+                defaults=self._registry.defaults.dataId,
+                **kwargs,
             )
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
@@ -973,7 +976,7 @@ class DirectButler(Butler):
         dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
 
         # Add Registry Dataset entry.
-        dataId = self._registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
+        dataId = self._registry.expandDataId(dataId, dimensions=datasetType.dimensions, **kwargs)
         (ref,) = self._registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
         self._datastore.put(obj, ref)
 
@@ -1335,7 +1338,9 @@ class DirectButler(Butler):
         ref = self._registry.getDataset(id)
         if ref is not None:
             if dimension_records:
-                ref = ref.expanded(self._registry.expandDataId(ref.dataId, graph=ref.datasetType.dimensions))
+                ref = ref.expanded(
+                    self._registry.expandDataId(ref.dataId, dimensions=ref.datasetType.dimensions)
+                )
             if storage_class:
                 ref = ref.overrideStorageClass(storage_class)
             if datastore_records:
@@ -1371,7 +1376,7 @@ class DirectButler(Butler):
             **kwargs,
         )
         if ref is not None and dimension_records:
-            ref = ref.expanded(self._registry.expandDataId(ref.dataId, graph=ref.datasetType.dimensions))
+            ref = ref.expanded(self._registry.expandDataId(ref.dataId, dimensions=ref.datasetType.dimensions))
         if ref is not None and storage_class is not None:
             ref = ref.overrideStorageClass(storage_class)
         return ref
@@ -1959,7 +1964,7 @@ class DirectButler(Butler):
             # come from this butler's universe.
             elements = frozenset(
                 element
-                for element in self.dimensions.getStaticElements()
+                for element in self.dimensions.elements
                 if element.hasTable() and element.viewOf is None
             )
             dataIds = {ref.dataId for ref in source_refs}
@@ -1974,7 +1979,8 @@ class DirectButler(Butler):
                         raise TypeError("Input butler needs to be a full butler to expand DataId.")
                 # If this butler doesn't know about a dimension in the source
                 # butler things will break later.
-                for record in dataId.records.values():
+                for element_name in dataId.dimensions.elements:
+                    record = dataId.records[element_name]
                     if record is not None and record.definition in elements:
                         dimension_records[record.definition].setdefault(record.dataId, record)
 
@@ -2079,13 +2085,13 @@ class DirectButler(Butler):
                     # In order to create a conforming dataset ref, create
                     # fake DataCoordinate values for the non-instrument
                     # dimensions. The type of the value does not matter here.
-                    dataId = {dim.name: 1 for dim in datasetType.dimensions if dim.name != "instrument"}
+                    dataId = {dim: 1 for dim in datasetType.dimensions.names if dim != "instrument"}
 
                     for instrument in instruments:
                         datasetRef = DatasetRef(
                             datasetType,
                             DataCoordinate.standardize(
-                                dataId, instrument=instrument, graph=datasetType.dimensions
+                                dataId, instrument=instrument, dimensions=datasetType.dimensions
                             ),
                             run="validate",
                         )

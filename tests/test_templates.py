@@ -36,7 +36,6 @@ from lsst.daf.butler import (
     DatasetId,
     DatasetRef,
     DatasetType,
-    DimensionGraph,
     DimensionUniverse,
     StorageClass,
 )
@@ -65,8 +64,8 @@ class TestFileTemplates(unittest.TestCase):
             dataId = self.dataId
         if "physical_filter" in dataId and "band" not in dataId:
             dataId["band"] = "b"  # Add fake band.
-        dimensions = DimensionGraph(self.universe, names=dataId.keys())
-        dataId = DataCoordinate.standardize(dataId, graph=dimensions)
+        dimensions = self.universe.conform(dataId.keys())
+        dataId = DataCoordinate.standardize(dataId, dimensions=dimensions)
 
         # Pretend we have a parent if this looks like a composite
         compositeName, componentName = DatasetType.splitDatasetTypeName(datasetTypeName)

@@ -42,7 +42,7 @@ from lsst.utils.classes import cached_getter
 from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionElement, DimensionGraph, DimensionRecord
+from ...dimensions import DataCoordinate, DimensionElement, DimensionGroup, DimensionRecord
 
 if TYPE_CHECKING:
     from lsst.daf.relation import ColumnTag
@@ -55,7 +55,7 @@ class DataCoordinateReader(ABC):
 
     @staticmethod
     def make(
-        dimensions: DimensionGraph,
+        dimensions: DimensionGroup,
         full: bool = True,
         records: bool = False,
         record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
@@ -64,7 +64,7 @@ class DataCoordinateReader(ABC):
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`
+        dimensions : `DimensionGroup`
             Dimensions of the `DataCoordinate` instances the new reader will
             read.
         full : `bool`, optional
@@ -92,8 +92,9 @@ class DataCoordinateReader(ABC):
                         e: cache for e, cache in record_caches.items() if e in dimensions.elements
                     }
                 record_readers = {}
-                for element in dimensions.elements:
-                    if element not in record_caches:
+                for element_name in dimensions.elements:
+                    element = dimensions.universe[element_name]
+                    if element_name not in record_caches:
                         record_readers[element] = DimensionRecordReader(element)
                 return _ExpandedDataCoordinateReader(full_reader, record_caches, record_readers)
             return full_reader
@@ -130,11 +131,11 @@ class _BasicDataCoordinateReader(DataCoordinateReader):
 
     Parameters
     ----------
-    dimensions : `DimensionGraph`
+    dimensions : `DimensionGroup`
         Dimensions of the `DataCoordinate` instances read.
     """
 
-    def __init__(self, dimensions: DimensionGraph):
+    def __init__(self, dimensions: DimensionGroup):
         self._dimensions = dimensions
         self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions.required.names)
 
@@ -142,7 +143,7 @@ class _BasicDataCoordinateReader(DataCoordinateReader):
 
     def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
         # Docstring inherited.
-        return DataCoordinate.fromRequiredValues(
+        return DataCoordinate.from_required_values(
             self._dimensions,
             tuple(row[tag] for tag in self._tags),
         )
@@ -157,19 +158,21 @@ class _FullDataCoordinateReader(DataCoordinateReader):
 
     Parameters
     ----------
-    dimensions : `DimensionGraph`
+    dimensions : `DimensionGroup`
         Dimensions of the `DataCoordinate` instances read.
     """
 
-    def __init__(self, dimensions: DimensionGraph):
+    def __init__(self, dimensions: DimensionGroup):
         self._dimensions = dimensions
-        self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions._dataCoordinateIndices)
+        self._tags = tuple(
+            DimensionKeyColumnTag(name) for name in self._dimensions.as_group().data_coordinate_keys
+        )
 
     __slots__ = ("_dimensions", "_tags")
 
     def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
         # Docstring inherited.
-        return DataCoordinate.fromFullValues(
+        return DataCoordinate.from_full_values(
             self._dimensions,
             tuple(row[tag] for tag in self._tags),
         )
@@ -258,7 +261,7 @@ class DatasetRefReader:
         record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
     ):
         self._data_coordinate_reader = DataCoordinateReader.make(
-            dataset_type.dimensions, full=full, records=records, record_caches=record_caches
+            dataset_type.dimensions.as_group(), full=full, records=records, record_caches=record_caches
         )
         self._dataset_type = dataset_type
         self._translate_collection = translate_collection

@@ -180,11 +180,13 @@ def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -
     # Create values for all dimensions that are (recursive) required or implied
     # dependencies of the given ones.
     complete_data_id_values = {}
-    for dimension in universe.extract(dataIds.keys()):
-        if dimension.name in dataIds:
-            complete_data_id_values[dimension.name] = list(dataIds[dimension.name])
-        if dimension.name not in complete_data_id_values:
-            complete_data_id_values[dimension.name] = [_makeRandomDataIdValue(dimension)]
+    for dimension_name in universe.conform(dataIds.keys()).names:
+        if dimension_name in dataIds:
+            complete_data_id_values[dimension_name] = list(dataIds[dimension_name])
+        if dimension_name not in complete_data_id_values:
+            complete_data_id_values[dimension_name] = [
+                _makeRandomDataIdValue(universe.dimensions[dimension_name])
+            ]
 
     # Start populating dicts that will become DimensionRecords by providing
     # alternate keys like detector names
@@ -316,7 +318,7 @@ def expandUniqueId(butler: Butler, partialId: Mapping[str, Any]) -> DataCoordina
     """
     # The example is *not* a doctest because it requires dangerous I/O
     registry = butler.registry
-    dimensions = registry.dimensions.extract(partialId.keys()).required
+    dimensions = registry.dimensions.conform(partialId.keys()).required
 
     query = " AND ".join(f"{dimension} = {value!r}" for dimension, value in partialId.items())
 
@@ -440,14 +442,14 @@ def addDataIdValue(butler: Butler, dimension: str, value: str | int, **related: 
     # Example is not doctest, because it's probably unsafe to create even an
     # in-memory butler in that environment.
     try:
-        fullDimension = butler.dimensions[dimension]
+        full_dimension = butler.dimensions[dimension]
     except KeyError as e:
         raise ValueError from e
     # Bad keys ignored by registry code
-    extraKeys = related.keys() - fullDimension.graph.dimensions.names
-    if extraKeys:
+    extra_keys = related.keys() - full_dimension.minimal_group.names
+    if extra_keys:
         raise ValueError(
-            f"Unexpected keywords {extraKeys} not found in {fullDimension.graph.dimensions.names}"
+            f"Unexpected keywords {extra_keys} not found in {full_dimension.minimal_group.names}"
         )
 
     # Assemble a dictionary data ID holding the given primary dimension value
@@ -456,25 +458,26 @@ def addDataIdValue(butler: Butler, dimension: str, value: str | int, **related: 
     data_id.update(related)
 
     # Compute the set of all dimensions that these recursively depend on.
-    all_dimensions = butler.dimensions.extract(data_id.keys())
+    all_dimensions = butler.dimensions.conform(data_id.keys())
 
     # Create dicts that will become DimensionRecords for all of these data IDs.
     # This iteration is guaranteed to be in topological order, so we can count
     # on new data ID values being invented before they are needed.
     record_dicts_by_dimension: dict[Dimension, dict[str, Any]] = {}
-    for dimension_obj in all_dimensions:
-        dimension_value = data_id.get(dimension_obj.name)
+    for dimension_name in all_dimensions.names:
+        dimension_obj = butler.dimensions.dimensions[dimension_name]
+        dimension_value = data_id.get(dimension_name)
         if dimension_value is None:
-            data_id[dimension_obj.name], invented = _findOrInventDataIdValue(butler, data_id, dimension_obj)
+            data_id[dimension_name], invented = _findOrInventDataIdValue(butler, data_id, dimension_obj)
             if not invented:
                 # No need to make a new record; one already exists.
                 continue
-        if dimension_obj.name in related:
+        if dimension_name in related:
             # Caller passed in a value of this dimension explicitly, but it
             # isn't the primary dimension they asked to have a record created
             # for.  That means they expect this record to already exist.
             continue
-        if dimension_obj != fullDimension and dimension_obj in all_dimensions.required:
+        if dimension_name != dimension and dimension_name in all_dimensions.required:
             # We also don't want to automatically create new dimension records
             # for required dimensions (except for the main dimension the caller
             # asked for); those are also asserted by the caller to already

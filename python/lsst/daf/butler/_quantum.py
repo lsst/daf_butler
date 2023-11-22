@@ -270,7 +270,8 @@ class Quantum:
             if simple.dataId is not None and simple.dataId.records is not None:
                 # for each dimension record get a id by adding it to the
                 # record accumulator.
-                for rec in value.dataId.records.values():
+                for element_name in value.dataId.dimensions.elements:
+                    rec = value.dataId.records[element_name]
                     if rec is not None:
                         recordId = accumulator.addRecord(rec)
                         recIds.append(recordId)
@@ -299,7 +300,8 @@ class Quantum:
                 # store them over and over again.
                 recIds = []
                 if simp.dataId is not None and simp.dataId.records is not None:
-                    for rec in e.dataId.records.values():
+                    for element_name in e.dataId.dimensions.elements:
+                        rec = e.dataId.records[element_name]
                         # for each dimension record get a id by adding it to
                         # the record accumulator.
                         if rec is not None:
@@ -334,7 +336,8 @@ class Quantum:
                 # store them over and over again.
                 recIds = []
                 if simp.dataId is not None and simp.dataId.records is not None:
-                    for rec in e.dataId.records.values():
+                    for element_name in e.dataId.dimensions.elements:
+                        rec = e.dataId.records[element_name]
                         # for each dimension record get a id by adding it to
                         # the record accumulator.
                         if rec is not None:

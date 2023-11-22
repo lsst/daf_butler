@@ -31,7 +31,7 @@ __all__ = ()  # all symbols intentionally private; for internal package use.
 import enum
 from typing import cast
 
-from ....dimensions import Dimension, DimensionElement, DimensionGraph, DimensionUniverse
+from ....dimensions import Dimension, DimensionElement, DimensionGroup, DimensionUniverse
 
 
 class ExpressionConstant(enum.Enum):
@@ -109,7 +109,7 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> tuple[Dimensi
             # Allow e.g. "visit.id = x" instead of just "visit = x"; this
             # can be clearer.
             return element, None
-        elif column in element.graph.names:
+        elif column in element.dimensions.names:
             # User said something like "patch.tract = x" or
             # "tract.tract = x" instead of just "tract = x" or
             # "tract.id = x", which is at least needlessly confusing and
@@ -132,12 +132,12 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> tuple[Dimensi
         return dimension, None
 
 
-def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionElement, str | None]:
+def categorizeOrderByName(dimensions: DimensionGroup, name: str) -> tuple[DimensionElement, str | None]:
     """Categorize an identifier in an ORDER BY clause.
 
     Parameters
     ----------
-    graph : `DimensionGraph`
+    dimensions : `DimensionGroup`
         All known dimensions.
     name : `str`
         Identifier to categorize.
@@ -154,8 +154,8 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionEl
     Raises
     ------
     ValueError
-        Raised if element name is not found in a graph, metadata name is not
-        recognized, or if there is more than one element has specified
+        Raised if element name is not found in a dimensions, metadata name is
+        not recognized, or if there is more than one element has specified
         metadata.
 
     Notes
@@ -168,16 +168,20 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionEl
       by dot, e.g. ``detector.full_name``.
     - Name can be a metadata name without element name prefix, e.g.
       ``day_obs``; in that case metadata (or key) is searched in all elements
-      present in a graph. Exception is raised if name appears in more than one
-      element.
+      present in a dimensions. Exception is raised if name appears in more than
+      one element.
     - Two special identifiers ``timespan.begin`` and ``timespan.end`` can be
       used with temporal elements, if element name is not given then a temporal
-      element from a graph is used.
+      element from a dimensions is used.
     """
     element: DimensionElement
     field_name: str | None = None
     if name in ("timespan.begin", "timespan.end"):
-        matches = [element for element in graph.elements if element.temporal]
+        matches = [
+            element
+            for element_name in dimensions.elements
+            if (element := dimensions.universe[element_name]).temporal
+        ]
         if len(matches) == 1:
             element = matches[0]
             field_name = name
@@ -192,14 +196,20 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionEl
     elif "." not in name:
         # No dot, can be either a dimension name or a field name (in any of
         # the known elements)
-        if name in graph.elements.names:
-            element = graph.elements[name]
+        if name in dimensions.elements:
+            element = dimensions.universe[name]
         else:
             # Can be a metadata name or any of unique keys
             match_pairs: list[tuple[DimensionElement, bool]] = [
-                (elem, False) for elem in graph.elements if name in elem.metadata.names
+                (element, False)
+                for element_name in dimensions.elements
+                if name in (element := dimensions.universe[element_name]).metadata.names
             ]
-            match_pairs += [(dim, True) for dim in graph if name in dim.uniqueKeys.names]
+            match_pairs += [
+                (dimension, True)
+                for dimension_name in dimensions.names
+                if name in (dimension := dimensions.universe.dimensions[dimension_name]).uniqueKeys.names
+            ]
             if len(match_pairs) == 1:
                 element, is_dimension_key = match_pairs[0]
                 if is_dimension_key and name == cast(Dimension, element).primaryKey.name:
@@ -218,13 +228,13 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> tuple[DimensionEl
     else:
         # qualified name, must be a dimension element and a field
         elem_name, _, field_name = name.partition(".")
-        if elem_name not in graph.elements.names:
+        if elem_name not in dimensions.elements:
             if field_name == "begin" or field_name == "end":
                 raise ValueError(
                     f"Unknown dimension element {elem_name!r}; perhaps you meant 'timespan.{field_name}'?"
                 )
             raise ValueError(f"Unknown dimension element {elem_name!r}.")
-        element = graph.elements[elem_name]
+        element = dimensions.universe[elem_name]
         if field_name in ("timespan.begin", "timespan.end"):
             if not element.temporal:
                 raise ValueError(f"Cannot use '{field_name}' with non-temporal element '{element}'.")

@@ -39,7 +39,7 @@ from ..cli.utils import sortAstropyTable
 from ..dimensions import DataCoordinate
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import DimensionGraph
+    from lsst.daf.butler import DimensionGroup
 
 _LOG = logging.getLogger(__name__)
 
@@ -78,16 +78,16 @@ class _Table:
             raise RuntimeError("No DataIds were provided.")
 
         dataId = next(iter(self.dataIds))
-        dimensions = list(dataId.full.keys())
+        dimensions = [dataId.universe.dimensions[k] for k in dataId.dimensions.data_coordinate_keys]
         columnNames = [str(item) for item in dimensions]
 
         # Need to hint the column types for numbers since the per-row
         # constructor of Table does not work this out on its own and sorting
         # will not work properly without.
         typeMap = {float: np.float64, int: np.int64}
-        columnTypes = [typeMap.get(type(value)) for value in dataId.full.values()]
+        columnTypes = [typeMap.get(type(value)) for value in dataId.full_values]
 
-        rows = [list(dataId.full.values()) for dataId in self.dataIds]
+        rows = [dataId.full_values for dataId in self.dataIds]
 
         table = AstropyTable(np.array(rows), names=columnNames, dtype=columnTypes)
         if order:
@@ -116,27 +116,29 @@ def queryDataIds(
         # Determine the dimensions relevant to all given dataset types.
         # Since we are going to AND together all dimensions, we can not
         # seed the result with an empty set.
-        graph: DimensionGraph | None = None
+        dataset_type_dimensions: DimensionGroup | None = None
         dataset_types = list(butler.registry.queryDatasetTypes(datasets))
         for dataset_type in dataset_types:
-            if graph is None:
+            if dataset_type_dimensions is None:
                 # Seed with dimensions of first dataset type.
-                graph = dataset_type.dimensions
+                dataset_type_dimensions = dataset_type.dimensions.as_group()
             else:
                 # Only retain dimensions that are in the current
                 # set AND the set from this dataset type.
-                graph = graph.intersection(dataset_type.dimensions)
-            _LOG.debug("Dimensions now %s from %s", set(graph.names), dataset_type.name)
+                dataset_type_dimensions = dataset_type_dimensions.intersection(
+                    dataset_type.dimensions.as_group()
+                )
+            _LOG.debug("Dimensions now %s from %s", set(dataset_type_dimensions.names), dataset_type.name)
 
             # Break out of the loop early. No additional dimensions
             # can be added to an empty set when using AND.
-            if not graph:
+            if not dataset_type_dimensions:
                 break
 
-        if not graph:
+        if not dataset_type_dimensions:
             names = [d.name for d in dataset_types]
             return None, f"No dimensions in common for specified dataset types ({names})"
-        dimensions = set(graph.names)
+        dimensions = set(dataset_type_dimensions.names)
         _LOG.info("Determined dimensions %s from datasets option %s", dimensions, datasets)
 
     query_collections: Iterable[str] | EllipsisType | None = None
@@ -153,7 +155,7 @@ def queryDataIds(
         results = results.limit(limit, new_offset)
 
     if results.any(exact=False):
-        if results.graph:
+        if results.dimensions:
             table = _Table(results)
             if not table.dataIds:
                 return None, "Post-query region filtering removed all rows, since nothing overlapped."

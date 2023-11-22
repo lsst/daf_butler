@@ -217,7 +217,7 @@ def parse_data_id_tuple(data_ids: tuple[str, ...], universe: DimensionUniverse) 
         dimension_str, value = id_str.split("=")
 
         try:
-            dimension = universe.getStaticDimensions()[dimension_str]
+            dimension = universe.dimensions[dimension_str]
         except KeyError:
             raise ValueError(f"DataID dimension '{dimension_str}' is not known to this universe.") from None
 

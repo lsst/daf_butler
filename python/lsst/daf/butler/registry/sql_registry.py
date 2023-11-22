@@ -58,6 +58,7 @@ from ..dimensions import (
     DimensionConfig,
     DimensionElement,
     DimensionGraph,
+    DimensionGroup,
     DimensionRecord,
     DimensionUniverse,
 )
@@ -890,12 +891,12 @@ class SqlRegistry:
         component = components[0]
         dataId = DataCoordinate.standardize(
             dataId,
-            graph=parent_dataset_type.dimensions,
+            dimensions=parent_dataset_type.dimensions,
             universe=self.dimensions,
             defaults=self.defaults.dataId,
             **kwargs,
         )
-        governor_constraints = {name: {cast(str, dataId[name])} for name in dataId.graph.governors.names}
+        governor_constraints = {name: {cast(str, dataId[name])} for name in dataId.dimensions.governors}
         (filtered_collections,) = backend.filter_dataset_collections(
             [parent_dataset_type],
             matched_collections,
@@ -1039,7 +1040,7 @@ class SqlRegistry:
         progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
         if expand:
             expandedDataIds = [
-                self.expandDataId(dataId, graph=storage.datasetType.dimensions)
+                self.expandDataId(dataId, dimensions=storage.datasetType.dimensions)
                 for dataId in progress.wrap(dataIds, f"Expanding {storage.datasetType.name} data IDs")
             ]
         else:
@@ -1152,7 +1153,7 @@ class SqlRegistry:
         progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
         if expand:
             expandedDatasets = [
-                dataset.expanded(self.expandDataId(dataset.dataId, graph=storage.datasetType.dimensions))
+                dataset.expanded(self.expandDataId(dataset.dataId, dimensions=storage.datasetType.dimensions))
                 for dataset in progress.wrap(datasets, f"Expanding {storage.datasetType.name} data IDs")
             ]
         else:
@@ -1411,7 +1412,7 @@ class SqlRegistry:
         standardizedDataIds = None
         if dataIds is not None:
             standardizedDataIds = [
-                DataCoordinate.standardize(d, graph=storage.datasetType.dimensions) for d in dataIds
+                DataCoordinate.standardize(d, dimensions=storage.datasetType.dimensions) for d in dataIds
             ]
         storage.decertify(
             collectionRecord,
@@ -1457,6 +1458,7 @@ class SqlRegistry:
         self,
         dataId: DataId | None = None,
         *,
+        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
         graph: DimensionGraph | None = None,
         records: NameLookupMapping[DimensionElement, DimensionRecord | None] | None = None,
         withDefaults: bool = True,
@@ -1468,12 +1470,16 @@ class SqlRegistry:
         ----------
         dataId : `DataCoordinate` or `dict`, optional
             Data ID to be expanded; augmented and overridden by ``kwargs``.
+        dimensions : `~collections.abc.Iterable` [ `str` ], \
+                `DimensionGroup`, or `DimensionGraph`, optional
+            The dimensions to be identified by the new `DataCoordinate`.
+            If not provided, will be inferred from the keys of ``mapping`` and
+            ``**kwargs``, and ``universe`` must be provided unless ``mapping``
+            is already a `DataCoordinate`.
         graph : `DimensionGraph`, optional
-            Set of dimensions for the expanded ID.  If `None`, the dimensions
-            will be inferred from the keys of ``dataId`` and ``kwargs``.
-            Dimensions that are in ``dataId`` or ``kwargs`` but not in
-            ``graph`` are silently ignored, providing a way to extract and
-            ``graph`` expand a subset of a data ID.
+            Like ``dimensions``, but as a ``DimensionGraph`` instance.  Ignored
+            if ``dimensions`` is provided.  Deprecated and will be removed
+            after v27.
         records : `~collections.abc.Mapping` [`str`, `DimensionRecord`], \
                 optional
             Dimension record data to use before querying the database for that
@@ -1515,7 +1521,12 @@ class SqlRegistry:
             defaults = self.defaults.dataId
         try:
             standardized = DataCoordinate.standardize(
-                dataId, graph=graph, universe=self.dimensions, defaults=defaults, **kwargs
+                dataId,
+                graph=graph,
+                dimensions=dimensions,
+                universe=self.dimensions,
+                defaults=defaults,
+                **kwargs,
             )
         except KeyError as exc:
             # This means either kwargs have some odd name or required
@@ -1530,46 +1541,50 @@ class SqlRegistry:
         else:
             records = dict(records)
         if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
-            records.update(dataId.records.byName())
-        keys = standardized.byName()
+            for element_name in dataId.dimensions.elements:
+                records[element_name] = dataId.records[element_name]
+        keys = dict(standardized.mapping)
         context = queries.SqlQueryContext(self._db, self._managers.column_types)
-        for element in standardized.graph.primaryKeyTraversalOrder:
-            record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
+        for element_name in standardized.dimensions.lookup_order:
+            element = self.dimensions[element_name]
+            record = records.get(element_name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
-                if isinstance(element, Dimension) and keys.get(element.name) is None:
-                    if element in standardized.graph.required:
+                if element_name in self.dimensions.dimensions.names and keys.get(element_name) is None:
+                    if element_name in standardized.dimensions.required:
                         raise DimensionNameError(
-                            f"No value or null value for required dimension {element.name}."
+                            f"No value or null value for required dimension {element_name}."
                         )
-                    keys[element.name] = None
+                    keys[element_name] = None
                     record = None
                 else:
-                    storage = self._managers.dimensions[element]
-                    record = storage.fetch_one(DataCoordinate.standardize(keys, graph=element.graph), context)
-                records[element.name] = record
+                    storage = self._managers.dimensions[element_name]
+                    record = storage.fetch_one(
+                        DataCoordinate.standardize(keys, dimensions=element.minimal_group), context
+                    )
+                records[element_name] = record
             if record is not None:
                 for d in element.implied:
                     value = getattr(record, d.name)
                     if keys.setdefault(d.name, value) != value:
                         raise InconsistentDataIdError(
                             f"Data ID {standardized} has {d.name}={keys[d.name]!r}, "
-                            f"but {element.name} implies {d.name}={value!r}."
+                            f"but {element_name} implies {d.name}={value!r}."
                         )
             else:
-                if element in standardized.graph.required:
+                if element_name in standardized.dimensions.required:
                     raise DataIdValueError(
                         f"Could not fetch record for required dimension {element.name} via keys {keys}."
                     )
                 if element.alwaysJoin:
                     raise InconsistentDataIdError(
-                        f"Could not fetch record for element {element.name} via keys {keys}, ",
+                        f"Could not fetch record for element {element_name} via keys {keys}, ",
                         "but it is marked alwaysJoin=True; this means one or more dimensions are not "
                         "related.",
                     )
                 for d in element.implied:
                     keys.setdefault(d.name, None)
                     records.setdefault(d.name, None)
-        return DataCoordinate.standardize(keys, graph=standardized.graph).expanded(records=records)
+        return DataCoordinate.standardize(keys, dimensions=standardized.dimensions).expanded(records=records)
 
     def insertDimensionData(
         self,
@@ -2092,11 +2107,11 @@ class SqlRegistry:
             # if any.
             dimension_names = set(parent_dataset_type.dimensions.names)
             if dimensions is not None:
-                dimension_names.update(self.dimensions.extract(dimensions).names)
+                dimension_names.update(self.dimensions.conform(dimensions).names)
             # Construct the summary structure needed to construct a
             # QueryBuilder.
             summary = queries.QuerySummary(
-                requested=DimensionGraph(self.dimensions, names=dimension_names),
+                requested=self.dimensions.conform(dimension_names),
                 column_types=self._managers.column_types,
                 data_id=data_id,
                 expression=where,
@@ -2132,7 +2147,8 @@ class SqlRegistry:
 
     def queryDataIds(
         self,
-        dimensions: Iterable[Dimension | str] | Dimension | str,
+        # TODO: Drop Dimension support on DM-41326.
+        dimensions: DimensionGroup | Iterable[Dimension | str] | Dimension | str,
         *,
         dataId: DataId | None = None,
         datasets: Any = None,
@@ -2147,10 +2163,12 @@ class SqlRegistry:
 
         Parameters
         ----------
-        dimensions : `Dimension` or `str`, or iterable thereof
+        dimensions : `DimensionGroup`, `Dimension`, or `str`, or \
+                `~collections.abc.Iterable` [ `Dimension` or `str` ]
             The dimensions of the data IDs to yield, as either `Dimension`
             instances or `str`.  Will be automatically expanded to a complete
-            `DimensionGraph`.
+            `DimensionGroup`.  Support for `Dimension` instances is deprecated
+            and will not be supported after v27.
         dataId : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints
             in the query.
@@ -2237,8 +2255,7 @@ class SqlRegistry:
         lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
         """
-        dimensions = ensure_iterable(dimensions)
-        requestedDimensions = self.dimensions.extract(dimensions)
+        requested_dimensions = self.dimensions.conform(dimensions)
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
         dataset_composition, collection_wildcard = self._standardize_query_dataset_args(
@@ -2247,7 +2264,7 @@ class SqlRegistry:
         if collection_wildcard is not None and collection_wildcard.empty():
             doomed_by.append("No data coordinates can be found because collection list is empty.")
         summary = queries.QuerySummary(
-            requested=requestedDimensions,
+            requested=requested_dimensions,
             column_types=self._managers.column_types,
             data_id=data_id,
             expression=where,
@@ -2352,8 +2369,7 @@ class SqlRegistry:
                 element = self.dimensions[element]
             except KeyError as e:
                 raise DimensionNameError(
-                    f"No such dimension '{element}', available dimensions: "
-                    + str(self.dimensions.getStaticElements())
+                    f"No such dimension '{element}', available dimensions: " + str(self.dimensions.elements)
                 ) from e
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
@@ -2363,7 +2379,7 @@ class SqlRegistry:
         if collection_wildcard is not None and collection_wildcard.empty():
             doomed_by.append("No dimension records can be found because collection list is empty.")
         summary = queries.QuerySummary(
-            requested=element.graph,
+            requested=element.minimal_group,
             column_types=self._managers.column_types,
             data_id=data_id,
             expression=where,
@@ -2375,7 +2391,7 @@ class SqlRegistry:
         builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
         for datasetType in dataset_composition:
             builder.joinDataset(datasetType, collection_wildcard, isResult=False)
-        query = builder.finish().with_record_columns(element)
+        query = builder.finish().with_record_columns(element.name)
         return queries.DatabaseDimensionRecordQueryResults(query, element)
 
     def queryDatasetAssociations(

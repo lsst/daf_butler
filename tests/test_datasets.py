@@ -59,7 +59,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         """
         datasetTypeName = "test"
         storageClass = StorageClass("test_StructuredData")
-        dimensions = self.universe.extract(("visit", "instrument"))
+        dimensions = self.universe.conform(("visit", "instrument"))
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
@@ -75,7 +75,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         datasetTypeName = "test"
         storageClass = StorageClass("test_constructor2")
         StorageClassFactory().registerStorageClass(storageClass)
-        dimensions = self.universe.extract(("instrument", "visit"))
+        dimensions = self.universe.conform(("instrument", "visit"))
         datasetType = DatasetType(datasetTypeName, dimensions, "test_constructor2")
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
@@ -85,7 +85,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         """Test that dataset type names only contain certain characters
         in certain positions.
         """
-        dimensions = self.universe.extract(("instrument", "visit"))
+        dimensions = self.universe.conform(("instrument", "visit"))
         goodNames = ("a", "A", "z1", "Z1", "a_1B", "A_1b", "_a")
         badNames = ("1", "a%b", "B+Z", "T[0]")
 
@@ -118,8 +118,8 @@ class DatasetTypeTestCase(unittest.TestCase):
         storageA = StorageClass("test_a")
         storageB = StorageClass("test_b")
         parent = StorageClass("test")
-        dimensionsA = self.universe.extract(["instrument"])
-        dimensionsB = self.universe.extract(["skymap"])
+        dimensionsA = self.universe.conform(["instrument"])
+        dimensionsB = self.universe.conform(["skymap"])
         self.assertEqual(
             DatasetType(
                 "a",
@@ -266,7 +266,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         storageB = StorageClass("test_b", pytype=list)
         storageC = StorageClass("test_c", pytype=dict)
         self.assertTrue(storageA.can_convert(storageB))
-        dimensionsA = self.universe.extract(["instrument"])
+        dimensionsA = self.universe.conform(["instrument"])
 
         dA = DatasetType("a", dimensionsA, storageA)
         dA2 = DatasetType("a", dimensionsA, storageB)
@@ -281,7 +281,7 @@ class DatasetTypeTestCase(unittest.TestCase):
     def testOverrideStorageClass(self) -> None:
         storageA = StorageClass("test_a", pytype=list, converters={"dict": "builtins.list"})
         storageB = StorageClass("test_b", pytype=dict)
-        dimensions = self.universe.extract(["instrument"])
+        dimensions = self.universe.conform(["instrument"])
 
         dA = DatasetType("a", dimensions, storageA)
         dB = dA.overrideStorageClass(storageB)
@@ -302,7 +302,7 @@ class DatasetTypeTestCase(unittest.TestCase):
 
     def testJson(self) -> None:
         storageA = StorageClass("test_a")
-        dimensionsA = self.universe.extract(["instrument"])
+        dimensionsA = self.universe.conform(["instrument"])
         self.assertEqual(
             DatasetType(
                 "a",
@@ -329,7 +329,7 @@ class DatasetTypeTestCase(unittest.TestCase):
     def testSorting(self) -> None:
         """Can we sort a DatasetType"""
         storage = StorageClass("test_a")
-        dimensions = self.universe.extract(["instrument"])
+        dimensions = self.universe.conform(["instrument"])
 
         d_a = DatasetType("a", dimensions, storage)
         d_f = DatasetType("f", dimensions, storage)
@@ -360,15 +360,15 @@ class DatasetTypeTestCase(unittest.TestCase):
         for name in ["a", "b"]:
             for storageClass in [storageC, storageD]:
                 for dims in [("instrument",), ("skymap",)]:
-                    datasetType = DatasetType(name, self.universe.extract(dims), storageClass)
-                    datasetTypeCopy = DatasetType(name, self.universe.extract(dims), storageClass)
+                    datasetType = DatasetType(name, self.universe.conform(dims), storageClass)
+                    datasetTypeCopy = DatasetType(name, self.universe.conform(dims), storageClass)
                     types.extend((datasetType, datasetTypeCopy))
                     unique += 1  # datasetType should always equal its copy
         self.assertEqual(len(set(types)), unique)  # all other combinations are unique
 
         # also check that hashes of instances constructed with StorageClass
         # name matches hashes of instances constructed with instances
-        dimensions = self.universe.extract(["instrument"])
+        dimensions = self.universe.conform(["instrument"])
         self.assertEqual(
             hash(DatasetType("a", dimensions, storageC)), hash(DatasetType("a", dimensions, "test_c"))
         )
@@ -389,7 +389,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         """Test that we can copy a dataset type."""
         storageClass = StorageClass("test_copy")
         datasetTypeName = "test"
-        dimensions = self.universe.extract(("instrument", "visit"))
+        dimensions = self.universe.conform(("instrument", "visit"))
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         dcopy = copy.deepcopy(datasetType)
         self.assertEqual(dcopy, datasetType)
@@ -415,14 +415,14 @@ class DatasetTypeTestCase(unittest.TestCase):
         """Test pickle support."""
         storageClass = StorageClass("test_pickle")
         datasetTypeName = "test"
-        dimensions = self.universe.extract(("instrument", "visit"))
+        dimensions = self.universe.conform(("instrument", "visit"))
         # Un-pickling requires that storage class is registered with factory.
         StorageClassFactory().registerStorageClass(storageClass)
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         datasetTypeOut = pickle.loads(pickle.dumps(datasetType))
         self.assertIsInstance(datasetTypeOut, DatasetType)
         self.assertEqual(datasetType.name, datasetTypeOut.name)
-        self.assertEqual(datasetType.dimensions.names, datasetTypeOut.dimensions.names)
+        self.assertEqual(datasetType.dimensions, datasetTypeOut.dimensions)
         self.assertEqual(datasetType.storageClass, datasetTypeOut.storageClass)
         self.assertIsNone(datasetTypeOut.parentStorageClass)
         self.assertIs(datasetType.isCalibration(), datasetTypeOut.isCalibration())
@@ -487,7 +487,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertFalse(storageClassA.isComposite())
         self.assertFalse(storageClassB.isComposite())
 
-        dimensions = self.universe.extract(("instrument", "visit"))
+        dimensions = self.universe.conform(("instrument", "visit"))
 
         datasetTypeComposite = DatasetType("composite", dimensions, storageClass)
         datasetTypeComponentA = datasetTypeComposite.makeComponentDatasetType("compA")
@@ -527,7 +527,7 @@ class DatasetRefTestCase(unittest.TestCase):
         sc_factory.registerStorageClass(self.componentStorageClass1)
         sc_factory.registerStorageClass(self.componentStorageClass2)
         sc_factory.registerStorageClass(self.parentStorageClass)
-        dimensions = self.universe.extract(("instrument", "visit"))
+        dimensions = self.universe.conform(("instrument", "visit"))
         self.dataId = DataCoordinate.standardize(
             dict(instrument="DummyCam", visit=42), universe=self.universe
         )
@@ -570,8 +570,8 @@ class DatasetRefTestCase(unittest.TestCase):
         # Passing a data ID that is missing dimensions should fail.
         # Create a full DataCoordinate to ensure that we are testing the
         # right thing.
-        dimensions = self.universe.extract(("instrument",))
-        dataId = DataCoordinate.standardize(instrument="DummyCam", graph=dimensions)
+        dimensions = self.universe.conform(("instrument",))
+        dataId = DataCoordinate.standardize(instrument="DummyCam", dimensions=dimensions)
         with self.assertRaises(KeyError):
             DatasetRef(self.datasetType, dataId, run="run")
         # Constructing a resolved ref should preserve run as well as everything
@@ -592,20 +592,20 @@ class DatasetRefTestCase(unittest.TestCase):
     def testSorting(self) -> None:
         """Can we sort a DatasetRef"""
         # All refs have the same run.
-        dimensions = self.universe.extract(("instrument", "visit"))
+        dimensions = self.universe.conform(("instrument", "visit"))
         ref1 = DatasetRef(
             self.datasetType,
-            DataCoordinate.standardize(instrument="DummyCam", visit=1, graph=dimensions),
+            DataCoordinate.standardize(instrument="DummyCam", visit=1, dimensions=dimensions),
             run="run",
         )
         ref2 = DatasetRef(
             self.datasetType,
-            DataCoordinate.standardize(instrument="DummyCam", visit=10, graph=dimensions),
+            DataCoordinate.standardize(instrument="DummyCam", visit=10, dimensions=dimensions),
             run="run",
         )
         ref3 = DatasetRef(
             self.datasetType,
-            DataCoordinate.standardize(instrument="DummyCam", visit=22, graph=dimensions),
+            DataCoordinate.standardize(instrument="DummyCam", visit=22, dimensions=dimensions),
             run="run",
         )
 
@@ -619,23 +619,23 @@ class DatasetRefTestCase(unittest.TestCase):
         # Now include different runs.
         ref1 = DatasetRef(
             self.datasetType,
-            DataCoordinate.standardize(instrument="DummyCam", visit=43, graph=dimensions),
+            DataCoordinate.standardize(instrument="DummyCam", visit=43, dimensions=dimensions),
             run="b",
         )
         self.assertEqual(ref1.run, "b")
         ref4 = DatasetRef(
             self.datasetType,
-            DataCoordinate.standardize(instrument="DummyCam", visit=10, graph=dimensions),
+            DataCoordinate.standardize(instrument="DummyCam", visit=10, dimensions=dimensions),
             run="b",
         )
         ref2 = DatasetRef(
             self.datasetType,
-            DataCoordinate.standardize(instrument="DummyCam", visit=4, graph=dimensions),
+            DataCoordinate.standardize(instrument="DummyCam", visit=4, dimensions=dimensions),
             run="a",
         )
         ref3 = DatasetRef(
             self.datasetType,
-            DataCoordinate.standardize(instrument="DummyCam", visit=104, graph=dimensions),
+            DataCoordinate.standardize(instrument="DummyCam", visit=104, dimensions=dimensions),
             run="c",
         )
 

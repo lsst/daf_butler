@@ -63,9 +63,7 @@ class ColumnCategorization:
 
     def filter_skypix(self, universe: DimensionUniverse) -> Iterator[SkyPixDimension]:
         return (
-            dimension
-            for name in self.dimension_keys
-            if isinstance(dimension := universe[name], SkyPixDimension)
+            dimension for name in self.dimension_keys if (dimension := universe.skypix_dimensions.get(name))
         )
 
     def filter_governors(self, universe: DimensionUniverse) -> Iterator[GovernorDimension]:

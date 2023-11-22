@@ -176,7 +176,7 @@ class QueryBuilder:
                 require_preferred_engine=True,
             )
         if self.summary.where.data_id:
-            known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.dimensions)
+            known_dimensions = self.summary.where.data_id.dimensions.intersection(self.summary.dimensions)
             known_data_id = self.summary.where.data_id.subset(known_dimensions)
             self.relation = self.relation.with_rows_satisfying(
                 self._context.make_data_coordinate_predicate(known_data_id),
@@ -227,8 +227,8 @@ class QueryBuilder:
             for family1, family2 in itertools.combinations(self.summary.dimensions.spatial, 2):
                 spatial_joins.append(
                     (
-                        family1.choose(self.summary.dimensions.elements).name,
-                        family2.choose(self.summary.dimensions.elements).name,
+                        family1.choose(self.summary.dimensions.elements.names, self.summary.universe).name,
+                        family2.choose(self.summary.dimensions.elements.names, self.summary.universe).name,
                     )
                 )
             self.relation = self._backend.make_dimension_relation(

@@ -558,7 +558,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler3 = Butler.from_config(butler=butler, collections=["imported_g"], instrument="Cam2")
         self.assertEqual(list(butler3.registry.defaults.collections), ["imported_g"])
         self.assertIsNone(butler3.registry.defaults.run, None)
-        self.assertEqual(butler3.registry.defaults.dataId.byName(), {"instrument": "Cam2"})
+        self.assertEqual(butler3.registry.defaults.dataId.required, {"instrument": "Cam2"})
 
         # Check that repr() does not fail.
         defaults = RegistryDefaults(collections=["imported_g"], run="test")

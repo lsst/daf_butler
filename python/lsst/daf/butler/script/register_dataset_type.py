@@ -71,17 +71,13 @@ def register_dataset_type(
     """
     butler = Butler.from_config(repo, writeable=True, without_datastore=True)
 
-    composite, component = DatasetType.splitDatasetTypeName(dataset_type)
+    _, component = DatasetType.splitDatasetTypeName(dataset_type)
     if component:
         raise ValueError("Component dataset types are created automatically when the composite is created.")
 
-    # mypy does not think that Tuple[str, ...] is allowed for DatasetType
-    # constructor so we have to do the conversion here.
-    graph = butler.dimensions.extract(dimensions)
-
     datasetType = DatasetType(
         dataset_type,
-        graph,
+        butler.dimensions.conform(dimensions),
         storage_class,
         parentStorageClass=None,
         isCalibration=is_calibration,

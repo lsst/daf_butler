@@ -50,7 +50,7 @@ from collections.abc import (
     ValuesView,
 )
 from types import MappingProxyType
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, overload
 
 
 class Named(Protocol):
@@ -120,10 +120,16 @@ class NamedKeyMapping(Mapping[K, V_co]):
     def __getitem__(self, key: str | K) -> V_co:
         raise NotImplementedError()
 
-    def get(self, key: str | K, default: Any = None) -> Any:
-        # Delegating to super is not allowed by typing, because it doesn't
-        # accept str, but we know it just delegates to __getitem__, which does.
-        return super().get(key, default)  # type: ignore
+    @overload
+    def get(self, key: object) -> V_co | None:
+        ...
+
+    @overload
+    def get(self, key: object, default: V) -> V_co | V:
+        ...
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        return super().get(key, default)
 
 
 NameLookupMapping = NamedKeyMapping[K, V_co] | Mapping[str, V_co]
@@ -305,7 +311,15 @@ class NamedValueAbstractSet(Set[K_co]):
     def __getitem__(self, key: str | K_co) -> K_co:
         raise NotImplementedError()
 
-    def get(self, key: str | K_co, default: Any = None) -> Any:
+    @overload
+    def get(self, key: object) -> K_co | None:
+        ...
+
+    @overload
+    def get(self, key: object, default: V) -> K_co | V:
+        ...
+
+    def get(self, key: Any, default: Any = None) -> Any:
         """Return the element with the given name.
 
         Returns ``default`` if no such element is present.

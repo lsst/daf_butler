@@ -328,13 +328,16 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         """
         if full is None:
             full = data_coordinate.hasFull()
-        dimensions = data_coordinate.graph.required if not full else data_coordinate.graph.dimensions
+        dimension_names = (
+            data_coordinate.required if not full else data_coordinate.dimensions.data_coordinate_keys
+        )
         terms: list[Predicate] = []
-        for dimension in dimensions:
+        for dimension_name in dimension_names:
+            dimension = data_coordinate.universe.dimensions[dimension_name]
             dtype = dimension.primaryKey.getPythonType()
             terms.append(
-                ColumnExpression.reference(DimensionKeyColumnTag(dimension.name), dtype=dtype).eq(
-                    ColumnExpression.literal(data_coordinate[dimension.name], dtype=dtype)
+                ColumnExpression.reference(DimensionKeyColumnTag(dimension_name), dtype=dtype).eq(
+                    ColumnExpression.literal(data_coordinate[dimension_name], dtype=dtype)
                 )
             )
         return Predicate.logical_and(*terms)

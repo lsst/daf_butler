@@ -68,8 +68,8 @@ class _ExposureRegionFactory(ExposureRegionFactory):
     def __init__(self, dimensions: DimensionRecordStorageManager):
         self.dimensions = dimensions
         self.universe = dimensions.universe
-        self.exposure_dimensions = self.universe["exposure"].graph
-        self.exposure_detector_dimensions = self.universe.extract(["exposure", "detector"])
+        self.exposure_dimensions = self.universe["exposure"].minimal_group
+        self.exposure_detector_dimensions = self.universe.conform(["exposure", "detector"])
 
     def exposure_region(self, dataId: DataCoordinate, context: SqlQueryContext) -> Region | None:
         # Docstring is inherited from a base class.
@@ -81,7 +81,7 @@ class _ExposureRegionFactory(ExposureRegionFactory):
             return None
         relation = visit_definition_storage.join(relation, Join(), context)
         # Join in a table with either visit+detector regions or visit regions.
-        if "detector" in dataId.names:
+        if "detector" in dataId.dimensions:
             visit_detector_region_storage = self.dimensions.get(self.universe["visit_detector_region"])
             if visit_detector_region_storage is None:
                 return None

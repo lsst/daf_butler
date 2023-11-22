@@ -321,7 +321,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             # them will be way faster (and we don't want to add a new index
             # just for this operation).
             to_delete: list[dict[str, Any]] = [
-                {"skypix_system": skypix.system.name, "skypix_level": skypix.level, **record.dataId.byName()}
+                {"skypix_system": skypix.system.name, "skypix_level": skypix.level, **record.dataId.required}
                 for record in records
             ]
             _LOG.debug("Deleting old common skypix overlaps for %s.", self.element.name)
@@ -335,7 +335,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         for record in records:
             if record.region is None:
                 continue
-            base_overlap_record = record.dataId.byName()
+            base_overlap_record = dict(record.dataId.required)
             base_overlap_record["skypix_system"] = skypix.system.name
             base_overlap_record["skypix_level"] = skypix.level
             for begin, end in skypix.pixelization.envelope(record.region):

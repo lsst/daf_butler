@@ -34,7 +34,7 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from lsst.utils.classes import cached_getter
 
@@ -47,6 +47,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
     from ._governor import GovernorDimension
     from ._graph import DimensionGraph
+    from ._group import DimensionGroup
     from ._records import DimensionRecord
     from ._universe import DimensionUniverse
 
@@ -212,12 +213,12 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         element, or `None` if there is no such dimension (`GovernorDimension`
         or `None`).
         """
-        if len(self.graph.governors) == 1:
-            (result,) = self.graph.governors
-            return result
-        elif len(self.graph.governors) > 1:
+        if len(self.minimal_group.governors) == 1:
+            (result,) = self.minimal_group.governors
+            return cast("GovernorDimension", self.universe[result])
+        elif len(self.minimal_group.governors) > 1:
             raise RuntimeError(
-                f"Dimension element {self.name} has multiple governors: {self.graph.governors}."
+                f"Dimension element {self.name} has multiple governors: {self.minimal_group.governors}."
             )
         else:
             return None
@@ -280,8 +281,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         """
         return NamedValueSet(list(self.required) + list(self.implied)).freeze()
 
+    # Deprecated via a warning from its implementation.
+    # TODO: remove on DM-41326.
     @property
-    @cached_getter
     def graph(self) -> DimensionGraph:
         """Return minimal graph that includes this element (`DimensionGraph`).
 
@@ -291,7 +293,20 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         ``self.graph.implied`` includes all dimensions also identified
         (possibly recursively) by this set.
         """
-        return self.universe.extract(self.dimensions.names)
+        return self.minimal_group._as_graph()
+
+    @property
+    @cached_getter
+    def minimal_group(self) -> DimensionGroup:
+        """Return minimal dimension group that includes this element.
+
+        ``self.minimal_group.required`` includes all dimensions whose primary
+        key values are sufficient (often necessary) to uniquely identify
+        ``self`` (including ``self`` if ``isinstance(self, Dimension)``.
+        ``self.minimal_group.implied`` includes all dimensions also identified
+        (possibly recursively) by this set.
+        """
+        return self.universe.conform(self.dimensions.names)
 
     @property
     @cached_getter

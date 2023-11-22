@@ -43,7 +43,7 @@ from .._config_support import LookupKey, processLookupConfigs
 from .._dataset_ref import DatasetRef
 from .._exceptions import ValidationError
 from .._storage_class import StorageClass
-from ..dimensions import DataCoordinate, SkyPixDimension
+from ..dimensions import DataCoordinate
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType
@@ -448,14 +448,14 @@ class FileTemplate:
         # the case where only required dimensions are present (which in this
         # context should only happen in unit tests; in general we need all
         # dimensions to fill out templates).
-        fields = {
+        fields: dict[str, object] = {
             k: ref.dataId.get(k) for k in ref.datasetType.dimensions.names if ref.dataId.get(k) is not None
         }
         # Extra information that can be included using . syntax
         extras = {}
         if isinstance(ref.dataId, DataCoordinate):
             if ref.dataId.hasRecords():
-                extras = ref.dataId.records.byName()
+                extras = {k: ref.dataId.records[k] for k in ref.dataId.dimensions.elements}
             skypix_alias = self._determine_skypix_alias(ref)
             if skypix_alias is not None:
                 fields["skypix"] = fields[skypix_alias]
@@ -735,7 +735,6 @@ class FileTemplate:
         # not be true in some test code, but that test code is a pain to
         # update to be more like the real world while still providing our
         # only tests of important behavior.
-        skypix = [dimension for dimension in entity.dimensions if isinstance(dimension, SkyPixDimension)]
-        if len(skypix) == 1:
-            alias = skypix[0].name
+        if len(entity.dimensions.skypix) == 1:
+            (alias,) = entity.dimensions.skypix.names
         return alias

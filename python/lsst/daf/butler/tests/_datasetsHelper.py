@@ -39,7 +39,7 @@ import os
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, StorageClass
+from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, DimensionGroup, StorageClass
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
@@ -52,7 +52,7 @@ class DatasetTestHelper:
     def makeDatasetRef(
         self,
         datasetTypeName: str,
-        dimensions: DimensionGraph | Iterable[str | Dimension],
+        dimensions: DimensionGroup | DimensionGraph | Iterable[str | Dimension],
         storageClass: StorageClass | str,
         dataId: DataCoordinate | Mapping[str, Any],
         *,
@@ -74,7 +74,7 @@ class DatasetTestHelper:
     def _makeDatasetRef(
         self,
         datasetTypeName: str,
-        dimensions: DimensionGraph | Iterable[str | Dimension],
+        dimensions: DimensionGroup | DimensionGraph | Iterable[str | Dimension],
         storageClass: StorageClass | str,
         dataId: DataCoordinate | Mapping,
         *,
@@ -95,7 +95,7 @@ class DatasetTestHelper:
         if run is None:
             run = "dummy"
         if not isinstance(dataId, DataCoordinate):
-            dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
+            dataId = DataCoordinate.standardize(dataId, dimensions=datasetType.dimensions)
         return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)
 
 

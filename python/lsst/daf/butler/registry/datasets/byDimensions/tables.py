@@ -351,7 +351,8 @@ def makeTagTableSpec(
                 target=(collectionFieldSpec.name, "dataset_type_id"),
             )
         )
-    for dimension in datasetType.dimensions.required:
+    for dimension_name in datasetType.dimensions.required.names:
+        dimension = datasetType.dimensions.universe.dimensions[dimension_name]
         fieldSpec = addDimensionForeignKey(
             tableSpec, dimension=dimension, nullable=False, primaryKey=False, constraint=constraints
         )
@@ -434,7 +435,8 @@ def makeCalibTableSpec(
         )
     )
     # Add dimension fields (part of the temporal lookup index.constraint).
-    for dimension in datasetType.dimensions.required:
+    for dimension_name in datasetType.dimensions.required.names:
+        dimension = datasetType.dimensions.universe.dimensions[dimension_name]
         fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
         index.append(fieldSpec.name)
         # If this is a governor dimension, add a foreign key constraint to the

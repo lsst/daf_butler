@@ -41,10 +41,9 @@ from ...dimensions import (
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
     DimensionElement,
-    DimensionGraph,
+    DimensionGroup,
     DimensionUniverse,
     GovernorDimension,
-    SkyPixDimension,
 )
 from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import (
@@ -85,8 +84,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     overlaps : `list` [ `DatabaseDimensionOverlapStorage` ]
         Objects that manage materialized overlaps between database-backed
         dimensions.
-    dimensionGraphStorage : `_DimensionGraphStorage`
-        Object that manages saved `DimensionGraph` definitions.
+    dimension_group_storage : `_DimensionGroupStorage`
+        Object that manages saved `DimensionGroup` definitions.
     universe : `DimensionUniverse`
         All known dimensions.
     """
@@ -99,7 +98,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         overlaps: dict[
             tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
         ],
-        dimensionGraphStorage: _DimensionGraphStorage,
+        dimension_group_storage: _DimensionGroupStorage,
         universe: DimensionUniverse,
         registry_schema_version: VersionTuple | None = None,
     ):
@@ -107,7 +106,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         self._db = db
         self._records = records
         self._overlaps = overlaps
-        self._dimensionGraphStorage = dimensionGraphStorage
+        self._dimension_group_storage = dimension_group_storage
 
     @classmethod
     def initialize(
@@ -124,7 +123,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # can pass in when initializing storage for DatabaseDimensionElements.
         governors = NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage]()
         records = NamedKeyDict[DimensionElement, DimensionRecordStorage]()
-        for dimension in universe.getGovernorDimensions():
+        for dimension in universe.governor_dimensions:
             governorStorage = dimension.makeStorage(db, context=context)
             governors[dimension] = governorStorage
             records[dimension] = governorStorage
@@ -133,14 +132,12 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # to gather a mapping from the names of those targets back to their
         # views.
         view_targets = {
-            element.viewOf: element
-            for element in universe.getDatabaseElements()
-            if element.viewOf is not None
+            element.viewOf: element for element in universe.database_elements if element.viewOf is not None
         }
         # We remember the spatial ones (grouped by family) so we can go back
         # and initialize overlap storage for them later.
         spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DatabaseDimensionRecordStorage]]()
-        for element in universe.getDatabaseElements():
+        for element in universe.database_elements:
             if element.viewOf is not None:
                 # We'll initialize this storage when the view's target is
                 # initialized.
@@ -186,13 +183,13 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 elementStoragePair[1].connect(overlapStorage)
                 overlaps[overlapStorage.elements] = overlapStorage
         # Create table that stores DimensionGraph definitions.
-        dimensionGraphStorage = _DimensionGraphStorage.initialize(db, context, universe=universe)
+        dimension_group_storage = _DimensionGroupStorage.initialize(db, context, universe=universe)
         return cls(
             db=db,
             records=records,
             universe=universe,
             overlaps=overlaps,
-            dimensionGraphStorage=dimensionGraphStorage,
+            dimension_group_storage=dimension_group_storage,
             registry_schema_version=registry_schema_version,
         )
 
@@ -200,10 +197,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         r = self._records.get(element)
         if r is None:
-            if isinstance(element, str):
-                element = self.universe[element]
-            if isinstance(element, SkyPixDimension):
-                return self.universe.skypix[element.system][element.level].makeStorage()
+            if (dimension := self.universe.skypix_dimensions.get(element)) is not None:
+                return dimension.makeStorage()
         return r
 
     def register(self, element: DimensionElement) -> DimensionRecordStorage:
@@ -212,13 +207,13 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         assert result, "All records instances should be created in initialize()."
         return result
 
-    def saveDimensionGraph(self, graph: DimensionGraph) -> int:
+    def save_dimension_group(self, graph: DimensionGroup) -> int:
         # Docstring inherited from DimensionRecordStorageManager.
-        return self._dimensionGraphStorage.save(graph)
+        return self._dimension_group_storage.save(graph)
 
-    def loadDimensionGraph(self, key: int) -> DimensionGraph:
+    def load_dimension_group(self, key: int) -> DimensionGroup:
         # Docstring inherited from DimensionRecordStorageManager.
-        return self._dimensionGraphStorage.load(key)
+        return self._dimension_group_storage.load(key)
 
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
@@ -327,8 +322,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         return [_VERSION]
 
 
-class _DimensionGraphStorage:
-    """Helper object that manages saved DimensionGraph definitions.
+class _DimensionGroupStorage:
+    """Helper object that manages saved DimensionGroup definitions.
 
     Should generally be constructed by calling `initialize` instead of invoking
     the constructor directly.
@@ -357,8 +352,8 @@ class _DimensionGraphStorage:
         self._idTable = idTable
         self._definitionTable = definitionTable
         self._universe = universe
-        self._keysByGraph: dict[DimensionGraph, int] = {universe.empty: 0}
-        self._graphsByKey: dict[int, DimensionGraph] = {0: universe.empty}
+        self._keysByGroup: dict[DimensionGroup, int] = {universe.empty.as_group(): 0}
+        self._groupsByKey: dict[int, DimensionGroup] = {0: universe.empty.as_group()}
 
     @classmethod
     def initialize(
@@ -367,7 +362,7 @@ class _DimensionGraphStorage:
         context: StaticTablesContext,
         *,
         universe: DimensionUniverse,
-    ) -> _DimensionGraphStorage:
+    ) -> _DimensionGroupStorage:
         """Construct a new instance, including creating tables if necessary.
 
         Parameters
@@ -382,7 +377,7 @@ class _DimensionGraphStorage:
 
         Returns
         -------
-        storage : `_DimensionGraphStorage`
+        storage : `_DimensionGroupStorage`
             New instance of this class.
         """
         # We need two tables just so we have one where the autoincrement key is
@@ -432,22 +427,22 @@ class _DimensionGraphStorage:
         for row in sql_rows:
             key = row[self._definitionTable.columns.dimension_graph_id]
             dimensionNamesByKey[key].add(row[self._definitionTable.columns.dimension_name])
-        keysByGraph: dict[DimensionGraph, int] = {self._universe.empty: 0}
-        graphsByKey: dict[int, DimensionGraph] = {0: self._universe.empty}
+        keysByGraph: dict[DimensionGroup, int] = {self._universe.empty.as_group(): 0}
+        graphsByKey: dict[int, DimensionGroup] = {0: self._universe.empty.as_group()}
         for key, dimensionNames in dimensionNamesByKey.items():
-            graph = DimensionGraph(self._universe, names=dimensionNames)
+            graph = DimensionGroup(self._universe, names=dimensionNames)
             keysByGraph[graph] = key
             graphsByKey[key] = graph
-        self._graphsByKey = graphsByKey
-        self._keysByGraph = keysByGraph
+        self._groupsByKey = graphsByKey
+        self._keysByGroup = keysByGraph
 
-    def save(self, graph: DimensionGraph) -> int:
+    def save(self, group: DimensionGroup) -> int:
         """Save a `DimensionGraph` definition to the database, allowing it to
         be retrieved later via the returned key.
 
         Parameters
         ----------
-        graph : `DimensionGraph`
+        group : `DimensionGroup`
             Set of dimensions to save.
 
         Returns
@@ -456,7 +451,7 @@ class _DimensionGraphStorage:
             Integer used as the unique key for this `DimensionGraph` in the
             database.
         """
-        key = self._keysByGraph.get(graph)
+        key = self._keysByGroup.get(group)
         if key is not None:
             return key
         # Lock tables and then refresh to guard against races where some other
@@ -466,18 +461,18 @@ class _DimensionGraphStorage:
         # work in long-lived data repositories.
         with self._db.transaction(lock=[self._idTable, self._definitionTable]):
             self.refresh()
-            key = self._keysByGraph.get(graph)
+            key = self._keysByGroup.get(group)
             if key is None:
                 (key,) = self._db.insert(self._idTable, {}, returnIds=True)  # type: ignore
                 self._db.insert(
                     self._definitionTable,
-                    *[{"dimension_graph_id": key, "dimension_name": name} for name in graph.required.names],
+                    *[{"dimension_graph_id": key, "dimension_name": name} for name in group.required],
                 )
-            self._keysByGraph[graph] = key
-            self._graphsByKey[key] = graph
+            self._keysByGroup[group] = key
+            self._groupsByKey[key] = group
         return key
 
-    def load(self, key: int) -> DimensionGraph:
+    def load(self, key: int) -> DimensionGroup:
         """Retrieve a `DimensionGraph` that was previously saved in the
         database.
 
@@ -492,8 +487,8 @@ class _DimensionGraphStorage:
         graph : `DimensionGraph`
             Retrieved graph.
         """
-        graph = self._graphsByKey.get(key)
+        graph = self._groupsByKey.get(key)
         if graph is None:
             self.refresh()
-            graph = self._graphsByKey[key]
+            graph = self._groupsByKey[key]
         return graph

@@ -121,13 +121,13 @@ class QuantumTestCase(unittest.TestCase):
             dataId43 = dataId43.expanded(records43)  # type: ignore
 
         datasetTypeInit = DatasetType(
-            datasetTypeNameInit, universe.extract(("instrument", "visit")), storageClass
+            datasetTypeNameInit, universe.conform(("instrument", "visit")), storageClass
         )
         datasetTypeInput = DatasetType(
-            datasetTypeNameInput, universe.extract(("instrument", "visit")), storageClass
+            datasetTypeNameInput, universe.conform(("instrument", "visit")), storageClass
         )
         datasetTypeOutput = DatasetType(
-            datasetTypeNameOutput, universe.extract(("instrument", "visit")), storageClass
+            datasetTypeNameOutput, universe.conform(("instrument", "visit")), storageClass
         )
         predictedInputs = {
             datasetTypeInput: [

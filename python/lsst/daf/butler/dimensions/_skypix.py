@@ -32,7 +32,7 @@ __all__ = (
     "SkyPixSystem",
 )
 
-from collections.abc import Mapping, Set
+from collections.abc import Iterator, Mapping, Set
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -42,12 +42,13 @@ from lsst.utils import doImportType
 
 from .. import ddl
 from .._named import NamedValueAbstractSet, NamedValueSet
-from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
+from .._topology import TopologicalFamily, TopologicalSpace
 from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
     from ..registry.interfaces import SkyPixDimensionRecordStorage
+    from ._universe import DimensionUniverse
 
 
 class SkyPixSystem(TopologicalFamily):
@@ -81,10 +82,11 @@ class SkyPixSystem(TopologicalFamily):
         for level in range(maxLevel + 1):
             self._members[level] = SkyPixDimension(self, level)
 
-    def choose(self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]) -> SkyPixDimension:
+    def choose(self, endpoints: Set[str], universe: DimensionUniverse) -> SkyPixDimension:
         # Docstring inherited from TopologicalFamily.
         best: SkyPixDimension | None = None
-        for endpoint in endpoints:
+        for endpoint_name in endpoints:
+            endpoint = universe[endpoint_name]
             if endpoint not in self:
                 continue
             assert isinstance(endpoint, SkyPixDimension)
@@ -96,6 +98,12 @@ class SkyPixSystem(TopologicalFamily):
 
     def __getitem__(self, level: int) -> SkyPixDimension:
         return self._members[level]
+
+    def __iter__(self) -> Iterator[SkyPixDimension]:
+        return iter(self._members.values())
+
+    def __len__(self) -> int:
+        return len(self._members)
 
 
 class SkyPixDimension(Dimension):
@@ -207,18 +215,17 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
         Fully-qualified name of the class whose instances represent a
         particular level of this pixelization.
     maxLevel : `int`, optional
-        Maximum level (inclusive) of the hierarchy.  If not provided,
-        an attempt will be made to obtain it from a ``MAX_LEVEL`` attribute
-        of the pixelization class.
+        Maximum level (inclusive) of the hierarchy.  If not provided, an
+        attempt will be made to obtain it from a ``MAX_LEVEL`` attribute of the
+        pixelization class.
 
     Notes
     -----
     At present, this class adds both a new `SkyPixSystem` instance all possible
     `SkyPixDimension` to the builder that invokes it.  In the future, it may
-    add only the `SkyPixSystem`, with dimension instances created on-the-fly
-    by the `DimensionUniverse`; this depends on `DimensionGraph.encode` going
-    away or otherwise eliminating assumptions about the set of dimensions in a
-    universe being static.
+    add only the `SkyPixSystem`, with dimension instances created on-the-fly by
+    the `DimensionUniverse`; this depends on eliminating assumptions about the
+    set of dimensions in a universe being static.
     """
 
     def __init__(self, name: str, pixelizationClassName: str, maxLevel: int | None = None):

@@ -38,7 +38,7 @@ from lsst.daf.relation import ColumnError, ColumnTag, Diagnostics, Relation, Sor
 from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, Dimension, DimensionElement, DimensionGraph, DimensionRecord
+from ...dimensions import DataCoordinate, DimensionElement, DimensionGroup, DimensionRecord
 from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._query_backend import QueryBackend
@@ -52,7 +52,7 @@ class Query:
 
     Parameters
     ----------
-    dimensions : `DimensionGraph`
+    dimensions : `DimensionGroup`
         The dimensions that span the query and are used to join its relations
         together.
     backend : `QueryBackend`
@@ -107,7 +107,7 @@ class Query:
 
     def __init__(
         self,
-        dimensions: DimensionGraph,
+        dimensions: DimensionGroup,
         backend: QueryBackend[QueryContext],
         context: QueryContext,
         relation: Relation,
@@ -126,9 +126,9 @@ class Query:
         self._record_caches = record_caches if record_caches is not None else {}
 
     @property
-    def dimensions(self) -> DimensionGraph:
+    def dimensions(self) -> DimensionGroup:
         """The dimensions that span the query and are used to join its
-        relations together (`DimensionGraph`).
+        relations together (`DimensionGroup`).
         """
         return self._dimensions
 
@@ -175,12 +175,12 @@ class Query:
     def __iter__(self) -> Iterator[Mapping[ColumnTag, Any]]:
         return iter(self._context.fetch_iterable(self._relation))
 
-    def iter_data_ids(self, dimensions: DimensionGraph | None = None) -> Iterator[DataCoordinate]:
+    def iter_data_ids(self, dimensions: DimensionGroup | None = None) -> Iterator[DataCoordinate]:
         """Return an iterator that converts result rows to data IDs.
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`, optional
+        dimensions : `DimensionGroup`, optional
             Dimensions of the data IDs to return.  If not provided,
             ``self.dimensions`` is used.
 
@@ -239,7 +239,7 @@ class Query:
                     yield parent_ref.makeComponentRef(component)
 
     def iter_data_ids_and_dataset_refs(
-        self, dataset_type: DatasetType, dimensions: DimensionGraph | None = None
+        self, dataset_type: DatasetType, dimensions: DimensionGroup | None = None
     ) -> Iterator[tuple[DataCoordinate, DatasetRef]]:
         """Iterate over pairs of data IDs and dataset refs.
 
@@ -250,7 +250,7 @@ class Query:
         ----------
         dataset_type : `DatasetType`
             The parent dataset type to yield references for.
-        dimensions : `DimensionGraph`, optional
+        dimensions : `DimensionGroup`, optional
             Dimensions of the data IDs to return.  If not provided,
             ``self.dimensions`` is used.
 
@@ -305,7 +305,7 @@ class Query:
                 case only_element_with_records:
                     element = only_element_with_records
         if (cache := self._record_caches.get(element)) is not None:
-            return (cache[data_id] for data_id in self.iter_data_ids(element.graph))
+            return (cache[data_id] for data_id in self.iter_data_ids(element.minimal_group))
         else:
             reader = DimensionRecordReader(element)
             if not (reader.columns_required <= self.relation.columns):
@@ -421,7 +421,7 @@ class Query:
 
     def projected(
         self,
-        dimensions: Iterable[Dimension | str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
         unique: bool = True,
         columns: Iterable[ColumnTag] | None = None,
         defer: bool | None = None,
@@ -432,7 +432,7 @@ class Query:
 
         Parameters
         ----------
-        dimensions : `~collections.abc.Iterable` [ `Dimension` or `str` ],
+        dimensions : `~collections.abc.Iterable` [ `str` ],
                 optional
             Dimensions to include in the new query.  Will be expanded to
             include all required and implied dependencies.  Must be a subset of
@@ -475,13 +475,16 @@ class Query:
             Raised if the columns to include in the new query are not all
             present in the current query.
         """
-        if dimensions is None:
-            dimensions = set(self._dimensions)
-        else:
-            dimensions = set(dimensions)
+        match dimensions:
+            case None:
+                dimensions = set(self._dimensions.names)
+            case DimensionGroup():
+                dimensions = set(dimensions.names)
+            case iterable:
+                dimensions = set(iterable)
         if columns is not None:
             dimensions.update(tag.dimension for tag in DimensionKeyColumnTag.filter_from(columns))
-        dimensions = self._dimensions.universe.extract(dimensions)
+        dimensions = self._dimensions.universe.conform(dimensions)
         if columns is None:
             columns = set()
         else:
@@ -489,9 +492,9 @@ class Query:
         columns.update(DimensionKeyColumnTag.generate(dimensions.names))
         if keep_record_columns:
             if self._has_record_columns is True:
-                for element in dimensions.elements:
-                    if element not in self._record_caches:
-                        columns.update(element.RecordClass.fields.columns)
+                for element_name in dimensions.elements:
+                    if element_name not in self._record_caches:
+                        columns.update(self.dimensions.universe[element_name].RecordClass.fields.columns)
             elif self._has_record_columns in dimensions.elements:
                 element = cast(DimensionElement, self._has_record_columns)
                 columns.update(element.RecordClass.fields.columns)
@@ -507,17 +510,15 @@ class Query:
             relation = relation.without_duplicates(preferred_engine=self._context.preferred_engine)
         return self._chain(relation, defer, dimensions=dimensions)
 
-    def with_record_columns(
-        self, dimension_element: DimensionElement | None = None, defer: bool | None = None
-    ) -> Query:
+    def with_record_columns(self, dimension_element: str | None = None, defer: bool | None = None) -> Query:
         """Return a modified `Query` with additional dimension record columns
         and/or caches.
 
         Parameters
         ----------
-        dimension_element : `DimensionElement`, optional
-            Single element to add record columns for, or `None` default to add
-            them for all elements in `dimensions`.
+        dimension_element : `str`, optional
+            Name of a single dimension element to add record columns for, or
+            `None` default to add them for all elements in `dimensions`.
         defer : `bool`, optional
             If `False`, run the new query immediately.  If `True`, do not.  If
             `None` (default), the ``defer`` option passed when making ``self``
@@ -543,10 +544,11 @@ class Query:
             return self
         record_caches = dict(self._record_caches)
         columns_required: set[ColumnTag] = set()
-        for element in self.dimensions.elements if dimension_element is None else [dimension_element]:
-            if element in record_caches:
+        for element_name in self.dimensions.elements if dimension_element is None else [dimension_element]:
+            element = self.dimensions.universe[element_name]
+            if element_name in record_caches:
                 continue
-            if (cache := self._backend.get_dimension_record_cache(element.name, self._context)) is not None:
+            if (cache := self._backend.get_dimension_record_cache(element_name, self._context)) is not None:
                 record_caches[element] = cache
             else:
                 columns_required.update(element.RecordClass.fields.columns.keys())
@@ -571,7 +573,9 @@ class Query:
         return self._chain(
             relation,
             defer=defer,
-            has_record_columns=True if dimension_element is None else dimension_element,
+            has_record_columns=(
+                True if dimension_element is None else self.dimensions.universe[dimension_element]
+            ),
             record_caches=record_caches,
         )
 
@@ -693,7 +697,7 @@ class Query:
         # If the dataset type has dimensions not in the current query, or we
         # need a temporal join for a calibration collection, either restore
         # those columns or join them in.
-        full_dimensions = dataset_type.dimensions.union(self._dimensions)
+        full_dimensions = dataset_type.dimensions.as_group().union(self._dimensions)
         relation = self._relation
         record_caches = self._record_caches
         base_columns_required: set[ColumnTag] = {
@@ -706,11 +710,12 @@ class Query:
                 # dimensions to the query we need to be able to get records for
                 # the new dimensions.
                 record_caches = dict(self._record_caches)
-                for element in full_dimensions.elements:
+                for element_name in full_dimensions.elements:
+                    element = full_dimensions.universe[element_name]
                     if element in record_caches:
                         continue
                     if (
-                        cache := self._backend.get_dimension_record_cache(element.name, self._context)
+                        cache := self._backend.get_dimension_record_cache(element_name, self._context)
                     ) is not None:
                         record_caches[element] = cache
                     else:
@@ -734,8 +739,12 @@ class Query:
                 # present in each family (e.g. patch beats tract).
                 spatial_joins.append(
                     (
-                        lhs_spatial_family.choose(full_dimensions.elements).name,
-                        rhs_spatial_family.choose(full_dimensions.elements).name,
+                        lhs_spatial_family.choose(
+                            full_dimensions.elements.names, self.dimensions.universe
+                        ).name,
+                        rhs_spatial_family.choose(
+                            full_dimensions.elements.names, self.dimensions.universe
+                        ).name,
                     )
                 )
         # Set up any temporal join between the query dimensions and CALIBRATION
@@ -743,7 +752,7 @@ class Query:
         temporal_join_on: set[ColumnTag] = set()
         if any(r.type is CollectionType.CALIBRATION for r in collection_records):
             for family in self._dimensions.temporal:
-                endpoint = family.choose(self._dimensions.elements)
+                endpoint = family.choose(self._dimensions.elements.names, self.dimensions.universe)
                 temporal_join_on.add(DimensionRecordColumnTag(endpoint.name, "timespan"))
             base_columns_required.update(temporal_join_on)
         # Note which of the many kinds of potentially-missing columns we have
@@ -991,7 +1000,7 @@ class Query:
         self,
         relation: Relation,
         is_deferred: bool,
-        dimensions: DimensionGraph | None = None,
+        dimensions: DimensionGroup | None = None,
         governor_constraints: Mapping[str, Set[str]] | None = None,
         has_record_columns: bool | DimensionElement | None = None,
         record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
@@ -1018,7 +1027,7 @@ class Query:
         self,
         relation: Relation,
         defer: bool | None,
-        dimensions: DimensionGraph | None = None,
+        dimensions: DimensionGroup | None = None,
         governor_constraints: Mapping[str, Set[str]] | None = None,
         has_record_columns: bool | DimensionElement | None = None,
         record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
@@ -1034,7 +1043,7 @@ class Query:
             If `False`, run the new query immediately.  If `True`, do not.  If
             `None` , the ``defer`` option passed when making ``self`` is used
             (this option is "sticky").
-        dimensions : `DimensionGraph`, optional
+        dimensions : `DimensionGroup`, optional
             See class docs.
         governor_constraints : `~collections.abc.Mapping` [ `str`, \
                 `~collections.abc.Set` [ `str` ] ], optional

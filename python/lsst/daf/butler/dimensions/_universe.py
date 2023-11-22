@@ -33,8 +33,8 @@ import logging
 import math
 import pickle
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
+from collections.abc import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast, overload
 
 from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
@@ -47,6 +47,7 @@ from ._database import DatabaseDimensionElement
 from ._elements import Dimension, DimensionElement
 from ._governor import GovernorDimension
 from ._graph import DimensionGraph
+from ._group import DimensionGroup
 from ._skypix import SkyPixDimension, SkyPixSystem
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
@@ -143,7 +144,7 @@ class DimensionUniverse:
         # copying from builder.
         self = object.__new__(cls)
         assert self is not None
-        self._cache = {}
+        self._cached_groups = {}
         self._dimensions = builder.dimensions
         self._elements = builder.elements
         self._topology = builder.topology
@@ -158,7 +159,7 @@ class DimensionUniverse:
             element.universe = self
 
         # Add attribute for special subsets of the graph.
-        self.empty = DimensionGraph(self, (), conform=False)
+        self._empty = DimensionGroup(self, (), _conform=False)
 
         # Use the version number and namespace from the config as a key in
         # the singleton dict containing all instances; that will let us
@@ -292,7 +293,6 @@ class DimensionUniverse:
         """
         return self._dimensions
 
-    @cached_getter
     def getGovernorDimensions(self) -> NamedValueAbstractSet[GovernorDimension]:
         """Return a set of all `GovernorDimension` instances in this universe.
 
@@ -301,9 +301,8 @@ class DimensionUniverse:
         governors : `NamedValueAbstractSet` [ `GovernorDimension` ]
             A frozen set of `GovernorDimension` instances.
         """
-        return NamedValueSet(d for d in self._dimensions if isinstance(d, GovernorDimension)).freeze()
+        return self.governor_dimensions
 
-    @cached_getter
     def getDatabaseElements(self) -> NamedValueAbstractSet[DatabaseDimensionElement]:
         """Return set of all `DatabaseDimensionElement` instances in universe.
 
@@ -314,6 +313,51 @@ class DimensionUniverse:
         -------
         elements : `NamedValueAbstractSet` [ `DatabaseDimensionElement` ]
             A frozen set of `DatabaseDimensionElement` instances.
+        """
+        return self.database_elements
+
+    @property
+    def elements(self) -> NamedValueAbstractSet[DimensionElement]:
+        """All dimension elements defined in this universe."""
+        return self._elements
+
+    @property
+    def dimensions(self) -> NamedValueAbstractSet[Dimension]:
+        """All dimensions defined in this universe."""
+        return self._dimensions
+
+    @property
+    @cached_getter
+    def governor_dimensions(self) -> NamedValueAbstractSet[GovernorDimension]:
+        """All governor dimensions defined in this universe.
+
+        Governor dimensions serve as special required dependencies of other
+        dimensions, with special handling in dimension query expressions and
+        collection summaries.  Governor dimension records are stored in the
+        database but the set of such values is expected to be small enough
+        for all values to be cached by all clients.
+        """
+        return NamedValueSet(d for d in self._dimensions if isinstance(d, GovernorDimension)).freeze()
+
+    @property
+    @cached_getter
+    def skypix_dimensions(self) -> NamedValueAbstractSet[SkyPixDimension]:
+        """All skypix dimensions defined in this universe.
+
+        Skypix dimension records are always generated on-the-fly rather than
+        stored in the database, and they always represent a tiling of the sky
+        with no overlaps.
+        """
+        result = NamedValueSet[SkyPixDimension]()
+        for system in self.skypix:
+            result.update(system)
+        return result.freeze()
+
+    @property
+    @cached_getter
+    def database_elements(self) -> NamedValueAbstractSet[DatabaseDimensionElement]:
+        """All dimension elements whose records are stored in the database,
+        except governor dimensions.
         """
         return NamedValueSet(d for d in self._elements if isinstance(d, DatabaseDimensionElement)).freeze()
 
@@ -374,6 +418,12 @@ class DimensionUniverse:
         """
         return self._dimensionIndices[name]
 
+    # TODO: remove on DM-41326.
+    @deprecated(
+        "Deprecated in favor of DimensionUniverse.conform, and will be removed after v27.",
+        version="v27",
+        category=FutureWarning,
+    )
     def expandDimensionNameSet(self, names: set[str]) -> None:
         """Expand a set of dimension names in-place.
 
@@ -403,6 +453,13 @@ class DimensionUniverse:
             else:
                 oldSize = len(names)
 
+    # TODO: remove on DM-41326.
+    @deprecated(
+        "DimensionUniverse.extract and DimensionGraph are deprecated in favor of DimensionUniverse.conform "
+        "and DimensionGroup, and will be removed after v27.",
+        version="v27",
+        category=FutureWarning,
+    )
     def extract(self, iterable: Iterable[Dimension | str]) -> DimensionGraph:
         """Construct graph from iterable.
 
@@ -424,15 +481,58 @@ class DimensionUniverse:
         graph : `DimensionGraph`
             A `DimensionGraph` instance containing all given dimensions.
         """
-        names = set()
-        for item in iterable:
-            try:
-                names.add(item.name)  # type: ignore
-            except AttributeError:
-                names.add(item)
-        return DimensionGraph(universe=self, names=names)
+        return self.conform(iterable)._as_graph()
 
-    def sorted(self, elements: Iterable[E | str], *, reverse: bool = False) -> list[E]:
+    def conform(
+        self,
+        dimensions: Iterable[str | Dimension] | str | DimensionElement | DimensionGroup | DimensionGraph,
+        /,
+    ) -> DimensionGroup:
+        """Construct a dimension group from an iterable of dimension names.
+
+        Parameters
+        ----------
+        dimensions : `~collections.abc.Iterable` [ `str` or `Dimension` ], \
+                `str`, `DimensionElement`, `DimensionGroup`, or \
+                `DimensionGraph`
+            Dimensions that must be included in the returned group; their
+            dependencies will be as well.  Support for `Dimension`,
+            `DimensionElement` and `DimensionGraph` objects is deprecated and
+            will be removed after v27.  Passing `DimensionGraph` objects will
+            not yield a deprecation warning to allow non-deprecated methods and
+            properties that return `DimensionGraph` objects to be passed
+            though, since these will be changed to return `DimensionGroup` in
+            the future.
+
+        Returns
+        -------
+        group : `DimensionGroup`
+            A `DimensionGroup` instance containing all given dimensions.
+        """
+        match dimensions:
+            case DimensionGroup():
+                return dimensions
+            case DimensionGraph():
+                return dimensions.as_group()
+            case DimensionElement() as d:
+                return d.minimal_group
+            case str() as name:
+                return self[name].minimal_group
+            case iterable:
+                names: set[str] = {getattr(d, "name", cast(str, d)) for d in iterable}
+                return DimensionGroup(self, names)
+
+    @overload
+    def sorted(self, elements: Iterable[Dimension], *, reverse: bool = False) -> Sequence[Dimension]:
+        ...
+
+    @overload
+    def sorted(
+        self, elements: Iterable[DimensionElement | str], *, reverse: bool = False
+    ) -> Sequence[DimensionElement]:
+        ...
+
+    def sorted(self, elements: Iterable[Any], *, reverse: bool = False) -> list[Any]:
         """Return a sorted version of the given iterable of dimension elements.
 
         The universe's sort order is topological (an element's dependencies
@@ -448,16 +548,15 @@ class DimensionUniverse:
 
         Returns
         -------
-        sorted : `list` of `DimensionElement`
-            A sorted list containing the same elements that were given.
+        sorted : `~collections.abc.Sequence` [ `Dimension` or \
+                `DimensionElement` ]
+            A sorted sequence containing the same elements that were given.
         """
         s = set(elements)
         result = [element for element in self._elements if element in s or element.name in s]
         if reverse:
             result.reverse()
-        # mypy thinks this can return DimensionElements even if all the user
-        # passed it was Dimensions; we know better.
-        return result  # type: ignore
+        return result
 
     # TODO: Remove this method on DM-38687.
     @deprecated(
@@ -501,6 +600,14 @@ class DimensionUniverse:
         """
         return self._populates[dimension.name]
 
+    @property
+    def empty(self) -> DimensionGraph:
+        """The `DimensionGraph` that contains no dimensions.
+
+        After v27 this will be a `DimensionGroup`.
+        """
+        return self._empty._as_graph()
+
     @classmethod
     def _unpickle(cls, version: int, namespace: str | None = None) -> DimensionUniverse:
         """Return an unpickled dimension universe.
@@ -534,10 +641,6 @@ class DimensionUniverse:
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
 
-    empty: DimensionGraph
-    """The `DimensionGraph` that contains no dimensions (`DimensionGraph`).
-    """
-
     commonSkyPix: SkyPixDimension
     """The special skypix dimension that is used to relate all other spatial
     dimensions in the `Registry` database (`SkyPixDimension`).
@@ -546,11 +649,13 @@ class DimensionUniverse:
     dimensionConfig: DimensionConfig
     """The configuration used to create this Universe (`DimensionConfig`)."""
 
-    _cache: dict[frozenset[str], DimensionGraph]
+    _cached_groups: dict[frozenset[str], DimensionGroup]
 
     _dimensions: NamedValueAbstractSet[Dimension]
 
     _elements: NamedValueAbstractSet[DimensionElement]
+
+    _empty: DimensionGroup
 
     _topology: Mapping[TopologicalSpace, NamedValueAbstractSet[TopologicalFamily]]
 

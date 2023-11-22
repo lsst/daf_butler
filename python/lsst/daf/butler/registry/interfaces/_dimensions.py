@@ -48,7 +48,7 @@ from ...dimensions import (
     DatabaseDimensionElement,
     DataCoordinate,
     DimensionElement,
-    DimensionGraph,
+    DimensionGroup,
     DimensionRecord,
     DimensionUniverse,
     GovernorDimension,
@@ -758,19 +758,19 @@ class DimensionRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def saveDimensionGraph(self, graph: DimensionGraph) -> int:
-        """Save a `DimensionGraph` definition to the database, allowing it to
+    def save_dimension_group(self, graph: DimensionGroup) -> int:
+        """Save a `DimensionGroup` definition to the database, allowing it to
         be retrieved later via the returned key.
 
         Parameters
         ----------
-        graph : `DimensionGraph`
+        dimensions : `DimensionGroup`
             Set of dimensions to save.
 
         Returns
         -------
         key : `int`
-            Integer used as the unique key for this `DimensionGraph` in the
+            Integer used as the unique key for this `DimensionGroup` in the
             database.
 
         Raises
@@ -782,20 +782,20 @@ class DimensionRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def loadDimensionGraph(self, key: int) -> DimensionGraph:
-        """Retrieve a `DimensionGraph` that was previously saved in the
+    def load_dimension_group(self, key: int) -> DimensionGroup:
+        """Retrieve a `DimensionGroup` that was previously saved in the
         database.
 
         Parameters
         ----------
         key : `int`
-            Integer used as the unique key for this `DimensionGraph` in the
+            Integer used as the unique key for this `DimensionGroup` in the
             database.
 
         Returns
         -------
-        graph : `DimensionGraph`
-            Retrieved graph.
+        dimensions : `DimensionGroup`
+            Retrieved dimensions.
 
         Raises
         ------

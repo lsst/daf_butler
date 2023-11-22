@@ -53,7 +53,7 @@ from lsst.daf.relation import (
 from .... import _timespan
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
 from ...._column_type_info import ColumnTypeInfo
-from ....dimensions import DataCoordinate, Dimension, DimensionGraph, DimensionUniverse
+from ....dimensions import DataCoordinate, Dimension, DimensionGroup, DimensionUniverse
 from ..._exceptions import UserExpressionError, UserExpressionSyntaxError
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .check import CheckVisitor
@@ -76,7 +76,7 @@ class ExpressionTypeError(TypeError):
 
 def make_string_expression_predicate(
     string: str,
-    dimensions: DimensionGraph,
+    dimensions: DimensionGroup,
     *,
     column_types: ColumnTypeInfo,
     bind: Mapping[str, Any] | None = None,
@@ -91,7 +91,7 @@ def make_string_expression_predicate(
     ----------
     string : `str`
         String to parse.
-    dimensions : `DimensionGraph`
+    dimensions : `DimensionGroup`
         The dimensions the query would include in the absence of this WHERE
         expression.
     column_types : `ColumnTypeInfo`
@@ -126,10 +126,10 @@ def make_string_expression_predicate(
     """
     governor_constraints: dict[str, Set[str]] = {}
     if data_id is None:
-        data_id = DataCoordinate.makeEmpty(dimensions.universe)
+        data_id = DataCoordinate.make_empty(dimensions.universe)
     if not string:
-        for dimension in data_id.graph.governors:
-            governor_constraints[dimension.name] = {cast(str, data_id[dimension])}
+        for dimension in data_id.dimensions.governors:
+            governor_constraints[dimension] = {cast(str, data_id[dimension])}
         return None, governor_constraints
     try:
         parser = ParserYacc()
@@ -140,13 +140,13 @@ def make_string_expression_predicate(
         bind = {}
     if bind:
         for identifier in bind:
-            if identifier in dimensions.universe.getStaticElements().names:
+            if identifier in dimensions.universe.elements.names:
                 raise RuntimeError(f"Bind parameter key {identifier!r} conflicts with a dimension element.")
             table, _, column = identifier.partition(".")
-            if column and table in dimensions.universe.getStaticElements().names:
+            if column and table in dimensions.universe.elements.names:
                 raise RuntimeError(f"Bind parameter key {identifier!r} looks like a dimension column.")
     if defaults is None:
-        defaults = DataCoordinate.makeEmpty(dimensions.universe)
+        defaults = DataCoordinate.make_empty(dimensions.universe)
     # Convert the expression to disjunctive normal form (ORs of ANDs).
     # That's potentially super expensive in the general case (where there's
     # a ton of nesting of ANDs and ORs).  That won't be the case for the
@@ -168,7 +168,7 @@ def make_string_expression_predicate(
             msg = f'Error in query expression "{exprOriginal}" (normalized to "{exprNormal}"): {err}'
         raise UserExpressionError(msg) from None
     for dimension_name, values in summary.dimension_constraints.items():
-        if dimension_name in dimensions.universe.getGovernorDimensions().names:
+        if dimension_name in dimensions.universe.governor_dimensions.names:
             governor_constraints[dimension_name] = cast(Set[str], values)
     converter = PredicateConversionVisitor(bind, dataset_type_name, dimensions.universe, column_types)
     predicate = tree.visit(converter)

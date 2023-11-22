@@ -41,7 +41,7 @@ from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._column_type_info import ColumnTypeInfo
 from ..._dataset_type import DatasetType
 from ..._named import NamedValueAbstractSet, NamedValueSet
-from ...dimensions import DataCoordinate, DimensionElement, DimensionGraph, DimensionUniverse, SkyPixDimension
+from ...dimensions import DataCoordinate, DimensionElement, DimensionGroup, DimensionUniverse, SkyPixDimension
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
@@ -61,7 +61,7 @@ class QueryWhereClause:
     @classmethod
     def combine(
         cls,
-        dimensions: DimensionGraph,
+        dimensions: DimensionGroup,
         expression: str = "",
         *,
         column_types: ColumnTypeInfo,
@@ -76,7 +76,7 @@ class QueryWhereClause:
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`
+        dimensions : `DimensionGroup`
             The dimensions that would be included in the query in the absence
             of the WHERE clause.
         expression : `str`, optional
@@ -108,9 +108,9 @@ class QueryWhereClause:
             An object representing the WHERE clause for a query.
         """
         if data_id is None:
-            data_id = DataCoordinate.makeEmpty(dimensions.universe)
+            data_id = DataCoordinate.make_empty(dimensions.universe)
         if defaults is None:
-            defaults = DataCoordinate.makeEmpty(dimensions.universe)
+            defaults = DataCoordinate.make_empty(dimensions.universe)
         expression_predicate, governor_constraints = make_string_expression_predicate(
             expression,
             dimensions,
@@ -171,7 +171,7 @@ class OrderByClause:
     """Class for information about columns in ORDER BY clause."""
 
     @classmethod
-    def parse_general(cls, order_by: Iterable[str], graph: DimensionGraph) -> OrderByClause:
+    def parse_general(cls, order_by: Iterable[str], dimensions: DimensionGroup) -> OrderByClause:
         """Parse an iterable of strings in the context of a multi-dimension
         query.
 
@@ -179,7 +179,7 @@ class OrderByClause:
         ----------
         order_by : `~collections.abc.Iterable` [ `str` ]
             Sequence of names to use for ordering with optional "-" prefix.
-        graph : `DimensionGraph`
+        dimensions : `DimensionGroup`
             Dimensions used by a query.
 
         Returns
@@ -195,7 +195,7 @@ class OrderByClause:
             if name[0] == "-":
                 ascending = False
                 name = name[1:]
-            element, column = categorizeOrderByName(graph, name)
+            element, column = categorizeOrderByName(dimensions, name)
             term = cls._make_term(element, column, ascending)
             terms.append(term)
         return cls(terms)
@@ -324,7 +324,7 @@ class QuerySummary:
 
     Parameters
     ----------
-    requested : `DimensionGraph`
+    requested : `DimensionGroup`
         The dimensions whose primary keys should be included in the result rows
         of the query.
     column_types : `ColumnTypeInfo`
@@ -362,7 +362,7 @@ class QuerySummary:
 
     def __init__(
         self,
-        requested: DimensionGraph,
+        requested: DimensionGroup,
         *,
         column_types: ColumnTypeInfo,
         data_id: DataCoordinate | None = None,
@@ -396,9 +396,9 @@ class QuerySummary:
         self.limit = limit
         self.columns_required, self.dimensions, self.region = self._compute_columns_required()
 
-    requested: DimensionGraph
+    requested: DimensionGroup
     """Dimensions whose primary keys should be included in the result rows of
-    the query (`DimensionGraph`).
+    the query (`DimensionGroup`).
     """
 
     where: QueryWhereClause
@@ -421,8 +421,8 @@ class QuerySummary:
     postprocessing filters), respectively.
     """
 
-    dimensions: DimensionGraph
-    """All dimensions in the query in any form (`DimensionGraph`).
+    dimensions: DimensionGroup
+    """All dimensions in the query in any form (`DimensionGroup`).
     """
 
     region: Region | None
@@ -448,7 +448,7 @@ class QuerySummary:
 
     def _compute_columns_required(
         self,
-    ) -> tuple[set[ColumnTag], DimensionGraph, Region | None]:
+    ) -> tuple[set[ColumnTag], DimensionGroup, Region | None]:
         """Compute the columns that must be provided by the relations joined
         into this query in order to obtain the right *set* of result rows in
         the right order.
@@ -464,31 +464,37 @@ class QuerySummary:
         if self.order_by is not None:
             tags.update(self.order_by.columns_required)
         region = self.where.region
-        for dimension in self.where.data_id.graph:
-            dimension_tag = DimensionKeyColumnTag(dimension.name)
+        for dimension_name in self.where.data_id.dimensions.names:
+            dimension_tag = DimensionKeyColumnTag(dimension_name)
             if dimension_tag in tags:
                 continue
-            if dimension == self.universe.commonSkyPix or not isinstance(dimension, SkyPixDimension):
+            if skypix_dimension := self.universe.skypix_dimensions.get(dimension_name):
+                if skypix_dimension == self.universe.commonSkyPix:
+                    # Common skypix dimension is should be available from
+                    # spatial join tables.
+                    tags.add(dimension_tag)
+                else:
+                    # This is a SkyPixDimension other than the common one.  If
+                    # it's not already present in the query (e.g. from a
+                    # dataset join), this is a pure spatial constraint, which
+                    # we can only apply by modifying the 'region' for the
+                    # query.  That will also require that we join in the common
+                    # skypix dimension.
+                    pixel = skypix_dimension.pixelization.pixel(self.where.data_id[dimension_name])
+                    if region is None:
+                        region = pixel
+                    else:
+                        region = IntersectionRegion(region, pixel)
+            else:
                 # If a dimension in the data ID is available from dimension
                 # tables or dimension spatial-join tables in the database,
-                # include it in the set of dimensions whose tables should be
-                # joined.  This makes these data ID constraints work just like
-                # simple 'where' constraints, which is good.
+                # include it in the set of dimensions whose tables should
+                # be joined.  This makes these data ID constraints work
+                # just like simple 'where' constraints, which is good.
                 tags.add(dimension_tag)
-            else:
-                # This is a SkyPixDimension other than the common one.  If it's
-                # not already present in the query (e.g. from a dataset join),
-                # this is a pure spatial constraint, which we can only apply by
-                # modifying the 'region' for the query.  That will also require
-                # that we join in the common skypix dimension.
-                pixel = dimension.pixelization.pixel(self.where.data_id[dimension])
-                if region is None:
-                    region = pixel
-                else:
-                    region = IntersectionRegion(region, pixel)
         # Make sure the dimension keys are expanded self-consistently in what
-        # we return by passing them through DimensionGraph.
-        dimensions = DimensionGraph(
+        # we return by passing them through DimensionGroup.
+        dimensions = DimensionGroup(
             self.universe, names={tag.dimension for tag in DimensionKeyColumnTag.filter_from(tags)}
         )
         # If we have a region constraint, ensure region columns and the common
@@ -496,11 +502,14 @@ class QuerySummary:
         missing_common_skypix = False
         if region is not None:
             for family in dimensions.spatial:
-                element = family.choose(dimensions.elements)
+                element = family.choose(dimensions.elements.names, self.universe)
                 tags.add(DimensionRecordColumnTag(element.name, "region"))
-                if not isinstance(element, SkyPixDimension) and self.universe.commonSkyPix not in dimensions:
+                if (
+                    not isinstance(element, SkyPixDimension)
+                    and self.universe.commonSkyPix.name not in dimensions
+                ):
                     missing_common_skypix = True
         if missing_common_skypix:
-            dimensions = dimensions.union(self.universe.commonSkyPix.graph)
+            dimensions = dimensions.union(self.universe.commonSkyPix.minimal_group)
         tags.update(DimensionKeyColumnTag.generate(dimensions.names))
         return (tags, dimensions, region)
