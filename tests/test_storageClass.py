@@ -243,6 +243,12 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         # Check you can silently insert something that is already there
         factory.registerStorageClass(newclass3)
 
+        # Reset the factory and check that default items are present
+        # but the new ones are not.
+        factory.reset()
+        self.assertNotIn(newclass3.name, factory)
+        self.assertIn("StructuredDataDict", factory)
+
     def testFactoryFind(self):
         # Finding a storage class can involve doing lots of slow imports so
         # this is a separate test.
