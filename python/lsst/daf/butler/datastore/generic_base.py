@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = ("GenericBaseDatastore",)
+__all__ = ("GenericBaseDatastore", "post_process_get")
 
 import logging
 from collections.abc import Mapping
@@ -53,54 +53,6 @@ class GenericBaseDatastore(Datastore, Generic[_InfoType]):
 
     Should always be sub-classed since key abstract methods are missing.
     """
-
-    def _post_process_get(
-        self,
-        inMemoryDataset: object,
-        readStorageClass: StorageClass,
-        assemblerParams: Mapping[str, Any] | None = None,
-        isComponent: bool = False,
-    ) -> object:
-        """Given the Python object read from the datastore, manipulate
-        it based on the supplied parameters and ensure the Python
-        type is correct.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Dataset to check.
-        readStorageClass: `StorageClass`
-            The `StorageClass` used to obtain the assembler and to
-            check the python type.
-        assemblerParams : `dict`, optional
-            Parameters to pass to the assembler.  Can be `None`.
-        isComponent : `bool`, optional
-            If this is a component, allow the inMemoryDataset to be `None`.
-
-        Returns
-        -------
-        dataset : `object`
-            In-memory dataset, potentially converted to expected type.
-        """
-        # Process any left over parameters
-        if assemblerParams:
-            inMemoryDataset = readStorageClass.delegate().handleParameters(inMemoryDataset, assemblerParams)
-
-        # Validate the returned data type matches the expected data type
-        pytype = readStorageClass.pytype
-
-        allowedTypes = []
-        if pytype:
-            allowedTypes.append(pytype)
-
-        # Special case components to allow them to be None
-        if isComponent:
-            allowedTypes.append(type(None))
-
-        if allowedTypes and not isinstance(inMemoryDataset, tuple(allowedTypes)):
-            inMemoryDataset = readStorageClass.coerce_type(inMemoryDataset)
-
-        return inMemoryDataset
 
     def _validate_put_parameters(self, inMemoryDataset: object, ref: DatasetRef) -> None:
         """Validate the supplied arguments for put.
@@ -173,3 +125,51 @@ class GenericBaseDatastore(Datastore, Generic[_InfoType]):
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)
         return self.put(inMemoryDataset, ref)
+
+
+def post_process_get(
+    inMemoryDataset: object,
+    readStorageClass: StorageClass,
+    assemblerParams: Mapping[str, Any] | None = None,
+    isComponent: bool = False,
+) -> object:
+    """Given the Python object read from the datastore, manipulate
+    it based on the supplied parameters and ensure the Python
+    type is correct.
+
+    Parameters
+    ----------
+    inMemoryDataset : `object`
+        Dataset to check.
+    readStorageClass: `StorageClass`
+        The `StorageClass` used to obtain the assembler and to
+        check the python type.
+    assemblerParams : `dict`, optional
+        Parameters to pass to the assembler.  Can be `None`.
+    isComponent : `bool`, optional
+        If this is a component, allow the inMemoryDataset to be `None`.
+
+    Returns
+    -------
+    dataset : `object`
+        In-memory dataset, potentially converted to expected type.
+    """
+    # Process any left over parameters
+    if assemblerParams:
+        inMemoryDataset = readStorageClass.delegate().handleParameters(inMemoryDataset, assemblerParams)
+
+    # Validate the returned data type matches the expected data type
+    pytype = readStorageClass.pytype
+
+    allowedTypes = []
+    if pytype:
+        allowedTypes.append(pytype)
+
+    # Special case components to allow them to be None
+    if isComponent:
+        allowedTypes.append(type(None))
+
+    if allowedTypes and not isinstance(inMemoryDataset, tuple(allowedTypes)):
+        inMemoryDataset = readStorageClass.coerce_type(inMemoryDataset)
+
+    return inMemoryDataset
