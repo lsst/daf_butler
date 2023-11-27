@@ -40,7 +40,7 @@ from urllib.parse import urlencode
 
 from lsst.daf.butler import DatasetId, DatasetRef, StorageClass
 from lsst.daf.butler.datastore import DatasetRefURIs
-from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore
+from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore, post_process_get
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo
 from lsst.daf.butler.utils import transactional
@@ -349,7 +349,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
 
         # Since there is no formatter to process parameters, they all must be
         # passed to the assembler.
-        inMemoryDataset = self._post_process_get(
+        inMemoryDataset = post_process_get(
             inMemoryDataset, refStorageClass, parameters, isComponent=component is not None
         )
 
