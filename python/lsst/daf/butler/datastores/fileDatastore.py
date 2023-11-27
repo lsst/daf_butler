@@ -37,10 +37,15 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast, TypeAlias
+
+from pydantic import AnyHttpUrl
+from typing import Literal
+from .._compat import _BaseModelCompat
 
 from lsst.daf.butler import (
     Config,
+    DataCoordinate,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -54,6 +59,8 @@ from lsst.daf.butler import (
     Progress,
     StorageClass,
     ddl,
+    SerializedDataCoordinate,
+    SerializedDatasetType,
 )
 from lsst.daf.butler.datastore import (
     DatasetRefURIs,
@@ -136,6 +143,25 @@ class DatastoreFileGetInformation:
 
     readStorageClass: StorageClass
     """The `StorageClass` of the dataset being read."""
+
+
+class FileDatastoreGetFileModel(_BaseModelCompat):
+    uri: AnyHttpUrl
+    formatter: str
+    storage_class: str
+    component: str | None
+    file_size: int
+
+
+class FileDatastoreGetModel(_BaseModelCompat):
+    datastore_type: Literal["file"]
+    file_info: list[FileDatastoreGetModel]
+    dataset_id: DatasetId
+    data_id: SerializedDataCoordinate
+    dataset_type: SerializedDatasetType
+
+
+DatasetLocationInformation: TypeAlias = tuple[Location, StoredFileInfo]
 
 
 class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
@@ -577,7 +603,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
     def _get_dataset_locations_info(
         self, ref: DatasetIdRef, ignore_datastore_records: bool = False
-    ) -> list[tuple[Location, StoredFileInfo]]:
+    ) -> list[DatasetLocationInformation]:
         r"""Find all the `Location`\ s  of the requested dataset in the
         `Datastore` and the associated stored file information.
 
@@ -702,7 +728,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             for location, formatter, storageClass, component in all_info
         ]
 
-    def _prepare_for_get(
+    def _prepare_for_direct_get(
         self, ref: DatasetRef, parameters: Mapping[str, Any] | None = None
     ) -> list[DatastoreFileGetInformation]:
         """Check parameters for ``get`` and obtain formatter and
@@ -738,8 +764,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             fileLocations = self._get_expected_dataset_locations_info(ref)
 
         if len(fileLocations) > 1:
-            disassembled = True
-
             # If trust is involved it is possible that there will be
             # components listed here that do not exist in the datastore.
             # Explicitly check for file artifact existence and filter out any
@@ -753,12 +777,26 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 if not fileLocations:
                     raise FileNotFoundError(f"None of the component files for dataset {ref} exist.")
 
-        else:
-            disassembled = False
-
         # Is this a component request?
         refComponent = ref.datasetType.component()
+        return self._prepare_for_get(
+            fileLocations,
+            refStorageClass=refStorageClass,
+            refComponent=refComponent,
+            parameters=parameters,
+            datasetId=ref.dataId,
+        )
 
+    def _prepare_for_get(
+        self,
+        fileLocations: list[DatasetLocationInformation],
+        *,
+        refStorageClass: StorageClass,
+        refComponent: str | None,
+        parameters: Mapping[str, Any] | None,
+        datasetId: DataCoordinate,
+    ) -> list[DatastoreFileGetInformation]:
+        disassembled = len(fileLocations) > 1
         fileGetInfo = []
         for location, storedFileInfo in fileLocations:
             # The storage class used to write the file
@@ -778,7 +816,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                     storageClass=writeStorageClass,
                     parameters=parameters,
                 ),
-                ref.dataId,
+                datasetId,
             )
 
             formatterParams, notFormatterParams = formatter.segregateParameters()
@@ -805,6 +843,31 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             )
 
         return fileGetInfo
+
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetModel:
+        records = self.getStoredItemsInfo(ref)
+        file_info = [
+            FileDatastoreGetFileModel(
+                uri=r.path,  # TODO: convert to HTTP URL via signing
+                formatter=r.formatter,
+                storage_class=r.storageClass.name,
+                component=r.component,
+                file_size=r.file_size,
+            )
+            for r in records
+        ]
+        return FileDatastoreGetModel(
+            datastore_type="file",
+            data_id=ref.dataId.to_simple(),
+            dataset_id=ref.id,
+            dataset_type=ref.datasetType.to_simple(),
+            file_info=file_info,
+        )
+
+    def execute_get_for_external_client(
+        self,
+    ) -> Any:
+        pass
 
     def _prepare_for_put(self, inMemoryDataset: Any, ref: DatasetRef) -> tuple[Location, Formatter]:
         """Check the arguments for ``put`` and obtain formatter and
@@ -1345,9 +1408,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     def _read_artifact_into_memory(
         self,
         getInfo: DatastoreFileGetInformation,
-        ref: DatasetRef,
-        isComponent: bool = False,
-        cache_ref: DatasetRef | None = None,
+        *,
+        datasetType: DatasetType,
+        dataId: DataCoordinate,
+        datasetId: DatasetId,
+        isComponent: bool,
     ) -> Any:
         """Read the artifact from datastore into in memory object.
 
@@ -1359,7 +1424,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             The registry information associated with this artifact.
         isComponent : `bool`
             Flag to indicate if a component is being read from this artifact.
-        cache_ref : `DatasetRef`, optional
+        cache_ref : `DatasetRef`
             The DatasetRef to use when looking up the file in the cache.
             This ref must have the same ID as the supplied ref but can
             be a parent ref or component ref to indicate to the cache whether
@@ -1377,13 +1442,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         uri = location.uri
         log.debug("Accessing data from %s", uri)
 
-        if cache_ref is None:
-            cache_ref = ref
-        if cache_ref.id != ref.id:
-            raise ValueError(
-                "The supplied cache dataset ref refers to a different dataset than expected:"
-                f" {ref.id} != {cache_ref.id}"
-            )
+        # TODO: Cache key includes component, so we need to make sure that the
+        # DatasetType is set to the appropriate component
+        cache_ref = DatasetRef(datasetType, dataId, "(UNKNOWN)", id=datasetId)
 
         # Cannot recalculate checksum but can compare size as a quick check
         # Do not do this if the size is negative since that indicates
@@ -1430,8 +1491,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 )
             except Exception as e:
                 raise ValueError(
-                    f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                    f" ({ref.datasetType.name} from {uri}): {e}"
+                    f"Failure from formatter '{formatter.name()}' for dataset {datasetId}"
+                    f" ({datasetType.name} from {uri}): {e}"
                 ) from e
         else:
             # Read from file.
@@ -1501,8 +1562,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                             result = formatter.read(component=getInfo.component if isComponent else None)
                     except Exception as e:
                         raise ValueError(
-                            f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                            f" ({ref.datasetType.name} from {uri}): {e}"
+                            f"Failure from formatter '{formatter.name()}' for dataset {datasetId}"
+                            f" ({datasetType.name} from {uri}): {e}"
                         ) from e
 
                     # File was read successfully so can move to cache
@@ -1510,7 +1571,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                         self.cacheManager.move_to_cache(local_uri, cache_ref)
 
         return self._post_process_get(
-            result, ref.datasetType.storageClass, getInfo.assemblerParams, isComponent=isComponent
+            result, datasetType.storageClass, getInfo.assemblerParams, isComponent=isComponent
         )
 
     def knows(self, ref: DatasetRef) -> bool:
@@ -2228,11 +2289,27 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # type conversion.
         if storageClass is not None:
             ref = ref.overrideStorageClass(storageClass)
-        refStorageClass = ref.datasetType.storageClass
 
-        allGetInfo = self._prepare_for_get(ref, parameters)
-        refComponent = ref.datasetType.component()
+        allGetInfo = self._prepare_for_direct_get(ref, parameters)
+        self._execute_get(
+            allGetInfo,
+            dataId=ref.dataId,
+            datasetId=ref.id,
+            datasetType=ref.datasetType,
+            parameters=parameters,
+        )
 
+    def _execute_get(
+        self,
+        allGetInfo: list[DatastoreFileGetInformation],
+        *,
+        dataId: DataCoordinate,
+        datasetId: DatasetId,
+        datasetType: DatasetType,
+        parameters: Mapping[str, Any] | None,
+    ) -> Any:
+        refStorageClass = datasetType.storageClass
+        refComponent = datasetType.component()
         # Create mapping from component name to related info
         allComponents = {i.component: i for i in allGetInfo}
 
@@ -2249,7 +2326,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         if isDisassembled and refComponent:
             # The composite storage class should be accessible through
             # the component dataset type
-            compositeStorageClass = ref.datasetType.parentStorageClass
+            compositeStorageClass = datasetType.parentStorageClass
 
             # In the unlikely scenario where the composite storage
             # class is not known, we can only assume that this is a
@@ -2282,17 +2359,21 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 component = getInfo.component
 
                 if component is None:
-                    raise RuntimeError(f"Internal error in datastore assembly of {ref}")
+                    raise RuntimeError(f"Internal error in datastore assembly of {dataId}")
 
                 # We do not want the formatter to think it's reading
                 # a component though because it is really reading a
                 # standalone dataset -- always tell reader it is not a
                 # component.
                 components[component] = self._read_artifact_into_memory(
-                    getInfo, ref.makeComponentRef(component), isComponent=False
+                    getInfo,
+                    datasetType=datasetType.makeComponentDatasetType(component),
+                    dataId=dataId,
+                    datasetId=datasetId,
+                    isComponent=False,
                 )
 
-            inMemoryDataset = ref.datasetType.storageClass.delegate().assemble(components)
+            inMemoryDataset = datasetType.storageClass.delegate().assemble(components)
 
             # Any unused parameters will have to be passed to the assembler
             if parameters:
@@ -2301,12 +2382,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 unusedParams = {}
 
             # Process parameters
-            return ref.datasetType.storageClass.delegate().handleParameters(
+            return datasetType.storageClass.delegate().handleParameters(
                 inMemoryDataset, parameters=unusedParams
             )
 
         elif isDisassembledReadOnlyComponent:
-            compositeStorageClass = ref.datasetType.parentStorageClass
+            compositeStorageClass = datasetType.parentStorageClass
             if compositeStorageClass is None:
                 raise RuntimeError(
                     f"Unable to retrieve derived component '{refComponent}' since"
@@ -2354,7 +2435,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                     storageClass=writeStorageClass,
                     parameters=parameters,
                 ),
-                ref.dataId,
+                dataId,
             )
 
             # The assembler can not receive any parameter requests for a
