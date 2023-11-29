@@ -24,3 +24,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from fastapi import HTTPException
+
+
+class NotFoundException(HTTPException):
+    def __init__(self, message: str = "Not found"):
+        super().__init__(status_code=404, detail=message)

@@ -28,8 +28,8 @@
 __all__ = (
     "DatastoreFileGetInformation",
     "DatasetLocationInformation",
-    "prepare_for_get",
-    "get_dataset_as_python_object",
+    "generate_datastore_get_information",
+    "get_dataset_as_python_object_from_get_info",
 )
 
 from collections.abc import Mapping
@@ -77,7 +77,7 @@ class DatastoreFileGetInformation:
     """The `StorageClass` of the dataset being read."""
 
 
-def prepare_for_get(
+def generate_datastore_get_information(
     fileLocations: list[DatasetLocationInformation],
     *,
     refStorageClass: StorageClass,
@@ -306,7 +306,7 @@ def _read_artifact_into_memory(
     )
 
 
-def get_dataset_as_python_object(
+def get_dataset_as_python_object_from_get_info(
     allGetInfo: list[DatastoreFileGetInformation],
     *,
     ref: DatasetRef,

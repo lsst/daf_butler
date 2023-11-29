@@ -36,8 +36,7 @@ import hashlib
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
-from typing import TYPE_CHECKING, Any, ClassVar, cast, TypeAlias
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from lsst.daf.butler import (
     Config,
@@ -75,8 +74,12 @@ from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo, 
 from lsst.daf.butler.datastores.file_datastore.get import (
     DatasetLocationInformation,
     DatastoreFileGetInformation,
-    get_dataset_as_python_object,
-    prepare_for_get,
+    generate_datastore_get_information,
+    get_dataset_as_python_object_from_get_info,
+)
+from lsst.daf.butler.datastores.fileDatastoreClient import (
+    FileDatastoreGetPayload,
+    FileDatastoreGetPayloadFileInfo,
 )
 from lsst.daf.butler.registry.interfaces import (
     DatabaseInsertMode,
@@ -113,8 +116,6 @@ class _IngestPrepData(Datastore.IngestPrepData):
     def __init__(self, datasets: Iterable[FileDataset]):
         super().__init__(ref for dataset in datasets for ref in dataset.refs)
         self.datasets = datasets
-
-
 
 
 class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
@@ -732,7 +733,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         # Is this a component request?
         refComponent = ref.datasetType.component()
-        return prepare_for_get(
+        return generate_datastore_get_information(
             fileLocations,
             refStorageClass=refStorageClass,
             refComponent=refComponent,
@@ -1993,8 +1994,21 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             ref = ref.overrideStorageClass(storageClass)
 
         allGetInfo = self._prepare_for_direct_get(ref, parameters)
-        return get_dataset_as_python_object(
+        return get_dataset_as_python_object_from_get_info(
             allGetInfo, ref=ref, parameters=parameters, cache_manager=self.cacheManager
+        )
+
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload:
+        # Docstring inherited
+
+        def to_file_info_payload(info: DatasetLocationInformation) -> FileDatastoreGetPayloadFileInfo:
+            location, file_info = info
+            return FileDatastoreGetPayloadFileInfo(url=location.uri.geturl(), metadata=file_info.to_simple())
+
+        return FileDatastoreGetPayload(
+            datastore_type="file",
+            dataset_ref=ref.to_simple(),
+            file_info=[to_file_info_payload(info) for info in self._get_dataset_locations_info(ref)],
         )
 
     @transactional

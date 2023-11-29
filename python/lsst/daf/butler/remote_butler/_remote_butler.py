@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar
 
 import httpx
 from lsst.daf.butler import __version__
+from lsst.daf.butler.datastores.fileDatastoreClient import get_dataset_as_python_object
 from lsst.daf.butler.repo_relocation import replaceRoot
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
@@ -51,7 +52,7 @@ from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Regist
 from ..registry.wildcards import CollectionWildcard
 from ._authentication import get_authentication_headers, get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
-from .server_models import FindDatasetModel
+from .server_models import FindDatasetModel, GetFileRequestModel, GetFileResponseModel
 
 if TYPE_CHECKING:
     from .._dataset_existence import DatasetExistence
@@ -215,7 +216,20 @@ class RemoteButler(Butler):
         **kwargs: Any,
     ) -> Any:
         # Docstring inherited.
-        raise NotImplementedError()
+        if not isinstance(datasetRefOrType, DatasetRef):
+            raise NotImplementedError("RemoteButler currently only supports get() of a DatasetRef")
+
+        dataset_id = datasetRefOrType.id
+        request = GetFileRequestModel(dataset_id=dataset_id)
+        response = self._post("get_file", request)
+        if response.status_code == 404:
+            raise LookupError(f"Dataset not found with ID ${dataset_id}")
+        response.raise_for_status()
+        model = self._parse_model(response, GetFileResponseModel)
+
+        return get_dataset_as_python_object(
+            model, parameters=parameters, storageClass=storageClass, universe=self.dimensions
+        )
 
     def getURIs(
         self,

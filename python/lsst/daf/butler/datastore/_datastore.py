@@ -540,6 +540,23 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> object:
+        """Retrieve serializable data that can be used to execute a get()
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+
+        Returns
+        -------
+        payload : `object`
+            Serializable payload containing the information needed to perform a
+            get() operation.  This payload may be sent over the wire to another
+            system to perform the get().
+        """
+        raise NotImplementedError()
+
     @abstractmethod
     def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
         """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
