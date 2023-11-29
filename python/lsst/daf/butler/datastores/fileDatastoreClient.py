@@ -15,34 +15,71 @@ from lsst.daf.butler.datastores.file_datastore.get import (
 
 
 class FileDatastoreGetPayloadFileInfo(_BaseModelCompat):
+    """Information required to read a single file stored in `FileDatastore`"""
+
     # TODO DM-41879: Allowing arbitrary URLs here is a severe security issue,
     # since it allows the server to trick the client into fetching data from
     # any file on its local filesystem or from remote storage using credentials
     # laying around in the environment.  This should be restricted to only
     # HTTP, but we don't yet have a means of mocking out HTTP gets in tests.
     url: str
-    metadata: SerializedStoredFileInfo
+    """An absolute URL that can be used to read the file"""
+
+    datastoreRecords: SerializedStoredFileInfo
+    """`FileDatastore` metadata records for this file"""
 
 
 class FileDatastoreGetPayload(_BaseModelCompat):
+    """A serializable representation of the data needed for retrieving an
+    artifact and converting it to a python object.
+    """
+
     datastore_type: Literal["file"]
+
     file_info: list[FileDatastoreGetPayloadFileInfo]
+    """List of retrieval information for each file associated with this
+    artifact
+    """
+
     dataset_ref: SerializedDatasetRef
+    """Registry information associated with this artifact"""
 
 
 def get_dataset_as_python_object(
-    model: FileDatastoreGetPayload,
+    payload: FileDatastoreGetPayload,
     *,
     universe: DimensionUniverse,
     parameters: Mapping[str, Any] | None,
     storageClass: StorageClass | str | None,
 ) -> Any:
+    """Retrieve an artifact from storage and return it as a Python object
+
+    Parameters
+    ----------
+    payload : `FileDatastoreGetPayload`
+        Pre-processed information about each file associated with this artifact
+    universe: `DimensionUniverse`
+        The universe of dimensions associated with the `DatasetRef` contained
+        in `payload`.
+    parameters : `Mapping`[`str`, `Any`]
+        `StorageClass` and `Formatter` parameters to be used when converting
+        the artifact to a Python object
+    storageClass: `StorageClass` | `str` | `None`
+        Overrides the `StorageClass` to be used when converting the artifact to
+        a Python object.  If `None`, uses the `StorageClass` specified by
+        `payload`.
+
+    Returns
+    -------
+    python_object: `Any`
+        The retrieved artifact, converted to a Python object
+    """
     fileLocations: list[DatasetLocationInformation] = [
-        (Location(None, file_info.url), StoredFileInfo.from_simple(file_info.metadata))
-        for file_info in model.file_info
+        (Location(None, file_info.url), StoredFileInfo.from_simple(file_info.datastoreRecords))
+        for file_info in payload.file_info
     ]
 
-    ref = DatasetRef.from_simple(model.dataset_ref, universe=universe)
+    ref = DatasetRef.from_simple(payload.dataset_ref, universe=universe)
     if storageClass is not None:
         ref = ref.overrideStorageClass(storageClass)
 

@@ -2000,7 +2000,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         def to_file_info_payload(info: DatasetLocationInformation) -> FileDatastoreGetPayloadFileInfo:
             location, file_info = info
-            return FileDatastoreGetPayloadFileInfo(url=location.uri.geturl(), metadata=file_info.to_simple())
+            return FileDatastoreGetPayloadFileInfo(
+                url=location.uri.geturl(), datastoreRecords=file_info.to_simple()
+            )
 
         return FileDatastoreGetPayload(
             datastore_type="file",
