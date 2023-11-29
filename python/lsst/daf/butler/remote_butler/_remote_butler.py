@@ -31,7 +31,7 @@ __all__ = ("RemoteButler",)
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar
 
 import httpx
 from lsst.daf.butler import __version__
@@ -41,7 +41,9 @@ from lsst.utils.introspection import get_full_type_name
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig
-from .._dataset_ref import DatasetRef, SerializedDatasetRef
+from .._compat import _BaseModelCompat
+from .._config import Config
+from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
 from ..dimensions import DataCoordinate, DimensionConfig, DimensionUniverse, SerializedDataCoordinate
@@ -52,9 +54,7 @@ from ._config import RemoteButlerConfigModel
 from .server_models import FindDatasetModel
 
 if TYPE_CHECKING:
-    from .._config import Config
     from .._dataset_existence import DatasetExistence
-    from .._dataset_ref import DatasetId, DatasetIdGenEnum
     from .._deferredDatasetHandle import DeferredDatasetHandle
     from .._file_dataset import FileDataset
     from .._limited_butler import LimitedButler
@@ -64,6 +64,9 @@ if TYPE_CHECKING:
     from ..dimensions import DataId, DimensionGroup, DimensionRecord
     from ..registry import CollectionArgType, Registry
     from ..transfers import RepoExportContext
+
+
+_AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=_BaseModelCompat)
 
 
 class RemoteButler(Butler):
@@ -328,12 +331,12 @@ class RemoteButler(Butler):
         )
 
         path = f"find_dataset/{dataset_type}"
-        response = self._client.post(
-            self._get_url(path), json=query.model_dump(mode="json", exclude_unset=True, exclude_defaults=True)
-        )
+        response = self._post(path, query)
         response.raise_for_status()
 
-        return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
+        return DatasetRef.from_simple(
+            self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
+        )
 
     def retrieveArtifacts(
         self,
@@ -530,3 +533,11 @@ class RemoteButler(Butler):
             The full path to the endpoint.
         """
         return f"{version}/{path}"
+
+    def _post(self, path: str, model: _BaseModelCompat) -> httpx.Response:
+        json = model.model_dump_json(exclude_unset=True).encode("utf-8")
+        url = self._get_url(path)
+        return self._client.post(url, content=json, headers={"content-type": "application/json"})
+
+    def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
+        return model.model_validate_json(response.content)
