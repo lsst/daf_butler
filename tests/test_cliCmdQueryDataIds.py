@@ -145,7 +145,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     def testDatasetsAndCollections(self):
         """Test constraining via datasets and collections."""
-        butler = self.loadData("base.yaml", "datasets-uuid.yaml")
+        butler = self.loadData("base.yaml", "datasets.yaml")
         # See that the data IDs returned are constrained by that collection's
         # contents.
         res, msg = self._queryDataIds(
