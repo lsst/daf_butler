@@ -731,14 +731,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 if not fileLocations:
                     raise FileNotFoundError(f"None of the component files for dataset {ref} exist.")
 
-        # Is this a component request?
-        refComponent = ref.datasetType.component()
         return generate_datastore_get_information(
             fileLocations,
-            refStorageClass=refStorageClass,
-            refComponent=refComponent,
+            readStorageClass=refStorageClass,
+            ref=ref,
             parameters=parameters,
-            dataId=ref.dataId,
         )
 
     def _prepare_for_put(self, inMemoryDataset: Any, ref: DatasetRef) -> tuple[Location, Formatter]:

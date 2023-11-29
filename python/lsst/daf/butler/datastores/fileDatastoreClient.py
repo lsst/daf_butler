@@ -48,10 +48,8 @@ def get_dataset_as_python_object(
 
     datastore_file_info = generate_datastore_get_information(
         fileLocations,
-        refStorageClass=ref.datasetType.storageClass,
-        refComponent=ref.datasetType.component(),
+        ref=ref,
         parameters=parameters,
-        dataId=ref.dataId,
     )
     return get_dataset_as_python_object_from_get_info(
         datastore_file_info, ref=ref, parameters=parameters, cache_manager=DatastoreDisabledCacheManager()

@@ -36,7 +36,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, TypeAlias
 
-from lsst.daf.butler import DataCoordinate, DatasetRef, FileDescriptor, Formatter, Location, StorageClass
+from lsst.daf.butler import DatasetRef, FileDescriptor, Formatter, Location, StorageClass
 from lsst.daf.butler.datastore.cache_manager import AbstractDatastoreCacheManager
 from lsst.daf.butler.datastore.generic_base import post_process_get
 from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
@@ -80,11 +80,16 @@ class DatastoreFileGetInformation:
 def generate_datastore_get_information(
     fileLocations: list[DatasetLocationInformation],
     *,
-    refStorageClass: StorageClass,
-    refComponent: str | None,
+    ref: DatasetRef,
     parameters: Mapping[str, Any] | None,
-    dataId: DataCoordinate,
+    readStorageClass: StorageClass | None = None,
 ) -> list[DatastoreFileGetInformation]:
+    if readStorageClass is None:
+        readStorageClass = ref.datasetType.storageClass
+
+    # Is this a component request?
+    refComponent = ref.datasetType.component()
+
     disassembled = len(fileLocations) > 1
     fileGetInfo = []
     for location, storedFileInfo in fileLocations:
@@ -94,8 +99,6 @@ def generate_datastore_get_information(
         # If this has been disassembled we need read to match the write
         if disassembled:
             readStorageClass = writeStorageClass
-        else:
-            readStorageClass = refStorageClass
 
         formatter = get_instance_of(
             storedFileInfo.formatter,
@@ -105,7 +108,7 @@ def generate_datastore_get_information(
                 storageClass=writeStorageClass,
                 parameters=parameters,
             ),
-            dataId,
+            ref.dataId,
         )
 
         formatterParams, notFormatterParams = formatter.segregateParameters()
