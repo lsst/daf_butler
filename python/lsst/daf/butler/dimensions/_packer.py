@@ -56,8 +56,8 @@ class DimensionPacker(metaclass=ABCMeta):
     fixed : `DataCoordinate`
         Expanded data ID for the dimensions whose values must remain fixed
         (to these values) in all calls to `pack`, and are used in the results
-        of calls to `unpack`.  Subclasses are permitted to require that
-        ``fixed.hasRecords()`` return `True`.
+        of calls to `unpack`.  Subclasses may ignore particular dimensions, and
+        are permitted to require that ``fixed.hasRecords()`` return `True`.
     dimensions : `DimensionGroup` or `DimensionGraph`
         The dimensions of data IDs packed by this instance.  Only
         `DimensionGroup` will be supported after v27.
@@ -124,12 +124,13 @@ class DimensionPacker(metaclass=ABCMeta):
         dataId : `DataId`
             Data ID to pack.  Values for any keys also present in the "fixed"
             data ID passed at construction must be the same as the values
-            passed at construction.
+            passed at construction, but in general you must still specify
+            those keys.
         returnMaxBits : `bool`
             If `True`, return a tuple of ``(packed, self.maxBits)``.
         **kwargs
-            Additional keyword arguments forwarded to
-            `DataCoordinate.standardize`.
+            Additional keyword arguments are treated like additional key-value
+            pairs in ``dataId``.
 
         Returns
         -------
