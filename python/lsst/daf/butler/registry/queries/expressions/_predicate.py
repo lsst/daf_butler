@@ -199,7 +199,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
         ">=": "__ge__",
         "+": "__add__",
         "-": "__sub__",
-        "/": "__mul__",
+        "*": "__mul__",
     }
 
     def to_datetime(self, time: astropy.time.Time) -> datetime.datetime:
