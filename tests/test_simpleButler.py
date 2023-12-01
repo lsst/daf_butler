@@ -324,7 +324,8 @@ class SimpleButlerTestCase(unittest.TestCase):
             try:
                 flat_id, _ = butler.get("flat", dataId=dataId, collections=coll, **kwds)
             except Exception as e:
-                raise type(e)(f"{str(e)}: dataId={dataId}, kwds={kwds}") from e
+                e.add_note(f"dataId={dataId}, kwds={kwds}")
+                raise
             self.assertEqual(flat_id, flat2g.id, msg=f"DataId: {dataId}, kwds: {kwds}")
 
         # Check that bad combinations raise.
