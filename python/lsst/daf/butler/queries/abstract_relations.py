@@ -30,24 +30,17 @@ from __future__ import annotations
 __all__ = ("DiscriminatedRelation",)
 
 
-from typing import TYPE_CHECKING, Annotated, Generic, Literal, TypeAlias, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
-from ..dimensions import DataIdValue, DimensionGroup, DimensionUniverse
-from ..dimensions._group import SortedSequenceSet
+from ..dimensions import DataIdValue
 
 if TYPE_CHECKING:
     from .abstract_expressions import DiscriminatedOrderExpression, DiscriminatedPredicate
 
 
-class UnvalidatedDimensionGroup(pydantic.RootModel[tuple[str, ...]]):
-    @property
-    def names(self) -> SortedSequenceSet:
-        return SortedSequenceSet(self.root)
-
-
-_D = TypeVar("_D", bound=DimensionGroup | UnvalidatedDimensionGroup)
+DimensionNameSet: TypeAlias = tuple[str, ...]
 
 
 class JoinTuple(tuple[str, str]):
@@ -73,15 +66,7 @@ class JoinTuple(tuple[str, str]):
         return self[1]
 
 
-def _validate_dimensions(
-    universe: DimensionUniverse, original: DimensionGroup | UnvalidatedDimensionGroup
-) -> DimensionGroup:
-    if (dimensions := universe.conform(original.names)).names != original.names:
-        raise ValueError(f"Validated dimensions {dimensions.names} != raw dimensions {original.names}.")
-    return dimensions
-
-
-class DatasetSearch(pydantic.BaseModel, Generic[_D]):
+class DatasetSearch(pydantic.BaseModel):
     """An abstract relation that represents a query for datasets."""
 
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
@@ -102,7 +87,7 @@ class DatasetSearch(pydantic.BaseModel, Generic[_D]):
     in a dataset search.
     """
 
-    dimensions: _D | None
+    dimensions: DimensionNameSet | None
     """The dimensions of the dataset type.
 
     If this is not `None`, the dimensions must match the actual dimensions of
@@ -111,16 +96,8 @@ class DatasetSearch(pydantic.BaseModel, Generic[_D]):
     operand in relation operations that require dimensions.
     """
 
-    def with_universe(self, universe: DimensionUniverse) -> DatasetSearch[DimensionGroup]:
-        if self.dimensions is None or isinstance(self.dimensions, DimensionGroup):
-            return cast(DatasetSearch[DimensionGroup], self)
-        dimensions = _validate_dimensions(universe, self.dimensions)
-        return DatasetSearch.model_construct(
-            dataset_type=self.dataset_type, collections=self.collections, dimensions=dimensions
-        )
 
-
-class DataCoordinateUpload(pydantic.BaseModel, Generic[_D]):
+class DataCoordinateUpload(pydantic.BaseModel):
     """An abstract relation that represents (and holds) user-provided data
     ID values.
     """
@@ -128,20 +105,14 @@ class DataCoordinateUpload(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["data_coordinate_upload"] = "data_coordinate_upload"
 
-    dimensions: _D
+    dimensions: DimensionNameSet
     """The dimensions of the data IDs."""
 
     rows: frozenset[tuple[DataIdValue, ...]]
     """The required values of the data IDs."""
 
-    def with_universe(self, universe: DimensionUniverse) -> DataCoordinateUpload[DimensionGroup]:
-        if isinstance(self.dimensions, DimensionGroup):
-            return cast(DataCoordinateUpload[DimensionGroup], self)
-        dimensions = _validate_dimensions(universe, self.dimensions)
-        return DataCoordinateUpload.model_construct(dimensions=dimensions, rows=self.rows)
 
-
-class DimensionJoin(pydantic.BaseModel, Generic[_D]):
+class DimensionJoin(pydantic.BaseModel):
     """An abstract relation that represents a join between dimension-element
     tables and (optionally) other relations.
 
@@ -157,10 +128,10 @@ class DimensionJoin(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["dimension_join"] = "dimension_join"
 
-    dimensions: _D
+    dimensions: DimensionNameSet
     """The dimensions of the relation."""
 
-    operands: tuple[DiscriminatedRelation[_D], ...] = ()
+    operands: tuple[DiscriminatedRelation, ...] = ()
     """Relations to include in the join other than dimension-element tables.
 
     Because dimension-element tables are expected to contain the full set of
@@ -186,19 +157,8 @@ class DimensionJoin(pydantic.BaseModel, Generic[_D]):
     whose timespans must overlap.
     """
 
-    def with_universe(self, universe: DimensionUniverse) -> DimensionJoin[DimensionGroup]:
-        if isinstance(self.dimensions, DimensionGroup):
-            return cast(DimensionJoin[DimensionGroup], self)
-        dimensions = _validate_dimensions(universe, self.dimensions)
-        return DimensionJoin.model_construct(
-            dimensions=dimensions,
-            operands=tuple([operand.with_universe(universe) for operand in self.operands]),
-            spatial=self.spatial,
-            temporal=self.temporal,
-        )
 
-
-class Selection(pydantic.BaseModel, Generic[_D]):
+class Selection(pydantic.BaseModel):
     """An abstract relation operation that filters out rows based on a
     boolean expression.
     """
@@ -206,27 +166,19 @@ class Selection(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["selection"] = "selection"
 
-    operand: DiscriminatedRelation[_D]
+    operand: DiscriminatedRelation
     """Upstream relation to operate on."""
 
-    predicate: DiscriminatedPredicate[_D]
+    predicate: DiscriminatedPredicate
     """Boolean expression tree that defines the filter."""
 
     @property
-    def dimensions(self) -> _D | None:
+    def dimensions(self) -> DimensionNameSet | None:
         """The dimensions of this abstract relation."""
         return self.operand.dimensions
 
-    def with_universe(self, universe: DimensionUniverse) -> Selection[DimensionGroup]:
-        if self.dimensions is None or isinstance(self.dimensions, DimensionGroup):
-            return cast(Selection[DimensionGroup], self)
-        return Selection.model_construct(
-            operand=self.operand.with_universe(universe),
-            predicate=self.predicate.with_universe(universe),
-        )
 
-
-class DimensionProjection(pydantic.BaseModel, Generic[_D]):
+class DimensionProjection(pydantic.BaseModel):
     """An abstract relation operation that drops dimension columns from its
     operand.
 
@@ -236,29 +188,20 @@ class DimensionProjection(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["dimension_projection"] = "dimension_projection"
 
-    operand: DiscriminatedRelation[_D]
+    operand: DiscriminatedRelation
     """The upstream relation to operate on.
 
     This must have dimensions that are not `None`.
     """
 
-    dimensions: _D
+    dimensions: DimensionNameSet
     """The dimensions of the new relation.
 
     This must be a subset of the original relation's dimensions.
     """
 
-    def with_universe(self, universe: DimensionUniverse) -> DimensionProjection[DimensionGroup]:
-        if isinstance(self.dimensions, DimensionGroup):
-            return cast(DimensionProjection[DimensionGroup], self)
-        dimensions = _validate_dimensions(universe, self.dimensions)
-        return DimensionProjection.model_construct(
-            operand=self.operand.with_universe(universe),
-            dimensions=dimensions,
-        )
 
-
-class OrderedSlice(pydantic.BaseModel, Generic[_D]):
+class OrderedSlice(pydantic.BaseModel):
     """An abstract relation operation that sorts and/or integer-slices the rows
     of its operand.
     """
@@ -266,7 +209,7 @@ class OrderedSlice(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["ordered_slice"] = "ordered_slice"
 
-    operand: DiscriminatedRelation[_D]
+    operand: DiscriminatedRelation
     """The upstream relation to operate on."""
 
     order_by: tuple[DiscriminatedOrderExpression, ...] = ()
@@ -279,22 +222,12 @@ class OrderedSlice(pydantic.BaseModel, Generic[_D]):
     """Index one past the last row to return, or `None` for no bound."""
 
     @property
-    def dimensions(self) -> _D | None:
+    def dimensions(self) -> DimensionNameSet | None:
         """The dimensions of this abstract relation."""
         return self.operand.dimensions
 
-    def with_universe(self, universe: DimensionUniverse) -> OrderedSlice[DimensionGroup]:
-        if self.dimensions is None or isinstance(self.dimensions, DimensionGroup):
-            return cast(OrderedSlice[DimensionGroup], self)
-        return OrderedSlice.model_construct(
-            operand=self.operand.with_universe(universe),
-            order_by=self.order_by,
-            begin=self.begin,
-            end=self.end,
-        )
 
-
-class Chain(pydantic.BaseModel, Generic[_D]):
+class Chain(pydantic.BaseModel):
     """An abstract relation whose rows are the union of the rows of its
     operands.
     """
@@ -302,26 +235,19 @@ class Chain(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["chain"] = "chain"
 
-    operands: tuple[DiscriminatedRelation[_D], ...] = pydantic.Field(min_length=2)
+    operands: tuple[DiscriminatedRelation, ...] = pydantic.Field(min_length=2)
     """The upstream relations to combine.
 
     Order is not necessarily preserved.
     """
 
     @property
-    def dimensions(self) -> _D | None:
+    def dimensions(self) -> DimensionNameSet | None:
         """The dimensions of this relation and all of its operands."""
         return self.operands[0].dimensions
 
-    def with_universe(self, universe: DimensionUniverse) -> Chain[DimensionGroup]:
-        if self.dimensions is None or isinstance(self.dimensions, DimensionGroup):
-            return cast(Chain[DimensionGroup], self)
-        return Chain.model_construct(
-            operands=tuple([operand.with_universe(universe) for operand in self.operands])
-        )
 
-
-class FindFirst(pydantic.BaseModel, Generic[_D]):
+class FindFirst(pydantic.BaseModel):
     """An abstract relation that finds the first dataset for each data ID
     in its ordered sequence of collections.
 
@@ -332,7 +258,7 @@ class FindFirst(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["find_first"] = "find_first"
 
-    operand: DiscriminatedRelation[_D]
+    operand: DiscriminatedRelation
     """The upstream relation to operate on.
 
     This may have more than one `DatasetSearch` joined into it (at any level),
@@ -344,19 +270,12 @@ class FindFirst(pydantic.BaseModel, Generic[_D]):
     """The type of the datasets being searched for."""
 
     @property
-    def dimensions(self) -> _D | None:
+    def dimensions(self) -> DimensionNameSet | None:
         """The dimensions of this abstract relation."""
         return self.operand.dimensions
 
-    def with_universe(self, universe: DimensionUniverse) -> FindFirst[DimensionGroup]:
-        if self.dimensions is None or isinstance(self.dimensions, DimensionGroup):
-            return cast(FindFirst[DimensionGroup], self)
-        return FindFirst.model_construct(
-            operand=self.operand.with_universe(universe), dataset_type=self.dataset_type
-        )
 
-
-class Materialization(pydantic.BaseModel, Generic[_D]):
+class Materialization(pydantic.BaseModel):
     """An abstract relation that represent evaluating the upstream relation
     and saving its rows somewhere (e.g. a temporary table or Parquet file).
     """
@@ -364,31 +283,26 @@ class Materialization(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["materialization"] = "materialization"
 
-    operand: DiscriminatedRelation[_D]
+    operand: DiscriminatedRelation
     """The upstream relation to evaluate."""
 
     @property
-    def dimensions(self) -> _D | None:
+    def dimensions(self) -> DimensionNameSet | None:
         """The dimensions of this abstract relation."""
         return self.operand.dimensions
-
-    def with_universe(self, universe: DimensionUniverse) -> Materialization[DimensionGroup]:
-        if self.dimensions is None or isinstance(self.dimensions, DimensionGroup):
-            return cast(Materialization[DimensionGroup], self)
-        return Materialization.model_construct(operand=self.operand.with_universe(universe))
 
 
 DiscriminatedRelation: TypeAlias = Annotated[
     Union[
-        DatasetSearch[_D],
-        DataCoordinateUpload[_D],
-        DimensionJoin[_D],
-        Selection[_D],
-        DimensionProjection[_D],
-        OrderedSlice[_D],
-        Chain[_D],
-        FindFirst[_D],
-        Materialization[_D],
+        DatasetSearch,
+        DataCoordinateUpload,
+        DimensionJoin,
+        Selection,
+        DimensionProjection,
+        OrderedSlice,
+        Chain,
+        FindFirst,
+        Materialization,
     ],
     pydantic.Field(discriminator="relation_type"),
 ]

@@ -35,18 +35,18 @@ __all__ = (
 
 from base64 import b64decode, b64encode
 from functools import cached_property
-from typing import TYPE_CHECKING, Annotated, Generic, Literal, TypeAlias, Union, cast
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, Union
 
 import astropy.time
 import pydantic
 from lsst.sphgeom import Region
 
 from .._timespan import Timespan
-from ..dimensions import DataIdValue, DimensionGroup, DimensionUniverse
+from ..dimensions import DataIdValue
 from ..time_utils import TimeConverter
 
 if TYPE_CHECKING:
-    from .abstract_relations import _D, DiscriminatedRelation
+    from .abstract_relations import DimensionNameSet, DiscriminatedRelation
 
 
 LiteralValue: TypeAlias = Union[int, str, float, bytes, astropy.time.Time, Timespan, Region]
@@ -283,61 +283,32 @@ DiscriminatedOrderExpression: TypeAlias = Annotated[
 ]
 
 
-class LogicalAnd(pydantic.BaseModel, Generic[_D]):
+class LogicalAnd(pydantic.BaseModel):
     """A boolean column expression that is `True` only if all of its operands
     are `True`.
     """
 
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     predicate_type: Literal["and"] = "and"
-    operands: tuple[DiscriminatedPredicate[_D], ...] = pydantic.Field(min_length=2)
-
-    def with_universe(self, universe: DimensionUniverse) -> LogicalAnd[DimensionGroup]:
-        new_operands: list[DiscriminatedPredicate[DimensionGroup]] = []
-        any_new: bool = False
-        for operand in self.operands:
-            new_operand = operand.with_universe(universe)
-            if new_operand is not operand:
-                any_new = True
-        if any_new:
-            return LogicalAnd.model_construct(operands=tuple(new_operands))
-        else:
-            return cast(LogicalAnd[DimensionGroup], self)
+    operands: tuple[DiscriminatedPredicate, ...] = pydantic.Field(min_length=2)
 
 
-class LogicalOr(pydantic.BaseModel, Generic[_D]):
+class LogicalOr(pydantic.BaseModel):
     """A boolean column expression that is `True` if any of its operands are
     `True`.
     """
 
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     predicate_type: Literal["or"] = "or"
-    operands: tuple[DiscriminatedPredicate[_D], ...] = pydantic.Field(min_length=2)
-
-    def with_universe(self, universe: DimensionUniverse) -> LogicalOr[DimensionGroup]:
-        new_operands: list[DiscriminatedPredicate[DimensionGroup]] = []
-        any_new: bool = False
-        for operand in self.operands:
-            new_operand = operand.with_universe(universe)
-            if new_operand is not operand:
-                any_new = True
-        if any_new:
-            return LogicalOr.model_construct(operands=tuple(new_operands))
-        else:
-            return cast(LogicalOr[DimensionGroup], self)
+    operands: tuple[DiscriminatedPredicate, ...] = pydantic.Field(min_length=2)
 
 
-class LogicalNot(pydantic.BaseModel, Generic[_D]):
+class LogicalNot(pydantic.BaseModel):
     """A boolean column expression that inverts its operand."""
 
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     predicate_type: Literal["not"] = "not"
-    operand: DiscriminatedPredicate[_D]
-
-    def with_universe(self, universe: DimensionUniverse) -> LogicalNot[DimensionGroup]:
-        if (new_operand := self.operand.with_universe(universe)) is self.operand:
-            return cast(LogicalNot[DimensionGroup], self)
-        return LogicalNot.model_construct(operand=new_operand)
+    operand: DiscriminatedPredicate
 
 
 class IsNull(pydantic.BaseModel):
@@ -346,9 +317,6 @@ class IsNull(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     predicate_type: Literal["is_null"] = "is_null"
     operand: DiscriminatedExpression
-
-    def with_universe(self, universe: DimensionUniverse) -> IsNull:
-        return self
 
 
 class Comparison(pydantic.BaseModel):
@@ -362,9 +330,6 @@ class Comparison(pydantic.BaseModel):
     b: DiscriminatedExpression
     operator: Literal["=", "!=", "<", ">", ">=", "<=", "overlaps"]
 
-    def with_universe(self, universe: DimensionUniverse) -> Comparison:
-        return self
-
 
 class InContainer(pydantic.BaseModel):
     """A boolean column expression that tests whether one expression is a
@@ -375,9 +340,6 @@ class InContainer(pydantic.BaseModel):
     predicate_type: Literal["in_container"] = "in_container"
     member: DiscriminatedExpression
     container: tuple[DiscriminatedExpression, ...]
-
-    def with_universe(self, universe: DimensionUniverse) -> InContainer:
-        return self
 
 
 class InRange(pydantic.BaseModel):
@@ -392,11 +354,8 @@ class InRange(pydantic.BaseModel):
     stop: int | None = None
     step: int = 1
 
-    def with_universe(self, universe: DimensionUniverse) -> InRange:
-        return self
 
-
-class InRelation(pydantic.BaseModel, Generic[_D]):
+class InRelation(pydantic.BaseModel):
     """A boolean column expression that tests whether its expression is
     included single-column projection of a relation.
 
@@ -408,17 +367,10 @@ class InRelation(pydantic.BaseModel, Generic[_D]):
     predicate_type: Literal["in_relation"] = "in_relation"
     member: DiscriminatedExpression
     column: DiscriminatedExpression
-    relation: DiscriminatedRelation[_D]
-
-    def with_universe(self, universe: DimensionUniverse) -> InRelation:
-        if self.relation.dimensions is None or isinstance(self.relation.dimensions, DimensionGroup):
-            return cast(InRelation[DimensionGroup], self)
-        return InRelation.model_construct(
-            member=self.member, column=self.column, relation=self.relation.with_universe(universe)
-        )
+    relation: DiscriminatedRelation
 
 
-class StringPredicate(pydantic.BaseModel, Generic[_D]):
+class StringPredicate(pydantic.BaseModel):
     """A tag wrapper for boolean column expressions created by parsing a string
     expression.
 
@@ -428,15 +380,10 @@ class StringPredicate(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     predicate_type: Literal["string_predicate"] = "string_predicate"
     where: str
-    tree: DiscriminatedPredicate[_D]
-
-    def with_universe(self, universe: DimensionUniverse) -> StringPredicate[DimensionGroup]:
-        if (new_tree := self.tree.with_universe(universe)) is self.tree:
-            return cast(StringPredicate[DimensionGroup], self)
-        return StringPredicate.model_construct(where=self.where, tree=new_tree)
+    tree: DiscriminatedPredicate
 
 
-class DataCoordinateConstraint(pydantic.BaseModel, Generic[_D]):
+class DataCoordinateConstraint(pydantic.BaseModel):
     """A boolean column expression defined by interpreting data ID's key-value
     pairs as a logical AND of equality constraints.
     """
@@ -444,33 +391,24 @@ class DataCoordinateConstraint(pydantic.BaseModel, Generic[_D]):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     predicate_type: Literal["data_coordinate_constraint"] = "data_coordinate_constraint"
 
-    dimensions: _D
+    dimensions: DimensionNameSet
     """The dimensions of the data ID."""
 
     values: tuple[DataIdValue, ...]
     """The required values of the data ID."""
 
-    def with_universe(self, universe: DimensionUniverse) -> DataCoordinateConstraint[DimensionGroup]:
-        if isinstance(self.dimensions, DimensionGroup):
-            return cast(DataCoordinateConstraint[DimensionGroup], self.dimensions)
-        from .abstract_relations import _validate_dimensions
-
-        return DataCoordinateConstraint.model_construct(
-            dimensions=_validate_dimensions(universe, self.dimensions), values=self.values
-        )
-
 
 Predicate: TypeAlias = Union[
-    LogicalAnd[_D],
-    LogicalOr[_D],
-    LogicalNot[_D],
+    LogicalAnd,
+    LogicalOr,
+    LogicalNot,
     IsNull,
     Comparison,
     InContainer,
     InRange,
-    InRelation[_D],
-    StringPredicate[_D],
-    DataCoordinateConstraint[_D],
+    InRelation,
+    StringPredicate,
+    DataCoordinateConstraint,
 ]
 
-DiscriminatedPredicate = Annotated[Predicate[_D], pydantic.Field(discriminator="predicate_type")]
+DiscriminatedPredicate = Annotated[Predicate, pydantic.Field(discriminator="predicate_type")]
