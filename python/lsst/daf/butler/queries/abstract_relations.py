@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, TypeAlias, Union
 from ..dimensions import DataIdValue, DimensionGroup
 
 if TYPE_CHECKING:
-    from .abstract_expressions import AbstractOrderExpression, AbstractPredicate
+    from .abstract_expressions import DiscriminatedOrderExpression, DiscriminatedPredicate
 
 
 class JoinTuple(tuple[str, str]):
@@ -158,7 +158,7 @@ class Selection:
     operand: AbstractRelation
     """Upstream relation to operate on."""
 
-    predicate: AbstractPredicate
+    predicate: DiscriminatedPredicate
     """Boolean expression tree that defines the filter."""
 
     @property
@@ -197,7 +197,7 @@ class OrderedSlice:
     operand: AbstractRelation
     """The upstream relation to operate on."""
 
-    order_by: tuple[AbstractOrderExpression, ...] = ()
+    order_by: tuple[DiscriminatedOrderExpression, ...] = ()
     """Expressions to sort the rows by."""
 
     begin: int = 0
