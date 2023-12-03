@@ -49,7 +49,7 @@ LiteralValue: TypeAlias = Union[int, str, float, bytes, astropy.time.Time, Times
 class IntColumnLiteral(pydantic.BaseModel):
     """A literal `int` value in a column expression."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["int"] = "int"
     value: int
 
@@ -61,7 +61,7 @@ class IntColumnLiteral(pydantic.BaseModel):
 class StringColumnLiteral(pydantic.BaseModel):
     """A literal `str` value in a column expression."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["str"] = "str"
     value: str
 
@@ -73,7 +73,7 @@ class StringColumnLiteral(pydantic.BaseModel):
 class FloatColumnLiteral(pydantic.BaseModel):
     """A literal `float` value in a column expression."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["float"] = "float"
     value: float
 
@@ -89,7 +89,7 @@ class BytesColumnLiteral(pydantic.BaseModel):
     use.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["bytes"] = "bytes"
     encoded: bytes
 
@@ -109,7 +109,7 @@ class TimeColumnLiteral(pydantic.BaseModel):
     and restored from that on first use.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["time"] = "time"
     nsec: int
 
@@ -129,7 +129,7 @@ class TimespanColumnLiteral(pydantic.BaseModel):
     when serialized and the timespan is restored from that on first use.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["timespan"] = "timespan"
     begin_nsec: int
     end_nsec: int
@@ -150,7 +150,7 @@ class RegionColumnLiteral(pydantic.BaseModel):
     first use.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["region"] = "region"
 
     encoded: bytes

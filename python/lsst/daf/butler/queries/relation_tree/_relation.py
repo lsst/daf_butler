@@ -45,7 +45,7 @@ JoinTuple: TypeAlias = Annotated[tuple[str, str], pydantic.AfterValidator(lambda
 class DatasetSearch(pydantic.BaseModel):
     """An abstract relation that represents a query for datasets."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["dataset_search"] = "dataset_search"
 
     dataset_type: str | None
@@ -78,7 +78,7 @@ class DataCoordinateUpload(pydantic.BaseModel):
     ID values.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["data_coordinate_upload"] = "data_coordinate_upload"
 
     dimensions: DimensionGroup
@@ -101,7 +101,7 @@ class DimensionJoin(pydantic.BaseModel):
     simpler if the only join constraints in play are on dimension columns.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["dimension_join"] = "dimension_join"
 
     dimensions: DimensionGroup
@@ -139,7 +139,7 @@ class Selection(pydantic.BaseModel):
     boolean expression.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["selection"] = "selection"
 
     operand: Relation
@@ -161,7 +161,7 @@ class DimensionProjection(pydantic.BaseModel):
     Any dataset columns present are always preserved.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["dimension_projection"] = "dimension_projection"
 
     operand: Relation
@@ -182,7 +182,7 @@ class OrderedSlice(pydantic.BaseModel):
     of its operand.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["ordered_slice"] = "ordered_slice"
 
     operand: Relation
@@ -208,7 +208,7 @@ class Chain(pydantic.BaseModel):
     operands.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["chain"] = "chain"
 
     operands: tuple[Relation, ...] = pydantic.Field(min_length=2)
@@ -231,7 +231,7 @@ class FindFirst(pydantic.BaseModel):
     columns other than those for its target dataset type.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["find_first"] = "find_first"
 
     operand: Relation
@@ -256,7 +256,7 @@ class Materialization(pydantic.BaseModel):
     and saving its rows somewhere (e.g. a temporary table or Parquet file).
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     relation_type: Literal["materialization"] = "materialization"
 
     operand: Relation

@@ -37,7 +37,7 @@ import pydantic
 class DimensionKeyReference(pydantic.BaseModel):
     """A column expression that references a dimension primary key column."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["dimension_key"] = "dimension_key"
     dimension: str
 
@@ -47,7 +47,7 @@ class DimensionFieldReference(pydantic.BaseModel):
     not a primary ket.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["dimension_field"] = "dimension_field"
     element: str
     field: str
@@ -58,7 +58,7 @@ class DatasetFieldReference(pydantic.BaseModel):
     type.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["dataset_field"] = "dataset_field"
     dataset_type: str | None
     field: str

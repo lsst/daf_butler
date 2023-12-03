@@ -45,7 +45,7 @@ class LogicalAnd(pydantic.BaseModel):
     are `True`.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["and"] = "and"
     operands: tuple[Predicate, ...] = pydantic.Field(min_length=2)
 
@@ -55,7 +55,7 @@ class LogicalOr(pydantic.BaseModel):
     `True`.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["or"] = "or"
     operands: tuple[Predicate, ...] = pydantic.Field(min_length=2)
 
@@ -63,7 +63,7 @@ class LogicalOr(pydantic.BaseModel):
 class LogicalNot(pydantic.BaseModel):
     """A boolean column expression that inverts its operand."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["not"] = "not"
     operand: Predicate
 
@@ -71,7 +71,7 @@ class LogicalNot(pydantic.BaseModel):
 class IsNull(pydantic.BaseModel):
     """A boolean column expression that tests whether its operand is NULL."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["is_null"] = "is_null"
     operand: ColumnExpression
 
@@ -81,7 +81,7 @@ class Comparison(pydantic.BaseModel):
     expressions.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["comparison"] = "comparison"
     a: ColumnExpression
     b: ColumnExpression
@@ -93,7 +93,7 @@ class InContainer(pydantic.BaseModel):
     member of an explicit sequence of other expressions.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["in_container"] = "in_container"
     member: ColumnExpression
     container: tuple[ColumnExpression, ...]
@@ -104,7 +104,7 @@ class InRange(pydantic.BaseModel):
     included in an integer range.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["in_range"] = "in_range"
     member: ColumnExpression
     start: int = 0
@@ -120,7 +120,7 @@ class InRelation(pydantic.BaseModel):
     be useful for other columns as well.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["in_relation"] = "in_relation"
     member: ColumnExpression
     column: ColumnExpression
@@ -134,7 +134,7 @@ class StringPredicate(pydantic.BaseModel):
     Remembering the original string is useful for error reporting.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["string_predicate"] = "string_predicate"
     where: str
     tree: Predicate
@@ -145,7 +145,7 @@ class DataCoordinateConstraint(pydantic.BaseModel):
     pairs as a logical AND of equality constraints.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["data_coordinate_constraint"] = "data_coordinate_constraint"
 
     dimensions: DimensionGroup

@@ -46,7 +46,7 @@ from .relation_tree import ColumnReference
 class DataCoordinateResultSpec(pydantic.BaseModel):
     """Specification for a query that yields `DataCoordinate` objects."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     result_type: Literal["data_coordinate"] = "data_coordinate"
     dimensions: DimensionGroup
     with_dimension_records: bool
@@ -55,7 +55,7 @@ class DataCoordinateResultSpec(pydantic.BaseModel):
 class DimensionRecordResultSpec(pydantic.BaseModel):
     """Specification for a query that yields `DimensionRecord` objects."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     result_type: Literal["dimension_record"] = "dimension_record"
     element: DimensionElement
 
@@ -63,7 +63,7 @@ class DimensionRecordResultSpec(pydantic.BaseModel):
 class DatasetRefResultSpec(pydantic.BaseModel):
     """Specification for a query that yields `DatasetRef` objects."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     result_type: Literal["dataset_ref"] = "dataset_ref"
     dataset_type_name: str | None
     dimensions: DimensionGroup
@@ -75,7 +75,7 @@ class GeneralResultSpec(pydantic.BaseModel):
     an explicit list of columns.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     result_type: Literal["general"] = "general"
     columns: tuple[ColumnReference]
 

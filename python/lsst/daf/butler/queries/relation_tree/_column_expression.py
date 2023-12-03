@@ -45,7 +45,7 @@ from ._column_reference import _ColumnReference
 class UnaryExpression(pydantic.BaseModel):
     """A unary operation on a column expression that returns a non-bool."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["unary"] = "unary"
     operand: ColumnExpression
     operator: Literal["-", "begin_of", "end_of"]
@@ -54,7 +54,7 @@ class UnaryExpression(pydantic.BaseModel):
 class BinaryExpression(pydantic.BaseModel):
     """A binary operation on column expressions that returns a non-bool."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["binary"] = "binary"
     a: ColumnExpression
     b: ColumnExpression
@@ -77,7 +77,7 @@ class Reversed(pydantic.BaseModel):
     reverse order.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["reversed"] = "reversed"
     operand: ColumnExpression
 
