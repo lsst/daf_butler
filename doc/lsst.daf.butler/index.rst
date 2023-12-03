@@ -221,6 +221,10 @@ General utilities
    :no-main-docstr:
    :headings: ^"
 
+.. automodapi:: lsst.daf.butler.pydantic_utils
+   :no-main-docstr:
+   :headings: ^"
+
 .. automodapi:: lsst.daf.butler.repo_relocation
    :no-main-docstr:
    :headings: ^"
