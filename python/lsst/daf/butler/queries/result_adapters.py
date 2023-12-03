@@ -27,47 +27,60 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnReference",)
+__all__ = (
+    "DataCoordinateResultSpec",
+    "DimensionRecordResultSpec",
+    "DatasetRefResultSpec",
+    "GeneralResultSpec",
+    "ResultSpec",
+)
 
 from typing import Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
+from ..dimensions import DimensionElement, DimensionGroup
+from .relation_tree import ColumnReference
 
-class DimensionKeyReference(pydantic.BaseModel):
-    """A column expression that references a dimension primary key column."""
+
+class DataCoordinateResultSpec(pydantic.BaseModel):
+    """Specification for a query that yields `DataCoordinate` objects."""
 
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
-    expression_type: Literal["dimension_key"] = "dimension_key"
-    dimension: str
+    result_type: Literal["data_coordinate"] = "data_coordinate"
+    dimensions: DimensionGroup
+    with_dimension_records: bool
 
 
-class DimensionFieldReference(pydantic.BaseModel):
-    """A column expression that references a dimension record column that is
-    not a primary ket.
+class DimensionRecordResultSpec(pydantic.BaseModel):
+    """Specification for a query that yields `DimensionRecord` objects."""
+
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    result_type: Literal["dimension_record"] = "dimension_record"
+    element: DimensionElement
+
+
+class DatasetRefResultSpec(pydantic.BaseModel):
+    """Specification for a query that yields `DatasetRef` objects."""
+
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
+    result_type: Literal["dataset_ref"] = "dataset_ref"
+    dataset_type_name: str | None
+    dimensions: DimensionGroup
+    with_dimension_records: bool
+
+
+class GeneralResultSpec(pydantic.BaseModel):
+    """Specification for a query that yields a table with
+    an explicit list of columns.
     """
 
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
-    expression_type: Literal["dimension_field"] = "dimension_field"
-    element: str
-    field: str
+    result_type: Literal["general"] = "general"
+    columns: tuple[ColumnReference]
 
 
-class DatasetFieldReference(pydantic.BaseModel):
-    """A column expression that references a column associated with a dataset
-    type.
-    """
-
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
-    expression_type: Literal["dataset_field"] = "dataset_field"
-    dataset_type: str | None
-    field: str
-
-
-_ColumnReference: TypeAlias = Union[
-    DimensionKeyReference,
-    DimensionFieldReference,
-    DatasetFieldReference,
+ResultSpec: TypeAlias = Annotated[
+    Union[DataCoordinateResultSpec, DimensionRecordResultSpec, DatasetRefResultSpec, GeneralResultSpec],
+    pydantic.Field(discriminator="result_type"),
 ]
-
-ColumnReference: TypeAlias = Annotated[_ColumnReference, pydantic.Field(discriminator="expression_type")]

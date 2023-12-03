@@ -28,7 +28,9 @@
 from __future__ import annotations
 
 __all__ = (
+    "_ColumnExpression",
     "ColumnExpression",
+    "OrderExpression",
     "OrderExpression",
 )
 
@@ -37,7 +39,7 @@ from typing import Annotated, Literal, TypeAlias, Union
 import pydantic
 
 from ._column_literal import ColumnLiteral
-from ._column_reference import ColumnReference
+from ._column_reference import _ColumnReference
 
 
 class UnaryExpression(pydantic.BaseModel):
@@ -61,7 +63,7 @@ class BinaryExpression(pydantic.BaseModel):
 
 _ColumnExpression: TypeAlias = Union[
     ColumnLiteral,
-    ColumnReference,
+    _ColumnReference,
     UnaryExpression,
     BinaryExpression,
 ]
