@@ -38,8 +38,9 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeAlias, Union, ca
 
 import pydantic
 from lsst.utils.classes import cached_getter
+from pydantic_core import core_schema
 
-from .. import arrow_utils, column_spec, ddl
+from .. import arrow_utils, column_spec, ddl, pydantic_utils
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalRelationshipEndpoint
 from ..json import from_json_generic, to_json_generic
@@ -457,6 +458,46 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     def documentation(self) -> str:
         """Extended description of this dimension element."""
         raise NotImplementedError()
+
+    @classmethod
+    def _validate(cls, data: Any, info: pydantic.ValidationInfo) -> DimensionElement:
+        """Pydantic validator (deserializer) for `DimensionElement`.
+
+        This satisfies the `pydantic.WithInfoPlainValidatorFunction` signature.
+        """
+        universe = pydantic_utils.get_universe_from_context(info.context)
+        return universe[data]
+
+    def _serialize(self) -> str:
+        """Pydantic serializer for `DimensionElement`.
+
+        This satisfies the `pydantic.PlainSerializerFunction` signature.
+        """
+        return self.name
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: pydantic.GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        # This is the Pydantic hook for overriding serialization, validation,
+        # and JSON schema generation.
+        str_schema = core_schema.str_schema()
+        from_str_schema = core_schema.chain_schema(
+            [str_schema, core_schema.with_info_plain_validator_function(cls._validate)]
+        )
+        return core_schema.json_or_python_schema(
+            # When deserializing from JSON, expect it to be a `str`
+            json_schema=from_str_schema,
+            # When deserializing from Python, first see if it's already a
+            # DimensionElement and then try conversion from `str`.
+            python_schema=core_schema.union_schema(
+                [core_schema.is_instance_schema(DimensionElement), from_str_schema]
+            ),
+            # When serializing convert it to a `str`.
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                cls._serialize, return_schema=str_schema
+            ),
+        )
 
 
 class Dimension(DimensionElement):
