@@ -926,6 +926,20 @@ class DataCoordinateTestCase(unittest.TestCase):
         )
         self.assertEqual(dimensions, adapter.validate_python(dimensions))
 
+    def test_dimension_element_pydantic(self):
+        """Test that DimensionElement round-trips through Pydantic as long as
+        it's given the universe when validated.
+        """
+        element = self.allDataIds.universe["visit"]
+        adapter = pydantic.TypeAdapter(DimensionElement)
+        json_str = adapter.dump_json(element)
+        python_data = adapter.dump_python(element)
+        self.assertEqual(element, adapter.validate_json(json_str, context=dict(universe=element.universe)))
+        self.assertEqual(
+            element, adapter.validate_python(python_data, context=dict(universe=element.universe))
+        )
+        self.assertEqual(element, adapter.validate_python(element))
+
 
 if __name__ == "__main__":
     unittest.main()
