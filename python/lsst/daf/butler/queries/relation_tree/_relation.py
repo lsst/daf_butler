@@ -27,18 +27,18 @@
 
 from __future__ import annotations
 
-__all__ = ("Relation",)
+__all__ = ("Relation", "DeferredValidationRelation")
 
 
 from typing import Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
-from ...dimensions import DataIdValue
+from ...dimensions import DataIdValue, DimensionGroup
+from ...pydantic_utils import DeferredValidation
 from ._column_expression import OrderExpression
 from ._predicate import Predicate
 
-DimensionNameSet: TypeAlias = tuple[str, ...]
 JoinTuple: TypeAlias = Annotated[tuple[str, str], pydantic.AfterValidator(lambda t: tuple(sorted(t)))]
 
 
@@ -63,7 +63,7 @@ class DatasetSearch(pydantic.BaseModel):
     in a dataset search.
     """
 
-    dimensions: DimensionNameSet | None
+    dimensions: DimensionGroup | None
     """The dimensions of the dataset type.
 
     If this is not `None`, the dimensions must match the actual dimensions of
@@ -81,7 +81,7 @@ class DataCoordinateUpload(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["data_coordinate_upload"] = "data_coordinate_upload"
 
-    dimensions: DimensionNameSet
+    dimensions: DimensionGroup
     """The dimensions of the data IDs."""
 
     rows: frozenset[tuple[DataIdValue, ...]]
@@ -104,7 +104,7 @@ class DimensionJoin(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["dimension_join"] = "dimension_join"
 
-    dimensions: DimensionNameSet
+    dimensions: DimensionGroup
     """The dimensions of the relation."""
 
     operands: tuple[Relation, ...] = ()
@@ -149,7 +149,7 @@ class Selection(pydantic.BaseModel):
     """Boolean expression tree that defines the filter."""
 
     @property
-    def dimensions(self) -> DimensionNameSet | None:
+    def dimensions(self) -> DimensionGroup | None:
         """The dimensions of this abstract relation."""
         return self.operand.dimensions
 
@@ -170,7 +170,7 @@ class DimensionProjection(pydantic.BaseModel):
     This must have dimensions that are not `None`.
     """
 
-    dimensions: DimensionNameSet
+    dimensions: DimensionGroup
     """The dimensions of the new relation.
 
     This must be a subset of the original relation's dimensions.
@@ -198,7 +198,7 @@ class OrderedSlice(pydantic.BaseModel):
     """Index one past the last row to return, or `None` for no bound."""
 
     @property
-    def dimensions(self) -> DimensionNameSet | None:
+    def dimensions(self) -> DimensionGroup | None:
         """The dimensions of this abstract relation."""
         return self.operand.dimensions
 
@@ -218,7 +218,7 @@ class Chain(pydantic.BaseModel):
     """
 
     @property
-    def dimensions(self) -> DimensionNameSet | None:
+    def dimensions(self) -> DimensionGroup | None:
         """The dimensions of this relation and all of its operands."""
         return self.operands[0].dimensions
 
@@ -246,7 +246,7 @@ class FindFirst(pydantic.BaseModel):
     """The type of the datasets being searched for."""
 
     @property
-    def dimensions(self) -> DimensionNameSet | None:
+    def dimensions(self) -> DimensionGroup | None:
         """The dimensions of this abstract relation."""
         return self.operand.dimensions
 
@@ -263,7 +263,7 @@ class Materialization(pydantic.BaseModel):
     """The upstream relation to evaluate."""
 
     @property
-    def dimensions(self) -> DimensionNameSet | None:
+    def dimensions(self) -> DimensionGroup | None:
         """The dimensions of this abstract relation."""
         return self.operand.dimensions
 
@@ -291,3 +291,7 @@ OrderedSlice.model_rebuild()
 Chain.model_rebuild()
 FindFirst.model_rebuild()
 Materialization.model_rebuild()
+
+
+class DeferredValidationRelation(DeferredValidation[Relation]):
+    pass

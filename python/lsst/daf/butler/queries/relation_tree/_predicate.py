@@ -33,11 +33,11 @@ from typing import TYPE_CHECKING, Annotated, Literal, Union
 
 import pydantic
 
-from ...dimensions import DataIdValue
+from ...dimensions import DataIdValue, DimensionGroup
 from ._column_expression import ColumnExpression
 
 if TYPE_CHECKING:
-    from ._relation import DimensionNameSet, Relation
+    from ._relation import Relation
 
 
 class LogicalAnd(pydantic.BaseModel):
@@ -148,7 +148,7 @@ class DataCoordinateConstraint(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     predicate_type: Literal["data_coordinate_constraint"] = "data_coordinate_constraint"
 
-    dimensions: DimensionNameSet
+    dimensions: DimensionGroup
     """The dimensions of the data ID."""
 
     values: tuple[DataIdValue, ...]
