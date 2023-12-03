@@ -27,43 +27,19 @@
 
 from __future__ import annotations
 
-__all__ = ("DiscriminatedRelation",)
+__all__ = ("Relation",)
 
 
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, Union
+from typing import Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
-from ..dimensions import DataIdValue
-
-if TYPE_CHECKING:
-    from .abstract_expressions import DiscriminatedOrderExpression, DiscriminatedPredicate
-
+from ...dimensions import DataIdValue
+from ._column_expression import OrderExpression
+from ._predicate import Predicate
 
 DimensionNameSet: TypeAlias = tuple[str, ...]
-
-
-class JoinTuple(tuple[str, str]):
-    """A 2-element `tuple` of `str` used to specify a spatial or temporal join.
-
-    This is just a tuple whose elements are always in lexicographical order,
-    ensuring it can be put in `set` without the original order of those
-    elements mattering.
-    """
-
-    def __new__(cls, a: str, b: str) -> JoinTuple:
-        if a <= b:
-            return super().__new__(cls, (a, b))  # type: ignore
-        else:
-            return super().__new__(cls, (b, a))  # type: ignore
-
-    @property
-    def a(self) -> str:
-        return self[0]
-
-    @property
-    def b(self) -> str:
-        return self[1]
+JoinTuple: TypeAlias = Annotated[tuple[str, str], pydantic.AfterValidator(lambda t: tuple(sorted(t)))]
 
 
 class DatasetSearch(pydantic.BaseModel):
@@ -131,7 +107,7 @@ class DimensionJoin(pydantic.BaseModel):
     dimensions: DimensionNameSet
     """The dimensions of the relation."""
 
-    operands: tuple[DiscriminatedRelation, ...] = ()
+    operands: tuple[Relation, ...] = ()
     """Relations to include in the join other than dimension-element tables.
 
     Because dimension-element tables are expected to contain the full set of
@@ -166,10 +142,10 @@ class Selection(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["selection"] = "selection"
 
-    operand: DiscriminatedRelation
+    operand: Relation
     """Upstream relation to operate on."""
 
-    predicate: DiscriminatedPredicate
+    predicate: Predicate
     """Boolean expression tree that defines the filter."""
 
     @property
@@ -188,7 +164,7 @@ class DimensionProjection(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["dimension_projection"] = "dimension_projection"
 
-    operand: DiscriminatedRelation
+    operand: Relation
     """The upstream relation to operate on.
 
     This must have dimensions that are not `None`.
@@ -209,10 +185,10 @@ class OrderedSlice(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["ordered_slice"] = "ordered_slice"
 
-    operand: DiscriminatedRelation
+    operand: Relation
     """The upstream relation to operate on."""
 
-    order_by: tuple[DiscriminatedOrderExpression, ...] = ()
+    order_by: tuple[OrderExpression, ...] = ()
     """Expressions to sort the rows by."""
 
     begin: int = 0
@@ -235,7 +211,7 @@ class Chain(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["chain"] = "chain"
 
-    operands: tuple[DiscriminatedRelation, ...] = pydantic.Field(min_length=2)
+    operands: tuple[Relation, ...] = pydantic.Field(min_length=2)
     """The upstream relations to combine.
 
     Order is not necessarily preserved.
@@ -258,7 +234,7 @@ class FindFirst(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["find_first"] = "find_first"
 
-    operand: DiscriminatedRelation
+    operand: Relation
     """The upstream relation to operate on.
 
     This may have more than one `DatasetSearch` joined into it (at any level),
@@ -283,7 +259,7 @@ class Materialization(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid")
     relation_type: Literal["materialization"] = "materialization"
 
-    operand: DiscriminatedRelation
+    operand: Relation
     """The upstream relation to evaluate."""
 
     @property
@@ -292,7 +268,7 @@ class Materialization(pydantic.BaseModel):
         return self.operand.dimensions
 
 
-DiscriminatedRelation: TypeAlias = Annotated[
+Relation: TypeAlias = Annotated[
     Union[
         DatasetSearch,
         DataCoordinateUpload,
@@ -306,3 +282,12 @@ DiscriminatedRelation: TypeAlias = Annotated[
     ],
     pydantic.Field(discriminator="relation_type"),
 ]
+
+
+DimensionJoin.model_rebuild()
+Selection.model_rebuild()
+DimensionProjection.model_rebuild()
+OrderedSlice.model_rebuild()
+Chain.model_rebuild()
+FindFirst.model_rebuild()
+Materialization.model_rebuild()
