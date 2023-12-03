@@ -27,14 +27,37 @@
 
 from __future__ import annotations
 
-__all__ = ("DeferredValidation",)
+__all__ = ("DeferredValidation", "get_universe_from_context")
 
-from typing import Any, ClassVar, Generic, Self, TypeVar, get_args
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Self, TypeVar, get_args
 
 import pydantic
 from pydantic_core import core_schema
 
+if TYPE_CHECKING:
+    from .dimensions import DimensionUniverse
+
 _T = TypeVar("_T")
+
+
+def get_universe_from_context(context: dict[str, Any] | None) -> DimensionUniverse:
+    """Extract the dimension universe from a Pydantic validation context
+    dictionary.
+
+    This function just provides consistent error handling around::
+
+        context["universe"]
+
+    """
+    if context is None:
+        raise ValueError("This object requires Pydantic validation context to be deserialized.")
+    try:
+        return context["universe"]
+    except KeyError:
+        raise ValueError(
+            "This object requires the DimensionUniverse to be provided in the Pydantic validation "
+            "context to be deserialized."
+        ) from None
 
 
 class DeferredValidation(Generic[_T]):
