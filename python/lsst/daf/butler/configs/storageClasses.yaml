@@ -411,3 +411,5 @@ storageClasses:
     pytype: lsst.analysis.tools.interfaces.MetricMeasurementBundle
   MultipleCellCoadd:
     pytype: lsst.cell_coadds.MultipleCellCoadd
+  NNModelPackagePayload:
+    pytype: lsst.meas.transiNet.modelPackages.formatters.NNModelPackagePayload
