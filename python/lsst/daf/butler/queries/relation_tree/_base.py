@@ -27,55 +27,42 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnReference", "DimensionKeyReference", "DimensionFieldReference", "DatasetFieldReference")
+__all__ = ("RelationBase", "ColumnExpressionBase", "PredicateBase", "StringOrWildcard", "DatasetFieldName")
 
-from typing import Annotated, Literal, TypeAlias, Union
+from types import EllipsisType
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
 
 import pydantic
 
-from ._base import ColumnExpressionBase, DatasetFieldName, StringOrWildcard
+if TYPE_CHECKING:
+    from ._column_reference import ColumnReference
 
 
-class DimensionKeyReference(ColumnExpressionBase):
-    """A column expression that references a dimension primary key column."""
-
-    expression_type: Literal["dimension_key"] = "dimension_key"
-    dimension: str
-
-    def gather_required_columns(self) -> set[ColumnReference]:
-        return {self}
-
-
-class DimensionFieldReference(ColumnExpressionBase):
-    """A column expression that references a dimension record column that is
-    not a primary ket.
-    """
-
-    expression_type: Literal["dimension_field"] = "dimension_field"
-    element: str
-    field: str
-
-    def gather_required_columns(self) -> set[ColumnReference]:
-        return {self}
-
-
-class DatasetFieldReference(ColumnExpressionBase):
-    """A column expression that references a column associated with a dataset
-    type.
-    """
-
-    expression_type: Literal["dataset_field"] = "dataset_field"
-    dataset_type: StringOrWildcard
-    field: DatasetFieldName
-
-    def gather_required_columns(self) -> set[ColumnReference]:
-        return {self}
-
-
-_ColumnReference: TypeAlias = Union[
-    DimensionKeyReference,
-    DimensionFieldReference,
-    DatasetFieldReference,
+StringOrWildcard = Annotated[
+    str | EllipsisType,
+    pydantic.PlainSerializer(lambda x: "..." if x is ... else x, return_type=str),
+    pydantic.BeforeValidator(lambda x: ... if x == "..." else x),
 ]
 
-ColumnReference: TypeAlias = Annotated[_ColumnReference, pydantic.Field(discriminator="expression_type")]
+
+DatasetFieldName: TypeAlias = Literal[
+    "dataset_id", "dataset_type", "ingest_date", "run", "collection", "rank"
+]
+
+
+class RelationTreeBase(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
+
+
+class RelationBase(RelationTreeBase):
+    pass
+
+
+class ColumnExpressionBase(RelationTreeBase):
+    def gather_required_columns(self) -> set[ColumnReference]:
+        return set()
+
+
+class PredicateBase(RelationTreeBase):
+    def gather_required_columns(self) -> set[ColumnReference]:
+        return set()

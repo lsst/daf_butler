@@ -37,19 +37,18 @@ from functools import cached_property
 from typing import Literal, TypeAlias, Union
 
 import astropy.time
-import pydantic
 from lsst.sphgeom import Region
 
 from ..._timespan import Timespan
 from ...time_utils import TimeConverter
+from ._base import ColumnExpressionBase
 
 LiteralValue: TypeAlias = Union[int, str, float, bytes, astropy.time.Time, Timespan, Region]
 
 
-class IntColumnLiteral(pydantic.BaseModel):
+class IntColumnLiteral(ColumnExpressionBase):
     """A literal `int` value in a column expression."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["int"] = "int"
     value: int
 
@@ -58,10 +57,9 @@ class IntColumnLiteral(pydantic.BaseModel):
         return cls.model_construct(value=value)
 
 
-class StringColumnLiteral(pydantic.BaseModel):
+class StringColumnLiteral(ColumnExpressionBase):
     """A literal `str` value in a column expression."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["str"] = "str"
     value: str
 
@@ -70,10 +68,9 @@ class StringColumnLiteral(pydantic.BaseModel):
         return cls.model_construct(value=value)
 
 
-class FloatColumnLiteral(pydantic.BaseModel):
+class FloatColumnLiteral(ColumnExpressionBase):
     """A literal `float` value in a column expression."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["float"] = "float"
     value: float
 
@@ -82,14 +79,13 @@ class FloatColumnLiteral(pydantic.BaseModel):
         return cls.model_construct(value=value)
 
 
-class BytesColumnLiteral(pydantic.BaseModel):
+class BytesColumnLiteral(ColumnExpressionBase):
     """A literal `bytes` value in a column expression.
 
     The original value is base64-encoded when serialized and decoded on first
     use.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["bytes"] = "bytes"
     encoded: bytes
 
@@ -102,14 +98,13 @@ class BytesColumnLiteral(pydantic.BaseModel):
         return cls.model_construct(encoded=b64encode(value))
 
 
-class TimeColumnLiteral(pydantic.BaseModel):
+class TimeColumnLiteral(ColumnExpressionBase):
     """A literal `astropy.time.Time` value in a column expression.
 
     The time is converted into TAI nanoseconds since 1970-01-01 when serialized
     and restored from that on first use.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["time"] = "time"
     nsec: int
 
@@ -122,14 +117,13 @@ class TimeColumnLiteral(pydantic.BaseModel):
         return cls.model_construct(nsec=TimeConverter().astropy_to_nsec(value))
 
 
-class TimespanColumnLiteral(pydantic.BaseModel):
+class TimespanColumnLiteral(ColumnExpressionBase):
     """A literal `Timespan` value in a column expression.
 
     The timespan bounds are converted into TAI nanoseconds since 1970-01-01
     when serialized and the timespan is restored from that on first use.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["timespan"] = "timespan"
     begin_nsec: int
     end_nsec: int
@@ -143,14 +137,13 @@ class TimespanColumnLiteral(pydantic.BaseModel):
         return cls.model_construct(begin_nsec=value._nsec[0], end_nsec=value._nsec[1])
 
 
-class RegionColumnLiteral(pydantic.BaseModel):
+class RegionColumnLiteral(ColumnExpressionBase):
     """A literal `lsst.sphgeom.Region` value in a column expression.
 
     The region is encoded to base64 `bytes` when serialized, and decoded on
     first use.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["region"] = "region"
 
     encoded: bytes

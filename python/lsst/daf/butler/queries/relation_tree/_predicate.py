@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from lsst.daf.butler.queries.relation_tree._column_reference import ColumnReference
+
 __all__ = ("Predicate",)
 
 from typing import TYPE_CHECKING, Annotated, Literal, Union
@@ -34,85 +36,108 @@ from typing import TYPE_CHECKING, Annotated, Literal, Union
 import pydantic
 
 from ...dimensions import DataIdValue, DimensionGroup
+from ._base import PredicateBase
 from ._column_expression import ColumnExpression
 
 if TYPE_CHECKING:
     from ._relation import Relation
 
 
-class LogicalAnd(pydantic.BaseModel):
+class LogicalAnd(PredicateBase):
     """A boolean column expression that is `True` only if all of its operands
     are `True`.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["and"] = "and"
     operands: tuple[Predicate, ...] = pydantic.Field(min_length=2)
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        result = self.operands[0].gather_required_columns()
+        for operand in self.operands[1:]:
+            result.update(operand.gather_required_columns())
+        return result
 
-class LogicalOr(pydantic.BaseModel):
+
+class LogicalOr(PredicateBase):
     """A boolean column expression that is `True` if any of its operands are
     `True`.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["or"] = "or"
     operands: tuple[Predicate, ...] = pydantic.Field(min_length=2)
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        result = self.operands[0].gather_required_columns()
+        for operand in self.operands[1:]:
+            result.update(operand.gather_required_columns())
+        return result
 
-class LogicalNot(pydantic.BaseModel):
+
+class LogicalNot(PredicateBase):
     """A boolean column expression that inverts its operand."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["not"] = "not"
     operand: Predicate
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        return self.operand.gather_required_columns()
 
-class IsNull(pydantic.BaseModel):
+
+class IsNull(PredicateBase):
     """A boolean column expression that tests whether its operand is NULL."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["is_null"] = "is_null"
     operand: ColumnExpression
 
 
-class Comparison(pydantic.BaseModel):
+class Comparison(PredicateBase):
     """A boolean columns expression formed by comparing two non-boolean
     expressions.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["comparison"] = "comparison"
     a: ColumnExpression
     b: ColumnExpression
     operator: Literal["=", "!=", "<", ">", ">=", "<=", "overlaps"]
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        result = self.a.gather_required_columns()
+        result.update(self.b.gather_required_columns())
+        return result
 
-class InContainer(pydantic.BaseModel):
+
+class InContainer(PredicateBase):
     """A boolean column expression that tests whether one expression is a
     member of an explicit sequence of other expressions.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["in_container"] = "in_container"
     member: ColumnExpression
     container: tuple[ColumnExpression, ...]
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        result = self.member.gather_required_columns()
+        for operand in self.container:
+            result.update(operand.gather_required_columns())
+        return result
 
-class InRange(pydantic.BaseModel):
+
+class InRange(PredicateBase):
     """A boolean column expression that tests whether its expression is
     included in an integer range.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["in_range"] = "in_range"
     member: ColumnExpression
     start: int = 0
     stop: int | None = None
     step: int = 1
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        return self.member.gather_required_columns()
 
-class InRelation(pydantic.BaseModel):
+
+class InRelation(PredicateBase):
     """A boolean column expression that tests whether its expression is
     included single-column projection of a relation.
 
@@ -120,32 +145,37 @@ class InRelation(pydantic.BaseModel):
     be useful for other columns as well.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["in_relation"] = "in_relation"
     member: ColumnExpression
     column: ColumnExpression
     relation: Relation
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        # We're only gathering columns from the relation this predicate is
+        # attached, not `self.column`, which belongs to `self.relation`.
+        return self.member.gather_required_columns()
 
-class StringPredicate(pydantic.BaseModel):
+
+class StringPredicate(PredicateBase):
     """A tag wrapper for boolean column expressions created by parsing a string
     expression.
 
     Remembering the original string is useful for error reporting.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["string_predicate"] = "string_predicate"
     where: str
     tree: Predicate
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        return self.tree.gather_required_columns()
 
-class DataCoordinateConstraint(pydantic.BaseModel):
+
+class DataCoordinateConstraint(PredicateBase):
     """A boolean column expression defined by interpreting data ID's key-value
     pairs as a logical AND of equality constraints.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     predicate_type: Literal["data_coordinate_constraint"] = "data_coordinate_constraint"
 
     dimensions: DimensionGroup

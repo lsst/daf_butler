@@ -38,27 +38,34 @@ from typing import Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
+from ._base import ColumnExpressionBase
 from ._column_literal import ColumnLiteral
-from ._column_reference import _ColumnReference
+from ._column_reference import ColumnReference, _ColumnReference
 
 
-class UnaryExpression(pydantic.BaseModel):
+class UnaryExpression(ColumnExpressionBase):
     """A unary operation on a column expression that returns a non-bool."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["unary"] = "unary"
     operand: ColumnExpression
     operator: Literal["-", "begin_of", "end_of"]
 
+    def gather_required_columns(self) -> set[ColumnReference]:
+        return self.operand.gather_required_columns()
 
-class BinaryExpression(pydantic.BaseModel):
+
+class BinaryExpression(ColumnExpressionBase):
     """A binary operation on column expressions that returns a non-bool."""
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["binary"] = "binary"
     a: ColumnExpression
     b: ColumnExpression
     operator: Literal["+", "-", "*", "/", "%"]
+
+    def gather_required_columns(self) -> set[ColumnReference]:
+        result = self.a.gather_required_columns()
+        result.update(self.b.gather_required_columns())
+        return result
 
 
 _ColumnExpression: TypeAlias = Union[
@@ -72,12 +79,11 @@ _ColumnExpression: TypeAlias = Union[
 ColumnExpression: TypeAlias = Annotated[_ColumnExpression, pydantic.Field(discriminator="expression_type")]
 
 
-class Reversed(pydantic.BaseModel):
+class Reversed(ColumnExpressionBase):
     """A tag wrapper for `AbstractExpression` that indicate sorting in
     reverse order.
     """
 
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
     expression_type: Literal["reversed"] = "reversed"
     operand: ColumnExpression
 
