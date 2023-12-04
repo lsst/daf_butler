@@ -221,6 +221,10 @@ class MetricTestRepo:
         The location of the repository, to pass to ``Butler.makeRepo``.
     configFile : `str`
         The path to the config file, to pass to ``Butler.makeRepo``.
+    forceConfigRoot: `bool`, optional
+        If `False`, any values present in the supplied ``config`` that
+        would normally be reset are not overridden and will appear
+        directly in the output config. Passed to ``Butler.makeRepo``.
     """
 
     METRICS_EXAMPLE_SUMMARY = {"AM1": 5.2, "AM2": 30.6}
@@ -237,9 +241,9 @@ class MetricTestRepo:
             [563, 234, 456.7, 752, 8, 9, 27],
         )
 
-    def __init__(self, root: str, configFile: str) -> None:
+    def __init__(self, root: str, configFile: str, forceConfigRoot: bool = True) -> None:
         self.root = root
-        Butler.makeRepo(self.root, config=Config(configFile))
+        Butler.makeRepo(self.root, config=Config(configFile), forceConfigRoot=forceConfigRoot)
         butlerConfigFile = os.path.join(self.root, "butler.yaml")
         self.storageClassFactory = StorageClassFactory()
         self.storageClassFactory.addFromConfig(butlerConfigFile)
