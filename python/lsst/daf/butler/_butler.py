@@ -1249,6 +1249,25 @@ class Butler(LimitedButler):
         raise NotImplementedError()
 
     @abstractmethod
+    def transfer_dimension_records_from(
+        self, source_butler: LimitedButler, source_refs: Iterable[DatasetRef]
+    ) -> None:
+        """Transfer dimension records to this Butler from another Butler.
+
+        Parameters
+        ----------
+        source_butler : `LimitedButler`
+            Butler from which the records are to be transferred. If data IDs
+            in ``source_refs`` are not expanded then this has to be a full
+            `Butler` whose registry will be used to expand data IDs.
+        source_refs : iterable of `DatasetRef`
+            Datasets defined in the source butler whose dimension records
+            should be transferred to this butler. In most circumstances.
+            transfer is faster if the dataset refs are expanded.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def transfer_from(
         self,
         source_butler: LimitedButler,

@@ -2308,6 +2308,11 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Can remove with DM-35498.
         self.target_butler.registry.refresh()
 
+        # Transfer the records for one ref to test the alternative API.
+        with self.assertLogs(logger="lsst", level=logging.DEBUG) as log_cm:
+            self.target_butler.transfer_dimension_records_from(self.source_butler, [source_refs[0]])
+        self.assertIn("number of records transferred: 1", ";".join(log_cm.output))
+
         # Now transfer them to the second butler, including dimensions.
         with self.assertLogs(logger="lsst", level=logging.DEBUG) as log_cm:
             transferred = self.target_butler.transfer_from(
