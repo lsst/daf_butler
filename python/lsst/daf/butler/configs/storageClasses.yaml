@@ -93,6 +93,10 @@ storageClasses:
       #
       # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
       - origin
+    components:
+      image: Image
+      mask: Mask
+      variance: Image
   MaskedImageF:
     inheritsFrom: MaskedImage
     pytype: lsst.afw.image.MaskedImageF
