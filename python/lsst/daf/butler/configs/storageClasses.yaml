@@ -84,6 +84,15 @@ storageClasses:
     pytype: lsst.afw.image.MaskX
   MaskedImage:
     pytype: lsst.afw.image.MaskedImage
+    delegate: lsst.obs.base.exposureAssembler.ExposureAssembler
+    parameters:
+      # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
+      - bbox
+
+      # Coordinate system for ``bbox`` (`lsst.afw.image.ImageOrigin`)
+      #
+      # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
+      - origin
   MaskedImageF:
     inheritsFrom: MaskedImage
     pytype: lsst.afw.image.MaskedImageF
