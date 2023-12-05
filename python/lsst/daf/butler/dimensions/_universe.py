@@ -596,7 +596,7 @@ class DimensionUniverse:
 
     def get_elements_populated_by(self, dimension: Dimension) -> NamedValueAbstractSet[DimensionElement]:
         """Return the set of `DimensionElement` objects whose
-        `~DimensionElement.populated_by` atttribute is the given dimension.
+        `~DimensionElement.populated_by` attribute is the given dimension.
         """
         return self._populates[dimension.name]
 

@@ -1881,7 +1881,7 @@ class DirectButler(Butler):
             doImport(filename)  # type: ignore
 
     def transfer_dimension_records_from(
-        self, source_butler: LimitedButler, source_refs: Iterable[DatasetRef]
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
     ) -> None:
         # Allowed dimensions in the target butler.
         elements = frozenset(
@@ -1904,7 +1904,7 @@ class DirectButler(Butler):
 
     def _extract_all_dimension_records_from_data_ids(
         self,
-        source_butler: LimitedButler,
+        source_butler: LimitedButler | Butler,
         data_ids: set[DataCoordinate],
         allowed_elements: frozenset[DimensionElement],
     ) -> dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]:
@@ -1912,16 +1912,20 @@ class DirectButler(Butler):
             source_butler, data_ids, allowed_elements
         )
 
-        additional_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
-        for name, records in primary_records.items():
-            # Get dimensions that depend on this dimension.
-            populated_by = self.dimensions.get_elements_populated_by(self.dimensions[name])
+        can_query = True if isinstance(source_butler, Butler) else False
 
-            for data_id in records.keys():
+        additional_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
+        for original_element, record_mapping in primary_records.items():
+            # Get dimensions that depend on this dimension.
+            populated_by = self.dimensions.get_elements_populated_by(
+                self.dimensions[original_element.name]  # type: ignore
+            )
+
+            for data_id in record_mapping.keys():
                 for element in populated_by:
                     if element not in allowed_elements:
                         continue
-                    if element.name == name:
+                    if element.name == original_element.name:
                         continue
 
                     if element.name in primary_records:
@@ -1936,7 +1940,14 @@ class DirectButler(Butler):
                         # have to be scanned.
                         continue
 
-                    records = source_butler.registry.queryDimensionRecords(element.name, **data_id.mapping)
+                    if not can_query:
+                        raise RuntimeError(
+                            f"Transferring populated_by records like {element.name} requires a full Butler."
+                        )
+
+                    records = source_butler.registry.queryDimensionRecords(  # type: ignore
+                        element.name, **data_id.mapping  # type: ignore
+                    )
                     for record in records:
                         additional_records[record.definition].setdefault(record.dataId, record)
 
@@ -1945,8 +1956,8 @@ class DirectButler(Butler):
         # know the exposure). Want to ensure we do not request records we
         # already have.
         missing_data_ids = set()
-        for name, records in additional_records.items():
-            for data_id in records.keys():
+        for name, record_mapping in additional_records.items():
+            for data_id in record_mapping.keys():
                 if data_id not in primary_records[name]:
                     missing_data_ids.add(data_id)
 
@@ -1957,14 +1968,14 @@ class DirectButler(Butler):
         )
 
         # Merge the extra sets of records in with the original.
-        for name, records in itertools.chain(additional_records.items(), secondary_records.items()):
-            primary_records[name].update(records)
+        for name, record_mapping in itertools.chain(additional_records.items(), secondary_records.items()):
+            primary_records[name].update(record_mapping)
 
         return primary_records
 
     def _extract_dimension_records_from_data_ids(
         self,
-        source_butler: LimitedButler,
+        source_butler: LimitedButler | Butler,
         data_ids: set[DataCoordinate],
         allowed_elements: frozenset[DimensionElement],
     ) -> dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]:

@@ -408,7 +408,7 @@ class RemoteButler(Butler):
         raise NotImplementedError()
 
     def transfer_dimension_records_from(
-        self, source_butler: LimitedButler, source_refs: Iterable[DatasetRef]
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
     ) -> None:
         # Docstring inherited.
         raise NotImplementedError()
