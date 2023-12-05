@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 import astropy
 from astropy.table import Table as AstropyTable
 
-from .. import Butler, Config, StorageClassFactory, Timespan
+from .. import Butler, Config, DatasetRef, StorageClassFactory, Timespan
 from ..registry import CollectionType
 from ..tests import MetricsExample, addDatasetType
 
@@ -295,7 +295,7 @@ class MetricTestRepo:
 
     def addDataset(
         self, dataId: dict[str, Any], run: str | None = None, datasetType: DatasetType | None = None
-    ) -> None:
+    ) -> DatasetRef:
         """Create a new example metric and add it to the named run with the
         given dataId.
 
@@ -317,4 +317,6 @@ class MetricTestRepo:
         if run:
             self.butler.registry.registerCollection(run, type=CollectionType.RUN)
         metric = self._makeExampleMetrics()
-        self.butler.put(metric, self.datasetType if datasetType is None else datasetType, dataId, run=run)
+        return self.butler.put(
+            metric, self.datasetType if datasetType is None else datasetType, dataId, run=run
+        )

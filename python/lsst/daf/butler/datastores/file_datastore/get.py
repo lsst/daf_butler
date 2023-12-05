@@ -207,13 +207,14 @@ def _read_artifact_into_memory(
     # Do not do this if the size is negative since that indicates
     # we do not know.
     recorded_size = getInfo.info.file_size
-    resource_size = uri.size()
-    if recorded_size >= 0 and resource_size != recorded_size:
-        raise RuntimeError(
-            "Integrity failure in Datastore. "
-            f"Size of file {uri} ({resource_size}) "
-            f"does not match size recorded in registry of {recorded_size}"
-        )
+
+    def check_resource_size(resource_size: int) -> None:
+        if recorded_size >= 0 and resource_size != recorded_size:
+            raise RuntimeError(
+                "Integrity failure in Datastore. "
+                f"Size of file {uri} ({resource_size}) "
+                f"does not match size recorded in registry of {recorded_size}"
+            )
 
     # For the general case we have choices for how to proceed.
     # 1. Always use a local file (downloading the remote resource to a
@@ -225,7 +226,7 @@ def _read_artifact_into_memory(
 
     formatter = getInfo.formatter
     nbytes_max = 10_000_000  # Arbitrary number that we can tune
-    if resource_size <= nbytes_max and formatter.can_read_bytes():
+    if recorded_size >= 0 and recorded_size <= nbytes_max and formatter.can_read_bytes():
         with cache_manager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
             if cached_file is not None:
                 desired_uri = cached_file
@@ -235,6 +236,7 @@ def _read_artifact_into_memory(
                 msg = ""
             with time_this(log, msg="Reading bytes from %s%s", args=(desired_uri, msg)):
                 serializedDataset = desired_uri.read()
+                check_resource_size(len(serializedDataset))
         log.debug(
             "Deserializing %s from %d bytes from location %s with formatter %s",
             f"component {getInfo.component}" if isComponent else "",
@@ -271,6 +273,7 @@ def _read_artifact_into_memory(
                 location_updated = True
 
             with uri.as_local() as local_uri:
+                check_resource_size(local_uri.size())
                 can_be_cached = False
                 if uri != local_uri:
                     # URI was remote and file was downloaded
