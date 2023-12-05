@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING, Any, cast
 try:
     import boto3
     import botocore
-    from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
+    from lsst.resources.s3utils import clean_test_environment_for_s3
     from moto import mock_s3  # type: ignore[import]
 except ImportError:
     boto3 = None
@@ -114,13 +114,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 def clean_environment() -> None:
     """Remove external environment variables that affect the tests."""
-    for k in (
-        "DAF_BUTLER_REPOSITORY_INDEX",
-        "S3_ENDPOINT_URL",
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_SHARED_CREDENTIALS_FILE",
-    ):
+    for k in ("DAF_BUTLER_REPOSITORY_INDEX",):
         os.environ.pop(k, None)
 
 
@@ -1993,10 +1987,8 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         self.bucketName = uri.netloc
 
         # Enable S3 mocking of tests.
+        self.enterContext(clean_test_environment_for_s3())
         self.mock_s3.start()
-
-        # set up some fake credentials if they do not exist
-        self.usingDummyCredentials = setAwsEnvCredentials()
 
         if self.useTempRoot:
             self.root = self.genRoot()
@@ -2034,10 +2026,6 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Stop the S3 mock.
         self.mock_s3.stop()
-
-        # unset any potentially set dummy credentials
-        if self.usingDummyCredentials:
-            unsetAwsEnvCredentials()
 
         if self.reg_dir is not None and os.path.exists(self.reg_dir):
             shutil.rmtree(self.reg_dir, ignore_errors=True)
