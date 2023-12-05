@@ -40,7 +40,7 @@ ImageU: lsst.obs.base.formatters.fitsExposure.FitsImageFormatter
 DecoratedImageU: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
 Mask: lsst.obs.base.formatters.fitsExposure.FitsMaskFormatter
 MaskX: lsst.obs.base.formatters.fitsExposure.FitsMaskFormatter
-MaskedImageF: lsst.obs.base.formatters.fitsMaskedImage.FitsMaskedImageFormatter
+MaskedImageF: lsst.obs.base.formatters.fitsExposure.FitsMaskedImageFormatter
 Exposure: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
 ExposureF: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
 ExposureI: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
