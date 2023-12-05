@@ -245,7 +245,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
     run = "corrupted-run"
     ref = repo.addDataset({"instrument": "DummyCamComp", "visit": 423}, run=run)
-    uris = repo.butler.getURIs(ref, run=run)
+    uris = repo.butler.getURIs(ref)
     oneOfTheComponents = list(uris.componentURIs.values())[0]
     oneOfTheComponents.write("corrupted data")
     return ref

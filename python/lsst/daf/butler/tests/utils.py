@@ -313,6 +313,12 @@ class MetricTestRepo:
         datasetType : ``DatasetType``, optional
             The dataset type of the added dataset. If `None`, will use the
             default dataset type.
+
+        Returns
+        -------
+        datasetRef : `DatasetRef`
+            A reference to the added dataset.
+
         """
         if run:
             self.butler.registry.registerCollection(run, type=CollectionType.RUN)
