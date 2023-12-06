@@ -1894,8 +1894,9 @@ class DirectButler(Butler):
             source_butler, data_ids, elements
         )
 
-        for element, r in dimension_records.items():
-            records = [r[dataId] for dataId in r]
+        # Insert order is important.
+        for element in self.dimensions.sorted(dimension_records.keys()):
+            records = [r for r in dimension_records[element].values()]
             # Assume that if the record is already present that we can
             # use it without having to check that the record metadata
             # is consistent.
@@ -2101,8 +2102,9 @@ class DirectButler(Butler):
         with self.transaction():
             if dimension_records:
                 _LOG.verbose("Ensuring that dimension records exist for transferred datasets.")
-                for element, r in dimension_records.items():
-                    records = [r[dataId] for dataId in r]
+                # Order matters.
+                for element in self.dimensions.sorted(dimension_records.keys()):
+                    records = [r for r in dimension_records[element].values()]
                     # Assume that if the record is already present that we can
                     # use it without having to check that the record metadata
                     # is consistent.
