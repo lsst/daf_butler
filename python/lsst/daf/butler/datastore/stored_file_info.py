@@ -215,7 +215,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     """StorageClass associated with Dataset."""
 
     component: str | None
-    """Component associated with this file. Can be None if the file does
+    """Component associated with this file. Can be `None` if the file does
     not refer to a component of a composite."""
 
     checksum: str | None
@@ -347,7 +347,7 @@ class SerializedStoredFileInfo(_BaseModelCompat):
     """Name of the StorageClass associated with Dataset."""
 
     component: str | None
-    """Component associated with this file. Can be None if the file does
+    """Component associated with this file. Can be `None` if the file does
     not refer to a component of a composite."""
 
     checksum: str | None

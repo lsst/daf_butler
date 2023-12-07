@@ -102,7 +102,7 @@ def generate_datastore_get_information(
 
     Returns
     -------
-    getInfo : `list[DatastoreFileGetInformation]`
+    getInfo : `list` [`DatastoreFileGetInformation`]
         The parameters needed to retrieve each file
     """
     if readStorageClass is None:
@@ -349,14 +349,14 @@ def get_dataset_as_python_object_from_get_info(
         The registry information associated with this artifact.
     parameters : `Mapping`[`str`, `Any`]
         `StorageClass` and `Formatter` parameters
-    cache_manager: `AbstractDatastoreCacheManager`
+    cache_manager : `AbstractDatastoreCacheManager`
         The cache manager to use for caching retrieved files
 
     Returns
     -------
-    python_object: `Any`
+    python_object : `typing.Any`
         The retrieved artifact, converted to a Python object according to the
-        `StorageClass` specified in `ref`.
+        `StorageClass` specified in ``ref``.
     """
     refStorageClass = ref.datasetType.storageClass
     refComponent = ref.datasetType.component()

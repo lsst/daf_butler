@@ -57,11 +57,12 @@ def get_dataset_as_python_object(
     Parameters
     ----------
     payload : `FileDatastoreGetPayload`
-        Pre-processed information about each file associated with this artifact
+        Pre-processed information about each file associated with this
+        artifact.
     universe: `DimensionUniverse`
         The universe of dimensions associated with the `DatasetRef` contained
-        in `payload`.
-    parameters : `Mapping`[`str`, `Any`]
+        in ``payload``.
+    parameters : `Mapping`[`str`, `typing.Any`]
         `StorageClass` and `Formatter` parameters to be used when converting
         the artifact to a Python object
     storageClass: `StorageClass` | `str` | `None`
