@@ -82,6 +82,24 @@ class SerializedDatasetType(_BaseModelCompat):
         methods.
 
         This method should only be called when the inputs are trusted.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the dataset type.
+        storageClass : `str` or `None`
+            The name of the storage class.
+        dimensions : `list` or `dict` or `None`
+            The dimensions associated with this dataset type.
+        parentStorageClass : `str` or `None`
+            The parent storage class name if this is a component.
+        isCalibration : `bool`
+            Whether this dataset type represents calibrations.
+
+        Returns
+        -------
+        `SerializedDatasetType`
+            A Pydantic model representing a dataset type.
         """
         cache = PersistenceContextVars.serializedDatasetTypeMapping.get()
         key = (name, storageClass or "")
@@ -150,9 +168,9 @@ class DatasetType:
         If `True`, this dataset type may be included in
         `~CollectionType.CALIBRATION` collections.
 
-    See Also
-    --------
-    :ref:`daf_butler_organizing_datasets`
+    Notes
+    -----
+    See also :ref:`daf_butler_organizing_datasets`.
     """
 
     __slots__ = (
@@ -469,7 +487,7 @@ class DatasetType:
         Parameters
         ----------
         component : `str`
-            Name of component
+            Name of component.
 
         Returns
         -------
@@ -520,7 +538,7 @@ class DatasetType:
         Parameters
         ----------
         component : `str`
-            Name of component
+            Name of component.
 
         Returns
         -------

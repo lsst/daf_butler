@@ -129,6 +129,11 @@ class Loader(yamlLoader):
     Notes
     -----
     See https://davidchall.github.io/yaml-includes.html
+
+    Parameters
+    ----------
+    stream : `str` or `io.IO`
+        The stream to parse.
     """
 
     def __init__(self, stream: str | IO):  # types-PyYAML annotates 'stream' with a private type
@@ -295,7 +300,7 @@ class Config(MutableMapping):
         Returns
         -------
         s : `str`
-            A prettyprint formatted string representing the config
+            A prettyprint formatted string representing the config.
         """
         return pprint.pformat(self._data, indent=2, width=1)
 
@@ -321,7 +326,7 @@ class Config(MutableMapping):
         Parameters
         ----------
         string : `str`
-            String containing content in specified format
+            String containing content in specified format.
         format : `str`, optional
             Format of the supplied string. Can be ``json`` or ``yaml``.
 
@@ -346,7 +351,7 @@ class Config(MutableMapping):
         Parameters
         ----------
         string : `str`
-            String containing content in YAML format
+            String containing content in YAML format.
 
         Returns
         -------
@@ -699,7 +704,7 @@ class Config(MutableMapping):
         Parameters
         ----------
         other : `dict` or `Config`
-            Source of configuration:
+            Source of configuration.
 
         Examples
         --------
@@ -726,7 +731,7 @@ class Config(MutableMapping):
         Parameters
         ----------
         other : `dict` or `Config`
-            Source of configuration:
+            Source of configuration.
         """
         if not isinstance(other, Mapping):
             raise TypeError(f"Can only merge a Mapping into a Config, not {type(other)}")
@@ -927,7 +932,7 @@ class Config(MutableMapping):
 
         Parameters
         ----------
-        uri: `lsst.resources.ResourcePathExpression`
+        uri : `lsst.resources.ResourcePathExpression`
             URI of location where the Config will be written.
         updateFile : bool, optional
             If True and uri does not end on a filename with extension, will
@@ -1119,7 +1124,7 @@ class ConfigSubset(Config):
     ----------
     other : `Config` or `~lsst.resources.ResourcePathExpression` or `dict`
         Argument specifying the configuration information as understood
-        by `Config`
+        by `Config`.
     validate : `bool`, optional
         If `True` required keys will be checked to ensure configuration
         consistency.
