@@ -409,7 +409,7 @@ class Timespan:
 
         Parameters
         ----------
-        other : `Timespan` or `astropy.time.Time`.
+        other : `Timespan` or `astropy.time.Time`
             Timespan or instant in time to relate to ``self``.
 
         Returns

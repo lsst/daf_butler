@@ -233,7 +233,7 @@ class MappingFactory:
 
         Parameters
         ----------
-        registryKey : `LookupKey`, `str` or object with ``name`` attribute.
+        registryKey : `LookupKey`, `str` or object with ``name`` attribute
             Item to associate with the provided type.
         typeName : `str` or Python type
             Identifies a class to associate with the provided key.

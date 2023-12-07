@@ -157,7 +157,7 @@ class RepoExportContext:
 
         Parameters
         ----------
-        dataIds : iterable of `DataCoordinate`.
+        dataIds : iterable of `DataCoordinate`
             Data IDs to export.  For large numbers of data IDs obtained by
             calls to `Registry.queryDataIds`, it will be much more efficient if
             these are expanded to include records (i.e.

@@ -173,7 +173,7 @@ class DimensionRecordStorage(ABC):
 
         Parameters
         ----------
-        record : `DimensionRecord`.
+        record : `DimensionRecord`
             An instance of the `DimensionRecord` subclass for the
             element this storage is associated with.
         update: `bool`, optional

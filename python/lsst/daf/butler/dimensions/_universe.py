@@ -541,7 +541,7 @@ class DimensionUniverse:
 
         Parameters
         ----------
-        elements : iterable of `DimensionElement`.
+        elements : iterable of `DimensionElement`
             Elements to be sorted.
         reverse : `bool`, optional
             If `True`, sort in the opposite order.
