@@ -27,47 +27,34 @@
 
 from __future__ import annotations
 
-__all__ = ("Relation", "DeferredValidationRelation")
+__all__ = ("DataCoordinateUpload",)
 
-from typing import Annotated, TypeAlias, Union
+from typing import Literal
 
-import pydantic
-
-from ...pydantic_utils import DeferredValidation
-from ._chain import Chain
-from ._data_coordinate_upload import DataCoordinateUpload
-from ._dataset_search import DatasetSearch
-from ._dimension_join import DimensionJoin
-from ._dimension_projection import DimensionProjection
-from ._find_first import FindFirst
-from ._materialization import Materialization
-from ._ordered_slice import OrderedSlice
-from ._selection import Selection
-
-Relation: TypeAlias = Annotated[
-    Union[
-        DatasetSearch,
-        DataCoordinateUpload,
-        DimensionJoin,
-        Selection,
-        DimensionProjection,
-        OrderedSlice,
-        Chain,
-        FindFirst,
-        Materialization,
-    ],
-    pydantic.Field(discriminator="relation_type"),
-]
+from ...dimensions import DataIdValue, DimensionGroup
+from ._base import RelationBase, StringOrWildcard
 
 
-DimensionJoin.model_rebuild()
-Selection.model_rebuild()
-DimensionProjection.model_rebuild()
-OrderedSlice.model_rebuild()
-Chain.model_rebuild()
-FindFirst.model_rebuild()
-Materialization.model_rebuild()
+class DataCoordinateUpload(RelationBase):
+    """An abstract relation that represents (and holds) user-provided data
+    ID values.
+    """
 
+    relation_type: Literal["data_coordinate_upload"] = "data_coordinate_upload"
 
-class DeferredValidationRelation(DeferredValidation[Relation]):
-    pass
+    dimensions: DimensionGroup
+    """The dimensions of the data IDs."""
+
+    rows: frozenset[tuple[DataIdValue, ...]]
+    """The required values of the data IDs."""
+
+    @property
+    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
+        """The dataset types whose ID columns (at least) are available from
+        this relation.
+        """
+        return frozenset()
+
+    # We probably should validate that the tuples in 'rows' have the right
+    # length (len(dimensions.required)) and maybe the right types, but we might
+    # switch to Arrow here before that actually matters.
