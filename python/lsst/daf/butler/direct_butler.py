@@ -37,6 +37,7 @@ __all__ = (
 import collections.abc
 import contextlib
 import io
+import itertools
 import logging
 import numbers
 import os
@@ -1879,6 +1880,125 @@ class DirectButler(Butler):
         else:
             doImport(filename)  # type: ignore
 
+    def transfer_dimension_records_from(
+        self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
+    ) -> None:
+        # Allowed dimensions in the target butler.
+        elements = frozenset(
+            element for element in self.dimensions.elements if element.hasTable() and element.viewOf is None
+        )
+
+        data_ids = {ref.dataId for ref in source_refs}
+
+        dimension_records = self._extract_all_dimension_records_from_data_ids(
+            source_butler, data_ids, elements
+        )
+
+        # Insert order is important.
+        for element in self.dimensions.sorted(dimension_records.keys()):
+            records = [r for r in dimension_records[element].values()]
+            # Assume that if the record is already present that we can
+            # use it without having to check that the record metadata
+            # is consistent.
+            self._registry.insertDimensionData(element, *records, skip_existing=True)
+            _LOG.debug("Dimension '%s' -- number of records transferred: %d", element.name, len(records))
+
+    def _extract_all_dimension_records_from_data_ids(
+        self,
+        source_butler: LimitedButler | Butler,
+        data_ids: set[DataCoordinate],
+        allowed_elements: frozenset[DimensionElement],
+    ) -> dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]:
+        primary_records = self._extract_dimension_records_from_data_ids(
+            source_butler, data_ids, allowed_elements
+        )
+
+        can_query = True if isinstance(source_butler, Butler) else False
+
+        additional_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
+        for original_element, record_mapping in primary_records.items():
+            # Get dimensions that depend on this dimension.
+            populated_by = self.dimensions.get_elements_populated_by(
+                self.dimensions[original_element.name]  # type: ignore
+            )
+
+            for data_id in record_mapping.keys():
+                for element in populated_by:
+                    if element not in allowed_elements:
+                        continue
+                    if element.name == original_element.name:
+                        continue
+
+                    if element.name in primary_records:
+                        # If this element has already been stored avoid
+                        # re-finding records since that may lead to additional
+                        # spurious records. e.g. visit is populated_by
+                        # visit_detector_region but querying
+                        # visit_detector_region by visit will return all the
+                        # detectors for this visit -- the visit dataId does not
+                        # constrain this.
+                        # To constrain the query the original dataIds would
+                        # have to be scanned.
+                        continue
+
+                    if not can_query:
+                        raise RuntimeError(
+                            f"Transferring populated_by records like {element.name} requires a full Butler."
+                        )
+
+                    records = source_butler.registry.queryDimensionRecords(  # type: ignore
+                        element.name, **data_id.mapping  # type: ignore
+                    )
+                    for record in records:
+                        additional_records[record.definition].setdefault(record.dataId, record)
+
+        # The next step is to walk back through the additional records to
+        # pick up any missing content (such as visit_definition needing to
+        # know the exposure). Want to ensure we do not request records we
+        # already have.
+        missing_data_ids = set()
+        for name, record_mapping in additional_records.items():
+            for data_id in record_mapping.keys():
+                if data_id not in primary_records[name]:
+                    missing_data_ids.add(data_id)
+
+        # Fill out the new records. Assume that these new records do not
+        # also need to carry over additional populated_by records.
+        secondary_records = self._extract_dimension_records_from_data_ids(
+            source_butler, missing_data_ids, allowed_elements
+        )
+
+        # Merge the extra sets of records in with the original.
+        for name, record_mapping in itertools.chain(additional_records.items(), secondary_records.items()):
+            primary_records[name].update(record_mapping)
+
+        return primary_records
+
+    def _extract_dimension_records_from_data_ids(
+        self,
+        source_butler: LimitedButler | Butler,
+        data_ids: set[DataCoordinate],
+        allowed_elements: frozenset[DimensionElement],
+    ) -> dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]:
+        dimension_records: dict[DimensionElement, dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
+
+        for data_id in data_ids:
+            # Need an expanded record, if not expanded that we need a full
+            # butler with registry (allow mocks with registry too).
+            if not data_id.hasRecords():
+                if registry := getattr(source_butler, "registry", None):
+                    data_id = registry.expandDataId(data_id)
+                else:
+                    raise TypeError("Input butler needs to be a full butler to expand DataId.")
+            # If this butler doesn't know about a dimension in the source
+            # butler things will break later.
+            for element_name in data_id.dimensions.elements:
+                record = data_id.records[element_name]
+                if record is not None and record.definition in allowed_elements:
+                    dimension_records[record.definition].setdefault(record.dataId, record)
+
+        return dimension_records
+
     def transfer_from(
         self,
         source_butler: LimitedButler,
@@ -1972,21 +2092,9 @@ class DirectButler(Butler):
                 if element.hasTable() and element.viewOf is None
             )
             dataIds = {ref.dataId for ref in source_refs}
-            # This logic comes from saveDataIds.
-            for dataId in dataIds:
-                # Need an expanded record, if not expanded that we need a full
-                # butler with registry (allow mocks with registry too).
-                if not dataId.hasRecords():
-                    if registry := getattr(source_butler, "registry", None):
-                        dataId = registry.expandDataId(dataId)
-                    else:
-                        raise TypeError("Input butler needs to be a full butler to expand DataId.")
-                # If this butler doesn't know about a dimension in the source
-                # butler things will break later.
-                for element_name in dataId.dimensions.elements:
-                    record = dataId.records[element_name]
-                    if record is not None and record.definition in elements:
-                        dimension_records[record.definition].setdefault(record.dataId, record)
+            dimension_records = self._extract_all_dimension_records_from_data_ids(
+                source_butler, dataIds, elements
+            )
 
         handled_collections: set[str] = set()
 
@@ -1994,8 +2102,9 @@ class DirectButler(Butler):
         with self.transaction():
             if dimension_records:
                 _LOG.verbose("Ensuring that dimension records exist for transferred datasets.")
-                for element, r in dimension_records.items():
-                    records = [r[dataId] for dataId in r]
+                # Order matters.
+                for element in self.dimensions.sorted(dimension_records.keys()):
+                    records = [r for r in dimension_records[element].values()]
                     # Assume that if the record is already present that we can
                     # use it without having to check that the record metadata
                     # is consistent.

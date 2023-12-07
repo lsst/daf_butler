@@ -324,7 +324,8 @@ class SimpleButlerTestCase(unittest.TestCase):
             try:
                 flat_id, _ = butler.get("flat", dataId=dataId, collections=coll, **kwds)
             except Exception as e:
-                raise type(e)(f"{str(e)}: dataId={dataId}, kwds={kwds}") from e
+                e.add_note(f"dataId={dataId}, kwds={kwds}")
+                raise
             self.assertEqual(flat_id, flat2g.id, msg=f"DataId: {dataId}, kwds: {kwds}")
 
         # Check that bad combinations raise.
@@ -601,6 +602,25 @@ class SimpleButlerTestCase(unittest.TestCase):
                 if not minimal:
                     from_json = type(test_item).from_json(json_str, universe=butler.dimensions)
                     self.assertEqual(from_json, test_item, msg=f"From JSON '{json_str}' using universe")
+
+    def test_populated_by(self):
+        """Test that dimension records can find other records."""
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
+
+        elements = frozenset(
+            element for element in butler.dimensions.elements if element.hasTable() and element.viewOf is None
+        )
+
+        # Get a visit-based dataId.
+        data_ids = set(butler.registry.queryDataIds("visit", visit=1232, instrument="HSC"))
+
+        # Request all the records related to it.
+        records = butler._extract_all_dimension_records_from_data_ids(butler, data_ids, elements)
+
+        self.assertIn(butler.dimensions["visit_detector_region"], records, f"Keys: {records.keys()}")
+        self.assertIn(butler.dimensions["visit_system_membership"], records)
+        self.assertIn(butler.dimensions["visit_system"], records)
 
     def testJsonDimensionRecordsAndHtmlRepresentation(self):
         # Dimension Records
