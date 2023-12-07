@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 _LOG = getLogger(__name__)
 
 
-class Butler(LimitedButler):
+class Butler(LimitedButler):  # numpydoc ignore=PR02
     """Interface for data butler and factory for Butler instances.
 
     Parameters
