@@ -26,3 +26,7 @@ repos:
     rev: v0.1.7
     hooks:
       - id: ruff
+  - repo: https://github.com/numpy/numpydoc
+    rev: "v1.6.0"
+    hooks:
+      - id: numpydoc-validation
