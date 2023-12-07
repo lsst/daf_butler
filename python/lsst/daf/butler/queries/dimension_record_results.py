@@ -28,54 +28,33 @@
 from __future__ import annotations
 
 __all__ = (
-    "RelationBase",
-    "ColumnExpressionBase",
-    "PredicateBase",
-    "StringOrWildcard",
-    "DatasetFieldName",
-    "InvalidRelationError",
+    "DimensionRecordResultSpec",
+    "DimensionRecordResultPage",
 )
 
-from types import EllipsisType
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
+from typing import Literal
 
 import pydantic
 
-if TYPE_CHECKING:
-    from ._column_reference import ColumnReference
+from ..dimensions import DimensionElement, DimensionRecord
+from .driver import PageKey
 
 
-StringOrWildcard = Annotated[
-    str | EllipsisType,
-    pydantic.PlainSerializer(lambda x: "..." if x is ... else x, return_type=str),
-    pydantic.BeforeValidator(lambda x: ... if x == "..." else x),
-]
+class DimensionRecordResultSpec(pydantic.BaseModel):
+    """Specification for a query that yields `DimensionRecord` objects."""
+
+    result_type: Literal["dimension_record"] = "dimension_record"
+    element: DimensionElement
 
 
-DatasetFieldName: TypeAlias = Literal[
-    "dataset_id", "dataset_type", "ingest_date", "run", "collection", "rank"
-]
+class DimensionRecordResultPage(pydantic.BaseModel):
+    """A single page of results from a dimension record query."""
 
+    spec: DimensionRecordResultSpec
+    next_key: PageKey | None
 
-class InvalidRelationError(ValueError):
-    """Exception raised when a query's relation tree would be invalid."""
-
-    pass
-
-
-class RelationTreeBase(pydantic.BaseModel):
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
-
-
-class RelationBase(RelationTreeBase):
-    pass
-
-
-class ColumnExpressionBase(RelationTreeBase):
-    def gather_required_columns(self) -> set[ColumnReference]:
-        return set()
-
-
-class PredicateBase(RelationTreeBase):
-    def gather_required_columns(self) -> set[ColumnReference]:
-        return set()
+    # TODO: On DM-41113 this will become a custom container that is
+    # Pydantic-friendly and supports data ID lookups (it'll probably use `dict`
+    # rather than `set` under the hood).  Right now this model isn't actually
+    # serializable.
+    rows: list[DimensionRecord]

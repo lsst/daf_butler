@@ -27,30 +27,31 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionJoin",)
+__all__ = ("DimensionJoin", "make_unit_relation")
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
+from typing import TYPE_CHECKING, Literal
 
 import pydantic
 
-from ...dimensions import DimensionGroup
+from ...dimensions import DimensionGroup, DimensionUniverse
 from ._base import RelationBase, StringOrWildcard
+from .joins import JoinTuple
 
 if TYPE_CHECKING:
     from ._relation import Relation
 
 
-def _validate_join_tuple(original: tuple[str, str]) -> tuple[str, str]:
-    if original[0] < original[1]:
-        return original
-    if original[0] > original[1]:
-        return original[::-1]
-    raise ValueError("Join tuples may not represent self-joins.")
+def make_unit_relation(universe: DimensionUniverse) -> DimensionJoin:
+    """Make an initial relation with empty dimensions and a single logical row.
 
-
-JoinTuple: TypeAlias = Annotated[tuple[str, str], pydantic.AfterValidator(_validate_join_tuple)]
+    This method should be used by `Butler._query` to construct the initial
+    relation tree.  This relation is a useful initial state because it is the
+    identity relation for joins, in that joining any other relation to this
+    relation yields that relation.
+    """
+    return DimensionJoin.model_construct(dimensions=universe.empty.as_group())
 
 
 class DimensionJoin(RelationBase):

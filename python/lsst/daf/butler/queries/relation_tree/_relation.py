@@ -46,27 +46,27 @@ from ._selection import Selection
 
 Relation: TypeAlias = Annotated[
     Union[
-        DatasetSearch,
-        DataCoordinateUpload,
-        DimensionJoin,
-        Selection,
-        DimensionProjection,
-        OrderedSlice,
         Chain,
+        DataCoordinateUpload,
+        DatasetSearch,
+        DimensionJoin,
+        DimensionProjection,
         FindFirst,
         Materialization,
+        OrderedSlice,
+        Selection,
     ],
     pydantic.Field(discriminator="relation_type"),
 ]
 
 
-DimensionJoin.model_rebuild()
-Selection.model_rebuild()
-DimensionProjection.model_rebuild()
-OrderedSlice.model_rebuild()
 Chain.model_rebuild()
+DimensionJoin.model_rebuild()
+DimensionProjection.model_rebuild()
 FindFirst.model_rebuild()
 Materialization.model_rebuild()
+OrderedSlice.model_rebuild()
+Selection.model_rebuild()
 
 
 class DeferredValidationRelation(DeferredValidation[Relation]):

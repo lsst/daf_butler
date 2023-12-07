@@ -28,54 +28,35 @@
 from __future__ import annotations
 
 __all__ = (
-    "RelationBase",
-    "ColumnExpressionBase",
-    "PredicateBase",
-    "StringOrWildcard",
-    "DatasetFieldName",
-    "InvalidRelationError",
+    "DatasetRefResultSpec",
+    "DatasetRefResultPage",
 )
 
-from types import EllipsisType
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
+from typing import Literal
 
 import pydantic
 
-if TYPE_CHECKING:
-    from ._column_reference import ColumnReference
+from .._dataset_ref import DatasetRef
+from ..dimensions import DimensionGroup
+from .driver import PageKey
 
 
-StringOrWildcard = Annotated[
-    str | EllipsisType,
-    pydantic.PlainSerializer(lambda x: "..." if x is ... else x, return_type=str),
-    pydantic.BeforeValidator(lambda x: ... if x == "..." else x),
-]
+class DatasetRefResultSpec(pydantic.BaseModel):
+    """Specification for a query that yields `DatasetRef` objects."""
+
+    result_type: Literal["dataset_ref"] = "dataset_ref"
+    dataset_type_name: str | None
+    dimensions: DimensionGroup
+    with_dimension_records: bool
 
 
-DatasetFieldName: TypeAlias = Literal[
-    "dataset_id", "dataset_type", "ingest_date", "run", "collection", "rank"
-]
+class DatasetRefResultPage(pydantic.BaseModel):
+    """A single page of results from a dataset ref query."""
 
+    spec: DatasetRefResultSpec
+    next_key: PageKey | None
 
-class InvalidRelationError(ValueError):
-    """Exception raised when a query's relation tree would be invalid."""
-
-    pass
-
-
-class RelationTreeBase(pydantic.BaseModel):
-    model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
-
-
-class RelationBase(RelationTreeBase):
-    pass
-
-
-class ColumnExpressionBase(RelationTreeBase):
-    def gather_required_columns(self) -> set[ColumnReference]:
-        return set()
-
-
-class PredicateBase(RelationTreeBase):
-    def gather_required_columns(self) -> set[ColumnReference]:
-        return set()
+    # TODO: On DM-41115 this will become a custom container that normalizes out
+    # attached DimensionRecords and is Pydantic-friendly.  Right now this model
+    # isn't actually serializable.
+    rows: list[DatasetRef]
