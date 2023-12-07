@@ -814,6 +814,7 @@ class Butler(LimitedButler):
     def get_dataset(
         self,
         id: DatasetId,
+        *,
         storage_class: str | StorageClass | None = None,
         dimension_records: bool = False,
         datastore_records: bool = False,
