@@ -438,7 +438,7 @@ class RegistryTests(ABC):
         # Search more than one collection, in which two have the right
         # dataset type and another does not.
         registry.registerRun("empty")
-        self.loadData(registry, "datasets-uuid.yaml")
+        self.loadData(registry, "datasets.yaml")
         bias1 = registry.findDataset("bias", instrument="Cam1", detector=2, collections=["imported_g"])
         self.assertIsNotNone(bias1)
         bias2 = registry.findDataset("bias", instrument="Cam1", detector=2, collections=["imported_r"])

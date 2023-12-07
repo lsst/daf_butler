@@ -27,19 +27,19 @@ data:
     run: imported_g
     records:
       -
-        dataset_id: 1001
+        dataset_id: !uuid e15ab039-bc8b-4135-87c5-90902a7c0b22
         data_id:
           instrument: Cam1
           detector: 1
         path: placeholder
       -
-        dataset_id: 1002
+        dataset_id: !uuid 51352db4-a47a-447c-b12d-a50b206b17cd
         data_id:
           instrument: Cam1
           detector: 2
         path: placeholder
       -
-        dataset_id: 1003
+        dataset_id: !uuid e06b6f3c-5b3e-46d0-bdde-4ef972301116
         data_id:
           instrument: Cam1
           detector: 3
@@ -50,7 +50,7 @@ data:
     run: imported_g
     records:
       -
-        dataset_id: 1010
+        dataset_id: !uuid 60c8a65c-7290-4c38-b1de-e3b1cdcf872d
         data_id:
           instrument: Cam1
           detector: 2
@@ -58,7 +58,7 @@ data:
           band: g
         path: placeholder
       -
-        dataset_id: 1020
+        dataset_id: !uuid 84239e7f-c41f-46d5-97b9-a27976b98ceb
         data_id:
           instrument: Cam1
           detector: 3
@@ -66,7 +66,7 @@ data:
           band: g
         path: placeholder
       -
-        dataset_id: 1030
+        dataset_id: !uuid fd51bce1-2848-49d6-a378-f8a122f5139a
         data_id:
           instrument: Cam1
           detector: 4
@@ -82,19 +82,19 @@ data:
     run: imported_r
     records:
       -
-        dataset_id: 2001
+        dataset_id: !uuid 87f3e68d-258d-41b7-8ea5-edf3557ccb30
         data_id:
           instrument: Cam1
           detector: 2
         path: placeholder
       -
-        dataset_id: 2002
+        dataset_id: !uuid dc0ef017-dc94-4118-b431-d65b1ef89a5f
         data_id:
           instrument: Cam1
           detector: 3
         path: placeholder
       -
-        dataset_id: 2003
+        dataset_id: !uuid e255067d-dcc5-4f39-9824-0baa5817d3e5
         data_id:
           instrument: Cam1
           detector: 4
@@ -105,7 +105,7 @@ data:
     run: imported_r
     records:
       -
-        dataset_id: 2010
+        dataset_id: !uuid d0bb04cd-d697-4a83-ba53-cdfcd58e3a0c
         data_id:
           instrument: Cam1
           detector: 1
@@ -113,7 +113,7 @@ data:
           band: r
         path: placeholder
       -
-        dataset_id: 2020
+        dataset_id: !uuid c1296796-56c5-4acf-9b49-40d920c6f840
         data_id:
           instrument: Cam1
           detector: 2
@@ -121,7 +121,7 @@ data:
           band: r
         path: placeholder
       -
-        dataset_id: 2030
+        dataset_id: !uuid 393972aa-57ab-41c2-b3bc-03541ca6bc6e
         data_id:
           instrument: Cam1
           detector: 3
@@ -129,7 +129,7 @@ data:
           band: r
         path: placeholder
       -
-        dataset_id: 2040
+        dataset_id: !uuid 37185f04-1cea-4ddd-a065-a5e0be9e19de
         data_id:
           instrument: Cam1
           detector: 4

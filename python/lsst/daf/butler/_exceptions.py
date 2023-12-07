@@ -26,7 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Specialized Butler exceptions."""
-__all__ = ("DatasetTypeNotSupportedError", "ValidationError")
+__all__ = ("DatasetTypeNotSupportedError", "EmptyQueryResultError", "ValidationError")
 
 
 class DatasetTypeNotSupportedError(RuntimeError):
@@ -43,3 +43,21 @@ class ValidationError(RuntimeError):
     """Some sort of validation error has occurred."""
 
     pass
+
+
+class EmptyQueryResultError(Exception):
+    """Exception raised when query methods return an empty result and `explain`
+    flag is set.
+
+    Attributes
+    ----------
+    reasons : `list` [`str`]
+        List of possible reasons for an empty query result.
+    """
+
+    def __init__(self, reasons: list[str]):
+        self.reasons = reasons
+
+    def __str__(self) -> str:
+        # There may be multiple reasons, format them into multiple lines.
+        return "Possible reasons for empty result:\n" + "\n".join(self.reasons)

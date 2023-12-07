@@ -57,7 +57,7 @@ class SimpleButlerTestCase(unittest.TestCase):
     datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
     )
-    datasetsImportFile = "datasets-uuid.yaml"
+    datasetsImportFile = "datasets.yaml"
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
@@ -655,14 +655,6 @@ class SimpleButlerTestCase(unittest.TestCase):
         for expression, expected in expressions:
             result = butler.registry.queryCollections(expression)
             self.assertEqual(set(result), expected)
-
-
-class SimpleButlerMixedUUIDTestCase(SimpleButlerTestCase):
-    """Same as SimpleButlerTestCase but uses UUID-based datasets manager and
-    loads datasets from YAML file with integer IDs.
-    """
-
-    datasetsImportFile = "datasets.yaml"
 
 
 if __name__ == "__main__":

@@ -91,7 +91,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # Populate the test server.
         server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets-uuid.yaml"))
+        server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
 
     @classmethod
     def tearDownClass(cls):

@@ -31,7 +31,8 @@ import os.path
 import re
 import unittest
 
-from lsst.daf.butler.registry import MissingSpatialOverlapError, RegistryConfig, _RegistryFactory, queries
+from lsst.daf.butler import DataCoordinateQueryResults, DimensionRecordQueryResults, ParentDatasetQueryResults
+from lsst.daf.butler.registry import MissingSpatialOverlapError, RegistryConfig, _RegistryFactory
 from lsst.daf.butler.transfers import YamlRepoImportBackend
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -97,9 +98,7 @@ class TestQueryRelationsTests(unittest.TestCase):
     def assert_relation_str(
         self,
         expected: str,
-        *results: queries.DataCoordinateQueryResults
-        | queries.DimensionRecordQueryResults
-        | queries.ParentDatasetQueryResults,
+        *results: DataCoordinateQueryResults | DimensionRecordQueryResults | ParentDatasetQueryResults,
     ) -> None:
         """Assert that checks that one or more registry
         queries have relation trees that match the given string.

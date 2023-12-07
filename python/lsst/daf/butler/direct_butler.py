@@ -42,38 +42,30 @@ import numbers
 import os
 import warnings
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, MutableMapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, TextIO
 
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
+from lsst.utils.iteration import ensure_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from sqlalchemy.exc import IntegrityError
 
 from ._butler import Butler
 from ._butler_config import ButlerConfig
-from ._config import Config
 from ._dataset_existence import DatasetExistence
-from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
+from ._dataset_ref import DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from ._exceptions import ValidationError
-from ._file_dataset import FileDataset
+from ._exceptions import EmptyQueryResultError, ValidationError
 from ._limited_butler import LimitedButler
 from ._registry_shim import RegistryShim
 from ._storage_class import StorageClass, StorageClassFactory
 from ._timespan import Timespan
-from .datastore import DatasetRefURIs, Datastore, NullDatastore
-from .dimensions import (
-    DataCoordinate,
-    DataId,
-    DataIdValue,
-    Dimension,
-    DimensionElement,
-    DimensionRecord,
-    DimensionUniverse,
-)
+from .datastore import Datastore, NullDatastore
+from .dimensions import DataCoordinate, Dimension
+from .direct_query import DirectQuery
 from .progress import Progress
 from .registry import (
     CollectionType,
@@ -81,7 +73,6 @@ from .registry import (
     DataIdError,
     MissingDatasetTypeError,
     NoDefaultCollectionError,
-    Registry,
     RegistryDefaults,
     _RegistryFactory,
 )
@@ -92,6 +83,20 @@ from .utils import transactional
 if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol
 
+    from ._config import Config
+    from ._dataset_ref import DatasetId, DatasetIdGenEnum
+    from ._file_dataset import FileDataset
+    from ._query import Query
+    from .datastore import DatasetRefURIs
+    from .dimensions import (
+        DataId,
+        DataIdValue,
+        DimensionElement,
+        DimensionGroup,
+        DimensionRecord,
+        DimensionUniverse,
+    )
+    from .registry import CollectionArgType, Registry
     from .transfers import RepoImportBackend
 
 _LOG = getLogger(__name__)
@@ -1668,8 +1673,7 @@ class DirectButler(Butler):
         # We need to reorganize all the inputs so that they are grouped
         # by dataset type and run. Multiple refs in a single FileDataset
         # are required to share the run and dataset type.
-        GroupedData = MutableMapping[tuple[DatasetType, str], list[FileDataset]]
-        groupedData: GroupedData = defaultdict(list)
+        groupedData: MutableMapping[tuple[DatasetType, str], list[FileDataset]] = defaultdict(list)
 
         # Track DataIDs that are being ingested so we can spot issues early
         # with duplication. Retain previous FileDataset so we can report it.
@@ -2208,6 +2212,101 @@ class DirectButler(Butler):
     def dimensions(self) -> DimensionUniverse:
         # Docstring inherited.
         return self._registry.dimensions
+
+    @contextlib.contextmanager
+    def _query(self) -> Iterator[Query]:
+        # Docstring inherited.
+        yield DirectQuery(self._registry)
+
+    def _query_data_ids(
+        self,
+        dimensions: DimensionGroup | Iterable[str] | str,
+        *,
+        data_id: DataId | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        expanded: bool = False,
+        order_by: Iterable[str] | str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        explain: bool = True,
+        **kwargs: Any,
+    ) -> list[DataCoordinate]:
+        # Docstring inherited.
+        query = DirectQuery(self._registry)
+        result = query.data_ids(dimensions, data_id=data_id, where=where, bind=bind, **kwargs)
+        if expanded:
+            result = result.expanded()
+        if order_by:
+            result = result.order_by(*ensure_iterable(order_by))
+        if limit is not None:
+            result = result.limit(limit, offset)
+        else:
+            if offset is not None:
+                raise TypeError("offset is specified without limit")
+        data_ids = list(result)
+        if explain and not data_ids:
+            raise EmptyQueryResultError(list(result.explain_no_results()))
+        return data_ids
+
+    def _query_datasets(
+        self,
+        dataset_type: Any,
+        collections: CollectionArgType | None = None,
+        *,
+        find_first: bool = True,
+        data_id: DataId | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        expanded: bool = False,
+        explain: bool = True,
+        **kwargs: Any,
+    ) -> list[DatasetRef]:
+        # Docstring inherited.
+        query = DirectQuery(self._registry)
+        result = query.datasets(
+            dataset_type,
+            collections,
+            find_first=find_first,
+            data_id=data_id,
+            where=where,
+            bind=bind,
+            **kwargs,
+        )
+        if expanded:
+            result = result.expanded()
+        refs = list(result)
+        if explain and not refs:
+            raise EmptyQueryResultError(list(result.explain_no_results()))
+        return refs
+
+    def _query_dimension_records(
+        self,
+        element: str,
+        *,
+        data_id: DataId | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        order_by: Iterable[str] | str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        explain: bool = True,
+        **kwargs: Any,
+    ) -> list[DimensionRecord]:
+        # Docstring inherited.
+        query = DirectQuery(self._registry)
+        result = query.dimension_records(element, data_id=data_id, where=where, bind=bind, **kwargs)
+        if order_by:
+            result = result.order_by(*ensure_iterable(order_by))
+        if limit is not None:
+            result = result.limit(limit, offset)
+        else:
+            if offset is not None:
+                raise TypeError("offset is specified without limit")
+        data_ids = list(result)
+        if explain and not data_ids:
+            raise EmptyQueryResultError(list(result.explain_no_results()))
+        return data_ids
 
     _registry: SqlRegistry
     """The object that manages dataset metadata and relationships

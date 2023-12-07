@@ -25,11 +25,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("RemoteButler",)
 
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
-from typing import Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO
 
 import httpx
 from lsst.daf.butler import __version__
@@ -39,23 +41,29 @@ from lsst.utils.introspection import get_full_type_name
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig
-from .._config import Config
-from .._dataset_existence import DatasetExistence
-from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
+from .._dataset_ref import DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
-from .._deferredDatasetHandle import DeferredDatasetHandle
-from .._file_dataset import FileDataset
-from .._limited_butler import LimitedButler
 from .._storage_class import StorageClass
-from .._timespan import Timespan
-from ..datastore import DatasetRefURIs
-from ..dimensions import DataCoordinate, DataId, DimensionConfig, DimensionUniverse, SerializedDataCoordinate
-from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Registry, RegistryDefaults
+from ..dimensions import DataCoordinate, DimensionConfig, DimensionUniverse, SerializedDataCoordinate
+from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
-from ..transfers import RepoExportContext
 from ._authentication import get_authentication_headers, get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
 from .server_models import FindDatasetModel
+
+if TYPE_CHECKING:
+    from .._config import Config
+    from .._dataset_existence import DatasetExistence
+    from .._dataset_ref import DatasetId, DatasetIdGenEnum
+    from .._deferredDatasetHandle import DeferredDatasetHandle
+    from .._file_dataset import FileDataset
+    from .._limited_butler import LimitedButler
+    from .._query import Query
+    from .._timespan import Timespan
+    from ..datastore import DatasetRefURIs
+    from ..dimensions import DataId, DimensionGroup, DimensionRecord
+    from ..registry import CollectionArgType, Registry
+    from ..transfers import RepoExportContext
 
 
 class RemoteButler(Butler):
@@ -432,6 +440,59 @@ class RemoteButler(Butler):
 
     @property
     def registry(self) -> Registry:
+        # Docstring inherited.
+        raise NotImplementedError()
+
+    def _query(self) -> AbstractContextManager[Query]:
+        # Docstring inherited.
+        raise NotImplementedError()
+
+    def _query_data_ids(
+        self,
+        dimensions: DimensionGroup | Iterable[str] | str,
+        *,
+        data_id: DataId | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        expanded: bool = False,
+        order_by: Iterable[str] | str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        explain: bool = True,
+        **kwargs: Any,
+    ) -> list[DataCoordinate]:
+        # Docstring inherited.
+        raise NotImplementedError()
+
+    def _query_datasets(
+        self,
+        dataset_type: Any,
+        collections: CollectionArgType | None = None,
+        *,
+        find_first: bool = True,
+        data_id: DataId | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        expanded: bool = False,
+        explain: bool = True,
+        **kwargs: Any,
+    ) -> list[DatasetRef]:
+        # Docstring inherited.
+        raise NotImplementedError()
+
+    def _query_dimension_records(
+        self,
+        element: str,
+        *,
+        data_id: DataId | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        order_by: Iterable[str] | str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        explain: bool = True,
+        **kwargs: Any,
+    ) -> list[DimensionRecord]:
         # Docstring inherited.
         raise NotImplementedError()
 
