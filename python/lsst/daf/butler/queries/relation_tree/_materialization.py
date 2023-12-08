@@ -37,7 +37,7 @@ from ...dimensions import DimensionGroup
 from ._base import RelationBase, StringOrWildcard
 
 if TYPE_CHECKING:
-    from ._relation import Relation
+    from ._relation import RootRelation
 
 
 class Materialization(RelationBase):
@@ -47,7 +47,7 @@ class Materialization(RelationBase):
 
     relation_type: Literal["materialization"] = "materialization"
 
-    operand: Relation
+    operand: RootRelation
     """The upstream relation to evaluate."""
 
     dataset_types: frozenset[StringOrWildcard]

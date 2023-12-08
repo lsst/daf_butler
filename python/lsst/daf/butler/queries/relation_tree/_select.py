@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionJoin", "make_unit_relation")
+__all__ = ("Select", "make_unit_relation")
 
 import itertools
 from functools import cached_property
@@ -37,13 +37,15 @@ import pydantic
 
 from ...dimensions import DimensionGroup, DimensionUniverse
 from ._base import RelationBase, StringOrWildcard
+from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
+from ._predicate import Predicate
 from .joins import JoinTuple
 
 if TYPE_CHECKING:
-    from ._relation import Relation
+    from ._relation import JoinOperand
 
 
-def make_unit_relation(universe: DimensionUniverse) -> DimensionJoin:
+def make_unit_relation(universe: DimensionUniverse) -> Select:
     """Make an initial relation with empty dimensions and a single logical row.
 
     This method should be used by `Butler._query` to construct the initial
@@ -51,28 +53,28 @@ def make_unit_relation(universe: DimensionUniverse) -> DimensionJoin:
     identity relation for joins, in that joining any other relation to this
     relation yields that relation.
     """
-    return DimensionJoin.model_construct(dimensions=universe.empty.as_group())
+    return Select.model_construct(dimensions=universe.empty.as_group())
 
 
-class DimensionJoin(RelationBase):
-    """An abstract relation that represents a join between dimension-element
-    tables and (optionally) other relations.
+class Select(RelationBase):
+    """An abstract relation that combines joins and row-selection within a
+    fixed set of dimensions.
 
     Notes
     -----
     Joins on dataset IDs are expected to be expressed as
-    `abstract_expressions.InRelation` predicates in `Selection` operations.
+    `abstract_expressions.InRelation` predicates used in the `where` attribute.
     That is slightly more powerful (since it can do set differences via
     `abstract_expressions.LogicalNot`) and it keeps the abstract relation tree
-    simpler if the only join constraints in play are on dimension columns.
+    simpler if the only join constraints in play here are on dimension columns.
     """
 
-    relation_type: Literal["dimension_join"] = "dimension_join"
+    relation_type: Literal["select"] = "select"
 
     dimensions: DimensionGroup
     """The dimensions of the relation."""
 
-    operands: tuple[Relation, ...] = ()
+    join_operands: tuple[JoinOperand, ...] = ()
     """Relations to include in the join other than dimension-element tables.
 
     Because dimension-element tables are expected to contain the full set of
@@ -85,15 +87,18 @@ class DimensionJoin(RelationBase):
     ``detector`` table, but the ``physical_filter`` table will be joined in.
     """
 
-    spatial: frozenset[JoinTuple] = frozenset()
+    spatial_joins: frozenset[JoinTuple] = frozenset()
     """Pairs of dimension element names that should whose regions on the sky
     must overlap.
     """
 
-    temporal: frozenset[JoinTuple] = frozenset()
+    temporal_joins: frozenset[JoinTuple] = frozenset()
     """Pairs of dimension element names and calibration dataset type names
     whose timespans must overlap.
     """
+
+    where: tuple[Predicate, ...] = ()
+    """Boolean expression trees whose logical AND defines a row filter."""
 
     @cached_property
     def available_dataset_types(self) -> frozenset[StringOrWildcard]:
@@ -101,13 +106,13 @@ class DimensionJoin(RelationBase):
         this relation.
         """
         result: set[StringOrWildcard] = set()
-        for operand in self.operands:
+        for operand in self.join_operands:
             result.update(operand.available_dataset_types)
         return frozenset(result)
 
     @pydantic.model_validator(mode="after")
-    def _validate_operands(self) -> DimensionJoin:
-        for operand in self.operands:
+    def _validate_join_operands(self) -> Select:
+        for operand in self.join_operands:
             if not operand.dimensions.issubset(self.dimensions):
                 raise ValueError(
                     f"Dimensions {operand.dimensions} of join operand {operand} are not a "
@@ -116,7 +121,7 @@ class DimensionJoin(RelationBase):
         return self
 
     @pydantic.model_validator(mode="after")
-    def _validate_spatial(self) -> DimensionJoin:
+    def _validate_spatial_joins(self) -> Select:
         def check_operand(operand: str) -> str:
             if operand not in self.dimensions.elements:
                 raise ValueError(f"Spatial join operand {operand!r} is not in this join's dimensions.")
@@ -125,13 +130,13 @@ class DimensionJoin(RelationBase):
                 raise ValueError(f"Spatial join operand {operand!r} is not associated with a region.")
             return family.name
 
-        for a, b in self.spatial:
+        for a, b in self.spatial_joins:
             if check_operand(a) == check_operand(b):
                 raise ValueError(f"Spatial join between {a!r} and {b!r} is unnecessary.")
         return self
 
     @pydantic.model_validator(mode="after")
-    def _validate_temporal(self) -> DimensionJoin:
+    def _validate_temporal_joins(self) -> Select:
         def check_operand(operand: str) -> str:
             if operand in self.dimensions.elements:
                 family = self.dimensions.universe[operand].temporal
@@ -145,18 +150,36 @@ class DimensionJoin(RelationBase):
                     f"Temporal join operand {operand!r} is not in this join's dimensions or dataset types."
                 )
 
-        for a, b in self.spatial:
+        for a, b in self.spatial_joins:
             if check_operand(a) == check_operand(b):
                 raise ValueError(f"Temporal join between {a!r} and {b!r} is unnecessary or impossible.")
         return self
 
     @pydantic.model_validator(mode="after")
-    def _validate_upstream_datasets(self) -> DimensionJoin:
-        for a, b in itertools.combinations(self.operands, 2):
+    def _validate_upstream_datasets(self) -> Select:
+        for a, b in itertools.combinations(self.join_operands, 2):
             if not a.available_dataset_types.isdisjoint(b.available_dataset_types):
                 common = a.available_dataset_types & b.available_dataset_types
                 if None in common:
                     raise ValueError(f"Upstream relations {a} and {b} both have a dataset wildcard.")
                 else:
                     raise ValueError(f"Upstream relations {a} and {b} both have dataset types {common}.")
+        return self
+
+    @pydantic.model_validator(mode="after")
+    def _validate_required_columns(self) -> Select:
+        required_columns = set()
+        for where_term in self.where:
+            required_columns.update(where_term.gather_required_columns())
+        for column in required_columns:
+            match column:
+                case DimensionKeyReference(dimension=dimension):
+                    if dimension not in self.dimensions:
+                        raise ValueError(f"Column {column} is not in dimensions {self.dimensions}.")
+                case DimensionFieldReference(element=element):
+                    if element not in self.dimensions.elements:
+                        raise ValueError(f"Column {column} is not in dimensions {self.dimensions}.")
+                case DatasetFieldReference(dataset_type=dataset_type):
+                    if dataset_type not in self.available_dataset_types:
+                        raise ValueError(f"Dataset search for column {column} is not present.")
         return self

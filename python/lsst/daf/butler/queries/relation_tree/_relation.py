@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Relation", "DeferredValidationRelation")
+__all__ = ("RootRelation", "DeferredValidationRootRelation", "JoinOperand", "OrderedSliceOperand")
 
 from typing import Annotated, TypeAlias, Union
 
@@ -36,32 +36,37 @@ import pydantic
 from ...pydantic_utils import DeferredValidation
 from ._data_coordinate_upload import DataCoordinateUpload
 from ._dataset_search import DatasetSearch
-from ._dimension_join import DimensionJoin
 from ._find_first import FindFirst
 from ._materialization import Materialization
 from ._ordered_slice import OrderedSlice
-from ._selection import Selection
+from ._select import Select
 
-Relation: TypeAlias = Annotated[
+JoinOperand: TypeAlias = Annotated[
     Union[
         DataCoordinateUpload,
         DatasetSearch,
-        DimensionJoin,
-        FindFirst,
         Materialization,
-        OrderedSlice,
-        Selection,
     ],
     pydantic.Field(discriminator="relation_type"),
 ]
 
+OrderedSliceOperand: TypeAlias = Annotated[
+    Union[Select, FindFirst],
+    pydantic.Field(discriminator="relation_type"),
+]
 
-DimensionJoin.model_rebuild()
+
+RootRelation: TypeAlias = Annotated[
+    Union[Select, FindFirst, OrderedSlice],
+    pydantic.Field(discriminator="relation_type"),
+]
+
+
+Select.model_rebuild()
 FindFirst.model_rebuild()
 Materialization.model_rebuild()
 OrderedSlice.model_rebuild()
-Selection.model_rebuild()
 
 
-class DeferredValidationRelation(DeferredValidation[Relation]):
+class DeferredValidationRootRelation(DeferredValidation[RootRelation]):
     pass

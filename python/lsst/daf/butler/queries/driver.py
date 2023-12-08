@@ -42,7 +42,7 @@ from .data_coordinate_results import DataCoordinateResultPage, DataCoordinateRes
 from .dataset_results import DatasetRefResultPage, DatasetRefResultSpec
 from .dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
 from .general_results import GeneralResultPage, GeneralResultSpec
-from .relation_tree import Relation
+from .relation_tree import RootRelation
 
 PageKey: TypeAlias = uuid.UUID
 
@@ -89,23 +89,25 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @overload
-    def execute(self, tree: Relation, result_spec: DataCoordinateResultSpec) -> DataCoordinateResultPage:
+    def execute(self, tree: RootRelation, result_spec: DataCoordinateResultSpec) -> DataCoordinateResultPage:
         ...
 
     @overload
-    def execute(self, tree: Relation, result_spec: DimensionRecordResultSpec) -> DimensionRecordResultPage:
+    def execute(
+        self, tree: RootRelation, result_spec: DimensionRecordResultSpec
+    ) -> DimensionRecordResultPage:
         ...
 
     @overload
-    def execute(self, tree: Relation, result_spec: DatasetRefResultSpec) -> DatasetRefResultPage:
+    def execute(self, tree: RootRelation, result_spec: DatasetRefResultSpec) -> DatasetRefResultPage:
         ...
 
     @overload
-    def execute(self, tree: Relation, result_spec: GeneralResultSpec) -> GeneralResultPage:
+    def execute(self, tree: RootRelation, result_spec: GeneralResultSpec) -> GeneralResultPage:
         ...
 
     @abstractmethod
-    def execute(self, tree: Relation, result_spec: ResultSpec) -> ResultPage:
+    def execute(self, tree: RootRelation, result_spec: ResultSpec) -> ResultPage:
         """Execute a query and return the first result page.
 
         Parameters
@@ -184,7 +186,7 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def count(self, tree: Relation, *, exact: bool, discard: bool) -> int:
+    def count(self, tree: RootRelation, *, exact: bool, discard: bool) -> int:
         """Return the number of rows a query would return.
 
         Parameters
@@ -206,7 +208,7 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def any(self, tree: Relation, *, execute: bool, exact: bool) -> bool:
+    def any(self, tree: RootRelation, *, execute: bool, exact: bool) -> bool:
         """Test whether the query would return any rows.
 
         Parameters
@@ -232,7 +234,7 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def explain_no_results(self, tree: Relation, execute: bool) -> Iterable[str]:
+    def explain_no_results(self, tree: RootRelation, execute: bool) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
 

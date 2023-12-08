@@ -44,7 +44,7 @@ from ._column_reference import (
 )
 
 if TYPE_CHECKING:
-    from ._relation import Relation
+    from ._relation import OrderedSliceOperand
 
 
 class OrderedSlice(RelationBase):
@@ -54,7 +54,7 @@ class OrderedSlice(RelationBase):
 
     relation_type: Literal["ordered_slice"] = "ordered_slice"
 
-    operand: Relation
+    operand: OrderedSliceOperand
     """The upstream relation to operate on."""
 
     order_by: tuple[OrderExpression, ...] = ()

@@ -38,7 +38,7 @@ from ...dimensions import DimensionGroup
 from ._base import RelationBase, StringOrWildcard
 
 if TYPE_CHECKING:
-    from ._relation import Relation
+    from ._select import Select
 
 
 class FindFirst(RelationBase):
@@ -51,7 +51,7 @@ class FindFirst(RelationBase):
 
     relation_type: Literal["find_first"] = "find_first"
 
-    operand: Relation
+    operand: Select
     """The upstream relation to operate on.
 
     This may have more than one `DatasetSearch` joined into it (at any level),

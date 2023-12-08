@@ -40,7 +40,7 @@ from ._base import PredicateBase
 from ._column_expression import ColumnExpression
 
 if TYPE_CHECKING:
-    from ._relation import Relation
+    from ._relation import RootRelation
 
 
 class LogicalAnd(PredicateBase):
@@ -148,7 +148,7 @@ class InRelation(PredicateBase):
     predicate_type: Literal["in_relation"] = "in_relation"
     member: ColumnExpression
     column: ColumnExpression
-    relation: Relation
+    relation: RootRelation
 
     def gather_required_columns(self) -> set[ColumnReference]:
         # We're only gathering columns from the relation this predicate is

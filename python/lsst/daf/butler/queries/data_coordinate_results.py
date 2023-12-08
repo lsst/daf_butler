@@ -44,7 +44,7 @@ from .._dataset_type import DatasetType
 from .._query_results import DataCoordinateQueryResults, DatasetQueryResults
 from ..dimensions import DataCoordinate, DimensionGroup
 from .driver import QueryDriver
-from .relation_tree import Relation
+from .relation_tree import RootRelation
 
 if TYPE_CHECKING:
     from .driver import PageKey
@@ -82,7 +82,7 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
     we won't need an ABC if this is the only implementation.
     """
 
-    def __init__(self, tree: Relation, driver: QueryDriver, spec: DataCoordinateResultSpec):
+    def __init__(self, tree: RootRelation, driver: QueryDriver, spec: DataCoordinateResultSpec):
         self._tree = tree
         self._driver = driver
         self._spec = spec

@@ -36,7 +36,7 @@ from .._query import Query
 from ..dimensions import DataCoordinate, DataId, DimensionGroup
 from .data_coordinate_results import DataCoordinateResultSpec, RelationDataCoordinateQueryResults
 from .driver import QueryDriver
-from .relation_tree import Relation
+from .relation_tree import RootRelation
 
 if TYPE_CHECKING:
     from .._query_results import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
@@ -65,7 +65,7 @@ class RelationQuery(Query):
     if this is the only implementation.
     """
 
-    def __init__(self, driver: QueryDriver, tree: Relation, include_dimension_records: bool):
+    def __init__(self, driver: QueryDriver, tree: RootRelation, include_dimension_records: bool):
         self._driver = driver
         self._tree = tree
         self._include_dimension_records = include_dimension_records
