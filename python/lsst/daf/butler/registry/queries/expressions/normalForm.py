@@ -751,10 +751,10 @@ class TransformationWrapper(ABC):
 
     @abstractmethod
     def unwrap(self) -> Node:
-        """Return an transformed expression tree.
+        """Return a transformed expression tree.
 
-        Return:
-        ------
+        Returns
+        -------
         tree : `Node`
             Tree node representing the same expression (and form) as ``self``.
         """
