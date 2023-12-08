@@ -53,7 +53,7 @@ abortedMsg = "Aborted."
 )
 @confirm_option()
 @options_file_option()
-def remove_collections(**kwargs: Any) -> None:
+def remove_collections(**kwargs: Any) -> None:  # numpydoc ignore=PR01
     """Remove one or more non-RUN collections.
 
     This command can be used to remove only non-RUN collections. If RUN

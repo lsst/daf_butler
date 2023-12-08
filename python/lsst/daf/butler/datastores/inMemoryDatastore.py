@@ -419,7 +419,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
             Reference to the required dataset.
         predict : `bool`, optional
             If the datastore does not know about the dataset, controls whether
-            it should return a predicted URI or not?
+            it should return a predicted URI or not.
 
         Returns
         -------
@@ -498,6 +498,26 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         overwrite: bool | None = False,
     ) -> list[ResourcePath]:
         """Retrieve the file artifacts associated with the supplied refs.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets for which artifacts are to be retrieved.
+            A single ref can result in multiple artifacts. The refs must
+            be resolved.
+        destination : `lsst.resources.ResourcePath`
+            Location to write the artifacts.
+        transfer : `str`, optional
+            Method to use to transfer the artifacts. Must be one of the options
+            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            "move" is not allowed.
+        preserve_path : `bool`, optional
+            If `True` the full path of the artifact within the datastore
+            is preserved. If `False` the final file component of the path
+            is used.
+        overwrite : `bool`, optional
+            If `True` allow transfers to overwrite existing files at the
+            destination.
 
         Notes
         -----

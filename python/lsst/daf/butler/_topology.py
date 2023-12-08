@@ -83,7 +83,7 @@ class TopologicalFamily(ABC):
     ----------
     name : `str`
         Unique string identifier for this family.
-    category : `TopologicalSpace`
+    space : `TopologicalSpace`
         Space in which the regions of this family live.
     """
 

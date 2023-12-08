@@ -153,12 +153,12 @@ class DatastoreTransaction:
         ----------
         name : `str`
             Name of the event.
-        undoFunc : func
+        undoFunc : `~collections.abc.Callable`
             Function to undo this event.
         *args : `tuple`
-            Positional arguments to `undoFunc`.
+            Positional arguments to ``undoFunc``.
         **kwargs
-            Keyword arguments to `undoFunc`.
+            Keyword arguments to ``undoFunc``.
         """
         self._log.append(self.Event(name, undoFunc, args, kwargs))
 
@@ -173,6 +173,17 @@ class DatastoreTransaction:
         separately should not be part of the same `undoWith` block.
 
         All arguments are forwarded directly to `registerUndo`.
+
+        Parameters
+        ----------
+        name : `str`
+            The name to associate with this event.
+        undoFunc : `~collections.abc.Callable`
+            Function to undo this event.
+        *args : `tuple`
+            Positional arguments for ``undoFunc``.
+        **kwargs : `typing.Any`
+            Keyword arguments for ``undoFunc``.
         """
         try:
             yield None
@@ -224,6 +235,16 @@ class DatasetRefURIs(abc.Sequence):
     `(primaryURI, componentURIs)`. To maintain backward compatibility this
     inherits from Sequence and so instances can be treated as a two-item
     tuple.
+
+    Parameters
+    ----------
+    primaryURI : `lsst.resources.ResourcePath` or `None`, optional
+        The URI to the primary artifact associated with this dataset. If the
+        dataset was disassembled within the datastore this may be `None`.
+    componentURIs : `dict` [`str`, `~lsst.resources.ResourcePath`] or `None`
+        The URIs to any components associated with the dataset artifact
+        indexed by component name. This can be empty if there are no
+        components.
     """
 
     def __init__(
@@ -232,15 +253,7 @@ class DatasetRefURIs(abc.Sequence):
         componentURIs: dict[str, ResourcePath] | None = None,
     ):
         self.primaryURI = primaryURI
-        """The URI to the primary artifact associated with this dataset. If the
-        dataset was disassembled within the datastore this may be `None`.
-        """
-
         self.componentURIs = componentURIs or {}
-        """The URIs to any components associated with the dataset artifact
-        indexed by component name. This can be empty if there are no
-        components.
-        """
 
     def __getitem__(self, index: Any) -> Any:
         """Get primaryURI and componentURIs by index.
@@ -1298,6 +1311,15 @@ class Datastore(metaclass=ABCMeta):
 class NullDatastore(Datastore):
     """A datastore that implements the `Datastore` API but always fails when
     it accepts any request.
+
+    Parameters
+    ----------
+    config : `Config` or `~lsst.resources.ResourcePathExpression` or `None`
+        Ignored.
+    bridgeManager : `DatastoreRegistryBridgeManager` or `None`
+        Ignored.
+    butlerRoot : `~lsst.resources.ResourcePathExpression` or `None`
+        Ignored.
     """
 
     @classmethod

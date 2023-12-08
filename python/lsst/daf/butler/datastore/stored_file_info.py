@@ -103,6 +103,16 @@ class StoredDatastoreItemInfo:
     def update(self, **kwargs: Any) -> StoredDatastoreItemInfo:
         """Create a new class with everything retained apart from the
         specified values.
+
+        Parameters
+        ----------
+        **kwargs : `~collections.abc.Mapping`
+            Values to override.
+
+        Returns
+        -------
+        updated : `StoredDatastoreItemInfo`
+            A new instance of the object with updated values.
         """
         raise NotImplementedError()
 
@@ -173,7 +183,23 @@ class StoredDatastoreItemInfo:
 
 @dataclass(frozen=True, slots=True)
 class StoredFileInfo(StoredDatastoreItemInfo):
-    """Datastore-private metadata associated with a Datastore file."""
+    """Datastore-private metadata associated with a Datastore file.
+
+    Parameters
+    ----------
+    formatter : `Formatter` or `str`
+        The formatter to use for this dataset.
+    path : `str`
+        Path to the artifact associated with this dataset.
+    storageClass : `StorageClass`
+        The storage class associated with this dataset.
+    component : `str` or `None`, optional
+        The component if disassembled.
+    checksum : `str` or `None`, optional
+        The checksum of the artifact.
+    file_size : `int`
+        The size of the file in bytes. -1 indicates the size is not known.
+    """
 
     storageClassFactory = StorageClassFactory()
 
@@ -245,7 +271,13 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         return self.update(component=component)
 
     def to_record(self, **kwargs: Any) -> dict[str, Any]:
-        """Convert the supplied ref to a database record."""
+        """Convert the supplied ref to a database record.
+
+        Parameters
+        ----------
+        **kwargs : `typing.Any`
+            Additional information to be added to the record.
+        """
         component = self.component
         if component is None:
             # Use empty string since we want this to be part of the

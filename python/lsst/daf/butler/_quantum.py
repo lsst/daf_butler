@@ -103,6 +103,32 @@ class SerializedQuantum(_BaseModelCompat):
     ) -> SerializedQuantum:
         """Construct a `SerializedQuantum` directly without validators.
 
+        Parameters
+        ----------
+        taskName : `str` or `None`
+            The name of the task.
+        dataId : `dict` or `None`
+            The dataId of the quantum.
+        datasetTypeMapping : `~collections.abc.Mapping` [`str`, `dict`]
+            Dataset type definitions.
+        initInputs : `~collections.abc.Mapping`
+            The quantum init inputs.
+        inputs : `~collections.abc.Mapping`
+            The quantum inputs.
+        outputs : `~collections.abc.Mapping`
+            The quantum outputs.
+        dimensionRecords : `dict` [`int`, `dict`] or `None`
+            The dimension records.
+        datastoreRecords : `dict` [`str`, `dict`] or `None`
+            The datastore records.
+
+        Returns
+        -------
+        quantum : `SerializedQuantum`
+            Serializable model of the quantum.
+
+        Notes
+        -----
         This differs from the pydantic "construct" method in that the arguments
         are explicitly what the model requires, and it will recurse through
         members, constructing them from their corresponding `direct` methods.

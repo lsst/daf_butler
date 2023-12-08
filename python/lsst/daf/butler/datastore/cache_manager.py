@@ -69,7 +69,13 @@ log = logging.getLogger(__name__)
 
 
 def remove_cache_directory(directory: str) -> None:
-    """Remove the specified directory and all its contents."""
+    """Remove the specified directory and all its contents.
+
+    Parameters
+    ----------
+    directory : `str`
+        Directory to remove.
+    """
     log.debug("Removing temporary cache directory %s", directory)
     shutil.rmtree(directory, ignore_errors=True)
 
@@ -990,11 +996,11 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             Keys into the cache, sorted by time with oldest first.
         """
 
-        def sort_by_time(key: str) -> datetime.datetime:
+        def _sort_by_time(key: str) -> str:
             """Sorter key function using cache entry details."""
             return self._cache_entries[key].ctime
 
-        return sorted(self._cache_entries, key=sort_by_time)
+        return sorted(self._cache_entries, key=_sort_by_time)
 
     def __str__(self) -> str:
         cachedir = self._cache_directory if self._cache_directory else "<tempdir>"
@@ -1027,33 +1033,84 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
     def should_be_cached(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:
         """Indicate whether the entity should be added to the cache.
 
-        Always returns `False`.
+        Parameters
+        ----------
+        entity : `StorageClass` or `DatasetType` or `DatasetRef`
+            Thing to test against the configuration. The ``name`` property
+            is used to determine a match.  A `DatasetType` will first check
+            its name, before checking its `StorageClass`.  If there are no
+            matches the default will be returned.
+
+        Returns
+        -------
+        should_cache : `bool`
+            Always returns `False`.
         """
         return False
 
     def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> ResourcePath | None:
-        """Move dataset to cache but always refuse and returns `None`."""
+        """Move dataset to cache.
+
+        Parameters
+        ----------
+        uri : `lsst.resources.ResourcePath`
+            Location of the file to be relocated to the cache. Will be moved.
+        ref : `DatasetRef`
+            Ref associated with this file. Will be used to determine the name
+            of the file within the cache.
+
+        Returns
+        -------
+        new : `lsst.resources.ResourcePath` or `None`
+           Always refuses and returns `None`.
+        """
         return None
 
     @contextlib.contextmanager
     def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[ResourcePath | None]:
         """Look for a dataset in the cache and return its location.
 
-        Never finds a file.
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset to locate in the cache.
+        extension : `str`
+            File extension expected. Should include the leading "``.``".
+
+        Yields
+        ------
+        uri : `lsst.resources.ResourcePath` or `None`
+            Never finds a file. Always returns `None`.
         """
         yield None
 
     def remove_from_cache(self, ref: DatasetRef | Iterable[DatasetRef]) -> None:
         """Remove datasets from cache.
 
-        Always does nothing.
+        Parameters
+        ----------
+        ref : `DatasetRef` or iterable of `DatasetRef`
+            The datasets to remove from the cache. Always does nothing.
         """
         return
 
     def known_to_cache(self, ref: DatasetRef, extension: str | None = None) -> bool:
         """Report if a dataset is known to the cache.
 
-        Always returns `False`.
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset to check for in the cache.
+        extension : `str`, optional
+            File extension expected. Should include the leading "``.``".
+            If `None` the extension is ignored and the dataset ID alone is
+            used to check in the cache. The extension must be defined if
+            a specific component is being checked.
+
+        Returns
+        -------
+        known : `bool`
+            Always returns `False`.
         """
         return False
 

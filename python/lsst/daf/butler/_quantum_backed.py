@@ -114,6 +114,8 @@ class QuantumBackedButler(LimitedButler):
         Datastore to use for all dataset I/O and existence checks.
     storageClasses : `StorageClassFactory`
         Object managing all storage class definitions.
+    dataset_types : `~collections.abc.Mapping` [`str`, `DatasetType`]
+        The registry dataset type definitions, indexed by name.
 
     Notes
     -----
@@ -212,7 +214,7 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`], \
+        dataset_types : `~collections.abc.Mapping` [`str`, `DatasetType`], \
                 optional
             Mapping of the dataset type name to its registry definition.
         """
@@ -261,11 +263,11 @@ class QuantumBackedButler(LimitedButler):
             fully resolved.
         dimensions : `DimensionUniverse`
             Object managing all dimension definitions.
+        datastore_records : `dict` [`str`, `DatastoreRecordData`] or `None`
+            Datastore records to import into a datastore.
         filename : `str`, optional
             Name for the SQLite database that will back this butler; defaults
             to an in-memory database.
-        datastore_records : `dict` [`str`, `DatastoreRecordData`] or `None`
-            Datastore records to import into a datastore.
         OpaqueManagerClass : `type`, optional
             A subclass of `OpaqueTableStorageManager` to use for datastore
             opaque records.  Default is a SQL-backed implementation.
@@ -274,7 +276,7 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`], \
+        dataset_types : `~collections.abc.Mapping` [`str`, `DatasetType`], \
                 optional
             Mapping of the dataset type name to its registry definition.
         """
@@ -732,7 +734,30 @@ class QuantumProvenanceData(_BaseModelCompat):
     ) -> QuantumProvenanceData:
         """Construct an instance directly without validators.
 
-        This differs from the pydantic "construct" method in that the
+        Parameters
+        ----------
+        predicted_inputs : `~collections.abc.Iterable` of `str` or `uuid.UUID`
+            The predicted inputs.
+        available_inputs : `~collections.abc.Iterable` of `str` or `uuid.UUID`
+            The available inputs.
+        actual_inputs : `~collections.abc.Iterable` of `str` or `uuid.UUID`
+            The actual inputs.
+        predicted_outputs : `~collections.abc.Iterable` of `str` or `uuid.UUID`
+            The predicted outputs.
+        actual_outputs : `~collections.abc.Iterable` of `str` or `uuid.UUID`
+            The actual outputs.
+        datastore_records : `~collections.abc.Mapping` [ `str`, \
+                `~collections.abc.Mapping` ]
+            The datastore records.
+
+        Returns
+        -------
+        provenance : `QuantumProvenanceData`
+            Serializable model of the quantum provenance.
+
+        Notes
+        -----
+        This differs from the Pydantic "construct" method in that the
         arguments are explicitly what the model requires, and it will recurse
         through members, constructing them from their corresponding `direct`
         methods.

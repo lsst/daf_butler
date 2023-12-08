@@ -37,7 +37,17 @@ from .options import collections_option, dataset_type_option, where_option
 
 
 class query_datasets_options(OptionGroup):  # noqa: N801
-    """A collection of options common to querying datasets."""
+    """A collection of options common to querying datasets.
+
+    Parameters
+    ----------
+    repo : `bool`
+        The Butler repository URI.
+    showUri : `bool`
+        Whether to include the dataset URI.
+    useArguments : `bool
+        Whether this is an argument or an option.
+    """
 
     def __init__(self, repo: bool = True, showUri: bool = True, useArguments: bool = True) -> None:
         self.decorators = []

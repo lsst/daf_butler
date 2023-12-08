@@ -173,7 +173,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
 
     Parameters
     ----------
-    args
+    *args : `typing.Any`
         All positional constructor arguments are forwarded directly to `dict`.
         Keyword arguments are not accepted, because plain strings are not valid
         keys for `NamedKeyDict`.
@@ -322,7 +322,17 @@ class NamedValueAbstractSet(Set[K_co]):
     def get(self, key: Any, default: Any = None) -> Any:
         """Return the element with the given name.
 
-        Returns ``default`` if no such element is present.
+        Parameters
+        ----------
+        key : `typing.Any`
+            The name of the element to be requested.
+        default : `typing.Any`, optional
+            The value returned if no such element is present.
+
+        Returns
+        -------
+        result : `typing.Any`
+            The value of the element.
         """
         try:
             return self[key]
@@ -492,7 +502,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
     Parameters
     ----------
-    elements : `iterable`
+    elements : `collections.abc.Iterable`
         Iterable over elements to include in the set.
 
     Raises
@@ -525,6 +535,11 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
     def add(self, element: K) -> None:
         """Add an element to the set.
+
+        Parameters
+        ----------
+        element : `typing.Any`
+            The element to add.
 
         Raises
         ------
