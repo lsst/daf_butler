@@ -34,7 +34,6 @@ from typing import Annotated, TypeAlias, Union
 import pydantic
 
 from ...pydantic_utils import DeferredValidation
-from ._chain import Chain
 from ._data_coordinate_upload import DataCoordinateUpload
 from ._dataset_search import DatasetSearch
 from ._dimension_join import DimensionJoin
@@ -46,7 +45,6 @@ from ._selection import Selection
 
 Relation: TypeAlias = Annotated[
     Union[
-        Chain,
         DataCoordinateUpload,
         DatasetSearch,
         DimensionJoin,
@@ -60,7 +58,6 @@ Relation: TypeAlias = Annotated[
 ]
 
 
-Chain.model_rebuild()
 DimensionJoin.model_rebuild()
 DimensionProjection.model_rebuild()
 FindFirst.model_rebuild()
