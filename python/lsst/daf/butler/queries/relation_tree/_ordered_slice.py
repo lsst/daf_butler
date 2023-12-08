@@ -83,8 +83,8 @@ class OrderedSlice(RelationBase):
     def join(
         self,
         other: Relation,
-        spatial_joins: JoinArg = frozenset(),
-        temporal_joins: JoinArg = frozenset(),
+        spatial: JoinArg = frozenset(),
+        temporal: JoinArg = frozenset(),
     ) -> OrderedSlice:
         if self.offset or self.limit is not None:
             raise InvalidRelationError(
@@ -103,7 +103,7 @@ class OrderedSlice(RelationBase):
         # OrderedSlice(...) rather than OrderedSlice.model_construct(...)
         # to check that the new operand is not itself an OrderedSlice.
         return OrderedSlice(
-            operand=self.operand.join(other, spatial_joins=spatial_joins, temporal_joins=temporal_joins),
+            operand=self.operand.join(other, spatial=spatial, temporal=temporal),
             order_terms=self.order_terms,
         )
 
@@ -124,6 +124,11 @@ class OrderedSlice(RelationBase):
         )
 
     def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> OrderedSlice:
+        if self.order_terms and (limit is not None or offset):
+            raise InvalidRelationError(
+                "Cannot sort a query that has already been positionally sliced. "
+                "To avoid this error always sort first and then slice."
+            )
         if limit is None:
             limit = self.limit
         elif self.limit is not None:

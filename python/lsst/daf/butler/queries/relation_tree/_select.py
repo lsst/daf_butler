@@ -121,8 +121,8 @@ class Select(RelationBase):
     def join(
         self,
         other: Relation,
-        spatial_joins: JoinArg = frozenset(),
-        temporal_joins: JoinArg = frozenset(),
+        spatial: JoinArg = frozenset(),
+        temporal: JoinArg = frozenset(),
     ) -> Select | OrderedSlice:
         from ._find_first import FindFirst
         from ._ordered_slice import OrderedSlice
@@ -137,25 +137,21 @@ class Select(RelationBase):
                     dimensions=self.dimensions | other.dimensions,
                     join_operands=self.join_operands + other.join_operands,
                     spatial_joins=(
-                        self.spatial_joins
-                        | other.spatial_joins
-                        | standardize_join_arg(spatial_joins, "spatial")
+                        self.spatial_joins | other.spatial_joins | standardize_join_arg(spatial, "spatial")
                     ),
                     temporal_joins=(
-                        self.spatial_joins
-                        | other.spatial_joins
-                        | standardize_join_arg(temporal_joins, "temporal")
+                        self.spatial_joins | other.spatial_joins | standardize_join_arg(temporal, "temporal")
                     ),
                     where_terms=self.where_terms + other.where_terms,
                 )
             case FindFirst() | OrderedSlice():
-                return other.join(self, spatial_joins=spatial_joins, temporal_joins=temporal_joins)
+                return other.join(self, spatial=spatial, temporal=temporal)
             case _:  # All JoinOperands
                 return Select(
                     dimensions=self.dimensions | other.dimensions,
                     join_operands=self.join_operands + (other,),
-                    spatial_joins=(self.spatial_joins | standardize_join_arg(spatial_joins, "spatial")),
-                    temporal_joins=(self.spatial_joins | standardize_join_arg(temporal_joins, "temporal")),
+                    spatial_joins=(self.spatial_joins | standardize_join_arg(spatial, "spatial")),
+                    temporal_joins=(self.spatial_joins | standardize_join_arg(temporal, "temporal")),
                     where_terms=self.where_terms,
                 )
         raise AssertionError("Invalid relation type for join.")

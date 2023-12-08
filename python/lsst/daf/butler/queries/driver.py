@@ -37,7 +37,7 @@ from typing import Annotated, TypeAlias, Union, overload
 
 import pydantic
 
-from ..dimensions import DimensionUniverse
+from ..dimensions import DimensionGroup, DimensionUniverse
 from .data_coordinate_results import DataCoordinateResultPage, DataCoordinateResultSpec
 from .dataset_results import DatasetRefResultPage, DatasetRefResultSpec
 from .dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
@@ -253,4 +253,8 @@ class QueryDriver(AbstractContextManager[None]):
             String messages that describe reasons the query might not yield any
             results.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_dataset_dimensions(self, name: str) -> DimensionGroup:
         raise NotImplementedError()

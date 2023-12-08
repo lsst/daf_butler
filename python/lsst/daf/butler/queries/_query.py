@@ -33,14 +33,22 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from .._query import Query
-from ..dimensions import DataCoordinate, DataId, DimensionGroup
+from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from .data_coordinate_results import DataCoordinateResultSpec, RelationDataCoordinateQueryResults
 from .driver import QueryDriver
-from .relation_tree import RootRelation
+from .relation_tree import (
+    DataCoordinateUpload,
+    DatasetSearch,
+    OrderExpression,
+    Predicate,
+    RootRelation,
+    make_dimension_relation,
+)
+from .relation_tree.joins import JoinArg
 
 if TYPE_CHECKING:
     from .._query_results import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
-    from ..registry._registry import CollectionArgType
+    from ..registry import CollectionArgType
 
 
 class RelationQuery(Query):
@@ -75,7 +83,7 @@ class RelationQuery(Query):
         dimensions: DimensionGroup | Iterable[str] | str,
         *,
         data_id: DataId | None = None,
-        where: str = "",
+        where: str | Predicate = "",
         bind: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> DataCoordinateQueryResults:
@@ -84,9 +92,9 @@ class RelationQuery(Query):
         data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
         tree = self._tree
         if not dimensions >= self._tree.dimensions:
-            raise NotImplementedError("TODO: push a DimensionJoin onto tree.")
+            tree = tree.join(make_dimension_relation(dimensions))
         if data_id or where:
-            raise NotImplementedError("TODO: push a Selection onto tree.")
+            tree = tree.where(*self._convert_predicate_args(where, data_id, bind=bind, **kwargs))
         result_spec = DataCoordinateResultSpec(
             dimensions=dimensions, include_dimension_records=self._include_dimension_records
         )
@@ -200,12 +208,12 @@ class RelationQuery(Query):
         """
         return self._driver.explain_no_results(self._tree, execute=execute)
 
-    def order_by(self, *args: str) -> Query:
+    def order_by(self, *args: str | OrderExpression) -> Query:
         """Sort any results returned by this query.
 
         Parameters
         ----------
-        *args : `str`
+        *args : `str` or `OrderExpression`
             Names of the columns/dimensions to use for ordering. Column name
             can be prefixed with minus (``-``) to use descending ordering.
 
@@ -213,8 +221,25 @@ class RelationQuery(Query):
         -------
         result : `Query`
             A new query object whose results will be sorted.
+
+        Notes
+        -----
+        Multiple `order_by` calls are combined; this::
+
+            q.order_by(*a).order_by(*b)
+
+        is equivalent to this::
+
+            q.order_by(*(b + a))
+
+        Note that this is consistent with sorting first by ``a`` and then by
+        ``b``.
         """
-        raise NotImplementedError("Copy and push an OrderedSlice onto the tree.")
+        return RelationQuery(
+            tree=self._tree.order_by(*self._convert_order_by_args(*args)),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
 
     def limit(self, limit: int | None = None, offset: int = 0) -> Query:
         """Limit the results returned by this query via positional slicing.
@@ -230,13 +255,117 @@ class RelationQuery(Query):
         Returns
         -------
         result : `Query`
-            A new query object whose results will be sorted.
+            A new query object whose results will be sliced.
+
+        Notes
+        -----
+        Multiple `limit` calls are combined, with ``offset`` summed and the
+        minimum ``limit``.
         """
-        raise NotImplementedError("Copy and push an OrderedSlice onto the tree.")
+        return RelationQuery(
+            tree=self._tree.order_by(limit=limit, offset=offset),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
 
     # TODO: Materialize should probably go here instead of
     # DataCoordinateQueryResults, but the signature should probably change,
     # too, and that requires more thought.
 
-    # TODO: Add many new query advanced-API methods that just push new relation
-    # operations onto the tree while returning a copy.
+    def join_dataset(
+        self,
+        dataset_type: str,
+        collections: Iterable[str],
+        *,
+        spatial: JoinArg = frozenset(),
+        temporal: JoinArg = frozenset(),
+    ) -> RelationQuery:
+        return RelationQuery(
+            tree=self._tree.join(
+                DatasetSearch.model_construct(
+                    dataset_type=dataset_type,
+                    collections=tuple(collections),
+                    dimensions=self._driver.get_dataset_dimensions(dataset_type),
+                ),
+                spatial=spatial,
+                temporal=temporal,
+            ),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
+
+    def join_data_coordinates(
+        self,
+        iterable: Iterable[DataCoordinate],
+        *,
+        spatial: JoinArg = frozenset(),
+        temporal: JoinArg = frozenset(),
+    ) -> RelationQuery:
+        rows: set[tuple[DataIdValue, ...]] = set()
+        dimensions: DimensionGroup | None = None
+        for data_coordinate in iterable:
+            if dimensions is None:
+                dimensions = data_coordinate.dimensions
+            elif dimensions != data_coordinate.dimensions:
+                raise RuntimeError(f"Inconsistent dimensions: {dimensions} != {data_coordinate.dimensions}.")
+            rows.add(data_coordinate.required_values)
+        if dimensions is None:
+            raise RuntimeError("Cannot upload an empty data coordinate set.")
+        return RelationQuery(
+            tree=self._tree.join(
+                DataCoordinateUpload(dimensions=dimensions, rows=rows), spatial=spatial, temporal=temporal
+            ),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
+
+    def join_dimensions(
+        self,
+        dimensions: Iterable[str] | DimensionGroup,
+        *,
+        spatial: JoinArg = frozenset(),
+        temporal: JoinArg = frozenset(),
+    ) -> RelationQuery:
+        dimensions = self._driver.universe.conform(dimensions)
+        return RelationQuery(
+            tree=self._tree.join(make_dimension_relation(dimensions), spatial=spatial, temporal=temporal),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
+
+    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> RelationQuery:
+        return RelationQuery(
+            tree=self._tree.joined_on(spatial=spatial, temporal=temporal),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
+
+    def where(
+        self, *args: str | Predicate | DataCoordinate, bind: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> RelationQuery:
+        return RelationQuery(
+            tree=self._tree.where(*self._convert_predicate_args(*args, bind=bind, **kwargs)),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
+
+    def find_first(
+        self, dataset_type: str, dimensions: Iterable[str] | DimensionGroup | None
+    ) -> RelationQuery:
+        if dimensions is None:
+            dimensions = self._driver.get_dataset_dimensions(dataset_type)
+        else:
+            dimensions = self._driver.universe.conform(dimensions)
+        return RelationQuery(
+            tree=self._tree.find_first(dataset_type, dimensions),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
+
+    def _convert_order_by_args(self, *args: str | OrderExpression) -> list[OrderExpression]:
+        raise NotImplementedError("TODO: Parse string expression.")
+
+    def _convert_predicate_args(
+        self, *args: str | Predicate | DataCoordinate, bind: Mapping[str, Any] | None = None
+    ) -> list[Predicate]:
+        raise NotImplementedError("TODO: Parse string expression.")

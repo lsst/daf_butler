@@ -84,8 +84,8 @@ class FindFirst(RelationBase):
     def join(
         self,
         other: Relation,
-        spatial_joins: JoinArg = frozenset(),
-        temporal_joins: JoinArg = frozenset(),
+        spatial: JoinArg = frozenset(),
+        temporal: JoinArg = frozenset(),
     ) -> NoReturn:
         raise InvalidRelationError(
             "Cannot join relations after a dataset find-first operation has been added. "
