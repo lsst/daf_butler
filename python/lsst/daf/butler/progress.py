@@ -171,7 +171,7 @@ class Progress:
             An arbitrary Python iterable that will be iterated over when the
             returned `ProgressBar` is.  If not provided, whether the progress
             bar is iterable is handler-defined, but it may be updated manually.
-        desc: `str`, optional
+        desc : `str`, optional
             A user-friendly description for this progress bar; usually appears
             next to it.  If not provided, ``self.name`` is used (which is not
             usually a user-friendly string, but may be appropriate for
@@ -181,7 +181,7 @@ class Progress:
             ``len(iterable)`` is used.  If that does not work, whether the
             progress bar works at all is handler-defined, and hence this mode
             should not be relied upon.
-        skip_scalar: `bool`, optional
+        skip_scalar : `bool`, optional
             If `True` and ``total`` is zero or one, do not report progress.
 
         Returns
@@ -219,7 +219,7 @@ class Progress:
         ----------
         iterable : `~collections.abc.Iterable`
             An arbitrary Python iterable to iterate over.
-        desc: `str`, optional
+        desc : `str`, optional
             A user-friendly description for this progress bar; usually appears
             next to it.  If not provided, ``self.name`` is used (which is not
             usually a user-friendly string, but may be appropriate for
@@ -229,7 +229,7 @@ class Progress:
             ``len(iterable)`` is used.  If that does not work, whether the
             progress bar works at all is handler-defined, and hence this mode
             should not be relied upon.
-        skip_scalar: `bool`, optional
+        skip_scalar : `bool`, optional
             If `True` and ``total`` is zero or one, do not report progress.
 
         Yields
@@ -253,7 +253,7 @@ class Progress:
         ----------
         chunks : `~collections.abc.Iterable`
             An iterable whose elements are themselves iterable.
-        desc: `str`, optional
+        desc : `str`, optional
             A user-friendly description for this progress bar; usually appears
             next to it.  If not provided, ``self.name`` is used (which is not
             usually a user-friendly string, but may be appropriate for
@@ -263,7 +263,7 @@ class Progress:
             of the lengths of the chunks if this can be computed.  If this is
             provided or `True`, each element in ``chunks`` must be sized but
             ``chunks`` itself need not be (and may be a single-pass iterable).
-        skip_scalar: `bool`, optional
+        skip_scalar : `bool`, optional
             If `True` and there are zero or one chunks, do not report progress.
 
         Yields
@@ -341,7 +341,7 @@ class Progress:
         items : `~collections.abc.Iterable`
             An iterable whose elements are (key, value) tuples, where the
             values are themselves iterable.
-        desc: `str`, optional
+        desc : `str`, optional
             A user-friendly description for this progress bar; usually appears
             next to it.  If not provided, ``self.name`` is used (which is not
             usually a user-friendly string, but may be appropriate for
@@ -351,7 +351,7 @@ class Progress:
             of the lengths of the chunks if this can be computed.  If this is
             provided or `True`, each element in ``chunks`` must be sized but
             ``chunks`` itself need not be (and may be a single-pass iterable).
-        skip_scalar: `bool`, optional
+        skip_scalar : `bool`, optional
             If `True` and there are zero or one items, do not report progress.
 
         Yields
@@ -431,7 +431,7 @@ class ProgressHandler(ABC):
             An arbitrary Python iterable that will be iterated over when the
             returned `ProgressBar` is.  If `None`, whether the progress bar is
             iterable is handler-defined, but it may be updated manually.
-        desc: `str`
+        desc : `str`
             A user-friendly description for this progress bar; usually appears
             next to it
         total : `int` or `None`

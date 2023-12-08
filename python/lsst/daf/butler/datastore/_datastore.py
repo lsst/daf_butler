@@ -155,7 +155,7 @@ class DatastoreTransaction:
             Name of the event.
         undoFunc : func
             Function to undo this event.
-        args : `tuple`
+        *args : `tuple`
             Positional arguments to `undoFunc`.
         **kwargs
             Keyword arguments to `undoFunc`.
@@ -595,7 +595,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        datasets : `FileDataset`
+        *datasets : `FileDataset`
             Each positional argument is a struct containing information about
             a file to be ingested, including its path (either absolute or
             relative to the datastore root, if applicable), a complete
@@ -624,7 +624,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        datasets : `FileDataset`
+        *datasets : `FileDataset`
             Each positional argument is a struct containing information about
             a file to be ingested, including its path (either absolute or
             relative to the datastore root, if applicable), a complete
@@ -682,7 +682,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        data : `IngestPrepData`
+        prepData : `IngestPrepData`
             An instance of a subclass of `IngestPrepData`.  Guaranteed to be
             the direct result of a call to `_prepIngest` on this datastore.
         transfer : `str`, optional
@@ -719,7 +719,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        datasets : `FileDataset`
+        *datasets : `FileDataset`
             Each positional argument is a struct containing information about
             a file to be ingested, including its path (either absolute or
             relative to the datastore root, if applicable), a complete
@@ -899,7 +899,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        ref : `DatasetRef`
+        datasetRef : `DatasetRef`
             Reference to the required dataset.
         predict : `bool`, optional
             If the datastore does not know about the dataset, should it

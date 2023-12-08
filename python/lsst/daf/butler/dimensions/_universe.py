@@ -472,7 +472,7 @@ class DimensionUniverse:
 
         Parameters
         ----------
-        iterable: iterable of `Dimension` or `str`
+        iterable : iterable of `Dimension` or `str`
             Dimensions that must be included in the returned graph (their
             dependencies will be as well).
 

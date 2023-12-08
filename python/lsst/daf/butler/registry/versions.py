@@ -168,9 +168,9 @@ class ButlerVersionsManager:
     def storeManagersConfig(self, managers: Mapping[str, VersionedExtension]) -> None:
         """Store configured extension names and their versions.
 
-        Parmeters
-        ---------
-        managers: `~collections.abc.Mapping` [`str`, `type`]
+        Parameters
+        ----------
+        managers : `~collections.abc.Mapping` [`str`, `type`]
             Collection of manager extension classes, the key is a manager type,
             e.g. "datasets".
 

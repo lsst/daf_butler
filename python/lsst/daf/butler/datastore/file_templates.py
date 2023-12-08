@@ -711,7 +711,7 @@ class FileTemplate:
 
         Parameters
         ----------
-        ref : `DatasetRef` or `DatasetType`
+        entity : `DatasetRef` or `DatasetType`
             The entity to examine.
 
         Returns

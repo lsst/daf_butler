@@ -312,7 +312,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        name : `str`
+        collection : `str`
             Name of the collection.
 
         Returns
@@ -328,7 +328,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        name : `str`
+        collection : `str`
             Name of the collection.
 
         Returns
@@ -572,7 +572,7 @@ class Registry(ABC):
         ----------
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
-        dataIds :  `~collections.abc.Iterable` of `dict` or `DataCoordinate`
+        dataIds : `~collections.abc.Iterable` of `dict` or `DataCoordinate`
             Dimension-based identifiers for the new datasets.
         run : `str`, optional
             The name of the run that produced the datasets.  Defaults to
@@ -624,7 +624,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        datasets :  `~collections.abc.Iterable` of `DatasetRef`
+        datasets : `~collections.abc.Iterable` of `DatasetRef`
             Datasets to be inserted. All `DatasetRef` instances must have
             identical ``datasetType`` and ``run`` attributes. ``run``
             attribute can be `None` and defaults to ``self.defaults.run``.
@@ -971,7 +971,7 @@ class Registry(ABC):
             The `DimensionElement` or name thereof that identifies the table
             records will be inserted into.
         row : `dict` or `DimensionRecord`
-           The record to insert.
+            The record to insert.
         conform : `bool`, optional
             If `False` (`True` is default) perform no checking or conversions,
             and assume that ``element`` is a `DimensionElement` instance and

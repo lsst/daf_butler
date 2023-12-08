@@ -50,7 +50,7 @@ def certifyCalibrations(
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
     inputCollection : `str`
-       Data collection to pull calibrations from.  Usually an existing
+        Data collection to pull calibrations from.  Usually an existing
         `~CollectionType.RUN` or `~CollectionType.CHAINED` collection, and may
         _not_ be a `~CollectionType.CALIBRATION` collection or a nonexistent
         collection.

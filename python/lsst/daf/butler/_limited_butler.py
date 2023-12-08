@@ -144,7 +144,7 @@ class LimitedButler(ABC):
 
         Parameters
         ----------
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             A resolved `DatasetRef` directly associated with a dataset.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,

@@ -772,7 +772,7 @@ class Database(ABC):
 
         Parameters
         ----------
-        original : `str`
+        shrunk : `str`
             The original name.
 
         Returns
@@ -1440,7 +1440,7 @@ class Database(ABC):
         ----------
         table : `sqlalchemy.schema.Table`
             Table rows should be inserted into.
-        returnIds: `bool`
+        returnIds : `bool`
             If `True` (`False` is default), return the values of the table's
             autoincrement primary key field (which much exist).
         select : `sqlalchemy.sql.SelectBase`, optional
@@ -1586,7 +1586,7 @@ class Database(ABC):
         ----------
         table : `sqlalchemy.schema.Table`
             Table that rows should be deleted from.
-        columns: `~collections.abc.Iterable` of `str`
+        columns : `~collections.abc.Iterable` of `str`
             The names of columns that will be used to constrain the rows to
             be deleted; these will be combined via ``AND`` to form the
             ``WHERE`` clause of the delete query.
@@ -1685,7 +1685,7 @@ class Database(ABC):
         ----------
         table : `sqlalchemy.schema.Table`
             Table that rows should be deleted from.
-        where: `sqlalchemy.sql.ClauseElement`
+        where : `sqlalchemy.sql.ClauseElement`
             The names of columns that will be used to constrain the rows to
             be deleted; these will be combined via ``AND`` to form the
             ``WHERE`` clause of the delete query.

@@ -156,7 +156,7 @@ def extract_datasets_from_table(
     prefix : `str`, optional
         Prefix to be used for relative paths. Can be `None` for current
         working directory.
-    id_generation_mode: `DatasetIdGenEnum`, optional
+    id_generation_mode : `DatasetIdGenEnum`, optional
         The mode to use when creating the dataset IDs.
 
     Returns

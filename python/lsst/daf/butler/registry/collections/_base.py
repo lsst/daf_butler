@@ -96,7 +96,6 @@ def makeRunTableSpec(
         Subclass of `TimespanDatabaseRepresentation` that encapsulates how
         timespans are stored in this database.
 
-
     Returns
     -------
     spec : `ddl.TableSpec`

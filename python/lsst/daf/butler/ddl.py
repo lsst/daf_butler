@@ -340,7 +340,7 @@ class FieldSpec:
 
         Parameters
         ----------
-        config: `Config`
+        config : `Config`
             Configuration describing the column.  Nested configuration keys
             correspond to `FieldSpec` attributes.
         **kwargs
@@ -478,7 +478,7 @@ class ForeignKeySpec:
 
         Parameters
         ----------
-        config: `Config`
+        config : `Config`
             Configuration describing the constraint.  Nested configuration keys
             correspond to `ForeignKeySpec` attributes.
 
@@ -615,7 +615,7 @@ class TableSpec:
 
         Parameters
         ----------
-        config: `Config`
+        config : `Config`
             Configuration describing the constraint.  Nested configuration keys
             correspond to `TableSpec` attributes.
 

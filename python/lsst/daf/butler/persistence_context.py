@@ -184,7 +184,7 @@ class PersistenceContextVars:
             A callable which is to be executed inside a specific context.
         *args : tuple
             Positional arguments which are to be passed to the `Callable`
-        **kwargs: dict, optional
+        **kwargs : dict, optional
             Extra key word arguments which are to be passed to the `Callable`
 
         Returns

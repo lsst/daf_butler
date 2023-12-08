@@ -135,7 +135,7 @@ class OpaqueTableStorage(ABC):
 
         Parameters
         ----------
-        columns: `~collections.abc.Iterable` of `str`
+        columns : `~collections.abc.Iterable` of `str`
             The names of columns that will be used to constrain the rows to
             be deleted; these will be combined via ``AND`` to form the
             ``WHERE`` clause of the delete query.

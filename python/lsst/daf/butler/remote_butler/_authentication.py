@@ -61,7 +61,7 @@ def get_authentication_token_from_environment(server_url: str) -> str | None:
 
     Returns
     -------
-     access_token: `str` or `None`
+    access_token: `str` or `None`
         A Rubin Science Platform access token, or `None` if no token was
         configured in the environment.
     """

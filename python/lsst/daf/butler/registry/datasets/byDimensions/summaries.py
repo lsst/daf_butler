@@ -86,7 +86,7 @@ class CollectionSummaryTables(Generic[_T]):
 
         Parameters
         ----------
-        collections: `CollectionManager`
+        collections : `CollectionManager`
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
@@ -179,7 +179,7 @@ class CollectionSummaryManager:
         context : `StaticTablesContext`
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present.
-        collections: `CollectionManager`
+        collections : `CollectionManager`
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.

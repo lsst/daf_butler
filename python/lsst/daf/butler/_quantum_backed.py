@@ -335,7 +335,7 @@ class QuantumBackedButler(LimitedButler):
             location records.  Default is a SQL-backed implementation.
         search_paths : `list` of `str`, optional
             Additional search paths for butler configuration.
-        dataset_types: `~collections.abc.Mapping` [`str`, `DatasetType`]
+        dataset_types : `~collections.abc.Mapping` [`str`, `DatasetType`]
             Mapping of the dataset type name to its registry definition.
         """
         butler_config = ButlerConfig(config, searchPaths=search_paths)

@@ -192,7 +192,6 @@ def readTable(textTable: str) -> AstropyTable:
     Contains formatting that causes the astropy table to print an empty string
     instead of "--" for missing/unpopulated values in the text table.
 
-
     Parameters
     ----------
     textTable : `str`

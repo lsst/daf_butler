@@ -398,7 +398,7 @@ class Config(MutableMapping):
 
         Parameters
         ----------
-        stream: `IO` or `str`
+        stream : `IO` or `str`
             Stream to pass to the YAML loader. Accepts anything that
             `yaml.load` accepts.  This can include a string as well as an
             IO stream.
@@ -419,7 +419,7 @@ class Config(MutableMapping):
 
         Parameters
         ----------
-        stream: `IO` or `str`
+        stream : `IO` or `str`
             Stream to pass to the JSON loader. This can include a string as
             well as an IO stream.
 

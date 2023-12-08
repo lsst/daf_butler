@@ -205,7 +205,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
 
         Parameters
         ----------
-        ref : `DatasetRef`
+        dataset_id : `DatasetRef`
             Target `DatasetRef`
 
         Returns
@@ -521,7 +521,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         ----------
         ref : `DatasetRef` or iterable thereof
             Reference to the required Dataset(s).
-        ignore_errors: `bool`, optional
+        ignore_errors : `bool`, optional
             Indicate that errors should be ignored.
 
         Raises

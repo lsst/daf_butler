@@ -79,8 +79,6 @@ def _makeTableSpecs(datasets: type[DatasetRecordStorageManager]) -> _TablesTuple
 
     Parameters
     ----------
-    universe : `DimensionUniverse`
-        All dimensions known to the `Registry`.
     datasets : subclass of `DatasetRecordStorageManager`
         Manager class for datasets; used only to create foreign key fields.
 

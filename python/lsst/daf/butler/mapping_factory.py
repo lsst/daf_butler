@@ -167,7 +167,7 @@ class MappingFactory:
         targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
-        args : `tuple`
+        *args : `tuple`
             Positional arguments to use pass to the object constructor.
         **kwargs
             Keyword arguments to pass to object constructor.
@@ -206,7 +206,7 @@ class MappingFactory:
         targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
-        args : `tuple`
+        *args : `tuple`
             Positional arguments to use pass to the object constructor.
         **kwargs
             Keyword arguments to pass to object constructor.

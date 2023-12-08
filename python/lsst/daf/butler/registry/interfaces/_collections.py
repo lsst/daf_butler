@@ -261,14 +261,14 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         tableSpec : `ddl.TableSpec`
             Specification for the table that should reference the collection
             table.  Will be modified in place.
-        prefix: `str`, optional
+        prefix : `str`, optional
             A name to use for the prefix of the new field; the full name may
             have a suffix (and is given in the returned `ddl.FieldSpec`).
-        onDelete: `str`, optional
+        onDelete : `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        constraint: `bool`, optional
+        constraint : `bool`, optional
             If `False` (`True` is default), add a field that can be joined to
             the collection primary key, but do not add a foreign key
             constraint.
@@ -303,14 +303,14 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         tableSpec : `ddl.TableSpec`
             Specification for the table that should reference the run table.
             Will be modified in place.
-        prefix: `str`, optional
+        prefix : `str`, optional
             A name to use for the prefix of the new field; the full name may
             have a suffix (and is given in the returned `ddl.FieldSpec`).
-        onDelete: `str`, optional
+        onDelete : `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        constraint: `bool`, optional
+        constraint : `bool`, optional
             If `False` (`True` is default), add a field that can be joined to
             the run primary key, but do not add a foreign key constraint.
         **kwargs
@@ -561,7 +561,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         ----------
         key
             Internal primary key value for the collection.
-        docs : `str`, optional
+        doc : `str`, optional
             Docstring for the collection with the given key.
         """
         raise NotImplementedError()

@@ -100,7 +100,7 @@ class RepoExportContext:
 
         Parameters
         ----------
-        name: `str`
+        name : `str`
             Name of the collection.
 
         Notes

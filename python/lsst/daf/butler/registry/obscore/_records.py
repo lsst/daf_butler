@@ -266,8 +266,8 @@ class RecordFactory:
         region : `~lsst.sphgeom.Region` or `None`
             Spacial region to convert to record.
 
-        Return
-        ------
+        Returns
+        -------
         record : `dict`
             Record items.
 

@@ -67,9 +67,9 @@ class LogicalBinaryOperator(enum.Enum):
 
         Parameters
         ----------
-        lhs: `TransformationWrapper`
+        lhs : `TransformationWrapper`
             First operand.
-        rhs: `TransformationWrapper`
+        rhs : `TransformationWrapper`
             Second operand.
 
         Returns
@@ -682,7 +682,7 @@ class TransformationWrapper(ABC):
         inner : `LogicalBinaryOperator`
             Inner operator for the expression being tested.  This may or may
             not be the same as ``outer``.
-        rhs: `TransformationWrapper`
+        rhs : `TransformationWrapper`
             The other inner operand for the expression being tested.
         form : `NormalForm`
             Normal form being transformed to.
@@ -724,7 +724,7 @@ class TransformationWrapper(ABC):
             One inner operand for the expression being transformed.
         inner : `LogicalBinaryOperator`
             Inner operator for the expression being transformed.
-        rhs: `TransformationWrapper`
+        rhs : `TransformationWrapper`
             The other inner operand for the expression being transformed.
         form : `NormalForm`
             Normal form being transformed to.

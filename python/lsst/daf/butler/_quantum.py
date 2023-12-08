@@ -246,7 +246,7 @@ class Quantum:
         Returns
         -------
         simple : `SerializedQuantum`
-           This object converted to a serializable representation.
+            This object converted to a serializable representation.
         """
         typeMapping = {}
         initInputs = {}

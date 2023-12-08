@@ -175,7 +175,7 @@ def _read_artifact_into_memory(
         The registry information associated with this artifact.
     isComponent : `bool`
         Flag to indicate if a component is being read from this artifact.
-    cache_manager: `AbstractDatastoreCacheManager`
+    cache_manager : `AbstractDatastoreCacheManager`
         The cache manager to use for caching retrieved files
     cache_ref : `DatasetRef`, optional
         The DatasetRef to use when looking up the file in the cache.

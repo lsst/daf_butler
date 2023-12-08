@@ -197,7 +197,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
         Parameters
         ----------
-        collections: `CollectionManager`
+        collections : `CollectionManager`
             Manager object for the collections in this `Registry`.
         universe : `DimensionUniverse`
             Universe graph containing all dimensions known to this `Registry`.

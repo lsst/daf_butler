@@ -88,24 +88,24 @@ class CategorizedWildcard:
                ``coerceItemValue`` (if provided);
              - a `CategorizedWildcard` instance (passed through unchanged if
                it meets the requirements specified by keyword arguments).
-        allowAny: `bool`, optional
+        allowAny : `bool`, optional
             If `False` (`True` is default) raise `TypeError` if `...` is
             encountered.
-        allowPatterns: `bool`, optional
+        allowPatterns : `bool`, optional
             If `False` (`True` is default) raise `TypeError` if a `re.Pattern`
             is encountered, or if ``expression`` is a `CategorizedWildcard`
             with `patterns` not empty.
-        coerceUnrecognized: `~collections.abc.Callable`, optional
+        coerceUnrecognized : `~collections.abc.Callable`, optional
             A callback that takes a single argument of arbitrary type and
             returns either a `str` - appended to `strings` - or a `tuple` of
             (`str`, `Any`) to be appended to `items`.  This will be called on
             objects of unrecognized type. Exceptions will be reraised as
             `TypeError` (and chained).
-        coerceItemValue: `~collections.abc.Callable`, optional
+        coerceItemValue : `~collections.abc.Callable`, optional
             If provided, ``expression`` may be a mapping from `str` to any
             type that can be passed to this function; the result of that call
             will be stored instead as the value in ``self.items``.
-        defaultItemValue: `Any`, optional
+        defaultItemValue : `Any`, optional
             If provided, combine this value with any string values encountered
             (including any returned by ``coerceUnrecognized``) to form a
             `tuple` and add it to `items`, guaranteeing that `strings` will be

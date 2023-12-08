@@ -88,7 +88,7 @@ class ObsCoreTableManager(VersionedExtension):
             Configuration of the obscore manager.
         datasets : `type`
             Type of dataset manager.
-        dimensions: `DimensionRecordStorageManager`
+        dimensions : `DimensionRecordStorageManager`
             Manager for Registry dimensions.
         registry_schema_version : `VersionTuple` or `None`
             Schema version of this extension as defined in registry.

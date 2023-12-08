@@ -195,7 +195,7 @@ class DatastoreRecordData:
 
         Parameters
         ----------
-        data : `dict`
+        simple : `dict`
             Serialized representation returned from `to_simple` method.
         universe : `DimensionUniverse`, optional
             Dimension universe, not used by this method.

@@ -478,7 +478,7 @@ class QueryBackend(Generic[_C]):
         join_to : `Relation`, optional
             Another relation to join with the query for datasets in all
             collections.
-        temporal_join_on: `~collections.abc.Set` [ `ColumnTag` ], optional
+        temporal_join_on : `~collections.abc.Set` [ `ColumnTag` ], optional
             Timespan columns in ``join_to`` that calibration dataset timespans
             must overlap.  Must already be present in ``join_to``.  Ignored if
             ``join_to`` is `None` or if there are no calibration collections.
@@ -552,7 +552,7 @@ class QueryBackend(Generic[_C]):
         join_to : `Relation`, optional
             Another relation to join with the query for datasets in all
             collections before filtering out out shadowed datasets.
-        temporal_join_on: `~collections.abc.Set` [ `ColumnTag` ], optional
+        temporal_join_on : `~collections.abc.Set` [ `ColumnTag` ], optional
             Timespan columns in ``join_to`` that calibration dataset timespans
             must overlap.  Must already be present in ``join_to``.  Ignored if
             ``join_to`` is `None` or if there are no calibration collections.

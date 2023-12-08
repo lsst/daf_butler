@@ -382,7 +382,7 @@ class SqlRegistry:
         tableName : `str`
             Logical name of the opaque table.  Must match the name used in a
             previous call to `registerOpaqueTable`.
-        data
+        *data
             Each additional positional argument is a dictionary that represents
             a single row to be added.
         """
@@ -396,7 +396,7 @@ class SqlRegistry:
         tableName : `str`
             Logical name of the opaque table.  Must match the name used in a
             previous call to `registerOpaqueTable`.
-        where
+        **where
             Additional keyword arguments are interpreted as equality
             constraints that restrict the returned rows (combined with AND);
             keyword arguments are column names and values are the values they
@@ -418,7 +418,7 @@ class SqlRegistry:
         tableName : `str`
             Logical name of the opaque table.  Must match the name used in a
             previous call to `registerOpaqueTable`.
-        where
+        **where
             Additional keyword arguments are interpreted as equality
             constraints that restrict the deleted rows (combined with AND);
             keyword arguments are column names and values are the values they
@@ -618,7 +618,7 @@ class SqlRegistry:
 
         Parameters
         ----------
-        name : `str`
+        collection : `str`
             Name of the collection.
 
         Returns
@@ -633,7 +633,7 @@ class SqlRegistry:
 
         Parameters
         ----------
-        name : `str`
+        collection : `str`
             Name of the collection.
 
         Returns
@@ -983,7 +983,7 @@ class SqlRegistry:
         ----------
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
-        dataIds :  `~collections.abc.Iterable` of `dict` or `DataCoordinate`
+        dataIds : `~collections.abc.Iterable` of `dict` or `DataCoordinate`
             Dimension-based identifiers for the new datasets.
         run : `str`, optional
             The name of the run that produced the datasets.  Defaults to
@@ -1079,7 +1079,7 @@ class SqlRegistry:
 
         Parameters
         ----------
-        datasets :  `~collections.abc.Iterable` of `DatasetRef`
+        datasets : `~collections.abc.Iterable` of `DatasetRef`
             Datasets to be inserted. All `DatasetRef` instances must have
             identical ``datasetType`` and ``run`` attributes. ``run``
             attribute can be `None` and defaults to ``self.defaults.run``.
@@ -1646,7 +1646,7 @@ class SqlRegistry:
             The `DimensionElement` or name thereof that identifies the table
             records will be inserted into.
         row : `dict` or `DimensionRecord`
-           The record to insert.
+            The record to insert.
         conform : `bool`, optional
             If `False` (`True` is default) perform no checking or conversions,
             and assume that ``element`` is a `DimensionElement` instance and
