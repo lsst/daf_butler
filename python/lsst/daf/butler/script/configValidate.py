@@ -43,7 +43,7 @@ def configValidate(repo: str, quiet: bool, dataset_type: list[str], ignore: list
     dataset_type : `list`[`str`]
         Specific DatasetTypes to validate.
     ignore : `list`[`str`]
-        "DatasetTypes to ignore for validation."
+        DatasetTypes to ignore for validation.
 
     Returns
     -------

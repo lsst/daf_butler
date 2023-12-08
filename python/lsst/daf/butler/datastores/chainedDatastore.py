@@ -649,8 +649,8 @@ class ChainedDatastore(Datastore):
         ref : `DatasetRef`
             Reference to the required dataset.
         predict : `bool`, optional
-            If the datastore does not know about the dataset, should it
-            return a predicted URI or not?
+            If the datastore does not know about the dataset, controls whether
+            it should return a predicted URI or not.
 
         Returns
         -------

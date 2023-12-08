@@ -324,7 +324,7 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         Returns
         -------
         predicate : `lsst.daf.relation.column_expressions.Predicate`
-            New predicate
+            New predicate.
         """
         if full is None:
             full = data_coordinate.hasFull()

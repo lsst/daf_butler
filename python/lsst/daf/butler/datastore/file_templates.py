@@ -393,7 +393,7 @@ class FileTemplate:
         Returns
         -------
         names : `set`
-            Names of fields used in this template
+            Names of fields used in this template.
 
         Notes
         -----

@@ -106,7 +106,7 @@ def _parseTimeString(time_str):
     Raises
     ------
     ValueError
-        Raised if input string has unexpected format
+        Raised if input string has unexpected format.
     """
     # Check for time zone. Python datetime objects can be timezone-aware
     # and if one has been stringified then there will be a +00:00 on the end.
@@ -186,17 +186,17 @@ class ParseError(ParserYaccError):
 
     Attributes
     ----------
-    expression : str
-        Full initial expression being parsed
-    token : str
-        Current token at parsing position
-    pos : int
+    expression : `str`
+        Full initial expression being parsed.
+    token : `str`
+        Current token at parsing position.
+    pos : `int`
         Current parsing position, offset from beginning of expression in
-        characters
-    lineno : int
-        Current line number in the expression
-    posInLine : int
-        Parsing position in current line, 0-based
+        characters.
+    lineno : `int`
+        Current line number in the expression.
+    posInLine : `int`
+        Parsing position in current line, 0-based.
     """
 
     def __init__(self, expression, token, pos, lineno):
@@ -259,14 +259,14 @@ class ParserYacc:
 
         Parameters
         ----------
-        input : str
-            Expression to parse
-        lexer : object, optional
+        input : `str`
+            Expression to parse.
+        lexer : `object`, optional
             Lexer instance, if not given then ParserLex.make_lexer() is
             called to create one.
-        debug : bool, optional
+        debug : `bool`, optional
             Set to True for debugging output.
-        tracking : bool, optional
+        tracking : `bool`, optional
             Set to True for tracking line numbers in parser.
         """
         # make lexer

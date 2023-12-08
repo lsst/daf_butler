@@ -71,7 +71,7 @@ class _Table:
         datasetRef : `DatasetRef`
             A dataset ref that will be added as a row in the table.
         uri : `lsst.resources.ResourcePath`, optional
-            The URI to show as a file location in the table, by default None
+            The URI to show as a file location in the table, by default `None`.
         """
         uri_str = str(uri) if uri else None
         self.datasetRefs.add(_RefInfo(datasetRef, uri_str))

@@ -78,7 +78,7 @@ class DeferredDatasetHandle:
         Returns
         -------
         return : `Object`
-            The dataset pointed to by this handle
+            The dataset pointed to by this handle.
         """
         if self.parameters is not None:
             mergedParameters = self.parameters.copy()

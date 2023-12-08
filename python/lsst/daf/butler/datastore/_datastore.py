@@ -134,7 +134,7 @@ class DatastoreTransaction:
     Parameters
     ----------
     parent : `DatastoreTransaction`, optional
-        The parent transaction (if any)
+        The parent transaction (if any).
     """
 
     Event: ClassVar[type] = Event
@@ -541,7 +541,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     def prepare_get_for_external_client(self, ref: DatasetRef) -> object:
-        """Retrieve serializable data that can be used to execute a get()
+        """Retrieve serializable data that can be used to execute a ``get()``.
 
         Parameters
         ----------
@@ -902,8 +902,8 @@ class Datastore(metaclass=ABCMeta):
         datasetRef : `DatasetRef`
             Reference to the required dataset.
         predict : `bool`, optional
-            If the datastore does not know about the dataset, should it
-            return a predicted URI or not?
+            If the datastore does not know about the dataset, controls whether
+            it should return a predicted URI or not.
 
         Returns
         -------

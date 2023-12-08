@@ -210,7 +210,7 @@ class OrderByClause:
         order_by : `~collections.abc.Iterable` [ `str` ]
             Sequence of names to use for ordering with optional "-" prefix.
         element : `DimensionElement`
-            Single or primary dimension element in the query
+            Single or primary dimension element in the query.
 
         Returns
         -------

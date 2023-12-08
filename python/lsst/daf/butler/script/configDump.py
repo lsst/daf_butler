@@ -44,7 +44,7 @@ def configDump(repo: str, subset: str, searchpath: str, outfile: IO) -> None:
         hierarchy such as '.datastore.root' where the leading '.' specified the
         delimiter for the hierarchy.
     searchpath : `str`
-        Additional search paths to use for configuration overrides
+        Additional search paths to use for configuration overrides.
     outfile : file-like object
         File to which the configuration should be printed.
 

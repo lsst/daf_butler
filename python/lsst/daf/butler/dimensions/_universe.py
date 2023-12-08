@@ -215,13 +215,13 @@ class DimensionUniverse:
         Parameters
         ----------
         other : `DimensionUniverse`
-            The other `DimensionUniverse` to check for compatibility
+            The other `DimensionUniverse` to check for compatibility.
 
         Returns
         -------
         results : `bool`
             If the other `DimensionUniverse` is compatible with this one return
-            `True`, else `False`
+            `True`, else `False`.
         """
         # Different namespaces mean that these universes cannot be compatible.
         if self.namespace != other.namespace:

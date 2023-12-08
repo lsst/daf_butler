@@ -1300,7 +1300,7 @@ class Database(ABC):
                 The subset of the keys of ``compared`` for which the existing
                 values did not match the given one, mapped to the existing
                 values in the database.  Once again, ``not bad`` is always an
-                error, but a different kind on context.  `None` if ``n != 1``
+                error, but a different kind on context.  `None` if ``n != 1``.
             result : `list` or `None`
                 Results in the database that correspond to the columns given
                 in ``returning``, or `None` if ``returning is None``.

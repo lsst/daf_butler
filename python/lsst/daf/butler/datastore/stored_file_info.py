@@ -335,7 +335,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
 
 class SerializedStoredFileInfo(_BaseModelCompat):
-    """Serialized representation of `StoredFileInfo` properties"""
+    """Serialized representation of `StoredFileInfo` properties."""
 
     formatter: str
     """Fully-qualified name of Formatter."""

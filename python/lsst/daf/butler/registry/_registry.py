@@ -892,7 +892,7 @@ class Registry(ABC):
             used).
         **kwargs
             Additional keywords are treated like additional key-value pairs for
-            ``dataId``, extending and overriding
+            ``dataId``, extending and overriding.
 
         Returns
         -------

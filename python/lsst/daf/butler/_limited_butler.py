@@ -564,7 +564,7 @@ class LimitedButler(ABC):
         category=FutureWarning,
     )
     def datastore(self) -> Datastore:
-        """The object that manages actual dataset storage. (`Datastore`)"""
+        """The object that manages actual dataset storage (`Datastore`)."""
         return self._datastore
 
     _datastore: Datastore

@@ -392,7 +392,7 @@ class Quantum:
         Parameters
         ----------
         simple : SerializedQuantum
-            The value returned by a call to `to_simple`
+            The value returned by a call to `to_simple`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions.
         reconstitutedDimensions : `dict` of `int` to `DimensionRecord` or None
@@ -598,17 +598,17 @@ class DimensionRecordsAccumulator:
         a unique integer key.
 
         This function returns the key associated with the record (either the
-        newly allocated key, or the existing one)
+        newly allocated key, or the existing one).
 
         Parameters
         ----------
         record : `DimensionRecord`
-            The record to add to the accumulator
+            The record to add to the accumulator.
 
         Returns
         -------
         accumulatorKey : int
-            The key that is associated with the supplied record
+            The key that is associated with the supplied record.
         """
         if (mappingValue := self.mapping.get(record)) is None:
             simple = record.to_simple()

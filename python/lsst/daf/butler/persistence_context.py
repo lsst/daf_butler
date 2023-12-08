@@ -183,14 +183,14 @@ class PersistenceContextVars:
         function : `Callable`
             A callable which is to be executed inside a specific context.
         *args : tuple
-            Positional arguments which are to be passed to the `Callable`
+            Positional arguments which are to be passed to the `Callable`.
         **kwargs : dict, optional
-            Extra key word arguments which are to be passed to the `Callable`
+            Extra key word arguments which are to be passed to the `Callable`.
 
         Returns
         -------
         result : `Any`
-            The result returned by executing the supplied `Callable`
+            The result returned by executing the supplied `Callable`.
         """
         self._ctx = copy_context()
         # Type checkers seem to have trouble with a second layer nesting of

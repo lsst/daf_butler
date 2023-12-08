@@ -206,7 +206,7 @@ class SqlRegistry:
         Parameters
         ----------
         config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
-            Registry configuration
+            Registry configuration.
         butlerRoot : `lsst.resources.ResourcePathExpression`, optional
             Path to the repository root this `Registry` will manage.
         writeable : `bool`, optional
@@ -1490,7 +1490,7 @@ class SqlRegistry:
             used).
         **kwargs
             Additional keywords are treated like additional key-value pairs for
-            ``dataId``, extending and overriding
+            ``dataId``, extending and overriding.
 
         Returns
         -------

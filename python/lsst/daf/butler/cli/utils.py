@@ -165,7 +165,7 @@ def clickResultMsg(result: click.testing.Result) -> str:
     Parameters
     ----------
     result : click.testing.Result
-        The result object returned from click.testing.CliRunner.invoke
+        The result object returned from `click.testing.CliRunner.invoke`.
 
     Returns
     -------
@@ -362,13 +362,13 @@ def split_kv(
     choice : `click.Choice`, optional
         If provided, verify each value is a valid choice using the provided
         `click.Choice` instance. If None, no verification will be done. By
-        default None
+        default `None`.
     multiple : `bool`, optional
         If true, the value may contain multiple comma-separated values. By
         default True.
     normalize : `bool`, optional
         If True and `choice.case_sensitive == False`, normalize the string the
-        user provided to match the choice's case. By default False.
+        user provided to match the choice's case. By default `False`.
     separator : str, optional
         The character that separates key-value pairs. May not be a comma or an
         empty space (for space separators use Click's default implementation
@@ -389,11 +389,11 @@ def split_kv(
     default_key : `Any`
         The key to use if a value is passed that is not a key-value pair.
         (Passing values that are not key-value pairs requires
-        ``unseparated_okay`` to be `True`.)
+        ``unseparated_okay`` to be `True`).
     reverse_kv : bool
         If true then for each item in values, the value to the left of the
         separator is treated as the value and the value to the right of the
-        separator is treated as the key. By default False.
+        separator is treated as the key. By default `False`.
     add_to_default : `bool`, optional
         If True, then passed-in values will not overwrite the default value
         unless the ``return_type`` is `dict` and passed-in value(s) have the
@@ -868,7 +868,7 @@ class MWCommand(click.Command):
         Parameters
         ----------
         ctx : `click.core.Context`
-            The current Context.ß
+            The current Context.
         args : `list` [`str`]
             The list of arguments from the command line, split at spaces but
             not at separators (like "=").
@@ -1064,6 +1064,7 @@ def _read_yaml_presets(file_uri: str, cmd_name: str) -> dict[str, Any]:
 def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list[str] | None = None) -> Table:
     """Sort an astropy table, with prioritization given to columns in this
     order:
+
     1. the provided named columns
     2. spatial and temporal columns
     3. the rest of the columns.
@@ -1073,7 +1074,7 @@ def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list
     Parameters
     ----------
     table : `astropy.table.Table`
-        The table to sort
+        The table to sort.
     dimensions : `list` [``Dimension``]
         The dimensions of the dataIds in the table (the dimensions should be
         the same for all the dataIds). Used to determine if the column is
