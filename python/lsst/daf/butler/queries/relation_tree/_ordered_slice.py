@@ -61,11 +61,11 @@ class OrderedSlice(RelationBase):
     order_by: tuple[OrderExpression, ...] = ()
     """Expressions to sort the rows by."""
 
-    begin: int = 0
+    offset: int = 0
     """Index of the first row to return."""
 
-    end: int | None = None
-    """Index one past the last row to return, or `None` for no bound."""
+    limit: int | None = None
+    """Maximum number of rows to return, or `None` for no bound."""
 
     @property
     def dimensions(self) -> DimensionGroup:
@@ -82,10 +82,10 @@ class OrderedSlice(RelationBase):
     def join(
         self,
         other: Relation,
-        spatial_joins: JoinArg = "auto",
-        temporal_joins: JoinArg = "auto",
+        spatial_joins: JoinArg = frozenset(),
+        temporal_joins: JoinArg = frozenset(),
     ) -> RootRelation:
-        if self.begin or self.end is not None:
+        if self.offset or self.limit is not None:
             raise InvalidRelationError(
                 "Cannot join relations after an offset/limit slice has been added. "
                 "To avoid this error perform all joins before adding an offset/limit slice, "
@@ -102,6 +102,14 @@ class OrderedSlice(RelationBase):
         return OrderedSlice(
             operand=self.operand.join(other, spatial_joins=spatial_joins, temporal_joins=temporal_joins),
             order_by=self.order_by,
+        )
+
+    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> OrderedSlice:
+        return OrderedSlice(
+            operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
+            order_by=self.order_by,
+            offset=self.offset,
+            limit=self.limit,
         )
 
     @pydantic.model_validator(mode="after")

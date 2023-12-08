@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Select", "make_unit_relation")
+__all__ = ("Select", "make_unit_relation", "make_dimension_relation")
 
 import itertools
 from functools import cached_property
@@ -39,7 +39,7 @@ from ...dimensions import DimensionGroup, DimensionUniverse
 from ._base import RelationBase, StringOrWildcard
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import Predicate
-from .joins import JoinArg, JoinTuple, compute_joins
+from .joins import JoinArg, JoinTuple, standardize_join_arg
 
 if TYPE_CHECKING:
     from ._relation import JoinOperand, Relation, RootRelation
@@ -53,10 +53,11 @@ def make_unit_relation(universe: DimensionUniverse) -> Select:
     identity relation for joins, in that joining any other relation to this
     relation yields that relation.
     """
-    return Select.model_construct(dimensions=universe.empty.as_group())
+    return make_dimension_relation(universe.empty.as_group())
 
 
 def make_dimension_relation(dimensions: DimensionGroup) -> Select:
+    """Make an initial relation with the given dimensions."""
     return Select.model_construct(dimensions=dimensions)
 
 
@@ -107,8 +108,8 @@ class Select(RelationBase):
     def join(
         self,
         other: Relation,
-        spatial_joins: JoinArg = "auto",
-        temporal_joins: JoinArg = "auto",
+        spatial_joins: JoinArg = frozenset(),
+        temporal_joins: JoinArg = frozenset(),
     ) -> RootRelation:
         from ._find_first import FindFirst
         from ._ordered_slice import OrderedSlice
@@ -118,8 +119,16 @@ class Select(RelationBase):
                 return Select(
                     dimensions=self.dimensions | other.dimensions,
                     join_operands=self.join_operands + other.join_operands,
-                    spatial_joins=compute_joins(spatial_joins, self, other, "spatial"),
-                    temporal_joins=compute_joins(temporal_joins, self, other, "temporal"),
+                    spatial_joins=(
+                        self.spatial_joins
+                        | other.spatial_joins
+                        | standardize_join_arg(spatial_joins, "spatial")
+                    ),
+                    temporal_joins=(
+                        self.spatial_joins
+                        | other.spatial_joins
+                        | standardize_join_arg(temporal_joins, "temporal")
+                    ),
                     where_terms=self.where_terms + other.where_terms,
                 )
             case FindFirst() | OrderedSlice():
@@ -128,11 +137,20 @@ class Select(RelationBase):
                 return Select(
                     dimensions=self.dimensions | other.dimensions,
                     join_operands=self.join_operands + (other,),
-                    spatial_joins=compute_joins(spatial_joins, self, other, "spatial"),
-                    temporal_joins=compute_joins(temporal_joins, self, other, "temporal"),
+                    spatial_joins=(self.spatial_joins | standardize_join_arg(spatial_joins, "spatial")),
+                    temporal_joins=(self.spatial_joins | standardize_join_arg(temporal_joins, "temporal")),
                     where_terms=self.where_terms,
                 )
         raise AssertionError("Invalid relation type for join.")
+
+    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> Select:
+        return Select(
+            dimensions=self.dimensions,
+            join_operands=self.join_operands,
+            spatial_joins=self.spatial_joins | standardize_join_arg(spatial, "spatial"),
+            temporal_joins=self.temporal_joins | standardize_join_arg(temporal, "temporal"),
+            where_terms=self.where_terms,
+        )
 
     @cached_property
     def available_dataset_types(self) -> frozenset[StringOrWildcard]:

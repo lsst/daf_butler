@@ -74,8 +74,8 @@ class FindFirst(RelationBase):
     def join(
         self,
         other: Relation,
-        spatial_joins: JoinArg = "auto",
-        temporal_joins: JoinArg = "auto",
+        spatial_joins: JoinArg = frozenset(),
+        temporal_joins: JoinArg = frozenset(),
     ) -> RootRelation:
         # If only Query objects (not *QueryResult) objects can be
         # explicitly joined, we may prohibit this logic branch at a
@@ -84,6 +84,13 @@ class FindFirst(RelationBase):
         raise InvalidRelationError(
             "Cannot join relations after a dataset find-first operation has been added. "
             "To avoid this error perform all joins before requesting dataset results."
+        )
+
+    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> FindFirst:
+        return FindFirst(
+            operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
+            dataset_type=self.dataset_type,
+            dimensions=self.dimensions,
         )
 
     @cached_property
