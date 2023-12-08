@@ -62,11 +62,12 @@ class FindFirst(RelationBase):
     dataset_type: str
     """The type of the datasets being searched for."""
 
-    @property
-    def dimensions(self) -> DimensionGroup:
-        """The dimensions of this abstract relation."""
-        assert self.operand.dimensions is not None, "checked by validator"
-        return self.operand.dimensions
+    dimensions: DimensionGroup
+    """The dimensions of the relation.
+
+    This must be a subset of the dimensions of its operand, and is most
+    frequently the dimensions of the dataset type.
+    """
 
     @cached_property
     def available_dataset_types(self) -> frozenset[StringOrWildcard]:
@@ -74,6 +75,15 @@ class FindFirst(RelationBase):
         this relation.
         """
         return frozenset({self.dataset_type})
+
+    @pydantic.model_validator(mode="after")
+    def _validate_dimensions(self) -> FindFirst:
+        if not self.dimensions <= self.operand.dimensions:
+            raise ValueError(
+                f"FindFirst dimensions {self.dimensions} are not a subset of its "
+                f"operand's dimensions {self.operand.dimensions}."
+            )
+        return self
 
     @pydantic.model_validator(mode="after")
     def _validate_upstream_datasets(self) -> FindFirst:

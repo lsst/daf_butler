@@ -37,7 +37,6 @@ from ...pydantic_utils import DeferredValidation
 from ._data_coordinate_upload import DataCoordinateUpload
 from ._dataset_search import DatasetSearch
 from ._dimension_join import DimensionJoin
-from ._dimension_projection import DimensionProjection
 from ._find_first import FindFirst
 from ._materialization import Materialization
 from ._ordered_slice import OrderedSlice
@@ -48,7 +47,6 @@ Relation: TypeAlias = Annotated[
         DataCoordinateUpload,
         DatasetSearch,
         DimensionJoin,
-        DimensionProjection,
         FindFirst,
         Materialization,
         OrderedSlice,
@@ -59,7 +57,6 @@ Relation: TypeAlias = Annotated[
 
 
 DimensionJoin.model_rebuild()
-DimensionProjection.model_rebuild()
 FindFirst.model_rebuild()
 Materialization.model_rebuild()
 OrderedSlice.model_rebuild()
