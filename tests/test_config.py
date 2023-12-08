@@ -51,7 +51,7 @@ def modified_environment(**environ):
 
     Parameters
     ----------
-    environ : `dict`
+    **environ : `dict`
         Key value pairs of environment variables to temporarily set.
     """
     old_environ = dict(os.environ)
