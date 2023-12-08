@@ -530,8 +530,8 @@ class TransformationWrapper(ABC):
         operator : `LogicalBinaryOperator`
             Operator whose operands to flatten.
 
-        Returns
-        -------
+        Yields
+        ------
         operands : `~collections.abc.Iterator` [ `TransformationWrapper` ]
             Operands that, if combined with ``operator``, yield an expression
             equivalent to ``self``.

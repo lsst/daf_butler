@@ -57,6 +57,16 @@ class NameShrinker:
     def shrink(self, original: str) -> str:
         """Shrink a name and remember the mapping between the original name and
         its shrunk form.
+
+        Parameters
+        ----------
+        original : `str`
+            The original name.
+
+        Returns
+        -------
+        shrunk : `str`
+            The shrunk form.
         """
         if len(original) <= self.maxLength:
             return original
@@ -75,7 +85,15 @@ class NameShrinker:
         """Return the original name that was passed to a previous call to
         `shrink`.
 
-        If the given name was not passed to `shrink` or was not modified by
-        it, it is returned unmodified.
+        Parameters
+        ----------
+        shrunk : `str`
+            The shrunk form.
+
+        Returns
+        -------
+        expanded : `str`
+            The expanded form. If the given name was not passed to `shrink`
+            or was not modified by it, it is returned unmodified.
         """
         return self._by_shrunk.get(shrunk, shrunk)

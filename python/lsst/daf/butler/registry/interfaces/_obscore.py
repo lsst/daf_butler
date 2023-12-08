@@ -54,7 +54,13 @@ if TYPE_CHECKING:
 
 
 class ObsCoreTableManager(VersionedExtension):
-    """An interface for populating ObsCore tables(s)."""
+    """An interface for populating ObsCore tables(s).
+
+    Parameters
+    ----------
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
+    """
 
     def __init__(self, *, registry_schema_version: VersionTuple | None = None):
         super().__init__(registry_schema_version=registry_schema_version)

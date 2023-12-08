@@ -318,6 +318,8 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         All dimensions know to the `Registry`.
     datasetIdColumnType : `type`
         Type for dataset ID column.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        The version of the registry schema.
     """
 
     def __init__(

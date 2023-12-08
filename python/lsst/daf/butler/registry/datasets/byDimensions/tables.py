@@ -391,7 +391,7 @@ def makeCalibTableSpec(
     collections : `type` [ `CollectionManager` ]
         `CollectionManager` subclass that can be used to construct foreign keys
         to the run and/or collection tables.
-    TimespanReprClass : `type` of `TimespanDatabaseRepresentation`.
+    TimespanReprClass : `type` of `TimespanDatabaseRepresentation`
         The Python type to use to represent a timespan.
     dtype : `type`
         Type of the FK column, same as the column type of the PK column of

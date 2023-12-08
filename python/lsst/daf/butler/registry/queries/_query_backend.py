@@ -98,7 +98,7 @@ class QueryBackend(Generic[_C]):
 
         Parameters
         ----------
-        key
+        key : `~typing.Any`
             Collection primary key value.
 
         Returns
@@ -122,7 +122,7 @@ class QueryBackend(Generic[_C]):
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             Names and/or patterns for collections; will be passed to
             `CollectionWildcard.from_expression`.
         collection_types : `collections.abc.Set` [ `CollectionType` ], optional
@@ -159,7 +159,7 @@ class QueryBackend(Generic[_C]):
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             Names and/or patterns for dataset types; will be passed to
             `DatasetTypeWildcard.from_expression`.
         components : `bool`, optional
@@ -202,7 +202,7 @@ class QueryBackend(Generic[_C]):
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             Names and/or patterns for the dataset type; will be passed to
             `DatasetTypeWildcard.from_expression`.
         components : `bool`, optional
@@ -470,11 +470,11 @@ class QueryBackend(Generic[_C]):
         collections : `~collections.abc.Sequence` [ `CollectionRecord` ]
             Records for collections to query.  Should generally be the result
             of a call to `resolve_dataset_collections`, and must not be empty.
-        context : `QueryContext`
-            Context that manages per-query state.
         columns : `~collections.abc.Set` [ `str` ]
             Columns to include in the relation.  See `Query.find_datasets` for
             details.
+        context : `QueryContext`
+            Context that manages per-query state.
         join_to : `Relation`, optional
             Another relation to join with the query for datasets in all
             collections.

@@ -388,7 +388,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
 
         Parameters
         ----------
-        callback
+        callback : `~collections.abc.Callable`
             Callable that takes a single `DimensionRecord` argument.  This will
             be called immediately after any successful insertion, in the same
             transaction.
@@ -655,6 +655,8 @@ class DimensionRecordStorageManager(VersionedExtension):
     universe : `DimensionUniverse`
         Universe of all dimensions and dimension elements known to the
         `Registry`.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
 
     Notes
     -----

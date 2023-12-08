@@ -261,6 +261,8 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         All dimensions know to the `Registry`.
     datasetIdColumnType : `type`
         Type for dataset ID column.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
 
     Notes
     -----

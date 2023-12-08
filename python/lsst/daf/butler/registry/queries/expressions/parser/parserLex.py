@@ -59,7 +59,7 @@ this must match t_RANGE_LITERAL docstring.
 class ParserLexError(Exception):
     """Exception raised for lex-phase errors.
 
-    Attributes
+    Parameters
     ----------
     expression : `str`
         Full initial expression being parsed.
@@ -86,6 +86,13 @@ class ParserLex:
     @classmethod
     def make_lexer(cls, reflags=0, **kwargs):
         """Return lexer.
+
+        Parameters
+        ----------
+        reflags : `int`, optional
+            Regular expression flags.
+        **kwargs
+            Additional parameters for lexer.
 
         Returns
         -------

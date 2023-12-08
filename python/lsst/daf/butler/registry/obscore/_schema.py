@@ -129,6 +129,8 @@ class ObsCoreSchema:
     ----------
     config : `ObsCoreConfig`
         ObsCore configuration instance.
+    spatial_plugins : `~collections.abc.Sequence` of `SpatialObsCorePlugin`
+        Spatial plugins.
     datasets : `type`, optional
         Type of dataset records manager. If specified, the ObsCore table will
         define a foreign key to ``datasets`` table with "ON DELETE CASCADE"

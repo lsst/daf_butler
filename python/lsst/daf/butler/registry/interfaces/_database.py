@@ -121,6 +121,13 @@ class StaticTablesContext:
 
     An instance of this class is returned by `Database.declareStaticTables`,
     which should be the only way it should be constructed.
+
+    Parameters
+    ----------
+    db : `Database`
+        The database.
+    connection : `sqlalchemy.engine.Connection`
+        The connection object.
     """
 
     def __init__(self, db: Database, connection: sqlalchemy.engine.Connection):
@@ -134,6 +141,20 @@ class StaticTablesContext:
         """Add a new table to the schema, returning its sqlalchemy
         representation.
 
+        Parameters
+        ----------
+        name : `str`
+            The name of the table.
+        spec : `ddl.TableSpec`
+            The specification of the table.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table`
+            The created table.
+
+        Notes
+        -----
         The new table may not actually be created until the end of the
         context created by `Database.declareStaticTables`, allowing tables
         to be declared in any order even in the presence of foreign key
@@ -156,6 +177,16 @@ class StaticTablesContext:
         to be declared in any order even in the presence of foreign key
         relationships.
 
+        Parameters
+        ----------
+        specs : `tuple` of `ddl.TableSpec`
+            Specifications of multiple tables.
+
+        Returns
+        -------
+        tables : `tuple` of `sqlalchemy.schema.Table`
+            All the tables created.
+
         Notes
         -----
         ``specs`` *must* be an instance of a type created by
@@ -177,7 +208,7 @@ class StaticTablesContext:
 
         Parameters
         ----------
-        initializer : callable
+        initializer : `~collections.abc.Callable`
             Method of a single argument which is a `Database` instance.
         """
         self._initializers.append(initializer)
@@ -252,6 +283,16 @@ class Database(ABC):
     def makeDefaultUri(cls, root: str) -> str | None:
         """Create a default connection URI appropriate for the given root
         directory, or `None` if there can be no such default.
+
+        Parameters
+        ----------
+        root : `str`
+            Root string to use to build connection URI.
+
+        Returns
+        -------
+        uri : `str` or `None`
+            The URI string or `None`.
         """
         return None
 
@@ -1344,7 +1385,7 @@ class Database(ABC):
                 toReturn = None
             return 1, inconsistencies, toReturn
 
-        def format_bad(inconsistencies: dict[str, Any]) -> str:
+        def _format_bad(inconsistencies: dict[str, Any]) -> str:
             """Format the 'bad' dictionary of existing values returned by
             ``check`` into a string suitable for an error message.
             """
@@ -1402,7 +1443,7 @@ class Database(ABC):
                         inserted_or_updated = bad
                     else:
                         raise DatabaseConflictError(
-                            f"Conflict in sync for table {table.name} on column(s) {format_bad(bad)}."
+                            f"Conflict in sync for table {table.name} on column(s) {_format_bad(bad)}."
                         )
                 else:
                     inserted_or_updated = inserted
@@ -1418,7 +1459,7 @@ class Database(ABC):
                     raise ReadOnlyDatabaseError("sync needs to update, but database is read-only.")
                 else:
                     raise DatabaseConflictError(
-                        f"Conflict in sync for table {table.name} on column(s) {format_bad(bad)}."
+                        f"Conflict in sync for table {table.name} on column(s) {_format_bad(bad)}."
                     )
             inserted_or_updated = False
         if returning is None:
@@ -1442,7 +1483,11 @@ class Database(ABC):
         ----------
         table : `sqlalchemy.schema.Table`
             Table rows should be inserted into.
-        returnIds : `bool`
+        *rows : `dict`
+            Positional arguments are the rows to be inserted, as dictionaries
+            mapping column name to value.  The keys in all dictionaries must
+            be the same.
+        returnIds : `bool`, optional
             If `True` (`False` is default), return the values of the table's
             autoincrement primary key field (which much exist).
         select : `sqlalchemy.sql.SelectBase`, optional
@@ -1453,10 +1498,6 @@ class Database(ABC):
             columns returned by ``select``.  Ignored if ``select`` is `None`.
             If not provided, the columns returned by ``select`` must be named
             to match the desired columns of ``table``.
-        *rows
-            Positional arguments are the rows to be inserted, as dictionaries
-            mapping column name to value.  The keys in all dictionaries must
-            be the same.
 
         Returns
         -------

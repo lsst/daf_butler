@@ -595,7 +595,7 @@ class Query:
         ----------
         dataset_type : `DatasetType`
             Dataset type to search for.  May not be a component.
-        collections
+        collections : `~typing.Any`
             Collection search path or pattern.  Must be a single collection
             name or ordered sequence if ``find_first=True``.  See
             :ref:`daf_butler_collection_expressions` for more information.

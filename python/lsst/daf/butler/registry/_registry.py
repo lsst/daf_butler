@@ -127,7 +127,13 @@ class Registry(ABC):
     @contextlib.contextmanager
     @abstractmethod
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
-        """Return a context manager that represents a transaction."""
+        """Return a context manager that represents a transaction.
+
+        Parameters
+        ----------
+        savepoint : `bool`
+            Whether to create a SAVEPOINT or not.
+        """
         raise NotImplementedError()
 
     def resetConnectionPool(self) -> None:

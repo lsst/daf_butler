@@ -60,7 +60,7 @@ class CollectionRecord(Generic[_Key]):
 
     Parameters
     ----------
-    key
+    key : _Key
         Unique collection ID, can be the same as ``name`` if ``name`` is used
         for identification. Usually this is an integer or string, but can be
         other database-specific type.
@@ -119,13 +119,13 @@ class RunRecord(CollectionRecord[_Key]):
 
     Parameters
     ----------
-    key: `object`
+    key : `object`
         Unique collection key.
     name : `str`
         Name of the collection.
     host : `str`, optional
         Name of the host or system on which this run was produced.
-    timespan: `Timespan`, optional
+    timespan : `Timespan`, optional
         Begin and end timestamps for the period over which the run was
         produced.
     """
@@ -164,11 +164,11 @@ class ChainedCollectionRecord(CollectionRecord[_Key]):
 
     Parameters
     ----------
-    key: `object`
+    key : `object`
         Unique collection key.
     name : `str`
         Name of the collection.
-    children: Iterable[str],
+    children : Iterable[str],
         Ordered sequence of names of child collections.
     """
 
@@ -194,6 +194,11 @@ class ChainedCollectionRecord(CollectionRecord[_Key]):
 class CollectionManager(Generic[_Key], VersionedExtension):
     """An interface for managing the collections (including runs) in a
     `Registry`.
+
+    Parameters
+    ----------
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
 
     Notes
     -----
@@ -475,7 +480,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
         Parameters
         ----------
-        key
+        key : `typing.Any`
             Internal primary key value for the collection.
 
         Returns
@@ -543,7 +548,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
         Parameters
         ----------
-        key
+        key : _Key
             Internal primary key value for the collection.
 
         Returns
@@ -559,7 +564,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
         Parameters
         ----------
-        key
+        key : _Key
             Internal primary key value for the collection.
         doc : `str`, optional
             Docstring for the collection with the given key.
@@ -573,7 +578,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
         Parameters
         ----------
-        key
+        key : _Key
             Internal primary key value for the collection.
 
         Returns

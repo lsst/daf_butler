@@ -76,9 +76,6 @@ class ButlerVersionsManager:
     ----------
     attributes : `ButlerAttributeManager`
         Attribute manager instance.
-    managers : `dict` [`str`, `VersionedExtension`]
-        Mapping of extension type as defined in configuration (e.g.
-        "collections") to corresponding instance of manager.
     """
 
     def __init__(self, attributes: ButlerAttributeManager):
@@ -210,6 +207,11 @@ class ButlerVersionsManager:
 
     def checkManagersConfig(self, managers: Mapping[str, type[VersionedExtension]]) -> None:
         """Compare configured manager names versions with stored in database.
+
+        Parameters
+        ----------
+        managers : `~collections.abc.Mapping` [ `str`, `type`]
+            The configured managers to check.
 
         Raises
         ------

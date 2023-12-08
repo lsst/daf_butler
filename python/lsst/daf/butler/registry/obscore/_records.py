@@ -99,7 +99,9 @@ class RecordFactory:
         Description of obscore schema.
     universe : `DimensionUniverse`
         Registry dimensions universe.
-    exposure_region_factory: `ExposureRegionFactory`, optional
+    spatial_plugins : `~collections.abc.Collection` of `SpatialObsCorePlugin`
+        Spatial plugins.
+    exposure_region_factory : `ExposureRegionFactory`, optional
         Manager for Registry dimensions.
     """
 

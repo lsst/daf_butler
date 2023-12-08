@@ -63,7 +63,13 @@ _VERSION = VersionTuple(0, 0, 1)
 
 
 class _ExposureRegionFactory(ExposureRegionFactory):
-    """Find exposure region from a matching visit dimensions records."""
+    """Find exposure region from a matching visit dimensions records.
+
+    Parameters
+    ----------
+    dimensions : `DimensionRecordStorageManager`
+        The dimension records storage manager.
+    """
 
     def __init__(self, dimensions: DimensionRecordStorageManager):
         self.dimensions = dimensions
@@ -112,6 +118,25 @@ class _ExposureRegionFactory(ExposureRegionFactory):
 class ObsCoreLiveTableManager(ObsCoreTableManager):
     """A manager class for ObsCore table, implements methods for updating the
     records in that table.
+
+    Parameters
+    ----------
+    db : `Database`
+        The active database.
+    table : `sqlalchemy.schema.Table`
+        The ObsCore table.
+    schema : `ObsCoreSchema`
+        The relevant schema.
+    universe : `DimensionUniverse`
+        The dimension universe.
+    config : `ObsCoreManagerConfig`
+        The config controlling the manager.
+    dimensions : `DimensionRecordStorageManager`
+        The storage manager for the dimension records.
+    spatial_plugins : `~collections.abc.Collection` of `SpatialObsCorePlugin`
+        Spatial plugins.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
     """
 
     def __init__(

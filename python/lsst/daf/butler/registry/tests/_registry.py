@@ -141,9 +141,16 @@ class RegistryTests(ABC):
         """
         raise NotImplementedError()
 
-    def loadData(self, registry: SqlRegistry, filename: str):
+    def loadData(self, registry: SqlRegistry, filename: str) -> None:
         """Load registry test data from ``getDataDir/<filename>``,
         which should be a YAML import/export file.
+
+        Parameters
+        ----------
+        registry : `SqlRegistry`
+            The registry to load into.
+        filename : `str`
+            The name of the file to load.
         """
         from ...transfers import YamlRepoImportBackend
 
@@ -1818,12 +1825,12 @@ class RegistryTests(ABC):
         relationships.
         """
 
-        def unpack_range_set(ranges: lsst.sphgeom.RangeSet) -> Iterator[int]:
+        def _unpack_range_set(ranges: lsst.sphgeom.RangeSet) -> Iterator[int]:
             """Unpack a sphgeom.RangeSet into the integers it contains."""
             for begin, end in ranges:
                 yield from range(begin, end)
 
-        def range_set_hull(
+        def _range_set_hull(
             ranges: lsst.sphgeom.RangeSet,
             pixelization: lsst.sphgeom.HtmPixelization,
         ) -> lsst.sphgeom.ConvexPolygon:
@@ -1831,7 +1838,7 @@ class RegistryTests(ABC):
             HTM pixelization index ranges.
             """
             points = []
-            for index in unpack_range_set(ranges):
+            for index in _unpack_range_set(ranges):
                 points.extend(pixelization.triangle(index).getVertices())
             return lsst.sphgeom.ConvexPolygon(points)
 
@@ -1845,7 +1852,7 @@ class RegistryTests(ABC):
         index = 12288
         child_ranges_small = lsst.sphgeom.RangeSet(index).scaled(4)
         assert htm6.universe().contains(child_ranges_small)
-        child_regions_small = [htm6.triangle(i) for i in unpack_range_set(child_ranges_small)]
+        child_regions_small = [htm6.triangle(i) for i in _unpack_range_set(child_ranges_small)]
         parent_region_small = lsst.sphgeom.ConvexPolygon(
             list(itertools.chain.from_iterable(c.getVertices() for c in child_regions_small))
         )
@@ -1854,7 +1861,7 @@ class RegistryTests(ABC):
         # htm6 trixels that overlap the original's bounding circle.  Make a new
         # parent that's the convex hull of the new children.
         child_regions_large = [
-            range_set_hull(htm6.envelope(c.getBoundingCircle()), htm6) for c in child_regions_small
+            _range_set_hull(htm6.envelope(c.getBoundingCircle()), htm6) for c in child_regions_small
         ]
         assert all(
             large.contains(small)
@@ -1873,7 +1880,7 @@ class RegistryTests(ABC):
         # filtering of regions.
         child_difference_indices = []
         for large, small in zip(child_regions_large, child_regions_small, strict=True):
-            difference = list(unpack_range_set(commonSkyPix.envelope(large) - commonSkyPix.envelope(small)))
+            difference = list(_unpack_range_set(commonSkyPix.envelope(large) - commonSkyPix.envelope(small)))
             assert difference, "if this is empty, we can't test anything useful with these regions"
             assert all(
                 not commonSkyPix.triangle(d).isDisjointFrom(large)
@@ -1882,7 +1889,7 @@ class RegistryTests(ABC):
             )
             child_difference_indices.append(difference)
         parent_difference_indices = list(
-            unpack_range_set(
+            _unpack_range_set(
                 commonSkyPix.envelope(parent_region_large) - commonSkyPix.envelope(parent_region_small)
             )
         )
@@ -2213,7 +2220,7 @@ class RegistryTests(ABC):
 
             pass
 
-        def assertLookup(
+        def _assertLookup(
             detector: int, timespan: Timespan, expected: DatasetRef | type[Ambiguous] | None
         ) -> None:
             """Local function that asserts that a bias lookup returns the given
@@ -2241,48 +2248,48 @@ class RegistryTests(ABC):
                 )
 
         # Systematically test lookups against expected results.
-        assertLookup(detector=2, timespan=Timespan(None, t1), expected=None)
-        assertLookup(detector=2, timespan=Timespan(None, t2), expected=None)
-        assertLookup(detector=2, timespan=Timespan(None, t3), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(None, t4), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(None, t5), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(None, None), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t1, t2), expected=None)
-        assertLookup(detector=2, timespan=Timespan(t1, t3), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t1, t4), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t1, t5), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t1, None), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t2, t3), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t2, t4), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t2, t5), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t2, None), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t3, t4), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t3, t5), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t3, None), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t4, t5), expected=bias2b)
-        assertLookup(detector=2, timespan=Timespan(t4, None), expected=bias2b)
-        assertLookup(detector=2, timespan=Timespan(t5, None), expected=bias2b)
-        assertLookup(detector=3, timespan=Timespan(None, t1), expected=None)
-        assertLookup(detector=3, timespan=Timespan(None, t2), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(None, t3), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(None, t4), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(None, t5), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(None, None), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(t1, t2), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t1, t3), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t1, t4), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t1, t5), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(t1, None), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(t2, t3), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t2, t4), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t2, t5), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(t2, None), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(t3, t4), expected=None)
-        assertLookup(detector=3, timespan=Timespan(t3, t5), expected=bias3b)
-        assertLookup(detector=3, timespan=Timespan(t3, None), expected=bias3b)
-        assertLookup(detector=3, timespan=Timespan(t4, t5), expected=bias3b)
-        assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
-        assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
+        _assertLookup(detector=2, timespan=Timespan(None, t1), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(None, t2), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(None, t3), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(None, t4), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(None, t5), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(None, None), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t1, t2), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(t1, t3), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t1, t4), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t1, t5), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t1, None), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t2, t3), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t2, t4), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t2, t5), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t2, None), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t3, t4), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t3, t5), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t3, None), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t4, t5), expected=bias2b)
+        _assertLookup(detector=2, timespan=Timespan(t4, None), expected=bias2b)
+        _assertLookup(detector=2, timespan=Timespan(t5, None), expected=bias2b)
+        _assertLookup(detector=3, timespan=Timespan(None, t1), expected=None)
+        _assertLookup(detector=3, timespan=Timespan(None, t2), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(None, t3), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(None, t4), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(None, t5), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(None, None), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(t1, t2), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t1, t3), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t1, t4), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t1, t5), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(t1, None), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(t2, t3), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t2, t4), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t2, t5), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(t2, None), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(t3, t4), expected=None)
+        _assertLookup(detector=3, timespan=Timespan(t3, t5), expected=bias3b)
+        _assertLookup(detector=3, timespan=Timespan(t3, None), expected=bias3b)
+        _assertLookup(detector=3, timespan=Timespan(t4, t5), expected=bias3b)
+        _assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
+        _assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
 
         # Test lookups via temporal joins to exposures.
         self.assertEqual(
@@ -2340,48 +2347,48 @@ class RegistryTests(ABC):
         # This should truncate bias2a to [t2, t3), leave bias3a unchanged at
         # [t1, t3), and truncate bias2b and bias3b to [t5, ∞).
         registry.decertify(collection=collection, datasetType="bias", timespan=Timespan(t3, t5))
-        assertLookup(detector=2, timespan=Timespan(None, t1), expected=None)
-        assertLookup(detector=2, timespan=Timespan(None, t2), expected=None)
-        assertLookup(detector=2, timespan=Timespan(None, t3), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(None, t4), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(None, t5), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(None, None), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t1, t2), expected=None)
-        assertLookup(detector=2, timespan=Timespan(t1, t3), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t1, t4), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t1, t5), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t1, None), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t2, t3), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t2, t4), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t2, t5), expected=bias2a)
-        assertLookup(detector=2, timespan=Timespan(t2, None), expected=Ambiguous)
-        assertLookup(detector=2, timespan=Timespan(t3, t4), expected=None)
-        assertLookup(detector=2, timespan=Timespan(t3, t5), expected=None)
-        assertLookup(detector=2, timespan=Timespan(t3, None), expected=bias2b)
-        assertLookup(detector=2, timespan=Timespan(t4, t5), expected=None)
-        assertLookup(detector=2, timespan=Timespan(t4, None), expected=bias2b)
-        assertLookup(detector=2, timespan=Timespan(t5, None), expected=bias2b)
-        assertLookup(detector=3, timespan=Timespan(None, t1), expected=None)
-        assertLookup(detector=3, timespan=Timespan(None, t2), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(None, t3), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(None, t4), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(None, t5), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(None, None), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(t1, t2), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t1, t3), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t1, t4), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t1, t5), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t1, None), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(t2, t3), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t2, t4), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t2, t5), expected=bias3a)
-        assertLookup(detector=3, timespan=Timespan(t2, None), expected=Ambiguous)
-        assertLookup(detector=3, timespan=Timespan(t3, t4), expected=None)
-        assertLookup(detector=3, timespan=Timespan(t3, t5), expected=None)
-        assertLookup(detector=3, timespan=Timespan(t3, None), expected=bias3b)
-        assertLookup(detector=3, timespan=Timespan(t4, t5), expected=None)
-        assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
-        assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
+        _assertLookup(detector=2, timespan=Timespan(None, t1), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(None, t2), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(None, t3), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(None, t4), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(None, t5), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(None, None), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t1, t2), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(t1, t3), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t1, t4), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t1, t5), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t1, None), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t2, t3), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t2, t4), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t2, t5), expected=bias2a)
+        _assertLookup(detector=2, timespan=Timespan(t2, None), expected=Ambiguous)
+        _assertLookup(detector=2, timespan=Timespan(t3, t4), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(t3, t5), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(t3, None), expected=bias2b)
+        _assertLookup(detector=2, timespan=Timespan(t4, t5), expected=None)
+        _assertLookup(detector=2, timespan=Timespan(t4, None), expected=bias2b)
+        _assertLookup(detector=2, timespan=Timespan(t5, None), expected=bias2b)
+        _assertLookup(detector=3, timespan=Timespan(None, t1), expected=None)
+        _assertLookup(detector=3, timespan=Timespan(None, t2), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(None, t3), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(None, t4), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(None, t5), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(None, None), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(t1, t2), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t1, t3), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t1, t4), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t1, t5), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t1, None), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(t2, t3), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t2, t4), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t2, t5), expected=bias3a)
+        _assertLookup(detector=3, timespan=Timespan(t2, None), expected=Ambiguous)
+        _assertLookup(detector=3, timespan=Timespan(t3, t4), expected=None)
+        _assertLookup(detector=3, timespan=Timespan(t3, t5), expected=None)
+        _assertLookup(detector=3, timespan=Timespan(t3, None), expected=bias3b)
+        _assertLookup(detector=3, timespan=Timespan(t4, t5), expected=None)
+        _assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
+        _assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
 
         # Decertify everything, this time with explicit data IDs, then check
         # that no lookups succeed.
@@ -2396,7 +2403,7 @@ class RegistryTests(ABC):
         )
         for detector in (2, 3):
             for timespan in allTimespans:
-                assertLookup(detector=detector, timespan=timespan, expected=None)
+                _assertLookup(detector=detector, timespan=timespan, expected=None)
         # Certify bias2a and bias3a over (-∞, ∞), check that all lookups return
         # those.
         registry.certify(
@@ -2405,8 +2412,8 @@ class RegistryTests(ABC):
             Timespan(None, None),
         )
         for timespan in allTimespans:
-            assertLookup(detector=2, timespan=timespan, expected=bias2a)
-            assertLookup(detector=3, timespan=timespan, expected=bias3a)
+            _assertLookup(detector=2, timespan=timespan, expected=bias2a)
+            _assertLookup(detector=3, timespan=timespan, expected=bias3a)
         # Decertify just bias2 over [t2, t4).
         # This should split a single certification row into two (and leave the
         # other existing row, for bias3a, alone).
@@ -2414,7 +2421,7 @@ class RegistryTests(ABC):
             collection, "bias", Timespan(t2, t4), dataIds=[dict(instrument="Cam1", detector=2)]
         )
         for timespan in allTimespans:
-            assertLookup(detector=3, timespan=timespan, expected=bias3a)
+            _assertLookup(detector=3, timespan=timespan, expected=bias3a)
             overlapsBefore = timespan.overlaps(Timespan(None, t2))
             overlapsAfter = timespan.overlaps(Timespan(t4, None))
             if overlapsBefore and overlapsAfter:
@@ -2423,7 +2430,7 @@ class RegistryTests(ABC):
                 expected = bias2a
             else:
                 expected = None
-            assertLookup(detector=2, timespan=timespan, expected=expected)
+            _assertLookup(detector=2, timespan=timespan, expected=expected)
 
     def testSkipCalibs(self):
         """Test how queries handle skipping of calibration collections."""
@@ -2568,7 +2575,13 @@ class RegistryTests(ABC):
         }
 
         def query(where):
-            """Return results as a sorted, deduplicated list of visit IDs."""
+            """Return results as a sorted, deduplicated list of visit IDs.
+
+            Parameters
+            ----------
+            where : `str`
+                The WHERE clause for the query.
+            """
             return sorted(
                 {
                     dataId["visit"]
@@ -3523,6 +3536,11 @@ class RegistryTests(ABC):
             """If a relation tree terminates with a transfer to a new engine,
             return the relation prior to that transfer.  If not, return the
             original relation.
+
+            Parameters
+            ----------
+            tree : `Relation`
+                The relation tree to modify.
             """
             match tree:
                 case Transfer(target=target):

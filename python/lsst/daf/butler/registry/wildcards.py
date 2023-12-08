@@ -74,8 +74,9 @@ class CategorizedWildcard:
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             The expression to categorize.  May be any of:
+
              - `str` (including glob patterns if ``allowPatterns`` is `True`);
              - `re.Pattern` (only if ``allowPatterns`` is `True`);
              - objects recognized by ``coerceUnrecognized`` (if provided);
@@ -293,12 +294,6 @@ class CollectionSearch(_CollectionSearch):
     instances, as the regular constructor performs no checking of inputs (and
     that can lead to confusing error messages downstream).
 
-    Parameters
-    ----------
-    collections : `tuple` [ `str` ]
-        Tuple of collection names, ordered from the first searched to the last
-        searched.
-
     Notes
     -----
     A `CollectionSearch` is used to find a single dataset (or set of datasets
@@ -323,12 +318,12 @@ class CollectionSearch(_CollectionSearch):
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             May be:
-             - a `str` collection name;
-             - an iterable of `str` collection names;
-             - another `CollectionSearch` instance (passed through
-               unchanged).
+
+            - a `str` collection name;
+            - an iterable of `str` collection names;
+            - another `CollectionSearch` instance (passed through unchanged).
 
             Duplicate entries will be removed (preserving the first appearance
             of each collection name).
@@ -432,14 +427,14 @@ class CollectionWildcard:
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             May be:
-             - a `str` collection name;
-             - an `re.Pattern` instance to match (with `re.Pattern.fullmatch`)
-               against collection names;
-             - any iterable containing any of the above;
-             - another `CollectionWildcard` instance (passed through
-               unchanged).
+
+            - a `str` collection name;
+            - an `re.Pattern` instance to match (with `re.Pattern.fullmatch`)
+              against collection names;
+            - any iterable containing any of the above;
+            - another `CollectionWildcard` instance (passed through unchanged).
 
             Duplicate collection names will be removed (preserving the first
             appearance of each collection name).
@@ -557,7 +552,7 @@ class DatasetTypeWildcard:
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             Expression to analyze.  May be any of the following:
 
             - a `str` dataset type name;

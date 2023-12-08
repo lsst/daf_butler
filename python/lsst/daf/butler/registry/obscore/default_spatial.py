@@ -59,6 +59,13 @@ _COLUMNS = (
 class DefaultSpatialObsCorePlugin(SpatialObsCorePlugin):
     """Class for a spatial ObsCore plugin which creates standard spatial
     obscore columns.
+
+    Parameters
+    ----------
+    name : `str`
+        The name.
+    config : `~collections.abc.Mapping` [`str`, `~typing.Any`]
+        ObsCore configuration.
     """
 
     def __init__(self, *, name: str, config: Mapping[str, Any]):

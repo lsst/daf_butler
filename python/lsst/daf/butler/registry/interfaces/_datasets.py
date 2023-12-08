@@ -322,6 +322,11 @@ class DatasetRecordStorageManager(VersionedExtension):
     `DatasetRecordStorageManager` primarily serves as a container and factory
     for `DatasetRecordStorage` instances, which each provide access to the
     records for a different `DatasetType`.
+
+    Parameters
+    ----------
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
     """
 
     def __init__(self, *, registry_schema_version: VersionTuple | None = None) -> None:
@@ -419,13 +424,13 @@ class DatasetRecordStorageManager(VersionedExtension):
         name : `str`, optional
             A name to use for the prefix of the new field; the full name is
             ``{name}_id``.
+        constraint : `bool`, optional
+            If `False` (`True` is default), add a field that can be joined to
+            the dataset primary key, but do not add a foreign key constraint.
         onDelete : `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        constraint : `bool`, optional
-            If `False` (`True` is default), add a field that can be joined to
-            the dataset primary key, but do not add a foreign key constraint.
         **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are
@@ -543,7 +548,7 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             Expression to resolve.  Will be passed to
             `DatasetTypeWildcard.from_expression`.
         components : `bool`, optional

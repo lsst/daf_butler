@@ -158,6 +158,11 @@ class OpaqueTableStorageManager(VersionedExtension):
     `OpaqueTableStorage` instances, which each provide access to the records
     for a different (logical) opaque table.
 
+    Parameters
+    ----------
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
+
     Notes
     -----
     Opaque tables are primarily used by `Datastore` instances to manage their
