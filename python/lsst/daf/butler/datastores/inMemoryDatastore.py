@@ -403,10 +403,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
-    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         # It is OK to call put() here because registry is not populating
         # bridges as we return empty dict from this method.
-        self.put(inMemoryDataset, ref)
+        self.put(in_memory_dataset, ref)
         # As ephemeral we return empty dict.
         return {}
 

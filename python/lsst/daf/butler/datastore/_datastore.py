@@ -571,14 +571,14 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def put_new(self, in_memory_dataset: Any, dataset_ref: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
 
         Parameters
         ----------
-        inMemoryDataset : `object`
+        in_memory_dataset : `object`
             The Dataset to store.
-        datasetRef : `DatasetRef`
+        ref : `DatasetRef`
             Reference to the associated Dataset.
 
         Returns
@@ -1195,7 +1195,8 @@ class Datastore(metaclass=ABCMeta):
         ----------
         transfer : `str` or `None`
             Transfer mode for ingest.
-        entity, optional
+        entity : `DatasetRef` or `DatasetType` or `StorageClass` or `None`, \
+                optional
             Object representing what will be ingested.  If not provided (or not
             specific enough), `True` may be returned even if expanded data
             IDs aren't necessary.
@@ -1334,7 +1335,7 @@ class NullDatastore(Datastore):
     def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
-    def put_new(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def ingest(

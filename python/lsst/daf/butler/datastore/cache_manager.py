@@ -79,6 +79,8 @@ def _construct_cache_path(root: ResourcePath, ref: DatasetRef, extension: str) -
 
     Parameters
     ----------
+    root : `lsst.resources.ResourcePath`
+        The root of the cache.
     ref : `DatasetRef`
         The dataset to look up in or write to the cache.
     extension : `str`

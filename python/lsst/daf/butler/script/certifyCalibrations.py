@@ -49,17 +49,17 @@ def certifyCalibrations(
     repo : `str`
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
-    inputCollection : `str`
+    input_collection : `str`
         Data collection to pull calibrations from.  Usually an existing
         `~CollectionType.RUN` or `~CollectionType.CHAINED` collection, and may
         _not_ be a `~CollectionType.CALIBRATION` collection or a nonexistent
         collection.
-    outputCollection : `str`
+    output_collection : `str`
         Data collection to store final calibrations.  If it already exists, it
         must be a `~CollectionType.CALIBRATION` collection.  If not, a new
         `~CollectionType.CALIBRATION` collection with this name will be
         registered.
-    datasetTypeName : `str`
+    dataset_type_name : `str`
         Name of the dataset type to certify.
     begin_date : `str`, optional
         ISO-8601 date (TAI) this calibration should start being used.

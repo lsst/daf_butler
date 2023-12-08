@@ -465,7 +465,7 @@ class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
 
         Parameters
         ----------
-        name : `str`, optional
+        *args : `str`, optional
             Name of the element to remove and return.  Must be passed
             positionally.  If not provided, an arbitrary element is
             removed and returned.

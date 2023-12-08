@@ -219,6 +219,9 @@ class DatasetRecordStorage(ABC):
             the same `DatasetType` as ``self``.
         timespan : `Timespan`
             The validity range for these datasets within the collection.
+        context : `SqlQueryContext`
+            The object that manages database connections, temporary tables and
+            relation engines for this query.
 
         Raises
         ------
@@ -261,6 +264,9 @@ class DatasetRecordStorage(ABC):
             Data IDs that should be decertified within the given validity range
             If `None`, all data IDs for ``self.datasetType`` will be
             decertified.
+        context : `SqlQueryContext`
+            The object that manages database connections, temporary tables and
+            relation engines for this query.
 
         Raises
         ------

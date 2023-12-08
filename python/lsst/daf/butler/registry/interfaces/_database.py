@@ -950,6 +950,8 @@ class Database(ABC):
 
         Parameters
         ----------
+        name : `str`
+            The name of the table.
         spec : `TableSpec`
             Specification for the foreign key to be added.
         metadata : `sqlalchemy.MetaData`

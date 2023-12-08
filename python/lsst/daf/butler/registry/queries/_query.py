@@ -609,15 +609,12 @@ class Query:
             - ``dataset_id``: the unique identifier of the dataset.  The type
               is implementation-dependent.  Never nullable.  Included by
               default.
-
             - ``ingest_date``: the date and time the dataset was added to the
               data repository.
-
             - ``run``: the foreign key column to the `~CollectionType.RUN`
               collection holding the dataset (not necessarily the collection
               name).  The type is dependent on the collection manager
               implementation.  Included by default.
-
             - ``collection``: the foreign key column to the collection type in
               which the dataset was actually in this search.  The type is
               dependent on the collection manager implementation.  This may
@@ -625,7 +622,6 @@ class Query:
               `~CollectionType.TAGGED` or `~CollectionType.CALIBRATION`
               collection, which means the same dataset may also appear multiple
               times in the query results.
-
             - ``timespan``: the validity range for datasets found in a
               `~CollectionType.CALIBRATION` collection, or ``NULL`` for other
               collection types.

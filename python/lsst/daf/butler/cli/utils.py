@@ -494,8 +494,11 @@ def to_upper(context: click.Context, param: click.core.Option, value: str) -> st
 
     Parameters
     ----------
-    context : click.Context
-    values : string
+    context : `click.Context`
+        Context given by Click.
+    param : `click.core.Option`
+        Provided by Click. Ignored.
+    value : `str`
         The value to be converted.
 
     Returns

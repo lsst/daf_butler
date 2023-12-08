@@ -384,6 +384,8 @@ class RegistryManagerInstances(
             construct.
         universe : `DimensionUniverse`
             Object that describes all dimensions in this data repository.
+        caching_context : `CachingContext` or `None`, optional
+            Caching context to use.
 
         Returns
         -------

@@ -234,6 +234,8 @@ class DimensionPackerFactory:
 
         Parameters
         ----------
+        universe : `DimensionUniverse`
+            The dimension universe for which this packer should be created.
         fixed : `DataCoordinate`
             Data ID that provides values for the "fixed" dimensions of the
             packer.  Must be expanded with all metadata known to the

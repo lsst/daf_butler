@@ -344,9 +344,9 @@ class Registry(ABC):
 
         Parameters
         ----------
-        name : `str`
+        collection : `str`
             Name of the collection.
-        docs : `str` or `None`
+        doc : `str` or `None`
             Docstring for the collection with the given name; will replace any
             existing docstring.  Passing `None` will remove any existing
             docstring.
@@ -514,6 +514,8 @@ class Registry(ABC):
             A timespan that the validity range of the dataset must overlap.
             If not provided, any `~CollectionType.CALIBRATION` collections
             matched by the ``collections`` argument will not be searched.
+        datastore_records : `bool`, optional
+            Whether to attach datastore records to the `DatasetRef`.
         **kwargs
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true

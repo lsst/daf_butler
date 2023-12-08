@@ -135,6 +135,8 @@ def makeStaticTableSpecs(
         Type of the dataset ID (primary key) column.
     autoincrement : `bool`
         If `True` then dataset ID column will be auto-incrementing.
+    schema_version : `VersionTuple`
+        The version of this schema.
 
     Returns
     -------
@@ -389,6 +391,8 @@ def makeCalibTableSpec(
     collections : `type` [ `CollectionManager` ]
         `CollectionManager` subclass that can be used to construct foreign keys
         to the run and/or collection tables.
+    TimespanReprClass : `type` of `TimespanDatabaseRepresentation`.
+        The Python type to use to represent a timespan.
     dtype : `type`
         Type of the FK column, same as the column type of the PK column of
         a referenced table (``dataset.id``).

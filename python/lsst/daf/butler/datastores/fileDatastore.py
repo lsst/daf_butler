@@ -2078,13 +2078,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.INSERT)
 
     @transactional
-    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         doDisassembly = self.composites.shouldBeDisassembled(ref)
         # doDisassembly = True
 
         artifacts = []
         if doDisassembly:
-            components = ref.datasetType.storageClass.delegate().disassemble(inMemoryDataset)
+            components = ref.datasetType.storageClass.delegate().disassemble(in_memory_dataset)
             if components is None:
                 raise RuntimeError(
                     f"Inconsistent configuration: dataset type {ref.datasetType.name} "
@@ -2102,7 +2102,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 artifacts.append((compRef, storedInfo))
         else:
             # Write the entire thing out
-            storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
+            storedInfo = self._write_in_memory_to_artifact(in_memory_dataset, ref)
             artifacts.append((ref, storedInfo))
 
         ref_records = {self._opaque_table_name: [info for _, info in artifacts]}
