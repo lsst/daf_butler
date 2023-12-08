@@ -996,7 +996,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             Keys into the cache, sorted by time with oldest first.
         """
 
-        def _sort_by_time(key: str) -> str:
+        def _sort_by_time(key: str) -> datetime.datetime:
             """Sorter key function using cache entry details."""
             return self._cache_entries[key].ctime
 
@@ -1062,7 +1062,7 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         Returns
         -------
         new : `lsst.resources.ResourcePath` or `None`
-           Always refuses and returns `None`.
+            Always refuses and returns `None`.
         """
         return None
 

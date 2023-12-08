@@ -475,6 +475,11 @@ class _NullProgressBar(Iterable[_T]):
         iterable : `~collections.abc.Iterable` or `None`
             An arbitrary Python iterable that will be iterated over when the
             returned object is.
+
+        Yields
+        ------
+        _NullProgressBar
+            Progress bar that does nothing.
         """
         yield cls(iterable)
 

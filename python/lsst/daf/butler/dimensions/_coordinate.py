@@ -82,6 +82,15 @@ class SerializedDataCoordinate(_BaseModelCompat):
     ) -> SerializedDataCoordinate:
         """Construct a `SerializedDataCoordinate` directly without validators.
 
+        Parameters
+        ----------
+        dataId : `dict`
+            The data ID.
+        records : `dict` or `None`
+            The dimension records.
+
+        Notes
+        -----
         This differs from the pydantic "construct" method in that the arguments
         are explicitly what the model requires, and it will recurse through
         members, constructing them from their corresponding `direct` methods.
@@ -142,9 +151,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     (instead, it is the same as testing for equality on the `required`
     attribute).
 
-    See Also
-    --------
-    :ref:`lsst.daf.butler-dimensions_data_ids`
+    See also :ref:`lsst.daf.butler-dimensions_data_ids`
     """
 
     __slots__ = ()

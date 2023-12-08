@@ -130,6 +130,8 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
     ----------
     name : `str`
         Name of the family.
+    space : `TopologicalSpace`
+        Space in which this family's regions live.
     members : `~collections.abc.Iterable` [ `str` ]
         The names of the members of this family, ordered according to the
         priority used in `choose` (first-choice member first).
@@ -370,6 +372,9 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
         If `True`, always include this element in any query or data ID in
         which its ``required`` dimensions appear, because it defines a
         relationship between those dimensions that must always be satisfied.
+    populated_by : `Dimension` or `None`
+        The dimension that this element's records are always inserted,
+        exported, and imported alongside.
 
     Notes
     -----
@@ -453,7 +458,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         relationship between those dimensions that must always be satisfied.
         Should only be provided when a `DimensionCombination` is being
         constructed.
-    populated_by: `Dimension`, optional
+    populated_by : `Dimension`, optional
         The dimension that this element's records are always inserted,
         exported, and imported alongside.
     """

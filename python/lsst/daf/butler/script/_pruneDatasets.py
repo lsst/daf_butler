@@ -50,7 +50,9 @@ class PruneDatasetsResult:
         The astropy tables that will be or were deleted, by default None.
     state : `PruneDatasetsResult.State`, optional
         The initial state of execution of the action, if `None` the result
-        state is ``INIT``, by default None.
+        state is ``INIT``, by default `None`.
+    errDict : `dict` [`str`, `str`] or `None`
+        Place to store error messages. Will be created if not given.
 
     Attributes
     ----------

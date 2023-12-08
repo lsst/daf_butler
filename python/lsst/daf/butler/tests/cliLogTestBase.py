@@ -75,7 +75,7 @@ except ModuleNotFoundError:
 @click.option("--expected-lsstroot-level", type=int)
 @click.option("--expected-lsstbutler-level", type=int)
 @click.option("--expected-lsstx-level", type=int)
-def command_log_settings_test(
+def command_log_settings_test(  # numpydoc ignore=PR01
     expected_pyroot_level: str,
     expected_pylsst_level: str,
     expected_pybutler_level: str,
@@ -130,6 +130,11 @@ class CliLogTestBase:
     class PythonLogger:
         """Keeps track of log level of a component and number of handlers
         attached to it at the time this object was initialized.
+
+        Parameters
+        ----------
+        component : `str` or `None`
+            The logger name.
         """
 
         def __init__(self, component: str | None) -> None:
@@ -139,6 +144,11 @@ class CliLogTestBase:
     class LsstLogger:
         """Keeps track of log level for a component at the time this object was
         initialized.
+
+        Parameters
+        ----------
+        component : `str` or `None`
+            The logger name.
         """
 
         def __init__(self, component: str) -> None:
@@ -146,10 +156,19 @@ class CliLogTestBase:
             self.initialLevel = self.logger.getLevel() if lsstLog else None
 
     def runTest(self, cmd: Callable) -> None:
-        """Test that the log context manager works with the butler cli to
-        initialize the logging system according to cli inputs for the duration
-        of the command execution and resets the logging system to its previous
-        state or expected state when command execution finishes.
+        """Test that the log context manager works with the butler cli.
+
+        Parameters
+        ----------
+        cmd : `~collections.abc.Callable`
+            The command to run.
+
+        Notes
+        -----
+        Tests that it will initialize the logging system according to cli
+        inputs for the duration of the command execution and resets the logging
+        system to its previous state or expected state when command execution
+        finishes.
         """
         pyRoot = self.PythonLogger(None)
         pyButler = self.PythonLogger("lsst.daf.butler")

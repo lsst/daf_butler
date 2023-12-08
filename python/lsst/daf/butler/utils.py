@@ -53,6 +53,16 @@ def transactional(func: F) -> F:
 
     This depends on the class also defining a `transaction` method
     that takes no arguments and acts as a context manager.
+
+    Parameters
+    ----------
+    func : `~collections.abc.Callable`
+        Method to decorate.
+
+    Returns
+    -------
+    decorated : `~collections.abc.Callable`
+        The decorated method.
     """
 
     @functools.wraps(func)

@@ -53,7 +53,6 @@ class MappingFactory:
         Python reference `type` to use to ensure that items stored in the
         registry create instance objects of the correct class. Subclasses
         of this type are allowed. Using `None` disables the check.
-
     """
 
     def __init__(self, refType: type):

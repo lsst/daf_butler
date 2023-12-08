@@ -220,7 +220,7 @@ class MetricTestRepo:
         The location of the repository, to pass to ``Butler.makeRepo``.
     configFile : `str`
         The path to the config file, to pass to ``Butler.makeRepo``.
-    forceConfigRoot: `bool`, optional
+    forceConfigRoot : `bool`, optional
         If `False`, any values present in the supplied ``config`` that
         would normally be reset are not overridden and will appear
         directly in the output config. Passed to ``Butler.makeRepo``.
@@ -317,7 +317,6 @@ class MetricTestRepo:
         -------
         datasetRef : `DatasetRef`
             A reference to the added dataset.
-
         """
         if run:
             self.butler.registry.registerCollection(run, type=CollectionType.RUN)

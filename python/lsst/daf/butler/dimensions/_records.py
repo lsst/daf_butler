@@ -187,6 +187,20 @@ class SerializedDimensionRecord(_BaseModelCompat):
     ) -> SerializedDimensionRecord:
         """Construct a `SerializedDimensionRecord` directly without validators.
 
+        Parameters
+        ----------
+        definition : `str`
+            The name of the record.
+        record : `dict`
+            A dictionary representation of the record content.
+
+        Returns
+        -------
+        rec : `SerializedDimensionRecord`
+            A model representing the dimension records.
+
+        Notes
+        -----
         This differs from the pydantic "construct" method in that the arguments
         are explicitly what the model requires, and it will recurse through
         members, constructing them from their corresponding `direct` methods.

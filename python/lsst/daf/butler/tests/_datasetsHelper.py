@@ -60,7 +60,32 @@ class DatasetTestHelper:
         run: str | None = None,
         conform: bool = True,
     ) -> DatasetRef:
-        """Make a DatasetType and wrap it in a DatasetRef for a test."""
+        """Make a DatasetType and wrap it in a DatasetRef for a test.
+
+        Parameters
+        ----------
+        datasetTypeName : `str`
+            The name of the dataset type.
+        dimensions : `DimensionGroup` or `~collections.abc.Iterable` of `str` \
+                or `Dimension`
+            The dimensions to use for this dataset type.
+        storageClass : `StorageClass` or `str`
+            The relevant storage class.
+        dataId : `DataCoordinate` or `~collections.abc.Mapping`
+            The data ID of this ref.
+        id : `DatasetId` or `None`, optional
+            The Id of this ref. Will be assigned automatically.
+        run : `str` or `None`, optional
+            The run for this ref. Will be assigned a default value if `None`.
+        conform : `bool`, optional
+            Whther to force the dataID to be checked for conformity with
+            the provided dimensions.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            The new ref.
+        """
         return self._makeDatasetRef(
             datasetTypeName,
             dimensions,
@@ -108,7 +133,15 @@ class DatastoreTestHelper:
     configFile: str
 
     def setUpDatastoreTests(self, registryClass: type, configClass: type[Config]) -> None:
-        """Shared setUp code for all Datastore tests."""
+        """Shared setUp code for all Datastore tests.
+
+        Parameters
+        ----------
+        registryClass : `type`
+            Type of registry to use.
+        configClass : `type`
+            Type of config to use.
+        """
         self.registry = registryClass()
         self.config = configClass(self.configFile)
 
@@ -121,7 +154,7 @@ class DatastoreTestHelper:
 
         Parameters
         ----------
-        sub : str, optional
+        sub : `str`, optional
             If not None, the returned Datastore will be distinct from any
             Datastore constructed with a different value of ``sub``.  For
             PosixDatastore, for example, the converse is also true, and ``sub``

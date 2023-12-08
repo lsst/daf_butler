@@ -583,7 +583,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
 
         Parameters
         ----------
-        components :  `~collections.abc.Sequence` [ `str` or `None` ]
+        components : `~collections.abc.Sequence` [ `str` or `None` ]
             Names of components to include in iteration.  `None` may be
             included (at most once) to include the parent dataset type.
         """

@@ -284,7 +284,18 @@ class MetricsExampleModel(BaseModel):
 
     @classmethod
     def from_metrics(cls, metrics: MetricsExample) -> MetricsExampleModel:
-        """Create a model based on an example."""
+        """Create a model based on an example.
+
+        Parameters
+        ----------
+        metrics : `MetricsExample`
+            Metrics from which to construct the model.
+
+        Returns
+        -------
+        model : `MetricsExampleModel`
+            New model.
+        """
         d = metrics.exportAsDict()
         # Assume pydantic v2 but fallback to v1
         try:

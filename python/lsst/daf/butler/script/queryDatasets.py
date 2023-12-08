@@ -161,7 +161,6 @@ class QueryDatasets:
     butler : `lsst.daf.butler.Butler` or `None`
         The butler to use to query. One of `repo` and `butler` must be `None`
         and the other must not be `None`.
-
     """
 
     def __init__(

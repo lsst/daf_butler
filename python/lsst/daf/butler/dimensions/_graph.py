@@ -60,6 +60,18 @@ class SerializedDimensionGraph(_BaseModelCompat):
     def direct(cls, *, names: list[str]) -> SerializedDimensionGraph:
         """Construct a `SerializedDimensionGraph` directly without validators.
 
+        Parameters
+        ----------
+        names : `list` [`str`]
+            The names of the dimensions to include.
+
+        Returns
+        -------
+        graph : `SerializedDimensionGraph`
+            Model representing these dimensions.
+
+        Notes
+        -----
         This differs from the pydantic "construct" method in that the arguments
         are explicitly what the model requires, and it will recurse through
         members, constructing them from their corresponding `direct` methods.
@@ -174,7 +186,7 @@ class _DimensionGraphNamedValueSet(NameMappingSetView[_T]):
     version="v27",
 )
 @immutable
-class DimensionGraph:
+class DimensionGraph:  # numpydoc ignore=PR02
     """An immutable, dependency-complete collection of dimensions.
 
     `DimensionGraph` is deprecated in favor of `DimensionGroup` and will be
@@ -404,6 +416,18 @@ class DimensionGraph:
 
         This lookup covers all `DimensionElement` instances in
         ``self.elements``, not just true `Dimension` instances).
+
+        Parameters
+        ----------
+        name : `str`
+            Name of element to return.
+        default : `typing.Any` or `None`
+            Default value if named element is not present.
+
+        Returns
+        -------
+        element : `DimensionElement` or `None`
+            The element found, or the default.
         """
         return self.elements.get(name, default)
 
@@ -416,27 +440,56 @@ class DimensionGraph:
     def as_group(self) -> DimensionGroup:
         """Return a `DimensionGroup` that represents the same set of
         dimensions.
+
+        Returns
+        -------
+        group : `DimensionGroup`
+           Group that represents the same set of dimensions.
         """
         return self._group
 
     def isdisjoint(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether the intersection of two graphs is empty.
 
-        Returns `True` if either operand is the empty.
+        Parameters
+        ----------
+        other : `DimensionGroup` or `DimensionGraph`
+            Other graph to compare with.
+
+        Returns
+        -------
+        is_disjoint : `bool`
+            Returns `True` if either operand is the empty.
         """
         return self._group.isdisjoint(other.as_group())
 
     def issubset(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether all dimensions in ``self`` are also in ``other``.
 
-        Returns `True` if ``self`` is empty.
+        Parameters
+        ----------
+        other : `DimensionGroup` or `DimensionGraph`
+            Other graph to compare with.
+
+        Returns
+        -------
+        is_subset : `bool`
+            Returns `True` if ``self`` is empty.
         """
         return self._group <= other.as_group()
 
     def issuperset(self, other: DimensionGroup | DimensionGraph) -> bool:
         """Test whether all dimensions in ``other`` are also in ``self``.
 
-        Returns `True` if ``other`` is empty.
+        Parameters
+        ----------
+        other : `DimensionGroup` or `DimensionGraph`
+            Other graph to compare with.
+
+        Returns
+        -------
+        is_superset : `bool`
+            Returns `True` if ``other`` is empty.
         """
         return self._group >= other.as_group()
 
@@ -468,6 +521,18 @@ class DimensionGraph:
     def union(self, *others: DimensionGroup | DimensionGraph) -> DimensionGraph:
         """Construct a new graph with all dimensions in any of the operands.
 
+        Parameters
+        ----------
+        *others : `DimensionGroup` or `DimensionGraph`
+            Other graphs to join with.
+
+        Returns
+        -------
+        union : `DimensionGraph`
+            The union of this graph wit hall the others.
+
+        Notes
+        -----
         The elements of the returned graph may exceed the naive union of
         their elements, as some `DimensionElement` instances are included
         in graphs whenever multiple dimensions are present, and those
@@ -479,6 +544,18 @@ class DimensionGraph:
     def intersection(self, *others: DimensionGroup | DimensionGraph) -> DimensionGraph:
         """Construct a new graph with only dimensions in all of the operands.
 
+        Parameters
+        ----------
+        *others : `DimensionGroup` or `DimensionGraph`
+            Other graphs to use.
+
+        Returns
+        -------
+        inter : `DimensionGraph`
+            Intersection of all the graphs.
+
+        Notes
+        -----
         See also `union`.
         """
         names = set(self.names).intersection(*[other.names for other in others])

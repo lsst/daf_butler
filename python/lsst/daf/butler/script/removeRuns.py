@@ -130,7 +130,7 @@ def removeRuns(
     """
     runs, datasets = _getCollectionInfo(repo, collection)
 
-    def doRemove(runs: Sequence[RemoveRun]) -> None:
+    def _doRemove(runs: Sequence[RemoveRun]) -> None:
         """Perform the remove step."""
         butler = Butler.from_config(repo, writeable=True)
         with butler.transaction():
@@ -142,7 +142,7 @@ def removeRuns(
             butler.removeRuns([r.name for r in runs], unstore=True)
 
     result = RemoveRunsResult(
-        onConfirmation=partial(doRemove, runs),
+        onConfirmation=partial(_doRemove, runs),
         runs=runs,
         datasets=datasets,
     )

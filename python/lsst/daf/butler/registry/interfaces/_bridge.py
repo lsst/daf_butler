@@ -276,7 +276,6 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
 
     - the `DimensionUniverse`, if they need it to (e.g.) construct or validate
       filename templates.
-
     """
 
     def __init__(

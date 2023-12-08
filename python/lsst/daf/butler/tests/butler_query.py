@@ -82,6 +82,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
         This method should be called from implementations of `make_butler`
         where the Registry should exist.
+
+        Parameters
+        ----------
+        registry : `SqlRegistry`
+            The registry to use.
+        filename : `str`
+            Location of test data.
         """
         with open(os.path.join(self.data_dir, filename)) as stream:
             backend = YamlRepoImportBackend(stream, registry)
@@ -91,6 +98,13 @@ class ButlerQueryTests(ABC, TestCaseMixin):
     def make_bias_collection(self, registry: SqlRegistry) -> None:
         """Make "biases" collection containing only bias datasets.
 
+        Parameters
+        ----------
+        registry : `SqlRegistry`
+            The registry to use.
+
+        Notes
+        -----
         Default test dataset has two collections, each with both flats and
         biases. This adds a new collection for biases, only if "imported_g"
         collection exists (usually loaded from datasets.yaml).

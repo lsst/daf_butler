@@ -51,6 +51,29 @@ def queryDimensionRecords(
 ) -> Table | None:
     """Query dimension records.
 
+    Parameters
+    ----------
+    repo : `str`
+        Butler location.
+    element : `str`
+        Name of relevant dimension record.
+    datasets : `tuple` of `str`
+        Dataset types to restrict query by.
+    collections : `~collections.abc.Iterable` of `str`
+        Collections to search.
+    where : `str`
+        Query string.
+    no_check : `bool`
+        If `True` do not check the query for consistency.
+    order_by : `tuple` of `str`
+        Columns to order results by.
+    limit : `int`
+        Maximum number of results.
+    offset : `int`
+        Offset into the results.
+
+    Notes
+    -----
     Docstring for supported parameters is the same as
     `~lsst.daf.butler.Registry.queryDimensionRecords` except for ``no_check``,
     which is the inverse of ``check``.

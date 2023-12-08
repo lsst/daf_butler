@@ -117,6 +117,8 @@ class DimensionConstructionBuilder:
     commonSkyPixName : `str`
         Name of the "common" skypix dimension that is used to relate all other
         spatial `TopologicalRelationshipEndpoint` objects.
+    config : `DimensionConfig`
+        The dimension universe to be used.
     namespace : `str`, optional
         The namespace to assign to this universe.
     visitors : `~collections.abc.Iterable` [ `DimensionConstructionVisitor` ]

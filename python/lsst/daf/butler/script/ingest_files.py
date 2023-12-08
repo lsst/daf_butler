@@ -211,6 +211,18 @@ def extract_datasets_from_table(
 def parse_data_id_tuple(data_ids: tuple[str, ...], universe: DimensionUniverse) -> dict[str, Any]:
     """Convert any additional k=v strings in the dataId tuple to dict
     form.
+
+    Parameters
+    ----------
+    data_ids : `tuple` of `str`
+        Strings of keyword=value pairs defining a data ID.
+    universe : `DimensionUniverse`
+        The relevant universe.
+
+    Returns
+    -------
+    data_id : `dict`
+        Data ID transformed from string into dictionary.
     """
     data_id: dict[str, Any] = {}
     for id_str in data_ids:

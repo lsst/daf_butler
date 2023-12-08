@@ -42,6 +42,16 @@ from lsst.daf.butler import DataCoordinate, DimensionGraph, DimensionGroup, Dime
 class ObservationDimensionPacker(DimensionPacker):
     """A `DimensionPacker` for visit+detector or exposure+detector, given an
     instrument.
+
+    Parameters
+    ----------
+    fixed : `DataCoordinate`
+        Expanded data ID for the dimensions whose values must remain fixed
+        (to these values) in all calls to `pack`, and are used in the results
+        of calls to `unpack`.  Subclasses may ignore particular dimensions, and
+        are permitted to require that ``fixed.hasRecords()`` return `True`.
+    dimensions : `DimensionGroup` or `DimensionGraph`
+        The dimensions of data IDs packed by this instance.
     """
 
     def __init__(self, fixed: DataCoordinate, dimensions: DimensionGraph | DimensionGroup):

@@ -61,7 +61,7 @@ _LOG = logging.getLogger(__name__)
 
 
 @immutable
-class DimensionUniverse:
+class DimensionUniverse:  # numpydoc ignore=PR02
     """Self-consistent set of dimensions.
 
     A parent class that represents a complete, self-consistent set of
@@ -597,6 +597,17 @@ class DimensionUniverse:
     def get_elements_populated_by(self, dimension: Dimension) -> NamedValueAbstractSet[DimensionElement]:
         """Return the set of `DimensionElement` objects whose
         `~DimensionElement.populated_by` attribute is the given dimension.
+
+        Parameters
+        ----------
+        dimension : `Dimension`
+            The dimension of interest.
+
+        Returns
+        -------
+        populated_by : `NamedValueAbstractSet` [ `DimensionElement` ]
+            The set of elements who say they are populated by the given
+            dimension.
         """
         return self._populates[dimension.name]
 

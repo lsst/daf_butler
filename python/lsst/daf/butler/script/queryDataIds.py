@@ -107,6 +107,27 @@ def queryDataIds(
 ) -> tuple[AstropyTable | None, str | None]:
     """Query for data IDs.
 
+    Parameters
+    ----------
+    repo : `str`
+        Butler location.
+    dimensions : `~collections.abc.Iterable` of `str`
+        Dimensions to use for query.
+    datasets : `tuple` of `str`
+        Dataset types to restrict query by.
+    where : `str`
+        Query string.
+    collections : `~collections.abc.Iterable` of `str`
+        Collections to search.
+    order_by : `tuple` of `str`
+        Columns to order results by.
+    limit : `int`
+        Maximum number of results.
+    offset : `int`
+        Offset into the results.
+
+    Notes
+    -----
     Docstring for supported parameters is the same as
     `~lsst.daf.butler.Registry.queryDataIds`.
     """
