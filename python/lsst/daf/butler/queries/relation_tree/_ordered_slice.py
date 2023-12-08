@@ -44,7 +44,8 @@ from ._column_reference import (
 )
 
 if TYPE_CHECKING:
-    from ._relation import OrderedSliceOperand, Relation, RootRelation
+    from ._predicate import Predicate
+    from ._relation import OrderedSliceOperand, Relation
     from .joins import JoinArg
 
 
@@ -58,7 +59,7 @@ class OrderedSlice(RelationBase):
     operand: OrderedSliceOperand
     """The upstream relation to operate on."""
 
-    order_by: tuple[OrderExpression, ...] = ()
+    order_terms: tuple[OrderExpression, ...] = ()
     """Expressions to sort the rows by."""
 
     offset: int = 0
@@ -84,7 +85,7 @@ class OrderedSlice(RelationBase):
         other: Relation,
         spatial_joins: JoinArg = frozenset(),
         temporal_joins: JoinArg = frozenset(),
-    ) -> RootRelation:
+    ) -> OrderedSlice:
         if self.offset or self.limit is not None:
             raise InvalidRelationError(
                 "Cannot join relations after an offset/limit slice has been added. "
@@ -98,16 +99,46 @@ class OrderedSlice(RelationBase):
                 "since those can only be performed on the final query."
             )
         # If this is a pure sort (and the only sort), we can do it downstream
-        # of the new join, provided that join is actually allowed.
+        # of the new join, provided that join is actually allowed. We use
+        # OrderedSlice(...) rather than OrderedSlice.model_construct(...)
+        # to check that the new operand is not itself an OrderedSlice.
         return OrderedSlice(
             operand=self.operand.join(other, spatial_joins=spatial_joins, temporal_joins=temporal_joins),
-            order_by=self.order_by,
+            order_terms=self.order_terms,
         )
 
     def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> OrderedSlice:
-        return OrderedSlice(
+        return OrderedSlice.model_construct(
             operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
-            order_by=self.order_by,
+            order_terms=self.order_terms,
+            offset=self.offset,
+            limit=self.limit,
+        )
+
+    def where(self, *terms: Predicate) -> OrderedSlice:
+        return OrderedSlice.model_construct(
+            operand=self.operand.where(*terms),
+            order_terms=self.order_terms,
+            offset=self.offset,
+            limit=self.limit,
+        )
+
+    def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> OrderedSlice:
+        if limit is None:
+            limit = self.limit
+        elif self.limit is not None:
+            limit = min(self.limit, limit)
+        return OrderedSlice(
+            operand=self.operand,
+            order_terms=terms + self.order_terms,
+            limit=limit,
+            offset=offset + self.offset,
+        )
+
+    def find_first(self, dataset_type: str, dimensions: DimensionGroup) -> OrderedSlice:
+        return OrderedSlice(
+            operand=self.operand.find_first(dataset_type, dimensions),
+            order_terms=self.order_terms,
             offset=self.offset,
             limit=self.limit,
         )
@@ -115,17 +146,29 @@ class OrderedSlice(RelationBase):
     @pydantic.model_validator(mode="after")
     def _validate_required_columns(self) -> OrderedSlice:
         required_columns: set[ColumnReference] = set()
-        for term in self.order_by:
+        for term in self.order_terms:
             required_columns.update(term.gather_required_columns())
         for column in required_columns:
             match column:
                 case DimensionKeyReference(dimension=dimension):
                     if dimension not in self.dimensions:
-                        raise ValueError(f"Order-by column {column} is not in dimensions {self.dimensions}.")
+                        raise InvalidRelationError(
+                            f"Order-by column {column} is not in dimensions {self.dimensions}."
+                        )
                 case DimensionFieldReference(element=element):
                     if element not in self.dimensions.elements:
-                        raise ValueError(f"Order-by column {column} is not in dimensions {self.dimensions}.")
+                        raise InvalidRelationError(
+                            f"Order-by column {column} is not in dimensions {self.dimensions}."
+                        )
                 case DatasetFieldReference(dataset_type=dataset_type):
                     if dataset_type not in self.available_dataset_types:
-                        raise ValueError(f"Dataset search for order-by column {column} is not present.")
+                        raise InvalidRelationError(
+                            f"Dataset search for order-by column {column} is not present."
+                        )
+        return self
+
+    @pydantic.model_validator(mode="after")
+    def _validate_nontrivial(self) -> OrderedSlice:
+        if not self.order_terms and self.limit is None and not self.offset:
+            raise InvalidRelationError("Operation does not do anything.")
         return self

@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = ("FindFirst",)
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NoReturn
 
 import pydantic
 
@@ -38,7 +38,10 @@ from ...dimensions import DimensionGroup
 from ._base import InvalidRelationError, RelationBase, StringOrWildcard
 
 if TYPE_CHECKING:
-    from ._relation import Relation, RootRelation
+    from ._column_expression import OrderExpression
+    from ._ordered_slice import OrderedSlice
+    from ._predicate import Predicate
+    from ._relation import Relation
     from ._select import Select
     from .joins import JoinArg
 
@@ -71,28 +74,6 @@ class FindFirst(RelationBase):
     frequently the dimensions of the dataset type.
     """
 
-    def join(
-        self,
-        other: Relation,
-        spatial_joins: JoinArg = frozenset(),
-        temporal_joins: JoinArg = frozenset(),
-    ) -> RootRelation:
-        # If only Query objects (not *QueryResult) objects can be
-        # explicitly joined, we may prohibit this logic branch at a
-        # higher level, because only DatasetQueryResult objects should
-        # have a tree with a FindFirst in it.
-        raise InvalidRelationError(
-            "Cannot join relations after a dataset find-first operation has been added. "
-            "To avoid this error perform all joins before requesting dataset results."
-        )
-
-    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> FindFirst:
-        return FindFirst(
-            operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
-            dataset_type=self.dataset_type,
-            dimensions=self.dimensions,
-        )
-
     @cached_property
     def available_dataset_types(self) -> frozenset[StringOrWildcard]:
         """The dataset types whose ID columns (at least) are available from
@@ -100,10 +81,52 @@ class FindFirst(RelationBase):
         """
         return frozenset({self.dataset_type})
 
+    def join(
+        self,
+        other: Relation,
+        spatial_joins: JoinArg = frozenset(),
+        temporal_joins: JoinArg = frozenset(),
+    ) -> NoReturn:
+        raise InvalidRelationError(
+            "Cannot join relations after a dataset find-first operation has been added. "
+            "To avoid this error perform all joins before requesting dataset results."
+        )
+
+    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> FindFirst:
+        return FindFirst.model_construct(
+            operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
+            dataset_type=self.dataset_type,
+            dimensions=self.dimensions,
+        )
+
+    def where(self, *terms: Predicate) -> FindFirst:
+        return FindFirst.model_construct(
+            operand=self.operand.where(*terms),
+            dataset_type=self.dataset_type,
+            dimensions=self.dimensions,
+        )
+
+    def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> OrderedSlice:
+        return OrderedSlice(operand=self, order_terms=terms, limit=limit, offset=offset)
+
+    def find_first(self, dataset_type: str, dimensions: DimensionGroup) -> FindFirst:
+        if not (dimensions <= self.dimensions):
+            raise InvalidRelationError(
+                f"New find-first dimensions {dimensions} are not a subset of the current "
+                f"dimensions {self.dimensions}."
+            )
+        if dataset_type != self.dataset_type:
+            raise InvalidRelationError(
+                f"Relation is already a find-first search for dataset type {self.dataset_type}."
+            )
+        return FindFirst.model_construct(
+            operand=self.operand, dataset_type=self.dataset_type, dimensions=dimensions
+        )
+
     @pydantic.model_validator(mode="after")
     def _validate_dimensions(self) -> FindFirst:
         if not self.dimensions <= self.operand.dimensions:
-            raise ValueError(
+            raise InvalidRelationError(
                 f"FindFirst dimensions {self.dimensions} are not a subset of its "
                 f"operand's dimensions {self.operand.dimensions}."
             )
@@ -112,5 +135,7 @@ class FindFirst(RelationBase):
     @pydantic.model_validator(mode="after")
     def _validate_upstream_datasets(self) -> FindFirst:
         if self.dataset_type not in self.operand.available_dataset_types:
-            raise ValueError(f"FindFirst target {self.dataset_type!r} is not available in {self.operand}.")
+            raise InvalidRelationError(
+                f"FindFirst target {self.dataset_type!r} is not available in {self.operand}."
+            )
         return self

@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Literal
 import pydantic
 
 from ...dimensions import DimensionGroup
-from ._base import RelationBase, StringOrWildcard
+from ._base import InvalidRelationError, RelationBase, StringOrWildcard
 
 if TYPE_CHECKING:
     from ._relation import RootRelation
@@ -72,7 +72,7 @@ class Materialization(RelationBase):
     @pydantic.model_validator(mode="after")
     def _validate_upstream_datasets(self) -> Materialization:
         if self.dataset_types.issubset(self.operand.available_dataset_types):
-            raise ValueError(
+            raise InvalidRelationError(
                 f"Materialization dataset types {self.dataset_types - self.operand.available_dataset_types} "
                 f"are not available in {self.operand}."
             )

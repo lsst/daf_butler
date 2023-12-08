@@ -36,13 +36,16 @@ from typing import TYPE_CHECKING, Literal
 import pydantic
 
 from ...dimensions import DimensionGroup, DimensionUniverse
-from ._base import RelationBase, StringOrWildcard
+from ._base import InvalidRelationError, RelationBase, StringOrWildcard
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import Predicate
 from .joins import JoinArg, JoinTuple, standardize_join_arg
 
 if TYPE_CHECKING:
-    from ._relation import JoinOperand, Relation, RootRelation
+    from ._column_expression import OrderExpression
+    from ._find_first import FindFirst
+    from ._ordered_slice import OrderedSlice
+    from ._relation import JoinOperand, Relation
 
 
 def make_unit_relation(universe: DimensionUniverse) -> Select:
@@ -105,15 +108,29 @@ class Select(RelationBase):
     where_terms: tuple[Predicate, ...] = ()
     """Boolean expression trees whose logical AND defines a row filter."""
 
+    @cached_property
+    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
+        """The dataset types whose ID columns (at least) are available from
+        this relation.
+        """
+        result: set[StringOrWildcard] = set()
+        for operand in self.join_operands:
+            result.update(operand.available_dataset_types)
+        return frozenset(result)
+
     def join(
         self,
         other: Relation,
         spatial_joins: JoinArg = frozenset(),
         temporal_joins: JoinArg = frozenset(),
-    ) -> RootRelation:
+    ) -> Select | OrderedSlice:
         from ._find_first import FindFirst
         from ._ordered_slice import OrderedSlice
 
+        # We intentionally call Select(...) below rather than
+        # Select.model_construct(...) here to get validation; if that gets
+        # expensive, we could look into running just the validations we can't
+        # guarantee via typing and invariants of arguments.
         match other:
             case Select():
                 return Select(
@@ -144,6 +161,10 @@ class Select(RelationBase):
         raise AssertionError("Invalid relation type for join.")
 
     def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> Select:
+        # We intentionally call Select(...) below rather than
+        # Select.model_construct(...) here to get validation of the new joins;
+        # if that gets expensive we should be able to get away with running
+        # just those validations on the result and using model_construct.
         return Select(
             dimensions=self.dimensions,
             join_operands=self.join_operands,
@@ -152,21 +173,38 @@ class Select(RelationBase):
             where_terms=self.where_terms,
         )
 
-    @cached_property
-    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
-        """The dataset types whose ID columns (at least) are available from
-        this relation.
-        """
-        result: set[StringOrWildcard] = set()
-        for operand in self.join_operands:
-            result.update(operand.available_dataset_types)
-        return frozenset(result)
+    def where(self, *terms: Predicate) -> Select:
+        full_dimension_names: set[str] = set(self.dimensions.names)
+        for where_term in terms:
+            for column in where_term.gather_required_columns():
+                match column:
+                    case DimensionKeyReference(dimension=dimension):
+                        full_dimension_names.add(dimension)
+                    case DimensionFieldReference(element=element):
+                        full_dimension_names.update(self.dimensions.universe[element].minimal_group.names)
+                    case DatasetFieldReference(dataset_type=dataset_type):
+                        if dataset_type not in self.available_dataset_types:
+                            raise InvalidRelationError(f"Dataset search for column {column} is not present.")
+        full_dimensions = self.dimensions.universe.conform(full_dimension_names)
+        return Select(
+            dimensions=full_dimensions,
+            join_operands=self.join_operands,
+            spatial_joins=self.spatial_joins,
+            temporal_joins=self.temporal_joins,
+            where_terms=self.where_terms + terms,
+        )
+
+    def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> OrderedSlice:
+        return OrderedSlice(operand=self, order_terms=terms, limit=limit, offset=offset)
+
+    def find_first(self, dataset_type: str, dimensions: DimensionGroup) -> FindFirst:
+        return FindFirst(operand=self, dataset_type=dataset_type, dimensions=dimensions)
 
     @pydantic.model_validator(mode="after")
     def _validate_join_operands(self) -> Select:
         for operand in self.join_operands:
             if not operand.dimensions.issubset(self.dimensions):
-                raise ValueError(
+                raise InvalidRelationError(
                     f"Dimensions {operand.dimensions} of join operand {operand} are not a "
                     f"subset of the join's dimensions {self.dimensions}."
                 )
@@ -176,15 +214,19 @@ class Select(RelationBase):
     def _validate_spatial_joins(self) -> Select:
         def check_operand(operand: str) -> str:
             if operand not in self.dimensions.elements:
-                raise ValueError(f"Spatial join operand {operand!r} is not in this join's dimensions.")
+                raise InvalidRelationError(
+                    f"Spatial join operand {operand!r} is not in this join's dimensions."
+                )
             family = self.dimensions.universe[operand].spatial
             if family is None:
-                raise ValueError(f"Spatial join operand {operand!r} is not associated with a region.")
+                raise InvalidRelationError(
+                    f"Spatial join operand {operand!r} is not associated with a region."
+                )
             return family.name
 
         for a, b in self.spatial_joins:
             if check_operand(a) == check_operand(b):
-                raise ValueError(f"Spatial join between {a!r} and {b!r} is unnecessary.")
+                raise InvalidRelationError(f"Spatial join between {a!r} and {b!r} is unnecessary.")
         return self
 
     @pydantic.model_validator(mode="after")
@@ -193,18 +235,22 @@ class Select(RelationBase):
             if operand in self.dimensions.elements:
                 family = self.dimensions.universe[operand].temporal
                 if family is None:
-                    raise ValueError(f"Temporal join operand {operand!r} is not associated with a region.")
+                    raise InvalidRelationError(
+                        f"Temporal join operand {operand!r} is not associated with a region."
+                    )
                 return family.name
             elif operand in self.available_dataset_types:
                 return "validity"
             else:
-                raise ValueError(
+                raise InvalidRelationError(
                     f"Temporal join operand {operand!r} is not in this join's dimensions or dataset types."
                 )
 
         for a, b in self.spatial_joins:
             if check_operand(a) == check_operand(b):
-                raise ValueError(f"Temporal join between {a!r} and {b!r} is unnecessary or impossible.")
+                raise InvalidRelationError(
+                    f"Temporal join between {a!r} and {b!r} is unnecessary or impossible."
+                )
         return self
 
     @pydantic.model_validator(mode="after")
@@ -213,25 +259,31 @@ class Select(RelationBase):
             if not a.available_dataset_types.isdisjoint(b.available_dataset_types):
                 common = a.available_dataset_types & b.available_dataset_types
                 if None in common:
-                    raise ValueError(f"Upstream relations {a} and {b} both have a dataset wildcard.")
+                    raise InvalidRelationError(
+                        f"Upstream relations {a} and {b} both have a dataset wildcard."
+                    )
                 else:
-                    raise ValueError(f"Upstream relations {a} and {b} both have dataset types {common}.")
+                    raise InvalidRelationError(
+                        f"Upstream relations {a} and {b} both have dataset types {common}."
+                    )
         return self
 
     @pydantic.model_validator(mode="after")
     def _validate_required_columns(self) -> Select:
-        required_columns = set()
         for where_term in self.where_terms:
-            required_columns.update(where_term.gather_required_columns())
-        for column in required_columns:
-            match column:
-                case DimensionKeyReference(dimension=dimension):
-                    if dimension not in self.dimensions:
-                        raise ValueError(f"Column {column} is not in dimensions {self.dimensions}.")
-                case DimensionFieldReference(element=element):
-                    if element not in self.dimensions.elements:
-                        raise ValueError(f"Column {column} is not in dimensions {self.dimensions}.")
-                case DatasetFieldReference(dataset_type=dataset_type):
-                    if dataset_type not in self.available_dataset_types:
-                        raise ValueError(f"Dataset search for column {column} is not present.")
+            for column in where_term.gather_required_columns():
+                match column:
+                    case DimensionKeyReference(dimension=dimension):
+                        if dimension not in self.dimensions:
+                            raise InvalidRelationError(
+                                f"Column {column} is not in dimensions {self.dimensions}."
+                            )
+                    case DimensionFieldReference(element=element):
+                        if element not in self.dimensions.elements:
+                            raise InvalidRelationError(
+                                f"Column {column} is not in dimensions {self.dimensions}."
+                            )
+                    case DatasetFieldReference(dataset_type=dataset_type):
+                        if dataset_type not in self.available_dataset_types:
+                            raise InvalidRelationError(f"Dataset search for column {column} is not present.")
         return self
