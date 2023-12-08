@@ -52,7 +52,14 @@ from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Regist
 from ..registry.wildcards import CollectionWildcard
 from ._authentication import get_authentication_headers, get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
-from .server_models import FindDatasetModel, GetFileRequestModel, GetFileResponseModel
+from .server_models import (
+    CollectionList,
+    DatasetTypeName,
+    FindDatasetModel,
+    GetFileByDataIdRequestModel,
+    GetFileRequestModel,
+    GetFileResponseModel,
+)
 
 if TYPE_CHECKING:
     from .._dataset_existence import DatasetExistence
@@ -216,14 +223,22 @@ class RemoteButler(Butler):
         **kwargs: Any,
     ) -> Any:
         # Docstring inherited.
-        if not isinstance(datasetRefOrType, DatasetRef):
-            raise NotImplementedError("RemoteButler currently only supports get() of a DatasetRef")
+        if isinstance(datasetRefOrType, DatasetRef):
+            dataset_id = datasetRefOrType.id
+            uuid_request = GetFileRequestModel(dataset_id=dataset_id)
+            response = self._post("get_file", uuid_request)
+            if response.status_code == 404:
+                raise LookupError(f"Dataset not found with ID {dataset_id}")
+        else:
+            request = GetFileByDataIdRequestModel(
+                dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
+                collections=self._normalize_collections(collections),
+                data_id=self._simplify_dataId(dataId),
+            )
+            response = self._post("get_file_by_data_id", request)
+            if response.status_code == 404:
+                raise LookupError(f"Dataset not found with DataId {dataId}")
 
-        dataset_id = datasetRefOrType.id
-        request = GetFileRequestModel(dataset_id=dataset_id)
-        response = self._post("get_file", request)
-        if response.status_code == 404:
-            raise LookupError(f"Dataset not found with ID ${dataset_id}")
         response.raise_for_status()
         model = self._parse_model(response, GetFileResponseModel)
 
@@ -310,31 +325,18 @@ class RemoteButler(Butler):
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
-        if collections is None:
-            if not self.collections:
-                raise NoDefaultCollectionError(
-                    "No collections provided to find_dataset, and no defaults from butler construction."
-                )
-            collections = self.collections
-        # Temporary hack. Assume strings for collections. In future
-        # want to construct CollectionWildcard and filter it through collection
-        # cache to generate list of collection names.
-        wildcards = CollectionWildcard.from_expression(collections)
-
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
         if timespan:
             raise ValueError("Timespan can not yet be used in butler client/server.")
 
-        if isinstance(dataset_type, DatasetType):
-            dataset_type = dataset_type.name
-
+        dataset_type = self._normalize_dataset_type_name(dataset_type)
         if isinstance(storage_class, StorageClass):
             storage_class = storage_class.name
 
         query = FindDatasetModel(
             data_id=self._simplify_dataId(data_id, **kwargs),
-            collections=wildcards.strings,
+            collections=self._normalize_collections(collections),
             storage_class=storage_class,
             dimension_records=dimension_records,
             datastore_records=datastore_records,
@@ -551,3 +553,22 @@ class RemoteButler(Butler):
 
     def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
         return model.model_validate_json(response.content)
+
+    def _normalize_collections(self, collections: str | Sequence[str] | None) -> CollectionList:
+        if collections is None:
+            if not self.collections:
+                raise NoDefaultCollectionError(
+                    "No collections provided, and no defaults from butler construction."
+                )
+            collections = self.collections
+        # Temporary hack. Assume strings for collections. In future
+        # want to construct CollectionWildcard and filter it through collection
+        # cache to generate list of collection names.
+        wildcards = CollectionWildcard.from_expression(collections)
+        return CollectionList(list(wildcards.strings))
+
+    def _normalize_dataset_type_name(self, datasetTypeOrName: DatasetType | str) -> DatasetTypeName:
+        if isinstance(datasetTypeOrName, DatasetType):
+            return DatasetTypeName(datasetTypeOrName.name)
+        else:
+            return DatasetTypeName(datasetTypeOrName)

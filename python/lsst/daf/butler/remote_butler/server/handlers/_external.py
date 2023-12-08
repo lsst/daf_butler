@@ -31,9 +31,10 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import SerializedDatasetRef, SerializedDatasetType
+from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, SerializedDatasetType
 from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetModel,
+    GetFileByDataIdRequestModel,
     GetFileRequestModel,
     GetFileResponseModel,
 )
@@ -168,5 +169,27 @@ def get_file(
     ref = butler.get_dataset(request.dataset_id, datastore_records=True)
     if ref is None:
         raise NotFoundException(f"Dataset ID {request.dataset_id} not found")
+    return _get_file_by_ref(butler, ref)
+
+
+@external_router.post("/v1/get_file_by_data_id")
+def get_file_by_data_id(
+    request: GetFileByDataIdRequestModel,
+    factory: Factory = Depends(factory_dependency),
+) -> GetFileResponseModel:
+    butler = factory.create_butler()
+    try:
+        ref = butler._findDatasetRef(
+            datasetRefOrType=request.dataset_type_name,
+            dataId=request.data_id.dataId,
+            collections=request.collections,
+            datastore_records=True,
+        )
+        return _get_file_by_ref(butler, ref)
+    except LookupError as e:
+        raise NotFoundException() from e
+
+
+def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     payload = butler._datastore.prepare_get_for_external_client(ref)
     return GetFileResponseModel.model_validate(payload)
