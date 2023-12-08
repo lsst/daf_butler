@@ -24,29 +24,3 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-"""Models used for client/server communication."""
-
-__all__ = ["FindDatasetModel", "GetFileResponseModel"]
-
-from lsst.daf.butler import DatasetId, SerializedDataCoordinate
-from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
-
-from .._compat import _BaseModelCompat
-
-
-class FindDatasetModel(_BaseModelCompat):
-    """Request model for find_dataset"""
-
-    data_id: SerializedDataCoordinate
-    collections: list[str]
-    storage_class: str | None
-    dimension_records: bool = False
-    datastore_records: bool = False
-
-
-class GetFileRequestModel(_BaseModelCompat):
-    dataset_id: DatasetId
-
-
-GetFileResponseModel = FileDatastoreGetPayload

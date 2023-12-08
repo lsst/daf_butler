@@ -43,7 +43,7 @@ from unittest.mock import patch
 
 from lsst.daf.butler import Butler, DataCoordinate, DatasetRef, MissingDatasetTypeError, StorageClassFactory
 from lsst.daf.butler.tests import DatastoreMock
-from lsst.daf.butler.tests.utils import MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, makeTestTempDir, removeTestTempDir
 from lsst.resources.http import HttpResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -76,9 +76,6 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Override the server's Butler initialization to point at our test repo
         server_butler = Butler.from_config(cls.root, writeable=True)
 
-        # Not yet testing butler.get()
-        DatastoreMock.apply(server_butler)
-
         def create_factory_dependency():
             return Factory(butler=server_butler)
 
@@ -89,7 +86,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         cls.client.base_url = "http://test.example/api/butler/"
         cls.butler = _make_remote_butler(cls.client)
 
-        # Populate the test server.
+        # Populate the test server.  The DatastoreMock is required because the
+        # datasets referenced in these imports do not point at real files
+        DatastoreMock.apply(server_butler)
         server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
         server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
 
@@ -196,6 +195,29 @@ class ButlerClientServerTestCase(unittest.TestCase):
             butler = Butler("https://test.example/api/butler")
         assert isinstance(butler, RemoteButler)
         assert str(butler._config.remote_butler.url) == "https://test.example/api/butler/"
+
+    def test_get(self):
+        # Test get() of a DatasetRef
+        ref = self.butler.find_dataset(
+            "test_metric_comp",
+            {"instrument": "DummyCamComp", "visit": 423},
+            collections="ingest/run",
+        )
+        metric = self.butler.get(ref)
+        self.assertIsInstance(metric, MetricsExample)
+        self.assertEqual(metric.summary, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+        # Test looking up a non-existent ref
+        invalid_ref = ref.replace(id=uuid.uuid4())
+        with self.assertRaises(LookupError):
+            self.butler.get(invalid_ref)
+
+        # Test storage class override
+        new_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
+        converted = self.butler.get(ref, storageClass=new_sc)
+        self.assertNotEqual(type(metric), type(converted))
+        self.assertIs(type(converted), new_sc.pytype)
+        self.assertEqual(metric, converted)
 
 
 if __name__ == "__main__":

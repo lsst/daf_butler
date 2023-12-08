@@ -1015,7 +1015,11 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         in lookup keys.
     """
 
-    def __init__(self, config: str | DatastoreCacheManagerConfig, universe: DimensionUniverse):
+    def __init__(
+        self,
+        config: str | DatastoreCacheManagerConfig | None = None,
+        universe: DimensionUniverse | None = None,
+    ):
         return
 
     def should_be_cached(self, entity: DatasetRef | DatasetType | StorageClass) -> bool:

@@ -27,13 +27,14 @@
 
 from __future__ import annotations
 
-__all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
+__all__ = ("StoredDatastoreItemInfo", "StoredFileInfo", "SerializedStoredFileInfo")
 
 import inspect
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
@@ -214,7 +215,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     """StorageClass associated with Dataset."""
 
     component: str | None
-    """Component associated with this file. Can be None if the file does
+    """Component associated with this file. Can be `None` if the file does
     not refer to a component of a composite."""
 
     checksum: str | None
@@ -259,6 +260,13 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             file_size=self.file_size,
             **kwargs,
         )
+
+    def to_simple(self) -> SerializedStoredFileInfo:
+        record = self.to_record()
+        # We allow None on the model but the record contains a "null string"
+        # instead
+        record["component"] = self.component
+        return SerializedStoredFileInfo.model_validate(record)
 
     def file_location(self, factory: LocationFactory) -> Location:
         """Return the location of artifact.
@@ -307,6 +315,10 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         )
         return info
 
+    @classmethod
+    def from_simple(cls: type[StoredFileInfo], model: SerializedStoredFileInfo) -> StoredFileInfo:
+        return cls.from_record(dict(model))
+
     def update(self, **kwargs: Any) -> StoredFileInfo:
         new_args = {}
         for k in self.__slots__:
@@ -320,3 +332,26 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     def __reduce__(self) -> str | tuple[Any, ...]:
         return (self.from_record, (self.to_record(),))
+
+
+class SerializedStoredFileInfo(_BaseModelCompat):
+    """Serialized representation of `StoredFileInfo` properties"""
+
+    formatter: str
+    """Fully-qualified name of Formatter."""
+
+    path: str
+    """Path to dataset within Datastore."""
+
+    storage_class: str
+    """Name of the StorageClass associated with Dataset."""
+
+    component: str | None
+    """Component associated with this file. Can be `None` if the file does
+    not refer to a component of a composite."""
+
+    checksum: str | None
+    """Checksum of the serialized dataset."""
+
+    file_size: int
+    """Size of the serialized dataset in bytes."""

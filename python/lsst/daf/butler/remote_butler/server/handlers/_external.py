@@ -32,9 +32,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from lsst.daf.butler import SerializedDatasetRef, SerializedDatasetType
-from lsst.daf.butler.remote_butler.server_models import FindDatasetModel
+from lsst.daf.butler.remote_butler.server_models import (
+    FindDatasetModel,
+    GetFileRequestModel,
+    GetFileResponseModel,
+)
 
 from .._dependencies import factory_dependency
+from .._exceptions import NotFoundException
 from .._factory import Factory
 
 external_router = APIRouter()
@@ -152,3 +157,16 @@ def find_dataset(
         **data_id,
     )
     return ref.to_simple() if ref else None
+
+
+@external_router.post("/v1/get_file")
+def get_file(
+    request: GetFileRequestModel,
+    factory: Factory = Depends(factory_dependency),
+) -> GetFileResponseModel:
+    butler = factory.create_butler()
+    ref = butler.get_dataset(request.dataset_id, datastore_records=True)
+    if ref is None:
+        raise NotFoundException(f"Dataset ID {request.dataset_id} not found")
+    payload = butler._datastore.prepare_get_for_external_client(ref)
+    return GetFileResponseModel.model_validate(payload)

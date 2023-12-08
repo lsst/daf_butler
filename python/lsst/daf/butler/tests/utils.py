@@ -223,11 +223,16 @@ class MetricTestRepo:
         The path to the config file, to pass to ``Butler.makeRepo``.
     """
 
+    METRICS_EXAMPLE_SUMMARY = {"AM1": 5.2, "AM2": 30.6}
+    """The summary data included in ``MetricsExample`` objects stored in the
+    test repo
+    """
+
     @staticmethod
     def _makeExampleMetrics() -> MetricsExample:
         """Make an object to put into the repository."""
         return MetricsExample(
-            {"AM1": 5.2, "AM2": 30.6},
+            MetricTestRepo.METRICS_EXAMPLE_SUMMARY,
             {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
             [563, 234, 456.7, 752, 8, 9, 27],
         )
