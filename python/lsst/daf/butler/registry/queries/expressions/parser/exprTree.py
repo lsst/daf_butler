@@ -85,7 +85,7 @@ class Node(ABC):
     node so that visiting code can navigate whole tree without
     knowing exact types of each node.
 
-    Attributes
+    Parameters
     ----------
     children : tuple of :py:class:`Node`
         Possibly empty list of sub-nodes.
@@ -111,14 +111,14 @@ class BinaryOp(Node):
     This class is used for representing all binary operators including
     arithmetic and boolean operations.
 
-    Attributes
+    Parameters
     ----------
-    lhs : Node
-        Left-hand side of the operation
-    rhs : Node
-        Right-hand side of the operation
-    op : str
-        Operator name, e.g. '+', 'OR'
+    lhs : `Node`
+        Left-hand side of the operation.
+    op : `str`
+        Operator name, e.g. '+', 'OR'.
+    rhs : `Node`
+        Right-hand side of the operation.
     """
 
     def __init__(self, lhs: Node, op: str, rhs: Node):
@@ -143,11 +143,11 @@ class UnaryOp(Node):
     This class is used for representing all unary operators including
     arithmetic and boolean operations.
 
-    Attributes
+    Parameters
     ----------
-    op : str
-        Operator name, e.g. '+', 'NOT'
-    operand : Node
+    op : `str`
+        Operator name, e.g. '+', 'NOT'.
+    operand : `Node`
         Operand.
     """
 
@@ -168,9 +168,9 @@ class UnaryOp(Node):
 class StringLiteral(Node):
     """Node representing string literal.
 
-    Attributes
+    Parameters
     ----------
-    value : str
+    value : `str`
         Literal value.
     """
 
@@ -189,7 +189,7 @@ class StringLiteral(Node):
 class TimeLiteral(Node):
     """Node representing time literal.
 
-    Attributes
+    Parameters
     ----------
     value : `astropy.time.Time`
         Literal string value.
@@ -213,7 +213,7 @@ class NumericLiteral(Node):
     We do not convert literals to numbers, their text representation
     is stored literally.
 
-    Attributes
+    Parameters
     ----------
     value : str
         Literal value.
@@ -237,7 +237,7 @@ class Identifier(Node):
     Value of the identifier is its name, it may contain zero or one dot
     character.
 
-    Attributes
+    Parameters
     ----------
     name : str
         Identifier name.
@@ -262,7 +262,7 @@ class RangeLiteral(Node):
     end of the range (with inclusive end) and optional stride value
     (default is 1).
 
-    Attributes
+    Parameters
     ----------
     start : `int`
         Start value of a range.
@@ -292,13 +292,13 @@ class RangeLiteral(Node):
 class IsIn(Node):
     """Node representing IN or NOT IN expression.
 
-    Attributes
+    Parameters
     ----------
-    lhs : Node
-        Left-hand side of the operation
-    values : list of Node
+    lhs : `Node`
+        Left-hand side of the operation.
+    values : `list` of `Node`
         List of values on the right side.
-    not_in : bool
+    not_in : `bool`
         If `True` then it is NOT IN expression, otherwise it is IN expression.
     """
 
@@ -325,9 +325,9 @@ class IsIn(Node):
 class Parens(Node):
     """Node representing parenthesized expression.
 
-    Attributes
+    Parameters
     ----------
-    expr : Node
+    expr : `Node`
         Expression inside parentheses.
     """
 
@@ -351,9 +351,9 @@ class TupleNode(Node):
     with two items, though this class can be used to represent different
     number of items in sequence.
 
-    Attributes
+    Parameters
     ----------
-    items : tuple of Node
+    items : `tuple` of `Node`
         Expressions inside parentheses.
     """
 
@@ -374,7 +374,7 @@ class TupleNode(Node):
 class FunctionCall(Node):
     """Node representing a function call.
 
-    Attributes
+    Parameters
     ----------
     function : `str`
         Name of the function.
@@ -400,7 +400,7 @@ class FunctionCall(Node):
 class PointNode(Node):
     """Node representing a point, (ra, dec) pair.
 
-    Attributes
+    Parameters
     ----------
     ra : `Node`
         Node representing ra value.
@@ -426,7 +426,7 @@ class PointNode(Node):
 def function_call(function: str, args: list[Node]) -> Node:
     """Return node representing function calls.
 
-    Attributes
+    Parameters
     ----------
     function : `str`
         Name of the function.

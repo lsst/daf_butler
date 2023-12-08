@@ -102,6 +102,7 @@ def _parseTimeString(time_str):
     Returns
     -------
     time : `astropy.time.Time`
+       The parsed time.
 
     Raises
     ------
@@ -184,6 +185,18 @@ class ParserYaccError(Exception):
 class ParseError(ParserYaccError):
     """Exception raised for parsing errors.
 
+    Parameters
+    ----------
+    expression : `str`
+        Full initial expression being parsed.
+    token : `str`
+        Current token at parsing position.
+    pos : `int`
+        Current parsing position, offset from beginning of expression in
+        characters.
+    lineno : `int`
+        Current line number in the expression.
+
     Attributes
     ----------
     expression : `str`
@@ -241,7 +254,7 @@ class ParserYacc:
         expression. If identifier does not exist in the mapping then
         `Identifier` is inserted into parse tree.
     **kwargs
-        optional keyword arguments that are passed to `yacc.yacc` constructor.
+        Optional keyword arguments that are passed to `yacc.yacc` constructor.
     """
 
     def __init__(self, idMap=None, **kwargs):
