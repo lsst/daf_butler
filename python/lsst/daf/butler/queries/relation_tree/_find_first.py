@@ -35,10 +35,12 @@ from typing import TYPE_CHECKING, Literal
 import pydantic
 
 from ...dimensions import DimensionGroup
-from ._base import RelationBase, StringOrWildcard
+from ._base import InvalidRelationError, RelationBase, StringOrWildcard
 
 if TYPE_CHECKING:
+    from ._relation import Relation, RootRelation
     from ._select import Select
+    from .joins import JoinArg
 
 
 class FindFirst(RelationBase):
@@ -68,6 +70,21 @@ class FindFirst(RelationBase):
     This must be a subset of the dimensions of its operand, and is most
     frequently the dimensions of the dataset type.
     """
+
+    def join(
+        self,
+        other: Relation,
+        spatial_joins: JoinArg = "auto",
+        temporal_joins: JoinArg = "auto",
+    ) -> RootRelation:
+        # If only Query objects (not *QueryResult) objects can be
+        # explicitly joined, we may prohibit this logic branch at a
+        # higher level, because only DatasetQueryResult objects should
+        # have a tree with a FindFirst in it.
+        raise InvalidRelationError(
+            "Cannot join relations after a dataset find-first operation has been added. "
+            "To avoid this error perform all joins before requesting dataset results."
+        )
 
     @cached_property
     def available_dataset_types(self) -> frozenset[StringOrWildcard]:

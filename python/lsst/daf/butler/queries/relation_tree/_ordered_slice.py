@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Literal
 import pydantic
 
 from ...dimensions import DimensionGroup
-from ._base import RelationBase, StringOrWildcard
+from ._base import InvalidRelationError, RelationBase, StringOrWildcard
 from ._column_expression import OrderExpression
 from ._column_reference import (
     ColumnReference,
@@ -44,7 +44,8 @@ from ._column_reference import (
 )
 
 if TYPE_CHECKING:
-    from ._relation import OrderedSliceOperand
+    from ._relation import OrderedSliceOperand, Relation, RootRelation
+    from .joins import JoinArg
 
 
 class OrderedSlice(RelationBase):
@@ -77,6 +78,31 @@ class OrderedSlice(RelationBase):
         this relation.
         """
         return self.operand.available_dataset_types
+
+    def join(
+        self,
+        other: Relation,
+        spatial_joins: JoinArg = "auto",
+        temporal_joins: JoinArg = "auto",
+    ) -> RootRelation:
+        if self.begin or self.end is not None:
+            raise InvalidRelationError(
+                "Cannot join relations after an offset/limit slice has been added. "
+                "To avoid this error perform all joins before adding an offset/limit slice, "
+                "since those can only be performed on the final query."
+            )
+        if other.relation_type == "ordered_slice":
+            raise InvalidRelationError(
+                "Cannot join two relations if both are either sorted or sliced. "
+                "To avoid this error perform all joins before adding any sorting or slicing, "
+                "since those can only be performed on the final query."
+            )
+        # If this is a pure sort (and the only sort), we can do it downstream
+        # of the new join, provided that join is actually allowed.
+        return OrderedSlice(
+            operand=self.operand.join(other, spatial_joins=spatial_joins, temporal_joins=temporal_joins),
+            order_by=self.order_by,
+        )
 
     @pydantic.model_validator(mode="after")
     def _validate_required_columns(self) -> OrderedSlice:

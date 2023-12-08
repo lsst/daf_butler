@@ -27,16 +27,17 @@
 
 from __future__ import annotations
 
-__all__ = ("JoinTuple", "JoinArg", "JoinHelper")
+__all__ = ("JoinTuple", "JoinArg", "compute_joins")
 
-from typing import Annotated, Any, ClassVar, Literal, TypeAlias, TypeVar, Union
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
-from ...dimensions import DimensionGroup
 from ._base import InvalidRelationError
 
-_T = TypeVar("_T")
+if TYPE_CHECKING:
+    from ._relation import Relation
 
 
 def _reorder_join_tuple(original: tuple[str, str]) -> tuple[str, str]:
@@ -50,51 +51,55 @@ def _reorder_join_tuple(original: tuple[str, str]) -> tuple[str, str]:
 JoinTuple: TypeAlias = Annotated[tuple[str, str], pydantic.AfterValidator(_reorder_join_tuple)]
 
 
-JoinArg: TypeAlias = Union[Literal["auto"], JoinTuple, frozenset[JoinTuple]]
+JoinArg: TypeAlias = Union[Literal["auto"], tuple[str, str], Iterable[tuple[str, str]]]
 
 
-class JoinHelper:
-    """Helper class for validating and automatic spatial and temporal joins."""
-
-    @classmethod
-    def standardize(
-        cls,
-        arg: JoinArg,
-        a_dimensions: DimensionGroup,
-        b_dimensions: DimensionGroup,
-        kind: Literal["spatial", "temporal"],
-    ) -> frozenset[JoinTuple]:
-        match arg:
-            case "auto":
-                a_families = getattr(a_dimensions, kind) - getattr(b_dimensions, kind)
-                b_families = getattr(b_dimensions, kind) - getattr(a_dimensions, kind)
-                if not a_families or not b_families:
-                    # If either side doesn't have a dimension participant,
-                    # don't create any automatic join.  This means
-                    # validity-range joins with dimensions on one side and a
-                    # CALIBRATION collection on the other are never automatic.
-                    return frozenset()
-                try:
-                    (a_family,) = a_families
-                except ValueError:
-                    raise InvalidRelationError(
-                        f"Cannot automate spatial join between {a_dimensions} and {b_dimensions}: "
-                        f"could use any of {{}}."
-                    )
-                try:
-                    (b_family,) = b_families
-                except ValueError:
-                    raise InvalidRelationError(
-                        f"Cannot automate spatial join between {a_dimensions} and {b_dimensions}: "
-                        f"could use any of {{}}.",
-                    )
-                a = a_family.choose(a_dimensions.elements, a_dimensions.universe).name
-                b = b_family.choose(b_dimensions.elements, b_dimensions.universe).name
-                return frozenset({_reorder_join_tuple((a, b))})
-            case (str(a), str(b)):
-                return frozenset({_reorder_join_tuple((a, b))})
-        if cls._set_arg_type_adapter is None:
-            cls._set_arg_type_adapter = pydantic.TypeAdapter(frozenset[JoinTuple])
-        return cls._set_arg_type_adapter.validate_python(arg)
-
-    _set_arg_type_adapter: ClassVar[pydantic.TypeAdapter[Any] | None] = None
+def compute_joins(
+    arg: JoinArg,
+    a_operand: Relation,
+    b_operand: Relation,
+    kind: Literal["spatial", "temporal"],
+) -> frozenset[JoinTuple]:
+    """Compute the spatial or temporal joins between a pair of relations."""
+    result: set[JoinTuple] = set()
+    result.update(getattr(a_operand, f"{kind}_joins", frozenset()))
+    result.update(getattr(b_operand, f"{kind}_joins", frozenset()))
+    match arg:
+        case "auto":
+            a_families = getattr(a_operand.dimensions, kind) - getattr(b_operand.dimensions, kind)
+            b_families = getattr(b_operand.dimensions, kind) - getattr(a_operand.dimensions, kind)
+            if not a_families or not b_families:
+                # If either side doesn't have a dimension participant,
+                # don't create any automatic join.  This means
+                # validity-range joins with dimensions on one side and a
+                # CALIBRATION collection on the other are never automatic.
+                return frozenset(result)
+            try:
+                (a_family,) = a_families
+            except ValueError:
+                raise InvalidRelationError(
+                    f"Cannot automate spatial join between {a_operand.dimensions} and "
+                    f"{b_operand.dimensions}: could use any of {{}}."
+                )
+            try:
+                (b_family,) = b_families
+            except ValueError:
+                raise InvalidRelationError(
+                    f"Cannot automate spatial join between {a_operand.dimensions} and "
+                    f"{b_operand.dimensions}: could use any of {{}}.",
+                )
+            a = a_family.choose(a_operand.dimensions.elements, a_operand.dimensions.universe).name
+            b = b_family.choose(b_operand.dimensions.elements, b_operand.dimensions.universe).name
+            result.add(_reorder_join_tuple((a, b)))
+        # MyPy is not smart enough to figure out how the following match arms
+        # narrow the type.
+        case (str(), str()) as pair:
+            result.add(_reorder_join_tuple(pair))  # type: ignore[arg-type]
+        case iterable:
+            for pair in iterable:  # type: ignore[assignment]
+                match pair:
+                    case (str(), str()):
+                        result.add(_reorder_join_tuple(pair))  # type: ignore[arg-type]
+                    case _:
+                        raise ValueError(f"Invalid argument {arg} for {kind} join.")
+    return frozenset(result)

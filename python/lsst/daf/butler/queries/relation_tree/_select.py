@@ -39,10 +39,10 @@ from ...dimensions import DimensionGroup, DimensionUniverse
 from ._base import RelationBase, StringOrWildcard
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import Predicate
-from .joins import JoinTuple
+from .joins import JoinArg, JoinTuple, compute_joins
 
 if TYPE_CHECKING:
-    from ._relation import JoinOperand
+    from ._relation import JoinOperand, Relation, RootRelation
 
 
 def make_unit_relation(universe: DimensionUniverse) -> Select:
@@ -54,6 +54,10 @@ def make_unit_relation(universe: DimensionUniverse) -> Select:
     relation yields that relation.
     """
     return Select.model_construct(dimensions=universe.empty.as_group())
+
+
+def make_dimension_relation(dimensions: DimensionGroup) -> Select:
+    return Select.model_construct(dimensions=dimensions)
 
 
 class Select(RelationBase):
@@ -97,8 +101,38 @@ class Select(RelationBase):
     whose timespans must overlap.
     """
 
-    where: tuple[Predicate, ...] = ()
+    where_terms: tuple[Predicate, ...] = ()
     """Boolean expression trees whose logical AND defines a row filter."""
+
+    def join(
+        self,
+        other: Relation,
+        spatial_joins: JoinArg = "auto",
+        temporal_joins: JoinArg = "auto",
+    ) -> RootRelation:
+        from ._find_first import FindFirst
+        from ._ordered_slice import OrderedSlice
+
+        match other:
+            case Select():
+                return Select(
+                    dimensions=self.dimensions | other.dimensions,
+                    join_operands=self.join_operands + other.join_operands,
+                    spatial_joins=compute_joins(spatial_joins, self, other, "spatial"),
+                    temporal_joins=compute_joins(temporal_joins, self, other, "temporal"),
+                    where_terms=self.where_terms + other.where_terms,
+                )
+            case FindFirst() | OrderedSlice():
+                return other.join(self, spatial_joins=spatial_joins, temporal_joins=temporal_joins)
+            case _:  # All JoinOperands
+                return Select(
+                    dimensions=self.dimensions | other.dimensions,
+                    join_operands=self.join_operands + (other,),
+                    spatial_joins=compute_joins(spatial_joins, self, other, "spatial"),
+                    temporal_joins=compute_joins(temporal_joins, self, other, "temporal"),
+                    where_terms=self.where_terms,
+                )
+        raise AssertionError("Invalid relation type for join.")
 
     @cached_property
     def available_dataset_types(self) -> frozenset[StringOrWildcard]:
@@ -169,7 +203,7 @@ class Select(RelationBase):
     @pydantic.model_validator(mode="after")
     def _validate_required_columns(self) -> Select:
         required_columns = set()
-        for where_term in self.where:
+        for where_term in self.where_terms:
             required_columns.update(where_term.gather_required_columns())
         for column in required_columns:
             match column:

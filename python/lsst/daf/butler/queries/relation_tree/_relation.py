@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("RootRelation", "DeferredValidationRootRelation", "JoinOperand", "OrderedSliceOperand")
+__all__ = ("RootRelation", "DeferredValidationRootRelation", "JoinOperand", "OrderedSliceOperand", "Relation")
 
 from typing import Annotated, TypeAlias, Union
 
@@ -58,6 +58,19 @@ OrderedSliceOperand: TypeAlias = Annotated[
 
 RootRelation: TypeAlias = Annotated[
     Union[Select, FindFirst, OrderedSlice],
+    pydantic.Field(discriminator="relation_type"),
+]
+
+
+Relation: TypeAlias = Annotated[
+    Union[
+        Select,
+        FindFirst,
+        OrderedSlice,
+        DataCoordinateUpload,
+        DatasetSearch,
+        Materialization,
+    ],
     pydantic.Field(discriminator="relation_type"),
 ]
 
