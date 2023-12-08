@@ -12,18 +12,18 @@ from lsst.daf.butler.datastores.file_datastore.get import (
     generate_datastore_get_information,
     get_dataset_as_python_object_from_get_info,
 )
+from pydantic import AnyHttpUrl
 
 
 class FileDatastoreGetPayloadFileInfo(_BaseModelCompat):
     """Information required to read a single file stored in `FileDatastore`"""
 
-    # TODO DM-41879: Allowing arbitrary URLs here is a severe security issue,
-    # since it allows the server to trick the client into fetching data from
-    # any file on its local filesystem or from remote storage using credentials
-    # laying around in the environment.  This should be restricted to only
-    # HTTP, but we don't yet have a means of mocking out HTTP gets in tests.
-    url: str
-    """An absolute URL that can be used to read the file"""
+    # This is intentionally restricted to HTTP for security reasons.  Allowing
+    # arbitrary URLs here would allow the server to trick the client into
+    # fetching data from any file on its local filesystem or from remote
+    # storage using credentials laying around in the environment.
+    url: AnyHttpUrl
+    """An HTTP URL that can be used to read the file"""
 
     datastoreRecords: SerializedStoredFileInfo
     """`FileDatastore` metadata records for this file"""
@@ -76,7 +76,7 @@ def get_dataset_as_python_object(
         The retrieved artifact, converted to a Python object
     """
     fileLocations: list[DatasetLocationInformation] = [
-        (Location(None, file_info.url), StoredFileInfo.from_simple(file_info.datastoreRecords))
+        (Location(None, str(file_info.url)), StoredFileInfo.from_simple(file_info.datastoreRecords))
         for file_info in payload.file_info
     ]
 

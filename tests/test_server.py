@@ -35,6 +35,8 @@ try:
     from lsst.daf.butler.remote_butler import RemoteButler
     from lsst.daf.butler.remote_butler.server import Factory, app
     from lsst.daf.butler.remote_butler.server._dependencies import factory_dependency
+    from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
+    from moto import mock_s3
 except ImportError:
     TestClient = None
     app = None
@@ -68,11 +70,28 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Set up a mock S3 environment using Moto.  Moto also monkeypatches the
+        # `requests` library so that any HTTP requests to presigned S3 URLs get
+        # redirected to the mocked S3.
+        # Note that all files are stored in memory.
+        cls.enterClassContext(clean_test_environment_for_s3())
+        cls.enterClassContext(mock_s3())
+        bucket_name = "anybucketname"  # matches s3Datastore.yaml
+        getS3Client().create_bucket(Bucket=bucket_name)
+
         cls.storageClassFactory = StorageClassFactory()
 
         # First create a butler and populate it.
         cls.root = makeTestTempDir(TESTDIR)
-        cls.repo = MetricTestRepo(root=cls.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+        cls.repo = MetricTestRepo(
+            root=cls.root,
+            configFile=os.path.join(TESTDIR, "config/basic/butler-s3store.yaml"),
+            forceConfigRoot=False,
+        )
+
+        # Add a file with corrupted data for testing error conditions
+        cls.dataset_with_corrupted_data = _create_corrupted_dataset(cls.repo)
+
         # Override the server's Butler initialization to point at our test repo
         server_butler = Butler.from_config(cls.root, writeable=True)
 
@@ -212,12 +231,24 @@ class ButlerClientServerTestCase(unittest.TestCase):
         with self.assertRaises(LookupError):
             self.butler.get(invalid_ref)
 
+        with self.assertRaises(RuntimeError):
+            self.butler.get(self.dataset_with_corrupted_data)
+
         # Test storage class override
         new_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
         converted = self.butler.get(ref, storageClass=new_sc)
         self.assertNotEqual(type(metric), type(converted))
         self.assertIs(type(converted), new_sc.pytype)
         self.assertEqual(metric, converted)
+
+
+def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
+    run = "corrupted-run"
+    ref = repo.addDataset({"instrument": "DummyCamComp", "visit": 423}, run=run)
+    uris = repo.butler.getURIs(ref)
+    oneOfTheComponents = list(uris.componentURIs.values())[0]
+    oneOfTheComponents.write("corrupted data")
+    return ref
 
 
 if __name__ == "__main__":

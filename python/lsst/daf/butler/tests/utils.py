@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 import astropy
 from astropy.table import Table as AstropyTable
 
-from .. import Butler, Config, StorageClassFactory, Timespan
+from .. import Butler, Config, DatasetRef, StorageClassFactory, Timespan
 from ..registry import CollectionType
 from ..tests import MetricsExample, addDatasetType
 
@@ -221,6 +221,10 @@ class MetricTestRepo:
         The location of the repository, to pass to ``Butler.makeRepo``.
     configFile : `str`
         The path to the config file, to pass to ``Butler.makeRepo``.
+    forceConfigRoot: `bool`, optional
+        If `False`, any values present in the supplied ``config`` that
+        would normally be reset are not overridden and will appear
+        directly in the output config. Passed to ``Butler.makeRepo``.
     """
 
     METRICS_EXAMPLE_SUMMARY = {"AM1": 5.2, "AM2": 30.6}
@@ -237,9 +241,9 @@ class MetricTestRepo:
             [563, 234, 456.7, 752, 8, 9, 27],
         )
 
-    def __init__(self, root: str, configFile: str) -> None:
+    def __init__(self, root: str, configFile: str, forceConfigRoot: bool = True) -> None:
         self.root = root
-        Butler.makeRepo(self.root, config=Config(configFile))
+        Butler.makeRepo(self.root, config=Config(configFile), forceConfigRoot=forceConfigRoot)
         butlerConfigFile = os.path.join(self.root, "butler.yaml")
         self.storageClassFactory = StorageClassFactory()
         self.storageClassFactory.addFromConfig(butlerConfigFile)
@@ -291,7 +295,7 @@ class MetricTestRepo:
 
     def addDataset(
         self, dataId: dict[str, Any], run: str | None = None, datasetType: DatasetType | None = None
-    ) -> None:
+    ) -> DatasetRef:
         """Create a new example metric and add it to the named run with the
         given dataId.
 
@@ -309,8 +313,16 @@ class MetricTestRepo:
         datasetType : ``DatasetType``, optional
             The dataset type of the added dataset. If `None`, will use the
             default dataset type.
+
+        Returns
+        -------
+        datasetRef : `DatasetRef`
+            A reference to the added dataset.
+
         """
         if run:
             self.butler.registry.registerCollection(run, type=CollectionType.RUN)
         metric = self._makeExampleMetrics()
-        self.butler.put(metric, self.datasetType if datasetType is None else datasetType, dataId, run=run)
+        return self.butler.put(
+            metric, self.datasetType if datasetType is None else datasetType, dataId, run=run
+        )

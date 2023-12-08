@@ -1998,10 +1998,23 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload:
         # Docstring inherited
 
+        # 1 hour.  Chosen somewhat arbitrarily -- this is long enough that the
+        # client should have time to download a large file with retries if
+        # needed, but short enough that it will become obvious quickly that
+        # these URLs expire.
+        # From a strictly technical standpoint there is no reason this
+        # shouldn't be a day or more, but there seems to be a political issue
+        # where people think there is a risk of end users posting presigned
+        # URLs for people without access rights to download.
+        url_expiration_time_seconds = 1 * 60 * 60
+
         def to_file_info_payload(info: DatasetLocationInformation) -> FileDatastoreGetPayloadFileInfo:
             location, file_info = info
             return FileDatastoreGetPayloadFileInfo(
-                url=location.uri.geturl(), datastoreRecords=file_info.to_simple()
+                url=location.uri.generate_presigned_get_url(
+                    expiration_time_seconds=url_expiration_time_seconds
+                ),
+                datastoreRecords=file_info.to_simple(),
             )
 
         return FileDatastoreGetPayload(
