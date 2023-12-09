@@ -43,12 +43,14 @@ import pydantic
 
 if TYPE_CHECKING:
     from ._column_reference import ColumnReference
+    from ._predicate import Predicate
 
 
 StringOrWildcard = Annotated[
     str | EllipsisType,
     pydantic.PlainSerializer(lambda x: "..." if x is ... else x, return_type=str),
     pydantic.BeforeValidator(lambda x: ... if x == "..." else x),
+    pydantic.GetPydanticSchema(lambda _s, h: h(str)),
 ]
 
 
@@ -79,3 +81,9 @@ class ColumnExpressionBase(RelationTreeBase):
 class PredicateBase(RelationTreeBase):
     def gather_required_columns(self) -> set[ColumnReference]:
         return set()
+
+    def _flatten_and(self) -> tuple[Predicate, ...]:
+        return (self,)  # type: ignore[return-value]
+
+    def _flatten_or(self) -> tuple[Predicate, ...]:
+        return (self,)  # type: ignore[return-value]

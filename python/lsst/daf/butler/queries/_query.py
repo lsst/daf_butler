@@ -36,6 +36,7 @@ from .._query import Query
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from .data_coordinate_results import DataCoordinateResultSpec, RelationDataCoordinateQueryResults
 from .driver import QueryDriver
+from .expression_factory import ExpressionFactory, ExpressionProxy
 from .relation_tree import (
     DataCoordinateUpload,
     DatasetSearch,
@@ -77,6 +78,58 @@ class RelationQuery(Query):
         self._driver = driver
         self._tree = tree
         self._include_dimension_records = include_dimension_records
+
+    @property
+    def expression_factory(self) -> ExpressionFactory:
+        """A factory for column expressions using overloaded operators.
+
+        Notes
+        -----
+        Typically this attribute will be assigned to a single-character local
+        variable, and then its (dynamic) attributes can be used to obtain
+        references to columns that can be included in a query::
+
+            with butler._query() as query:
+                x = query.expression_factory
+                query = query.where(
+                    x.instrument == "LSSTCam",
+                    x.visit.day_obs > 20240701,
+                    x.any(x.band == 'u', x.band == 'y'),
+                )
+
+        As shown above, the returned object also has an `any` method to create
+        combine expressions with logical OR (as well as `not_` and `all`,
+        though the latter is rarely necessary since `where` already combines
+        its arguments with AND).
+
+        Proxies for fields associated with dataset types (``dataset_id``,
+        ``ingest_date``, ``run``, ``collection``, as well as ``timespan`` for
+        `~CollectionType.CALIBRATION` collection searches) can be obtained with
+        dict-like access instead::
+
+            with butler._query() as query:
+                query = query.order_by(x["raw"].ingest_date)
+
+        Expression proxy objects that correspond to scalar columns overload the
+        standard comparison operators (``==``, ``!=``, ``<``, ``>``, ``<=``,
+        ``>=``) and provide `~ScalarExpressionProxy.in_range`,
+        `~ScalarExpressionProxy.in_iterable`, and
+        `~ScalarExpressionProxy.in_query` methods for membership tests.  For
+        `order_by` contexts, they also have a `~ScalarExpressionProxy.desc`
+        property to indicate that the sort order for that expression should be
+        reversed.
+
+        Proxy objects for region and timespan fields have an `overlaps` method,
+        and timespans also have `~TimespanProxy.begin` and `~TimespanProxy.end`
+        properties to access scalar expression proxies for the bounds.
+
+        All proxy objects also have a `~ExpressionProxy.is_null` property.
+
+        Literal values can be created by calling `ExpressionFactory.literal`,
+        but can almost always be created implicitly via overloaded operators
+        instead.
+        """
+        return ExpressionFactory(self._driver.universe)
 
     def data_ids(
         self,
@@ -208,7 +261,7 @@ class RelationQuery(Query):
         """
         return self._driver.explain_no_results(self._tree, execute=execute)
 
-    def order_by(self, *args: str | OrderExpression) -> Query:
+    def order_by(self, *args: str | OrderExpression | ExpressionProxy) -> Query:
         """Sort any results returned by this query.
 
         Parameters
@@ -341,7 +394,10 @@ class RelationQuery(Query):
         )
 
     def where(
-        self, *args: str | Predicate | DataCoordinate, bind: Mapping[str, Any] | None = None, **kwargs: Any
+        self,
+        *args: str | Predicate | DataCoordinate,
+        bind: Mapping[str, Any] | None = None,
+        **kwargs: Any,
     ) -> RelationQuery:
         return RelationQuery(
             tree=self._tree.where(*self._convert_predicate_args(*args, bind=bind, **kwargs)),
@@ -362,7 +418,7 @@ class RelationQuery(Query):
             include_dimension_records=self._include_dimension_records,
         )
 
-    def _convert_order_by_args(self, *args: str | OrderExpression) -> list[OrderExpression]:
+    def _convert_order_by_args(self, *args: str | OrderExpression | ExpressionProxy) -> list[OrderExpression]:
         raise NotImplementedError("TODO: Parse string expression.")
 
     def _convert_predicate_args(

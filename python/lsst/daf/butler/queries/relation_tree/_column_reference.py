@@ -45,6 +45,13 @@ class DimensionKeyReference(ColumnExpressionBase):
     def gather_required_columns(self) -> set[ColumnReference]:
         return {self}
 
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        return self.dimension
+
 
 class DimensionFieldReference(ColumnExpressionBase):
     """A column expression that references a dimension record column that is
@@ -58,6 +65,13 @@ class DimensionFieldReference(ColumnExpressionBase):
     def gather_required_columns(self) -> set[ColumnReference]:
         return {self}
 
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        return f"{self.element}.{self.field}"
+
 
 class DatasetFieldReference(ColumnExpressionBase):
     """A column expression that references a column associated with a dataset
@@ -70,6 +84,16 @@ class DatasetFieldReference(ColumnExpressionBase):
 
     def gather_required_columns(self) -> set[ColumnReference]:
         return {self}
+
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        if self.dataset_type is ...:
+            return self.field
+        else:
+            return f"{self.dataset_type}.{self.field}"
 
 
 _ColumnReference: TypeAlias = Union[

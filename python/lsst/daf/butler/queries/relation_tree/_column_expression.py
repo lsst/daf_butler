@@ -28,10 +28,11 @@
 from __future__ import annotations
 
 __all__ = (
-    "_ColumnExpression",
     "ColumnExpression",
     "OrderExpression",
-    "OrderExpression",
+    "UnaryExpression",
+    "BinaryExpression",
+    "Reversed",
 )
 
 from typing import Annotated, Literal, TypeAlias, Union
@@ -53,6 +54,22 @@ class UnaryExpression(ColumnExpressionBase):
     def gather_required_columns(self) -> set[ColumnReference]:
         return self.operand.gather_required_columns()
 
+    @property
+    def precedence(self) -> int:
+        return 1
+
+    def __str__(self) -> str:
+        s = str(self.operand)
+        if self.operand.precedence >= self.precedence:
+            s = f"({s})"
+        match self.operator:
+            case "-":
+                return f"-{s}"
+            case "begin_of":
+                return f"{s}.begin"
+            case "end_of":
+                return f"{s}.end"
+
 
 class BinaryExpression(ColumnExpressionBase):
     """A binary operation on column expressions that returns a non-bool."""
@@ -66,6 +83,30 @@ class BinaryExpression(ColumnExpressionBase):
         result = self.a.gather_required_columns()
         result.update(self.b.gather_required_columns())
         return result
+
+    @property
+    def precedence(self) -> int:
+        match self.operator:
+            case "*" | "/" | "%":
+                return 2
+            case "+" | "-":
+                return 3
+
+    def __str__(self) -> str:
+        a = str(self.a)
+        b = str(self.b)
+        match self.operator:
+            case "*" | "+":
+                if self.a.precedence > self.precedence:
+                    a = f"({a})"
+                if self.b.precedence > self.precedence:
+                    b = f"({b})"
+            case _:
+                if self.a.precedence >= self.precedence:
+                    a = f"({a})"
+                if self.b.precedence >= self.precedence:
+                    b = f"({b})"
+        return f"({a} {self.operator} {b})"
 
 
 _ColumnExpression: TypeAlias = Union[
@@ -86,6 +127,9 @@ class Reversed(ColumnExpressionBase):
 
     expression_type: Literal["reversed"] = "reversed"
     operand: ColumnExpression
+
+    def __str__(self) -> str:
+        return f"{self.operand} DESC"
 
 
 OrderExpression: TypeAlias = Annotated[

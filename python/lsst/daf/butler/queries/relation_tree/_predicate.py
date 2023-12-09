@@ -27,20 +27,35 @@
 
 from __future__ import annotations
 
-from lsst.daf.butler.queries.relation_tree._column_reference import ColumnReference
+__all__ = (
+    "Predicate",
+    "LogicalAnd",
+    "LogicalOr",
+    "LogicalNot",
+    "IsNull",
+    "Comparison",
+    "InContainer",
+    "InRange",
+    "InRelation",
+    "StringPredicate",
+    "DataCoordinateConstraint",
+    "ComparisonOperator",
+)
 
-__all__ = ("Predicate",)
-
-from typing import TYPE_CHECKING, Annotated, Literal, Union
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
-from ...dimensions import DataIdValue, DimensionGroup
+from ...dimensions import DataCoordinate, DataIdValue, DimensionGroup
 from ._base import PredicateBase
 from ._column_expression import ColumnExpression
+from ._column_reference import ColumnReference
 
 if TYPE_CHECKING:
     from ._relation import RootRelation
+
+
+ComparisonOperator: TypeAlias = Literal["==", "!=", "<", ">", ">=", "<=", "overlaps"]
 
 
 class LogicalAnd(PredicateBase):
@@ -57,6 +72,19 @@ class LogicalAnd(PredicateBase):
             result.update(operand.gather_required_columns())
         return result
 
+    @property
+    def precedence(self) -> int:
+        return 6
+
+    def __str__(self) -> str:
+        return " AND ".join(
+            str(operand) if operand.precedence <= self.precedence else f"({operand})"
+            for operand in self.operands
+        )
+
+    def _flatten_and(self) -> tuple[Predicate, ...]:
+        return self.operands
+
 
 class LogicalOr(PredicateBase):
     """A boolean column expression that is `True` if any of its operands are
@@ -72,6 +100,19 @@ class LogicalOr(PredicateBase):
             result.update(operand.gather_required_columns())
         return result
 
+    @property
+    def precedence(self) -> int:
+        return 7
+
+    def __str__(self) -> str:
+        return " OR ".join(
+            str(operand) if operand.precedence <= self.precedence else f"({operand})"
+            for operand in self.operands
+        )
+
+    def _flatten_or(self) -> tuple[Predicate, ...]:
+        return self.operands
+
 
 class LogicalNot(PredicateBase):
     """A boolean column expression that inverts its operand."""
@@ -82,12 +123,35 @@ class LogicalNot(PredicateBase):
     def gather_required_columns(self) -> set[ColumnReference]:
         return self.operand.gather_required_columns()
 
+    @property
+    def precedence(self) -> int:
+        return 4
+
+    def __str__(self) -> str:
+        if self.operand.precedence <= self.precedence:
+            return f"NOT {self.operand}"
+        else:
+            return f"NOT ({self.operand})"
+
 
 class IsNull(PredicateBase):
     """A boolean column expression that tests whether its operand is NULL."""
 
     predicate_type: Literal["is_null"] = "is_null"
     operand: ColumnExpression
+
+    def gather_required_columns(self) -> set[ColumnReference]:
+        return self.operand.gather_required_columns()
+
+    @property
+    def precedence(self) -> int:
+        return 5
+
+    def __str__(self) -> str:
+        if self.operand.precedence <= self.precedence:
+            return f"{self.operand} IS NULL"
+        else:
+            return f"({self.operand}) IS NULL"
 
 
 class Comparison(PredicateBase):
@@ -98,12 +162,21 @@ class Comparison(PredicateBase):
     predicate_type: Literal["comparison"] = "comparison"
     a: ColumnExpression
     b: ColumnExpression
-    operator: Literal["=", "!=", "<", ">", ">=", "<=", "overlaps"]
+    operator: ComparisonOperator
 
     def gather_required_columns(self) -> set[ColumnReference]:
         result = self.a.gather_required_columns()
         result.update(self.b.gather_required_columns())
         return result
+
+    @property
+    def precedence(self) -> int:
+        return 5
+
+    def __str__(self) -> str:
+        a = str(self.a) if self.a.precedence <= self.precedence else f"({self.a})"
+        b = str(self.b) if self.b.precedence <= self.precedence else f"({self.b})"
+        return f"{a} {self.operator.upper()} {b}"
 
 
 class InContainer(PredicateBase):
@@ -121,6 +194,14 @@ class InContainer(PredicateBase):
             result.update(operand.gather_required_columns())
         return result
 
+    @property
+    def precedence(self) -> int:
+        return 5
+
+    def __str__(self) -> str:
+        m = str(self.member) if self.member.precedence <= self.precedence else f"({self.member})"
+        return f"{m} IN [{', '.join(str(item) for item in self.container)}]"
+
 
 class InRange(PredicateBase):
     """A boolean column expression that tests whether its expression is
@@ -136,6 +217,17 @@ class InRange(PredicateBase):
     def gather_required_columns(self) -> set[ColumnReference]:
         return self.member.gather_required_columns()
 
+    @property
+    def precedence(self) -> int:
+        return 5
+
+    def __str__(self) -> str:
+        s = f"{self.start if self.start else ''}..{self.stop if self.stop is not None else ''}"
+        if self.step != 1:
+            s = f"{s}:{self.step}"
+        m = str(self.member) if self.member.precedence <= self.precedence else f"({self.member})"
+        return f"{m} IN {s}"
+
 
 class InRelation(PredicateBase):
     """A boolean column expression that tests whether its expression is
@@ -150,10 +242,19 @@ class InRelation(PredicateBase):
     column: ColumnExpression
     relation: RootRelation
 
+    @property
+    def precedence(self) -> int:
+        return 5
+
     def gather_required_columns(self) -> set[ColumnReference]:
         # We're only gathering columns from the relation this predicate is
-        # attached, not `self.column`, which belongs to `self.relation`.
+        # attached to, not `self.column`, which belongs to `self.relation`.
         return self.member.gather_required_columns()
+
+    def __str__(self) -> str:
+        m = str(self.member) if self.member.precedence <= self.precedence else f"({self.member})"
+        c = str(self.column) if self.column.precedence <= self.precedence else f"({self.column})"
+        return f"{m} IN [{{{self.relation}}}.{c}]"
 
 
 class StringPredicate(PredicateBase):
@@ -170,6 +271,13 @@ class StringPredicate(PredicateBase):
     def gather_required_columns(self) -> set[ColumnReference]:
         return self.tree.gather_required_columns()
 
+    @property
+    def precedence(self) -> int:
+        return 5
+
+    def __str__(self) -> str:
+        return f'parsed("{self.where}")'
+
 
 class DataCoordinateConstraint(PredicateBase):
     """A boolean column expression defined by interpreting data ID's key-value
@@ -183,6 +291,13 @@ class DataCoordinateConstraint(PredicateBase):
 
     values: tuple[DataIdValue, ...]
     """The required values of the data ID."""
+
+    @property
+    def precedence(self) -> int:
+        return 5
+
+    def __str__(self) -> str:
+        return str(DataCoordinate.from_required_values(self.dimensions, self.values))
 
 
 Predicate = Annotated[

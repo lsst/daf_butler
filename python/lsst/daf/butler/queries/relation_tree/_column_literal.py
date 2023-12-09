@@ -32,11 +32,13 @@ __all__ = (
     "make_column_literal",
 )
 
+import warnings
 from base64 import b64decode, b64encode
 from functools import cached_property
 from typing import Literal, TypeAlias, Union
 
 import astropy.time
+import erfa
 from lsst.sphgeom import Region
 
 from ..._timespan import Timespan
@@ -56,6 +58,13 @@ class IntColumnLiteral(ColumnExpressionBase):
     def from_value(cls, value: int) -> IntColumnLiteral:
         return cls.model_construct(value=value)
 
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        return repr(self.value)
+
 
 class StringColumnLiteral(ColumnExpressionBase):
     """A literal `str` value in a column expression."""
@@ -67,6 +76,13 @@ class StringColumnLiteral(ColumnExpressionBase):
     def from_value(cls, value: str) -> StringColumnLiteral:
         return cls.model_construct(value=value)
 
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        return repr(self.value)
+
 
 class FloatColumnLiteral(ColumnExpressionBase):
     """A literal `float` value in a column expression."""
@@ -77,6 +93,13 @@ class FloatColumnLiteral(ColumnExpressionBase):
     @classmethod
     def from_value(cls, value: float) -> FloatColumnLiteral:
         return cls.model_construct(value=value)
+
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        return repr(self.value)
 
 
 class BytesColumnLiteral(ColumnExpressionBase):
@@ -97,6 +120,13 @@ class BytesColumnLiteral(ColumnExpressionBase):
     def from_value(cls, value: bytes) -> BytesColumnLiteral:
         return cls.model_construct(encoded=b64encode(value))
 
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        return "(bytes)"
+
 
 class TimeColumnLiteral(ColumnExpressionBase):
     """A literal `astropy.time.Time` value in a column expression.
@@ -115,6 +145,17 @@ class TimeColumnLiteral(ColumnExpressionBase):
     @classmethod
     def from_value(cls, value: astropy.time.Time) -> TimeColumnLiteral:
         return cls.model_construct(nsec=TimeConverter().astropy_to_nsec(value))
+
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        # Trap dubious year warnings in case we have timespans from
+        # simulated data in the future
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=erfa.ErfaWarning)
+            return self.value.tai.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 class TimespanColumnLiteral(ColumnExpressionBase):
@@ -136,6 +177,13 @@ class TimespanColumnLiteral(ColumnExpressionBase):
     def from_value(cls, value: Timespan) -> TimespanColumnLiteral:
         return cls.model_construct(begin_nsec=value._nsec[0], end_nsec=value._nsec[1])
 
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        return str(self.value)
+
 
 class RegionColumnLiteral(ColumnExpressionBase):
     """A literal `lsst.sphgeom.Region` value in a column expression.
@@ -155,6 +203,13 @@ class RegionColumnLiteral(ColumnExpressionBase):
     @classmethod
     def from_value(cls, value: Region) -> RegionColumnLiteral:
         return cls.model_construct(encoded=b64encode(value.encode()))
+
+    @property
+    def precedence(self) -> int:
+        return 0
+
+    def __str__(self) -> str:
+        return "(bytes)"
 
 
 ColumnLiteral: TypeAlias = Union[
