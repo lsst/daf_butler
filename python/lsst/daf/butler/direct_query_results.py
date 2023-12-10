@@ -143,8 +143,10 @@ class DirectDataCoordinateQueryResults(DataCoordinateQueryResults):
         # Docstring inherited.
         return DirectDataCoordinateQueryResults(self._registry_query_result.order_by(*args))
 
-    def limit(self, limit: int, offset: int | None = 0) -> DataCoordinateQueryResults:
+    def limit(self, limit: int | None = None, offset: int = 0) -> DataCoordinateQueryResults:
         # Docstring inherited.
+        if limit is None:
+            raise NotImplementedError("Offset without limit is temporarily unsupported.")
         return DirectDataCoordinateQueryResults(self._registry_query_result.limit(limit, offset))
 
 
@@ -285,8 +287,10 @@ class DirectDimensionRecordQueryResults(DimensionRecordQueryResults):
         # Docstring inherited.
         return DirectDimensionRecordQueryResults(self._registry_query_result.order_by(*args))
 
-    def limit(self, limit: int, offset: int | None = 0) -> DimensionRecordQueryResults:
+    def limit(self, limit: int | None = None, offset: int = 0) -> DimensionRecordQueryResults:
         # Docstring inherited.
+        if limit is None:
+            raise NotImplementedError("Offset without limit is temporarily unsupported.")
         return DirectDimensionRecordQueryResults(self._registry_query_result.limit(limit, offset))
 
     def explain_no_results(self, execute: bool = True) -> Iterable[str]:

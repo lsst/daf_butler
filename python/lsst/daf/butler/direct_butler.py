@@ -2124,7 +2124,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         expanded: bool = False,
         order_by: Iterable[str] | str | None = None,
         limit: int | None = None,
-        offset: int | None = None,
+        offset: int = 0,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DataCoordinate]:
@@ -2138,7 +2138,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         if limit is not None:
             result = result.limit(limit, offset)
         else:
-            if offset is not None:
+            if offset:
                 raise TypeError("offset is specified without limit")
         data_ids = list(result)
         if explain and not data_ids:
@@ -2185,7 +2185,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         bind: Mapping[str, Any] | None = None,
         order_by: Iterable[str] | str | None = None,
         limit: int | None = None,
-        offset: int | None = None,
+        offset: int = 0,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DimensionRecord]:
@@ -2197,7 +2197,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         if limit is not None:
             result = result.limit(limit, offset)
         else:
-            if offset is not None:
+            if offset:
                 raise TypeError("offset is specified without limit")
         data_ids = list(result)
         if explain and not data_ids:
