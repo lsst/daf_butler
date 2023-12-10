@@ -27,12 +27,15 @@
 
 from __future__ import annotations
 
-__all__ = ("DataCoordinateUpload",)
+__all__ = ("DataCoordinateUpload", "UploadKey")
 
-from typing import Literal, final
+import uuid
+from typing import Literal, TypeAlias, final
 
-from ...dimensions import DataIdValue, DimensionGroup
+from ...dimensions import DimensionGroup
 from ._base import RelationBase
+
+UploadKey: TypeAlias = uuid.UUID
 
 
 @final
@@ -43,17 +46,13 @@ class DataCoordinateUpload(RelationBase):
 
     relation_type: Literal["data_coordinate_upload"] = "data_coordinate_upload"
 
+    key: UploadKey
+    """Key used by a `QueryDriver` to track the uploaded rows."""
+
     dimensions: DimensionGroup
     """The dimensions of the data IDs."""
-
-    rows: frozenset[tuple[DataIdValue, ...]]
-    """The required values of the data IDs."""
 
     @property
     def available_dataset_types(self) -> frozenset[str]:
         # Docstring inherited.
         return frozenset()
-
-    # We probably should validate that the tuples in 'rows' have the right
-    # length (len(dimensions.required)) and maybe the right types, but we might
-    # switch to Arrow here before that actually matters.

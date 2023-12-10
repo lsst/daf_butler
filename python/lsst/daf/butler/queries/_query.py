@@ -40,10 +40,13 @@ from .expression_factory import ExpressionFactory, ExpressionProxy
 from .relation_tree import (
     DataCoordinateUpload,
     DatasetSearch,
+    InvalidRelationError,
+    Materialization,
     OrderExpression,
     Predicate,
     RootRelation,
     make_dimension_relation,
+    make_unit_relation,
 )
 from .relation_tree.joins import JoinArg
 
@@ -328,9 +331,38 @@ class RelationQuery(Query):
             include_dimension_records=self._include_dimension_records,
         )
 
-    # TODO: Materialize should probably go here instead of
-    # DataCoordinateQueryResults, but the signature should probably change,
-    # too, and that requires more thought.
+    def materialize(self, *, dataset_types: Iterable[str] | None = ()) -> RelationQuery:
+        """Execute the query, save its results to a temporary location, and
+        return a new query that represents fetching or joining against those
+        saved results.
+
+        Parameters
+        ----------
+        dataset_types : `~collections.abc.Iterable` [ `str` ], optional
+            Names of dataset types whose ID fields (at least) should be
+            included in the temporary results; default is to include all
+            datasets types whose ID columns are currently available to the
+            query.  Dataset searches over multiple collections are not
+            resolved, but enough information is preserved to resolve them
+            downstream of the materialization.
+
+        Returns
+        -------
+        query : `Query`
+            A new query object whose that represents the materialized rows.
+        """
+        if dataset_types is None:
+            dataset_types = self._tree.available_dataset_types
+        else:
+            dataset_types = frozenset(dataset_types)
+        key = self._driver.materialize(self._tree, dataset_types)
+        return RelationQuery(
+            self._driver,
+            tree=make_unit_relation(self._driver.universe).join(
+                Materialization.model_construct(key=key, operand=self._tree, dataset_types=dataset_types)
+            ),
+            include_dimension_records=self._include_dimension_records,
+        )
 
     def join_dataset_search(
         self,
@@ -390,8 +422,9 @@ class RelationQuery(Query):
             rows.add(data_coordinate.required_values)
         if dimensions is None:
             raise RuntimeError("Cannot upload an empty data coordinate set.")
+        key = self._driver.upload_data_coordinates(dimensions, rows)
         return RelationQuery(
-            tree=self._tree.join(DataCoordinateUpload(dimensions=dimensions, rows=rows)),
+            tree=self._tree.join(DataCoordinateUpload(dimensions=dimensions, key=key)),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
@@ -499,6 +532,58 @@ class RelationQuery(Query):
         """
         return RelationQuery(
             tree=self._tree.where(*self._convert_predicate_args(*args, bind=bind, **kwargs)),
+            driver=self._driver,
+            include_dimension_records=self._include_dimension_records,
+        )
+
+    def find_first(
+        self, dataset_type: str | None = None, dimensions: DimensionGroup | None = None
+    ) -> RelationQuery:
+        """Return a query that resolves the datasets by searching collections
+        in order after grouping by data ID.
+
+        Parameters
+        ----------
+        dataset_type : `str`, optional
+            Dataset type name of the datasets to resolve.  May be omitted if
+            the query has exactly one dataset type joined in.
+        dimensions : `~collections.abc.Iterable` [ `str` ] or \
+                `DimensionGroup`, optional
+            Dimensions of the data IDs to group by.  If not provided, the
+            dataset type's dimensions are used (not the query's dimensions).
+
+        Returns
+        -------
+        query : `Query`
+            A new query object that includes the dataset resolution operation.
+            Dataset columns other than the target dataset type's are dropped,
+            as are dimensions outside ``dimensions``.
+
+        Notes
+        -----
+        This operation is typically applied automatically when obtain a results
+        object from the query, but in rare cases it may need to be added
+        directly by this method, such as prior to a `materialization` or when
+        the query is being used as the container in a `relation_tree.InRange`
+        expression.
+        """
+        if not self._tree.available_dataset_types:
+            raise InvalidRelationError("Query does not have any dataset searches joined in.")
+        if dataset_type is None:
+            try:
+                (dataset_type,) = self._tree.available_dataset_types
+            except ValueError:
+                raise InvalidRelationError(
+                    "Find-first dataset type must be provided if the query has more than one."
+                ) from None
+        elif dataset_type not in self._tree.available_dataset_types:
+            raise InvalidRelationError(
+                f"Find-first dataset type {dataset_type} is not present in query."
+            ) from None
+        if dimensions is None:
+            dimensions = self._driver.get_dataset_dimensions(dataset_type)
+        return RelationQuery(
+            tree=self._tree.find_first(dataset_type, dimensions),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )

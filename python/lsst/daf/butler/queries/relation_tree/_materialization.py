@@ -27,9 +27,10 @@
 
 from __future__ import annotations
 
-__all__ = ("Materialization",)
+__all__ = ("Materialization", "MaterializationKey")
 
-from typing import TYPE_CHECKING, Literal, final
+import uuid
+from typing import TYPE_CHECKING, Literal, TypeAlias, final
 
 import pydantic
 
@@ -39,6 +40,8 @@ from ._base import InvalidRelationError, RelationBase
 if TYPE_CHECKING:
     from ._relation import RootRelation
 
+MaterializationKey: TypeAlias = uuid.UUID
+
 
 @final
 class Materialization(RelationBase):
@@ -47,6 +50,9 @@ class Materialization(RelationBase):
     """
 
     relation_type: Literal["materialization"] = "materialization"
+
+    key: MaterializationKey
+    """Key used by a `QueryDriver` to track the materialized rows."""
 
     operand: RootRelation
     """The upstream relation to evaluate."""

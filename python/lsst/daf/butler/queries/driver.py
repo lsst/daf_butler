@@ -37,12 +37,12 @@ from typing import Annotated, TypeAlias, Union, overload
 
 import pydantic
 
-from ..dimensions import DimensionGroup, DimensionUniverse
+from ..dimensions import DataIdValue, DimensionGroup, DimensionUniverse
 from .data_coordinate_results import DataCoordinateResultPage, DataCoordinateResultSpec
 from .dataset_results import DatasetRefResultPage, DatasetRefResultSpec
 from .dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
 from .general_results import GeneralResultPage, GeneralResultSpec
-from .relation_tree import RootRelation
+from .relation_tree import MaterializationKey, RootRelation, UploadKey
 
 PageKey: TypeAlias = uuid.UUID
 
@@ -183,6 +183,51 @@ class QueryDriver(AbstractContextManager[None]):
         # In DirectButler I expect have a dict[PageKey, Cursor], fetch a blocks
         # of rows from it, and just reuse the page key for the next page until
         # the cursor is exactly.
+        raise NotImplementedError()
+
+    @abstractmethod
+    def materialize(self, tree: RootRelation, dataset_types: frozenset[str]) -> MaterializationKey:
+        """Execute a relation tree, saving results to temporary storage for use
+        in later queries.
+
+        Parameters
+        ----------
+        tree : `RootRelation`
+            Relation tree to evaluate.
+        dataset_types : `frozenset` [ `str` ]
+            Names of dataset types whose ID columns (at least) should be
+            preserved.
+
+        Returns
+        -------
+        key
+            Unique identifier for the result rows that allows them to be
+            referenced in a `Materialization` relation instance in relation
+            trees executed later.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def upload_data_coordinates(
+        self, dimensions: DimensionGroup, rows: Iterable[tuple[DataIdValue, ...]]
+    ) -> UploadKey:
+        """Upload a table of data coordinates for use in later queries.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Dimensions of the data coordinates.
+        rows : `Iterable` [ `tuple` ]
+            Tuples of data coordinate values, covering just the "required"
+            subset of ``dimensions``.
+
+        Returns
+        -------
+        key
+            Unique identifier for the upload that allows it to be referenced in
+            a `DataCoordinateUpload` relation instance in relation trees
+            executed later.
+        """
         raise NotImplementedError()
 
     @abstractmethod
