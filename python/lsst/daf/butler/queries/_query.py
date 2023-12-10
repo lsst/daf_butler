@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 from .._query import Query
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from .data_coordinate_results import DataCoordinateResultSpec, RelationDataCoordinateQueryResults
+from .dimension_record_results import DimensionRecordResultSpec, RelationDimensionRecordQueryResults
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory, ExpressionProxy
 from .relation_tree import (
@@ -45,6 +46,8 @@ from .relation_tree import (
     OrderExpression,
     Predicate,
     RootRelation,
+    convert_order_by_args,
+    convert_where_args,
     make_dimension_relation,
     make_unit_relation,
 )
@@ -63,7 +66,7 @@ class RelationQuery(Query):
     ----------
     driver : `QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `Relation`
+    tree : `RootRelation`
         Description of the query as a tree of relation operations.  The
         instance returned directly by the `Butler._query` entry point should
         be constructed via `make_unit_relation`.
@@ -81,6 +84,16 @@ class RelationQuery(Query):
         self._driver = driver
         self._tree = tree
         self._include_dimension_records = include_dimension_records
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        """The dimensions joined into the query."""
+        return self._tree.dimensions
+
+    @property
+    def dataset_types(self) -> frozenset[str]:
+        """The names of dataset types joined into the query."""
+        return self._tree.available_dataset_types
 
     @property
     def expression_factory(self) -> ExpressionFactory:
@@ -138,6 +151,8 @@ class RelationQuery(Query):
         self,
         dimensions: DimensionGroup | Iterable[str] | str,
         *,
+        # TODO: Arguments below are redundant with chaining methods; which ones
+        # are so convenient we have to keep them?
         data_id: DataId | None = None,
         where: str | Predicate = "",
         bind: Mapping[str, Any] | None = None,
@@ -150,11 +165,11 @@ class RelationQuery(Query):
         if not dimensions >= self._tree.dimensions:
             tree = tree.join(make_dimension_relation(dimensions))
         if data_id or where:
-            tree = tree.where(*self._convert_predicate_args(where, data_id, bind=bind, **kwargs))
+            tree = tree.where(*convert_where_args(self._tree, where, data_id, bind=bind, **kwargs))
         result_spec = DataCoordinateResultSpec(
             dimensions=dimensions, include_dimension_records=self._include_dimension_records
         )
-        return RelationDataCoordinateQueryResults(tree, self._driver, result_spec)
+        return RelationDataCoordinateQueryResults(self._driver, tree, result_spec)
 
     def datasets(
         self,
@@ -174,13 +189,22 @@ class RelationQuery(Query):
         self,
         element: str,
         *,
+        # TODO: Arguments below are redundant with chaining methods; which ones
+        # are so convenient we have to keep them?
         data_id: DataId | None = None,
         where: str = "",
         bind: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> DimensionRecordQueryResults:
         # Docstring inherited.
-        raise NotImplementedError("TODO")
+        data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
+        tree = self._tree
+        if element not in tree.dimensions.elements:
+            tree = tree.join(make_dimension_relation(self._driver.universe[element].minimal_group))
+        if data_id or where:
+            tree = tree.where(*convert_where_args(self._tree, where, data_id, bind=bind, **kwargs))
+        result_spec = DimensionRecordResultSpec(element=self._driver.universe[element])
+        return RelationDimensionRecordQueryResults(self._driver, tree, result_spec)
 
     # TODO: add general, dict-row results method and QueryResults.
 
@@ -299,7 +323,7 @@ class RelationQuery(Query):
         their fields in expressions.
         """
         return RelationQuery(
-            tree=self._tree.order_by(*self._convert_order_by_args(*args)),
+            tree=self._tree.order_by(*convert_order_by_args(self._tree, *args)),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
@@ -531,7 +555,7 @@ class RelationQuery(Query):
         their fields in expressions.
         """
         return RelationQuery(
-            tree=self._tree.where(*self._convert_predicate_args(*args, bind=bind, **kwargs)),
+            tree=self._tree.where(*convert_where_args(self._tree, *args, bind=bind, **kwargs)),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
@@ -587,13 +611,3 @@ class RelationQuery(Query):
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
-
-    def _convert_order_by_args(self, *args: str | OrderExpression | ExpressionProxy) -> list[OrderExpression]:
-        """Convert ``order_by`` arguments to a list of column expressions."""
-        raise NotImplementedError("TODO: Parse string expression.")
-
-    def _convert_predicate_args(
-        self, *args: str | Predicate | DataId, bind: Mapping[str, Any] | None = None
-    ) -> list[Predicate]:
-        """Convert ``where`` arguments to a list of column expressions."""
-        raise NotImplementedError("TODO: Parse string expression.")

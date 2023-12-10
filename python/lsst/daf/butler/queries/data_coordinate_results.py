@@ -34,7 +34,7 @@ __all__ = (
 )
 
 from collections.abc import Iterable, Iterator
-from contextlib import AbstractContextManager
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Literal
 
 import pydantic
@@ -44,7 +44,13 @@ from .._dataset_type import DatasetType
 from .._query_results import DataCoordinateQueryResults, DatasetQueryResults
 from ..dimensions import DataCoordinate, DimensionGroup
 from .driver import QueryDriver
-from .relation_tree import RootRelation
+from .relation_tree import (
+    InvalidRelationError,
+    Materialization,
+    RootRelation,
+    convert_order_by_args,
+    make_unit_relation,
+)
 
 if TYPE_CHECKING:
     from .driver import PageKey
@@ -74,7 +80,16 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
     """Implementation of DataCoordinateQueryResults for the relation-based
     query system.
 
-
+    Parameters
+    ----------
+    driver : `QueryDriver`
+        Implementation object that knows how to actually execute queries.
+    tree : `RootRelation`
+        Description of the query as a tree of relation operations.  The
+        instance returned directly by the `Butler._query` entry point should
+        be constructed via `make_unit_relation`.
+    spec : `DataCoordinateResultSpec`
+        Specification for the details of the data IDs to return.
 
     Notes
     -----
@@ -82,13 +97,14 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
     we won't need an ABC if this is the only implementation.
     """
 
-    def __init__(self, tree: RootRelation, driver: QueryDriver, spec: DataCoordinateResultSpec):
-        self._tree = tree
+    def __init__(self, driver: QueryDriver, tree: RootRelation, spec: DataCoordinateResultSpec):
         self._driver = driver
+        self._tree = tree
         self._spec = spec
 
     @property
     def dimensions(self) -> DimensionGroup:
+        # Docstring inherited.
         return self._spec.dimensions
 
     def __iter__(self) -> Iterator[DataCoordinate]:
@@ -99,20 +115,36 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
             yield from page.rows
 
     def has_full(self) -> bool:  # TODO: since this is always true, we may not need it.
+        # Docstring inherited.
         return True
 
     def has_records(self) -> bool:  # TODO: should this be a property now?
+        # Docstring inherited.
         return self._spec.include_dimension_records
 
-    def materialize(self) -> AbstractContextManager[DataCoordinateQueryResults]:
-        raise NotImplementedError()
+    @contextmanager
+    def materialize(self) -> Iterator[DataCoordinateQueryResults]:
+        # Docstring inherited.
+        key = self._driver.materialize(self._tree, frozenset())
+        yield RelationDataCoordinateQueryResults(
+            self._driver,
+            tree=make_unit_relation(self._driver.universe).join(
+                Materialization.model_construct(key=key, operand=self._tree, dataset_types=frozenset())
+            ),
+            spec=self._spec,
+        )
+        # TODO: Right now we just rely on the QueryDriver context instead of
+        # using this one.  If we want this to remain a context manager, we
+        # should make it do something, e.g. by adding QueryDriver method to
+        # drop a materialization.
 
     def expanded(self) -> DataCoordinateQueryResults:
+        # Docstring inherited.
         if self.has_records():
             return self
         return RelationDataCoordinateQueryResults(
+            self._driver,
             tree=self._tree,
-            driver=self._driver,
             spec=DataCoordinateResultSpec(dimensions=self._spec.dimensions, include_dimension_records=True),
         )
 
@@ -122,13 +154,31 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
         *,
         unique: bool = False,
     ) -> DataCoordinateQueryResults:
-        raise NotImplementedError(
-            "TODO: Copy with a new result spec and/or DimensionProjection pushed onto tree."
+        # Docstring inherited.
+        if dimensions is None:
+            dimensions = self.dimensions
+        else:
+            dimensions = self._driver.universe.conform(dimensions)
+            if not dimensions <= self.dimensions:
+                raise InvalidRelationError(
+                    f"New dimensions {dimensions} are not a subset of the current "
+                    f"dimensions {self.dimensions}."
+                )
+        # TODO: right now I'm assuming we'll deduplicate all query results (per
+        # page), even if we have to do that in Python, so the 'unique' argument
+        # doesn't do anything.
+        return RelationDataCoordinateQueryResults(
+            self._driver,
+            tree=self._tree,
+            spec=DataCoordinateResultSpec(
+                dimensions=dimensions, include_dimension_records=self._spec.include_dimension_records
+            ),
         )
 
     def find_datasets(
         self, dataset_type: DatasetType | str, collections: Any, *, find_first: bool = True
     ) -> DatasetQueryResults:
+        # Docstring inherited.
         raise NotImplementedError("TODO: Copy with a new result spec and maybe a new DatasetSearch in tree.")
 
     def find_related_datasets(
@@ -139,19 +189,33 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
         find_first: bool = True,
         dimensions: DimensionGroup | Iterable[str] | None = None,
     ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
+        # Docstring inherited.
         raise NotImplementedError("TODO: drop this in favor of GeneralQueryResults")
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
+        # Docstring inherited.
         return self._driver.count(self._tree, exact=exact, discard=discard)
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
+        # Docstring inherited.
         return self._driver.any(self._tree, execute=execute, exact=exact)
 
     def explain_no_results(self, execute: bool = True) -> Iterable[str]:
+        # Docstring inherited.
         return self._driver.explain_no_results(self._tree, execute=execute)
 
     def order_by(self, *args: str) -> DataCoordinateQueryResults:
-        raise NotImplementedError("TODO: Copy with a OrderedSlice pushed onto tree.")
+        # Docstring inherited.
+        return RelationDataCoordinateQueryResults(
+            driver=self._driver,
+            tree=self._tree.order_by(*convert_order_by_args(self._tree, *args)),
+            spec=self._spec,
+        )
 
-    def limit(self, limit: int, offset: int | None = 0) -> DataCoordinateQueryResults:
-        raise NotImplementedError("TODO: Copy with a OrderedSlice pushed onto tree.")
+    def limit(self, limit: int | None = None, offset: int = 0) -> DataCoordinateQueryResults:
+        # Docstring inherited.
+        return RelationDataCoordinateQueryResults(
+            driver=self._driver,
+            tree=self._tree.order_by(limit=limit, offset=offset),
+            spec=self._spec,
+        )

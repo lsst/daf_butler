@@ -27,15 +27,16 @@
 
 from __future__ import annotations
 
-__all__ = ("Select", "make_unit_relation", "make_dimension_relation")
+__all__ = ("Select", "make_unit_relation", "make_dimension_relation", "convert_where_args")
 
 import itertools
+from collections.abc import Mapping
 from functools import cached_property
-from typing import TYPE_CHECKING, Literal, final
+from typing import TYPE_CHECKING, Any, Literal, final
 
 import pydantic
 
-from ...dimensions import DimensionGroup, DimensionUniverse
+from ...dimensions import DataId, DimensionGroup, DimensionUniverse
 from ._base import InvalidRelationError, RelationBase
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import Predicate
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
     from ._column_expression import OrderExpression
     from ._find_first import FindFirst
     from ._ordered_slice import OrderedSlice
-    from ._relation import JoinOperand, Relation
+    from ._relation import JoinOperand, Relation, RootRelation
 
 
 def make_unit_relation(universe: DimensionUniverse) -> Select:
@@ -278,3 +279,10 @@ class Select(RelationBase):
                         if dataset_type not in self.available_dataset_types:
                             raise InvalidRelationError(f"Dataset search for column {column} is not present.")
         return self
+
+
+def convert_where_args(
+    tree: RootRelation, *args: str | Predicate | DataId, bind: Mapping[str, Any] | None = None
+) -> list[Predicate]:
+    """Convert ``where`` arguments to a list of column expressions."""
+    raise NotImplementedError("TODO: Parse string expression.")

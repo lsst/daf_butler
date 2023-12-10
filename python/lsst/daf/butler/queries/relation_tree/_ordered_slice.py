@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("OrderedSlice",)
+__all__ = ("OrderedSlice", "convert_order_by_args")
 
 from typing import TYPE_CHECKING, Literal, final
 
@@ -44,8 +44,9 @@ from ._column_reference import (
 )
 
 if TYPE_CHECKING:
+    from ..expression_factory import ExpressionProxy
     from ._predicate import Predicate
-    from ._relation import OrderedSliceOperand, Relation
+    from ._relation import OrderedSliceOperand, Relation, RootRelation
     from .joins import JoinArg
 
 
@@ -173,3 +174,10 @@ class OrderedSlice(RelationBase):
         if not self.order_terms and self.limit is None and not self.offset:
             raise InvalidRelationError("Operation does not do anything.")
         return self
+
+
+def convert_order_by_args(
+    tree: RootRelation, *args: str | OrderExpression | ExpressionProxy
+) -> list[OrderExpression]:
+    """Convert ``order_by`` arguments to a list of column expressions."""
+    raise NotImplementedError("TODO")

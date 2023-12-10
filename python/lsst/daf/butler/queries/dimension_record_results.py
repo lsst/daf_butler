@@ -32,12 +32,16 @@ __all__ = (
     "DimensionRecordResultPage",
 )
 
+import dataclasses
+from collections.abc import Iterable, Iterator
 from typing import Literal
 
 import pydantic
 
-from ..dimensions import DimensionElement, DimensionRecord
-from .driver import PageKey
+from .._query_results import DimensionRecordQueryResults
+from ..dimensions import DimensionElement, DimensionRecord, DimensionRecordSet, DimensionRecordTable
+from .driver import PageKey, QueryDriver
+from .relation_tree import RootRelation, convert_order_by_args
 
 
 class DimensionRecordResultSpec(pydantic.BaseModel):
@@ -47,14 +51,111 @@ class DimensionRecordResultSpec(pydantic.BaseModel):
     element: DimensionElement
 
 
-class DimensionRecordResultPage(pydantic.BaseModel):
+@dataclasses.dataclass
+class DimensionRecordResultPage:
     """A single page of results from a dimension record query."""
 
     spec: DimensionRecordResultSpec
     next_key: PageKey | None
+    rows: Iterable[DimensionRecord]
 
-    # TODO: On DM-41113 this will become a custom container that is
-    # Pydantic-friendly and supports data ID lookups (it'll probably use `dict`
-    # rather than `set` under the hood).  Right now this model isn't actually
-    # serializable.
-    rows: list[DimensionRecord]
+    def as_table(self) -> DimensionRecordTable:
+        if isinstance(self.rows, DimensionRecordTable):
+            return self.rows
+        else:
+            return DimensionRecordTable(self.spec.element, self.rows)
+
+    def as_set(self) -> DimensionRecordSet:
+        if isinstance(self.rows, DimensionRecordSet):
+            return self.rows
+        else:
+            return DimensionRecordSet(self.spec.element, self.rows)
+
+
+class RelationDimensionRecordQueryResults(DimensionRecordQueryResults):
+    """Implementation of DimensionRecordQueryResults for the relation-based
+    query system.
+
+    Parameters
+    ----------
+    driver : `QueryDriver`
+        Implementation object that knows how to actually execute queries.
+    tree : `RootRelation`
+        Description of the query as a tree of relation operations.  The
+        instance returned directly by the `Butler._query` entry point should
+        be constructed via `make_unit_relation`.
+    spec : `DimensionRecordResultSpec`
+        Specification for the details of the records to return.
+
+    Notes
+    -----
+    Ideally this will eventually just be "DimensionRecordQueryResults", because
+    we won't need an ABC if this is the only implementation.
+    """
+
+    def __init__(self, driver: QueryDriver, tree: RootRelation, spec: DimensionRecordResultSpec):
+        self._driver = driver
+        self._tree = tree
+        self._spec = spec
+
+    def __iter__(self) -> Iterator[DimensionRecord]:
+        page = self._driver.execute(self._tree, self._spec)
+        yield from page.rows
+        while page.next_key is not None:
+            page = self._driver.fetch_next_page(self._spec, page.next_key)
+            yield from page.rows
+
+    def iter_table_pages(self) -> Iterator[DimensionRecordTable]:
+        page = self._driver.execute(self._tree, self._spec)
+        yield page.as_table()
+        while page.next_key is not None:
+            page = self._driver.fetch_next_page(self._spec, page.next_key)
+            yield page.as_table()
+
+    def iter_set_pages(self) -> Iterator[DimensionRecordSet]:
+        page = self._driver.execute(self._tree, self._spec)
+        yield page.as_set()
+        while page.next_key is not None:
+            page = self._driver.fetch_next_page(self._spec, page.next_key)
+            yield page.as_set()
+
+    # TODO: might want to make this `str`, in keeping with RFC-834's philosophy
+    # of keeping DimensionElement out of public APIs (this old-query-system
+    # version of this one was accidentally omitted from that RFC, but we don't
+    # need an RFC to change it in the new system).
+    @property
+    def element(self) -> DimensionElement:
+        # Docstring inherited.
+        return self._spec.element
+
+    def run(self) -> DimensionRecordQueryResults:
+        # Docstring inherited.
+        raise NotImplementedError("TODO: remove this from the base class.")
+
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
+        # Docstring inherited.
+        return self._driver.count(self._tree, exact=exact, discard=discard)
+
+    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
+        # Docstring inherited.
+        return self._driver.any(self._tree, execute=execute, exact=exact)
+
+    def order_by(self, *args: str) -> DimensionRecordQueryResults:
+        # Docstring inherited.
+        return RelationDimensionRecordQueryResults(
+            driver=self._driver,
+            tree=self._tree.order_by(*convert_order_by_args(self._tree, *args)),
+            spec=self._spec,
+        )
+
+    def limit(self, limit: int | None = None, offset: int = 0) -> DimensionRecordQueryResults:
+        # Docstring inherited.
+        return RelationDimensionRecordQueryResults(
+            driver=self._driver,
+            tree=self._tree.order_by(limit=limit, offset=offset),
+            spec=self._spec,
+        )
+
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
+        # Docstring inherited.
+        return self._driver.explain_no_results(self._tree, execute=execute)
