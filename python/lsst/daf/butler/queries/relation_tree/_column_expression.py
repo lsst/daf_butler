@@ -35,7 +35,7 @@ __all__ = (
     "Reversed",
 )
 
-from typing import Annotated, Literal, TypeAlias, Union
+from typing import Annotated, Literal, TypeAlias, Union, final
 
 import pydantic
 
@@ -44,18 +44,25 @@ from ._column_literal import ColumnLiteral
 from ._column_reference import ColumnReference, _ColumnReference
 
 
+@final
 class UnaryExpression(ColumnExpressionBase):
     """A unary operation on a column expression that returns a non-bool."""
 
     expression_type: Literal["unary"] = "unary"
+
     operand: ColumnExpression
+    """Expression this one operates on."""
+
     operator: Literal["-", "begin_of", "end_of"]
+    """Operator this expression applies."""
 
     def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
         return self.operand.gather_required_columns()
 
     @property
     def precedence(self) -> int:
+        # Docstring inherited.
         return 1
 
     def __str__(self) -> str:
@@ -71,21 +78,34 @@ class UnaryExpression(ColumnExpressionBase):
                 return f"{s}.end"
 
 
+@final
 class BinaryExpression(ColumnExpressionBase):
     """A binary operation on column expressions that returns a non-bool."""
 
     expression_type: Literal["binary"] = "binary"
+
     a: ColumnExpression
+    """Left-hand side expression this one operates on."""
+
     b: ColumnExpression
+    """Right-hand side expression this one operates on."""
+
     operator: Literal["+", "-", "*", "/", "%"]
+    """Operator this expression applies.
+
+    Integer '/' and '%' are defined as in SQL, not Python (though the
+    definitions are the same for positive arguments).
+    """
 
     def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
         result = self.a.gather_required_columns()
         result.update(self.b.gather_required_columns())
         return result
 
     @property
     def precedence(self) -> int:
+        # Docstring inherited.
         match self.operator:
             case "*" | "/" | "%":
                 return 2
@@ -109,6 +129,10 @@ class BinaryExpression(ColumnExpressionBase):
         return f"({a} {self.operator} {b})"
 
 
+# Union without Pydantic annotation for the discriminator, for use in nesting
+# in other unions that will add that annotation.  It's not clear whether it
+# would work to just nest the annotated ones, but it seems safest not to rely
+# on undocumented behavior.
 _ColumnExpression: TypeAlias = Union[
     ColumnLiteral,
     _ColumnReference,
@@ -120,13 +144,25 @@ _ColumnExpression: TypeAlias = Union[
 ColumnExpression: TypeAlias = Annotated[_ColumnExpression, pydantic.Field(discriminator="expression_type")]
 
 
+@final
 class Reversed(ColumnExpressionBase):
     """A tag wrapper for `AbstractExpression` that indicate sorting in
     reverse order.
     """
 
     expression_type: Literal["reversed"] = "reversed"
+
     operand: ColumnExpression
+    """Expression to sort on in reverse."""
+
+    def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
+        return self.operand.gather_required_columns()
+
+    @property
+    def precedence(self) -> int:
+        # Docstring inherited.
+        return self.operand.precedence
 
     def __str__(self) -> str:
         return f"{self.operand} DESC"

@@ -30,18 +30,19 @@ from __future__ import annotations
 __all__ = ("DatasetSearch",)
 
 from functools import cached_property
-from typing import Literal
+from typing import Literal, final
 
 from ...dimensions import DimensionGroup
-from ._base import RelationBase, StringOrWildcard
+from ._base import RelationBase
 
 
+@final
 class DatasetSearch(RelationBase):
     """An abstract relation that represents a query for datasets."""
 
     relation_type: Literal["dataset_search"] = "dataset_search"
 
-    dataset_type: StringOrWildcard
+    dataset_type: str
     """The name of the type of datasets returned by the query.
 
     ``...`` may be used to select all dataset types with the given
@@ -65,8 +66,6 @@ class DatasetSearch(RelationBase):
     """
 
     @cached_property
-    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
-        """The dataset types whose ID columns (at least) are available from
-        this relation.
-        """
+    def available_dataset_types(self) -> frozenset[str]:
+        # Docstring inherited.
         return frozenset({self.dataset_type})

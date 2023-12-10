@@ -179,6 +179,8 @@ class RelationQuery(Query):
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
+    # TODO: add general, dict-row results method and QueryResults.
+
     # TODO: methods below are not part of the base Query, but they have
     # counterparts on at least some QueryResults objects.  We need to think
     # about which should be duplicated in Query and QueryResults, and which
@@ -261,18 +263,18 @@ class RelationQuery(Query):
         """
         return self._driver.explain_no_results(self._tree, execute=execute)
 
-    def order_by(self, *args: str | OrderExpression | ExpressionProxy) -> Query:
-        """Sort any results returned by this query.
+    def order_by(self, *args: str | OrderExpression | ExpressionProxy) -> RelationQuery:
+        """Return a new query that sorts any results returned.
 
         Parameters
         ----------
         *args : `str` or `OrderExpression`
-            Names of the columns/dimensions to use for ordering. Column name
-            can be prefixed with minus (``-``) to use descending ordering.
+            Column names or expression objects to use for ordering. Names can
+            be prefixed with minus (``-``) to use descending ordering.
 
         Returns
         -------
-        result : `Query`
+        query : `Query`
             A new query object whose results will be sorted.
 
         Notes
@@ -287,6 +289,11 @@ class RelationQuery(Query):
 
         Note that this is consistent with sorting first by ``a`` and then by
         ``b``.
+
+        If an expression references a dimension or dimension element that is
+        not already present in the query, it will be joined in, but dataset
+        searches must already be joined into a query in order to reference
+        their fields in expressions.
         """
         return RelationQuery(
             tree=self._tree.order_by(*self._convert_order_by_args(*args)),
@@ -294,8 +301,8 @@ class RelationQuery(Query):
             include_dimension_records=self._include_dimension_records,
         )
 
-    def limit(self, limit: int | None = None, offset: int = 0) -> Query:
-        """Limit the results returned by this query via positional slicing.
+    def limit(self, limit: int | None = None, offset: int = 0) -> RelationQuery:
+        """Return a new query with results limited by positional slicing.
 
         Parameters
         ----------
@@ -307,7 +314,7 @@ class RelationQuery(Query):
 
         Returns
         -------
-        result : `Query`
+        query : `Query`
             A new query object whose results will be sliced.
 
         Notes
@@ -325,35 +332,54 @@ class RelationQuery(Query):
     # DataCoordinateQueryResults, but the signature should probably change,
     # too, and that requires more thought.
 
-    def join_dataset(
+    def join_dataset_search(
         self,
         dataset_type: str,
         collections: Iterable[str],
-        *,
-        spatial: JoinArg = frozenset(),
-        temporal: JoinArg = frozenset(),
     ) -> RelationQuery:
+        """Return a new query with a search for a dataset joined in.
+
+        Parameters
+        ----------
+        dataset_type : `str`
+            Name of the dataset type.  May not refer to a dataset component.
+        collections : `~collections.abc.Iterable` [ `str` ]
+            Iterable of collections to search.  Order is preserved, but will
+            not matter if the dataset search is only used as a constraint on
+            dimensions or if ``find_first=False`` when requesting results.
+
+        Returns
+        -------
+        query : `Query`
+            A new query object with dataset columns available and rows
+            restricted to those consistent with the found data IDs.
+        """
         return RelationQuery(
             tree=self._tree.join(
                 DatasetSearch.model_construct(
                     dataset_type=dataset_type,
                     collections=tuple(collections),
                     dimensions=self._driver.get_dataset_dimensions(dataset_type),
-                ),
-                spatial=spatial,
-                temporal=temporal,
+                )
             ),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
 
-    def join_data_coordinates(
-        self,
-        iterable: Iterable[DataCoordinate],
-        *,
-        spatial: JoinArg = frozenset(),
-        temporal: JoinArg = frozenset(),
-    ) -> RelationQuery:
+    def join_data_coordinates(self, iterable: Iterable[DataCoordinate]) -> RelationQuery:
+        """Return a new query that joins in an explicit table of data IDs.
+
+        Parameters
+        ----------
+        iterable : `~collections.abc.Iterable` [ `DataCoordinate` ]
+            Iterable of `DataCoordinate`.  All items must have the same
+            dimensions.  Must have at least one item.
+
+        Returns
+        -------
+        query : `Query`
+            A new query object with the data IDs joined in.
+        """
         rows: set[tuple[DataIdValue, ...]] = set()
         dimensions: DimensionGroup | None = None
         for data_coordinate in iterable:
@@ -365,28 +391,69 @@ class RelationQuery(Query):
         if dimensions is None:
             raise RuntimeError("Cannot upload an empty data coordinate set.")
         return RelationQuery(
-            tree=self._tree.join(
-                DataCoordinateUpload(dimensions=dimensions, rows=rows), spatial=spatial, temporal=temporal
-            ),
+            tree=self._tree.join(DataCoordinateUpload(dimensions=dimensions, rows=rows)),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
 
-    def join_dimensions(
-        self,
-        dimensions: Iterable[str] | DimensionGroup,
-        *,
-        spatial: JoinArg = frozenset(),
-        temporal: JoinArg = frozenset(),
-    ) -> RelationQuery:
+    def join_dimensions(self, dimensions: Iterable[str] | DimensionGroup) -> RelationQuery:
+        """Return a new query that joins the logical tables for additional
+        dimensions.
+
+        Parameters
+        ----------
+        iterable : `~collections.abc.Iterable` [ `str` ] or `DimensionGroup`
+            Names of dimensions to join in.
+
+        Returns
+        -------
+        query : `Query`
+            A new query object with the dimensions joined in.
+        """
         dimensions = self._driver.universe.conform(dimensions)
         return RelationQuery(
-            tree=self._tree.join(make_dimension_relation(dimensions), spatial=spatial, temporal=temporal),
+            tree=self._tree.join(make_dimension_relation(dimensions)),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
 
     def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> RelationQuery:
+        """Return a new query with new spatial or temporal join constraints.
+
+        Parameters
+        ----------
+        spatial : `tuple` [ `str`, `str` ] or `~collections.abc.Iterable` \
+                [ `tuple [ `str`, `str` ], optional
+            A pair or pairs of dimension element names whose regions must
+            overlap.
+        temporal : `tuple` [ `str`, `str` ] or `~collections.abc.Iterable` \
+                [ `tuple [ `str`, `str` ], optional
+            A pair or pairs of dimension element names and/or calibration
+            dataset type names whose timespans must overlap.  Datasets in
+            collections other than `~CollectionType.CALIBRATION` collections
+            are associated with an unbounded timespan.
+
+        Returns
+        -------
+        query : `Query`
+            A new query object with the given join criteria as well as any
+            join criteria already present in ``self``.
+
+        Notes
+        -----
+        Implicit spatial and temporal joins are also added to queries (when
+        they are actually executed) when an explicit join (of the sort added by
+        this method) is absent between any pair of spatial/temporal "families"
+        present in the query, and these implicit joins use the most
+        fine-grained overlap possible.  For example, in a query with dimensions
+        ``{instrument, visit, tract, patch}``, the implicit spatial join would
+        be between ``visit`` and ``patch``, but an explicit join between
+        ``visit`` and `tract`` would override it, because "tract" and "patch"
+        are in the same family (as are ``visit`` and ``visit_detector_region``,
+        but the latter is not used here because it is not present in the
+        example query dimensions).  For "skypix" dimensions like ``healpixN``
+        or `htmN`, all levels in the same system are in the same family.
+        """
         return RelationQuery(
             tree=self._tree.joined_on(spatial=spatial, temporal=temporal),
             driver=self._driver,
@@ -395,33 +462,53 @@ class RelationQuery(Query):
 
     def where(
         self,
-        *args: str | Predicate | DataCoordinate,
+        *args: str | Predicate | DataId,
         bind: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> RelationQuery:
+        """Return a query with a boolean-expression filter on its rows.
+
+        Parameters
+        ----------
+        *args
+            Constraints to apply, combined with logical AND.  Arguments may be
+            `str` expressions to parse, `Predicate` objects (these are
+            typically constructed via `expression_factory`) or data IDs.
+        bind : `~collections.abc.Mapping`
+            Mapping from string identifier appearing in a string expression to
+            a literal value that should be substituted for it.  This is
+            recommended instead of embedding literals directly into the
+            expression, especially for strings, timespans, or other types where
+            quoting or formatting is nontrivial.
+        **kwargs
+            Data ID key value pairs that extend and override any present in
+            ``*args``.
+
+        Returns
+        -------
+        query : `Query`
+            A new query object with the given row filters as well as any
+            already present in ``self`` (combined with logical AND).
+
+        Notes
+        -----
+        If an expression references a dimension or dimension element that is
+        not already present in the query, it will be joined in, but dataset
+        searches must already be joined into a query in order to reference
+        their fields in expressions.
+        """
         return RelationQuery(
             tree=self._tree.where(*self._convert_predicate_args(*args, bind=bind, **kwargs)),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
 
-    def find_first(
-        self, dataset_type: str, dimensions: Iterable[str] | DimensionGroup | None
-    ) -> RelationQuery:
-        if dimensions is None:
-            dimensions = self._driver.get_dataset_dimensions(dataset_type)
-        else:
-            dimensions = self._driver.universe.conform(dimensions)
-        return RelationQuery(
-            tree=self._tree.find_first(dataset_type, dimensions),
-            driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
-        )
-
     def _convert_order_by_args(self, *args: str | OrderExpression | ExpressionProxy) -> list[OrderExpression]:
+        """Convert ``order_by`` arguments to a list of column expressions."""
         raise NotImplementedError("TODO: Parse string expression.")
 
     def _convert_predicate_args(
-        self, *args: str | Predicate | DataCoordinate, bind: Mapping[str, Any] | None = None
+        self, *args: str | Predicate | DataId, bind: Mapping[str, Any] | None = None
     ) -> list[Predicate]:
+        """Convert ``where`` arguments to a list of column expressions."""
         raise NotImplementedError("TODO: Parse string expression.")

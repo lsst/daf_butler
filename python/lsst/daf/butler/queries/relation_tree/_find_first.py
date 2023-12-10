@@ -30,12 +30,12 @@ from __future__ import annotations
 __all__ = ("FindFirst",)
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Literal, NoReturn
+from typing import TYPE_CHECKING, Literal, NoReturn, final
 
 import pydantic
 
 from ...dimensions import DimensionGroup
-from ._base import InvalidRelationError, RelationBase, StringOrWildcard
+from ._base import InvalidRelationError, RootRelationBase
 
 if TYPE_CHECKING:
     from ._column_expression import OrderExpression
@@ -46,7 +46,8 @@ if TYPE_CHECKING:
     from .joins import JoinArg
 
 
-class FindFirst(RelationBase):
+@final
+class FindFirst(RootRelationBase):
     """An abstract relation that finds the first dataset for each data ID
     in its ordered sequence of collections.
 
@@ -75,24 +76,19 @@ class FindFirst(RelationBase):
     """
 
     @cached_property
-    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
-        """The dataset types whose ID columns (at least) are available from
-        this relation.
-        """
+    def available_dataset_types(self) -> frozenset[str]:
+        # Docstring inherited.
         return frozenset({self.dataset_type})
 
-    def join(
-        self,
-        other: Relation,
-        spatial: JoinArg = frozenset(),
-        temporal: JoinArg = frozenset(),
-    ) -> NoReturn:
+    def join(self, other: Relation) -> NoReturn:
+        # Docstring inherited.
         raise InvalidRelationError(
             "Cannot join relations after a dataset find-first operation has been added. "
             "To avoid this error perform all joins before requesting dataset results."
         )
 
     def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> FindFirst:
+        # Docstring inherited.
         return FindFirst.model_construct(
             operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
             dataset_type=self.dataset_type,
@@ -100,6 +96,7 @@ class FindFirst(RelationBase):
         )
 
     def where(self, *terms: Predicate) -> FindFirst:
+        # Docstring inherited.
         return FindFirst.model_construct(
             operand=self.operand.where(*terms),
             dataset_type=self.dataset_type,
@@ -107,9 +104,11 @@ class FindFirst(RelationBase):
         )
 
     def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> OrderedSlice:
+        # Docstring inherited.
         return OrderedSlice(operand=self, order_terms=terms, limit=limit, offset=offset)
 
     def find_first(self, dataset_type: str, dimensions: DimensionGroup) -> FindFirst:
+        # Docstring inherited.
         if not (dimensions <= self.dimensions):
             raise InvalidRelationError(
                 f"New find-first dimensions {dimensions} are not a subset of the current "

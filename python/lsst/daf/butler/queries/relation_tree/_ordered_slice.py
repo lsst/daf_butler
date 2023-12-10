@@ -29,12 +29,12 @@ from __future__ import annotations
 
 __all__ = ("OrderedSlice",)
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, final
 
 import pydantic
 
 from ...dimensions import DimensionGroup
-from ._base import InvalidRelationError, RelationBase, StringOrWildcard
+from ._base import InvalidRelationError, RelationBase
 from ._column_expression import OrderExpression
 from ._column_reference import (
     ColumnReference,
@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from .joins import JoinArg
 
 
+@final
 class OrderedSlice(RelationBase):
     """An abstract relation operation that sorts and/or integer-slices the rows
     of its operand.
@@ -74,18 +75,12 @@ class OrderedSlice(RelationBase):
         return self.operand.dimensions
 
     @property
-    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
-        """The dataset types whose ID columns (at least) are available from
-        this relation.
-        """
+    def available_dataset_types(self) -> frozenset[str]:
+        # Docstring inherited.
         return self.operand.available_dataset_types
 
-    def join(
-        self,
-        other: Relation,
-        spatial: JoinArg = frozenset(),
-        temporal: JoinArg = frozenset(),
-    ) -> OrderedSlice:
+    def join(self, other: Relation) -> OrderedSlice:
+        # Docstring inherited.
         if self.offset or self.limit is not None:
             raise InvalidRelationError(
                 "Cannot join relations after an offset/limit slice has been added. "
@@ -102,12 +97,10 @@ class OrderedSlice(RelationBase):
         # of the new join, provided that join is actually allowed. We use
         # OrderedSlice(...) rather than OrderedSlice.model_construct(...)
         # to check that the new operand is not itself an OrderedSlice.
-        return OrderedSlice(
-            operand=self.operand.join(other, spatial=spatial, temporal=temporal),
-            order_terms=self.order_terms,
-        )
+        return OrderedSlice(operand=self.operand.join(other), order_terms=self.order_terms)
 
     def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> OrderedSlice:
+        # Docstring inherited.
         return OrderedSlice.model_construct(
             operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
             order_terms=self.order_terms,
@@ -116,6 +109,7 @@ class OrderedSlice(RelationBase):
         )
 
     def where(self, *terms: Predicate) -> OrderedSlice:
+        # Docstring inherited.
         return OrderedSlice.model_construct(
             operand=self.operand.where(*terms),
             order_terms=self.order_terms,
@@ -124,6 +118,7 @@ class OrderedSlice(RelationBase):
         )
 
     def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> OrderedSlice:
+        # Docstring inherited.
         if self.order_terms and (limit is not None or offset):
             raise InvalidRelationError(
                 "Cannot sort a query that has already been positionally sliced. "
@@ -141,6 +136,7 @@ class OrderedSlice(RelationBase):
         )
 
     def find_first(self, dataset_type: str, dimensions: DimensionGroup) -> OrderedSlice:
+        # Docstring inherited.
         return OrderedSlice(
             operand=self.operand.find_first(dataset_type, dimensions),
             order_terms=self.order_terms,

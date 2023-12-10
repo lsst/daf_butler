@@ -29,12 +29,13 @@ from __future__ import annotations
 
 __all__ = ("DataCoordinateUpload",)
 
-from typing import Literal
+from typing import Literal, final
 
 from ...dimensions import DataIdValue, DimensionGroup
-from ._base import RelationBase, StringOrWildcard
+from ._base import RelationBase
 
 
+@final
 class DataCoordinateUpload(RelationBase):
     """An abstract relation that represents (and holds) user-provided data
     ID values.
@@ -49,10 +50,8 @@ class DataCoordinateUpload(RelationBase):
     """The required values of the data IDs."""
 
     @property
-    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
-        """The dataset types whose ID columns (at least) are available from
-        this relation.
-        """
+    def available_dataset_types(self) -> frozenset[str]:
+        # Docstring inherited.
         return frozenset()
 
     # We probably should validate that the tuples in 'rows' have the right

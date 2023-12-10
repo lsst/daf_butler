@@ -29,17 +29,18 @@ from __future__ import annotations
 
 __all__ = ("Materialization",)
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, final
 
 import pydantic
 
 from ...dimensions import DimensionGroup
-from ._base import InvalidRelationError, RelationBase, StringOrWildcard
+from ._base import InvalidRelationError, RelationBase
 
 if TYPE_CHECKING:
     from ._relation import RootRelation
 
 
+@final
 class Materialization(RelationBase):
     """An abstract relation that represents evaluating the upstream relation
     and saving its rows somewhere (e.g. a temporary table or Parquet file).
@@ -50,7 +51,7 @@ class Materialization(RelationBase):
     operand: RootRelation
     """The upstream relation to evaluate."""
 
-    dataset_types: frozenset[StringOrWildcard]
+    dataset_types: frozenset[str]
     """Dataset types whose IDs were stored in the materialization."""
 
     @property
@@ -63,10 +64,8 @@ class Materialization(RelationBase):
         return self.operand.dimensions
 
     @property
-    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
-        """The dataset types whose ID columns (at least) are available from
-        this relation.
-        """
+    def available_dataset_types(self) -> frozenset[str]:
+        # Docstring inherited.
         return self.dataset_types
 
     @pydantic.model_validator(mode="after")

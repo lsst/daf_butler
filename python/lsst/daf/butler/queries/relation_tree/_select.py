@@ -31,12 +31,12 @@ __all__ = ("Select", "make_unit_relation", "make_dimension_relation")
 
 import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, final
 
 import pydantic
 
 from ...dimensions import DimensionGroup, DimensionUniverse
-from ._base import InvalidRelationError, RelationBase, StringOrWildcard
+from ._base import InvalidRelationError, RelationBase
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import Predicate
 from .joins import JoinArg, JoinTuple, standardize_join_arg
@@ -64,6 +64,7 @@ def make_dimension_relation(dimensions: DimensionGroup) -> Select:
     return Select.model_construct(dimensions=dimensions)
 
 
+@final
 class Select(RelationBase):
     """An abstract relation that combines joins and row-selection within a
     fixed set of dimensions.
@@ -109,21 +110,15 @@ class Select(RelationBase):
     """Boolean expression trees whose logical AND defines a row filter."""
 
     @cached_property
-    def available_dataset_types(self) -> frozenset[StringOrWildcard]:
-        """The dataset types whose ID columns (at least) are available from
-        this relation.
-        """
-        result: set[StringOrWildcard] = set()
+    def available_dataset_types(self) -> frozenset[str]:
+        # Docstring inherited.
+        result: set[str] = set()
         for operand in self.join_operands:
             result.update(operand.available_dataset_types)
         return frozenset(result)
 
-    def join(
-        self,
-        other: Relation,
-        spatial: JoinArg = frozenset(),
-        temporal: JoinArg = frozenset(),
-    ) -> Select | OrderedSlice:
+    def join(self, other: Relation) -> Select | OrderedSlice:
+        # Docstring inherited.
         from ._find_first import FindFirst
         from ._ordered_slice import OrderedSlice
 
@@ -136,27 +131,24 @@ class Select(RelationBase):
                 return Select(
                     dimensions=self.dimensions | other.dimensions,
                     join_operands=self.join_operands + other.join_operands,
-                    spatial_joins=(
-                        self.spatial_joins | other.spatial_joins | standardize_join_arg(spatial, "spatial")
-                    ),
-                    temporal_joins=(
-                        self.spatial_joins | other.spatial_joins | standardize_join_arg(temporal, "temporal")
-                    ),
+                    spatial_joins=(self.spatial_joins | other.spatial_joins),
+                    temporal_joins=(self.spatial_joins | other.spatial_joins),
                     where_terms=self.where_terms + other.where_terms,
                 )
             case FindFirst() | OrderedSlice():
-                return other.join(self, spatial=spatial, temporal=temporal)
+                return other.join(self)
             case _:  # All JoinOperands
                 return Select(
                     dimensions=self.dimensions | other.dimensions,
                     join_operands=self.join_operands + (other,),
-                    spatial_joins=(self.spatial_joins | standardize_join_arg(spatial, "spatial")),
-                    temporal_joins=(self.spatial_joins | standardize_join_arg(temporal, "temporal")),
+                    spatial_joins=(self.spatial_joins),
+                    temporal_joins=(self.spatial_joins),
                     where_terms=self.where_terms,
                 )
         raise AssertionError("Invalid relation type for join.")
 
     def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> Select:
+        # Docstring inherited.
         # We intentionally call Select(...) below rather than
         # Select.model_construct(...) here to get validation of the new joins;
         # if that gets expensive we should be able to get away with running
@@ -170,6 +162,7 @@ class Select(RelationBase):
         )
 
     def where(self, *terms: Predicate) -> Select:
+        # Docstring inherited.
         full_dimension_names: set[str] = set(self.dimensions.names)
         for where_term in terms:
             for column in where_term.gather_required_columns():
@@ -191,9 +184,11 @@ class Select(RelationBase):
         )
 
     def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> OrderedSlice:
+        # Docstring inherited.
         return OrderedSlice(operand=self, order_terms=terms, limit=limit, offset=offset)
 
     def find_first(self, dataset_type: str, dimensions: DimensionGroup) -> FindFirst:
+        # Docstring inherited.
         return FindFirst(operand=self, dataset_type=dataset_type, dimensions=dimensions)
 
     @pydantic.model_validator(mode="after")

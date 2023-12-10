@@ -29,64 +29,83 @@ from __future__ import annotations
 
 __all__ = ("ColumnReference", "DimensionKeyReference", "DimensionFieldReference", "DatasetFieldReference")
 
-from typing import Annotated, Literal, TypeAlias, Union
+from typing import Annotated, Literal, TypeAlias, Union, final
 
 import pydantic
 
 from ._base import ColumnExpressionBase, DatasetFieldName, StringOrWildcard
 
 
+@final
 class DimensionKeyReference(ColumnExpressionBase):
     """A column expression that references a dimension primary key column."""
 
     expression_type: Literal["dimension_key"] = "dimension_key"
+
     dimension: str
+    """Name of the dimension."""
 
     def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
         return {self}
 
     @property
     def precedence(self) -> int:
+        # Docstring inherited.
         return 0
 
     def __str__(self) -> str:
         return self.dimension
 
 
+@final
 class DimensionFieldReference(ColumnExpressionBase):
     """A column expression that references a dimension record column that is
-    not a primary ket.
+    not a primary key.
     """
 
     expression_type: Literal["dimension_field"] = "dimension_field"
+
     element: str
+    """Name of the dimension element."""
+
     field: str
+    """Name of the field (i.e. column) in the element's logical table."""
 
     def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
         return {self}
 
     @property
     def precedence(self) -> int:
+        # Docstring inherited.
         return 0
 
     def __str__(self) -> str:
         return f"{self.element}.{self.field}"
 
 
+@final
 class DatasetFieldReference(ColumnExpressionBase):
     """A column expression that references a column associated with a dataset
     type.
     """
 
     expression_type: Literal["dataset_field"] = "dataset_field"
+
     dataset_type: StringOrWildcard
+    """Name of the dataset type, or ``...`` to match any dataset type."""
+
     field: DatasetFieldName
+    """Name of the field (i.e. column) in the dataset's logical table."""
 
     def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
         return {self}
 
     @property
     def precedence(self) -> int:
+        # Docstring inherited.
         return 0
 
     def __str__(self) -> str:
@@ -96,6 +115,10 @@ class DatasetFieldReference(ColumnExpressionBase):
             return f"{self.dataset_type}.{self.field}"
 
 
+# Union without Pydantic annotation for the discriminator, for use in nesting
+# in other unions that will add that annotation.  It's not clear whether it
+# would work to just nest the annotated ones, but it seems safest not to rely
+# on undocumented behavior.
 _ColumnReference: TypeAlias = Union[
     DimensionKeyReference,
     DimensionFieldReference,
