@@ -106,6 +106,16 @@ def astropyTablesToStr(tables: list[Table]) -> str:
     """Render astropy tables to string as they are displayed in the CLI.
 
     Output formatting matches ``printAstropyTables``.
+
+    Parameters
+    ----------
+    tables : `list` of `astropy.table.Table`
+        The tables to format.
+
+    Returns
+    -------
+    formatted : `str`
+        Tables formatted into a string.
     """
     ret = ""
     for table in tables:
@@ -119,6 +129,11 @@ def printAstropyTables(tables: list[Table]) -> None:
     """Print astropy tables to be displayed in the CLI.
 
     Output formatting matches ``astropyTablesToStr``.
+
+    Parameters
+    ----------
+    tables : `list` of `astropy.table.Table`
+        The tables to print.
     """
     for table in tables:
         print("")
@@ -165,7 +180,7 @@ def clickResultMsg(result: click.testing.Result) -> str:
     Parameters
     ----------
     result : click.testing.Result
-        The result object returned from click.testing.CliRunner.invoke
+        The result object returned from `click.testing.CliRunner.invoke`.
 
     Returns
     -------
@@ -362,13 +377,13 @@ def split_kv(
     choice : `click.Choice`, optional
         If provided, verify each value is a valid choice using the provided
         `click.Choice` instance. If None, no verification will be done. By
-        default None
+        default `None`.
     multiple : `bool`, optional
         If true, the value may contain multiple comma-separated values. By
         default True.
     normalize : `bool`, optional
         If True and `choice.case_sensitive == False`, normalize the string the
-        user provided to match the choice's case. By default False.
+        user provided to match the choice's case. By default `False`.
     separator : str, optional
         The character that separates key-value pairs. May not be a comma or an
         empty space (for space separators use Click's default implementation
@@ -389,11 +404,11 @@ def split_kv(
     default_key : `Any`
         The key to use if a value is passed that is not a key-value pair.
         (Passing values that are not key-value pairs requires
-        ``unseparated_okay`` to be `True`.)
+        ``unseparated_okay`` to be `True`).
     reverse_kv : bool
         If true then for each item in values, the value to the left of the
         separator is treated as the value and the value to the right of the
-        separator is treated as the key. By default False.
+        separator is treated as the key. By default `False`.
     add_to_default : `bool`, optional
         If True, then passed-in values will not overwrite the default value
         unless the ``return_type`` is `dict` and passed-in value(s) have the
@@ -412,12 +427,22 @@ def split_kv(
     """
 
     def norm(val: str) -> str:
-        """If `normalize` is True and `choice` is not `None`, find the value
+        """If `normalize` is `True` and `choice` is not `None`, find the value
         in the available choices and return the value as spelled in the
         choices.
 
         Assumes that val exists in choices; `split_kv` uses the `choice`
         instance to verify val is a valid choice.
+
+        Parameters
+        ----------
+        val : `str`
+            Value to be found.
+
+        Returns
+        -------
+        val : `str`
+            The value that was found or the value that was given.
         """
         if normalize and choice is not None:
             v = val.casefold()
@@ -494,9 +519,11 @@ def to_upper(context: click.Context, param: click.core.Option, value: str) -> st
 
     Parameters
     ----------
-    context : click.Context
-
-    values : string
+    context : `click.Context`
+        Context given by Click.
+    param : `click.core.Option`
+        Provided by Click. Ignored.
+    value : `str`
         The value to be converted.
 
     Returns
@@ -566,7 +593,7 @@ class option_section:  # noqa: N801
 class MWPath(click.Path):
     """Overrides click.Path to implement file-does-not-exist checking.
 
-    Changes the definition of ``exists` so that `True` indicates the location
+    Changes the definition of ``exists`` so that `True` indicates the location
     (file or directory) must exist, `False` indicates the location must *not*
     exist, and `None` indicates that the file may exist or not. The standard
     definition for the `click.Path` ``exists`` parameter is that for `True` a
@@ -575,12 +602,28 @@ class MWPath(click.Path):
 
     Parameters
     ----------
-    exists : `True`, `False`, or `None`
+    exists : `bool` or `None`, optional
         If `True`, the location (file or directory) indicated by the caller
         must exist. If `False` the location must not exist. If `None`, the
         location may exist or not.
+    file_okay : `bool`, optional
+        Allow a file as a value.
+    dir_okay : `bool`, optional
+        Allow a directory as a value.
+    writable : `bool`, optional
+        If `True`, a writable check is performed.
+    readable : `bool, optional
+        If `True`, a readable check is performed.
+    resolve_path : `bool`, optional
+        Resolve the path.
+    allow_dash : `bool`, optional
+        Allow single dash as value to mean a standard stream.
+    path_type : `type` or `None`, optional
+        Convert the incoming value to this type.
 
-    For other parameters see `click.Path`.
+    Notes
+    -----
+    All parameters other than ``exists`` come directly from `click.Path`.
     """
 
     def __init__(
@@ -615,6 +658,15 @@ class MWPath(click.Path):
 
         Called by `click.ParamType` to "convert values through types".
         `click.Path` uses this step to verify Path conditions.
+
+        Parameters
+        ----------
+        value : `str` or `os.PathLike`
+            File path.
+        param : `click.Parameter`
+            Parameters provided by Click.
+        ctx : `click.Context`
+            Context provided by Click.
         """
         if self.mustNotExist and os.path.exists(value):
             self.fail(f'Path "{value}" should not exist.')
@@ -727,6 +779,13 @@ class OptionSection(MWOption):
 class MWOptionDecorator:
     """Wraps the click.option decorator to enable shared options to be declared
     and allows inspection of the shared option.
+
+    Parameters
+    ----------
+    *param_decls : `typing.Any`
+        Parameters to be stored in the option.
+    **kwargs : `typing.Any`
+        Keyword arguments for the option.
     """
 
     def __init__(self, *param_decls: Any, **kwargs: Any) -> None:
@@ -761,6 +820,13 @@ class MWOptionDecorator:
 class MWArgumentDecorator:
     """Wraps the click.argument decorator to enable shared arguments to be
     declared.
+
+    Parameters
+    ----------
+    *param_decls : `typing.Any`
+        Parameters to be stored in the argument.
+    **kwargs : `typing.Any`
+        Keyword arguments for the argument.
     """
 
     def __init__(self, *param_decls: Any, **kwargs: Any) -> None:
@@ -781,6 +847,13 @@ class MWArgumentDecorator:
 class MWCommand(click.Command):
     """Command subclass that stores a copy of the args list for use by the
     command.
+
+    Parameters
+    ----------
+    *args : `typing.Any`
+        Arguments for `click.Command`.
+    **kwargs : `typing.Any`
+        Keyword arguments for `click.Command`.
     """
 
     extra_epilog: str | None = None
@@ -869,7 +942,7 @@ class MWCommand(click.Command):
         Parameters
         ----------
         ctx : `click.core.Context`
-            The current Context.ß
+            The current Context.
         args : `list` [`str`]
             The list of arguments from the command line, split at spaces but
             not at separators (like "=").
@@ -966,6 +1039,11 @@ class MWCtxObj:
     def getFrom(ctx: click.Context) -> Any:
         """If needed, initialize `ctx.obj` with a new `MWCtxObj`, and return
         the new or already existing `MWCtxObj`.
+
+        Parameters
+        ----------
+        ctx : `click.Context`
+            Context provided by Click.
         """
         if ctx.obj is not None:
             return ctx.obj
@@ -1063,8 +1141,10 @@ def _read_yaml_presets(file_uri: str, cmd_name: str) -> dict[str, Any]:
 
 
 def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list[str] | None = None) -> Table:
-    """Sort an astropy table, with prioritization given to columns in this
-    order:
+    """Sort an astropy table.
+
+    Prioritization is given to columns in this order:
+
     1. the provided named columns
     2. spatial and temporal columns
     3. the rest of the columns.
@@ -1074,7 +1154,7 @@ def sortAstropyTable(table: Table, dimensions: list[Dimension], sort_first: list
     Parameters
     ----------
     table : `astropy.table.Table`
-        The table to sort
+        The table to sort.
     dimensions : `list` [``Dimension``]
         The dimensions of the dataIds in the table (the dimensions should be
         the same for all the dataIds). Used to determine if the column is
@@ -1113,6 +1193,16 @@ def catch_and_exit(func: Callable) -> Callable:
     and signals click to exit.
 
     Use as decorator.
+
+    Parameters
+    ----------
+    func : `collections.abc.Callable`
+        The function to be decorated.
+
+    Returns
+    -------
+    `collections.abc.Callable`
+        The decorated function.
     """
 
     @wraps(func)

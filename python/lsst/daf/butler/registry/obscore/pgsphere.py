@@ -56,11 +56,33 @@ class PgSpherePoint(UserDefinedType):
     cache_ok = True
 
     def get_col_spec(self, **kw: Any) -> str:
-        """Return name of the column type."""
+        """Return name of the column type.
+
+        Parameters
+        ----------
+        **kw
+            Keyword Parameters.
+
+        Returns
+        -------
+        spec : `str`
+            Always returns "SPOINT".
+        """
         return "SPOINT"
 
     def bind_processor(self, dialect: sqlalchemy.engine.Dialect) -> Callable:
-        """Return processor method for bind values."""
+        """Return processor method for bind values.
+
+        Parameters
+        ----------
+        dialect : `sqlalchemy.engine.Dialect`
+            The relevant dialect.
+
+        Returns
+        -------
+        processor : `~collections.abc.Callable`
+            The processor method.
+        """
 
         def _process(value: LonLat | None) -> str | None:
             if value is None:
@@ -84,11 +106,33 @@ class PgSpherePolygon(UserDefinedType):
     cache_ok = True
 
     def get_col_spec(self, **kw: Any) -> str:
-        """Return name of the column type."""
+        """Return name of the column type.
+
+        Parameters
+        ----------
+        **kw
+            Keyword Parameters.
+
+        Returns
+        -------
+        spec : `str`
+            Always returns "SPOLY".
+        """
         return "SPOLY"
 
     def bind_processor(self, dialect: sqlalchemy.engine.Dialect) -> Callable:
-        """Return processor method for bind values."""
+        """Return processor method for bind values.
+
+        Parameters
+        ----------
+        dialect : `sqlalchemy.engine.Dialect`
+            The relevant dialect.
+
+        Returns
+        -------
+        processor : `~collections.abc.Callable`
+            The processor method.
+        """
 
         def _process(value: Sequence[LonLat] | None) -> str | None:
             if value is None:
@@ -112,6 +156,15 @@ ischema_names["spoly"] = PgSpherePolygon
 class PgSphereObsCorePlugin(SpatialObsCorePlugin):
     """Spatial ObsCore plugin which creates pg_sphere geometries.
 
+    Parameters
+    ----------
+    name : `str`
+        The name.
+    config : `~collections.abc.Mapping` [`str`, `~typing.Any`]
+        The configuration.
+
+    Notes
+    -----
     This plugin adds and fills two columns to obscore table - one for the
     region (polygon), another for the position of the center of bounding
     circle. Both columns are indexed. Column names can be changed via plugin

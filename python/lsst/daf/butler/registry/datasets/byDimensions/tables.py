@@ -81,17 +81,17 @@ def addDatasetForeignKey(
     tableSpec : `ddl.TableSpec`
         Specification for the table that should reference the dataset
         table.  Will be modified in place.
-    dtype: `type`
+    dtype : `type`
         Type of the column, same as the column type of the PK column of
         a referenced table (``dataset.id``).
-    name: `str`, optional
+    name : `str`, optional
         A name to use for the prefix of the new field; the full name is
         ``{name}_id``.
-    onDelete: `str`, optional
+    onDelete : `str`, optional
         One of "CASCADE" or "SET NULL", indicating what should happen to
         the referencing row if the collection row is deleted.  `None`
         indicates that this should be an integrity error.
-    constraint: `bool`, optional
+    constraint : `bool`, optional
         If `False` (`True` is default), add a field that can be joined to
         the dataset primary key, but do not add a foreign key constraint.
     **kwargs
@@ -127,14 +127,16 @@ def makeStaticTableSpecs(
 
     Parameters
     ----------
-    collections: `CollectionManager`
+    collections : `CollectionManager`
         Manager object for the collections in this `Registry`.
     universe : `DimensionUniverse`
         Universe graph containing all dimensions known to this `Registry`.
-    dtype: `type`
+    dtype : `type`
         Type of the dataset ID (primary key) column.
-    autoincrement: `bool`
+    autoincrement : `bool`
         If `True` then dataset ID column will be auto-incrementing.
+    schema_version : `VersionTuple`
+        The version of this schema.
 
     Returns
     -------
@@ -389,7 +391,9 @@ def makeCalibTableSpec(
     collections : `type` [ `CollectionManager` ]
         `CollectionManager` subclass that can be used to construct foreign keys
         to the run and/or collection tables.
-    dtype: `type`
+    TimespanReprClass : `type` of `TimespanDatabaseRepresentation`
+        The Python type to use to represent a timespan.
+    dtype : `type`
         Type of the FK column, same as the column type of the PK column of
         a referenced table (``dataset.id``).
 

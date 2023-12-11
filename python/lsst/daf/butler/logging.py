@@ -108,6 +108,11 @@ class ButlerMDC:
         """Clear the MDC value associated with this key.
 
         Can be called even if the key is not known to MDC.
+
+        Parameters
+        ----------
+        key : `str`
+            Key for which the MDC value should be removed.
         """
         cls._MDC.pop(key, None)
 

@@ -66,6 +66,27 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
 
     Instances of this class should never be constructed directly; use
     `DatasetRecordStorageManager.register` instead.
+
+    Parameters
+    ----------
+    datasetType : `DatasetType`
+        The dataset type to use.
+    db : `Database`
+        Database connection.
+    dataset_type_id : `int`
+        Dataset type identifier.
+    collections : `CollectionManager`
+        The collection manager.
+    static : `StaticDatasetTablesTuple`
+        Unknown.
+    summaries : `CollectionSummaryManager`
+        Collection summary manager.
+    tags_table_factory : `~collections.abc.Callable`
+        Factory for creating tags tables.
+    use_astropy_ingest_date : `bool`
+        Whether to use Astropy for ingest date.
+    calibs_table_factory : `~collections.abc.Callable`
+        Factory for creating calibration tables.
     """
 
     def __init__(

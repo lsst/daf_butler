@@ -454,7 +454,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         If `None` (default), `DataCoordinateSet.hasRecords` will be computed
         from the given data IDs, immediately if ``check`` is `True`, or on
         first use if ``check`` is `False`.
-    check: `bool`, optional
+    check : `bool`, optional
         If `True` (default) check that all data IDs are consistent with the
         given ``graph`` and state flags at construction.  If `False`, no
         checking will occur.
@@ -808,7 +808,7 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         If `None` (default), `DataCoordinateSet.hasRecords` will be computed
         from the given data IDs, immediately if ``check`` is `True`, or on
         first use if ``check`` is `False`.
-    check: `bool`, optional
+    check : `bool`, optional
         If `True` (default) check that all data IDs are consistent with the
         given ``graph`` and state flags at construction.  If `False`, no
         checking will occur.

@@ -715,7 +715,7 @@ class FormatterFactory:
             or `DatasetType` instance is provided.  Supports instrument
             override if a `DatasetRef` is provided configured with an
             ``instrument`` value for the data ID.
-        args : `tuple`
+        *args : `tuple`
             Positional arguments to use pass to the object constructor.
         **kwargs
             Keyword arguments to pass to object constructor.
@@ -749,7 +749,7 @@ class FormatterFactory:
             or `DatasetType` instance is provided.  Supports instrument
             override if a `DatasetRef` is provided configured with an
             ``instrument`` value for the data ID.
-        args : `tuple`
+        *args : `tuple`
             Positional arguments to use pass to the object constructor.
         **kwargs
             Keyword arguments to pass to object constructor.

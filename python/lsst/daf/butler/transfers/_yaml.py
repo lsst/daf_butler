@@ -108,8 +108,10 @@ class YamlRepoExportBackend(RepoExportBackend):
 
     Parameters
     ----------
-    stream
+    stream : `io.IO`
         A writeable file-like object.
+    universe : `DimensionUniverse`
+        The dimension universe to use for the export.
     """
 
     def __init__(self, stream: IO, universe: DimensionUniverse):
@@ -227,7 +229,7 @@ class YamlRepoImportBackend(RepoImportBackend):
 
     Parameters
     ----------
-    stream
+    stream : `io.IO`
         A readable file-like object.
     registry : `SqlRegistry`
         The registry datasets will be imported into.  Only used to retreive

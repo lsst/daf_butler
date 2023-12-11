@@ -76,6 +76,15 @@ class SerializedDatastoreRecordData(_BaseModelCompat):
         """Construct a `SerializedDatastoreRecordData` directly without
         validators.
 
+        Parameters
+        ----------
+        dataset_ids : `list` [`str` or `uuid.UUID`]
+            The dataset UUIDs.
+        records : `dict`
+            The datastore records.
+
+        Notes
+        -----
         This differs from the pydantic "construct" method in that the
         arguments are explicitly what the model requires, and it will recurse
         through members, constructing them from their corresponding `direct`
@@ -195,7 +204,7 @@ class DatastoreRecordData:
 
         Parameters
         ----------
-        data : `dict`
+        simple : `dict`
             Serialized representation returned from `to_simple` method.
         universe : `DimensionUniverse`, optional
             Dimension universe, not used by this method.

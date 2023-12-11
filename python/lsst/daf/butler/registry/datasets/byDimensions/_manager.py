@@ -123,6 +123,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         Structure containing tables that summarize the contents of collections.
     caching_context : `CachingContext`
         Object controlling caching of information returned by managers.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
     """
 
     def __init__(
@@ -197,7 +199,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
         Parameters
         ----------
-        collections: `CollectionManager`
+        collections : `CollectionManager`
             Manager object for the collections in this `Registry`.
         universe : `DimensionUniverse`
             Universe graph containing all dimensions known to this `Registry`.

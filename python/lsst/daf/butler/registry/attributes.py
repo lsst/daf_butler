@@ -62,6 +62,8 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         Database engine interface for the namespace in which this table lives.
     table : `sqlalchemy.schema.Table`
         SQLAlchemy representation of the table that stores attributes.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        The version of the registry schema.
     """
 
     def __init__(

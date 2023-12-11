@@ -261,6 +261,8 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         All dimensions know to the `Registry`.
     datasetIdColumnType : `type`
         Type for dataset ID column.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
 
     Notes
     -----
@@ -276,7 +278,6 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
 
     - the `DimensionUniverse`, if they need it to (e.g.) construct or validate
       filename templates.
-
     """
 
     def __init__(

@@ -40,27 +40,29 @@ from ._formatter import FormatterParameter
 
 @dataclass
 class FileDataset:
-    """A struct that represents a dataset exported to a file."""
+    """A struct that represents a dataset exported to a file.
+
+    Parameters
+    ----------
+    path : `lsst.resources.ResourcePath` or `str`
+        Path to the dataset (`lsst.resources.ResourcePath` or `str`).
+
+        If the dataset was exported with ``transfer=None`` (i.e. in-place),
+        this is relative to the datastore root (only datastores that have a
+        well-defined root in the local filesystem can be expected to support
+        in-place exports).  Otherwise this is relative to the directory passed
+        to `Datastore.export`.
+    refs : `list` [ `DatasetRef` ]
+        Registry information about the dataset.
+    formatter : `Formatter` or `str` or `None`, optional
+        A `Formatter` class or fully-qualified name.
+    """
 
     __slots__ = ("refs", "path", "formatter")
 
     refs: list[DatasetRef]
-    """Registry information about the dataset. (`list` of `DatasetRef`).
-    """
-
     path: str | ResourcePath
-    """Path to the dataset (`lsst.resources.ResourcePath` or `str`).
-
-    If the dataset was exported with ``transfer=None`` (i.e. in-place),
-    this is relative to the datastore root (only datastores that have a
-    well-defined root in the local filesystem can be expected to support
-    in-place exports).  Otherwise this is relative to the directory passed
-    to `Datastore.export`.
-    """
-
     formatter: FormatterParameter | None
-    """A `Formatter` class or fully-qualified name.
-    """
 
     def __init__(
         self,

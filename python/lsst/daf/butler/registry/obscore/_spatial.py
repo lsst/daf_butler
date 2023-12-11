@@ -99,7 +99,7 @@ class SpatialObsCorePlugin(ABC):
 
         Parameters
         ----------
-        table : `ddl.TableSpec`
+        table_spec : `ddl.TableSpec`
             ObsCore table specification.
 
         Notes

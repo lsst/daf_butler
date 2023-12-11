@@ -40,7 +40,7 @@ def removeDatasetType(repo: str, dataset_type_name: tuple[str, ...]) -> None:
     repo : `str`
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
-    datasetTypeName : `str`
+    dataset_type_name : `str`
         The name of the dataset type to be removed.
     """
     butler = Butler.from_config(repo, writeable=True, without_datastore=True)

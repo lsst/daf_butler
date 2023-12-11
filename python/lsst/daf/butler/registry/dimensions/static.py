@@ -88,6 +88,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         Object that manages saved `DimensionGroup` definitions.
     universe : `DimensionUniverse`
         All known dimensions.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
     """
 
     def __init__(

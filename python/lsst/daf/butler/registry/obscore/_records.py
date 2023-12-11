@@ -99,7 +99,9 @@ class RecordFactory:
         Description of obscore schema.
     universe : `DimensionUniverse`
         Registry dimensions universe.
-    exposure_region_factory: `ExposureRegionFactory`, optional
+    spatial_plugins : `~collections.abc.Collection` of `SpatialObsCorePlugin`
+        Spatial plugins.
+    exposure_region_factory : `ExposureRegionFactory`, optional
         Manager for Registry dimensions.
     """
 
@@ -266,8 +268,8 @@ class RecordFactory:
         region : `~lsst.sphgeom.Region` or `None`
             Spacial region to convert to record.
 
-        Return
-        ------
+        Returns
+        -------
         record : `dict`
             Record items.
 

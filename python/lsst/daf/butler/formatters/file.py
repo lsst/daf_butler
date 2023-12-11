@@ -232,9 +232,6 @@ class FileFormatter(Formatter):
 
         Parameters
         ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
         component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the

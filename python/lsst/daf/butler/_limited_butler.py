@@ -144,7 +144,7 @@ class LimitedButler(ABC):
 
         Parameters
         ----------
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             A resolved `DatasetRef` directly associated with a dataset.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
@@ -564,7 +564,7 @@ class LimitedButler(ABC):
         category=FutureWarning,
     )
     def datastore(self) -> Datastore:
-        """The object that manages actual dataset storage. (`Datastore`)"""
+        """The object that manages actual dataset storage (`Datastore`)."""
         return self._datastore
 
     _datastore: Datastore

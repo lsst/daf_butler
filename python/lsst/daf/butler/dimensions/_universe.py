@@ -61,7 +61,7 @@ _LOG = logging.getLogger(__name__)
 
 
 @immutable
-class DimensionUniverse:
+class DimensionUniverse:  # numpydoc ignore=PR02
     """Self-consistent set of dimensions.
 
     A parent class that represents a complete, self-consistent set of
@@ -215,13 +215,13 @@ class DimensionUniverse:
         Parameters
         ----------
         other : `DimensionUniverse`
-            The other `DimensionUniverse` to check for compatibility
+            The other `DimensionUniverse` to check for compatibility.
 
         Returns
         -------
         results : `bool`
             If the other `DimensionUniverse` is compatible with this one return
-            `True`, else `False`
+            `True`, else `False`.
         """
         # Different namespaces mean that these universes cannot be compatible.
         if self.namespace != other.namespace:
@@ -472,7 +472,7 @@ class DimensionUniverse:
 
         Parameters
         ----------
-        iterable: iterable of `Dimension` or `str`
+        iterable : iterable of `Dimension` or `str`
             Dimensions that must be included in the returned graph (their
             dependencies will be as well).
 
@@ -541,7 +541,7 @@ class DimensionUniverse:
 
         Parameters
         ----------
-        elements : iterable of `DimensionElement`.
+        elements : iterable of `DimensionElement`
             Elements to be sorted.
         reverse : `bool`, optional
             If `True`, sort in the opposite order.
@@ -597,6 +597,17 @@ class DimensionUniverse:
     def get_elements_populated_by(self, dimension: Dimension) -> NamedValueAbstractSet[DimensionElement]:
         """Return the set of `DimensionElement` objects whose
         `~DimensionElement.populated_by` attribute is the given dimension.
+
+        Parameters
+        ----------
+        dimension : `Dimension`
+            The dimension of interest.
+
+        Returns
+        -------
+        populated_by : `NamedValueAbstractSet` [ `DimensionElement` ]
+            The set of elements who say they are populated by the given
+            dimension.
         """
         return self._populates[dimension.name]
 

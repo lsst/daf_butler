@@ -409,7 +409,7 @@ class Timespan:
 
         Parameters
         ----------
-        other : `Timespan` or `astropy.time.Time`.
+        other : `Timespan` or `astropy.time.Time`
             Timespan or instant in time to relate to ``self``.
 
         Returns
@@ -726,7 +726,7 @@ class TimespanDatabaseRepresentation(ABC):
 
         Parameters
         ----------
-        timespan
+        timespan : `Timespan` or `None`
             A timespan literal, or `None` for ``NULL``.
         name : `str`, optional
             Name for the logical column; a part of the name for multi-column

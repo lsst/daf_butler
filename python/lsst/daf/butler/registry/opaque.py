@@ -158,6 +158,8 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
     metaTable : `sqlalchemy.schema.Table`
         SQLAlchemy representation of the table that records which opaque
         logical tables exist.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
     """
 
     def __init__(

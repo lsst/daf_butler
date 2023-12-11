@@ -16,17 +16,17 @@ from pydantic import AnyHttpUrl
 
 
 class FileDatastoreGetPayloadFileInfo(_BaseModelCompat):
-    """Information required to read a single file stored in `FileDatastore`"""
+    """Information required to read a single file stored in `FileDatastore`."""
 
     # This is intentionally restricted to HTTP for security reasons.  Allowing
     # arbitrary URLs here would allow the server to trick the client into
     # fetching data from any file on its local filesystem or from remote
     # storage using credentials laying around in the environment.
     url: AnyHttpUrl
-    """An HTTP URL that can be used to read the file"""
+    """An HTTP URL that can be used to read the file."""
 
     datastoreRecords: SerializedStoredFileInfo
-    """`FileDatastore` metadata records for this file"""
+    """`FileDatastore` metadata records for this file."""
 
 
 class FileDatastoreGetPayload(_BaseModelCompat):
@@ -38,11 +38,11 @@ class FileDatastoreGetPayload(_BaseModelCompat):
 
     file_info: list[FileDatastoreGetPayloadFileInfo]
     """List of retrieval information for each file associated with this
-    artifact
+    artifact.
     """
 
     dataset_ref: SerializedDatasetRef
-    """Registry information associated with this artifact"""
+    """Registry information associated with this artifact."""
 
 
 def get_dataset_as_python_object(
@@ -52,28 +52,28 @@ def get_dataset_as_python_object(
     parameters: Mapping[str, Any] | None,
     storageClass: StorageClass | str | None,
 ) -> Any:
-    """Retrieve an artifact from storage and return it as a Python object
+    """Retrieve an artifact from storage and return it as a Python object.
 
     Parameters
     ----------
     payload : `FileDatastoreGetPayload`
         Pre-processed information about each file associated with this
         artifact.
-    universe: `DimensionUniverse`
+    universe : `DimensionUniverse`
         The universe of dimensions associated with the `DatasetRef` contained
         in ``payload``.
     parameters : `Mapping`[`str`, `typing.Any`]
         `StorageClass` and `Formatter` parameters to be used when converting
-        the artifact to a Python object
-    storageClass: `StorageClass` | `str` | `None`
+        the artifact to a Python object.
+    storageClass : `StorageClass` | `str` | `None`
         Overrides the `StorageClass` to be used when converting the artifact to
         a Python object.  If `None`, uses the `StorageClass` specified by
-        `payload`.
+        ``payload``.
 
     Returns
     -------
-    python_object: `Any`
-        The retrieved artifact, converted to a Python object
+    python_object : `typing.Any`
+        The retrieved artifact, converted to a Python object.
     """
     fileLocations: list[DatasetLocationInformation] = [
         (Location(None, str(file_info.url)), StoredFileInfo.from_simple(file_info.datastoreRecords))

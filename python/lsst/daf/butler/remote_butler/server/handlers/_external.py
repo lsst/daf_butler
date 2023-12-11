@@ -71,7 +71,7 @@ async def get_client_config() -> dict[str, Any]:
 
 @external_router.get("/v1/universe", response_model=dict[str, Any])
 def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> dict[str, Any]:
-    """Allow remote client to get dimensions definition."""
+    # Allow remote client to get dimensions definition.
     butler = factory.create_butler()
     return butler.dimensions.dimensionConfig.toDict()
 
@@ -87,7 +87,7 @@ def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> di
 def get_dataset_type(
     dataset_type_name: str, factory: Factory = Depends(factory_dependency)
 ) -> SerializedDatasetType:
-    """Return the dataset type."""
+    # Return the dataset type.
     butler = factory.create_butler()
     datasetType = butler.get_dataset_type(dataset_type_name)
     return datasetType.to_simple()
@@ -108,7 +108,7 @@ def get_dataset(
     datastore_records: bool = False,
     factory: Factory = Depends(factory_dependency),
 ) -> SerializedDatasetRef | None:
-    """Return a single dataset reference."""
+    # Return a single dataset reference.
     butler = factory.create_butler()
     ref = butler.get_dataset(
         id,

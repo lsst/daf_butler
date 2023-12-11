@@ -74,7 +74,7 @@ class StorageClass:
     name : `str`
         Name to use for this class.
     pytype : `type` or `str`
-        Python type (or name of type) to associate with the `StorageClass`
+        Python type (or name of type) to associate with the `StorageClass`.
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
     derivedComponents : `dict`, optional
@@ -810,6 +810,10 @@ StorageClasses
             Base class for this `StorageClass`. Must be either `StorageClass`
             or a subclass of `StorageClass`. If `None`, `StorageClass` will
             be used.
+        **kwargs
+            Additional parameter values to use as defaults for this class.
+            This can include ``components``, ``parameters``,
+            ``derivedComponents``, and ``converters``.
 
         Returns
         -------

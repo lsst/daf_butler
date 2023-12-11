@@ -121,7 +121,7 @@ def removeCollections(
     Parameters
     ----------
     repo : `str`
-        Same as the ``config`` argument to ``Butler.__init__``
+        Same as the ``config`` argument to ``Butler.__init__``.
     collection : `str`
         Same as the ``name`` argument to ``Registry.removeCollection``.
 
@@ -133,14 +133,14 @@ def removeCollections(
     """
     collectionInfo = _getCollectionInfo(repo, collection)
 
-    def doRemove(collections: Table) -> None:
+    def _doRemove(collections: Table) -> None:
         """Perform the prune collection step."""
         butler = Butler.from_config(repo, writeable=True, without_datastore=True)
         for name in collections["Collection"]:
             butler.registry.removeCollection(name)
 
     result = RemoveCollectionResult(
-        onConfirmation=partial(doRemove, collectionInfo.nonRunCollections),
+        onConfirmation=partial(_doRemove, collectionInfo.nonRunCollections),
         removeCollectionsTable=collectionInfo.nonRunCollections,
         runsTable=collectionInfo.runCollections,
     )

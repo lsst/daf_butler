@@ -121,6 +121,16 @@ class DatabaseTests(ABC):
     def makeEmptyDatabase(self, origin: int = 0) -> Database:
         """Return an empty `Database` with the given origin, or an
         automatically-generated one if ``origin`` is `None`.
+
+        Parameters
+        ----------
+        origin : `int` or `None`
+            Origin to use for the database.
+
+        Returns
+        -------
+        db : `Database`
+            Empty database with given origin or auto-generated origin.
         """
         raise NotImplementedError()
 
@@ -129,6 +139,18 @@ class DatabaseTests(ABC):
         """Return a context manager for a read-only connection into the given
         database.
 
+        Parameters
+        ----------
+        database : `Database`
+            The database to use.
+
+        Yields
+        ------
+        `Database`
+            The new database connection.
+
+        Notes
+        -----
         The original database should be considered unusable within the context
         but safe to use again afterwards (this allows the context manager to
         block write access by temporarily changing user permissions to really
@@ -140,6 +162,18 @@ class DatabaseTests(ABC):
     def getNewConnection(self, database: Database, *, writeable: bool) -> Database:
         """Return a new `Database` instance that points to the same underlying
         storage as the given one.
+
+        Parameters
+        ----------
+        database : `Database`
+            The current database.
+        writeable : `bool`
+            Whether the connection should be writeable or not.
+
+        Returns
+        -------
+        db : `Database`
+            The new database connection.
         """
         raise NotImplementedError()
 
@@ -149,6 +183,20 @@ class DatabaseTests(ABC):
         """Run a SELECT or other read-only query against the database and
         return the results as a list.
 
+        Parameters
+        ----------
+        database : `Database`
+            The database to use.
+        executable : `sqlalchemy.sql.expression.SelectBase`
+            Expression to execute.
+
+        Returns
+        -------
+        results : `list` of `sqlalchemy.engine.Row`
+            The results.
+
+        Notes
+        -----
         This is a thin wrapper around database.query() that just avoids
         context-manager boilerplate that is usefully verbose in production code
         but just noise in tests.
@@ -160,6 +208,20 @@ class DatabaseTests(ABC):
         """Run a SELECT query that yields a single column and row against the
         database and return its value.
 
+        Parameters
+        ----------
+        database : `Database`
+            The database to use.
+        executable : `sqlalchemy.sql.expression.SelectBase`
+            Expression to execute.
+
+        Returns
+        -------
+        results : `~typing.Any`
+            The results.
+
+        Notes
+        -----
         This is a thin wrapper around database.query() that just avoids
         context-manager boilerplate that is usefully verbose in production code
         but just noise in tests.
@@ -736,9 +798,16 @@ class DatabaseTests(ABC):
         with db1.declareStaticTables(create=True) as context:
             tables1 = context.addTableTuple(STATIC_TABLE_SPECS)
 
-        async def side1(lock: Iterable[str] = ()) -> tuple[set[str], set[str]]:
+        async def _side1(lock: Iterable[str] = ()) -> tuple[set[str], set[str]]:
             """One side of the concurrent locking test.
 
+            Parameters
+            ----------
+            lock : `~collections.abc.Iterable` of `str`
+                Locks.
+
+            Notes
+            -----
             This optionally locks the table (and maybe the whole database),
             does a select for its contents, inserts a new row, and then selects
             again, with some waiting in between to make sure the other side has
@@ -757,9 +826,11 @@ class DatabaseTests(ABC):
                 names2 = {row.name for row in self.query_list(db1, tables1.a.select())}
             return names1, names2
 
-        async def side2() -> None:
+        async def _side2() -> None:
             """Other side of the concurrent locking test.
 
+            Notes
+            -----
             This side just waits a bit and then tries to insert a row into the
             table that the other side is trying to lock.  Hopefully that
             waiting is enough to give the other side a chance to acquire the
@@ -769,7 +840,7 @@ class DatabaseTests(ABC):
             because we can only make that unlikely, not impossible.
             """
 
-            def toRunInThread():
+            def _toRunInThread():
                 """Create new SQLite connection for use in thread.
 
                 SQLite locking isn't asyncio-friendly unless we actually
@@ -787,17 +858,17 @@ class DatabaseTests(ABC):
             await asyncio.sleep(2.0)
             loop = asyncio.get_running_loop()
             with ThreadPoolExecutor() as pool:
-                await loop.run_in_executor(pool, toRunInThread)
+                await loop.run_in_executor(pool, _toRunInThread)
 
-        async def testProblemsWithNoLocking() -> None:
+        async def _testProblemsWithNoLocking() -> None:
             """Run side1 and side2 with no locking, attempting to demonstrate
             the problem that locking is supposed to solve.  If we get unlucky
             with scheduling, side2 will just happen to insert after side1 is
             done, and we won't have anything definitive.  We just warn in that
             case because we really don't want spurious test failures.
             """
-            task1 = asyncio.create_task(side1())
-            task2 = asyncio.create_task(side2())
+            task1 = asyncio.create_task(_side1())
+            task2 = asyncio.create_task(_side2())
 
             names1, names2 = await task1
             await task2
@@ -823,17 +894,17 @@ class DatabaseTests(ABC):
                 self.assertEqual(names1, set())
                 self.assertEqual(names2, {"a1", "a2"})
 
-        asyncio.run(testProblemsWithNoLocking())
+        asyncio.run(_testProblemsWithNoLocking())
 
         # Clean up after first test.
         db1.delete(tables1.a, ["name"], {"name": "a1"}, {"name": "a2"})
 
-        async def testSolutionWithLocking() -> None:
+        async def _testSolutionWithLocking() -> None:
             """Run side1 and side2 with locking, which should make side2 block
             its insert until side2 releases its lock.
             """
-            task1 = asyncio.create_task(side1(lock=[tables1.a]))
-            task2 = asyncio.create_task(side2())
+            task1 = asyncio.create_task(_side1(lock=[tables1.a]))
+            task2 = asyncio.create_task(_side2())
 
             names1, names2 = await task1
             await task2
@@ -853,7 +924,7 @@ class DatabaseTests(ABC):
                 self.assertEqual(names1, set())
                 self.assertEqual(names2, {"a1"})
 
-        asyncio.run(testSolutionWithLocking())
+        asyncio.run(_testSolutionWithLocking())
 
     def testTimespanDatabaseRepresentation(self):
         """Tests for `TimespanDatabaseRepresentation` and the `Database`
@@ -893,7 +964,7 @@ class DatabaseTests(ABC):
             aTable = context.addTable("a", aSpec)
         self.maxDiff = None
 
-        def convertRowForInsert(row: dict) -> dict:
+        def _convertRowForInsert(row: dict) -> dict:
             """Convert a row containing a Timespan instance into one suitable
             for insertion into the database.
             """
@@ -901,7 +972,7 @@ class DatabaseTests(ABC):
             ts = result.pop(TimespanReprClass.NAME)
             return TimespanReprClass.update(ts, result=result)
 
-        def convertRowFromSelect(row: dict) -> dict:
+        def _convertRowFromSelect(row: dict) -> dict:
             """Convert a row from the database into one containing a Timespan.
 
             Parameters
@@ -925,9 +996,9 @@ class DatabaseTests(ABC):
         # Include one with a NULL timespan.
         aRows = [{"id": n, TimespanReprClass.NAME: t} for n, t in enumerate(aTimespans)]
         aRows.append({"id": len(aRows), TimespanReprClass.NAME: None})
-        db.insert(aTable, convertRowForInsert(aRows[0]))
-        db.insert(aTable, *[convertRowForInsert(r) for r in aRows[1:3]])
-        db.insert(aTable, *[convertRowForInsert(r) for r in aRows[3:]])
+        db.insert(aTable, _convertRowForInsert(aRows[0]))
+        db.insert(aTable, *[_convertRowForInsert(r) for r in aRows[1:3]])
+        db.insert(aTable, *[_convertRowForInsert(r) for r in aRows[3:]])
         # Add another one with a NULL timespan, but this time by invoking
         # the server-side default.
         aRows.append({"id": len(aRows)})
@@ -937,7 +1008,7 @@ class DatabaseTests(ABC):
         self.assertEqual(
             aRows,
             [
-                convertRowFromSelect(row._asdict())
+                _convertRowFromSelect(row._asdict())
                 for row in self.query_list(db, aTable.select().order_by(aTable.columns.id))
             ],
         )
@@ -963,9 +1034,9 @@ class DatabaseTests(ABC):
         bRows.extend(
             {"id": n + offset, "key": 2, TimespanReprClass.NAME: t} for n, t in enumerate(bTimespans)
         )
-        db.insert(bTable, *[convertRowForInsert(r) for r in bRows[:2]])
-        db.insert(bTable, convertRowForInsert(bRows[2]))
-        db.insert(bTable, *[convertRowForInsert(r) for r in bRows[3:]])
+        db.insert(bTable, *[_convertRowForInsert(r) for r in bRows[:2]])
+        db.insert(bTable, _convertRowForInsert(bRows[2]))
+        db.insert(bTable, *[_convertRowForInsert(r) for r in bRows[3:]])
         # Insert a row with no timespan into table B.  This should invoke the
         # server-side default, which is a timespan over (-∞, ∞).  We set
         # key=3 to avoid upsetting an exclusion constraint that might exist.
@@ -976,27 +1047,29 @@ class DatabaseTests(ABC):
         self.assertEqual(
             bRows,
             [
-                convertRowFromSelect(row._asdict())
+                _convertRowFromSelect(row._asdict())
                 for row in self.query_list(db, bTable.select().order_by(bTable.columns.id))
             ],
         )
         # Test that we can't insert timespan=None into this table.
         with self.assertRaises(sqlalchemy.exc.IntegrityError):
-            db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 4, TimespanReprClass.NAME: None}))
+            db.insert(
+                bTable, _convertRowForInsert({"id": len(bRows), "key": 4, TimespanReprClass.NAME: None})
+            )
         # IFF this database supports exclusion constraints, test that they
         # also prevent inserts.
         if TimespanReprClass.hasExclusionConstraint():
             with self.assertRaises(sqlalchemy.exc.IntegrityError):
                 db.insert(
                     bTable,
-                    convertRowForInsert(
+                    _convertRowForInsert(
                         {"id": len(bRows), "key": 1, TimespanReprClass.NAME: Timespan(None, timestamps[1])}
                     ),
                 )
             with self.assertRaises(sqlalchemy.exc.IntegrityError):
                 db.insert(
                     bTable,
-                    convertRowForInsert(
+                    _convertRowForInsert(
                         {
                             "id": len(bRows),
                             "key": 1,
@@ -1007,7 +1080,7 @@ class DatabaseTests(ABC):
             with self.assertRaises(sqlalchemy.exc.IntegrityError):
                 db.insert(
                     bTable,
-                    convertRowForInsert(
+                    _convertRowForInsert(
                         {"id": len(bRows), "key": 1, TimespanReprClass.NAME: Timespan(timestamps[2], None)}
                     ),
                 )

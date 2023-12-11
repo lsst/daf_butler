@@ -51,6 +51,11 @@ class SortedSequenceSet(Set[str]):
     This delegates directly to ``tuple.__contains__``, so there is an implicit
     assumption that `len` is small and hence O(N) lookups are not a problem, as
     is the case for sets of dimension names.
+
+    Parameters
+    ----------
+    seq : `tuple` [`str`, ...]
+        Strings to see the set.
     """
 
     def __init__(self, seq: tuple[str, ...]):
@@ -85,7 +90,13 @@ class SortedSequenceSet(Set[str]):
         return f"{{{', '.join(str(k) for k in self._seq)}}}"
 
     def as_tuple(self) -> tuple[str, ...]:
-        """Return the underlying tuple."""
+        """Return the underlying tuple.
+
+        Returns
+        -------
+        t : `tuple`
+            A tuple of all the values.
+        """
         return self._seq
 
     @property
@@ -101,7 +112,7 @@ class SortedSequenceSet(Set[str]):
 
 
 @immutable
-class DimensionGroup:
+class DimensionGroup:  # numpydoc ignore=PR02
     """An immutable, dependency-complete collection of dimensions.
 
     `DimensionGroup` behaves in many respects like a set of `str` dimension
@@ -248,6 +259,13 @@ class DimensionGroup:
     def as_group(self) -> DimensionGroup:
         """Return ``self``.
 
+        Returns
+        -------
+        group : `DimensionGroup`
+            Returns itself.
+
+        Notes
+        -----
         This is a backwards-compatibility API that allows both `DimensionGraph`
         and `DimensionGroup` to be coerced to the latter.
         """
@@ -257,6 +275,13 @@ class DimensionGroup:
     def _as_graph(self) -> DimensionGraph:
         """Return a view of ``self`` as a `DimensionGraph`.
 
+        Returns
+        -------
+        graph : `DimensionGraph`
+            The deprecated form of `DimensionGroup`.
+
+        Notes
+        -----
         This is provided as a convenience for methods and properties that must
         return a `DimensionGraph` for backwards compatibility (until v27).  It
         is the only way of making a `DimensionGraph` that does not produce
@@ -271,21 +296,45 @@ class DimensionGroup:
     def isdisjoint(self, other: DimensionGroup) -> bool:
         """Test whether the intersection of two groups is empty.
 
-        Returns `True` if either operand is the empty.
+        Parameters
+        ----------
+        other : `DimensionGroup`
+            Other group to compare with.
+
+        Returns
+        -------
+        is_disjoin : `bool`
+            Returns `True` if either operand is the empty.
         """
         return self.names.isdisjoint(other.names)
 
     def issubset(self, other: DimensionGroup) -> bool:
         """Test whether all dimensions in ``self`` are also in ``other``.
 
-        Returns `True` if ``self`` is empty.
+        Parameters
+        ----------
+        other : `DimensionGroup`
+            Other group to compare with.
+
+        Returns
+        -------
+        is_subset : `bool`
+            Returns `True` if ``self`` is empty.
         """
         return self.names <= other.names
 
     def issuperset(self, other: DimensionGroup) -> bool:
         """Test whether all dimensions in ``other`` are also in ``self``.
 
-        Returns `True` if ``other`` is empty.
+        Parameters
+        ----------
+        other : `DimensionGroup`
+            Other group to compare with.
+
+        Returns
+        -------
+        is_superset : `bool`
+            Returns `True` if ``other`` is empty.
         """
         return self.names >= other.names
 
@@ -316,6 +365,18 @@ class DimensionGroup:
     def union(self, *others: DimensionGroup) -> DimensionGroup:
         """Construct a new group with all dimensions in any of the operands.
 
+        Parameters
+        ----------
+        *others : `DimensionGroup`
+            Other groups to join with.
+
+        Returns
+        -------
+        union : `DimensionGroup`
+            Union of all the groups.
+
+        Notes
+        -----
         The elements of the returned group may exceed the naive union of their
         elements, as some dimension elements are included in groups whenever
         multiple dimensions are present, and those dependency dimensions could
@@ -327,6 +388,18 @@ class DimensionGroup:
     def intersection(self, *others: DimensionGroup) -> DimensionGroup:
         """Construct a new group with only dimensions in all of the operands.
 
+        Parameters
+        ----------
+        *others : `DimensionGroup`
+            Other groups to compare with.
+
+        Returns
+        -------
+        inter : `DimensionGroup`
+            Intersection of all the groups.
+
+        Notes
+        -----
         See also `union`.
         """
         names = set(self.names).intersection(*[other.names for other in others])

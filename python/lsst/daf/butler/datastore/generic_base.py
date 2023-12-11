@@ -141,7 +141,7 @@ def post_process_get(
     ----------
     inMemoryDataset : `object`
         Dataset to check.
-    readStorageClass: `StorageClass`
+    readStorageClass : `StorageClass`
         The `StorageClass` used to obtain the assembler and to
         check the python type.
     assemblerParams : `dict`, optional

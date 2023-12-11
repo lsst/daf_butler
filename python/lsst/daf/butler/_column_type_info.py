@@ -82,7 +82,13 @@ class ColumnTypeInfo:
 
     @property
     def ingest_date_pytype(self) -> type:
-        """Python type corresponding to ``ingest_date`` column type."""
+        """Python type corresponding to ``ingest_date`` column type.
+
+        Returns
+        -------
+        `type`
+            The Python type.
+        """
         if self.ingest_date_dtype is ddl.AstropyTimeNsecTai:
             return astropy.time.Time
         elif self.ingest_date_dtype is sqlalchemy.TIMESTAMP:

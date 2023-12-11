@@ -103,11 +103,11 @@ def exportCalibs(
         URI string of the directory to write the exported
         calibrations.
     collections : `list` [`str`]
-       Data collections to pull calibrations from.  Must be an
-       existing `~CollectionType.CHAINED` or
-       `~CollectionType.CALIBRATION` collection.
+        Data collections to pull calibrations from.  Must be an
+        existing `~CollectionType.CHAINED` or
+        `~CollectionType.CALIBRATION` collection.
     dataset_type : `tuple` [`str`]
-       The dataset types to export. Default is to export all.
+        The dataset types to export. Default is to export all.
     transfer : `str`
         The transfer mode to use for exporting.
 
@@ -119,7 +119,7 @@ def exportCalibs(
 
     Raises
     ------
-    RuntimeError :
+    RuntimeError
         Raised if the output directory already exists.
     """
     butler = Butler.from_config(repo, writeable=False)

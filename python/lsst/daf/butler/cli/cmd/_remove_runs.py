@@ -66,11 +66,11 @@ def _print_remove(will: bool, runs: Sequence[script.RemoveRun], datasets: Mappin
 
     Parameters
     ----------
-    will : bool
+    will : `bool`
         True if remove "will" happen, False if the remove "did" happen.
-    runs : Sequence[str]
+    runs : `~collections.abc.Sequence` [`str`]
         The RUNs that will be or were removed.
-    datasets : Mapping[str, int]
+    datasets : `~collections.abc.Mapping` [`str`, `int`]
         The dataset types & count that will be or were removed.
     """
     print(willRemoveRunsMsg if will else didRemoveRunsMsg)
@@ -112,6 +112,17 @@ def remove_runs(context: click.Context, confirm: bool, force: bool, **kwargs: An
 
     This command can be used to remove RUN collections and the datasets within
     them.
+
+    Parameters
+    ----------
+    context : `click.Context`
+        Context provided by Click.
+    confirm : `bool`
+        Confirmation for removal of the run.
+    force : `bool`
+        Force removal.
+    **kwargs : `dict` [`str`, `str`]
+        The parameters to pass to `~lsst.daf.butler.script.removeRuns`.
     """
     result = script.removeRuns(**kwargs)
     canRemoveRuns = len(result.runs)

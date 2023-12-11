@@ -54,10 +54,10 @@ def collectionChain(
         the first element (0). ``children`` must be integers if given.
         Both 'prepend' and 'extend' are the same as 'redefine' if the chain
         does not exist.
-    parent: `str`
+    parent : `str`
         Name of the chained collection to update. Will be created if it
         does not exist already.
-    children: iterable of `str`
+    children : iterable of `str`
         Names of the children to be included in the chain.
     doc : `str`
         If the chained collection is being created, the documentation string

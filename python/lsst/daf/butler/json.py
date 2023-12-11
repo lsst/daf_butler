@@ -58,22 +58,45 @@ def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:
     """Convert this class to JSON assuming that the ``to_simple()`` returns
     a pydantic model.
 
+    Parameters
+    ----------
+    minimal : `bool`
+        Return minimal possible representation.
     """
     return self.to_simple(minimal=minimal).model_dump_json(exclude_defaults=True, exclude_unset=True)
 
 
 def from_json_pydantic(
-    cls: type[SupportsSimple],
+    cls_: type[SupportsSimple],
     json_str: str,
     universe: DimensionUniverse | None = None,
     registry: Registry | None = None,
 ) -> SupportsSimple:
-    """Convert from JSON to a pydantic model."""
-    simple = cls._serializedType.model_validate_json(json_str)
+    """Convert from JSON to a pydantic model.
+
+    Parameters
+    ----------
+    cls_ : `type` of `SupportsSimple`
+        The Python type being created.
+    json_str : `str`
+        The JSON string representing this object.
+    universe : `DimensionUniverse` or `None`, optional
+        The universe required to instantiate some models. Required if
+        ``registry`` is `None`.
+    registry : `Registry` or `None`, optional
+        Registry from which to obtain the dimension universe if an explicit
+        universe has not been given.
+
+    Returns
+    -------
+    model : `SupportsSimple`
+        Pydantic model constructed from JSON and validated.
+    """
+    simple = cls_._serializedType.model_validate_json(json_str)
     try:
-        return cls.from_simple(simple, universe=universe, registry=registry)
+        return cls_.from_simple(simple, universe=universe, registry=registry)
     except AttributeError as e:
-        raise AttributeError(f"JSON deserialization requires {cls} has a from_simple() class method") from e
+        raise AttributeError(f"JSON deserialization requires {cls_} has a from_simple() class method") from e
 
 
 def to_json_generic(self: SupportsSimple, minimal: bool = False) -> str:

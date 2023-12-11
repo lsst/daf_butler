@@ -234,6 +234,24 @@ class SerializedDatasetRef(_BaseModelCompat):
     ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.
 
+        Parameters
+        ----------
+        id : `str`
+            The UUID in string form.
+        run : `str`
+            The run for this dataset.
+        datasetType : `dict` [`str`, `typing.Any`]
+            A representation of the dataset type.
+        dataId : `dict` [`str`, `typing.Any`]
+            A representation of the data ID.
+        component : `str` or `None`
+            Any component associated with this ref.
+
+        Returns
+        -------
+        serialized : `SerializedDatasetRef`
+            A Pydantic model representing the given parameters.
+
         Notes
         -----
         This differs from the pydantic "construct" method in that the arguments
@@ -300,10 +318,12 @@ class DatasetRef:
         ``dataId``.  `~DatasetIdGenEnum.DATAID_TYPE_RUN` makes a
         deterministic UUID5-type ID based on a dataset type name, run
         collection name, and ``dataId``.
+    datastore_records : `DatasetDatastoreRecords` or `None`
+        Datastore records to attach.
 
-    See Also
-    --------
-    :ref:`daf_butler_organizing_datasets`
+    Notes
+    -----
+    See also :ref:`daf_butler_organizing_datasets`
     """
 
     _serializedType = SerializedDatasetRef
@@ -759,7 +779,7 @@ class DatasetRef:
         run : `str` or `None`
             If not `None` then update run collection name. If ``dataset_id`` is
             `None` then this will also cause new dataset ID to be generated.
-        storage_class : `str` or `StorageClass` or `None`.
+        storage_class : `str` or `StorageClass` or `None`
             The new storage class. If not `None`, replaces existing storage
             class.
         datastore_records : `DatasetDatastoreRecords` or `None`
@@ -791,7 +811,7 @@ class DatasetRef:
             datastore_records=datastore_records,
         )
 
-    def is_compatible_with(self, ref: DatasetRef) -> bool:
+    def is_compatible_with(self, other: DatasetRef) -> bool:
         """Determine if the given `DatasetRef` is compatible with this one.
 
         Parameters
@@ -829,13 +849,13 @@ class DatasetRef:
         be converted to the original python type. The reverse is not guaranteed
         and depends on whether bidirectional converters have been registered.
         """
-        if self.id != ref.id:
+        if self.id != other.id:
             return False
-        if self.dataId != ref.dataId:
+        if self.dataId != other.dataId:
             return False
-        if self.run != ref.run:
+        if self.run != other.run:
             return False
-        return self.datasetType.is_compatible_with(ref.datasetType)
+        return self.datasetType.is_compatible_with(other.datasetType)
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).

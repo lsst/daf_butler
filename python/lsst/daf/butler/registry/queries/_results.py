@@ -704,6 +704,8 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         """Return a new query results object for the same parent datasets but
         different components.
 
+        Parameters
+        ----------
         components :  `~collections.abc.Sequence` [ `str` or `None` ]
             Names of components to include in iteration.  `None` may be
             included (at most once) to include the parent dataset type.

@@ -89,6 +89,13 @@ def _importPlugin(pluginName: str) -> types.ModuleType | type | None | click.Com
 class LoaderCLI(click.MultiCommand, abc.ABC):
     """Extends `click.MultiCommand`, which dispatches to subcommands, to load
     subcommands at runtime.
+
+    Parameters
+    ----------
+    *args : `typing.Any`
+        Arguments passed to parent constructor.
+    **kwargs : `typing.Any`
+        Keyword arguments passed to parent constructor.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -374,9 +381,23 @@ class ButlerCLI(LoaderCLI):
 def cli(log_level: str, long_log: bool, log_file: str, log_tty: bool, log_label: str, progress: bool) -> None:
     """Command line interface for butler.
 
-    log_level is handled by get_command and list_commands, and is called in
-    one of those functions before this is called. long_log is handled by
-    setup_logging.
+    Parameters
+    ----------
+    log_level : `str`
+        The log level to use by default. ``log_level`` is handled by
+        ``get_command`` and ``list_commands``, and is called in
+        one of those functions before this is called.
+    long_log : `bool`
+        Enable extended log output. ``long_log`` is handled by
+        ``setup_logging``.
+    log_file : `str`
+        The log file name.
+    log_tty : `bool`
+        Whether to send logs to standard output.
+    log_label : `str`
+        Log labels.
+    progress : `bool`
+        Whether to use progress bar.
     """
     pass
 

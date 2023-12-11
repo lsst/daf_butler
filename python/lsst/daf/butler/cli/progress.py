@@ -61,6 +61,15 @@ class ClickProgressHandler(ProgressHandler):
         for progress bars.
 
         Should usually be called only by the `option` method.
+
+        Parameters
+        ----------
+        ctx : `click.Context`
+            Context provided by Click.
+        params : `click.Parameter`
+            Parameters provided by Click.
+        value : `typing.Any`
+            Value to control whether a handler class is registered.
         """
         if value:
             Progress.set_handler(cls())
@@ -71,6 +80,11 @@ class ClickProgressHandler(ProgressHandler):
     def option(cls, cmd: Any) -> Any:
         """`click` command decorator that adds a ``--progress`` option
         that installs a default-constructed instance of this progress handler.
+
+        Parameters
+        ----------
+        cmd : `typing.Any`
+            Command to be modified.
         """
         return click.option(
             "--progress/--no-progress",

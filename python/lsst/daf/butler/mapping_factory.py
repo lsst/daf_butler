@@ -53,7 +53,6 @@ class MappingFactory:
         Python reference `type` to use to ensure that items stored in the
         registry create instance objects of the correct class. Subclasses
         of this type are allowed. Using `None` disables the check.
-
     """
 
     def __init__(self, refType: type):
@@ -167,7 +166,7 @@ class MappingFactory:
         targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
-        args : `tuple`
+        *args : `tuple`
             Positional arguments to use pass to the object constructor.
         **kwargs
             Keyword arguments to pass to object constructor.
@@ -206,7 +205,7 @@ class MappingFactory:
         targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
-        args : `tuple`
+        *args : `tuple`
             Positional arguments to use pass to the object constructor.
         **kwargs
             Keyword arguments to pass to object constructor.
@@ -233,7 +232,7 @@ class MappingFactory:
 
         Parameters
         ----------
-        registryKey : `LookupKey`, `str` or object with ``name`` attribute.
+        registryKey : `LookupKey`, `str` or object with ``name`` attribute
             Item to associate with the provided type.
         typeName : `str` or Python type
             Identifies a class to associate with the provided key.

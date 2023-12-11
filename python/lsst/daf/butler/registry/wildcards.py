@@ -74,8 +74,9 @@ class CategorizedWildcard:
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             The expression to categorize.  May be any of:
+
              - `str` (including glob patterns if ``allowPatterns`` is `True`);
              - `re.Pattern` (only if ``allowPatterns`` is `True`);
              - objects recognized by ``coerceUnrecognized`` (if provided);
@@ -88,24 +89,24 @@ class CategorizedWildcard:
                ``coerceItemValue`` (if provided);
              - a `CategorizedWildcard` instance (passed through unchanged if
                it meets the requirements specified by keyword arguments).
-        allowAny: `bool`, optional
+        allowAny : `bool`, optional
             If `False` (`True` is default) raise `TypeError` if `...` is
             encountered.
-        allowPatterns: `bool`, optional
+        allowPatterns : `bool`, optional
             If `False` (`True` is default) raise `TypeError` if a `re.Pattern`
             is encountered, or if ``expression`` is a `CategorizedWildcard`
             with `patterns` not empty.
-        coerceUnrecognized: `~collections.abc.Callable`, optional
+        coerceUnrecognized : `~collections.abc.Callable`, optional
             A callback that takes a single argument of arbitrary type and
             returns either a `str` - appended to `strings` - or a `tuple` of
             (`str`, `Any`) to be appended to `items`.  This will be called on
             objects of unrecognized type. Exceptions will be reraised as
             `TypeError` (and chained).
-        coerceItemValue: `~collections.abc.Callable`, optional
+        coerceItemValue : `~collections.abc.Callable`, optional
             If provided, ``expression`` may be a mapping from `str` to any
             type that can be passed to this function; the result of that call
             will be stored instead as the value in ``self.items``.
-        defaultItemValue: `Any`, optional
+        defaultItemValue : `Any`, optional
             If provided, combine this value with any string values encountered
             (including any returned by ``coerceUnrecognized``) to form a
             `tuple` and add it to `items`, guaranteeing that `strings` will be
@@ -293,12 +294,6 @@ class CollectionSearch(_CollectionSearch):
     instances, as the regular constructor performs no checking of inputs (and
     that can lead to confusing error messages downstream).
 
-    Parameters
-    ----------
-    collections : `tuple` [ `str` ]
-        Tuple of collection names, ordered from the first searched to the last
-        searched.
-
     Notes
     -----
     A `CollectionSearch` is used to find a single dataset (or set of datasets
@@ -323,12 +318,12 @@ class CollectionSearch(_CollectionSearch):
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             May be:
-             - a `str` collection name;
-             - an iterable of `str` collection names;
-             - another `CollectionSearch` instance (passed through
-               unchanged).
+
+            - a `str` collection name;
+            - an iterable of `str` collection names;
+            - another `CollectionSearch` instance (passed through unchanged).
 
             Duplicate entries will be removed (preserving the first appearance
             of each collection name).
@@ -432,14 +427,14 @@ class CollectionWildcard:
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             May be:
-             - a `str` collection name;
-             - an `re.Pattern` instance to match (with `re.Pattern.fullmatch`)
-               against collection names;
-             - any iterable containing any of the above;
-             - another `CollectionWildcard` instance (passed through
-               unchanged).
+
+            - a `str` collection name;
+            - an `re.Pattern` instance to match (with `re.Pattern.fullmatch`)
+              against collection names;
+            - any iterable containing any of the above;
+            - another `CollectionWildcard` instance (passed through unchanged).
 
             Duplicate collection names will be removed (preserving the first
             appearance of each collection name).
@@ -557,7 +552,7 @@ class DatasetTypeWildcard:
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             Expression to analyze.  May be any of the following:
 
             - a `str` dataset type name;

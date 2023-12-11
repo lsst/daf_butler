@@ -127,7 +127,13 @@ class Registry(ABC):
     @contextlib.contextmanager
     @abstractmethod
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
-        """Return a context manager that represents a transaction."""
+        """Return a context manager that represents a transaction.
+
+        Parameters
+        ----------
+        savepoint : `bool`
+            Whether to create a SAVEPOINT or not.
+        """
         raise NotImplementedError()
 
     def resetConnectionPool(self) -> None:
@@ -312,7 +318,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        name : `str`
+        collection : `str`
             Name of the collection.
 
         Returns
@@ -328,7 +334,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        name : `str`
+        collection : `str`
             Name of the collection.
 
         Returns
@@ -344,9 +350,9 @@ class Registry(ABC):
 
         Parameters
         ----------
-        name : `str`
+        collection : `str`
             Name of the collection.
-        docs : `str` or `None`
+        doc : `str` or `None`
             Docstring for the collection with the given name; will replace any
             existing docstring.  Passing `None` will remove any existing
             docstring.
@@ -514,6 +520,8 @@ class Registry(ABC):
             A timespan that the validity range of the dataset must overlap.
             If not provided, any `~CollectionType.CALIBRATION` collections
             matched by the ``collections`` argument will not be searched.
+        datastore_records : `bool`, optional
+            Whether to attach datastore records to the `DatasetRef`.
         **kwargs
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true
@@ -572,7 +580,7 @@ class Registry(ABC):
         ----------
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
-        dataIds :  `~collections.abc.Iterable` of `dict` or `DataCoordinate`
+        dataIds : `~collections.abc.Iterable` of `dict` or `DataCoordinate`
             Dimension-based identifiers for the new datasets.
         run : `str`, optional
             The name of the run that produced the datasets.  Defaults to
@@ -624,7 +632,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        datasets :  `~collections.abc.Iterable` of `DatasetRef`
+        datasets : `~collections.abc.Iterable` of `DatasetRef`
             Datasets to be inserted. All `DatasetRef` instances must have
             identical ``datasetType`` and ``run`` attributes. ``run``
             attribute can be `None` and defaults to ``self.defaults.run``.
@@ -892,7 +900,7 @@ class Registry(ABC):
             used).
         **kwargs
             Additional keywords are treated like additional key-value pairs for
-            ``dataId``, extending and overriding
+            ``dataId``, extending and overriding.
 
         Returns
         -------
@@ -971,7 +979,7 @@ class Registry(ABC):
             The `DimensionElement` or name thereof that identifies the table
             records will be inserted into.
         row : `dict` or `DimensionRecord`
-           The record to insert.
+            The record to insert.
         conform : `bool`, optional
             If `False` (`True` is default) perform no checking or conversions,
             and assume that ``element`` is a `DimensionElement` instance and

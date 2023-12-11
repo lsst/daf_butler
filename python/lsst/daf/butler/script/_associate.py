@@ -41,7 +41,23 @@ def associate(
     where: str,
     find_first: bool,
 ) -> None:
-    """Add existing datasets to a CHAINED collection."""
+    """Add existing datasets to a CHAINED collection.
+
+    Parameters
+    ----------
+    repo : `str`
+        The Butler repository location.
+    collection : `str`
+        Name of the tagged collection to place datasets.
+    dataset_type : `~collections.abc.Iterable` of `str`
+        Names of dataset types.
+    collections : `~collections.abc.Iterable`
+        Collections to use in the query.
+    where : `str`
+        Query string.
+    find_first : `bool`
+        Whether to find the first match or not.
+    """
     butler = Butler.from_config(repo, writeable=True)
 
     butler.registry.registerCollection(collection, CollectionType.TAGGED)

@@ -50,6 +50,13 @@ class ButlerAttributeExistsError(RuntimeError):
 class ButlerAttributeManager(VersionedExtension):
     """An interface for managing butler attributes in a `Registry`.
 
+    Parameters
+    ----------
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
+
+    Notes
+    -----
     Attributes are represented in registry as a set of name-value pairs, both
     have string type. Any non-string data types (e.g. integers) need to be
     converted to/from strings on client side. Attribute names can be arbitrary

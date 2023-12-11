@@ -415,9 +415,9 @@ def addDataIdValue(butler: Butler, dimension: str, value: str | int, **related: 
         The repository to update.
     dimension : `str`
         The name of the dimension to gain a new value.
-    value
+    value : `str` or `int`
         The value to register for the dimension.
-    **related
+    **related : `typing.Any`
         Any existing dimensions to be linked to ``value``.
 
     Notes
@@ -549,7 +549,13 @@ class DatastoreMock:
 
     @staticmethod
     def apply(butler: Butler) -> None:
-        """Apply datastore mocks to a butler."""
+        """Apply datastore mocks to a butler.
+
+        Parameters
+        ----------
+        butler : `~lsst.daf.butler.Butler`
+            Butler to be modified.
+        """
         butler._datastore.export = DatastoreMock._mock_export  # type: ignore
         butler._datastore.get = DatastoreMock._mock_get  # type: ignore
         butler._datastore.ingest = MagicMock()  # type: ignore

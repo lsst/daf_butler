@@ -468,7 +468,7 @@ class DataCoordinateTestCase(unittest.TestCase):
         Parameters
         ----------
         n : `int`
-             Number of data IDs to select.
+            Number of data IDs to select.
         dataIds : `DataCoordinateSequence`, optional
             Data IDs to select from.  Defaults to ``self.allDataIds``.
 
@@ -494,8 +494,8 @@ class DataCoordinateTestCase(unittest.TestCase):
         Parameters
         ----------
         n : `int`
-             Number of dimensions to select, before automatic expansion by
-             `DimensionGroup`.
+            Number of dimensions to select, before automatic expansion by
+            `DimensionGroup`.
         group : `DimensionGroup`, optional
             Dimensions to select from.  Defaults to
             ``self.allDataIds.dimensions``.

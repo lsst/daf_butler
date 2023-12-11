@@ -71,7 +71,7 @@ class _Table:
         datasetRef : `DatasetRef`
             A dataset ref that will be added as a row in the table.
         uri : `lsst.resources.ResourcePath`, optional
-            The URI to show as a file location in the table, by default None
+            The URI to show as a file location in the table, by default `None`.
         """
         uri_str = str(uri) if uri else None
         self.datasetRefs.add(_RefInfo(datasetRef, uri_str))
@@ -161,7 +161,6 @@ class QueryDatasets:
     butler : `lsst.daf.butler.Butler` or `None`
         The butler to use to query. One of `repo` and `butler` must be `None`
         and the other must not be `None`.
-
     """
 
     def __init__(

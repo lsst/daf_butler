@@ -60,10 +60,10 @@ class CollectionSummaryTables(Generic[_T]):
 
     Parameters
     ----------
-    datasetType
+    datasetType : _T
         Table [specification] that summarizes which dataset types are in each
         collection.
-    dimensions
+    dimensions : `NamedKeyMapping`
         Mapping of table [specifications] that summarize which governor
         dimension values are present in the data IDs of each collection.
     """
@@ -86,7 +86,7 @@ class CollectionSummaryTables(Generic[_T]):
 
         Parameters
         ----------
-        collections: `CollectionManager`
+        collections : `CollectionManager`
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
@@ -128,7 +128,7 @@ class CollectionSummaryManager:
     ----------
     db : `Database`
         Interface to the underlying database engine and namespace.
-    collections: `CollectionManager`
+    collections : `CollectionManager`
         Manager object for the collections in this `Registry`.
     dimensions : `DimensionRecordStorageManager`
         Manager object for the dimensions in this `Registry`.
@@ -179,7 +179,7 @@ class CollectionSummaryManager:
         context : `StaticTablesContext`
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present.
-        collections: `CollectionManager`
+        collections : `CollectionManager`
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.

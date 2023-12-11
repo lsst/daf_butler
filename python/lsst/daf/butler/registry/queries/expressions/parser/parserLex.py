@@ -59,17 +59,17 @@ this must match t_RANGE_LITERAL docstring.
 class ParserLexError(Exception):
     """Exception raised for lex-phase errors.
 
-    Attributes
+    Parameters
     ----------
-    expression : str
-        Full initial expression being parsed
-    remain : str
-        Remaining non-parsed part of the expression
-    pos : int
+    expression : `str`
+        Full initial expression being parsed.
+    remain : `str`
+        Remaining non-parsed part of the expression.
+    pos : `int`
         Current parsing position, offset from beginning of expression in
-        characters
-    lineno : int
-        Current line number in the expression
+        characters.
+    lineno : `int`
+        Current line number in the expression.
     """
 
     def __init__(self, expression, remain, pos, lineno):
@@ -87,9 +87,17 @@ class ParserLex:
     def make_lexer(cls, reflags=0, **kwargs):
         """Return lexer.
 
+        Parameters
+        ----------
+        reflags : `int`, optional
+            Regular expression flags.
+        **kwargs
+            Additional parameters for lexer.
+
         Returns
         -------
-        `ply.lex.Lexer` instance.
+        `ply.lex.Lexer`
+            Lexer instance.
         """
         # make sure that flags that we need are there
         kw = dict(reflags=reflags | re.IGNORECASE | re.VERBOSE)

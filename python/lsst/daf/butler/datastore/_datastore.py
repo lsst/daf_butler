@@ -134,7 +134,7 @@ class DatastoreTransaction:
     Parameters
     ----------
     parent : `DatastoreTransaction`, optional
-        The parent transaction (if any)
+        The parent transaction (if any).
     """
 
     Event: ClassVar[type] = Event
@@ -153,12 +153,12 @@ class DatastoreTransaction:
         ----------
         name : `str`
             Name of the event.
-        undoFunc : func
+        undoFunc : `~collections.abc.Callable`
             Function to undo this event.
-        args : `tuple`
-            Positional arguments to `undoFunc`.
+        *args : `tuple`
+            Positional arguments to ``undoFunc``.
         **kwargs
-            Keyword arguments to `undoFunc`.
+            Keyword arguments to ``undoFunc``.
         """
         self._log.append(self.Event(name, undoFunc, args, kwargs))
 
@@ -173,6 +173,17 @@ class DatastoreTransaction:
         separately should not be part of the same `undoWith` block.
 
         All arguments are forwarded directly to `registerUndo`.
+
+        Parameters
+        ----------
+        name : `str`
+            The name to associate with this event.
+        undoFunc : `~collections.abc.Callable`
+            Function to undo this event.
+        *args : `tuple`
+            Positional arguments for ``undoFunc``.
+        **kwargs : `typing.Any`
+            Keyword arguments for ``undoFunc``.
         """
         try:
             yield None
@@ -224,6 +235,16 @@ class DatasetRefURIs(abc.Sequence):
     `(primaryURI, componentURIs)`. To maintain backward compatibility this
     inherits from Sequence and so instances can be treated as a two-item
     tuple.
+
+    Parameters
+    ----------
+    primaryURI : `lsst.resources.ResourcePath` or `None`, optional
+        The URI to the primary artifact associated with this dataset. If the
+        dataset was disassembled within the datastore this may be `None`.
+    componentURIs : `dict` [`str`, `~lsst.resources.ResourcePath`] or `None`
+        The URIs to any components associated with the dataset artifact
+        indexed by component name. This can be empty if there are no
+        components.
     """
 
     def __init__(
@@ -232,15 +253,7 @@ class DatasetRefURIs(abc.Sequence):
         componentURIs: dict[str, ResourcePath] | None = None,
     ):
         self.primaryURI = primaryURI
-        """The URI to the primary artifact associated with this dataset. If the
-        dataset was disassembled within the datastore this may be `None`.
-        """
-
         self.componentURIs = componentURIs or {}
-        """The URIs to any components associated with the dataset artifact
-        indexed by component name. This can be empty if there are no
-        components.
-        """
 
     def __getitem__(self, index: Any) -> Any:
         """Get primaryURI and componentURIs by index.
@@ -541,7 +554,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     def prepare_get_for_external_client(self, ref: DatasetRef) -> object:
-        """Retrieve serializable data that can be used to execute a get()
+        """Retrieve serializable data that can be used to execute a ``get()``.
 
         Parameters
         ----------
@@ -571,14 +584,14 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def put_new(self, in_memory_dataset: Any, dataset_ref: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
 
         Parameters
         ----------
-        inMemoryDataset : `object`
+        in_memory_dataset : `object`
             The Dataset to store.
-        datasetRef : `DatasetRef`
+        ref : `DatasetRef`
             Reference to the associated Dataset.
 
         Returns
@@ -595,7 +608,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        datasets : `FileDataset`
+        *datasets : `FileDataset`
             Each positional argument is a struct containing information about
             a file to be ingested, including its path (either absolute or
             relative to the datastore root, if applicable), a complete
@@ -624,7 +637,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        datasets : `FileDataset`
+        *datasets : `FileDataset`
             Each positional argument is a struct containing information about
             a file to be ingested, including its path (either absolute or
             relative to the datastore root, if applicable), a complete
@@ -682,7 +695,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        data : `IngestPrepData`
+        prepData : `IngestPrepData`
             An instance of a subclass of `IngestPrepData`.  Guaranteed to be
             the direct result of a call to `_prepIngest` on this datastore.
         transfer : `str`, optional
@@ -719,7 +732,7 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        datasets : `FileDataset`
+        *datasets : `FileDataset`
             Each positional argument is a struct containing information about
             a file to be ingested, including its path (either absolute or
             relative to the datastore root, if applicable), a complete
@@ -899,11 +912,11 @@ class Datastore(metaclass=ABCMeta):
 
         Parameters
         ----------
-        ref : `DatasetRef`
+        datasetRef : `DatasetRef`
             Reference to the required dataset.
         predict : `bool`, optional
-            If the datastore does not know about the dataset, should it
-            return a predicted URI or not?
+            If the datastore does not know about the dataset, controls whether
+            it should return a predicted URI or not.
 
         Returns
         -------
@@ -1195,7 +1208,8 @@ class Datastore(metaclass=ABCMeta):
         ----------
         transfer : `str` or `None`
             Transfer mode for ingest.
-        entity, optional
+        entity : `DatasetRef` or `DatasetType` or `StorageClass` or `None`, \
+                optional
             Object representing what will be ingested.  If not provided (or not
             specific enough), `True` may be returned even if expanded data
             IDs aren't necessary.
@@ -1297,6 +1311,15 @@ class Datastore(metaclass=ABCMeta):
 class NullDatastore(Datastore):
     """A datastore that implements the `Datastore` API but always fails when
     it accepts any request.
+
+    Parameters
+    ----------
+    config : `Config` or `~lsst.resources.ResourcePathExpression` or `None`
+        Ignored.
+    bridgeManager : `DatastoreRegistryBridgeManager` or `None`
+        Ignored.
+    butlerRoot : `~lsst.resources.ResourcePathExpression` or `None`
+        Ignored.
     """
 
     @classmethod
@@ -1334,7 +1357,7 @@ class NullDatastore(Datastore):
     def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
-    def put_new(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 
     def ingest(

@@ -60,7 +60,7 @@ class CollectionRecord(Generic[_Key]):
 
     Parameters
     ----------
-    key
+    key : _Key
         Unique collection ID, can be the same as ``name`` if ``name`` is used
         for identification. Usually this is an integer or string, but can be
         other database-specific type.
@@ -119,13 +119,13 @@ class RunRecord(CollectionRecord[_Key]):
 
     Parameters
     ----------
-    key: `object`
+    key : `object`
         Unique collection key.
     name : `str`
         Name of the collection.
     host : `str`, optional
         Name of the host or system on which this run was produced.
-    timespan: `Timespan`, optional
+    timespan : `Timespan`, optional
         Begin and end timestamps for the period over which the run was
         produced.
     """
@@ -164,11 +164,11 @@ class ChainedCollectionRecord(CollectionRecord[_Key]):
 
     Parameters
     ----------
-    key: `object`
+    key : `object`
         Unique collection key.
     name : `str`
         Name of the collection.
-    children: Iterable[str],
+    children : Iterable[str],
         Ordered sequence of names of child collections.
     """
 
@@ -194,6 +194,11 @@ class ChainedCollectionRecord(CollectionRecord[_Key]):
 class CollectionManager(Generic[_Key], VersionedExtension):
     """An interface for managing the collections (including runs) in a
     `Registry`.
+
+    Parameters
+    ----------
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
 
     Notes
     -----
@@ -261,14 +266,14 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         tableSpec : `ddl.TableSpec`
             Specification for the table that should reference the collection
             table.  Will be modified in place.
-        prefix: `str`, optional
+        prefix : `str`, optional
             A name to use for the prefix of the new field; the full name may
             have a suffix (and is given in the returned `ddl.FieldSpec`).
-        onDelete: `str`, optional
+        onDelete : `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        constraint: `bool`, optional
+        constraint : `bool`, optional
             If `False` (`True` is default), add a field that can be joined to
             the collection primary key, but do not add a foreign key
             constraint.
@@ -303,14 +308,14 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         tableSpec : `ddl.TableSpec`
             Specification for the table that should reference the run table.
             Will be modified in place.
-        prefix: `str`, optional
+        prefix : `str`, optional
             A name to use for the prefix of the new field; the full name may
             have a suffix (and is given in the returned `ddl.FieldSpec`).
-        onDelete: `str`, optional
+        onDelete : `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        constraint: `bool`, optional
+        constraint : `bool`, optional
             If `False` (`True` is default), add a field that can be joined to
             the run primary key, but do not add a foreign key constraint.
         **kwargs
@@ -475,7 +480,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
         Parameters
         ----------
-        key
+        key : `typing.Any`
             Internal primary key value for the collection.
 
         Returns
@@ -543,7 +548,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
         Parameters
         ----------
-        key
+        key : _Key
             Internal primary key value for the collection.
 
         Returns
@@ -559,9 +564,9 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
         Parameters
         ----------
-        key
+        key : _Key
             Internal primary key value for the collection.
-        docs : `str`, optional
+        doc : `str`, optional
             Docstring for the collection with the given key.
         """
         raise NotImplementedError()
@@ -573,7 +578,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
         Parameters
         ----------
-        key
+        key : _Key
             Internal primary key value for the collection.
 
         Returns

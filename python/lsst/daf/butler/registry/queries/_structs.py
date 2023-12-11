@@ -210,7 +210,7 @@ class OrderByClause:
         order_by : `~collections.abc.Iterable` [ `str` ]
             Sequence of names to use for ordering with optional "-" prefix.
         element : `DimensionElement`
-            Single or primary dimension element in the query
+            Single or primary dimension element in the query.
 
         Returns
         -------
@@ -336,8 +336,6 @@ class QuerySummary:
         A user-provided string WHERE expression.
     region : `lsst.sphgeom.Region`, optional
         A spatial constraint that all rows must overlap.
-    timespan : `Timespan`, optional
-        A temporal constraint that all rows must overlap.
     bind : `~collections.abc.Mapping` [ `str`, `object` ], optional
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.

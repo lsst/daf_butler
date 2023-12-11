@@ -114,12 +114,12 @@ class DirectButler(Butler):
 
     Parameters
     ----------
-    config : `ButlerConfig`, `Config` or `str`, optional.
+    config : `ButlerConfig`, `Config` or `str`, optional
         Configuration. Anything acceptable to the
         `ButlerConfig` constructor.  If a directory path
         is given the configuration will be read from a ``butler.yaml`` file in
         that location.  If `None` is given default values will be used.
-    butler : `DirectButler`, optional.
+    butler : `DirectButler`, optional
         If provided, construct a new Butler that uses the same registry and
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``

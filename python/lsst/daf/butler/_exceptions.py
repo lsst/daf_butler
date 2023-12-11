@@ -49,7 +49,7 @@ class EmptyQueryResultError(Exception):
     """Exception raised when query methods return an empty result and `explain`
     flag is set.
 
-    Attributes
+    Parameters
     ----------
     reasons : `list` [`str`]
         List of possible reasons for an empty query result.

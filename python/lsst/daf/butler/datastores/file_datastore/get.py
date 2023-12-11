@@ -85,25 +85,25 @@ def generate_datastore_get_information(
     readStorageClass: StorageClass | None = None,
 ) -> list[DatastoreFileGetInformation]:
     """Process parameters and instantiate formatters for in preparation for
-    retrieving an artifact and converting it to a Python object
+    retrieving an artifact and converting it to a Python object.
 
     Parameters
     ----------
     fileLocations : `list`[`DatasetLocationInformation`]
         List of file locations for this artifact and their associated datastore
-        records
+        records.
     ref : `DatasetRef`
         The registry information associated with this artifact.
     parameters : `Mapping`[`str`, `Any`]
-        `StorageClass` and `Formatter` parameters
+        `StorageClass` and `Formatter` parameters.
     readStorageClass : `StorageClass` | `None`, optional
         The StorageClass to use when ultimately returning the resulting object
-        from the get.  Defaults to the `StorageClass` specified by `ref`
+        from the get.  Defaults to the `StorageClass` specified by ``ref``.
 
     Returns
     -------
     getInfo : `list` [`DatastoreFileGetInformation`]
-        The parameters needed to retrieve each file
+        The parameters needed to retrieve each file.
     """
     if readStorageClass is None:
         readStorageClass = ref.datasetType.storageClass
@@ -175,7 +175,7 @@ def _read_artifact_into_memory(
         The registry information associated with this artifact.
     isComponent : `bool`
         Flag to indicate if a component is being read from this artifact.
-    cache_manager: `AbstractDatastoreCacheManager`
+    cache_manager : `AbstractDatastoreCacheManager`
         The cache manager to use for caching retrieved files
     cache_ref : `DatasetRef`, optional
         The DatasetRef to use when looking up the file in the cache.
@@ -342,18 +342,19 @@ def get_dataset_as_python_object_from_get_info(
     parameters: Mapping[str, Any] | None,
     cache_manager: AbstractDatastoreCacheManager,
 ) -> Any:
-    """Retrieve an artifact from storage and return it as a Python object
+    """Retrieve an artifact from storage and return it as a Python object.
 
     Parameters
     ----------
     allGetInfo : `list`[`DatastoreFileGetInformation`]
-        Pre-processed information about each file associated with this artifact
+        Pre-processed information about each file associated with this
+        artifact.
     ref : `DatasetRef`
         The registry information associated with this artifact.
     parameters : `Mapping`[`str`, `Any`]
-        `StorageClass` and `Formatter` parameters
+        `StorageClass` and `Formatter` parameters.
     cache_manager : `AbstractDatastoreCacheManager`
-        The cache manager to use for caching retrieved files
+        The cache manager to use for caching retrieved files.
 
     Returns
     -------

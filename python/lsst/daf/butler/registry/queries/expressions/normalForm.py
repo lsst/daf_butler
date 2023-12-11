@@ -67,9 +67,9 @@ class LogicalBinaryOperator(enum.Enum):
 
         Parameters
         ----------
-        lhs: `TransformationWrapper`
+        lhs : `TransformationWrapper`
             First operand.
-        rhs: `TransformationWrapper`
+        rhs : `TransformationWrapper`
             Second operand.
 
         Returns
@@ -530,8 +530,8 @@ class TransformationWrapper(ABC):
         operator : `LogicalBinaryOperator`
             Operator whose operands to flatten.
 
-        Returns
-        -------
+        Yields
+        ------
         operands : `~collections.abc.Iterator` [ `TransformationWrapper` ]
             Operands that, if combined with ``operator``, yield an expression
             equivalent to ``self``.
@@ -682,7 +682,7 @@ class TransformationWrapper(ABC):
         inner : `LogicalBinaryOperator`
             Inner operator for the expression being tested.  This may or may
             not be the same as ``outer``.
-        rhs: `TransformationWrapper`
+        rhs : `TransformationWrapper`
             The other inner operand for the expression being tested.
         form : `NormalForm`
             Normal form being transformed to.
@@ -724,7 +724,7 @@ class TransformationWrapper(ABC):
             One inner operand for the expression being transformed.
         inner : `LogicalBinaryOperator`
             Inner operator for the expression being transformed.
-        rhs: `TransformationWrapper`
+        rhs : `TransformationWrapper`
             The other inner operand for the expression being transformed.
         form : `NormalForm`
             Normal form being transformed to.
@@ -751,10 +751,10 @@ class TransformationWrapper(ABC):
 
     @abstractmethod
     def unwrap(self) -> Node:
-        """Return an transformed expression tree.
+        """Return a transformed expression tree.
 
-        Return:
-        ------
+        Returns
+        -------
         tree : `Node`
             Tree node representing the same expression (and form) as ``self``.
         """

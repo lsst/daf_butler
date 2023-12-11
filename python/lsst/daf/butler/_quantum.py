@@ -103,6 +103,32 @@ class SerializedQuantum(_BaseModelCompat):
     ) -> SerializedQuantum:
         """Construct a `SerializedQuantum` directly without validators.
 
+        Parameters
+        ----------
+        taskName : `str` or `None`
+            The name of the task.
+        dataId : `dict` or `None`
+            The dataId of the quantum.
+        datasetTypeMapping : `~collections.abc.Mapping` [`str`, `dict`]
+            Dataset type definitions.
+        initInputs : `~collections.abc.Mapping`
+            The quantum init inputs.
+        inputs : `~collections.abc.Mapping`
+            The quantum inputs.
+        outputs : `~collections.abc.Mapping`
+            The quantum outputs.
+        dimensionRecords : `dict` [`int`, `dict`] or `None`
+            The dimension records.
+        datastoreRecords : `dict` [`str`, `dict`] or `None`
+            The datastore records.
+
+        Returns
+        -------
+        quantum : `SerializedQuantum`
+            Serializable model of the quantum.
+
+        Notes
+        -----
         This differs from the pydantic "construct" method in that the arguments
         are explicitly what the model requires, and it will recurse through
         members, constructing them from their corresponding `direct` methods.
@@ -246,7 +272,7 @@ class Quantum:
         Returns
         -------
         simple : `SerializedQuantum`
-           This object converted to a serializable representation.
+            This object converted to a serializable representation.
         """
         typeMapping = {}
         initInputs = {}
@@ -392,7 +418,7 @@ class Quantum:
         Parameters
         ----------
         simple : SerializedQuantum
-            The value returned by a call to `to_simple`
+            The value returned by a call to `to_simple`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions.
         reconstitutedDimensions : `dict` of `int` to `DimensionRecord` or None
@@ -598,17 +624,17 @@ class DimensionRecordsAccumulator:
         a unique integer key.
 
         This function returns the key associated with the record (either the
-        newly allocated key, or the existing one)
+        newly allocated key, or the existing one).
 
         Parameters
         ----------
         record : `DimensionRecord`
-            The record to add to the accumulator
+            The record to add to the accumulator.
 
         Returns
         -------
         accumulatorKey : int
-            The key that is associated with the supplied record
+            The key that is associated with the supplied record.
         """
         if (mappingValue := self.mapping.get(record)) is None:
             simple = record.to_simple()

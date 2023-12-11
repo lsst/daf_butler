@@ -445,7 +445,7 @@ class ChainedDatastore(Datastore):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
-    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         # Docstring inherited from base class.
         log.debug("Put %s", ref)
 
@@ -473,7 +473,7 @@ class ChainedDatastore(Datastore):
             else:
                 npermanent += 1
             try:
-                stored_ref_map = datastore.put_new(inMemoryDataset, ref)
+                stored_ref_map = datastore.put_new(in_memory_dataset, ref)
                 stored_refs.update(stored_ref_map)
                 nsuccess += 1
                 if not datastore.isEphemeral:
@@ -649,8 +649,8 @@ class ChainedDatastore(Datastore):
         ref : `DatasetRef`
             Reference to the required dataset.
         predict : `bool`, optional
-            If the datastore does not know about the dataset, should it
-            return a predicted URI or not?
+            If the datastore does not know about the dataset, controls whether
+            it should return a predicted URI or not.
 
         Returns
         -------

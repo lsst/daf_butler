@@ -84,7 +84,7 @@ class DatasetRecordStorage(ABC):
             Expanded data IDs (`DataCoordinate` instances) for the
             datasets to be added.   The dimensions of all data IDs must be the
             same as ``self.datasetType.dimensions``.
-        idMode : `DatasetIdGenEnum`
+        idGenerationMode : `DatasetIdGenEnum`
             With `UNIQUE` each new dataset is inserted with its new unique ID.
             With non-`UNIQUE` mode ID is computed from some combination of
             dataset type, dataId, and run collection name; if the same ID is
@@ -110,7 +110,7 @@ class DatasetRecordStorage(ABC):
         run : `RunRecord`
             The record object describing the `~CollectionType.RUN` collection
             this dataset will be associated with.
-        datasets :  `~collections.abc.Iterable` of `DatasetRef`
+        datasets : `~collections.abc.Iterable` of `DatasetRef`
             Datasets to be inserted.  Datasets can specify ``id`` attribute
             which will be used for inserted datasets. All dataset IDs must
             have the same type (`int` or `uuid.UUID`), if type of dataset IDs
@@ -138,7 +138,7 @@ class DatasetRecordStorage(ABC):
 
         Parameters
         ----------
-         datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
+        datasets : `~collections.abc.Iterable` [ `DatasetRef` ]
             Datasets to be deleted.  All datasets must be resolved and have
             the same `DatasetType` as ``self``.
 
@@ -219,6 +219,9 @@ class DatasetRecordStorage(ABC):
             the same `DatasetType` as ``self``.
         timespan : `Timespan`
             The validity range for these datasets within the collection.
+        context : `SqlQueryContext`
+            The object that manages database connections, temporary tables and
+            relation engines for this query.
 
         Raises
         ------
@@ -261,6 +264,9 @@ class DatasetRecordStorage(ABC):
             Data IDs that should be decertified within the given validity range
             If `None`, all data IDs for ``self.datasetType`` will be
             decertified.
+        context : `SqlQueryContext`
+            The object that manages database connections, temporary tables and
+            relation engines for this query.
 
         Raises
         ------
@@ -316,6 +322,11 @@ class DatasetRecordStorageManager(VersionedExtension):
     `DatasetRecordStorageManager` primarily serves as a container and factory
     for `DatasetRecordStorage` instances, which each provide access to the
     records for a different `DatasetType`.
+
+    Parameters
+    ----------
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
     """
 
     def __init__(self, *, registry_schema_version: VersionTuple | None = None) -> None:
@@ -342,7 +353,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         context : `StaticTablesContext`
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present.
-        collections: `CollectionManager`
+        collections : `CollectionManager`
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
@@ -410,16 +421,16 @@ class DatasetRecordStorageManager(VersionedExtension):
         tableSpec : `ddl.TableSpec`
             Specification for the table that should reference the dataset
             table.  Will be modified in place.
-        name: `str`, optional
+        name : `str`, optional
             A name to use for the prefix of the new field; the full name is
             ``{name}_id``.
-        onDelete: `str`, optional
+        constraint : `bool`, optional
+            If `False` (`True` is default), add a field that can be joined to
+            the dataset primary key, but do not add a foreign key constraint.
+        onDelete : `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        constraint: `bool`, optional
-            If `False` (`True` is default), add a field that can be joined to
-            the dataset primary key, but do not add a foreign key constraint.
         **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are
@@ -537,7 +548,7 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Parameters
         ----------
-        expression
+        expression : `~typing.Any`
             Expression to resolve.  Will be passed to
             `DatasetTypeWildcard.from_expression`.
         components : `bool`, optional

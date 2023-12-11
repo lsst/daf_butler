@@ -64,12 +64,12 @@ if TYPE_CHECKING:
 _LOG = getLogger(__name__)
 
 
-class Butler(LimitedButler):
+class Butler(LimitedButler):  # numpydoc ignore=PR02
     """Interface for data butler and factory for Butler instances.
 
     Parameters
     ----------
-    config : `ButlerConfig`, `Config` or `str`, optional.
+    config : `ButlerConfig`, `Config` or `str`, optional
         Configuration. Anything acceptable to the `ButlerConfig` constructor.
         If a directory path is given the configuration will be read from a
         ``butler.yaml`` file in that location. If `None` is given default
@@ -138,7 +138,28 @@ class Butler(LimitedButler):
         config: Config | ResourcePathExpression | None = None,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
     ) -> type[Butler]:
-        """Find actual class to instantiate."""
+        """Find actual class to instantiate.
+
+        Parameters
+        ----------
+        config : `ButlerConfig`, `Config` or `str`, optional
+            Configuration. Anything acceptable to the `ButlerConfig`
+            constructor. If a directory path is given the configuration will be
+            read from a ``butler.yaml`` file in that location. If `None` is
+            given default values will be used. If ``config`` contains "cls"
+            key then its value is used as a name of butler class and it must be
+            a sub-class of this class, otherwise `DirectButler` is
+            instantiated.
+        searchPaths : `list` of `str`, optional
+            Directory paths to search when calculating the full Butler
+            configuration.  Not used if the supplied config is already a
+            `ButlerConfig`.
+
+        Returns
+        -------
+        butler_class : `type`
+            The type of `Butler` to instantiate.
+        """
         butler_class_name: str | None = None
         if config is not None:
             # Check for optional "cls" key in config.
@@ -174,7 +195,7 @@ class Butler(LimitedButler):
 
         Parameters
         ----------
-        config : `ButlerConfig`, `Config` or `str`, optional.
+        config : `ButlerConfig`, `Config` or `str`, optional
             Configuration. Anything acceptable to the `ButlerConfig`
             constructor. If a directory path is given the configuration will be
             read from a ``butler.yaml`` file in that location. If `None` is
@@ -215,6 +236,11 @@ class Butler(LimitedButler):
         **kwargs : `Any`
             Additional keyword arguments passed to a constructor of actual
             butler class.
+
+        Returns
+        -------
+        butler : `Butler`
+            A `Butler` constructed from the given configuration.
 
         Notes
         -----
@@ -828,9 +854,9 @@ class Butler(LimitedButler):
         storage_class : `str` or `StorageClass` or `None`
             A storage class to use when creating the returned entry. If given
             it must be compatible with the default storage class.
-        dimension_records: `bool`, optional
+        dimension_records : `bool`, optional
             If `True` the ref will be expanded and contain dimension records.
-        datastore_records: `bool`, optional.
+        datastore_records : `bool`, optional
             If `True` the ref will contain associated datastore records.
 
         Returns
@@ -884,9 +910,9 @@ class Butler(LimitedButler):
         storage_class : `str` or `StorageClass` or `None`
             A storage class to use when creating the returned entry. If given
             it must be compatible with the default storage class.
-        dimension_records: `bool`, optional
+        dimension_records : `bool`, optional
             If `True` the ref will be expanded and contain dimension records.
-        datastore_records: `bool`, optional.
+        datastore_records : `bool`, optional
             If `True` the ref will contain associated datastore records.
         **kwargs
             Additional keyword arguments passed to
@@ -1094,7 +1120,7 @@ class Butler(LimitedButler):
 
         Parameters
         ----------
-        datasets : `FileDataset`
+        *datasets : `FileDataset`
             Each positional argument is a struct containing information about
             a file to be ingested, including its URI (either absolute or
             relative to the datastore root, if applicable), a resolved

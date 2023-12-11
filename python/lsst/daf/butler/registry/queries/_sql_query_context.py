@@ -71,7 +71,7 @@ class SqlQueryContext(QueryContext):
     ----------
     db : `Database`
         Object that abstracts the database engine.
-    sql_engine : `ButlerSqlEngine`
+    column_types : `ColumnTypeInfo`
         Information about column types that can vary with registry
         configuration.
     row_chunk_size : `int`, optional

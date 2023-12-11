@@ -116,6 +116,15 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
     """A SQLAlchemy custom type for Python `bytes`.
 
     Maps Python `bytes` to a base64-encoded `sqlalchemy.Text` field.
+
+    Parameters
+    ----------
+    nbytes : `int` or `None`, optional
+        Number of bytes.
+    *args : `typing.Any`
+        Parameters passed to base class constructor.
+    **kwargs : `typing.Any`
+        Keyword parameters passed to base class constructor.
     """
 
     impl = sqlalchemy.Text
@@ -340,7 +349,7 @@ class FieldSpec:
 
         Parameters
         ----------
-        config: `Config`
+        config : `Config`
             Configuration describing the column.  Nested configuration keys
             correspond to `FieldSpec` attributes.
         **kwargs
@@ -478,7 +487,7 @@ class ForeignKeySpec:
 
         Parameters
         ----------
-        config: `Config`
+        config : `Config`
             Configuration describing the constraint.  Nested configuration keys
             correspond to `ForeignKeySpec` attributes.
 
@@ -508,7 +517,7 @@ class IndexSpec:
     ----------
     *columns : `str`
         Names of the columns to index.
-    **kwargs: `Any`
+    **kwargs : `Any`
         Additional keyword arguments to pass directly to
         `sqlalchemy.schema.Index` constructor. This could be used to provide
         backend-specific options, e.g. to create a ``GIST`` index in PostgreSQL
@@ -541,7 +550,7 @@ class TableSpec:
         Specifications for the columns in this table.
     unique : `~collections.abc.Iterable` [ `tuple` [ `str` ] ], optional
         Non-primary-key unique constraints for the table.
-    indexes: `~collections.abc.Iterable` [ `IndexSpec` ], optional
+    indexes : `~collections.abc.Iterable` [ `IndexSpec` ], optional
         Indexes for the table.
     foreignKeys : `~collections.abc.Iterable` [ `ForeignKeySpec` ], optional
         Foreign key constraints for the table.
@@ -615,7 +624,7 @@ class TableSpec:
 
         Parameters
         ----------
-        config: `Config`
+        config : `Config`
             Configuration describing the constraint.  Nested configuration keys
             correspond to `TableSpec` attributes.
 

@@ -205,7 +205,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
 
         Parameters
         ----------
-        ref : `DatasetRef`
+        dataset_id : `DatasetRef`
             Target `DatasetRef`
 
         Returns
@@ -403,10 +403,10 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
-    def put_new(self, inMemoryDataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
+    def put_new(self, in_memory_dataset: Any, ref: DatasetRef) -> Mapping[str, DatasetRef]:
         # It is OK to call put() here because registry is not populating
         # bridges as we return empty dict from this method.
-        self.put(inMemoryDataset, ref)
+        self.put(in_memory_dataset, ref)
         # As ephemeral we return empty dict.
         return {}
 
@@ -418,8 +418,8 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         ref : `DatasetRef`
             Reference to the required dataset.
         predict : `bool`, optional
-            If the datastore does not know about the dataset, should it
-            return a predicted URI or not?
+            If the datastore does not know about the dataset, controls whether
+            it should return a predicted URI or not.
 
         Returns
         -------
@@ -499,6 +499,26 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
     ) -> list[ResourcePath]:
         """Retrieve the file artifacts associated with the supplied refs.
 
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets for which artifacts are to be retrieved.
+            A single ref can result in multiple artifacts. The refs must
+            be resolved.
+        destination : `lsst.resources.ResourcePath`
+            Location to write the artifacts.
+        transfer : `str`, optional
+            Method to use to transfer the artifacts. Must be one of the options
+            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            "move" is not allowed.
+        preserve_path : `bool`, optional
+            If `True` the full path of the artifact within the datastore
+            is preserved. If `False` the final file component of the path
+            is used.
+        overwrite : `bool`, optional
+            If `True` allow transfers to overwrite existing files at the
+            destination.
+
         Notes
         -----
         Not implemented by this datastore.
@@ -521,7 +541,7 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         ----------
         ref : `DatasetRef` or iterable thereof
             Reference to the required Dataset(s).
-        ignore_errors: `bool`, optional
+        ignore_errors : `bool`, optional
             Indicate that errors should be ignored.
 
         Raises

@@ -89,13 +89,12 @@ def makeRunTableSpec(
     ----------
     collectionIdName : `str`
         Name of the column in collections table that identifies it (PK).
-    collectionIdType
+    collectionIdType : `type`
         Type of the PK column in the collections table, one of the
         `sqlalchemy` types.
     TimespanReprClass : `type` [ `TimespanDatabaseRepresentation` ]
         Subclass of `TimespanDatabaseRepresentation` that encapsulates how
         timespans are stored in this database.
-
 
     Returns
     -------
@@ -129,7 +128,7 @@ def makeCollectionChainTableSpec(collectionIdName: str, collectionIdType: type) 
     ----------
     collectionIdName : `str`
         Name of the column in collections table that identifies it (PK).
-    collectionIdType
+    collectionIdType : `type`
         Type of the PK column in the collections table, one of the
         `sqlalchemy` types.
 
@@ -176,6 +175,10 @@ class DefaultCollectionManager(CollectionManager[K]):
         Name of the column in collections table that identifies it (PK).
     dimensions : `DimensionRecordStorageManager`
         Manager object for the dimensions in this `Registry`.
+    caching_context : `CachingContext`
+        Caching context to use.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        The version of the registry schema.
 
     Notes
     -----

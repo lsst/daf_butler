@@ -48,8 +48,10 @@ def _getTable(
 
     Parameters
     ----------
-    repo
-    glob
+    repo : `str`
+        The Butler repository location.
+    glob : `collections.abc.Iterable` of `str`
+        Wildcard to pass to ``queryCollections``.
     collection_type
         Same as `queryCollections`
     inverse : `bool`
@@ -122,8 +124,10 @@ def _getTree(
 
     Parameters
     ----------
-    repo
-    glob
+    repo : `str`
+        Butler repository location.
+    glob : `collections.abc.Iterable` of `str`
+        Wildcards to pass to ``queryCollections``.
     collection_type
         Same as `queryCollections`
     inverse : `bool`
@@ -202,9 +206,6 @@ def queryCollections(
         Must be one of "FLATTEN", "TABLE", or "TREE" (case sensitive).
         Affects contents and formatting of results, see
         ``cli.commands.query_collections``.
-    inverse : `bool`
-        If true, show what CHAINED collections the dataset is a member of
-        (instead of what datasets any CHAINED collection contains)
 
     Returns
     -------

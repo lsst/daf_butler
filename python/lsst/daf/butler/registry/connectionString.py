@@ -73,8 +73,8 @@ class ConnectionStringFactory:
 
         Parameters
         ----------
-        config : `RegistryConfig`
-            Registry configuration
+        registryConfig : `RegistryConfig`
+            Registry configuration.
 
         Returns
         -------

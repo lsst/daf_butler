@@ -62,8 +62,8 @@ class SqliteDatabase(Database):
 
     Parameters
     ----------
-    connection : `sqlalchemy.engine.Connection`
-        An existing connection created by a previous call to `connect`.
+    engine : `sqlalchemy.engine.Engine`
+        Engine to use for this connection.
     origin : `int`
         An integer ID that should be used as the default for any datasets,
         quanta, or other entities that use a (autoincrement, origin) compound

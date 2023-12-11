@@ -36,8 +36,8 @@ from pydantic import Field
 
 
 class DictConvertibleModel(_BaseModelCompat):
-    """A pydantic model to/from dict conversion in which the dict
-    representation is intentionally different from pydantics' own dict
+    """A Pydantic model to/from dict conversion in which the `dict`
+    representation is intentionally different from Pydantic's own `dict`
     conversions.
     """
 
@@ -58,7 +58,7 @@ class DictConvertibleModel(_BaseModelCompat):
         content : `~collections.abc.Mapping`
             Content of the logical dict that this object converts to.
         extra : `str`, optional
-            Extra content that is not included in the dict representation
+            Extra content that is not included in the dict representation.
 
         Returns
         -------

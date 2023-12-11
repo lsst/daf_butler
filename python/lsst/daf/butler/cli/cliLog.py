@@ -55,7 +55,20 @@ class PrecisionLogFormatter(logging.Formatter):
     """Control whether local time is displayed instead of UTC."""
 
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
-        """Format the time as an aware datetime."""
+        """Format the time as an aware datetime.
+
+        Parameters
+        ----------
+        record : `logging.LogRecord`
+            The record to format.
+        datefmt : `str` or `None`, optional
+            Format to use when formatting the date.
+
+        Returns
+        -------
+        formatted : `str`
+            Formatted date string.
+        """
         ct: datetime.datetime = self.converter(record.created, tz=datetime.UTC)  # type: ignore
         if self.use_local:
             ct = ct.astimezone()
@@ -276,7 +289,7 @@ class CliLog:
         Parameters
         ----------
         logLevels : `list` of `tuple`
-            per-component logging levels, each item in the list is a tuple
+            Per-component logging levels, each item in the list is a tuple
             (component, level), `component` is a logger name or an empty string
             or `None` for default root logger, `level` is a logging level name,
             one of CRITICAL, ERROR, WARNING, INFO, DEBUG (case insensitive).
@@ -381,7 +394,13 @@ class CliLog:
         return lsstLog.LevelTranslator.logging2lsstLog(pylog_level)
 
     class ComponentSettings:
-        """Container for log level values for a logging component."""
+        """Container for log level values for a logging component.
+
+        Parameters
+        ----------
+        component : `str` or `None`
+            The logger component.
+        """
 
         def __init__(self, component: str | None):
             self.component = component

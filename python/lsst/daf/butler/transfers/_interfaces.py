@@ -70,7 +70,7 @@ class RepoExportBackend(ABC):
         ----------
         element : `DimensionElement`
             The `DimensionElement` whose elements are being exported.
-        data : `DimensionRecord` (variadic)
+        *data : `DimensionRecord` (variadic)
             One or more records to export.
         """
         raise NotImplementedError()
@@ -84,7 +84,7 @@ class RepoExportBackend(ABC):
 
         Parameters
         ----------
-        record: `CollectionRecord`
+        record : `CollectionRecord`
             Object representing the collection to export.
         doc : `str` or `None`
             Documentation string for the collection.
@@ -103,7 +103,7 @@ class RepoExportBackend(ABC):
             Type of all datasets being exported with this call.
         run : `str`
             Run associated with all datasets being exported with this call.
-        datasets : `FileDataset`, variadic
+        *datasets : `FileDataset`, variadic
             Per-dataset information to be exported.  `FileDataset.formatter`
             attributes should be strings, not `Formatter` instances or classes.
         """

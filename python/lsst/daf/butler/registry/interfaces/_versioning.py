@@ -48,10 +48,14 @@ class IncompatibleVersionError(RuntimeError):
 class VersionTuple(NamedTuple):
     """Class representing a version number.
 
-    Parameters
+    Attributes
     ----------
-    major, minor, patch : `int`
-        Version number components
+    major : `int
+        Major version number.
+    minor : `int`
+        Minor version number.
+    patch : `int`
+        Patch level.
     """
 
     major: int

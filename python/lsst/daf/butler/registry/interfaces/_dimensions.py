@@ -139,10 +139,10 @@ class DimensionRecordStorage(ABC):
 
         Parameters
         ----------
-        records
+        *records
             One or more instances of the `DimensionRecord` subclass for the
             element this storage is associated with.
-        replace: `bool`, optional
+        replace : `bool`, optional
             If `True` (`False` is default), replace existing records in the
             database if there is a conflict.
         skip_existing : `bool`, optional
@@ -173,10 +173,10 @@ class DimensionRecordStorage(ABC):
 
         Parameters
         ----------
-        record : `DimensionRecord`.
+        record : `DimensionRecord`
             An instance of the `DimensionRecord` subclass for the
             element this storage is associated with.
-        update: `bool`, optional
+        update : `bool`, optional
             If `True` (`False` is default), update the existing record in the
             database if there is a conflict.
 
@@ -388,7 +388,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
 
         Parameters
         ----------
-        callback
+        callback : `~collections.abc.Callable`
             Callable that takes a single `DimensionRecord` argument.  This will
             be called immediately after any successful insertion, in the same
             transaction.
@@ -655,6 +655,8 @@ class DimensionRecordStorageManager(VersionedExtension):
     universe : `DimensionUniverse`
         Universe of all dimensions and dimension elements known to the
         `Registry`.
+    registry_schema_version : `VersionTuple` or `None`, optional
+        Version of registry schema.
 
     Notes
     -----
@@ -764,7 +766,7 @@ class DimensionRecordStorageManager(VersionedExtension):
 
         Parameters
         ----------
-        dimensions : `DimensionGroup`
+        graph : `DimensionGroup`
             Set of dimensions to save.
 
         Returns

@@ -202,3 +202,27 @@ max-doc-length = 79
 
 [tool.ruff.pydocstyle]
 convention = "numpy"
+
+[tool.numpydoc_validation]
+checks = [
+    "all",  # All except the rules listed below.
+    "SA01",  # See Also section.
+    "EX01",  # Example section.
+    "SS06",  # Summary can go into second line.
+    "GL01",  # Summary text can start on same line as """
+    "GL08",  # Do not require docstring.
+    "ES01",  # No extended summary required.
+    "RT01",  # Unfortunately our @property trigger this.
+    "RT02",  # Does not want named return value. DM style says we do.
+    "SS05",  # pydocstyle is better at finding infinitive verb.
+]
+exclude = [
+    "^test_.*",  # Do not test docstrings in test code.
+    '^spatial\..*',  # Do not test doc strings in the spatial.py test code.
+    '^lex\..*',  # Lexer
+    '^parserLex\.',  # Docstrings are not numpydoc
+    '^parserYacc\.',  # Docstrings are not numpydoc
+    '^commands\.',  # Click docstrings, not numpydoc
+    '^__init__$',
+    '\._[a-zA-Z_]+$',  # Private methods.
+]
