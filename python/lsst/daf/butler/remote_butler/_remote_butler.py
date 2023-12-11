@@ -39,6 +39,7 @@ from lsst.daf.butler.datastores.fileDatastoreClient import get_dataset_as_python
 from lsst.daf.butler.repo_relocation import replaceRoot
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
+from pydantic import parse_obj_as
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig
@@ -47,7 +48,7 @@ from .._config import Config
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
-from ..dimensions import DataCoordinate, DimensionConfig, DimensionUniverse, SerializedDataCoordinate
+from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
 from ._authentication import get_authentication_headers, get_authentication_token_from_environment
@@ -144,33 +145,29 @@ class RemoteButler(Butler):
         self._dimensions = DimensionUniverse(config)
         return self._dimensions
 
-    def _simplify_dataId(
-        self, dataId: DataId | None, **kwargs: dict[str, int | str]
-    ) -> SerializedDataCoordinate | None:
+    def _simplify_dataId(self, dataId: DataId | None, kwargs: dict[str, DataIdValue]) -> SerializedDataId:
         """Take a generic Data ID and convert it to a serializable form.
 
         Parameters
         ----------
         dataId : `dict`, `None`, `DataCoordinate`
             The data ID to serialize.
-        **kwargs : `dict`
-            Additional values that should be included if this is not
-            a `DataCoordinate`.
+        kwargs : `dict`
+            Additional entries to augment or replace the values in ``dataId``
 
         Returns
         -------
-        data_id : `SerializedDataCoordinate` or `None`
+        data_id : `SerializedDataId` or `None`
             A serializable form.
         """
-        if dataId is None and not kwargs:
-            return None
-        if isinstance(dataId, DataCoordinate):
-            return dataId.to_simple()
+        if dataId is None:
+            dataId = {}
+        elif isinstance(dataId, DataCoordinate):
+            dataId = dataId.to_simple(minimal=True).dataId
+        else:
+            dataId = dict(dataId)
 
-        # Assume we can treat it as a dict.
-        data_id = dict(dataId) if dataId is not None else {}
-        data_id.update(kwargs)
-        return SerializedDataCoordinate(dataId=data_id)
+        return parse_obj_as(SerializedDataId, dataId | kwargs)
 
     def _caching_context(self) -> AbstractContextManager[None]:
         # Docstring inherited.
@@ -335,7 +332,7 @@ class RemoteButler(Butler):
             storage_class = storage_class.name
 
         query = FindDatasetModel(
-            data_id=self._simplify_dataId(data_id, **kwargs),
+            data_id=self._simplify_dataId(data_id, kwargs),
             collections=self._normalize_collections(collections),
             storage_class=storage_class,
             dimension_records=dimension_records,

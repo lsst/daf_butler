@@ -141,21 +141,15 @@ def find_dataset(
 ) -> SerializedDatasetRef | None:
     collection_query = query.collections if query.collections else None
 
-    # Get the simple dict from the SerializedDataCoordinate. We do not know
-    # if it is a well-defined DataCoordinate or needs some massaging first.
-    # find_dataset will use dimension record queries if necessary.
-    data_id = query.data_id.dataId
-
     butler = factory.create_butler()
     ref = butler.find_dataset(
         dataset_type,
-        None,
+        query.data_id,
         collections=collection_query,
         storage_class=query.storage_class,
         timespan=None,
         dimension_records=query.dimension_records,
         datastore_records=query.datastore_records,
-        **data_id,
     )
     return ref.to_simple() if ref else None
 
@@ -181,7 +175,7 @@ def get_file_by_data_id(
     try:
         ref = butler._findDatasetRef(
             datasetRefOrType=request.dataset_type_name,
-            dataId=request.data_id.dataId,
+            dataId=request.data_id,
             collections=request.collections,
             datastore_records=True,
         )

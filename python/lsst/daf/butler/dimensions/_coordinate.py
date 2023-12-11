@@ -32,7 +32,14 @@
 
 from __future__ import annotations
 
-__all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDataCoordinate")
+__all__ = (
+    "DataCoordinate",
+    "DataId",
+    "DataIdKey",
+    "DataIdValue",
+    "SerializedDataCoordinate",
+    "SerializedDataId",
+)
 
 import numbers
 import warnings
@@ -69,17 +76,20 @@ DataIdValue = int | str | None
 DataCoordinate or other data ID.
 """
 
+SerializedDataId = dict[str, DataIdValue]
+"""Simplified model for serializing the ``mapping`` property of
+`DataCoordinate`.
+"""
+
 
 class SerializedDataCoordinate(_BaseModelCompat):
     """Simplified model for serializing a `DataCoordinate`."""
 
-    dataId: dict[str, DataIdValue]
+    dataId: SerializedDataId
     records: dict[str, SerializedDimensionRecord] | None = None
 
     @classmethod
-    def direct(
-        cls, *, dataId: dict[str, DataIdValue], records: dict[str, dict] | None
-    ) -> SerializedDataCoordinate:
+    def direct(cls, *, dataId: SerializedDataId, records: dict[str, dict] | None) -> SerializedDataCoordinate:
         """Construct a `SerializedDataCoordinate` directly without validators.
 
         Parameters
