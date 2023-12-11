@@ -230,7 +230,7 @@ class RemoteButler(Butler):
             request = GetFileByDataIdRequestModel(
                 dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
                 collections=self._normalize_collections(collections),
-                data_id=self._simplify_dataId(dataId),
+                data_id=self._simplify_dataId(dataId, kwargs),
             )
             response = self._post("get_file_by_data_id", request)
             if response.status_code == 404:

@@ -252,6 +252,17 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Test get() by DataId.
         data_id_metric = self.butler.get(dataset_type, dataId=data_id, collections=collections)
         self.assertEqual(metric, data_id_metric)
+        # Test get() by DataId dict augmented with kwargs.
+        kwarg_metric = self.butler.get(
+            dataset_type, dataId={"instrument": "DummyCamComp"}, collections=collections, visit=423
+        )
+        self.assertEqual(metric, kwarg_metric)
+        # Test get() by DataId DataCoordinate augmented with kwargs.
+        coordinate = DataCoordinate.make_empty(self.butler.dimensions)
+        kwarg_data_coordinate_metric = self.butler.get(
+            dataset_type, dataId=coordinate, collections=collections, instrument="DummyCamComp", visit=423
+        )
+        self.assertEqual(metric, kwarg_data_coordinate_metric)
         # Test get() of a non-existent DataId.
         invalid_data_id = {"instrument": "NotAValidlInstrument", "visit": 423}
         with self.assertRaises(LookupError):
