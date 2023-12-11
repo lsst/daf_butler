@@ -104,7 +104,6 @@ def get_dataset_type(
 )
 def get_dataset(
     id: uuid.UUID,
-    storage_class: str | None = None,
     dimension_records: bool = False,
     datastore_records: bool = False,
     factory: Factory = Depends(factory_dependency),
@@ -113,7 +112,6 @@ def get_dataset(
     butler = factory.create_butler()
     ref = butler.get_dataset(
         id,
-        storage_class=storage_class,
         dimension_records=dimension_records,
         datastore_records=datastore_records,
     )
@@ -146,7 +144,6 @@ def find_dataset(
         dataset_type,
         query.data_id,
         collections=collection_query,
-        storage_class=query.storage_class,
         timespan=None,
         dimension_records=query.dimension_records,
         datastore_records=query.datastore_records,

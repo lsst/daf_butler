@@ -45,7 +45,6 @@ class FindDatasetModel(_BaseModelCompat):
 
     data_id: SerializedDataId
     collections: CollectionList
-    storage_class: str | None
     dimension_records: bool = False
     datastore_records: bool = False
 

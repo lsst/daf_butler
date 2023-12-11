@@ -311,23 +311,22 @@ class RemoteButler(Butler):
         datastore_records: bool = False,
     ) -> DatasetRef | None:
         path = f"dataset/{id}"
-        if isinstance(storage_class, StorageClass):
-            storage_class_name = storage_class.name
-        elif storage_class:
-            storage_class_name = storage_class
         params: dict[str, str | bool] = {
             "dimension_records": dimension_records,
             "datastore_records": datastore_records,
         }
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
-        if storage_class:
-            params["storage_class"] = storage_class_name
         response = self._client.get(self._get_url(path), params=params)
         response.raise_for_status()
         if response.json() is None:
             return None
-        return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
+        ref = DatasetRef.from_simple(
+            self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
+        )
+        if storage_class is not None:
+            ref = ref.overrideStorageClass(storage_class)
+        return ref
 
     def find_dataset(
         self,
@@ -347,13 +346,10 @@ class RemoteButler(Butler):
             raise ValueError("Timespan can not yet be used in butler client/server.")
 
         dataset_type = self._normalize_dataset_type_name(dataset_type)
-        if isinstance(storage_class, StorageClass):
-            storage_class = storage_class.name
 
         query = FindDatasetModel(
             data_id=self._simplify_dataId(data_id, kwargs),
             collections=self._normalize_collections(collections),
-            storage_class=storage_class,
             dimension_records=dimension_records,
             datastore_records=datastore_records,
         )
@@ -362,9 +358,12 @@ class RemoteButler(Butler):
         response = self._post(path, query)
         response.raise_for_status()
 
-        return DatasetRef.from_simple(
+        ref = DatasetRef.from_simple(
             self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
         )
+        if storage_class is not None:
+            ref = ref.overrideStorageClass(storage_class)
+        return ref
 
     def retrieveArtifacts(
         self,
