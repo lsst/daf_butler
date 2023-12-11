@@ -33,16 +33,20 @@ import uuid
 from abc import abstractmethod
 from collections.abc import Iterable
 from contextlib import AbstractContextManager
-from typing import Annotated, TypeAlias, Union, overload
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, Union, overload
 
 import pydantic
 
+from .._dataset_type import DatasetType
 from ..dimensions import DataIdValue, DimensionGroup, DimensionUniverse
 from .data_coordinate_results import DataCoordinateResultPage, DataCoordinateResultSpec
 from .dataset_results import DatasetRefResultPage, DatasetRefResultSpec
 from .dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
 from .general_results import GeneralResultPage, GeneralResultSpec
 from .relation_tree import MaterializationKey, RootRelation, UploadKey
+
+if TYPE_CHECKING:
+    from ..registry import CollectionArgType
 
 PageKey: TypeAlias = uuid.UUID
 
@@ -63,6 +67,8 @@ class QueryDriver(AbstractContextManager[None]):
     """Base class for the implementation object inside `RelationQuery` objects
     that is specialized for DirectButler vs. RemoteButler.
 
+    Notes
+    -----
     Implementations should be context managers.  This allows them to manage the
     lifetime of server-side state, such as:
 
@@ -301,5 +307,48 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
+    def resolve_collection_wildcard(
+        self, collections: CollectionArgType | None = None
+    ) -> tuple[list[str], bool]:
+        """Resolve a collection argument into a sequence of collection names.
+
+        Parameters
+        ----------
+        collections
+            Collection search path argument.  If `None`, the default
+            collections for the client should be used, if there are any.
+
+        Returns
+        -------
+        matched : `list` [ `str` ]
+            Matching collection names.  `~CollectionType.CHAINED` collections
+            are included directly rather than flattened.
+        ordered : `bool`
+            If `True`, the expression specified an order that can be used in
+            a find-first search.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def resolve_dataset_type_wildcard(self, dataset_type: Any) -> dict[str, DatasetType]:
+        """Resolve a dataset type argument into a mapping of `DatasetType`
+        objects.
+
+        Parameters
+        ----------
+        dataset_type
+            Dataset type name, object, or wildcard to resolve.
+
+        Returns
+        -------
+        matched : `dict` [ `str`, `DatasetType` ]
+            Mapping from dataset type name to dataset type.  Storage classes
+            passed in should be preserved, but component dataset types should
+            result in an exception.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def get_dataset_dimensions(self, name: str) -> DimensionGroup:
+        """Return the dimensions for a dataset type."""
         raise NotImplementedError()

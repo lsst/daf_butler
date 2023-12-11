@@ -77,7 +77,7 @@ class DataCoordinateResultPage(pydantic.BaseModel):
 
 
 class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
-    """Implementation of DataCoordinateQueryResults for the relation-based
+    """Implementation of `DataCoordinateQueryResults` for the relation-based
     query system.
 
     Parameters
@@ -145,7 +145,9 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
         return RelationDataCoordinateQueryResults(
             self._driver,
             tree=self._tree,
-            spec=DataCoordinateResultSpec(dimensions=self._spec.dimensions, include_dimension_records=True),
+            spec=DataCoordinateResultSpec.model_construct(
+                dimensions=self._spec.dimensions, include_dimension_records=True
+            ),
         )
 
     def subset(
@@ -170,7 +172,7 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
         return RelationDataCoordinateQueryResults(
             self._driver,
             tree=self._tree,
-            spec=DataCoordinateResultSpec(
+            spec=DataCoordinateResultSpec.model_construct(
                 dimensions=dimensions, include_dimension_records=self._spec.include_dimension_records
             ),
         )

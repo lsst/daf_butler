@@ -35,6 +35,11 @@ from typing import TYPE_CHECKING, Any
 from .._query import Query
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from .data_coordinate_results import DataCoordinateResultSpec, RelationDataCoordinateQueryResults
+from .dataset_results import (
+    ChainedDatasetQueryResults,
+    DatasetRefResultSpec,
+    RelationSingleTypeDatasetQueryResults,
+)
 from .dimension_record_results import DimensionRecordResultSpec, RelationDimensionRecordQueryResults
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory, ExpressionProxy
@@ -171,6 +176,8 @@ class RelationQuery(Query):
         )
         return RelationDataCoordinateQueryResults(self._driver, tree, result_spec)
 
+    # TODO add typing.overload variants for single-dataset-type and patterns.
+
     def datasets(
         self,
         dataset_type: Any,
@@ -183,7 +190,46 @@ class RelationQuery(Query):
         **kwargs: Any,
     ) -> DatasetQueryResults:
         # Docstring inherited.
-        raise NotImplementedError("TODO")
+        resolved_dataset_types = self._driver.resolve_dataset_type_wildcard(dataset_type)
+        data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
+        where_terms = convert_where_args(self._tree, where, data_id, bind=bind, **kwargs)
+        single_type_results: list[RelationSingleTypeDatasetQueryResults] = []
+        for name, resolved_dataset_type in resolved_dataset_types.items():
+            tree = self._tree
+            if name not in tree.available_dataset_types:
+                resolved_collections, collections_ordered = self._driver.resolve_collection_wildcard(
+                    collections
+                )
+                if find_first and not collections_ordered:
+                    raise InvalidRelationError(
+                        f"Unordered collections argument {collections} requires find_first=False."
+                    )
+                tree = tree.join(
+                    DatasetSearch.model_construct(
+                        dataset_type=name,
+                        dimensions=resolved_dataset_type.dimensions.as_group(),
+                        collections=tuple(resolved_collections),
+                    )
+                )
+            elif collections is not None:
+                raise InvalidRelationError(
+                    f"Dataset type {name!r} was already joined into this query but new collections "
+                    f"{collections!r} were still provided."
+                )
+            if where_terms:
+                tree = tree.where(*where_terms)
+            if find_first:
+                tree = tree.find_first(name, resolved_dataset_type.dimensions.as_group())
+            spec = DatasetRefResultSpec.model_construct(
+                dataset_type=resolved_dataset_type, include_dimension_records=self._include_dimension_records
+            )
+            single_type_results.append(
+                RelationSingleTypeDatasetQueryResults(self._driver, tree=tree, spec=spec)
+            )
+        if len(single_type_results) == 1:
+            return single_type_results[0]
+        else:
+            return ChainedDatasetQueryResults(tuple(single_type_results))
 
     def dimension_records(
         self,
