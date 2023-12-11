@@ -239,6 +239,14 @@ class RemoteButler(Butler):
         response.raise_for_status()
         model = self._parse_model(response, GetFileResponseModel)
 
+        # If the caller provided a DatasetRef or DatasetType, they may have
+        # overridden the storage class on it.  We need to respect this, if they
+        # haven't asked to re-override it.
+        explicitDatasetType = _extract_dataset_type(datasetRefOrType)
+        if explicitDatasetType is not None:
+            if storageClass is None:
+                storageClass = explicitDatasetType.storageClass
+
         return get_dataset_as_python_object(
             model, parameters=parameters, storageClass=storageClass, universe=self.dimensions
         )
@@ -569,3 +577,15 @@ class RemoteButler(Butler):
             return DatasetTypeName(datasetTypeOrName.name)
         else:
             return DatasetTypeName(datasetTypeOrName)
+
+
+def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
+    """Return the DatasetType associated with the argument, or None if the
+    argument is not an object that contains a DatasetType object.
+    """
+    if isinstance(datasetRefOrType, DatasetType):
+        return datasetRefOrType
+    elif isinstance(datasetRefOrType, DatasetRef):
+        return datasetRefOrType.datasetType
+    else:
+        return None

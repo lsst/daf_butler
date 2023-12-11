@@ -288,10 +288,22 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # Test storage class override
         new_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
-        converted = self.butler.get(ref, storageClass=new_sc)
-        self.assertNotEqual(type(metric), type(converted))
-        self.assertIs(type(converted), new_sc.pytype)
-        self.assertEqual(metric, converted)
+
+        def check_sc_override(converted):
+            self.assertNotEqual(type(metric), type(converted))
+            self.assertIsInstance(converted, new_sc.pytype)
+            self.assertEqual(metric, converted)
+
+        check_sc_override(self.butler.get(ref, storageClass=new_sc))
+
+        # Test storage class override via DatasetRef
+        check_sc_override(self.butler.get(ref.overrideStorageClass("MetricsConversion")))
+        # Test storage class override via DatasetType
+        check_sc_override(
+            self.butler.get(
+                ref.datasetType.overrideStorageClass(new_sc), dataId=data_id, collections=collections
+            )
+        )
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
