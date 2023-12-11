@@ -31,18 +31,18 @@ __all__ = [
     "DirectDataCoordinateQueryResults",
     "DirectDatasetQueryResults",
     "DirectDimensionRecordQueryResults",
-    "DirectParentDatasetQueryResults",
+    "DirectSingleTypeDatasetQueryResults",
 ]
 
 import contextlib
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, Any
 
 from ._query_results import (
     DataCoordinateQueryResults,
     DatasetQueryResults,
     DimensionRecordQueryResults,
-    ParentDatasetQueryResults,
+    SingleTypeDatasetQueryResults,
 )
 from .registry import queries as registry_queries
 
@@ -165,10 +165,10 @@ class DirectDatasetQueryResults(DatasetQueryResults):
     def __iter__(self) -> Iterator[DatasetRef]:
         return iter(self._registry_query_result)
 
-    def by_parent_dataset_type(self) -> Iterator[ParentDatasetQueryResults]:
+    def by_dataset_type(self) -> Iterator[SingleTypeDatasetQueryResults]:
         # Docstring inherited.
         for by_parent in self._registry_query_result.byParentDatasetType():
-            yield DirectParentDatasetQueryResults(by_parent)
+            yield DirectSingleTypeDatasetQueryResults(by_parent)
 
     @contextlib.contextmanager
     def materialize(self) -> Iterator[DatasetQueryResults]:
@@ -193,8 +193,8 @@ class DirectDatasetQueryResults(DatasetQueryResults):
         return self._registry_query_result.explain_no_results(execute=execute)
 
 
-class DirectParentDatasetQueryResults(ParentDatasetQueryResults):
-    """Implementation of `ParentDatasetQueryResults` using query result
+class DirectSingleTypeDatasetQueryResults(SingleTypeDatasetQueryResults):
+    """Implementation of `SingleTypeDatasetQueryResults` using query result
     obtained from registry.
 
     Parameters
@@ -210,18 +210,18 @@ class DirectParentDatasetQueryResults(ParentDatasetQueryResults):
     def __iter__(self) -> Iterator[DatasetRef]:
         return iter(self._registry_query_result)
 
-    def by_parent_dataset_type(self) -> Iterator[ParentDatasetQueryResults]:
+    def by_dataset_type(self) -> Iterator[SingleTypeDatasetQueryResults]:
         # Docstring inherited.
         yield self
 
     @contextlib.contextmanager
-    def materialize(self) -> Iterator[ParentDatasetQueryResults]:
+    def materialize(self) -> Iterator[SingleTypeDatasetQueryResults]:
         # Docstring inherited.
         with self._registry_query_result.materialize() as result:
-            yield DirectParentDatasetQueryResults(result)
+            yield DirectSingleTypeDatasetQueryResults(result)
 
     @property
-    def parent_dataset_type(self) -> DatasetType:
+    def dataset_type(self) -> DatasetType:
         # Docstring inherited.
         return self._registry_query_result.parentDatasetType
 
@@ -230,13 +230,9 @@ class DirectParentDatasetQueryResults(ParentDatasetQueryResults):
         # Docstring inherited.
         return DirectDataCoordinateQueryResults(self._registry_query_result.dataIds)
 
-    def with_components(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
+    def expanded(self) -> SingleTypeDatasetQueryResults:
         # Docstring inherited.
-        return DirectParentDatasetQueryResults(self._registry_query_result.withComponents(components))
-
-    def expanded(self) -> ParentDatasetQueryResults:
-        # Docstring inherited.
-        return DirectParentDatasetQueryResults(self._registry_query_result.expanded())
+        return DirectSingleTypeDatasetQueryResults(self._registry_query_result.expanded())
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.

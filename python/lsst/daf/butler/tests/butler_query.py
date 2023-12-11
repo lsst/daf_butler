@@ -355,9 +355,9 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertTrue(result.any())
         self.assertCountEqual([ref.dataId["detector"] for ref in result], [1, 2, 3, 2, 3, 4])
 
-        by_type = list(result.by_parent_dataset_type())
+        by_type = list(result.by_dataset_type())
         self.assertEqual(len(by_type), 2)
-        self.assertEqual(set(item.parent_dataset_type.name for item in by_type), {"bias", "flat"})
+        self.assertEqual(set(item.dataset_type.name for item in by_type), {"bias", "flat"})
 
         with result.materialize() as materialized:
             result = materialized.expanded()
