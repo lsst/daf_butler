@@ -593,7 +593,7 @@ class option_section:  # noqa: N801
 class MWPath(click.Path):
     """Overrides click.Path to implement file-does-not-exist checking.
 
-    Changes the definition of ``exists` so that `True` indicates the location
+    Changes the definition of ``exists`` so that `True` indicates the location
     (file or directory) must exist, `False` indicates the location must *not*
     exist, and `None` indicates that the file may exist or not. The standard
     definition for the `click.Path` ``exists`` parameter is that for `True` a
