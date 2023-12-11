@@ -247,8 +247,19 @@ class RemoteButler(Butler):
             if storageClass is None:
                 storageClass = explicitDatasetType.storageClass
 
+        # If the caller provided a DatasetRef, they may have overridden the
+        # component on it.  We need to explicitly handle this because we did
+        # not send the DatasetType to the server in this case.
+        componentOverride = None
+        if isinstance(datasetRefOrType, DatasetRef):
+            componentOverride = datasetRefOrType.datasetType.component()
+
         return get_dataset_as_python_object(
-            model, parameters=parameters, storageClass=storageClass, universe=self.dimensions
+            model,
+            parameters=parameters,
+            storageClass=storageClass,
+            universe=self.dimensions,
+            component=componentOverride,
         )
 
     def getURIs(

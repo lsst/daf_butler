@@ -29,6 +29,8 @@ import os.path
 import unittest
 import uuid
 
+from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
+
 try:
     # Failing to import any of these should disable the tests.
     from fastapi.testclient import TestClient
@@ -304,6 +306,22 @@ class ButlerClientServerTestCase(unittest.TestCase):
                 ref.datasetType.overrideStorageClass(new_sc), dataId=data_id, collections=collections
             )
         )
+
+        # Test component override via DatasetRef
+        component_ref = ref.makeComponentRef("summary")
+        component_data = self.butler.get(component_ref)
+        self.assertEqual(component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+        # Test overriding both storage class and component via DatasetRef
+        converted_component_data = self.butler.get(component_ref, storageClass="DictConvertibleModel")
+        self.assertIsInstance(converted_component_data, DictConvertibleModel)
+        self.assertEqual(converted_component_data.content, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+        # Test component override via DatasetType
+        dataset_type_component_data = self.butler.get(
+            component_ref.datasetType, component_ref.dataId, collections=collections
+        )
+        self.assertEqual(dataset_type_component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
