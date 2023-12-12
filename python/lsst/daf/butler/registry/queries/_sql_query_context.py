@@ -55,7 +55,7 @@ from lsst.daf.relation import (
 
 from ..._column_tags import is_timespan_column
 from ..._column_type_info import ColumnTypeInfo, LogicalColumn
-from ..._timespan import TimespanDatabaseRepresentation
+from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ..nameShrinker import NameShrinker
 from ._query_context import QueryContext
 from .butler_sql_engine import ButlerSqlEngine
