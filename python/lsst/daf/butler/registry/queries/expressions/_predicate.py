@@ -47,10 +47,9 @@ from lsst.daf.relation import (
     sql,
 )
 
-# We import the timespan module rather than types within it because match
-# syntax uses qualified names with periods to distinguish literals from
-# captures.
-from .... import _timespan
+# We import the some modules rather than types within them because match syntax
+# uses qualified names with periods to distinguish literals from captures.
+from .... import _timespan, timespan_database_representation
 from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
 from ...._column_type_info import ColumnTypeInfo
 from ....dimensions import DataCoordinate, Dimension, DimensionGroup, DimensionUniverse
@@ -389,7 +388,7 @@ class PredicateConversionVisitor(TreeVisitor[VisitorResult]):
             tag = DimensionRecordColumnTag(element.name, column)
             dtype = (
                 _timespan.Timespan
-                if column == _timespan.TimespanDatabaseRepresentation.NAME
+                if column == timespan_database_representation.TimespanDatabaseRepresentation.NAME
                 else element.RecordClass.fields.standard[column].getPythonType()
             )
             return ColumnExpression.reference(tag, dtype)

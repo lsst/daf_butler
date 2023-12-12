@@ -37,7 +37,7 @@ from lsst.utils.classes import cached_getter
 from .. import ddl
 from .._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from .._named import NamedValueSet
-from .._timespan import TimespanDatabaseRepresentation
+from ..timespan_database_representation import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from lsst.daf.relation import ColumnTag

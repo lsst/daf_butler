@@ -72,7 +72,7 @@ from ._named import NamedValueSet
 from .utils import stripIfNotNone
 
 if TYPE_CHECKING:
-    from ._timespan import TimespanDatabaseRepresentation
+    from .timespan_database_representation import TimespanDatabaseRepresentation
 
 
 _LOG = logging.getLogger(__name__)

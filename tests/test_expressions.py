@@ -35,7 +35,6 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetColumnTag,
     DimensionUniverse,
-    TimespanDatabaseRepresentation,
     ddl,
     time_utils,
 )
@@ -43,6 +42,7 @@ from lsst.daf.butler.registry.queries.expressions import make_string_expression_
 from lsst.daf.butler.registry.queries.expressions.check import CheckVisitor, InspectionVisitor
 from lsst.daf.butler.registry.queries.expressions.normalForm import NormalForm, NormalFormExpression
 from lsst.daf.butler.registry.queries.expressions.parser import ParserYacc
+from lsst.daf.butler.timespan_database_representation import TimespanDatabaseRepresentation
 from lsst.daf.relation import ColumnContainer, ColumnExpression
 from sqlalchemy.schema import Column
 

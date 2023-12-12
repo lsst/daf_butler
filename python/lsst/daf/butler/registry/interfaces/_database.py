@@ -50,7 +50,7 @@ import astropy.time
 import sqlalchemy
 
 from ..._named import NamedValueAbstractSet
-from ..._timespan import TimespanDatabaseRepresentation
+from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._exceptions import ConflictingDefinitionError
 
 
