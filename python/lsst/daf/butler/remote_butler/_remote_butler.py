@@ -156,7 +156,7 @@ class RemoteButler(Butler):
 
         Returns
         -------
-        data_id : `SerializedDataId` or `None`
+        data_id : `SerializedDataId`
             A serializable form.
         """
         if dataId is None:
@@ -223,7 +223,7 @@ class RemoteButler(Butler):
             dataset_id = datasetRefOrType.id
             response = self._get(f"get_file/{dataset_id}")
             if response.status_code == 404:
-                raise LookupError(f"Dataset not found with ID {dataset_id}")
+                raise LookupError(f"Dataset not found: {datasetRefOrType}")
         else:
             request = GetFileByDataIdRequestModel(
                 dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
@@ -232,7 +232,10 @@ class RemoteButler(Butler):
             )
             response = self._post("get_file_by_data_id", request)
             if response.status_code == 404:
-                raise LookupError(f"Dataset not found with DataId {dataId}")
+                raise LookupError(
+                    f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
+                    f" collections: {collections}"
+                )
 
         response.raise_for_status()
         model = self._parse_model(response, GetFileResponseModel)
@@ -560,18 +563,24 @@ class RemoteButler(Butler):
         return f"{version}/{path}"
 
     def _post(self, path: str, model: _BaseModelCompat) -> httpx.Response:
+        """Send a POST request to the Butler server."""
         json = model.model_dump_json(exclude_unset=True).encode("utf-8")
         url = self._get_url(path)
         return self._client.post(url, content=json, headers={"content-type": "application/json"})
 
     def _get(self, path: str) -> httpx.Response:
+        """Send a GET request to the Butler server."""
         url = self._get_url(path)
         return self._client.get(url)
 
     def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
+        """Deserialize a Pydantic model from the body of an HTTP response."""
         return model.model_validate_json(response.content)
 
     def _normalize_collections(self, collections: str | Sequence[str] | None) -> CollectionList:
+        """Convert the ``collections`` parameter in the format used by Butler
+        methods to a standardized format for the REST API.
+        """
         if collections is None:
             if not self.collections:
                 raise NoDefaultCollectionError(
@@ -585,6 +594,9 @@ class RemoteButler(Butler):
         return CollectionList(list(wildcards.strings))
 
     def _normalize_dataset_type_name(self, datasetTypeOrName: DatasetType | str) -> DatasetTypeName:
+        """Convert DatasetType parameters in the format used by Butler methods
+        to a standardized string name for the REST API.
+        """
         if isinstance(datasetTypeOrName, DatasetType):
             return DatasetTypeName(datasetTypeOrName.name)
         else:

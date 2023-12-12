@@ -298,26 +298,26 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         check_sc_override(self.butler.get(ref, storageClass=new_sc))
 
-        # Test storage class override via DatasetRef
+        # Test storage class override via DatasetRef.
         check_sc_override(self.butler.get(ref.overrideStorageClass("MetricsConversion")))
-        # Test storage class override via DatasetType
+        # Test storage class override via DatasetType.
         check_sc_override(
             self.butler.get(
                 ref.datasetType.overrideStorageClass(new_sc), dataId=data_id, collections=collections
             )
         )
 
-        # Test component override via DatasetRef
+        # Test component override via DatasetRef.
         component_ref = ref.makeComponentRef("summary")
         component_data = self.butler.get(component_ref)
         self.assertEqual(component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
-        # Test overriding both storage class and component via DatasetRef
+        # Test overriding both storage class and component via DatasetRef.
         converted_component_data = self.butler.get(component_ref, storageClass="DictConvertibleModel")
         self.assertIsInstance(converted_component_data, DictConvertibleModel)
         self.assertEqual(converted_component_data.content, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
-        # Test component override via DatasetType
+        # Test component override via DatasetType.
         dataset_type_component_data = self.butler.get(
             component_ref.datasetType, component_ref.dataId, collections=collections
         )

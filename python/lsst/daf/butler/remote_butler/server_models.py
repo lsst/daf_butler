@@ -50,6 +50,8 @@ class FindDatasetModel(_BaseModelCompat):
 
 
 class GetFileByDataIdRequestModel(_BaseModelCompat):
+    """Request model for ``get_file_by_data_id``."""
+
     dataset_type_name: DatasetTypeName
     data_id: SerializedDataId
     collections: CollectionList

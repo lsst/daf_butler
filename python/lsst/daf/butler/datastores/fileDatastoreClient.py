@@ -84,6 +84,10 @@ def get_dataset_as_python_object(
     ]
 
     ref = DatasetRef.from_simple(payload.dataset_ref, universe=universe)
+
+    # If we have both a component override and a storage class override, the
+    # component override has to be applied first.  DatasetRef cares because it
+    # is checking compatibility of the storage class with its DatasetType.
     if component is not None:
         ref = ref.makeComponentRef(component)
     if storageClass is not None:

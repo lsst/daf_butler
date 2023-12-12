@@ -94,7 +94,7 @@ class SerializedDataCoordinate(_BaseModelCompat):
 
         Parameters
         ----------
-        dataId : `dict`
+        dataId : `SerializedDataId`
             The data ID.
         records : `dict` or `None`
             The dimension records.

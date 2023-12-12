@@ -150,7 +150,11 @@ def find_dataset(
     return ref.to_simple() if ref else None
 
 
-@external_router.get("/v1/get_file/{dataset_id}")
+@external_router.get(
+    "/v1/get_file/{dataset_id}",
+    summary="Lookup via DatasetId (UUID) the information needed to download and use the files associated"
+    " with a dataset.",
+)
 def get_file(
     dataset_id: uuid.UUID,
     factory: Factory = Depends(factory_dependency),
@@ -162,7 +166,11 @@ def get_file(
     return _get_file_by_ref(butler, ref)
 
 
-@external_router.post("/v1/get_file_by_data_id")
+@external_router.post(
+    "/v1/get_file_by_data_id",
+    summary="Lookup via DataId (metadata key/value pairs) the information needed to download"
+    " and use the files associated with a dataset.",
+)
 def get_file_by_data_id(
     request: GetFileByDataIdRequestModel,
     factory: Factory = Depends(factory_dependency),
@@ -181,5 +189,6 @@ def get_file_by_data_id(
 
 
 def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
+    """Return file information associated with ``ref``."""
     payload = butler._datastore.prepare_get_for_external_client(ref)
     return GetFileResponseModel.model_validate(payload)
