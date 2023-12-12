@@ -31,7 +31,7 @@ __all__ = ["FindDatasetModel", "GetFileResponseModel"]
 
 from typing import NewType
 
-from lsst.daf.butler import DatasetId, SerializedDataId
+from lsst.daf.butler import SerializedDataId
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 
 from .._compat import _BaseModelCompat
@@ -47,10 +47,6 @@ class FindDatasetModel(_BaseModelCompat):
     collections: CollectionList
     dimension_records: bool = False
     datastore_records: bool = False
-
-
-class GetFileRequestModel(_BaseModelCompat):
-    dataset_id: DatasetId
 
 
 class GetFileByDataIdRequestModel(_BaseModelCompat):

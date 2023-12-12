@@ -58,7 +58,6 @@ from .server_models import (
     DatasetTypeName,
     FindDatasetModel,
     GetFileByDataIdRequestModel,
-    GetFileRequestModel,
     GetFileResponseModel,
 )
 
@@ -153,7 +152,7 @@ class RemoteButler(Butler):
         dataId : `dict`, `None`, `DataCoordinate`
             The data ID to serialize.
         kwargs : `dict`
-            Additional entries to augment or replace the values in ``dataId``
+            Additional entries to augment or replace the values in ``dataId``.
 
         Returns
         -------
@@ -222,8 +221,7 @@ class RemoteButler(Butler):
         # Docstring inherited.
         if isinstance(datasetRefOrType, DatasetRef):
             dataset_id = datasetRefOrType.id
-            uuid_request = GetFileRequestModel(dataset_id=dataset_id)
-            response = self._post("get_file", uuid_request)
+            response = self._get(f"get_file/{dataset_id}")
             if response.status_code == 404:
                 raise LookupError(f"Dataset not found with ID {dataset_id}")
         else:
@@ -565,6 +563,10 @@ class RemoteButler(Butler):
         json = model.model_dump_json(exclude_unset=True).encode("utf-8")
         url = self._get_url(path)
         return self._client.post(url, content=json, headers={"content-type": "application/json"})
+
+    def _get(self, path: str) -> httpx.Response:
+        url = self._get_url(path)
+        return self._client.get(url)
 
     def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
         return model.model_validate_json(response.content)

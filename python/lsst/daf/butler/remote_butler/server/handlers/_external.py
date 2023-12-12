@@ -35,7 +35,6 @@ from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, Serialized
 from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetModel,
     GetFileByDataIdRequestModel,
-    GetFileRequestModel,
     GetFileResponseModel,
 )
 
@@ -151,15 +150,15 @@ def find_dataset(
     return ref.to_simple() if ref else None
 
 
-@external_router.post("/v1/get_file")
+@external_router.get("/v1/get_file/{dataset_id}")
 def get_file(
-    request: GetFileRequestModel,
+    dataset_id: uuid.UUID,
     factory: Factory = Depends(factory_dependency),
 ) -> GetFileResponseModel:
     butler = factory.create_butler()
-    ref = butler.get_dataset(request.dataset_id, datastore_records=True)
+    ref = butler.get_dataset(dataset_id, datastore_records=True)
     if ref is None:
-        raise NotFoundException(f"Dataset ID {request.dataset_id} not found")
+        raise NotFoundException(f"Dataset ID {dataset_id} not found")
     return _get_file_by_ref(butler, ref)
 
 
