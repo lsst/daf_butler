@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from lsst.daf.butler.column_spec import IntColumnSpec
+
 __all__ = (
     "SkyPixDimension",
     "SkyPixSystem",
@@ -36,14 +38,12 @@ from collections.abc import Iterator, Mapping, Set
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-import sqlalchemy
 from lsst.sphgeom import PixelizationABC
 from lsst.utils import doImportType
 
-from .. import ddl
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
-from ._elements import Dimension
+from ._elements import Dimension, KeyColumnSpec, MetadataColumnSpec
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
@@ -150,7 +150,7 @@ class SkyPixDimension(Dimension):
         return MappingProxyType({TopologicalSpace.SPATIAL: self.system})
 
     @property
-    def metadata(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
+    def metadata_columns(self) -> NamedValueAbstractSet[MetadataColumnSpec]:
         # Docstring inherited from DimensionElement.
         return NamedValueSet().freeze()
 
@@ -179,18 +179,9 @@ class SkyPixDimension(Dimension):
         return BasicSkyPixDimensionRecordStorage(self)
 
     @property
-    def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
+    def unique_keys(self) -> NamedValueAbstractSet[KeyColumnSpec]:
         # Docstring inherited from DimensionElement.
-        return NamedValueSet(
-            {
-                ddl.FieldSpec(
-                    name="id",
-                    dtype=sqlalchemy.BigInteger,
-                    primaryKey=True,
-                    nullable=False,
-                )
-            }
-        ).freeze()
+        return NamedValueSet([IntColumnSpec(name="id", nullable=False)]).freeze()
 
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.

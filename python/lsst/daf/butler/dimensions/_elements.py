@@ -34,11 +34,11 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, Union, cast
 
 from lsst.utils.classes import cached_getter
 
-from .. import ddl
+from .. import column_spec, ddl
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalRelationshipEndpoint
 from ..json import from_json_generic, to_json_generic
@@ -49,7 +49,22 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._graph import DimensionGraph
     from ._group import DimensionGroup
     from ._records import DimensionRecord
+    from ._schema import DimensionRecordSchema
     from ._universe import DimensionUniverse
+
+KeyColumnSpec: TypeAlias = Union[
+    column_spec.IntColumnSpec,
+    column_spec.StringColumnSpec,
+    column_spec.HashColumnSpec,
+]
+
+MetadataColumnSpec: TypeAlias = Union[
+    column_spec.IntColumnSpec,
+    column_spec.StringColumnSpec,
+    column_spec.FloatColumnSpec,
+    column_spec.HashColumnSpec,
+    column_spec.BoolColumnSpec,
+]
 
 
 class DimensionElement(TopologicalRelationshipEndpoint):
@@ -325,13 +340,35 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         return _subclassDimensionRecord(self)
 
     @property
+    def alternate_keys(self) -> NamedValueAbstractSet[KeyColumnSpec]:
+        """Additional unique key fields for this dimension element that are not
+        the primary key (`NamedValueAbstractSet` of `KeyColumnSpec`).
+
+        This is always empty for elements that are not dimensions.
+
+        If this dimension has required dependencies, the keys of those
+        dimensions are also included in the unique constraints defined for
+        these alternate keys.
+        """
+        return NamedValueSet().freeze()
+
+    @property
     @abstractmethod
+    def metadata_columns(self) -> NamedValueAbstractSet[MetadataColumnSpec]:
+        """Additional metadata fields included in this element's table.
+
+        (`NamedValueSet` of `MetadataColumnSpec`).
+        """
+        raise NotImplementedError()
+
+    @property
+    @cached_getter
     def metadata(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
         """Additional metadata fields included in this element's table.
 
         (`NamedValueSet` of `FieldSpec`).
         """
-        raise NotImplementedError()
+        return NamedValueSet([column_spec.to_sql_spec() for column_spec in self.metadata_columns]).freeze()
 
     @property
     def viewOf(self) -> str | None:
@@ -368,6 +405,16 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         raise NotImplementedError()
 
     @property
+    @cached_getter
+    def schema(self) -> DimensionRecordSchema:
+        """A description of the columns in this element's records and (at least
+        conceptual) table.
+        """
+        from ._schema import DimensionRecordSchema
+
+        return DimensionRecordSchema(self)
+
+    @property
     @abstractmethod
     def documentation(self) -> str:
         """Extended description of this dimension element."""
@@ -383,6 +430,36 @@ class Dimension(DimensionElement):
 
     @property
     @abstractmethod
+    def unique_keys(self) -> NamedValueAbstractSet[KeyColumnSpec]:
+        """Descriptions of unique identifiers for this dimension.
+
+        All fields that can individually be used to identify records of this
+        element, given the primary keys of all required dependencies
+        (`NamedValueAbstractSet` of `KeyColumnSpec`).
+        """
+        raise NotImplementedError()
+
+    @property
+    @cached_getter
+    def primary_key(self) -> KeyColumnSpec:
+        """The primary key field for this dimension (`KeyColumnSpec`).
+
+        Note that the database primary keys for dimension tables are in general
+        compound; this field is the only field in the database primary key that
+        is not also a foreign key (to a required dependency dimension table).
+        """
+        primary_ey, *_ = self.unique_keys
+        return primary_ey
+
+    @property
+    @cached_getter
+    def alternate_keys(self) -> NamedValueAbstractSet[KeyColumnSpec]:
+        # Docstring inherited.
+        _, *alternate_keys = self.unique_keys
+        return NamedValueSet(alternate_keys).freeze()
+
+    @property
+    @cached_getter
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
         """Return the unique fields.
 
@@ -390,7 +467,9 @@ class Dimension(DimensionElement):
         element, given the primary keys of all required dependencies
         (`NamedValueAbstractSet` of `FieldSpec`).
         """
-        raise NotImplementedError()
+        return NamedValueSet(
+            [column_spec.to_sql_spec(primaryKey=(n == 0)) for n, column_spec in enumerate(self.unique_keys)]
+        )
 
     @property
     @cached_getter

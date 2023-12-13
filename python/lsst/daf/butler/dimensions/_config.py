@@ -31,17 +31,19 @@ __all__ = ("DimensionConfig",)
 
 import warnings
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any
+from typing import Annotated, Any, TypeAlias
 
+import pydantic
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from .. import ddl
 from .._config import Config, ConfigSubset
 from .._topology import TopologicalSpace
+from ..column_spec import default_nullable, not_nullable
 from ._database import (
     DatabaseDimensionElementConstructionVisitor,
     DatabaseTopologicalFamilyConstructionVisitor,
 )
+from ._elements import KeyColumnSpec, MetadataColumnSpec
 from ._governor import GovernorDimensionConstructionVisitor
 from ._packer import DimensionPackerConstructionVisitor
 from ._skypix import SkyPixConstructionVisitor
@@ -50,6 +52,14 @@ from .construction import DimensionConstructionBuilder, DimensionConstructionVis
 # The default namespace to use on older dimension config files that only
 # have a version.
 _DEFAULT_NAMESPACE = "daf_butler"
+
+
+AnnotatedKeyColumnSpec: TypeAlias = Annotated[
+    KeyColumnSpec, pydantic.Field(discriminator="type"), pydantic.AfterValidator(not_nullable)
+]
+AnnotatedMetadataColumnSpec: TypeAlias = Annotated[
+    MetadataColumnSpec, pydantic.Field(discriminator="type"), pydantic.AfterValidator(default_nullable)
+]
 
 
 class DimensionConfig(ConfigSubset):
@@ -192,11 +202,17 @@ class DimensionConfig(ConfigSubset):
             `StandardDimensionCombination` to an under-construction
             `DimensionUniverse`.
         """
+        # MyPy is confused by the typing.Annotated usage and/or how Pydantic
+        # annotated TypeAdapter.
+        key_adapter: pydantic.TypeAdapter[KeyColumnSpec] = pydantic.TypeAdapter(
+            AnnotatedKeyColumnSpec  # type: ignore
+        )
+        metadata_adapter: pydantic.TypeAdapter[MetadataColumnSpec] = pydantic.TypeAdapter(
+            AnnotatedMetadataColumnSpec  # type: ignore
+        )
         for name, subconfig in self["elements"].items():
-            metadata = [ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())]
-            uniqueKeys = [ddl.FieldSpec.fromConfig(c, nullable=False) for c in subconfig.get("keys", ())]
-            if uniqueKeys:
-                uniqueKeys[0].primaryKey = True
+            metadata_columns = [metadata_adapter.validate_python(c) for c in subconfig.get("metadata", ())]
+            unique_keys = [key_adapter.validate_python(c) for c in subconfig.get("keys", ())]
             if subconfig.get("governor", False):
                 unsupported = {"required", "implied", "viewOf", "alwaysJoin"}
                 if not unsupported.isdisjoint(subconfig.keys()):
@@ -208,8 +224,8 @@ class DimensionConfig(ConfigSubset):
                 yield GovernorDimensionConstructionVisitor(
                     name=name,
                     storage=subconfig["storage"],
-                    metadata=metadata,
-                    uniqueKeys=uniqueKeys,
+                    metadata_columns=metadata_columns,
+                    unique_keys=unique_keys,
                     doc=subconfig.get("doc", ""),
                 )
             else:
@@ -218,9 +234,9 @@ class DimensionConfig(ConfigSubset):
                     storage=subconfig["storage"],
                     required=set(subconfig.get("requires", ())),
                     implied=set(subconfig.get("implies", ())),
-                    metadata=metadata,
+                    metadata_columns=metadata_columns,
                     alwaysJoin=subconfig.get("always_join", False),
-                    uniqueKeys=uniqueKeys,
+                    unique_keys=unique_keys,
                     populated_by=subconfig.get("populated_by", None),
                     doc=subconfig.get("doc", ""),
                 )

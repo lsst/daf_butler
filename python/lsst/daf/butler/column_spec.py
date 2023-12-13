@@ -1,0 +1,254 @@
+# This file is part of butler4.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (http://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This software is dual licensed under the GNU General Public License and also
+# under a 3-clause BSD license. Recipients may choose which of these licenses
+# to use; please see the files gpl-3.0.txt and/or bsd_license.txt,
+# respectively.  If you choose the GPL option then the following text applies
+# (but note that there is still no warranty even if you opt for BSD instead):
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from __future__ import annotations
+
+__all__ = (
+    "AnyColumnSpec",
+    "ColumnSpec",
+    "not_nullable",
+    "default_nullable",
+    "IntColumnSpec",
+    "StringColumnSpec",
+    "HashColumnSpec",
+    "FloatColumnSpec",
+    "BoolColumnSpec",
+    "RegionColumnSpec",
+    "TimespanColumnSpec",
+)
+
+import textwrap
+from typing import Any, ClassVar, Literal, Union, final
+
+import pydantic
+from lsst.sphgeom import Region
+
+from . import ddl
+from ._timespan import Timespan
+
+
+class ColumnSpec(pydantic.BaseModel):
+    """Base class for descriptions of table columns."""
+
+    name: str = pydantic.Field(description="""Name of the column.""")
+
+    doc: str = pydantic.Field(default="", description="Documentation for the column.")
+
+    type: str
+
+    nullable: bool | None = pydantic.Field(
+        default=None,
+        description=textwrap.dedent(
+            """\
+            Whether the column may be ``NULL``.
+
+            The default (represented by `None`) is context-dependent; some
+            fields are ``NOT NULL``, while oethers default to nullable.
+            """
+        ),
+    )
+
+    def to_sql_spec(self, **kwargs: Any) -> ddl.FieldSpec:
+        """Convert this specification to a SQL-specific one.
+
+        Parameters
+        ----------
+        **kwargs
+            Forwarded to `ddl.FieldSpec`.
+
+        Returns
+        -------
+        sql_spec : `ddl.FieldSpec`
+            A SQL-specific version of this specification.
+        """
+        return ddl.FieldSpec(name=self.name, dtype=ddl.VALID_CONFIG_COLUMN_TYPES[self.type], **kwargs)
+
+    def display(self, level: int = 0, tab: str = "  ") -> list[str]:
+        """Return a human-reader-focused string description of this column as
+        a list of lines.
+
+        Parameters
+        ----------
+        level : `int`
+            Number of indentation tabs for the first line.
+        tab : `str`
+            Characters to duplicate ``level`` times to form the actual indent.
+
+        Returns
+        -------
+        lines : `list` [ `str` ]
+            Display lines.
+        """
+        lines = [f"{tab * level}{self.name}: {self.type}"]
+        if self.doc:
+            indent = tab * (level + 1)
+            lines.extend(
+                textwrap.wrap(
+                    self.doc,
+                    initial_indent=indent,
+                    subsequent_indent=indent,
+                )
+            )
+        return lines
+
+    def __str__(self) -> str:
+        return "\n".join(self.display())
+
+
+def not_nullable(c: ColumnSpec) -> ColumnSpec:
+    """Pydantic validator for `ColumnSpec` that requires
+    `ColumnSpec.nullable` to be `False`, and replaces `None` with `False`.
+
+    Parameters
+    ----------
+    c : `ColumnSpec`
+        Original column specification.
+
+    Returns
+    -------
+    c : `ColumnSpec`
+        The object passed in, modified in-place.
+    """
+    if c.nullable is True:
+        raise ValueError("Key columns may not be nullable.")
+    c.nullable = False
+    return c
+
+
+def default_nullable(c: ColumnSpec) -> ColumnSpec:
+    """Pydantic validator for `ColumnSpec` that allows
+    `ColumnSpec.nullable` to be `True` or `False` and replaces `None` with
+    `True`.
+
+    Parameters
+    ----------
+    c : `ColumnSpec`
+        Original column specification.
+
+    Returns
+    -------
+    c : `ColumnSpec`
+        The object passed in, modified in-place.
+    """
+    if c.nullable is None:
+        c.nullable = True
+    return c
+
+
+@final
+class IntColumnSpec(ColumnSpec):
+    """Description of an integer column."""
+
+    pytype: ClassVar[type] = int
+
+    type: Literal["int"] = "int"
+
+
+@final
+class StringColumnSpec(ColumnSpec):
+    """Description of a string column."""
+
+    pytype: ClassVar[type] = str
+
+    type: Literal["string"] = "string"
+
+    length: int
+    """Maximum length of strings."""
+
+    def to_ddl_spec(self, **kwargs: Any) -> ddl.FieldSpec:
+        # Docstring inherited.
+        return super().to_sql_spec(length=self.length, **kwargs)
+
+
+@final
+class HashColumnSpec(ColumnSpec):
+    """Description of a hash digest."""
+
+    pytype: ClassVar[type] = bytes
+
+    type: Literal["hash"] = "hash"
+
+    nbytes: int
+    """Number of bytes for the hash."""
+
+    def to_ddl_spec(self, **kwargs: Any) -> ddl.FieldSpec:
+        # Docstring inherited.
+        return super().to_sql_spec(nbytes=self.nbytes, **kwargs)
+
+
+@final
+class FloatColumnSpec(ColumnSpec):
+    """Description of a float column."""
+
+    pytype: ClassVar[type] = float
+
+    type: Literal["float"] = "float"
+
+
+@final
+class BoolColumnSpec(ColumnSpec):
+    """Description of a bool column."""
+
+    pytype: ClassVar[type] = bool
+
+    type: Literal["bool"] = "bool"
+
+
+@final
+class RegionColumnSpec(ColumnSpec):
+    """Description of a region column."""
+
+    name: str = "region"
+
+    pytype: ClassVar[type] = Region
+
+    type: Literal["region"] = "region"
+
+    nbytes: int = 2048
+    """Number of bytes for the encoded region."""
+
+
+@final
+class TimespanColumnSpec(ColumnSpec):
+    """Description of a timespan column."""
+
+    name: str = "timespan"
+
+    pytype: ClassVar[type] = Timespan
+
+    type: Literal["timespan"] = "timespan"
+
+
+AnyColumnSpec = Union[
+    IntColumnSpec,
+    StringColumnSpec,
+    HashColumnSpec,
+    FloatColumnSpec,
+    BoolColumnSpec,
+    RegionColumnSpec,
+    TimespanColumnSpec,
+]
