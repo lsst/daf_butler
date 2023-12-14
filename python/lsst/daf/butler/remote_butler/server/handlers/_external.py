@@ -31,10 +31,10 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import SerializedDatasetRef, SerializedDatasetType
+from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, SerializedDatasetType
 from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetModel,
-    GetFileRequestModel,
+    GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
 
@@ -103,7 +103,6 @@ def get_dataset_type(
 )
 def get_dataset(
     id: uuid.UUID,
-    storage_class: str | None = None,
     dimension_records: bool = False,
     datastore_records: bool = False,
     factory: Factory = Depends(factory_dependency),
@@ -112,7 +111,6 @@ def get_dataset(
     butler = factory.create_butler()
     ref = butler.get_dataset(
         id,
-        storage_class=storage_class,
         dimension_records=dimension_records,
         datastore_records=datastore_records,
     )
@@ -140,33 +138,57 @@ def find_dataset(
 ) -> SerializedDatasetRef | None:
     collection_query = query.collections if query.collections else None
 
-    # Get the simple dict from the SerializedDataCoordinate. We do not know
-    # if it is a well-defined DataCoordinate or needs some massaging first.
-    # find_dataset will use dimension record queries if necessary.
-    data_id = query.data_id.dataId
-
     butler = factory.create_butler()
     ref = butler.find_dataset(
         dataset_type,
-        None,
+        query.data_id,
         collections=collection_query,
-        storage_class=query.storage_class,
         timespan=None,
         dimension_records=query.dimension_records,
         datastore_records=query.datastore_records,
-        **data_id,
     )
     return ref.to_simple() if ref else None
 
 
-@external_router.post("/v1/get_file")
+@external_router.get(
+    "/v1/get_file/{dataset_id}",
+    summary="Lookup via DatasetId (UUID) the information needed to download and use the files associated"
+    " with a dataset.",
+)
 def get_file(
-    request: GetFileRequestModel,
+    dataset_id: uuid.UUID,
     factory: Factory = Depends(factory_dependency),
 ) -> GetFileResponseModel:
     butler = factory.create_butler()
-    ref = butler.get_dataset(request.dataset_id, datastore_records=True)
+    ref = butler.get_dataset(dataset_id, datastore_records=True)
     if ref is None:
-        raise NotFoundException(f"Dataset ID {request.dataset_id} not found")
+        raise NotFoundException(f"Dataset ID {dataset_id} not found")
+    return _get_file_by_ref(butler, ref)
+
+
+@external_router.post(
+    "/v1/get_file_by_data_id",
+    summary="Lookup via DataId (metadata key/value pairs) the information needed to download"
+    " and use the files associated with a dataset.",
+)
+def get_file_by_data_id(
+    request: GetFileByDataIdRequestModel,
+    factory: Factory = Depends(factory_dependency),
+) -> GetFileResponseModel:
+    butler = factory.create_butler()
+    try:
+        ref = butler._findDatasetRef(
+            datasetRefOrType=request.dataset_type_name,
+            dataId=request.data_id,
+            collections=request.collections,
+            datastore_records=True,
+        )
+        return _get_file_by_ref(butler, ref)
+    except LookupError as e:
+        raise NotFoundException() from e
+
+
+def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
+    """Return file information associated with ``ref``."""
     payload = butler._datastore.prepare_get_for_external_client(ref)
     return GetFileResponseModel.model_validate(payload)

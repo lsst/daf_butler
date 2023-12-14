@@ -34,7 +34,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from lsst.daf.butler import Butler, DataCoordinate, MissingDatasetTypeError, SerializedDataCoordinate
+from lsst.daf.butler import MissingDatasetTypeError
 from safir.metadata import Metadata, get_metadata
 
 from .handlers._external import external_router
@@ -57,26 +57,6 @@ def missing_dataset_type_exception_handler(request: Request, exc: MissingDataset
         status_code=404,
         content={"detail": message, "exception": "MissingDatasetTypeError"},
     )
-
-
-def unpack_dataId(butler: Butler, data_id: SerializedDataCoordinate | None) -> DataCoordinate | None:
-    """Convert the serialized dataId back to full DataCoordinate.
-
-    Parameters
-    ----------
-    butler : `lsst.daf.butler.Butler`
-        The butler to use for registry and universe.
-    data_id : `SerializedDataCoordinate` or `None`
-        The serialized form.
-
-    Returns
-    -------
-    dataId : `DataCoordinate` or `None`
-        The DataId usable by registry.
-    """
-    if data_id is None:
-        return None
-    return DataCoordinate.from_simple(data_id, registry=butler.registry)
 
 
 @app.get(

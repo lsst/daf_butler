@@ -29,6 +29,8 @@ import os.path
 import unittest
 import uuid
 
+from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
+
 try:
     # Failing to import any of these should disable the tests.
     from fastapi.testclient import TestClient
@@ -43,7 +45,14 @@ except ImportError:
 
 from unittest.mock import patch
 
-from lsst.daf.butler import Butler, DataCoordinate, DatasetRef, MissingDatasetTypeError, StorageClassFactory
+from lsst.daf.butler import (
+    Butler,
+    DataCoordinate,
+    DatasetRef,
+    MissingDatasetTypeError,
+    NoDefaultCollectionError,
+    StorageClassFactory,
+)
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, makeTestTempDir, removeTestTempDir
 from lsst.resources.http import HttpResourcePath
@@ -51,7 +60,13 @@ from lsst.resources.http import HttpResourcePath
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def _make_remote_butler(http_client):
+def _make_test_client(app, raise_server_exceptions=True):
+    client = TestClient(app, raise_server_exceptions=raise_server_exceptions)
+    client.base_url = "http://test.example/api/butler/"
+    return client
+
+
+def _make_remote_butler(http_client, **kwargs):
     return RemoteButler(
         config={
             "remote_butler": {
@@ -61,6 +76,7 @@ def _make_remote_butler(http_client):
             }
         },
         http_client=http_client,
+        **kwargs,
     )
 
 
@@ -101,9 +117,19 @@ class ButlerClientServerTestCase(unittest.TestCase):
         app.dependency_overrides[factory_dependency] = create_factory_dependency
 
         # Set up the RemoteButler that will connect to the server
-        cls.client = TestClient(app)
-        cls.client.base_url = "http://test.example/api/butler/"
+        cls.client = _make_test_client(app)
         cls.butler = _make_remote_butler(cls.client)
+        cls.butler_with_default_collection = _make_remote_butler(cls.client, collections="ingest/run")
+        # By default, the TestClient instance raises any unhandled exceptions
+        # from the server as if they had originated in the client to ease
+        # debugging.  However, this can make it appear that error propagation
+        # is working correctly when in a real deployment the server exception
+        # would cause a 500 Internal Server Error.  This instance of the butler
+        # is set up so that any unhandled server exceptions do return a 500
+        # status code.
+        cls.butler_without_error_propagation = _make_remote_butler(
+            _make_test_client(app, raise_server_exceptions=False)
+        )
 
         # Populate the test server.  The DatastoreMock is required because the
         # datasets referenced in these imports do not point at real files
@@ -136,7 +162,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(bias_type.name, "bias")
 
         with self.assertRaises(MissingDatasetTypeError):
-            self.butler.get_dataset_type("not_bias")
+            self.butler_without_error_propagation.get_dataset_type("not_bias")
 
     def test_find_dataset(self):
         storage_class = self.storageClassFactory.getStorageClass("Exposure")
@@ -216,30 +242,86 @@ class ButlerClientServerTestCase(unittest.TestCase):
         assert str(butler._config.remote_butler.url) == "https://test.example/api/butler/"
 
     def test_get(self):
-        # Test get() of a DatasetRef
-        ref = self.butler.find_dataset(
-            "test_metric_comp",
-            {"instrument": "DummyCamComp", "visit": 423},
-            collections="ingest/run",
-        )
+        dataset_type = "test_metric_comp"
+        data_id = {"instrument": "DummyCamComp", "visit": 423}
+        collections = "ingest/run"
+        # Test get() of a DatasetRef.
+        ref = self.butler.find_dataset(dataset_type, data_id, collections=collections)
         metric = self.butler.get(ref)
         self.assertIsInstance(metric, MetricsExample)
         self.assertEqual(metric.summary, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
+        # Test get() by DataId.
+        data_id_metric = self.butler.get(dataset_type, dataId=data_id, collections=collections)
+        self.assertEqual(metric, data_id_metric)
+        # Test get() by DataId dict augmented with kwargs.
+        kwarg_metric = self.butler.get(
+            dataset_type, dataId={"instrument": "DummyCamComp"}, collections=collections, visit=423
+        )
+        self.assertEqual(metric, kwarg_metric)
+        # Test get() by DataId DataCoordinate augmented with kwargs.
+        coordinate = DataCoordinate.make_empty(self.butler.dimensions)
+        kwarg_data_coordinate_metric = self.butler.get(
+            dataset_type, dataId=coordinate, collections=collections, instrument="DummyCamComp", visit=423
+        )
+        self.assertEqual(metric, kwarg_data_coordinate_metric)
+        # Test get() of a non-existent DataId.
+        invalid_data_id = {"instrument": "NotAValidlInstrument", "visit": 423}
+        with self.assertRaises(LookupError):
+            self.butler_without_error_propagation.get(
+                dataset_type, dataId=invalid_data_id, collections=collections
+            )
+
+        # Test get() by DataId with default collections.
+        default_collection_metric = self.butler_with_default_collection.get(dataset_type, dataId=data_id)
+        self.assertEqual(metric, default_collection_metric)
+
+        # Test get() by DataId with no collections specified.
+        with self.assertRaises(NoDefaultCollectionError):
+            self.butler_without_error_propagation.get(dataset_type, dataId=data_id)
+
         # Test looking up a non-existent ref
         invalid_ref = ref.replace(id=uuid.uuid4())
         with self.assertRaises(LookupError):
-            self.butler.get(invalid_ref)
+            self.butler_without_error_propagation.get(invalid_ref)
 
         with self.assertRaises(RuntimeError):
-            self.butler.get(self.dataset_with_corrupted_data)
+            self.butler_without_error_propagation.get(self.dataset_with_corrupted_data)
 
         # Test storage class override
         new_sc = self.storageClassFactory.getStorageClass("MetricsConversion")
-        converted = self.butler.get(ref, storageClass=new_sc)
-        self.assertNotEqual(type(metric), type(converted))
-        self.assertIs(type(converted), new_sc.pytype)
-        self.assertEqual(metric, converted)
+
+        def check_sc_override(converted):
+            self.assertNotEqual(type(metric), type(converted))
+            self.assertIsInstance(converted, new_sc.pytype)
+            self.assertEqual(metric, converted)
+
+        check_sc_override(self.butler.get(ref, storageClass=new_sc))
+
+        # Test storage class override via DatasetRef.
+        check_sc_override(self.butler.get(ref.overrideStorageClass("MetricsConversion")))
+        # Test storage class override via DatasetType.
+        check_sc_override(
+            self.butler.get(
+                ref.datasetType.overrideStorageClass(new_sc), dataId=data_id, collections=collections
+            )
+        )
+
+        # Test component override via DatasetRef.
+        component_ref = ref.makeComponentRef("summary")
+        component_data = self.butler.get(component_ref)
+        self.assertEqual(component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+        # Test overriding both storage class and component via DatasetRef.
+        converted_component_data = self.butler.get(component_ref, storageClass="DictConvertibleModel")
+        self.assertIsInstance(converted_component_data, DictConvertibleModel)
+        self.assertEqual(converted_component_data.content, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
+
+        # Test component override via DatasetType.
+        dataset_type_component_data = self.butler.get(
+            component_ref.datasetType, component_ref.dataId, collections=collections
+        )
+        self.assertEqual(dataset_type_component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:

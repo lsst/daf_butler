@@ -39,6 +39,7 @@ from lsst.daf.butler.datastores.fileDatastoreClient import get_dataset_as_python
 from lsst.daf.butler.repo_relocation import replaceRoot
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
+from pydantic import parse_obj_as
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig
@@ -47,12 +48,18 @@ from .._config import Config
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
-from ..dimensions import DataCoordinate, DimensionConfig, DimensionUniverse, SerializedDataCoordinate
+from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
 from ._authentication import get_authentication_headers, get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
-from .server_models import FindDatasetModel, GetFileRequestModel, GetFileResponseModel
+from .server_models import (
+    CollectionList,
+    DatasetTypeName,
+    FindDatasetModel,
+    GetFileByDataIdRequestModel,
+    GetFileResponseModel,
+)
 
 if TYPE_CHECKING:
     from .._dataset_existence import DatasetExistence
@@ -137,33 +144,29 @@ class RemoteButler(Butler):
         self._dimensions = DimensionUniverse(config)
         return self._dimensions
 
-    def _simplify_dataId(
-        self, dataId: DataId | None, **kwargs: dict[str, int | str]
-    ) -> SerializedDataCoordinate | None:
+    def _simplify_dataId(self, dataId: DataId | None, kwargs: dict[str, DataIdValue]) -> SerializedDataId:
         """Take a generic Data ID and convert it to a serializable form.
 
         Parameters
         ----------
         dataId : `dict`, `None`, `DataCoordinate`
             The data ID to serialize.
-        **kwargs : `dict`
-            Additional values that should be included if this is not
-            a `DataCoordinate`.
+        kwargs : `dict`
+            Additional entries to augment or replace the values in ``dataId``.
 
         Returns
         -------
-        data_id : `SerializedDataCoordinate` or `None`
+        data_id : `SerializedDataId`
             A serializable form.
         """
-        if dataId is None and not kwargs:
-            return None
-        if isinstance(dataId, DataCoordinate):
-            return dataId.to_simple()
+        if dataId is None:
+            dataId = {}
+        elif isinstance(dataId, DataCoordinate):
+            dataId = dataId.to_simple(minimal=True).dataId
+        else:
+            dataId = dict(dataId)
 
-        # Assume we can treat it as a dict.
-        data_id = dict(dataId) if dataId is not None else {}
-        data_id.update(kwargs)
-        return SerializedDataCoordinate(dataId=data_id)
+        return parse_obj_as(SerializedDataId, dataId | kwargs)
 
     def _caching_context(self) -> AbstractContextManager[None]:
         # Docstring inherited.
@@ -216,19 +219,48 @@ class RemoteButler(Butler):
         **kwargs: Any,
     ) -> Any:
         # Docstring inherited.
-        if not isinstance(datasetRefOrType, DatasetRef):
-            raise NotImplementedError("RemoteButler currently only supports get() of a DatasetRef")
+        if isinstance(datasetRefOrType, DatasetRef):
+            dataset_id = datasetRefOrType.id
+            response = self._get(f"get_file/{dataset_id}")
+            if response.status_code == 404:
+                raise LookupError(f"Dataset not found: {datasetRefOrType}")
+        else:
+            request = GetFileByDataIdRequestModel(
+                dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
+                collections=self._normalize_collections(collections),
+                data_id=self._simplify_dataId(dataId, kwargs),
+            )
+            response = self._post("get_file_by_data_id", request)
+            if response.status_code == 404:
+                raise LookupError(
+                    f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
+                    f" collections: {collections}"
+                )
 
-        dataset_id = datasetRefOrType.id
-        request = GetFileRequestModel(dataset_id=dataset_id)
-        response = self._post("get_file", request)
-        if response.status_code == 404:
-            raise LookupError(f"Dataset not found with ID ${dataset_id}")
         response.raise_for_status()
         model = self._parse_model(response, GetFileResponseModel)
 
+        # If the caller provided a DatasetRef or DatasetType, they may have
+        # overridden the storage class on it.  We need to respect this, if they
+        # haven't asked to re-override it.
+        explicitDatasetType = _extract_dataset_type(datasetRefOrType)
+        if explicitDatasetType is not None:
+            if storageClass is None:
+                storageClass = explicitDatasetType.storageClass
+
+        # If the caller provided a DatasetRef, they may have overridden the
+        # component on it.  We need to explicitly handle this because we did
+        # not send the DatasetType to the server in this case.
+        componentOverride = None
+        if isinstance(datasetRefOrType, DatasetRef):
+            componentOverride = datasetRefOrType.datasetType.component()
+
         return get_dataset_as_python_object(
-            model, parameters=parameters, storageClass=storageClass, universe=self.dimensions
+            model,
+            parameters=parameters,
+            storageClass=storageClass,
+            universe=self.dimensions,
+            component=componentOverride,
         )
 
     def getURIs(
@@ -280,23 +312,22 @@ class RemoteButler(Butler):
         datastore_records: bool = False,
     ) -> DatasetRef | None:
         path = f"dataset/{id}"
-        if isinstance(storage_class, StorageClass):
-            storage_class_name = storage_class.name
-        elif storage_class:
-            storage_class_name = storage_class
         params: dict[str, str | bool] = {
             "dimension_records": dimension_records,
             "datastore_records": datastore_records,
         }
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
-        if storage_class:
-            params["storage_class"] = storage_class_name
         response = self._client.get(self._get_url(path), params=params)
         response.raise_for_status()
         if response.json() is None:
             return None
-        return DatasetRef.from_simple(SerializedDatasetRef(**response.json()), universe=self.dimensions)
+        ref = DatasetRef.from_simple(
+            self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
+        )
+        if storage_class is not None:
+            ref = ref.overrideStorageClass(storage_class)
+        return ref
 
     def find_dataset(
         self,
@@ -310,32 +341,16 @@ class RemoteButler(Butler):
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
-        if collections is None:
-            if not self.collections:
-                raise NoDefaultCollectionError(
-                    "No collections provided to find_dataset, and no defaults from butler construction."
-                )
-            collections = self.collections
-        # Temporary hack. Assume strings for collections. In future
-        # want to construct CollectionWildcard and filter it through collection
-        # cache to generate list of collection names.
-        wildcards = CollectionWildcard.from_expression(collections)
-
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
         if timespan:
             raise ValueError("Timespan can not yet be used in butler client/server.")
 
-        if isinstance(dataset_type, DatasetType):
-            dataset_type = dataset_type.name
-
-        if isinstance(storage_class, StorageClass):
-            storage_class = storage_class.name
+        dataset_type = self._normalize_dataset_type_name(dataset_type)
 
         query = FindDatasetModel(
-            data_id=self._simplify_dataId(data_id, **kwargs),
-            collections=wildcards.strings,
-            storage_class=storage_class,
+            data_id=self._simplify_dataId(data_id, kwargs),
+            collections=self._normalize_collections(collections),
             dimension_records=dimension_records,
             datastore_records=datastore_records,
         )
@@ -344,9 +359,12 @@ class RemoteButler(Butler):
         response = self._post(path, query)
         response.raise_for_status()
 
-        return DatasetRef.from_simple(
+        ref = DatasetRef.from_simple(
             self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
         )
+        if storage_class is not None:
+            ref = ref.overrideStorageClass(storage_class)
+        return ref
 
     def retrieveArtifacts(
         self,
@@ -545,9 +563,53 @@ class RemoteButler(Butler):
         return f"{version}/{path}"
 
     def _post(self, path: str, model: _BaseModelCompat) -> httpx.Response:
+        """Send a POST request to the Butler server."""
         json = model.model_dump_json(exclude_unset=True).encode("utf-8")
         url = self._get_url(path)
         return self._client.post(url, content=json, headers={"content-type": "application/json"})
 
+    def _get(self, path: str) -> httpx.Response:
+        """Send a GET request to the Butler server."""
+        url = self._get_url(path)
+        return self._client.get(url)
+
     def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
+        """Deserialize a Pydantic model from the body of an HTTP response."""
         return model.model_validate_json(response.content)
+
+    def _normalize_collections(self, collections: str | Sequence[str] | None) -> CollectionList:
+        """Convert the ``collections`` parameter in the format used by Butler
+        methods to a standardized format for the REST API.
+        """
+        if collections is None:
+            if not self.collections:
+                raise NoDefaultCollectionError(
+                    "No collections provided, and no defaults from butler construction."
+                )
+            collections = self.collections
+        # Temporary hack. Assume strings for collections. In future
+        # want to construct CollectionWildcard and filter it through collection
+        # cache to generate list of collection names.
+        wildcards = CollectionWildcard.from_expression(collections)
+        return CollectionList(list(wildcards.strings))
+
+    def _normalize_dataset_type_name(self, datasetTypeOrName: DatasetType | str) -> DatasetTypeName:
+        """Convert DatasetType parameters in the format used by Butler methods
+        to a standardized string name for the REST API.
+        """
+        if isinstance(datasetTypeOrName, DatasetType):
+            return DatasetTypeName(datasetTypeOrName.name)
+        else:
+            return DatasetTypeName(datasetTypeOrName)
+
+
+def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
+    """Return the DatasetType associated with the argument, or None if the
+    argument is not an object that contains a DatasetType object.
+    """
+    if isinstance(datasetRefOrType, DatasetType):
+        return datasetRefOrType
+    elif isinstance(datasetRefOrType, DatasetRef):
+        return datasetRefOrType.datasetType
+    else:
+        return None

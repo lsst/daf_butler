@@ -28,15 +28,19 @@
 from functools import cache
 
 from lsst.daf.butler import Butler
+from lsst.daf.butler.direct_butler import DirectButler
 
 from ._config import get_config_from_env
 from ._factory import Factory
 
 
 @cache
-def _make_global_butler() -> Butler:
+def _make_global_butler() -> DirectButler:
     config = get_config_from_env()
-    return Butler.from_config(config.config_uri)
+    butler = Butler.from_config(config.config_uri)
+    if not isinstance(butler, DirectButler):
+        raise TypeError("Server can only use a DirectButler")
+    return butler
 
 
 def factory_dependency() -> Factory:

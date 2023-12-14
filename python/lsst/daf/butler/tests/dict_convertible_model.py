@@ -41,7 +41,7 @@ class DictConvertibleModel(_BaseModelCompat):
     conversions.
     """
 
-    content: dict[str, str] = Field(default_factory=dict)
+    content: dict[str, float | str] = Field(default_factory=dict)
     """Content of the logical dict that this object converts to (`dict`).
     """
 
@@ -67,7 +67,7 @@ class DictConvertibleModel(_BaseModelCompat):
         """
         return cls(content=dict(content), extra=extra)
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, float | str]:
         """Convert the model to a dictionary.
 
         Returns

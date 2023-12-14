@@ -25,14 +25,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler.direct_butler import DirectButler
 
 __all__ = ("Factory",)
 
 
 class Factory:
-    def __init__(self, *, butler: Butler):
+    def __init__(self, *, butler: DirectButler):
         self._butler = butler
 
-    def create_butler(self) -> Butler:
+    def create_butler(self) -> DirectButler:
         return self._butler

@@ -51,6 +51,7 @@ def get_dataset_as_python_object(
     universe: DimensionUniverse,
     parameters: Mapping[str, Any] | None,
     storageClass: StorageClass | str | None,
+    component: str | None,
 ) -> Any:
     """Retrieve an artifact from storage and return it as a Python object.
 
@@ -69,6 +70,8 @@ def get_dataset_as_python_object(
         Overrides the `StorageClass` to be used when converting the artifact to
         a Python object.  If `None`, uses the `StorageClass` specified by
         ``payload``.
+    component : `str` | `None`
+        Selects which component of the artifact to retrieve.
 
     Returns
     -------
@@ -81,6 +84,12 @@ def get_dataset_as_python_object(
     ]
 
     ref = DatasetRef.from_simple(payload.dataset_ref, universe=universe)
+
+    # If we have both a component override and a storage class override, the
+    # component override has to be applied first.  DatasetRef cares because it
+    # is checking compatibility of the storage class with its DatasetType.
+    if component is not None:
+        ref = ref.makeComponentRef(component)
     if storageClass is not None:
         ref = ref.overrideStorageClass(storageClass)
 
