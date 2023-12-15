@@ -1805,7 +1805,8 @@ class DirectButler(Butler):
                 helper = RepoExportContext(
                     self._registry, self._datastore, backend=backend, directory=directory, transfer=transfer
                 )
-                yield helper
+                with self._caching_context():
+                    yield helper
             except BaseException:
                 raise
             else:
@@ -1863,15 +1864,16 @@ class DirectButler(Butler):
         )
 
         def doImport(importStream: TextIO | ResourceHandleProtocol) -> None:
-            backend = BackendClass(importStream, self._registry)  # type: ignore[call-arg]
-            backend.register()
-            with self.transaction():
-                backend.load(
-                    self._datastore,
-                    directory=directory,
-                    transfer=transfer,
-                    skip_dimensions=skip_dimensions,
-                )
+            with self._caching_context():
+                backend = BackendClass(importStream, self._registry)  # type: ignore[call-arg]
+                backend.register()
+                with self.transaction():
+                    backend.load(
+                        self._datastore,
+                        directory=directory,
+                        transfer=transfer,
+                        skip_dimensions=skip_dimensions,
+                    )
 
         if isinstance(filename, ResourcePath):
             # We can not use open() here at the moment because of
@@ -2326,7 +2328,8 @@ class DirectButler(Butler):
     @contextlib.contextmanager
     def _query(self) -> Iterator[Query]:
         # Docstring inherited.
-        yield DirectQuery(self._registry)
+        with self._caching_context():
+            yield DirectQuery(self._registry)
 
     def _query_data_ids(
         self,
