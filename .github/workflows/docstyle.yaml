@@ -10,7 +10,7 @@ jobs:
   call-workflow:
     uses: lsst/rubin_workflows/.github/workflows/docstyle.yaml@main
     with:
-      args: "python/lsst/daf/butler/core/"
+      args: "$(find python -name '*.py' | egrep -v 'parser/ply|parserYacc')"
   numpydoc:
     runs-on: ubuntu-latest
     steps:

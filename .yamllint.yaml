@@ -1,8 +1,5 @@
 extends: default
 
-ignore: |
-  /tests/config/dbAuth/badDbAuth2.yaml
-
 rules:
   document-start: {present: false}
   line-length:

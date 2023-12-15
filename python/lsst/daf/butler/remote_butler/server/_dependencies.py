@@ -44,4 +44,5 @@ def _make_global_butler() -> DirectButler:
 
 
 def factory_dependency() -> Factory:
+    """Return factory dependency for injection into FastAPI."""
     return Factory(butler=_make_global_butler())
