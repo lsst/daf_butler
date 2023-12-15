@@ -31,6 +31,14 @@ __all__ = ("Factory",)
 
 
 class Factory:
+    """Class to provide a cached Butler instance.
+
+    Parameters
+    ----------
+    butler : `DirectButler`
+        Butler to use.
+    """
+
     def __init__(self, *, butler: DirectButler):
         self._butler = butler
 

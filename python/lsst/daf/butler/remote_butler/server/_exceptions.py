@@ -29,5 +29,13 @@ from fastapi import HTTPException
 
 
 class NotFoundException(HTTPException):
+    """Exception corresponding to a 404 server error.
+
+    Parameters
+    ----------
+    message : `str`, optional
+        Message to include in the exception.
+    """
+
     def __init__(self, message: str = "Not found"):
         super().__init__(status_code=404, detail=message)

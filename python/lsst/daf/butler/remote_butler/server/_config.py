@@ -33,10 +33,14 @@ __all__ = ("Config", "get_config_from_env")
 
 @dataclass(frozen=True)
 class Config:
+    """Simplified configuration for a client/server connection."""
+
     config_uri: str
+    """URI of the configuration."""
 
 
 def get_config_from_env() -> Config:
+    """Retrieve a configuration from the environment."""
     config_uri = os.getenv("BUTLER_SERVER_CONFIG_URI")
     if config_uri is None:
         raise Exception(

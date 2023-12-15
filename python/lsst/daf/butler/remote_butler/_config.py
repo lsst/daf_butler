@@ -31,8 +31,12 @@ from .._compat import _BaseModelCompat
 
 
 class RemoteButlerOptionsModel(_BaseModelCompat):
+    """Model representing the remote server connection."""
+
     url: AnyHttpUrl
 
 
 class RemoteButlerConfigModel(_BaseModelCompat):
+    """Configuration representing a remote butler."""
+
     remote_butler: RemoteButlerOptionsModel

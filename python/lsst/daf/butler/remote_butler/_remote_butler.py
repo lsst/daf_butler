@@ -78,6 +78,56 @@ _AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=_BaseModelCompat)
 
 
 class RemoteButler(Butler):
+    """A `Butler` that can be used to connect through a remote server.
+
+    Parameters
+    ----------
+    config : `ButlerConfig`, `Config` or `str`, optional
+        Configuration. Anything acceptable to the `ButlerConfig` constructor.
+        If a directory path is given the configuration will be read from a
+        ``butler.yaml`` file in that location. If `None` is given default
+        values will be used. If ``config`` contains "cls" key then its value is
+        used as a name of butler class and it must be a sub-class of this
+        class, otherwise `DirectButler` is instantiated.
+    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
+        An expression specifying the collections to be searched (in order) when
+        reading datasets.
+        This may be a `str` collection name or an iterable thereof.
+        See :ref:`daf_butler_collection_expressions` for more information.
+        These collections are not registered automatically and must be
+        manually registered before they are used by any method, but they may be
+        manually registered after the `Butler` is initialized.
+    run : `str`, optional
+        Name of the `~CollectionType.RUN` collection new datasets should be
+        inserted into.  If ``collections`` is `None` and ``run`` is not `None`,
+        ``collections`` will be set to ``[run]``.  If not `None`, this
+        collection will automatically be registered.  If this is not set (and
+        ``writeable`` is not set either), a read-only butler will be created.
+    searchPaths : `list` of `str`, optional
+        Directory paths to search when calculating the full Butler
+        configuration.  Not used if the supplied config is already a
+        `ButlerConfig`.
+    writeable : `bool`, optional
+        Explicitly sets whether the butler supports write operations.  If not
+        provided, a read-write butler is created if any of ``run``, ``tags``,
+        or ``chains`` is non-empty.
+    inferDefaults : `bool`, optional
+        If `True` (default) infer default data ID values from the values
+        present in the datasets in ``collections``: if all collections have the
+        same value (or no value) for a governor dimension, that value will be
+        the default for that dimension.  Nonexistent collections are ignored.
+        If a default value is provided explicitly for a governor dimension via
+        ``**kwargs``, no default will be inferred for that dimension.
+    http_client : `httpx.Client` or `None`, optional
+        Client to use to connect to the server. This is generally only
+        necessary for test code.
+    access_token : `str` or `None`, optional
+        Explicit access token to use when connecting to the server. If not
+        given an attempt will be found to obtain one from the environment.
+    **kwargs : `Any`
+        Parameters that can be used to set defaults for governor dimensions.
+    """
+
     def __init__(
         self,
         # These parameters are inherited from the Butler() constructor
