@@ -242,7 +242,7 @@ class ButlerVersionsManager:
             raise MissingManagerError("Cannot find stored configuration for managers: " + ", ".join(missing))
         if mismatch:
             raise ManagerMismatchError(
-                "Configured managers do not match registry-stored names:\n" + "\n".join(missing)
+                "Configured managers do not match registry-stored names:\n" + "\n".join(mismatch)
             )
 
     def managerVersions(self) -> Mapping[str, VersionTuple]:
