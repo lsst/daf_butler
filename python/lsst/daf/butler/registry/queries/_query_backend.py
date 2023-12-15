@@ -32,6 +32,7 @@ __all__ = ("QueryBackend",)
 
 from abc import abstractmethod
 from collections.abc import Iterable, Mapping, Sequence, Set
+from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from lsst.daf.relation import (
@@ -76,6 +77,13 @@ class QueryBackend(Generic[_C]):
     def universe(self) -> DimensionUniverse:
         """Definition of all dimensions and dimension elements for this
         registry (`DimensionUniverse`).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def caching_context(self) -> AbstractContextManager[None]:
+        """Enable caching of collection records and summaries for the duration
+        of the returned context manager.
         """
         raise NotImplementedError()
 

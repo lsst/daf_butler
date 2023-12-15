@@ -325,17 +325,16 @@ class SqlRegistry:
         with self._db.transaction():
             self._managers.refresh()
 
-    @contextlib.contextmanager
-    def caching_context(self) -> Iterator[None]:
-        """Context manager that enables caching.
+    def caching_context(self) -> contextlib.AbstractContextManager[None]:
+        """Return context manager that enables caching.
 
-        Yields
-        ------
-        `None`
+        Returns
+        -------
+        manager
+            A context manager that enables client-side caching.  Entering
+            the context returns `None`.
         """
-        self._managers.caching_context.enable()
-        yield
-        self._managers.caching_context.disable()
+        return self._managers.caching_context_manager()
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:

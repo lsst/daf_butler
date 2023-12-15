@@ -56,24 +56,53 @@ class CachingContext:
     explicitly enabling caching in pipetask executors.
     """
 
-    collection_records: CollectionRecordCache | None = None
-    """Cache for collection records (`CollectionRecordCache`)."""
-
-    collection_summaries: CollectionSummaryCache | None = None
-    """Cache for collection summary records (`CollectionSummaryCache`)."""
-
-    dataset_types: DatasetTypeCache[DatasetRecordStorage]
-    """Cache for dataset types, never disabled (`DatasetTypeCache`)."""
-
     def __init__(self) -> None:
-        self.dataset_types = DatasetTypeCache()
+        self._dataset_types: DatasetTypeCache[DatasetRecordStorage] = DatasetTypeCache()
+        self._collection_records: CollectionRecordCache | None = None
+        self._collection_summaries: CollectionSummaryCache | None = None
+        self._depth = 0
 
-    def enable(self) -> None:
-        """Enable caches, initializes all caches."""
-        self.collection_records = CollectionRecordCache()
-        self.collection_summaries = CollectionSummaryCache()
+    @property
+    def is_enabled(self) -> bool:
+        return self._collection_records is not None
 
-    def disable(self) -> None:
-        """Disable caches, sets all caches to `None`."""
-        self.collection_records = None
-        self.collection_summaries = None
+    def _enable(self) -> None:
+        """Enable caches.
+
+        For use only by RegistryManagerInstances, which is the single point
+        of entry for enabling and disabling the caches.
+        """
+        if self._depth == 0:
+            self._collection_records = CollectionRecordCache()
+            self._collection_summaries = CollectionSummaryCache()
+        self._depth += 1
+
+    def _disable(self) -> None:
+        """Disable caches.
+
+        For use only by RegistryManagerInstances, which is the single point
+        of entry for enabling and disabling the caches.
+        """
+        if self._depth == 1:
+            self._collection_records = None
+            self._collection_summaries = None
+            self._depth = 0
+        elif self._depth > 1:
+            self._depth -= 1
+        else:
+            raise AssertionError("Bad caching context management detected.")
+
+    @property
+    def collection_records(self) -> CollectionRecordCache | None:
+        """Cache for collection records (`CollectionRecordCache`)."""
+        return self._collection_records
+
+    @property
+    def collection_summaries(self) -> CollectionSummaryCache | None:
+        """Cache for collection summary records (`CollectionSummaryCache`)."""
+        return self._collection_summaries
+
+    @property
+    def dataset_types(self) -> DatasetTypeCache[DatasetRecordStorage]:
+        """Cache for dataset types, never disabled (`DatasetTypeCache`)."""
+        return self._dataset_types

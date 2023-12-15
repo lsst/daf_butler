@@ -29,6 +29,7 @@ from __future__ import annotations
 __all__ = ("SqlQueryBackend",)
 
 from collections.abc import Iterable, Mapping, Sequence, Set
+from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, cast
 
 from lsst.daf.relation import ColumnError, ColumnExpression, ColumnTag, Join, Predicate, Relation
@@ -71,11 +72,18 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         # Docstring inherited.
         return self._managers.dimensions.universe
 
+    def caching_context(self) -> AbstractContextManager[None]:
+        # Docstring inherited.
+        return self._managers.caching_context_manager()
+
     def context(self) -> SqlQueryContext:
         # Docstring inherited.
         return SqlQueryContext(self._db, self._managers.column_types)
 
     def get_collection_name(self, key: Any) -> str:
+        assert (
+            self._managers.caching_context.is_enabled
+        ), "Collection-record caching should already been enabled any time this is called."
         return self._managers.collections[key].name
 
     def resolve_collection_wildcard(
