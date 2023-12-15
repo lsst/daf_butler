@@ -56,6 +56,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastore import DatasetRefURIs
 from lsst.daf.butler.tests import DatastoreMock, addDatasetType
 from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -329,11 +330,16 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
     def test_getURIs_no_components(self):
         # This dataset does not have components, and should return one URI.
+        def check_uri(uri: ResourcePath):
+            self.assertIsNotNone(uris.primaryURI)
+            self.assertEqual(uris.primaryURI.scheme, "https")
+            self.assertEqual(uris.primaryURI.read(), b"123")
+
         uris = self.butler.getURIs(self.simple_dataset_ref)
         self.assertEqual(len(uris.componentURIs), 0)
-        self.assertIsNotNone(uris.primaryURI)
-        self.assertEqual(uris.primaryURI.scheme, "https")
-        self.assertEqual(uris.primaryURI.read(), b"123")
+        check_uri(uris.primaryURI)
+
+        check_uri(self.butler.getURI(self.simple_dataset_ref))
 
     def test_getURIs_multiple_components(self):
         # This dataset has multiple components, so we should get back multiple
@@ -352,6 +358,10 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         uris = self.butler.getURIs(dataset_type, dataId=data_id, collections=collections)
         check_uris(uris)
+
+        # Calling getURI on a multi-file dataset raises an exception
+        with self.assertRaises(RuntimeError):
+            self.butler.getURI(dataset_type, dataId=data_id, collections=collections)
 
         # getURIs does NOT respect component overrides on the DatasetRef,
         # instead returning the parent's URIs.  Unclear if this is "correct"

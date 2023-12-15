@@ -360,20 +360,6 @@ class RemoteButler(Butler):
                 components[component] = ResourcePath(str(f.url))
             return DatasetRefURIs(componentURIs=components)
 
-    def getURI(
-        self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        /,
-        dataId: DataId | None = None,
-        *,
-        predict: bool = False,
-        collections: Any = None,
-        run: str | None = None,
-        **kwargs: Any,
-    ) -> ResourcePath:
-        # Docstring inherited.
-        raise NotImplementedError()
-
     def get_dataset_type(self, name: str) -> DatasetType:
         # In future implementation this should directly access the cache
         # and only go to the server if the dataset type is not known.
