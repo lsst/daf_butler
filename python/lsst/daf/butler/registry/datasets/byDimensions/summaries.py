@@ -31,6 +31,7 @@ from .... import ddl
 
 __all__ = ("CollectionSummaryManager",)
 
+import logging
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Generic, TypeVar
 
@@ -52,6 +53,9 @@ from ...interfaces import (
 from ...wildcards import CollectionWildcard
 
 _T = TypeVar("_T")
+
+
+_LOG = logging.getLogger(__name__)
 
 
 class CollectionSummaryTables(Generic[_T]):
@@ -305,6 +309,8 @@ class CollectionSummaryManager:
                 chains[collection] = children
             else:
                 non_chains.append(collection)
+
+        _LOG.debug("Fetching summaries for collections %s.", [record.name for record in non_chains])
 
         # Set up the SQL query we'll use to fetch all of the summary
         # information at once.
