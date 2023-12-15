@@ -31,6 +31,7 @@
 import glob
 import os
 import os.path
+import tempfile
 import unittest
 
 import lsst.daf.butler.registry.connectionString as ConnectionStringModule
@@ -80,11 +81,15 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
 
     def testRaises(self):
         """Test that DbAuthError propagates through the class."""
-        ConnectionStringModule.DB_AUTH_PATH = os.path.join(self.configDir, "badDbAuth2.yaml")
-        regConf = RegistryConfig(os.path.join(self.configDir, "registryConf2.yaml"))
-        conStrFactory = ConnectionStringFactory()
-        with self.assertRaises(DbAuthError):
-            conStrFactory.fromConfig(regConf)
+        # Create a bad yaml file that triggers a parsing error.
+        # It will be created with the correct 600 permissions.
+        with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w") as temp_config:
+            print("[", file=temp_config, flush=True)
+            ConnectionStringModule.DB_AUTH_PATH = os.path.join(temp_config.name)
+            regConf = RegistryConfig(os.path.join(self.configDir, "registryConf2.yaml"))
+            conStrFactory = ConnectionStringFactory()
+            with self.assertRaises(DbAuthError):
+                conStrFactory.fromConfig(regConf)
 
 
 if __name__ == "__main__":
