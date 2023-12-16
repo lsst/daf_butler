@@ -28,6 +28,7 @@ from __future__ import annotations
 
 __all__ = ["NameKeyCollectionManager"]
 
+import logging
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -54,6 +55,9 @@ _KEY_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, prim
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(2, 0, 0)
+
+
+_LOG = logging.getLogger(__name__)
 
 
 def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
@@ -174,6 +178,7 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
 
     def _fetch_by_key(self, collection_ids: Iterable[str] | None) -> list[CollectionRecord[str]]:
         # Docstring inherited from base class.
+        _LOG.debug("Fetching collection records using names %s.", collection_ids)
         sql = sqlalchemy.sql.select(*self._tables.collection.columns, *self._tables.run.columns).select_from(
             self._tables.collection.join(self._tables.run, isouter=True)
         )

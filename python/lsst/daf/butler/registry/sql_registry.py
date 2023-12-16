@@ -325,17 +325,16 @@ class SqlRegistry:
         with self._db.transaction():
             self._managers.refresh()
 
-    @contextlib.contextmanager
-    def caching_context(self) -> Iterator[None]:
-        """Context manager that enables caching.
+    def caching_context(self) -> contextlib.AbstractContextManager[None]:
+        """Return context manager that enables caching.
 
-        Yields
-        ------
-        `None`
+        Returns
+        -------
+        manager
+            A context manager that enables client-side caching.  Entering
+            the context returns `None`.
         """
-        self._managers.caching_context.enable()
-        yield
-        self._managers.caching_context.disable()
+        return self._managers.caching_context_manager()
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
@@ -893,94 +892,95 @@ class SqlRegistry:
                 )
             collections = self.defaults.collections
         backend = queries.SqlQueryBackend(self._db, self._managers)
-        collection_wildcard = CollectionWildcard.from_expression(collections, require_ordered=True)
-        if collection_wildcard.empty():
-            return None
-        matched_collections = backend.resolve_collection_wildcard(collection_wildcard)
-        parent_dataset_type, components = backend.resolve_single_dataset_type_wildcard(
-            datasetType, components_deprecated=False
-        )
-        if len(components) > 1:
-            raise DatasetTypeError(
-                f"findDataset requires exactly one dataset type; got multiple components {components} "
-                f"for parent dataset type {parent_dataset_type.name}."
+        with backend.caching_context():
+            collection_wildcard = CollectionWildcard.from_expression(collections, require_ordered=True)
+            if collection_wildcard.empty():
+                return None
+            matched_collections = backend.resolve_collection_wildcard(collection_wildcard)
+            parent_dataset_type, components = backend.resolve_single_dataset_type_wildcard(
+                datasetType, components_deprecated=False
             )
-        component = components[0]
-        dataId = DataCoordinate.standardize(
-            dataId,
-            dimensions=parent_dataset_type.dimensions,
-            universe=self.dimensions,
-            defaults=self.defaults.dataId,
-            **kwargs,
-        )
-        governor_constraints = {name: {cast(str, dataId[name])} for name in dataId.dimensions.governors}
-        (filtered_collections,) = backend.filter_dataset_collections(
-            [parent_dataset_type],
-            matched_collections,
-            governor_constraints=governor_constraints,
-        ).values()
-        if not filtered_collections:
-            return None
-        if timespan is None:
-            filtered_collections = [
-                collection_record
-                for collection_record in filtered_collections
-                if collection_record.type is not CollectionType.CALIBRATION
-            ]
-        if filtered_collections:
-            requested_columns = {"dataset_id", "run", "collection"}
-            with backend.context() as context:
-                predicate = context.make_data_coordinate_predicate(
-                    dataId.subset(parent_dataset_type.dimensions), full=False
+            if len(components) > 1:
+                raise DatasetTypeError(
+                    f"findDataset requires exactly one dataset type; got multiple components {components} "
+                    f"for parent dataset type {parent_dataset_type.name}."
                 )
-                if timespan is not None:
-                    requested_columns.add("timespan")
-                    predicate = predicate.logical_and(
-                        context.make_timespan_overlap_predicate(
-                            DatasetColumnTag(parent_dataset_type.name, "timespan"), timespan
-                        )
+            component = components[0]
+            dataId = DataCoordinate.standardize(
+                dataId,
+                dimensions=parent_dataset_type.dimensions,
+                universe=self.dimensions,
+                defaults=self.defaults.dataId,
+                **kwargs,
+            )
+            governor_constraints = {name: {cast(str, dataId[name])} for name in dataId.dimensions.governors}
+            (filtered_collections,) = backend.filter_dataset_collections(
+                [parent_dataset_type],
+                matched_collections,
+                governor_constraints=governor_constraints,
+            ).values()
+            if not filtered_collections:
+                return None
+            if timespan is None:
+                filtered_collections = [
+                    collection_record
+                    for collection_record in filtered_collections
+                    if collection_record.type is not CollectionType.CALIBRATION
+                ]
+            if filtered_collections:
+                requested_columns = {"dataset_id", "run", "collection"}
+                with backend.context() as context:
+                    predicate = context.make_data_coordinate_predicate(
+                        dataId.subset(parent_dataset_type.dimensions), full=False
                     )
-                relation = backend.make_dataset_query_relation(
-                    parent_dataset_type, filtered_collections, requested_columns, context
-                ).with_rows_satisfying(predicate)
-                rows = list(context.fetch_iterable(relation))
-        else:
-            rows = []
-        if not rows:
-            return None
-        elif len(rows) == 1:
-            best_row = rows[0]
-        else:
-            rank_by_collection_key = {record.key: n for n, record in enumerate(filtered_collections)}
-            collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
-            row_iter = iter(rows)
-            best_row = next(row_iter)
-            best_rank = rank_by_collection_key[best_row[collection_tag]]
-            have_tie = False
-            for row in row_iter:
-                if (rank := rank_by_collection_key[row[collection_tag]]) < best_rank:
-                    best_row = row
-                    best_rank = rank
-                    have_tie = False
-                elif rank == best_rank:
-                    have_tie = True
-                    assert timespan is not None, "Rank ties should be impossible given DB constraints."
-            if have_tie:
-                raise LookupError(
-                    f"Ambiguous calibration lookup for {parent_dataset_type.name} in collections "
-                    f"{collection_wildcard.strings} with timespan {timespan}."
-                )
-        reader = queries.DatasetRefReader(
-            parent_dataset_type,
-            translate_collection=lambda k: self._managers.collections[k].name,
-        )
-        ref = reader.read(best_row, data_id=dataId)
-        if component is not None:
-            ref = ref.makeComponentRef(component)
-        if datastore_records:
-            ref = self.get_datastore_records(ref)
+                    if timespan is not None:
+                        requested_columns.add("timespan")
+                        predicate = predicate.logical_and(
+                            context.make_timespan_overlap_predicate(
+                                DatasetColumnTag(parent_dataset_type.name, "timespan"), timespan
+                            )
+                        )
+                    relation = backend.make_dataset_query_relation(
+                        parent_dataset_type, filtered_collections, requested_columns, context
+                    ).with_rows_satisfying(predicate)
+                    rows = list(context.fetch_iterable(relation))
+            else:
+                rows = []
+            if not rows:
+                return None
+            elif len(rows) == 1:
+                best_row = rows[0]
+            else:
+                rank_by_collection_key = {record.key: n for n, record in enumerate(filtered_collections)}
+                collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
+                row_iter = iter(rows)
+                best_row = next(row_iter)
+                best_rank = rank_by_collection_key[best_row[collection_tag]]
+                have_tie = False
+                for row in row_iter:
+                    if (rank := rank_by_collection_key[row[collection_tag]]) < best_rank:
+                        best_row = row
+                        best_rank = rank
+                        have_tie = False
+                    elif rank == best_rank:
+                        have_tie = True
+                        assert timespan is not None, "Rank ties should be impossible given DB constraints."
+                if have_tie:
+                    raise LookupError(
+                        f"Ambiguous calibration lookup for {parent_dataset_type.name} in collections "
+                        f"{collection_wildcard.strings} with timespan {timespan}."
+                    )
+            reader = queries.DatasetRefReader(
+                parent_dataset_type,
+                translate_collection=lambda k: self._managers.collections[k].name,
+            )
+            ref = reader.read(best_row, data_id=dataId)
+            if component is not None:
+                ref = ref.makeComponentRef(component)
+            if datastore_records:
+                ref = self.get_datastore_records(ref)
 
-        return ref
+            return ref
 
     @transactional
     def insertDatasets(

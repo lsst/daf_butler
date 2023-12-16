@@ -30,6 +30,7 @@ from ... import ddl
 
 __all__ = ["SynthIntKeyCollectionManager"]
 
+import logging
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -57,6 +58,8 @@ _KEY_FIELD_SPEC = ddl.FieldSpec(
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(2, 0, 0)
+
+_LOG = logging.getLogger(__name__)
 
 
 def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
@@ -172,10 +175,12 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
 
     def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[int]]:
         # Docstring inherited from base class.
+        _LOG.debug("Fetching collection records using names %s.", names)
         return self._fetch("name", names)
 
     def _fetch_by_key(self, collection_ids: Iterable[int] | None) -> list[CollectionRecord[int]]:
         # Docstring inherited from base class.
+        _LOG.debug("Fetching collection records using IDs %s.", collection_ids)
         return self._fetch(self._collectionIdName, collection_ids)
 
     def _fetch(

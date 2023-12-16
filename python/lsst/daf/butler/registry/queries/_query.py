@@ -156,18 +156,20 @@ class Query:
     @contextmanager
     def open_context(self) -> Iterator[None]:
         """Return a context manager that ensures a database connection is
-        established and temporary tables and cursors have a defined lifetime.
+        established, temporary tables and cursors have a defined lifetime,
+        and client-side caching is turned on.
 
         Returns
         -------
         context : `contextlib.AbstractContextManager`
             Context manager with no return value.
         """
-        if self._context.is_open:
-            yield
-        else:
-            with self._context:
+        with self._backend.caching_context():
+            if self._context.is_open:
                 yield
+            else:
+                with self._context:
+                    yield
 
     def __str__(self) -> str:
         return str(self._relation)
@@ -199,7 +201,9 @@ class Query:
                 f"Missing column(s) {set(reader.columns_required - self.relation.columns)} "
                 f"for data IDs with dimensions {dimensions}."
             )
-        return (reader.read(row) for row in self)
+        with self.backend.caching_context():
+            for row in self:
+                yield reader.read(row)
 
     def iter_dataset_refs(
         self, dataset_type: DatasetType, components: Sequence[None | str] = (None,)
@@ -230,13 +234,14 @@ class Query:
                 f"Missing column(s) {set(reader.columns_required - self.relation.columns)} "
                 f"for datasets with type {dataset_type.name} and dimensions {dataset_type.dimensions}."
             )
-        for row in self:
-            parent_ref = reader.read(row)
-            for component in components:
-                if component is None:
-                    yield parent_ref
-                else:
-                    yield parent_ref.makeComponentRef(component)
+        with self.backend.caching_context():
+            for row in self:
+                parent_ref = reader.read(row)
+                for component in components:
+                    if component is None:
+                        yield parent_ref
+                    else:
+                        yield parent_ref.makeComponentRef(component)
 
     def iter_data_ids_and_dataset_refs(
         self, dataset_type: DatasetType, dimensions: DimensionGroup | None = None
@@ -281,8 +286,9 @@ class Query:
                 f"Missing column(s) {set(dataset_reader.columns_required - self.relation.columns)} "
                 f"for datasets with type {dataset_type.name} and dimensions {dataset_type.dimensions}."
             )
-        for row in self:
-            yield (data_id_reader.read(row), dataset_reader.read(row))
+        with self.backend.caching_context():
+            for row in self:
+                yield (data_id_reader.read(row), dataset_reader.read(row))
 
     def iter_dimension_records(self, element: DimensionElement | None = None) -> Iterator[DimensionRecord]:
         """Return an iterator that converts result rows to dimension records.
@@ -305,7 +311,8 @@ class Query:
                 case only_element_with_records:
                     element = only_element_with_records
         if (cache := self._record_caches.get(element)) is not None:
-            return (cache[data_id] for data_id in self.iter_data_ids(element.minimal_group))
+            for data_id in self.iter_data_ids(element.minimal_group):
+                yield cache[data_id]
         else:
             reader = DimensionRecordReader(element)
             if not (reader.columns_required <= self.relation.columns):
@@ -313,7 +320,9 @@ class Query:
                     f"Missing column(s) {set(reader.columns_required - self.relation.columns)} "
                     f"for records of element {element.name}."
                 )
-            return (reader.read(row) for row in self)
+            with self._backend.caching_context():
+                for row in self:
+                    yield reader.read(row)
 
     def run(self) -> Query:
         """Execute the query and hold its results in memory.
