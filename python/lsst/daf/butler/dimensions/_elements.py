@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, Union, cast
 
 from lsst.utils.classes import cached_getter
 
-from .. import column_spec, ddl
+from .. import arrow_utils, column_spec, ddl
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalRelationshipEndpoint
 from ..json import from_json_generic, to_json_generic
@@ -509,6 +509,37 @@ class Dimension(DimensionElement):
     def populated_by(self) -> Dimension:
         # Docstring inherited.
         return self
+
+    def to_arrow(self, dimensions: DimensionGroup, spec: KeyColumnSpec | None = None) -> arrow_utils.ToArrow:
+        """Return an object that converts the primary key value for this
+        dimension to column in an Arrow table.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`
+            Full set of dimensions over which the rows of the table are unique
+            or close to unique.  This is used to determine whether to use
+            Arrow's dictionary encoding to compress duplicate values.
+        spec : `KeyColumnSpec`, optional
+            Column specification for this dimension.  If not provided, a copy
+            of `primary_key` the the field name replaced with the dimension
+            name will be used, which is appropriate for when this dimension
+            appears in data ID or the dimension record tables of other
+            dimension elements.
+
+        Returns
+        -------
+        converter : `arrow_utils.ToArrow`
+            Converter for this dimension's primary key.
+        """
+        if spec is None:
+            spec = self.primary_key.model_copy(update={"name": self.name})
+        if dimensions != self.minimal_group and spec.type != "int":
+            # Values are large and will be duplicated in rows that are unique
+            # over these dimensions, so dictionary encoding may help a lot.
+            return spec.to_arrow().dictionary_encoded()
+        else:
+            return spec.to_arrow()
 
 
 class DimensionCombination(DimensionElement):

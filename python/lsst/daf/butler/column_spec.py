@@ -42,16 +42,18 @@ __all__ = (
 )
 
 import textwrap
+from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Literal, Union, final
 
+import pyarrow as pa
 import pydantic
 from lsst.sphgeom import Region
 
-from . import ddl
+from . import arrow_utils, ddl
 from ._timespan import Timespan
 
 
-class ColumnSpec(pydantic.BaseModel):
+class ColumnSpec(pydantic.BaseModel, ABC):
     """Base class for descriptions of table columns."""
 
     name: str = pydantic.Field(description="""Name of the column.""")
@@ -86,6 +88,18 @@ class ColumnSpec(pydantic.BaseModel):
             A SQL-specific version of this specification.
         """
         return ddl.FieldSpec(name=self.name, dtype=ddl.VALID_CONFIG_COLUMN_TYPES[self.type], **kwargs)
+
+    @abstractmethod
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        """Return an object that converts values of this column to a column in
+        an Arrow table.
+
+        Returns
+        -------
+        converter : `arrow_utils.ToArrow`
+            A converter object with schema information in Arrow form.
+        """
+        raise NotImplementedError()
 
     def display(self, level: int = 0, tab: str = "  ") -> list[str]:
         """Return a human-reader-focused string description of this column as
@@ -167,6 +181,10 @@ class IntColumnSpec(ColumnSpec):
 
     type: Literal["int"] = "int"
 
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        return arrow_utils.ToArrow.for_primitive(self.name, pa.uint64(), nullable=self.nullable)
+
 
 @final
 class StringColumnSpec(ColumnSpec):
@@ -179,9 +197,13 @@ class StringColumnSpec(ColumnSpec):
     length: int
     """Maximum length of strings."""
 
-    def to_ddl_spec(self, **kwargs: Any) -> ddl.FieldSpec:
+    def to_sql_spec(self, **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited.
         return super().to_sql_spec(length=self.length, **kwargs)
+
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        return arrow_utils.ToArrow.for_primitive(self.name, pa.string(), nullable=self.nullable)
 
 
 @final
@@ -195,9 +217,19 @@ class HashColumnSpec(ColumnSpec):
     nbytes: int
     """Number of bytes for the hash."""
 
-    def to_ddl_spec(self, **kwargs: Any) -> ddl.FieldSpec:
+    def to_sql_spec(self, **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited.
         return super().to_sql_spec(nbytes=self.nbytes, **kwargs)
+
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        return arrow_utils.ToArrow.for_primitive(
+            self.name,
+            # We use a fixed-size binary field because we know hashes actually
+            # use the maximum size.
+            pa.binary(self.nbytes),
+            nullable=self.nullable,
+        )
 
 
 @final
@@ -208,6 +240,10 @@ class FloatColumnSpec(ColumnSpec):
 
     type: Literal["float"] = "float"
 
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        return arrow_utils.ToArrow.for_primitive(self.name, pa.float64(), nullable=self.nullable)
+
 
 @final
 class BoolColumnSpec(ColumnSpec):
@@ -216,6 +252,10 @@ class BoolColumnSpec(ColumnSpec):
     pytype: ClassVar[type] = bool
 
     type: Literal["bool"] = "bool"
+
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        return arrow_utils.ToArrow.for_primitive(self.name, pa.bool_(), nullable=self.nullable)
 
 
 @final
@@ -231,6 +271,10 @@ class RegionColumnSpec(ColumnSpec):
     nbytes: int = 2048
     """Number of bytes for the encoded region."""
 
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        return arrow_utils.ToArrow.for_region(self.name, nullable=self.nullable)
+
 
 @final
 class TimespanColumnSpec(ColumnSpec):
@@ -241,6 +285,10 @@ class TimespanColumnSpec(ColumnSpec):
     pytype: ClassVar[type] = Timespan
 
     type: Literal["timespan"] = "timespan"
+
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
 
 AnyColumnSpec = Union[
