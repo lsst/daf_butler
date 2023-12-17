@@ -175,7 +175,7 @@ class DimensionRecordSchema:
             for dimension, key_spec in zip(self.element.dimensions, self.dimensions):
                 converters.append(dimension.to_arrow(dimensions, key_spec))
         for remainder_spec in self.remainder:
-            if (
+            if remainder_spec.type == "string" and (
                 remainder_spec.name in self.element.metadata_columns.names
                 or dimensions != self.element.minimal_group
             ):

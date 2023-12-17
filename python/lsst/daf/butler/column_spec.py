@@ -225,9 +225,9 @@ class HashColumnSpec(ColumnSpec):
         # Docstring inherited.
         return arrow_utils.ToArrow.for_primitive(
             self.name,
-            # We use a fixed-size binary field because we know hashes actually
-            # use the maximum size.
-            pa.binary(self.nbytes),
+            # The size for Arrow binary columns is a fixed size, not a maximum
+            # as in SQL, so we use a variable-size column.
+            pa.binary(),
             nullable=self.nullable,
         )
 

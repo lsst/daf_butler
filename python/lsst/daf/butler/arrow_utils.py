@@ -363,3 +363,7 @@ class TimespanArrowScalar(pa.ExtensionScalar):
         return Timespan(
             None, None, _nsec=(self.value["begin_nsec"].as_py(), self.value["begin_nsec"].as_py())
         )
+
+
+pa.register_extension_type(RegionArrowType())
+pa.register_extension_type(TimespanArrowType())
