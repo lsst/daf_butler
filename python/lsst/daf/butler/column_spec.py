@@ -50,10 +50,11 @@ import pydantic
 from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
+from ._compat import _BaseModelCompat
 from ._timespan import Timespan
 
 
-class ColumnSpec(pydantic.BaseModel, ABC):
+class ColumnSpec(_BaseModelCompat, ABC):
     """Base class for descriptions of table columns."""
 
     name: str = pydantic.Field(description="""Name of the column.""")
@@ -183,6 +184,7 @@ class IntColumnSpec(ColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.uint64(), nullable=self.nullable)
 
 
@@ -203,6 +205,7 @@ class StringColumnSpec(ColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.string(), nullable=self.nullable)
 
 
@@ -223,6 +226,7 @@ class HashColumnSpec(ColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(
             self.name,
             # The size for Arrow binary columns is a fixed size, not a maximum
@@ -242,6 +246,7 @@ class FloatColumnSpec(ColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.float64(), nullable=self.nullable)
 
 
@@ -255,6 +260,7 @@ class BoolColumnSpec(ColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.bool_(), nullable=self.nullable)
 
 
@@ -273,6 +279,7 @@ class RegionColumnSpec(ColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_region(self.name, nullable=self.nullable)
 
 
@@ -288,6 +295,7 @@ class TimespanColumnSpec(ColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
 
