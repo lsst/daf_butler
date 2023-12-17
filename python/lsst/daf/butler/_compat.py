@@ -130,6 +130,9 @@ if PYDANTIC_V2:
             ) -> str:
                 return ""
 
+            def model_copy(self, *, update: dict[str, Any] | None = None, deep: bool = False) -> Self:
+                raise NotImplementedError("For type-checking only.")
+
             @property
             def model_fields(self) -> dict[str, FieldInfo]:  # type: ignore
                 return {}
@@ -254,6 +257,9 @@ else:
                 exclude_defaults=exclude_defaults,
                 exclude_none=exclude_none,
             )
+
+        def model_copy(self, *, update: dict[str, Any] | None = None, deep: bool = False) -> Self:
+            return self.copy(update=update, deep=deep)
 
         @classmethod
         def model_validate_json(
