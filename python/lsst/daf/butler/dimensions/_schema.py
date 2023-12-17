@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 
 from lsst.utils.classes import cached_getter, immutable
 
-from .. import ddl
+from .. import arrow_utils, ddl
 from .._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from .._named import NamedValueAbstractSet, NamedValueSet
 from ..column_spec import RegionColumnSpec, TimespanColumnSpec
@@ -44,6 +44,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from lsst.daf.relation import ColumnTag
 
     from ._elements import Dimension, DimensionElement, KeyColumnSpec, MetadataColumnSpec
+    from ._group import DimensionGroup
 
 
 @immutable
@@ -142,6 +143,46 @@ class DimensionRecordSchema:
         for column_spec in self.all:
             lines.extend(column_spec.display(level=1))
         return "\n".join(lines)
+
+    def to_arrow(
+        self, remainder_only: bool = False, dimensions: DimensionGroup | None = None
+    ) -> list[arrow_utils.ToArrow]:
+        """Convert this schema to Arrow form.
+
+        Parameters
+        ----------
+        remainder_only : `bool`, optional
+            If `True`, skip the fields in `dimensions` and convert only those
+            in `remainder`.
+        dimensions : `DimensionGroup`, optional
+            Full set of dimensions over which the rows of the table are unique
+            or close to unique.  This is used to determine whether to use
+            Arrow's dictionary encoding to compress duplicate values.  Defaults
+            to this element's `~DimensionElement.minimal_group`, which is
+            appropriate for tables of just the records of this element.
+
+        Returns
+        -------
+        converters : `list` [ `arrow_utils.ToArrow` ]
+            List of objects that can convert `DimensionRecord` attribute values
+            to Arrow records, corresponding exactly to either `all` or
+            `remainder`, depending on ``remainder_only``.
+        """
+        if dimensions is None:
+            dimensions = self.element.minimal_group
+        converters: list[arrow_utils.ToArrow] = []
+        if not remainder_only:
+            for dimension, key_spec in zip(self.element.dimensions, self.dimensions):
+                converters.append(dimension.to_arrow(dimensions, key_spec))
+        for remainder_spec in self.remainder:
+            if (
+                remainder_spec.name in self.element.metadata_columns.names
+                or dimensions != self.element.minimal_group
+            ):
+                converters.append(remainder_spec.to_arrow().dictionary_encoded())
+            else:
+                converters.append(remainder_spec.to_arrow())
+        return converters
 
 
 def _makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
