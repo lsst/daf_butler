@@ -43,6 +43,7 @@ from ._governor import *
 from ._graph import *
 from ._group import *
 from ._packer import *
+from ._record_set import *
 from ._record_table import *
 from ._records import *
 from ._schema import *

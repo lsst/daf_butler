@@ -62,6 +62,14 @@ class DimensionRecordTable:
         `make_arrow_schema` for this element.  This argument is primarily
         intended to serve as the way to reconstruct a `DimensionRecordTable`
         that has been serialized to an Arrow-supported file or IPC format.
+
+    Notes
+    -----
+    `DimensionRecordTable` should generally have a smaller memory footprint
+    than `DimensionRecordSet` if its rows are unique, and it provides fast
+    column-oriented access and Arrow interoperability that `DimensionRecordSet`
+    lacks entirely.  In other respects `DimensionRecordSet` is more
+    featureful and simpler to use efficiently.
     """
 
     def __init__(
