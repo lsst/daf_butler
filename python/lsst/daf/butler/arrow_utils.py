@@ -27,15 +27,25 @@
 
 from __future__ import annotations
 
-__all__ = ("ToArrow", "RegionArrowType", "RegionArrowScalar", "TimespanArrowType", "TimespanArrowScalar")
+__all__ = (
+    "ToArrow",
+    "RegionArrowType",
+    "RegionArrowScalar",
+    "TimespanArrowType",
+    "TimespanArrowScalar",
+    "DateTimeArrowType",
+    "DateTimeArrowScalar",
+)
 
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, final
 
+import astropy.time
 import pyarrow as pa
 from lsst.sphgeom import Region
 
 from ._timespan import Timespan
+from .time_utils import TimeConverter
 
 
 class ToArrow(ABC):
@@ -98,6 +108,25 @@ class ToArrow(ABC):
             Converter instance.
         """
         return _ToArrowTimespan(name, nullable)
+
+    @staticmethod
+    def for_datetime(name: str, nullable: bool = True) -> ToArrow:
+        """Return a converter for `astropy.time.Time`, stored as TAI
+        nanoseconds since 1970-01-01.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the schema field.
+        nullable : `bool`
+            Whether the field should permit null or `None` values.
+
+        Returns
+        -------
+        to_arrow : `ToArrow`
+            Converter instance.
+        """
+        return _ToArrowDateTime(name, nullable)
 
     @property
     @abstractmethod
@@ -305,6 +334,43 @@ class _ToArrowTimespan(ToArrow):
         return pa.ExtensionArray.from_storage(TimespanArrowType(), storage_array)
 
 
+class _ToArrowDateTime(ToArrow):
+    """`ToArrow` implementation for `astropy.time.Time` fields.
+
+    Should be constructed via the `ToArrow.for_datetime` factory method.
+    """
+
+    def __init__(self, name: str, nullable: bool):
+        self._name = name
+        self._nullable = nullable
+
+    storage_type: ClassVar[pa.DataType] = pa.int64()
+
+    @property
+    def name(self) -> str:
+        # Docstring inherited.
+        return self._name
+
+    @property
+    def nullable(self) -> bool:
+        # Docstring inherited.
+        return self._nullable
+
+    @property
+    def data_type(self) -> pa.DataType:
+        # Docstring inherited.
+        return DateTimeArrowType()
+
+    def append(self, value: astropy.time.Time, column: list[int]) -> None:
+        # Docstring inherited.
+        column.append(TimeConverter().astropy_to_nsec(value))
+
+    def finish(self, column: list[Any]) -> pa.Array:
+        # Docstring inherited.
+        storage_array = pa.array(column, self.storage_type)
+        return pa.ExtensionArray.from_storage(DateTimeArrowType(), storage_array)
+
+
 @final
 class RegionArrowType(pa.ExtensionType):
     """An Arrow extension type for lsst.sphgeom.Region."""
@@ -365,5 +431,39 @@ class TimespanArrowScalar(pa.ExtensionScalar):
         )
 
 
+@final
+class DateTimeArrowType(pa.ExtensionType):
+    """An Arrow extension type for `astropy.time.Time`, stored as TAI
+    nanoseconds since 1970-01-01.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(_ToArrowTimespan.storage_type, "astropy.time.Time")
+
+    def __arrow_ext_serialize__(self) -> bytes:
+        return b""
+
+    @classmethod
+    def __arrow_ext_deserialize__(cls, storage_type: pa.DataType, serialized: bytes) -> DateTimeArrowType:
+        return cls()
+
+    def __arrow_ext_scalar_class__(self) -> type[DateTimeArrowScalar]:
+        return DateTimeArrowScalar
+
+
+@final
+class DateTimeArrowScalar(pa.ExtensionScalar):
+    """An Arrow scalar type for `astropy.time.Time`, stored as TAI
+    nanoseconds since 1970-01-01.
+
+    Use the standard `as_py` method to convert to an actual `astropy.time.Time`
+    instance.
+    """
+
+    def as_py(self) -> astropy.time.Time:
+        return TimeConverter().nsec_to_astropy(self.value.as_py())
+
+
 pa.register_extension_type(RegionArrowType())
 pa.register_extension_type(TimespanArrowType())
+pa.register_extension_type(DateTimeArrowType())

@@ -42,6 +42,7 @@ import textwrap
 from abc import ABC, abstractmethod
 from typing import Annotated, Any, ClassVar, Literal, Union, final
 
+import astropy.time
 import pyarrow as pa
 import pydantic
 from lsst.sphgeom import Region
@@ -243,6 +244,22 @@ class TimespanColumnSpec(_BaseColumnSpec):
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
 
+@final
+class DateTimeColumnSpec(_BaseColumnSpec):
+    """Description of a time column, stored as integer TAI nanoseconds since
+    1970-01-01 and represented in Python via `astropy.time.Time`.
+    """
+
+    pytype: ClassVar[type] = astropy.time.Time
+
+    type: Literal["datetime"] = "datetime"
+
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
+        return arrow_utils.ToArrow.for_datetime(self.name, nullable=self.nullable)
+
+
 ColumnSpec = Annotated[
     Union[
         IntColumnSpec,
@@ -252,6 +269,7 @@ ColumnSpec = Annotated[
         BoolColumnSpec,
         RegionColumnSpec,
         TimespanColumnSpec,
+        DateTimeColumnSpec,
     ],
     pydantic.Field(discriminator="type"),
 ]
