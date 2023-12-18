@@ -36,11 +36,12 @@ __all__ = (
     "BoolColumnSpec",
     "RegionColumnSpec",
     "TimespanColumnSpec",
+    "ColumnType",
 )
 
 import textwrap
 from abc import ABC, abstractmethod
-from typing import Annotated, Any, ClassVar, Literal, Union, final
+from typing import Annotated, Any, ClassVar, Literal, TypeAlias, Union, final
 
 import astropy.time
 import pyarrow as pa
@@ -50,6 +51,8 @@ from lsst.sphgeom import Region
 from . import arrow_utils, ddl
 from ._timespan import Timespan
 
+ColumnType: TypeAlias = Literal["int", "string", "hash", "float", "datetime", "bool", "timespan", "region"]
+
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
     """Base class for descriptions of table columns."""
@@ -58,7 +61,7 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
 
     doc: str = pydantic.Field(default="", description="Documentation for the column.")
 
-    type: str
+    type: ColumnType
 
     nullable: bool = pydantic.Field(
         default=True,
