@@ -34,12 +34,14 @@ __all__ = (
     "HashColumnSpec",
     "FloatColumnSpec",
     "BoolColumnSpec",
+    "UUIDColumnSpec",
     "RegionColumnSpec",
     "TimespanColumnSpec",
     "ColumnType",
 )
 
 import textwrap
+import uuid
 from abc import ABC, abstractmethod
 from typing import Annotated, Any, ClassVar, Literal, TypeAlias, Union, final
 
@@ -51,7 +53,9 @@ from lsst.sphgeom import Region
 from . import arrow_utils, ddl
 from ._timespan import Timespan
 
-ColumnType: TypeAlias = Literal["int", "string", "hash", "float", "datetime", "bool", "timespan", "region"]
+ColumnType: TypeAlias = Literal[
+    "int", "string", "hash", "float", "datetime", "bool", "uuid", "timespan", "region"
+]
 
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
@@ -214,6 +218,20 @@ class BoolColumnSpec(_BaseColumnSpec):
 
 
 @final
+class UUIDColumnSpec(_BaseColumnSpec):
+    """Description of a UUID column."""
+
+    pytype: ClassVar[type] = uuid.UUID
+
+    type: Literal["uuid"] = "uuid"
+
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
+        return arrow_utils.ToArrow.for_uuid(self.name, nullable=self.nullable)
+
+
+@final
 class RegionColumnSpec(_BaseColumnSpec):
     """Description of a region column."""
 
@@ -270,6 +288,7 @@ ColumnSpec = Annotated[
         HashColumnSpec,
         FloatColumnSpec,
         BoolColumnSpec,
+        UUIDColumnSpec,
         RegionColumnSpec,
         TimespanColumnSpec,
         DateTimeColumnSpec,

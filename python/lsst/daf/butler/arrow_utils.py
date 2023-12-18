@@ -35,8 +35,11 @@ __all__ = (
     "TimespanArrowScalar",
     "DateTimeArrowType",
     "DateTimeArrowScalar",
+    "UUIDArrowType",
+    "UUIDArrowScalar",
 )
 
+import uuid
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, final
 
@@ -72,6 +75,24 @@ class ToArrow(ABC):
             Converter instance.
         """
         return _ToArrowPrimitive(name, data_type, nullable)
+
+    @staticmethod
+    def for_uuid(name: str, nullable: bool = True) -> ToArrow:
+        """Return a converter for `uuid.UUID`.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the schema field.
+        nullable : `bool`
+            Whether the field should permit null or `None` values.
+
+        Returns
+        -------
+        to_arrow : `ToArrow`
+            Converter instance.
+        """
+        return _ToArrowUUID(name, nullable)
 
     @staticmethod
     def for_region(name: str, nullable: bool = True) -> ToArrow:
@@ -255,6 +276,43 @@ class _ToArrowDictionary(ToArrow):
         return self._to_arrow_value.finish(column).dictionary_encode()
 
 
+class _ToArrowUUID(ToArrow):
+    """`ToArrow` implementation for `uuid.UUID` fields.
+
+    Should be constructed via the `ToArrow.for_uuid` factory method.
+    """
+
+    def __init__(self, name: str, nullable: bool):
+        self._name = name
+        self._nullable = nullable
+
+    storage_type: ClassVar[pa.DataType] = pa.binary(16)
+
+    @property
+    def name(self) -> str:
+        # Docstring inherited.
+        return self._name
+
+    @property
+    def nullable(self) -> bool:
+        # Docstring inherited.
+        return self._nullable
+
+    @property
+    def data_type(self) -> pa.DataType:
+        # Docstring inherited.
+        return UUIDArrowType()
+
+    def append(self, value: uuid.UUID, column: list[bytes]) -> None:
+        # Docstring inherited.
+        column.append(value.bytes)
+
+    def finish(self, column: list[Any]) -> pa.Array:
+        # Docstring inherited.
+        storage_array = pa.array(column, self.storage_type)
+        return pa.ExtensionArray.from_storage(UUIDArrowType(), storage_array)
+
+
 class _ToArrowRegion(ToArrow):
     """`ToArrow` implementation for `lsst.sphgeom.Region` fields.
 
@@ -369,6 +427,38 @@ class _ToArrowDateTime(ToArrow):
         # Docstring inherited.
         storage_array = pa.array(column, self.storage_type)
         return pa.ExtensionArray.from_storage(DateTimeArrowType(), storage_array)
+
+
+@final
+class UUIDArrowType(pa.ExtensionType):
+    """An Arrow extension type for `astropy.time.Time`, stored as TAI
+    nanoseconds since 1970-01-01.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(_ToArrowTimespan.storage_type, "astropy.time.Time")
+
+    def __arrow_ext_serialize__(self) -> bytes:
+        return b""
+
+    @classmethod
+    def __arrow_ext_deserialize__(cls, storage_type: pa.DataType, serialized: bytes) -> UUIDArrowType:
+        return cls()
+
+    def __arrow_ext_scalar_class__(self) -> type[UUIDArrowScalar]:
+        return UUIDArrowScalar
+
+
+@final
+class UUIDArrowScalar(pa.ExtensionScalar):
+    """An Arrow scalar type for `uuid.UUID`.
+
+    Use the standard `as_py` method to convert to an actual `uuid.UUID`
+    instance.
+    """
+
+    def as_py(self) -> astropy.time.Time:
+        return uuid.UUID(bytes=self.value.as_py())
 
 
 @final
