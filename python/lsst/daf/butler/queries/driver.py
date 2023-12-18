@@ -33,7 +33,8 @@ import uuid
 from abc import abstractmethod
 from collections.abc import Iterable
 from contextlib import AbstractContextManager
-from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, Union, overload
+from types import EllipsisType
+from typing import Annotated, TypeAlias, Union, overload
 
 import pydantic
 
@@ -44,9 +45,6 @@ from .dataset_results import DatasetRefResultPage, DatasetRefResultSpec
 from .dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
 from .general_results import GeneralResultPage, GeneralResultSpec
 from .relation_tree import MaterializationKey, RootRelation, UploadKey
-
-if TYPE_CHECKING:
-    from ..registry import CollectionArgType
 
 PageKey: TypeAlias = uuid.UUID
 
@@ -130,9 +128,9 @@ class QueryDriver(AbstractContextManager[None]):
         Returns
         -------
         first_page : `ResultPage`
-            A page whose type corresponds to type of ``result_spec``, with at
-            least the initial rows from the query.  This should have an empty
-            ``rows`` attribute if the query returned no results, and a
+            A page whose type corresponds to the type of ``result_spec``, with
+            at least the initial rows from the query.  This should have an
+            empty ``rows`` attribute if the query returned no results, and a
             ``next_key`` attribute that is not `None` if there were more
             results than could be returned in a single page.
         """
@@ -186,9 +184,9 @@ class QueryDriver(AbstractContextManager[None]):
         # fetched (or, failing that, when receiving a signal from
         # ``__exit__``).
         #
-        # In DirectButler I expect have a dict[PageKey, Cursor], fetch a blocks
-        # of rows from it, and just reuse the page key for the next page until
-        # the cursor is exactly.
+        # In DirectButler I expect to have a dict[PageKey, Cursor], fetch a
+        # blocks of rows from it, and just reuse the page key for the next page
+        # until the cursor is exactly.
         raise NotImplementedError()
 
     @abstractmethod
@@ -308,13 +306,14 @@ class QueryDriver(AbstractContextManager[None]):
 
     @abstractmethod
     def resolve_collection_wildcard(
-        self, collections: CollectionArgType | None = None
+        self, collections: str | Iterable[str] | EllipsisType | None = None
     ) -> tuple[list[str], bool]:
         """Resolve a collection argument into a sequence of collection names.
 
         Parameters
         ----------
-        collections
+        collections : `str`, `~collections.abc.Iterable` [ `str` ], ``...``,
+                or `None`, optional
             Collection search path argument.  If `None`, the default
             collections for the client should be used, if there are any.
 
@@ -330,13 +329,17 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def resolve_dataset_type_wildcard(self, dataset_type: Any) -> dict[str, DatasetType]:
+    def resolve_dataset_type_wildcard(
+        self, dataset_type: str | DatasetType | Iterable[str] | Iterable[DatasetType] | EllipsisType
+    ) -> dict[str, DatasetType]:
         """Resolve a dataset type argument into a mapping of `DatasetType`
         objects.
 
         Parameters
         ----------
-        dataset_type
+        dataset_type : `str`, `DatasetType`, `~collections.abc.Iterable` \
+                [ `str` ], `~collections.abc.Iterable` [ `DatasetType` ], \
+                or ``...``
             Dataset type name, object, or wildcard to resolve.
 
         Returns
@@ -350,5 +353,16 @@ class QueryDriver(AbstractContextManager[None]):
 
     @abstractmethod
     def get_dataset_dimensions(self, name: str) -> DimensionGroup:
-        """Return the dimensions for a dataset type."""
+        """Return the dimensions for a dataset type.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the dataset type.
+
+        Returns
+        -------
+        dimensions : `DimensionGroup`
+            Dimensions of the dataset type.
+        """
         raise NotImplementedError()

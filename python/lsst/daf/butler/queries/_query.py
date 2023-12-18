@@ -198,7 +198,8 @@ class RelationQuery(Query):
             tree = self._tree
             if name not in tree.available_dataset_types:
                 resolved_collections, collections_ordered = self._driver.resolve_collection_wildcard(
-                    collections
+                    # TODO: drop regex support from base signature.
+                    collections,  # type: ignore
                 )
                 if find_first and not collections_ordered:
                     raise InvalidRelationError(
@@ -295,8 +296,6 @@ class RelationQuery(Query):
 
         Parameters
         ----------
-        tree : `Relation`
-            Description of the query as a tree of relation operations.
         execute : `bool`, optional
             If `True`, execute at least a ``LIMIT 1`` query if it cannot be
             determined prior to execution that the query would return no rows.
@@ -321,8 +320,6 @@ class RelationQuery(Query):
 
         Parameters
         ----------
-        tree : `Relation`
-            Description of the query as a tree of relation operations.
         execute : `bool`, optional
             If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
             of aspects of the tree to more precisely determine where rows were
@@ -505,7 +502,7 @@ class RelationQuery(Query):
 
         Parameters
         ----------
-        iterable : `~collections.abc.Iterable` [ `str` ] or `DimensionGroup`
+        dimensions : `~collections.abc.Iterable` [ `str` ] or `DimensionGroup`
             Names of dimensions to join in.
 
         Returns
