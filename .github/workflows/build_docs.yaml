@@ -49,7 +49,7 @@ jobs:
         run: sudo apt-get install graphviz
 
       - name: Install documenteer
-        run: pip install 'documenteer[pipelines]>=0.8'
+        run: pip install 'documenteer[pipelines]>=0.8,<1.0'
 
       - name: Build documentation
         working-directory: ./doc
