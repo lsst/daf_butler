@@ -746,7 +746,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def getURI(
         self,
         datasetRefOrType: DatasetRef | DatasetType | str,
@@ -808,7 +807,16 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Raised if a URI is requested for a dataset that consists of
             multiple artifacts.
         """
-        raise NotImplementedError()
+        primary, components = self.getURIs(
+            datasetRefOrType, dataId=dataId, predict=predict, collections=collections, run=run, **kwargs
+        )
+
+        if primary is None or components:
+            raise RuntimeError(
+                f"Dataset ({datasetRefOrType}) includes distinct URIs for components. "
+                "Use Butler.getURIs() instead."
+            )
+        return primary
 
     @abstractmethod
     def get_dataset_type(self, name: str) -> DatasetType:

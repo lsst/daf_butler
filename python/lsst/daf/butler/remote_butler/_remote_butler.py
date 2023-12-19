@@ -48,6 +48,7 @@ from .._config import Config
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
+from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
@@ -68,13 +69,16 @@ if TYPE_CHECKING:
     from .._limited_butler import LimitedButler
     from .._query import Query
     from .._timespan import Timespan
-    from ..datastore import DatasetRefURIs
     from ..dimensions import DataId, DimensionGroup, DimensionRecord
     from ..registry import CollectionArgType, Registry
     from ..transfers import RepoExportContext
 
 
 _AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=_BaseModelCompat)
+"""Generic type variable that accepts any Pydantic model class."""
+_InputCollectionList = str | Sequence[str] | None
+"""The possible types of the ``collections`` parameter of most Butler methods.
+"""
 
 
 class RemoteButler(Butler):
@@ -269,26 +273,7 @@ class RemoteButler(Butler):
         **kwargs: Any,
     ) -> Any:
         # Docstring inherited.
-        if isinstance(datasetRefOrType, DatasetRef):
-            dataset_id = datasetRefOrType.id
-            response = self._get(f"get_file/{dataset_id}")
-            if response.status_code == 404:
-                raise LookupError(f"Dataset not found: {datasetRefOrType}")
-        else:
-            request = GetFileByDataIdRequestModel(
-                dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
-                collections=self._normalize_collections(collections),
-                data_id=self._simplify_dataId(dataId, kwargs),
-            )
-            response = self._post("get_file_by_data_id", request)
-            if response.status_code == 404:
-                raise LookupError(
-                    f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
-                    f" collections: {collections}"
-                )
-
-        response.raise_for_status()
-        model = self._parse_model(response, GetFileResponseModel)
+        model = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
 
         # If the caller provided a DatasetRef or DatasetType, they may have
         # overridden the storage class on it.  We need to respect this, if they
@@ -313,6 +298,37 @@ class RemoteButler(Butler):
             component=componentOverride,
         )
 
+    def _get_file_info(
+        self,
+        datasetRefOrType: DatasetRef | DatasetType | str,
+        dataId: DataId | None,
+        collections: _InputCollectionList,
+        kwargs: dict[str, DataIdValue],
+    ) -> GetFileResponseModel:
+        """Send a request to the server for the file URLs and metadata
+        associated with a dataset.
+        """
+        if isinstance(datasetRefOrType, DatasetRef):
+            dataset_id = datasetRefOrType.id
+            response = self._get(f"get_file/{dataset_id}")
+            if response.status_code == 404:
+                raise LookupError(f"Dataset not found: {datasetRefOrType}")
+        else:
+            request = GetFileByDataIdRequestModel(
+                dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
+                collections=self._normalize_collections(collections),
+                data_id=self._simplify_dataId(dataId, kwargs),
+            )
+            response = self._post("get_file_by_data_id", request)
+            if response.status_code == 404:
+                raise LookupError(
+                    f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
+                    f" collections: {collections}"
+                )
+
+        response.raise_for_status()
+        return self._parse_model(response, GetFileResponseModel)
+
     def getURIs(
         self,
         datasetRefOrType: DatasetRef | DatasetType | str,
@@ -325,21 +341,24 @@ class RemoteButler(Butler):
         **kwargs: Any,
     ) -> DatasetRefURIs:
         # Docstring inherited.
-        raise NotImplementedError()
+        if predict or run:
+            raise NotImplementedError("Predict mode is not supported by RemoteButler")
 
-    def getURI(
-        self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        /,
-        dataId: DataId | None = None,
-        *,
-        predict: bool = False,
-        collections: Any = None,
-        run: str | None = None,
-        **kwargs: Any,
-    ) -> ResourcePath:
-        # Docstring inherited.
-        raise NotImplementedError()
+        response = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
+        file_info = response.file_info
+        if len(file_info) == 1:
+            return DatasetRefURIs(primaryURI=ResourcePath(str(file_info[0].url)))
+        else:
+            components = {}
+            for f in file_info:
+                component = f.datastoreRecords.component
+                if component is None:
+                    raise ValueError(
+                        f"DatasetId {response.dataset_ref.id} has a component file"
+                        " with no component name defined"
+                    )
+                components[component] = ResourcePath(str(f.url))
+            return DatasetRefURIs(componentURIs=components)
 
     def get_dataset_type(self, name: str) -> DatasetType:
         # In future implementation this should directly access the cache
@@ -627,7 +646,7 @@ class RemoteButler(Butler):
         """Deserialize a Pydantic model from the body of an HTTP response."""
         return model.model_validate_json(response.content)
 
-    def _normalize_collections(self, collections: str | Sequence[str] | None) -> CollectionList:
+    def _normalize_collections(self, collections: _InputCollectionList) -> CollectionList:
         """Convert the ``collections`` parameter in the format used by Butler
         methods to a standardized format for the REST API.
         """

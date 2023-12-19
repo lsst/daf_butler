@@ -53,8 +53,10 @@ from lsst.daf.butler import (
     NoDefaultCollectionError,
     StorageClassFactory,
 )
-from lsst.daf.butler.tests import DatastoreMock
+from lsst.daf.butler.datastore import DatasetRefURIs
+from lsst.daf.butler.tests import DatastoreMock, addDatasetType
 from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -104,9 +106,11 @@ class ButlerClientServerTestCase(unittest.TestCase):
             configFile=os.path.join(TESTDIR, "config/basic/butler-s3store.yaml"),
             forceConfigRoot=False,
         )
-
         # Add a file with corrupted data for testing error conditions
         cls.dataset_with_corrupted_data = _create_corrupted_dataset(cls.repo)
+        # All of the datasets that come with MetricTestRepo are disassembled
+        # composites.  Add a simple dataset for testing the common case.
+        cls.simple_dataset_ref = _create_simple_dataset(cls.repo.butler)
 
         # Override the server's Butler initialization to point at our test repo
         server_butler = Butler.from_config(cls.root, writeable=True)
@@ -131,8 +135,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
             _make_test_client(app, raise_server_exceptions=False)
         )
 
-        # Populate the test server.  The DatastoreMock is required because the
-        # datasets referenced in these imports do not point at real files
+        # Populate the test server.
+        # The DatastoreMock is required because the datasets referenced in
+        # these imports do not point at real files.
         DatastoreMock.apply(server_butler)
         server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
         server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
@@ -323,6 +328,50 @@ class ButlerClientServerTestCase(unittest.TestCase):
         )
         self.assertEqual(dataset_type_component_data, MetricTestRepo.METRICS_EXAMPLE_SUMMARY)
 
+    def test_getURIs_no_components(self):
+        # This dataset does not have components, and should return one URI.
+        def check_uri(uri: ResourcePath):
+            self.assertIsNotNone(uris.primaryURI)
+            self.assertEqual(uris.primaryURI.scheme, "https")
+            self.assertEqual(uris.primaryURI.read(), b"123")
+
+        uris = self.butler.getURIs(self.simple_dataset_ref)
+        self.assertEqual(len(uris.componentURIs), 0)
+        check_uri(uris.primaryURI)
+
+        check_uri(self.butler.getURI(self.simple_dataset_ref))
+
+    def test_getURIs_multiple_components(self):
+        # This dataset has multiple components, so we should get back multiple
+        # URIs.
+        dataset_type = "test_metric_comp"
+        data_id = {"instrument": "DummyCamComp", "visit": 423}
+        collections = "ingest/run"
+
+        def check_uris(uris: DatasetRefURIs):
+            self.assertIsNone(uris.primaryURI)
+            self.assertEqual(len(uris.componentURIs), 3)
+            path = uris.componentURIs["summary"]
+            self.assertEqual(path.scheme, "https")
+            data = path.read()
+            self.assertEqual(data, b"AM1: 5.2\nAM2: 30.6\n")
+
+        uris = self.butler.getURIs(dataset_type, dataId=data_id, collections=collections)
+        check_uris(uris)
+
+        # Calling getURI on a multi-file dataset raises an exception
+        with self.assertRaises(RuntimeError):
+            self.butler.getURI(dataset_type, dataId=data_id, collections=collections)
+
+        # getURIs does NOT respect component overrides on the DatasetRef,
+        # instead returning the parent's URIs.  Unclear if this is "correct"
+        # from a conceptual point of view, but this matches DirectButler
+        # behavior.
+        ref = self.butler.find_dataset(dataset_type, data_id=data_id, collections=collections)
+        componentRef = ref.makeComponentRef("summary")
+        componentUris = self.butler.getURIs(componentRef)
+        check_uris(componentUris)
+
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
     run = "corrupted-run"
@@ -330,6 +379,12 @@ def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
     uris = repo.butler.getURIs(ref)
     oneOfTheComponents = list(uris.componentURIs.values())[0]
     oneOfTheComponents.write("corrupted data")
+    return ref
+
+
+def _create_simple_dataset(butler: Butler) -> DatasetRef:
+    dataset_type = addDatasetType(butler, "test_int", {"instrument", "visit"}, "int")
+    ref = butler.put(123, dataset_type, dataId={"instrument": "DummyCamComp", "visit": 423})
     return ref
 
 
