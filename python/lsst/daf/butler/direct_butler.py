@@ -44,7 +44,7 @@ import os
 import warnings
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar, TextIO
+from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
 
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -55,6 +55,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ._butler import Butler
 from ._butler_config import ButlerConfig
+from ._butler_instance_options import ButlerInstanceOptions
 from ._dataset_existence import DatasetExistence
 from ._dataset_ref import DatasetRef
 from ._dataset_type import DatasetType
@@ -109,7 +110,7 @@ class ButlerValidationError(ValidationError):
     pass
 
 
-class DirectButler(Butler):
+class DirectButler(Butler):  # numpydoc ignore=PR02
     """Main entry point for the data access system.
 
     Parameters
@@ -119,40 +120,17 @@ class DirectButler(Butler):
         `ButlerConfig` constructor.  If a directory path
         is given the configuration will be read from a ``butler.yaml`` file in
         that location.  If `None` is given default values will be used.
+    options : `ButlerInstanceOptions`
+        Default values and other settings for the Butler instance.
     butler : `DirectButler`, optional
         If provided, construct a new Butler that uses the same registry and
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
         arguments.
-    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
-        An expression specifying the collections to be searched (in order) when
-        reading datasets.
-        This may be a `str` collection name or an iterable thereof.
-        See :ref:`daf_butler_collection_expressions` for more information.
-        These collections are not registered automatically and must be
-        manually registered before they are used by any method, but they may be
-        manually registered after the `Butler` is initialized.
-    run : `str`, optional
-        Name of the `~CollectionType.RUN` collection new datasets should be
-        inserted into.  If ``collections`` is `None` and ``run`` is not `None`,
-        ``collections`` will be set to ``[run]``.  If not `None`, this
-        collection will automatically be registered.  If this is not set (and
-        ``writeable`` is not set either), a read-only butler will be created.
     searchPaths : `list` of `str`, optional
         Directory paths to search when calculating the full Butler
         configuration.  Not used if the supplied config is already a
         `ButlerConfig`.
-    writeable : `bool`, optional
-        Explicitly sets whether the butler supports write operations.  If not
-        provided, a read-write butler is created if any of ``run``, ``tags``,
-        or ``chains`` is non-empty.
-    inferDefaults : `bool`, optional
-        If `True` (default) infer default data ID values from the values
-        present in the datasets in ``collections``: if all collections have the
-        same value (or no value) for a governor dimension, that value will be
-        the default for that dimension.  Nonexistent collections are ignored.
-        If a default value is provided explicitly for a governor dimension via
-        ``**kwargs``, no default will be inferred for that dimension.
     without_datastore : `bool`, optional
         If `True` do not attach a datastore to this butler. Any attempts
         to use a datastore will fail.
@@ -161,36 +139,45 @@ class DirectButler(Butler):
         dimensions like ``instrument`` and ``skymap``.
     """
 
-    def __init__(
-        self,
+    # This is __new__ instead of __init__ because we have to support
+    # instantiation via the legacy constructor Butler.__new__(), which
+    # reads the configuration and selects which subclass to instantiate.  The
+    # interaction between __new__ and __init__ is kind of wacky in Python.  If
+    # we were using __init__ here, __init__ would be called twice (once when
+    # the RemoteButler instance is constructed inside Butler.from_config(), and
+    # a second time with the original arguments to Butler() when the instance
+    # is returned from Butler.__new__()
+    def __new__(
+        cls,
         config: Config | ResourcePathExpression | None = None,
         *,
+        options: ButlerInstanceOptions,
         butler: DirectButler | None = None,
-        collections: Any = None,
-        run: str | None = None,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
-        writeable: bool | None = None,
-        inferDefaults: bool = True,
         without_datastore: bool = False,
-        **kwargs: str,
-    ):
-        defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
+    ) -> DirectButler:
+        self = cast(DirectButler, super().__new__(cls))
+
+        defaults = RegistryDefaults(
+            collections=options.collections, run=options.run, infer=options.inferDefaults, **options.kwargs
+        )
         # Load registry, datastore, etc. from config or existing butler.
         if butler is not None:
-            if config is not None or searchPaths is not None or writeable is not None:
+            if config is not None or searchPaths is not None or options.writeable is not None:
                 raise TypeError(
                     "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
                 )
             self._registry = butler._registry.copy(defaults)
             self._datastore = butler._datastore
             self.storageClasses = butler.storageClasses
-            self._config: ButlerConfig = butler._config
+            self._config = butler._config
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths, without_datastore=without_datastore)
             try:
                 butlerRoot = self._config.get("root", self._config.configDir)
+                writeable = options.writeable
                 if writeable is None:
-                    writeable = run is not None
+                    writeable = options.run is not None
                 self._registry = _RegistryFactory(self._config).from_config(
                     butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
                 )
@@ -222,6 +209,8 @@ class DirectButler(Butler):
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
 
         self._registry_shim = RegistryShim(self)
+
+        return self
 
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
@@ -273,14 +262,11 @@ class DirectButler(Butler):
         butler : `Butler`
             A new `Butler` instance.
         """
-        # MyPy doesn't recognize that the kwargs below are totally valid; it
-        # seems to think '**defaultDataId* is a _positional_ argument!
         return cls(
             config=config,
-            collections=collections,
-            run=run,
-            writeable=writeable,
-            **defaultDataId,  # type: ignore
+            options=ButlerInstanceOptions(
+                collections=collections, run=run, writeable=writeable, kwargs=defaultDataId
+            ),
         )
 
     def __reduce__(self) -> tuple:
@@ -2349,6 +2335,8 @@ class DirectButler(Butler):
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return data_ids
 
+    _config: ButlerConfig
+
     _registry: SqlRegistry
     """The object that manages dataset metadata and relationships
     (`SqlRegistry`).
@@ -2369,3 +2357,5 @@ class DirectButler(Butler):
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
     """
+
+    _registry_shim: RegistryShim

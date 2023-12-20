@@ -39,6 +39,7 @@ from lsst.utils import doImportType
 from lsst.utils.logging import getLogger
 
 from ._butler_config import ButlerConfig
+from ._butler_instance_options import ButlerInstanceOptions
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
 from ._limited_butler import LimitedButler
@@ -128,56 +129,19 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         **kwargs: Any,
     ) -> Butler:
         if cls is Butler:
-            cls = cls._find_butler_class(config, searchPaths)
+            return Butler.from_config(
+                config=config,
+                collections=collections,
+                run=run,
+                searchPaths=searchPaths,
+                writeable=writeable,
+                inferDefaults=inferDefaults,
+                **kwargs,
+            )
+
         # Note: we do not pass any parameters to __new__, Python will pass them
         # to __init__ after __new__ returns sub-class instance.
         return super().__new__(cls)
-
-    @staticmethod
-    def _find_butler_class(
-        config: Config | ResourcePathExpression | None = None,
-        searchPaths: Sequence[ResourcePathExpression] | None = None,
-    ) -> type[Butler]:
-        """Find actual class to instantiate.
-
-        Parameters
-        ----------
-        config : `ButlerConfig`, `Config` or `str`, optional
-            Configuration. Anything acceptable to the `ButlerConfig`
-            constructor. If a directory path is given the configuration will be
-            read from a ``butler.yaml`` file in that location. If `None` is
-            given default values will be used. If ``config`` contains "cls"
-            key then its value is used as a name of butler class and it must be
-            a sub-class of this class, otherwise `DirectButler` is
-            instantiated.
-        searchPaths : `list` of `str`, optional
-            Directory paths to search when calculating the full Butler
-            configuration.  Not used if the supplied config is already a
-            `ButlerConfig`.
-
-        Returns
-        -------
-        butler_class : `type`
-            The type of `Butler` to instantiate.
-        """
-        butler_class_name: str | None = None
-        if config is not None:
-            # Check for optional "cls" key in config.
-            if not isinstance(config, Config):
-                config = ButlerConfig(config, searchPaths=searchPaths)
-            butler_class_name = config.get("cls")
-
-        # Make DirectButler if class is not specified.
-        butler_class: type[Butler]
-        if butler_class_name is None:
-            from .direct_butler import DirectButler
-
-            butler_class = DirectButler
-        else:
-            butler_class = doImportType(butler_class_name)
-            if not issubclass(butler_class, Butler):
-                raise TypeError(f"{butler_class_name} is not a subclass of Butler")
-        return butler_class
 
     @classmethod
     def from_config(
@@ -234,8 +198,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             governor dimension via ``**kwargs``, no default will be inferred
             for that dimension.
         **kwargs : `Any`
-            Additional keyword arguments passed to a constructor of actual
-            butler class.
+            Default data ID key-value pairs.  These may only identify
+            "governor" dimensions like ``instrument`` and ``skymap``.
 
         Returns
         -------
@@ -297,16 +261,38 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         arguments provided, but it defaults to `False` when there are not
         collection arguments.
         """
-        cls = cls._find_butler_class(config, searchPaths)
-        return cls(
-            config,
-            collections=collections,
-            run=run,
-            searchPaths=searchPaths,
-            writeable=writeable,
-            inferDefaults=inferDefaults,
-            **kwargs,
+        butler_class_name: str | None = None
+        if config is not None:
+            # Check for optional "cls" key in config.
+            if not isinstance(config, Config):
+                config = ButlerConfig(config, searchPaths=searchPaths)
+            butler_class_name = config.get("cls")
+
+        options = ButlerInstanceOptions(
+            collections=collections, run=run, writeable=writeable, inferDefaults=inferDefaults, kwargs=kwargs
         )
+
+        # Make DirectButler if class is not specified.
+        if butler_class_name is None or butler_class_name == "lsst.daf.butler.direct_butler.DirectButler":
+            from .direct_butler import DirectButler
+
+            return DirectButler(
+                config,
+                options=options,
+                searchPaths=searchPaths,
+                # Additional options for DirectButler which are
+                # forwarded from the Butler() constructor.
+                butler=kwargs.pop("butler", None),
+                without_datastore=kwargs.pop("without_datastore", False),
+            )
+        elif butler_class_name == "lsst.daf.butler.remote_butler.RemoteButler":
+            from .remote_butler import RemoteButler
+
+            return RemoteButler(config, options=options, searchPaths=searchPaths)
+        else:
+            raise ValueError(
+                f"Butler configuration requests to load unknown Butler class {butler_class_name}"
+            )
 
     @staticmethod
     def makeRepo(

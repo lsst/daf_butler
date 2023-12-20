@@ -53,6 +53,7 @@ from lsst.daf.butler import (
     NoDefaultCollectionError,
     StorageClassFactory,
 )
+from lsst.daf.butler._butler_instance_options import ButlerInstanceOptions
 from lsst.daf.butler.datastore import DatasetRefURIs
 from lsst.daf.butler.tests import DatastoreMock, addDatasetType
 from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, makeTestTempDir, removeTestTempDir
@@ -68,7 +69,7 @@ def _make_test_client(app, raise_server_exceptions=True):
     return client
 
 
-def _make_remote_butler(http_client, **kwargs):
+def _make_remote_butler(http_client, *, collections: str | None = None):
     return RemoteButler(
         config={
             "remote_butler": {
@@ -78,7 +79,7 @@ def _make_remote_butler(http_client, **kwargs):
             }
         },
         http_client=http_client,
-        **kwargs,
+        options=ButlerInstanceOptions(collections=collections),
     )
 
 

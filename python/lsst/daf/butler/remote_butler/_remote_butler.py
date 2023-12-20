@@ -31,7 +31,7 @@ __all__ = ("RemoteButler",)
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
-from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar
+from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar, cast
 
 import httpx
 from lsst.daf.butler import __version__
@@ -43,6 +43,7 @@ from pydantic import parse_obj_as
 
 from .._butler import Butler
 from .._butler_config import ButlerConfig
+from .._butler_instance_options import ButlerInstanceOptions
 from .._compat import _BaseModelCompat
 from .._config import Config
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
@@ -81,7 +82,7 @@ _InputCollectionList = str | Sequence[str] | None
 """
 
 
-class RemoteButler(Butler):
+class RemoteButler(Butler):  # numpydoc ignore=PR02
     """A `Butler` that can be used to connect through a remote server.
 
     Parameters
@@ -93,60 +94,46 @@ class RemoteButler(Butler):
         values will be used. If ``config`` contains "cls" key then its value is
         used as a name of butler class and it must be a sub-class of this
         class, otherwise `DirectButler` is instantiated.
-    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
-        An expression specifying the collections to be searched (in order) when
-        reading datasets.
-        This may be a `str` collection name or an iterable thereof.
-        See :ref:`daf_butler_collection_expressions` for more information.
-        These collections are not registered automatically and must be
-        manually registered before they are used by any method, but they may be
-        manually registered after the `Butler` is initialized.
-    run : `str`, optional
-        Name of the `~CollectionType.RUN` collection new datasets should be
-        inserted into.  If ``collections`` is `None` and ``run`` is not `None`,
-        ``collections`` will be set to ``[run]``.  If not `None`, this
-        collection will automatically be registered.  If this is not set (and
-        ``writeable`` is not set either), a read-only butler will be created.
+    options : `ButlerInstanceOptions`
+        Default values and other settings for the Butler instance.
     searchPaths : `list` of `str`, optional
         Directory paths to search when calculating the full Butler
         configuration.  Not used if the supplied config is already a
         `ButlerConfig`.
-    writeable : `bool`, optional
-        Explicitly sets whether the butler supports write operations.  If not
-        provided, a read-write butler is created if any of ``run``, ``tags``,
-        or ``chains`` is non-empty.
-    inferDefaults : `bool`, optional
-        If `True` (default) infer default data ID values from the values
-        present in the datasets in ``collections``: if all collections have the
-        same value (or no value) for a governor dimension, that value will be
-        the default for that dimension.  Nonexistent collections are ignored.
-        If a default value is provided explicitly for a governor dimension via
-        ``**kwargs``, no default will be inferred for that dimension.
     http_client : `httpx.Client` or `None`, optional
         Client to use to connect to the server. This is generally only
         necessary for test code.
     access_token : `str` or `None`, optional
         Explicit access token to use when connecting to the server. If not
         given an attempt will be found to obtain one from the environment.
-    **kwargs : `Any`
-        Parameters that can be used to set defaults for governor dimensions.
     """
 
-    def __init__(
-        self,
+    _config: RemoteButlerConfigModel
+    _dimensions: DimensionUniverse | None
+    _registry_defaults: RegistryDefaults
+    _client: httpx.Client
+
+    # This is __new__ instead of __init__ because we have to support
+    # instantiation via the legacy constructor Butler.__new__(), which
+    # reads the configuration and selects which subclass to instantiate.  The
+    # interaction between __new__ and __init__ is kind of wacky in Python.  If
+    # we were using __init__ here, __init__ would be called twice (once when
+    # the RemoteButler instance is constructed inside Butler.from_config(), and
+    # a second time with the original arguments to Butler() when the instance
+    # is returned from Butler.__new__()
+    def __new__(
+        cls,
         # These parameters are inherited from the Butler() constructor
         config: Config | ResourcePathExpression | None = None,
         *,
-        collections: Any = None,
-        run: str | None = None,
+        options: ButlerInstanceOptions,
         searchPaths: Sequence[ResourcePathExpression] | None = None,
-        writeable: bool | None = None,
-        inferDefaults: bool = True,
         # Parameters unique to RemoteButler
         http_client: httpx.Client | None = None,
         access_token: str | None = None,
-        **kwargs: Any,
-    ):
+    ) -> RemoteButler:
+        self = cast(RemoteButler, super().__new__(cls))
+
         butler_config = ButlerConfig(config, searchPaths, without_datastore=True)
         # There is a convention in Butler config files where <butlerRoot> in a
         # configuration option refers to the directory containing the
@@ -160,10 +147,12 @@ class RemoteButler(Butler):
             )
         self._config = RemoteButlerConfigModel.model_validate(butler_config)
 
-        self._dimensions: DimensionUniverse | None = None
+        self._dimensions = None
         # TODO: RegistryDefaults should have finish() called on it, but this
         # requires getCollectionSummary() which is not yet implemented
-        self._registry_defaults = RegistryDefaults(collections, run, inferDefaults, **kwargs)
+        self._registry_defaults = RegistryDefaults(
+            options.collections, options.run, options.inferDefaults, **options.kwargs
+        )
 
         if http_client is not None:
             # We have injected a client explicitly in to the class.
@@ -180,6 +169,8 @@ class RemoteButler(Butler):
             headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
             headers.update(auth_headers)
             self._client = httpx.Client(headers=headers, base_url=server_url)
+
+        return self
 
     def isWriteable(self) -> bool:
         # Docstring inherited.
