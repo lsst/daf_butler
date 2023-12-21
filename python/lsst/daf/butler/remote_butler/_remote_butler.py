@@ -36,16 +36,13 @@ from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar, cast
 import httpx
 from lsst.daf.butler import __version__
 from lsst.daf.butler.datastores.fileDatastoreClient import get_dataset_as_python_object
-from lsst.daf.butler.repo_relocation import replaceRoot
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
 from pydantic import parse_obj_as
 
 from .._butler import Butler
-from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
 from .._compat import _BaseModelCompat
-from .._config import Config
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
@@ -53,8 +50,7 @@ from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
-from ._authentication import get_authentication_headers, get_authentication_token_from_environment
-from ._config import RemoteButlerConfigModel
+from ._authentication import get_authentication_headers
 from .server_models import (
     CollectionList,
     DatasetTypeName,
@@ -87,31 +83,27 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     Parameters
     ----------
-    config : `ButlerConfig`, `Config` or `str`, optional
-        Configuration. Anything acceptable to the `ButlerConfig` constructor.
-        If a directory path is given the configuration will be read from a
-        ``butler.yaml`` file in that location. If `None` is given default
-        values will be used. If ``config`` contains "cls" key then its value is
-        used as a name of butler class and it must be a sub-class of this
-        class, otherwise `DirectButler` is instantiated.
+    server_url : `str`
+        URL of the Butler server we will connect to.
     options : `ButlerInstanceOptions`
         Default values and other settings for the Butler instance.
-    searchPaths : `list` of `str`, optional
-        Directory paths to search when calculating the full Butler
-        configuration.  Not used if the supplied config is already a
-        `ButlerConfig`.
-    http_client : `httpx.Client` or `None`, optional
-        Client to use to connect to the server. This is generally only
-        necessary for test code.
+    http_client : `httpx.Client`
+        HTTP connection pool we will use to connect to the server.
     access_token : `str` or `None`, optional
-        Explicit access token to use when connecting to the server. If not
-        given an attempt will be found to obtain one from the environment.
+        Rubin Science Platform Gafaelfawr access token that will be used to
+        authenticate with the server.
+
+    Notes
+    -----
+    Instead of using this constructor, most users should use either
+    `Butler.from_config` or `RemoteButlerFactory`.
     """
 
-    _config: RemoteButlerConfigModel
     _dimensions: DimensionUniverse | None
     _registry_defaults: RegistryDefaults
     _client: httpx.Client
+    _server_url: str
+    _headers: dict[str, str]
 
     # This is __new__ instead of __init__ because we have to support
     # instantiation via the legacy constructor Butler.__new__(), which
@@ -122,53 +114,24 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     # a second time with the original arguments to Butler() when the instance
     # is returned from Butler.__new__()
     def __new__(
-        cls,
-        # These parameters are inherited from the Butler() constructor
-        config: Config | ResourcePathExpression | None = None,
-        *,
-        options: ButlerInstanceOptions,
-        searchPaths: Sequence[ResourcePathExpression] | None = None,
-        # Parameters unique to RemoteButler
-        http_client: httpx.Client | None = None,
-        access_token: str | None = None,
+        cls, *, server_url: str, options: ButlerInstanceOptions, http_client: httpx.Client, access_token: str
     ) -> RemoteButler:
         self = cast(RemoteButler, super().__new__(cls))
 
-        butler_config = ButlerConfig(config, searchPaths, without_datastore=True)
-        # There is a convention in Butler config files where <butlerRoot> in a
-        # configuration option refers to the directory containing the
-        # configuration file. We allow this for the remote butler's URL so
-        # that the server doesn't have to know which hostname it is being
-        # accessed from.
-        server_url_key = ("remote_butler", "url")
-        if server_url_key in butler_config:
-            butler_config[server_url_key] = replaceRoot(
-                butler_config[server_url_key], butler_config.configDir
-            )
-        self._config = RemoteButlerConfigModel.model_validate(butler_config)
-
+        self._client = http_client
+        self._server_url = server_url
         self._dimensions = None
+
         # TODO: RegistryDefaults should have finish() called on it, but this
         # requires getCollectionSummary() which is not yet implemented
         self._registry_defaults = RegistryDefaults(
             options.collections, options.run, options.inferDefaults, **options.kwargs
         )
 
-        if http_client is not None:
-            # We have injected a client explicitly in to the class.
-            # This is generally done for testing.
-            self._client = http_client
-        else:
-            server_url = str(self._config.remote_butler.url)
-            auth_headers = {}
-            if access_token is None:
-                access_token = get_authentication_token_from_environment(server_url)
-            if access_token is not None:
-                auth_headers = get_authentication_headers(access_token)
+        auth_headers = get_authentication_headers(access_token)
+        headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
 
-            headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
-            headers.update(auth_headers)
-            self._client = httpx.Client(headers=headers, base_url=server_url)
+        self._headers = auth_headers | headers
 
         return self
 
@@ -620,18 +583,21 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         path : `str`
             The full path to the endpoint.
         """
-        return f"{version}/{path}"
+        slash = "" if self._server_url.endswith("/") else "/"
+        return f"{self._server_url}{slash}{version}/{path}"
 
     def _post(self, path: str, model: _BaseModelCompat) -> httpx.Response:
         """Send a POST request to the Butler server."""
         json = model.model_dump_json(exclude_unset=True).encode("utf-8")
         url = self._get_url(path)
-        return self._client.post(url, content=json, headers={"content-type": "application/json"})
+        return self._client.post(
+            url, content=json, headers=self._headers | {"content-type": "application/json"}
+        )
 
     def _get(self, path: str) -> httpx.Response:
         """Send a GET request to the Butler server."""
         url = self._get_url(path)
-        return self._client.get(url)
+        return self._client.get(url, headers=self._headers)
 
     def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
         """Deserialize a Pydantic model from the body of an HTTP response."""

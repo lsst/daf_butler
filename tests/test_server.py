@@ -34,7 +34,8 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 try:
     # Failing to import any of these should disable the tests.
     from fastapi.testclient import TestClient
-    from lsst.daf.butler.remote_butler import RemoteButler
+    from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
+    from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
     from lsst.daf.butler.remote_butler.server import Factory, app
     from lsst.daf.butler.remote_butler.server._dependencies import factory_dependency
     from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
@@ -56,7 +57,13 @@ from lsst.daf.butler import (
 from lsst.daf.butler._butler_instance_options import ButlerInstanceOptions
 from lsst.daf.butler.datastore import DatasetRefURIs
 from lsst.daf.butler.tests import DatastoreMock, addDatasetType
-from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.utils import (
+    MetricsExample,
+    MetricTestRepo,
+    makeTestTempDir,
+    mock_env,
+    removeTestTempDir,
+)
 from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 
@@ -65,22 +72,15 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 def _make_test_client(app, raise_server_exceptions=True):
     client = TestClient(app, raise_server_exceptions=raise_server_exceptions)
-    client.base_url = "http://test.example/api/butler/"
     return client
 
 
 def _make_remote_butler(http_client, *, collections: str | None = None):
-    return RemoteButler(
-        config={
-            "remote_butler": {
-                # This URL is ignored because we override the HTTP client, but
-                # must be valid to satisfy the config validation
-                "url": "https://test.example"
-            }
-        },
-        http_client=http_client,
-        options=ButlerInstanceOptions(collections=collections),
-    )
+    options = None
+    if collections is not None:
+        options = ButlerInstanceOptions(collections=collections)
+    factory = RemoteButlerFactory("https://test.example/api/butler", http_client)
+    return factory.create_butler_for_access_token("fake-access-token", butler_options=options)
 
 
 @unittest.skipIf(TestClient is None or app is None, "FastAPI not installed.")
@@ -243,9 +243,19 @@ class ButlerClientServerTestCase(unittest.TestCase):
             return self.client.get(http_resource_path.geturl()).content
 
         with patch.object(HttpResourcePath, "read", override_read):
-            butler = Butler("https://test.example/api/butler")
-        assert isinstance(butler, RemoteButler)
-        assert str(butler._config.remote_butler.url) == "https://test.example/api/butler/"
+            # Add access key to environment variables. RemoteButler
+            # instantiation will throw an error if access key is not
+            # available.
+            with mock_env({_EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY: "fake-access-token"}):
+                butler = Butler(
+                    "https://test.example/api/butler",
+                    collections=["collection1", "collection2"],
+                    run="collection2",
+                )
+        self.assertIsInstance(butler, RemoteButler)
+        self.assertEqual(butler._server_url, "https://test.example/api/butler/")
+        self.assertEqual(butler.collections, ("collection1", "collection2"))
+        self.assertEqual(butler.run, "collection2")
 
     def test_get(self):
         dataset_type = "test_metric_comp"

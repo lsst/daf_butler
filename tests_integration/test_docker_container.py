@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler.remote_butler import RemoteButlerFactory
 from lsst.daf.butler.tests.utils import MetricTestRepo
 from testcontainers.core.container import DockerContainer
 
@@ -58,7 +58,9 @@ class ButlerDockerTestCase(unittest.TestCase):
         cls.server_uri = cls.enterClassContext(_run_server_docker())
 
     def test_get_dataset_type(self):
-        butler = Butler(self.server_uri)
+        butler = RemoteButlerFactory.create_factory_for_url(self.server_uri).create_butler_for_access_token(
+            "fake-access-token"
+        )
         dataset_type = butler.get_dataset_type("test_metric_comp")
         self.assertEqual(dataset_type.name, "test_metric_comp")
 

@@ -106,6 +106,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         the default for that dimension.  Nonexistent collections are ignored.
         If a default value is provided explicitly for a governor dimension via
         ``**kwargs``, no default will be inferred for that dimension.
+    without_datastore : `bool`, optional
+        If `True` do not attach a datastore to this butler. Any attempts
+        to use a datastore will fail.
     **kwargs : `Any`
         Additional keyword arguments passed to a constructor of actual butler
         class.
@@ -126,6 +129,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         searchPaths: Sequence[ResourcePathExpression] | None = None,
         writeable: bool | None = None,
         inferDefaults: bool = True,
+        without_datastore: bool = False,
         **kwargs: Any,
     ) -> Butler:
         if cls is Butler:
@@ -136,6 +140,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 searchPaths=searchPaths,
                 writeable=writeable,
                 inferDefaults=inferDefaults,
+                without_datastore=without_datastore,
                 **kwargs,
             )
 
@@ -153,6 +158,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         searchPaths: Sequence[ResourcePathExpression] | None = None,
         writeable: bool | None = None,
         inferDefaults: bool = True,
+        without_datastore: bool = False,
         **kwargs: Any,
     ) -> Butler:
         """Create butler instance from configuration.
@@ -197,6 +203,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             are ignored.  If a default value is provided explicitly for a
             governor dimension via ``**kwargs``, no default will be inferred
             for that dimension.
+        without_datastore : `bool`, optional
+            If `True` do not attach a datastore to this butler. Any attempts
+            to use a datastore will fail.
         **kwargs : `Any`
             Default data ID key-value pairs.  These may only identify
             "governor" dimensions like ``instrument`` and ``skymap``.
@@ -261,34 +270,35 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         arguments provided, but it defaults to `False` when there are not
         collection arguments.
         """
-        butler_class_name: str | None = None
-        if config is not None:
-            # Check for optional "cls" key in config.
-            if not isinstance(config, Config):
-                config = ButlerConfig(config, searchPaths=searchPaths)
-            butler_class_name = config.get("cls")
-
         options = ButlerInstanceOptions(
             collections=collections, run=run, writeable=writeable, inferDefaults=inferDefaults, kwargs=kwargs
         )
+
+        # Load the Butler configuration.  This may involve searching the
+        # environment to locate a configuration file.
+        butler_config = ButlerConfig(config, searchPaths=searchPaths, without_datastore=without_datastore)
+        # Configuration optionally includes a class name specifying which
+        # implementation to use, DirectButler or RemoteButler.
+        butler_class_name = butler_config.get("cls")
 
         # Make DirectButler if class is not specified.
         if butler_class_name is None or butler_class_name == "lsst.daf.butler.direct_butler.DirectButler":
             from .direct_butler import DirectButler
 
             return DirectButler(
-                config,
+                butler_config,
                 options=options,
-                searchPaths=searchPaths,
-                # Additional options for DirectButler which are
-                # forwarded from the Butler() constructor.
+                without_datastore=without_datastore,
+                # Additional option for DirectButler which is not part of the
+                # common Butler() interface.  This selects an alternate "copy
+                # existing instance" variation of the constructor
                 butler=kwargs.pop("butler", None),
-                without_datastore=kwargs.pop("without_datastore", False),
             )
         elif butler_class_name == "lsst.daf.butler.remote_butler.RemoteButler":
-            from .remote_butler import RemoteButler
+            from .remote_butler import RemoteButlerFactory
 
-            return RemoteButler(config, options=options, searchPaths=searchPaths)
+            factory = RemoteButlerFactory.create_factory_from_config(butler_config)
+            return factory.create_butler_with_credentials_from_environment(butler_options=options)
         else:
             raise ValueError(
                 f"Butler configuration requests to load unknown Butler class {butler_class_name}"

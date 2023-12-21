@@ -85,7 +85,6 @@ from .utils import transactional
 if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol
 
-    from ._config import Config
     from ._dataset_ref import DatasetId, DatasetIdGenEnum
     from ._file_dataset import FileDataset
     from ._query import Query
@@ -115,11 +114,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
     Parameters
     ----------
-    config : `ButlerConfig`, `Config` or `str`, optional
-        Configuration. Anything acceptable to the
-        `ButlerConfig` constructor.  If a directory path
-        is given the configuration will be read from a ``butler.yaml`` file in
-        that location.  If `None` is given default values will be used.
+    config : `ButlerConfig`
+        The configuration for this Butler instance.
     options : `ButlerInstanceOptions`
         Default values and other settings for the Butler instance.
     butler : `DirectButler`, optional
@@ -127,10 +123,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
         arguments.
-    searchPaths : `list` of `str`, optional
-        Directory paths to search when calculating the full Butler
-        configuration.  Not used if the supplied config is already a
-        `ButlerConfig`.
     without_datastore : `bool`, optional
         If `True` do not attach a datastore to this butler. Any attempts
         to use a datastore will fail.
@@ -144,16 +136,15 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     # reads the configuration and selects which subclass to instantiate.  The
     # interaction between __new__ and __init__ is kind of wacky in Python.  If
     # we were using __init__ here, __init__ would be called twice (once when
-    # the RemoteButler instance is constructed inside Butler.from_config(), and
+    # the DirectButler instance is constructed inside Butler.from_config(), and
     # a second time with the original arguments to Butler() when the instance
     # is returned from Butler.__new__()
     def __new__(
         cls,
-        config: Config | ResourcePathExpression | None = None,
+        config: ButlerConfig,
         *,
         options: ButlerInstanceOptions,
         butler: DirectButler | None = None,
-        searchPaths: Sequence[ResourcePathExpression] | None = None,
         without_datastore: bool = False,
     ) -> DirectButler:
         self = cast(DirectButler, super().__new__(cls))
@@ -163,16 +154,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         )
         # Load registry, datastore, etc. from config or existing butler.
         if butler is not None:
-            if config is not None or searchPaths is not None or options.writeable is not None:
-                raise TypeError(
-                    "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
-                )
+            if options.writeable is not None:
+                raise TypeError("Cannot pass 'writeable' argument with 'butler' argument.")
             self._registry = butler._registry.copy(defaults)
             self._datastore = butler._datastore
             self.storageClasses = butler.storageClasses
             self._config = butler._config
         else:
-            self._config = ButlerConfig(config, searchPaths=searchPaths, without_datastore=without_datastore)
+            self._config = config
             try:
                 butlerRoot = self._config.get("root", self._config.configDir)
                 writeable = options.writeable
