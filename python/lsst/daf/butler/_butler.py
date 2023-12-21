@@ -270,6 +270,20 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         arguments provided, but it defaults to `False` when there are not
         collection arguments.
         """
+        # DirectButler used to have a way to specify a "copy constructor" by
+        # passing the "butler" parameter to its constructor.  This
+        # functionality has been moved out of the constructor into
+        # Butler._clone(), but the new interface is not public yet.
+        butler = kwargs.pop("butler", None)
+        if butler is not None:
+            if not isinstance(butler, Butler):
+                raise TypeError("'butler' parameter must be a Butler instance")
+            if config is not None or searchPaths is not None or writeable is not None:
+                raise TypeError(
+                    "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
+                )
+            return butler._clone(collections=collections, run=run, inferDefaults=inferDefaults, **kwargs)
+
         options = ButlerInstanceOptions(
             collections=collections, run=run, writeable=writeable, inferDefaults=inferDefaults, kwargs=kwargs
         )
@@ -289,10 +303,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 butler_config,
                 options=options,
                 without_datastore=without_datastore,
-                # Additional option for DirectButler which is not part of the
-                # common Butler() interface.  This selects an alternate "copy
-                # existing instance" variation of the constructor
-                butler=kwargs.pop("butler", None),
             )
         elif butler_class_name == "lsst.daf.butler.remote_butler.RemoteButler":
             from .remote_butler import RemoteButlerFactory
@@ -1685,5 +1695,20 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             collection wildcard is passed when ``find_first`` is `True`, or
             when ``collections`` is `None` and default butler collections are
             not defined.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _clone(
+        self,
+        *,
+        collections: Any = None,
+        run: str | None = None,
+        inferDefaults: bool = True,
+        **kwargs: Any,
+    ) -> Butler:
+        """Return a new Butler instance connected to the same repository
+        as this one, but overriding ``collections``, ``run``,
+        ``inferDefaults``, and default data ID.
         """
         raise NotImplementedError()

@@ -118,11 +118,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         The configuration for this Butler instance.
     options : `ButlerInstanceOptions`
         Default values and other settings for the Butler instance.
-    butler : `DirectButler`, optional
-        If provided, construct a new Butler that uses the same registry and
-        datastore as the given one, but with the given collection and run.
-        Incompatible with the ``config``, ``searchPaths``, and ``writeable``
-        arguments.
     without_datastore : `bool`, optional
         If `True` do not attach a datastore to this butler. Any attempts
         to use a datastore will fail.
@@ -144,7 +139,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         config: ButlerConfig,
         *,
         options: ButlerInstanceOptions,
-        butler: DirectButler | None = None,
         without_datastore: bool = False,
     ) -> DirectButler:
         self = cast(DirectButler, super().__new__(cls))
@@ -152,54 +146,70 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         defaults = RegistryDefaults(
             collections=options.collections, run=options.run, infer=options.inferDefaults, **options.kwargs
         )
-        # Load registry, datastore, etc. from config or existing butler.
-        if butler is not None:
-            if options.writeable is not None:
-                raise TypeError("Cannot pass 'writeable' argument with 'butler' argument.")
-            self._registry = butler._registry.copy(defaults)
-            self._datastore = butler._datastore
-            self.storageClasses = butler.storageClasses
-            self._config = butler._config
-        else:
-            self._config = config
-            try:
-                butlerRoot = self._config.get("root", self._config.configDir)
-                writeable = options.writeable
-                if writeable is None:
-                    writeable = options.run is not None
-                self._registry = _RegistryFactory(self._config).from_config(
-                    butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
+        self._config = config
+        try:
+            butlerRoot = self._config.get("root", self._config.configDir)
+            writeable = options.writeable
+            if writeable is None:
+                writeable = options.run is not None
+            self._registry = _RegistryFactory(self._config).from_config(
+                butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
+            )
+            if without_datastore:
+                self._datastore = NullDatastore(None, None)
+            else:
+                self._datastore = Datastore.fromConfig(
+                    self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
                 )
-                if without_datastore:
-                    self._datastore = NullDatastore(None, None)
-                else:
-                    self._datastore = Datastore.fromConfig(
-                        self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
-                    )
-                # TODO: Once datastore drops dependency on registry we can
-                # construct datastore first and pass opaque tables to registry
-                # constructor.
-                self._registry.make_datastore_tables(self._datastore.get_opaque_table_definitions())
-                self.storageClasses = StorageClassFactory()
-                self.storageClasses.addFromConfig(self._config)
-            except Exception:
-                # Failures here usually mean that configuration is incomplete,
-                # just issue an error message which includes config file URI.
-                _LOG.error(f"Failed to instantiate Butler from config {self._config.configFile}.")
-                raise
+            # TODO: Once datastore drops dependency on registry we can
+            # construct datastore first and pass opaque tables to registry
+            # constructor.
+            self._registry.make_datastore_tables(self._datastore.get_opaque_table_definitions())
+            self.storageClasses = StorageClassFactory()
+            self.storageClasses.addFromConfig(self._config)
+        except Exception:
+            # Failures here usually mean that configuration is incomplete,
+            # just issue an error message which includes config file URI.
+            _LOG.error(f"Failed to instantiate Butler from config {self._config.configFile}.")
+            raise
 
+        if "run" in self._config or "collection" in self._config:
+            raise ValueError("Passing a run or collection via configuration is no longer supported.")
+
+        self._finish_init()
+
+        return self
+
+    def _finish_init(self) -> None:
+        """Finish the setup of a new DirectButler instance."""
         # For execution butler the datastore needs a special
         # dependency-inversion trick. This is not used by regular butler,
         # but we do not have a way to distinguish regular butler from execution
         # butler.
         self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
 
-        if "run" in self._config or "collection" in self._config:
-            raise ValueError("Passing a run or collection via configuration is no longer supported.")
-
         self._registry_shim = RegistryShim(self)
 
-        return self
+    def _clone(
+        self,
+        *,
+        collections: Any = None,
+        run: str | None = None,
+        inferDefaults: bool = True,
+        **kwargs: Any,
+    ) -> DirectButler:
+        # Docstring inherited
+        new_butler = cast(DirectButler, super().__new__(type(self)))
+        defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
+
+        new_butler._registry = self._registry.copy(defaults)
+        new_butler._datastore = self._datastore
+        new_butler.storageClasses = self.storageClasses
+        new_butler._config = self._config
+
+        new_butler._finish_init()
+
+        return new_butler
 
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.

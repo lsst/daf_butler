@@ -628,6 +628,16 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         else:
             return DatasetTypeName(datasetTypeOrName)
 
+    def _clone(
+        self,
+        *,
+        collections: Any = None,
+        run: str | None = None,
+        inferDefaults: bool = True,
+        **kwargs: Any,
+    ) -> RemoteButler:
+        raise NotImplementedError()
+
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
     """Return the DatasetType associated with the argument, or None if the
