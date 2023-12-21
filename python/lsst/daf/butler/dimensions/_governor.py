@@ -35,10 +35,9 @@ from typing import TYPE_CHECKING
 
 from lsst.utils import doImportType
 
-from .. import ddl
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
-from ._elements import Dimension
+from ._elements import Dimension, KeyColumnSpec, MetadataColumnSpec
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
@@ -59,13 +58,15 @@ class GovernorDimension(Dimension):
         Fully qualified name of the `GovernorDimensionRecordStorage` subclass
         that will back this element in the registry (in a "cls" key) along
         with any other construction keyword arguments (in other keys).
-    metadata : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
+    metadata_columns : `NamedValueAbstractSet` [ `MetadataColumnSpec` ]
         Field specifications for all non-key fields in this dimension's table.
-    uniqueKeys : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
+    unique_keys : `NamedValueAbstractSet` [ `KeyColumnSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used
         to define unique constraints.
+    doc : `str`
+        Extended description of this element.
 
     Notes
     -----
@@ -96,14 +97,16 @@ class GovernorDimension(Dimension):
         name: str,
         storage: dict,
         *,
-        metadata: NamedValueAbstractSet[ddl.FieldSpec],
-        uniqueKeys: NamedValueAbstractSet[ddl.FieldSpec],
+        metadata_columns: NamedValueAbstractSet[MetadataColumnSpec],
+        unique_keys: NamedValueAbstractSet[KeyColumnSpec],
+        doc: str,
     ):
         self._name = name
         self._storage = storage
         self._required = NamedValueSet({self}).freeze()
-        self._metadata = metadata
-        self._uniqueKeys = uniqueKeys
+        self._metadata_columns = metadata_columns
+        self._unique_keys = unique_keys
+        self._doc = doc
         if self.primaryKey.getPythonType() is not str:
             raise TypeError(
                 f"Governor dimension '{name}' must have a string primary key (configured type "
@@ -138,14 +141,19 @@ class GovernorDimension(Dimension):
         return MappingProxyType({})
 
     @property
-    def metadata(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
+    def metadata_columns(self) -> NamedValueAbstractSet[MetadataColumnSpec]:
         # Docstring inherited from DimensionElement.
-        return self._metadata
+        return self._metadata_columns
 
     @property
-    def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
+    def unique_keys(self) -> NamedValueAbstractSet[KeyColumnSpec]:
         # Docstring inherited from Dimension.
-        return self._uniqueKeys
+        return self._unique_keys
+
+    @property
+    def documentation(self) -> str:
+        # Docstring inherited from DimensionElement.
+        return self._doc
 
     def makeStorage(
         self,
@@ -189,13 +197,15 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         Fully qualified name of the `GovernorDimensionRecordStorage` subclass
         that will back this element in the registry (in a "cls" key) along
         with any other construction keyword arguments (in other keys).
-    metadata : `~collections.abc.Iterable` [ `ddl.FieldSpec` ]
+    metadata_columns : `~collections.abc.Iterable` [ `MetadataColumnSpec` ]
         Field specifications for all non-key fields in this element's table.
-    uniqueKeys : `~collections.abc.Iterable` [ `ddl.FieldSpec` ]
+    unique_keys : `~collections.abc.Iterable` [ `KeyColumnSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used
         to define unique constraints.
+    doc : `str`
+        Extended description of this element.
     """
 
     def __init__(
@@ -203,13 +213,15 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         name: str,
         storage: dict,
         *,
-        metadata: Iterable[ddl.FieldSpec] = (),
-        uniqueKeys: Iterable[ddl.FieldSpec] = (),
+        metadata_columns: Iterable[MetadataColumnSpec] = (),
+        unique_keys: Iterable[KeyColumnSpec] = (),
+        doc: str,
     ):
         super().__init__(name)
         self._storage = storage
-        self._metadata = NamedValueSet(metadata).freeze()
-        self._uniqueKeys = NamedValueSet(uniqueKeys).freeze()
+        self._metadata_columns = NamedValueSet(metadata_columns).freeze()
+        self._unique_keys = NamedValueSet(unique_keys).freeze()
+        self._doc = doc
 
     def hasDependenciesIn(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
@@ -221,8 +233,9 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         dimension = GovernorDimension(
             self.name,
             storage=self._storage,
-            metadata=self._metadata,
-            uniqueKeys=self._uniqueKeys,
+            metadata_columns=self._metadata_columns,
+            unique_keys=self._unique_keys,
+            doc=self._doc,
         )
         builder.dimensions.add(dimension)
         builder.elements.add(dimension)

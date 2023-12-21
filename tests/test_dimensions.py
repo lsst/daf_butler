@@ -49,11 +49,11 @@ from lsst.daf.butler import (
     DimensionUniverse,
     NamedKeyDict,
     NamedValueSet,
-    TimespanDatabaseRepresentation,
     YamlRepoImportBackend,
     ddl,
 )
 from lsst.daf.butler.registry import RegistryConfig, _RegistryFactory
+from lsst.daf.butler.timespan_database_representation import TimespanDatabaseRepresentation
 
 DIMENSION_DATA_FILE = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "data", "registry", "hsc-rc2-subset.yaml")

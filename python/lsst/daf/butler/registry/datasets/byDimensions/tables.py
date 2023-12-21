@@ -45,8 +45,8 @@ from typing import Any
 import sqlalchemy
 
 from ...._dataset_type import DatasetType
-from ...._timespan import TimespanDatabaseRepresentation
 from ....dimensions import DimensionUniverse, GovernorDimension, addDimensionForeignKey
+from ....timespan_database_representation import TimespanDatabaseRepresentation
 from ...interfaces import CollectionManager, VersionTuple
 
 DATASET_TYPE_NAME_LENGTH = 128

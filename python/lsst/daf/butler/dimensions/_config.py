@@ -33,15 +33,17 @@ import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
+import pydantic
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from .. import ddl
+from .._compat import PYDANTIC_V2
 from .._config import Config, ConfigSubset
 from .._topology import TopologicalSpace
 from ._database import (
     DatabaseDimensionElementConstructionVisitor,
     DatabaseTopologicalFamilyConstructionVisitor,
 )
+from ._elements import KeyColumnSpec, MetadataColumnSpec
 from ._governor import GovernorDimensionConstructionVisitor
 from ._packer import DimensionPackerConstructionVisitor
 from ._skypix import SkyPixConstructionVisitor
@@ -192,11 +194,30 @@ class DimensionConfig(ConfigSubset):
             `StandardDimensionCombination` to an under-construction
             `DimensionUniverse`.
         """
+        if PYDANTIC_V2:
+            # MyPy is confused by the typing.Annotated usage and/or how
+            # Pydantic annotated TypeAdapter.
+            key_adapter: pydantic.TypeAdapter[KeyColumnSpec] = pydantic.TypeAdapter(  # type: ignore
+                KeyColumnSpec  # type: ignore
+            )
+            validate_key = key_adapter.validate_python
+            metadata_adapter: pydantic.TypeAdapter[MetadataColumnSpec] = pydantic.TypeAdapter(  # type: ignore
+                MetadataColumnSpec  # type: ignore
+            )
+            validate_metadata = metadata_adapter.validate_python
+        else:
+
+            def validate_key(value: Any) -> KeyColumnSpec:  # type: ignore[misc]
+                return pydantic.parse_obj_as(KeyColumnSpec, value)  # type: ignore
+
+            def validate_metadata(value: Any) -> MetadataColumnSpec:  # type: ignore[misc]
+                return pydantic.parse_obj_as(MetadataColumnSpec, value)  # type: ignore
+
         for name, subconfig in self["elements"].items():
-            metadata = [ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())]
-            uniqueKeys = [ddl.FieldSpec.fromConfig(c, nullable=False) for c in subconfig.get("keys", ())]
-            if uniqueKeys:
-                uniqueKeys[0].primaryKey = True
+            metadata_columns = [validate_metadata(c) for c in subconfig.get("metadata", ())]
+            unique_keys = [validate_key(c) for c in subconfig.get("keys", ())]
+            for unique_key in unique_keys:
+                unique_key.nullable = False
             if subconfig.get("governor", False):
                 unsupported = {"required", "implied", "viewOf", "alwaysJoin"}
                 if not unsupported.isdisjoint(subconfig.keys()):
@@ -208,8 +229,9 @@ class DimensionConfig(ConfigSubset):
                 yield GovernorDimensionConstructionVisitor(
                     name=name,
                     storage=subconfig["storage"],
-                    metadata=metadata,
-                    uniqueKeys=uniqueKeys,
+                    metadata_columns=metadata_columns,
+                    unique_keys=unique_keys,
+                    doc=subconfig.get("doc", ""),
                 )
             else:
                 yield DatabaseDimensionElementConstructionVisitor(
@@ -217,10 +239,11 @@ class DimensionConfig(ConfigSubset):
                     storage=subconfig["storage"],
                     required=set(subconfig.get("requires", ())),
                     implied=set(subconfig.get("implies", ())),
-                    metadata=metadata,
+                    metadata_columns=metadata_columns,
                     alwaysJoin=subconfig.get("always_join", False),
-                    uniqueKeys=uniqueKeys,
+                    unique_keys=unique_keys,
                     populated_by=subconfig.get("populated_by", None),
+                    doc=subconfig.get("doc", ""),
                 )
 
     def _extractTopologyVisitors(self) -> Iterator[DimensionConstructionVisitor]:

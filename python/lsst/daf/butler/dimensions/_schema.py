@@ -26,23 +26,163 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("addDimensionForeignKey",)
+__all__ = ("addDimensionForeignKey", "DimensionRecordSchema")
 
 import copy
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from typing import TYPE_CHECKING
 
-from lsst.utils.classes import cached_getter
+from lsst.utils.classes import cached_getter, immutable
 
-from .. import ddl
+from .. import arrow_utils, ddl
 from .._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
-from .._named import NamedValueSet
-from .._timespan import TimespanDatabaseRepresentation
+from .._named import NamedValueAbstractSet, NamedValueSet
+from ..column_spec import RegionColumnSpec, TimespanColumnSpec
+from ..timespan_database_representation import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from lsst.daf.relation import ColumnTag
 
-    from ._elements import Dimension, DimensionElement
+    from ._elements import Dimension, DimensionElement, KeyColumnSpec, MetadataColumnSpec
+    from ._group import DimensionGroup
+
+
+@immutable
+class DimensionRecordSchema:
+    """A description of the columns in a dimension element's records.
+
+    Instances of this class should be obtained via `DimensionElement.schema`,
+    where they are cached on first use.
+
+    Parameters
+    ----------
+    element : `DimensionElement`
+        Element this object describes.
+    """
+
+    def __init__(self, element: DimensionElement):
+        self.element = element
+        self.required = NamedValueSet()
+        self.implied = NamedValueSet()
+        self.dimensions = NamedValueSet()
+        self.remainder = NamedValueSet()
+        self.all = NamedValueSet()
+        for dimension in element.required:
+            if dimension != element:
+                key_spec = dimension.primary_key.model_copy(update={"name": dimension.name})
+            else:
+                # A Dimension instance is in its own required dependency graph
+                # (always at the end, because of topological ordering).  In
+                # this case we don't want to rename the field.
+                key_spec = element.primary_key  # type: ignore
+            self.required.add(key_spec)
+            self.dimensions.add(key_spec)
+        for dimension in element.implied:
+            key_spec = dimension.primary_key.model_copy(update={"name": dimension.name})
+            self.implied.add(key_spec)
+            self.dimensions.add(key_spec)
+        self.all.update(self.dimensions)
+        # Add non-primary unique keys.
+        self.remainder.update(element.alternate_keys)
+        # Add other metadata record_fields.
+        self.remainder.update(element.metadata_columns)
+        if element.spatial:
+            self.remainder.add(RegionColumnSpec(nullable=True))
+        if element.temporal:
+            self.remainder.add(TimespanColumnSpec(nullable=True))
+        self.all.update(self.remainder)
+        self.required.freeze()
+        self.implied.freeze()
+        self.dimensions.freeze()
+        self.remainder.freeze()
+        self.all.freeze()
+
+    element: DimensionElement
+    """The dimension element these fields correspond to.
+
+    (`DimensionElement`)
+    """
+
+    required: NamedValueAbstractSet[KeyColumnSpec]
+    """The required dimension columns of this element's records.
+
+    The elements of this set correspond to `DimensionElement.required`, in the
+    same order.
+    """
+
+    implied: NamedValueAbstractSet[KeyColumnSpec]
+    """The implied dimension columns of this element's records.
+
+    The elements of this set correspond to `DimensionElement.implied`, in the
+    same order.
+    """
+
+    dimensions: NamedValueAbstractSet[KeyColumnSpec]
+    """The required and implied dimension columns of this element's records.
+
+    The elements of this set correspond to `DimensionElement.dimensions`, in
+    the same order.
+    """
+
+    remainder: NamedValueAbstractSet[MetadataColumnSpec | RegionColumnSpec | TimespanColumnSpec]
+    """The fields of this table that do not correspond to dimensions.
+
+    This includes alternate keys, metadata columns, and any region or timespan.
+    """
+
+    all: NamedValueAbstractSet[MetadataColumnSpec | RegionColumnSpec | TimespanColumnSpec]
+    """All columns for this dimension element's records, in order."""
+
+    @property
+    def names(self) -> Set[str]:
+        """The names of all columns, in order."""
+        return self.all.names
+
+    def __str__(self) -> str:
+        lines = [f"{self.element.name}: "]
+        for column_spec in self.all:
+            lines.extend(column_spec.display(level=1))
+        return "\n".join(lines)
+
+    def to_arrow(
+        self, remainder_only: bool = False, dimensions: DimensionGroup | None = None
+    ) -> list[arrow_utils.ToArrow]:
+        """Convert this schema to Arrow form.
+
+        Parameters
+        ----------
+        remainder_only : `bool`, optional
+            If `True`, skip the fields in `dimensions` and convert only those
+            in `remainder`.
+        dimensions : `DimensionGroup`, optional
+            Full set of dimensions over which the rows of the table are unique
+            or close to unique.  This is used to determine whether to use
+            Arrow's dictionary encoding to compress duplicate values.  Defaults
+            to this element's `~DimensionElement.minimal_group`, which is
+            appropriate for tables of just the records of this element.
+
+        Returns
+        -------
+        converters : `list` [ `arrow_utils.ToArrow` ]
+            List of objects that can convert `DimensionRecord` attribute values
+            to Arrow records, corresponding exactly to either `all` or
+            `remainder`, depending on ``remainder_only``.
+        """
+        if dimensions is None:
+            dimensions = self.element.minimal_group
+        converters: list[arrow_utils.ToArrow] = []
+        if not remainder_only:
+            for dimension, key_spec in zip(self.element.dimensions, self.dimensions):
+                converters.append(dimension.to_arrow(dimensions, key_spec))
+        for remainder_spec in self.remainder:
+            if remainder_spec.type == "string" and (
+                remainder_spec.name in self.element.metadata_columns.names
+                or dimensions != self.element.minimal_group
+            ):
+                converters.append(remainder_spec.to_arrow().dictionary_encoded())
+            else:
+                converters.append(remainder_spec.to_arrow())
+        return converters
 
 
 def _makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:

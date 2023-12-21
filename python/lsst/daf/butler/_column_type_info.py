@@ -40,8 +40,8 @@ from lsst.daf.relation import ColumnTag, sql
 
 from . import ddl
 from ._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
-from ._timespan import TimespanDatabaseRepresentation
 from .dimensions import Dimension, DimensionUniverse
+from .timespan_database_representation import TimespanDatabaseRepresentation
 
 LogicalColumn = sqlalchemy.sql.ColumnElement | TimespanDatabaseRepresentation
 """A type alias for the types used to represent columns in SQL relations.

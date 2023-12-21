@@ -234,6 +234,10 @@ General utilities
    :no-main-docstr:
    :headings: ^"
 
+.. automodapi:: lsst.daf.butler.timespan_database_representation
+   :no-main-docstr:
+   :headings: ^"
+
 .. automodapi:: lsst.daf.butler.utils
    :no-main-docstr:
    :headings: ^"
