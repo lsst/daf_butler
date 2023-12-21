@@ -300,7 +300,7 @@ class ButlerLogRecords(_ButlerLogRecords):
         records : iterable of `ButlerLogRecord`
             The records to seed this class with.
         """
-        return cls(root=list(records))
+        return cls.model_construct(root=list(records))
 
     @classmethod
     def from_file(cls, filename: str) -> "ButlerLogRecords":
@@ -546,7 +546,7 @@ class ButlerLogRecordHandler(StreamHandler):
 
     def __init__(self) -> None:
         super().__init__()
-        self.records = ButlerLogRecords([])
+        self.records = ButlerLogRecords.model_construct(root=[])
 
     def emit(self, record: LogRecord) -> None:
         self.records.append(record)

@@ -169,7 +169,7 @@ class CacheEntry(BaseModel):
         id_, component, _ = _parse_cache_name(file_in_cache)
 
         stat = os.stat(file.ospath)
-        return cls(
+        return cls.model_construct(
             name=file_in_cache,
             size=stat.st_size,
             ref=id_,
