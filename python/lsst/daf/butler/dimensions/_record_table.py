@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, final, overload
 
 import pyarrow as pa
 import pyarrow.compute as pc
+from lsst.utils.iteration import chunk_iterable
 
 if TYPE_CHECKING:
     from ._elements import DimensionElement
@@ -62,6 +63,11 @@ class DimensionRecordTable:
         `make_arrow_schema` for this element.  This argument is primarily
         intended to serve as the way to reconstruct a `DimensionRecordTable`
         that has been serialized to an Arrow-supported file or IPC format.
+    batch_size : `int`, optional
+        How many elements of ``records`` should be processed at a time, with
+        each batch yielding a `pyarrow.RecordBatch` in the created table.
+        Smaller values will reduce peak memory usage for large iterables.
+        Ignored if ``records`` is empty.
 
     Notes
     -----
@@ -78,6 +84,7 @@ class DimensionRecordTable:
         records: Iterable[DimensionRecord] = (),
         universe: DimensionUniverse | None = None,
         table: pa.Table | None = None,
+        batch_size: int | None = None,
     ):
         if element is None:
             if table is not None and b"element" in table.schema.metadata:
@@ -103,7 +110,13 @@ class DimensionRecordTable:
             },
         )
         self._required_value_fields = [pc.field(name) for name in self._element.schema.required.names]
-        batches = [self._make_batch(records, arrow_schema)]
+        if batch_size is None:
+            batches = [self._make_batch(records, arrow_schema)]
+        else:
+            batches = [
+                self._make_batch(record_chunk, arrow_schema)
+                for record_chunk in chunk_iterable(records, chunk_size=batch_size)
+            ]
         if table is not None:
             batches.extend(table.to_batches())
         self._table: pa.Table = pa.Table.from_batches(batches, arrow_schema)

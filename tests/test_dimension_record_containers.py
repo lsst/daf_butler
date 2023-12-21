@@ -198,6 +198,17 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         )
         self.assertEqual(list(table1), list(table2))
 
+    def test_record_chunk_init(self):
+        """Test constructing a DimensionRecordTable from an iterable in chunks.
+
+        We use 'patch' records for this test because there are enough of them
+        to have multiple chunks.
+        """
+        table1 = DimensionRecordTable(self.universe["patch"], self.records["patch"], batch_size=5)
+        self.assertEqual(len(table1), 12)
+        self.assertEqual([len(batch) for batch in table1.to_arrow().to_batches()], [5, 5, 2])
+        self.assertEqual(list(table1), list(self.records["patch"]))
+
     def test_record_set_const(self):
         """Test attributes and methods of `DimensionRecordSet` that do not
         modify the set.
