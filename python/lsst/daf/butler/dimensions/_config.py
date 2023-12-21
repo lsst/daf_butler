@@ -31,7 +31,7 @@ __all__ = ("DimensionConfig",)
 
 import warnings
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Annotated, Any, TypeAlias
+from typing import Any
 
 import pydantic
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -39,7 +39,6 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 from .._compat import PYDANTIC_V2
 from .._config import Config, ConfigSubset
 from .._topology import TopologicalSpace
-from ..column_spec import default_nullable, not_nullable
 from ._database import (
     DatabaseDimensionElementConstructionVisitor,
     DatabaseTopologicalFamilyConstructionVisitor,
@@ -53,21 +52,6 @@ from .construction import DimensionConstructionBuilder, DimensionConstructionVis
 # The default namespace to use on older dimension config files that only
 # have a version.
 _DEFAULT_NAMESPACE = "daf_butler"
-
-if PYDANTIC_V2:
-    AnnotatedKeyColumnSpec: TypeAlias = Annotated[
-        KeyColumnSpec, pydantic.Field(discriminator="type"), pydantic.AfterValidator(not_nullable)
-    ]
-    AnnotatedMetadataColumnSpec: TypeAlias = Annotated[
-        MetadataColumnSpec, pydantic.Field(discriminator="type"), pydantic.AfterValidator(default_nullable)
-    ]
-else:
-
-    class _KeyColumnModel(pydantic.BaseModel):
-        spec: KeyColumnSpec = pydantic.Field(discriminator="type")
-
-    class _MetadataColumnModel(pydantic.BaseModel):
-        spec: MetadataColumnSpec = pydantic.Field(discriminator="type")
 
 
 class DimensionConfig(ConfigSubset):
@@ -214,24 +198,26 @@ class DimensionConfig(ConfigSubset):
             # MyPy is confused by the typing.Annotated usage and/or how
             # Pydantic annotated TypeAdapter.
             key_adapter: pydantic.TypeAdapter[KeyColumnSpec] = pydantic.TypeAdapter(  # type: ignore
-                AnnotatedKeyColumnSpec  # type: ignore
+                KeyColumnSpec  # type: ignore
             )
             validate_key = key_adapter.validate_python
             metadata_adapter: pydantic.TypeAdapter[MetadataColumnSpec] = pydantic.TypeAdapter(  # type: ignore
-                AnnotatedMetadataColumnSpec  # type: ignore
+                MetadataColumnSpec  # type: ignore
             )
             validate_metadata = metadata_adapter.validate_python
         else:
 
             def validate_key(value: Any) -> KeyColumnSpec:  # type: ignore[misc]
-                return not_nullable(_KeyColumnModel(spec=value).spec)  # type: ignore[return-value]
+                return pydantic.parse_obj_as(KeyColumnSpec, value)  # type: ignore
 
             def validate_metadata(value: Any) -> MetadataColumnSpec:  # type: ignore[misc]
-                return default_nullable(_MetadataColumnModel(spec=value).spec)  # type: ignore[return-value]
+                return pydantic.parse_obj_as(MetadataColumnSpec, value)  # type: ignore
 
         for name, subconfig in self["elements"].items():
             metadata_columns = [validate_metadata(c) for c in subconfig.get("metadata", ())]
             unique_keys = [validate_key(c) for c in subconfig.get("keys", ())]
+            for unique_key in unique_keys:
+                unique_key.nullable = False
             if subconfig.get("governor", False):
                 unsupported = {"required", "implied", "viewOf", "alwaysJoin"}
                 if not unsupported.isdisjoint(subconfig.keys()):

@@ -34,8 +34,9 @@ __all__ = (
 )
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, Union, cast
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeAlias, Union, cast
 
+import pydantic
 from lsst.utils.classes import cached_getter
 
 from .. import arrow_utils, column_spec, ddl
@@ -52,18 +53,24 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._schema import DimensionRecordSchema
     from ._universe import DimensionUniverse
 
-KeyColumnSpec: TypeAlias = Union[
-    column_spec.IntColumnSpec,
-    column_spec.StringColumnSpec,
-    column_spec.HashColumnSpec,
+KeyColumnSpec: TypeAlias = Annotated[
+    Union[
+        column_spec.IntColumnSpec,
+        column_spec.StringColumnSpec,
+        column_spec.HashColumnSpec,
+    ],
+    pydantic.Field(discriminator="type"),
 ]
 
-MetadataColumnSpec: TypeAlias = Union[
-    column_spec.IntColumnSpec,
-    column_spec.StringColumnSpec,
-    column_spec.FloatColumnSpec,
-    column_spec.HashColumnSpec,
-    column_spec.BoolColumnSpec,
+MetadataColumnSpec: TypeAlias = Annotated[
+    Union[
+        column_spec.IntColumnSpec,
+        column_spec.StringColumnSpec,
+        column_spec.FloatColumnSpec,
+        column_spec.HashColumnSpec,
+        column_spec.BoolColumnSpec,
+    ],
+    pydantic.Field(discriminator="type"),
 ]
 
 

@@ -29,8 +29,6 @@ from __future__ import annotations
 
 __all__ = (
     "ColumnSpec",
-    "not_nullable",
-    "default_nullable",
     "IntColumnSpec",
     "StringColumnSpec",
     "HashColumnSpec",
@@ -62,16 +60,9 @@ class _BaseColumnSpec(_BaseModelCompat, ABC):
 
     type: str
 
-    nullable: bool | None = pydantic.Field(
-        default=None,
-        description=textwrap.dedent(
-            """\
-            Whether the column may be ``NULL``.
-
-            The default (represented by `None`) is context-dependent; some
-            fields are ``NOT NULL``, while oethers default to nullable.
-            """
-        ),
+    nullable: bool = pydantic.Field(
+        default=True,
+        description="Whether the column may be ``NULL``.",
     )
 
     def to_sql_spec(self, **kwargs: Any) -> ddl.FieldSpec:
@@ -133,46 +124,6 @@ class _BaseColumnSpec(_BaseModelCompat, ABC):
         return "\n".join(self.display())
 
 
-def not_nullable(c: _BaseColumnSpec) -> _BaseColumnSpec:
-    """Pydantic validator for `ColumnSpec` that requires
-    `ColumnSpec.nullable` to be `False`, and replaces `None` with `False`.
-
-    Parameters
-    ----------
-    c : `ColumnSpec`
-        Original column specification.
-
-    Returns
-    -------
-    c : `ColumnSpec`
-        The object passed in, modified in-place.
-    """
-    if c.nullable is True:
-        raise ValueError("Key columns may not be nullable.")
-    c.nullable = False
-    return c
-
-
-def default_nullable(c: _BaseColumnSpec) -> _BaseColumnSpec:
-    """Pydantic validator for `ColumnSpec` that allows
-    `ColumnSpec.nullable` to be `True` or `False` and replaces `None` with
-    `True`.
-
-    Parameters
-    ----------
-    c : `ColumnSpec`
-        Original column specification.
-
-    Returns
-    -------
-    c : `ColumnSpec`
-        The object passed in, modified in-place.
-    """
-    if c.nullable is None:
-        c.nullable = True
-    return c
-
-
 @final
 class IntColumnSpec(_BaseColumnSpec):
     """Description of an integer column."""
@@ -183,7 +134,6 @@ class IntColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
-        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.uint64(), nullable=self.nullable)
 
 
@@ -204,7 +154,6 @@ class StringColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
-        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.string(), nullable=self.nullable)
 
 
@@ -225,7 +174,6 @@ class HashColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
-        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(
             self.name,
             # The size for Arrow binary columns is a fixed size, not a maximum
@@ -259,7 +207,6 @@ class BoolColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
-        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_primitive(self.name, pa.bool_(), nullable=self.nullable)
 
 
@@ -294,7 +241,6 @@ class TimespanColumnSpec(_BaseColumnSpec):
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
-        assert self.nullable is not None, "nullable=None should be resolved by validators"
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
 
