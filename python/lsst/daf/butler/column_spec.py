@@ -42,7 +42,7 @@ __all__ = (
 
 import textwrap
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Literal, Union, final
+from typing import Annotated, Any, ClassVar, Literal, Union, final
 
 import pyarrow as pa
 import pydantic
@@ -298,12 +298,15 @@ class TimespanColumnSpec(_BaseColumnSpec):
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
 
-ColumnSpec = Union[
-    IntColumnSpec,
-    StringColumnSpec,
-    HashColumnSpec,
-    FloatColumnSpec,
-    BoolColumnSpec,
-    RegionColumnSpec,
-    TimespanColumnSpec,
+ColumnSpec = Annotated[
+    Union[
+        IntColumnSpec,
+        StringColumnSpec,
+        HashColumnSpec,
+        FloatColumnSpec,
+        BoolColumnSpec,
+        RegionColumnSpec,
+        TimespanColumnSpec,
+    ],
+    pydantic.Field(discriminator="type"),
 ]
