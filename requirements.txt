@@ -9,6 +9,7 @@ git+https://github.com/lsst/sphgeom@main#egg=lsst-sphgeom
 git+https://github.com/lsst/utils@main#egg=lsst-utils
 git+https://github.com/lsst/resources@main#egg=lsst-resources
 git+https://github.com/lsst/daf_relation@main#egg=lsst-daf-relation
+pyarrow >= 0.16
 # optional
 backoff >= 1.10
 boto3 >= 1.13
@@ -17,7 +18,6 @@ moto >= 1.3
 pandas >= 1.0
 numpy >= 1.17
 matplotlib >= 3.0.3
-pyarrow >= 0.16
 responses >= 0.12.0
 urllib3 >= 1.25.10
 fastapi
