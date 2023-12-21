@@ -28,7 +28,6 @@
 from __future__ import annotations
 
 __all__ = (
-    "AnyColumnSpec",
     "ColumnSpec",
     "not_nullable",
     "default_nullable",
@@ -54,7 +53,7 @@ from ._compat import _BaseModelCompat
 from ._timespan import Timespan
 
 
-class ColumnSpec(_BaseModelCompat, ABC):
+class _BaseColumnSpec(_BaseModelCompat, ABC):
     """Base class for descriptions of table columns."""
 
     name: str = pydantic.Field(description="""Name of the column.""")
@@ -134,7 +133,7 @@ class ColumnSpec(_BaseModelCompat, ABC):
         return "\n".join(self.display())
 
 
-def not_nullable(c: ColumnSpec) -> ColumnSpec:
+def not_nullable(c: _BaseColumnSpec) -> _BaseColumnSpec:
     """Pydantic validator for `ColumnSpec` that requires
     `ColumnSpec.nullable` to be `False`, and replaces `None` with `False`.
 
@@ -154,7 +153,7 @@ def not_nullable(c: ColumnSpec) -> ColumnSpec:
     return c
 
 
-def default_nullable(c: ColumnSpec) -> ColumnSpec:
+def default_nullable(c: _BaseColumnSpec) -> _BaseColumnSpec:
     """Pydantic validator for `ColumnSpec` that allows
     `ColumnSpec.nullable` to be `True` or `False` and replaces `None` with
     `True`.
@@ -175,7 +174,7 @@ def default_nullable(c: ColumnSpec) -> ColumnSpec:
 
 
 @final
-class IntColumnSpec(ColumnSpec):
+class IntColumnSpec(_BaseColumnSpec):
     """Description of an integer column."""
 
     pytype: ClassVar[type] = int
@@ -189,7 +188,7 @@ class IntColumnSpec(ColumnSpec):
 
 
 @final
-class StringColumnSpec(ColumnSpec):
+class StringColumnSpec(_BaseColumnSpec):
     """Description of a string column."""
 
     pytype: ClassVar[type] = str
@@ -210,7 +209,7 @@ class StringColumnSpec(ColumnSpec):
 
 
 @final
-class HashColumnSpec(ColumnSpec):
+class HashColumnSpec(_BaseColumnSpec):
     """Description of a hash digest."""
 
     pytype: ClassVar[type] = bytes
@@ -237,7 +236,7 @@ class HashColumnSpec(ColumnSpec):
 
 
 @final
-class FloatColumnSpec(ColumnSpec):
+class FloatColumnSpec(_BaseColumnSpec):
     """Description of a float column."""
 
     pytype: ClassVar[type] = float
@@ -251,7 +250,7 @@ class FloatColumnSpec(ColumnSpec):
 
 
 @final
-class BoolColumnSpec(ColumnSpec):
+class BoolColumnSpec(_BaseColumnSpec):
     """Description of a bool column."""
 
     pytype: ClassVar[type] = bool
@@ -265,7 +264,7 @@ class BoolColumnSpec(ColumnSpec):
 
 
 @final
-class RegionColumnSpec(ColumnSpec):
+class RegionColumnSpec(_BaseColumnSpec):
     """Description of a region column."""
 
     name: str = "region"
@@ -284,7 +283,7 @@ class RegionColumnSpec(ColumnSpec):
 
 
 @final
-class TimespanColumnSpec(ColumnSpec):
+class TimespanColumnSpec(_BaseColumnSpec):
     """Description of a timespan column."""
 
     name: str = "timespan"
@@ -299,7 +298,7 @@ class TimespanColumnSpec(ColumnSpec):
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
 
-AnyColumnSpec = Union[
+ColumnSpec = Union[
     IntColumnSpec,
     StringColumnSpec,
     HashColumnSpec,
