@@ -31,16 +31,15 @@ __all__ = ["FindDatasetModel", "GetFileResponseModel"]
 
 from typing import NewType
 
+import pydantic
 from lsst.daf.butler import SerializedDataId
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
-
-from .._compat import _BaseModelCompat
 
 CollectionList = NewType("CollectionList", list[str])
 DatasetTypeName = NewType("DatasetTypeName", str)
 
 
-class FindDatasetModel(_BaseModelCompat):
+class FindDatasetModel(pydantic.BaseModel):
     """Request model for find_dataset."""
 
     data_id: SerializedDataId
@@ -49,7 +48,7 @@ class FindDatasetModel(_BaseModelCompat):
     datastore_records: bool = False
 
 
-class GetFileByDataIdRequestModel(_BaseModelCompat):
+class GetFileByDataIdRequestModel(pydantic.BaseModel):
     """Request model for ``get_file_by_data_id``."""
 
     dataset_type_name: DatasetTypeName

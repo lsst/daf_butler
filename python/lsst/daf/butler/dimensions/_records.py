@@ -33,9 +33,8 @@ from collections.abc import Hashable
 from typing import TYPE_CHECKING, Any, ClassVar, Optional, Tuple
 
 import lsst.sphgeom
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.classes import immutable
-from pydantic import Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
+from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
 from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
@@ -74,7 +73,7 @@ def _subclassDimensionRecord(definition: DimensionElement) -> type[DimensionReco
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
-class SpecificSerializedDimensionRecord(_BaseModelCompat, extra="forbid"):
+class SpecificSerializedDimensionRecord(BaseModel, extra="forbid"):
     """Base model for a specific serialized record content."""
 
 
@@ -142,7 +141,7 @@ _serialized_dimension_record_schema_extra = {
 }
 
 
-class SerializedDimensionRecord(_BaseModelCompat):
+class SerializedDimensionRecord(BaseModel):
     """Simplified model for serializing a `DimensionRecord`."""
 
     definition: str = Field(
@@ -167,16 +166,9 @@ class SerializedDimensionRecord(_BaseModelCompat):
         ],
     )
 
-    if PYDANTIC_V2:
-        model_config = {
-            "json_schema_extra": _serialized_dimension_record_schema_extra,  # type: ignore[typeddict-item]
-        }
-    else:
-
-        class Config:
-            """Local configuration overrides for model."""
-
-            schema_extra = _serialized_dimension_record_schema_extra
+    model_config = {
+        "json_schema_extra": _serialized_dimension_record_schema_extra,  # type: ignore[typeddict-item]
+    }
 
     @classmethod
     def direct(

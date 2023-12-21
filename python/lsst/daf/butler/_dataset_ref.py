@@ -43,7 +43,6 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, TypeAlias, runtime_checkable
 
 import pydantic
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from lsst.utils.classes import immutable
 from pydantic import StrictStr
 
@@ -183,7 +182,7 @@ class DatasetIdFactory:
 _serializedDatasetRefFieldsSet = {"id", "datasetType", "dataId", "run", "component"}
 
 
-class SerializedDatasetRef(_BaseModelCompat):
+class SerializedDatasetRef(pydantic.BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
     id: uuid.UUID
@@ -192,35 +191,19 @@ class SerializedDatasetRef(_BaseModelCompat):
     run: StrictStr | None = None
     component: StrictStr | None = None
 
-    if PYDANTIC_V2:
-        # Can not use "after" validator since in some cases the validator
-        # seems to trigger with the datasetType field not yet set.
-        @pydantic.model_validator(mode="before")  # type: ignore[attr-defined]
-        @classmethod
-        def check_consistent_parameters(cls, data: dict[str, Any]) -> dict[str, Any]:
-            has_datasetType = data.get("datasetType") is not None
-            has_dataId = data.get("dataId") is not None
-            if has_datasetType is not has_dataId:
-                raise ValueError("If specifying datasetType or dataId, must specify both.")
+    # Can not use "after" validator since in some cases the validator
+    # seems to trigger with the datasetType field not yet set.
+    @pydantic.model_validator(mode="before")  # type: ignore[attr-defined]
+    @classmethod
+    def check_consistent_parameters(cls, data: dict[str, Any]) -> dict[str, Any]:
+        has_datasetType = data.get("datasetType") is not None
+        has_dataId = data.get("dataId") is not None
+        if has_datasetType is not has_dataId:
+            raise ValueError("If specifying datasetType or dataId, must specify both.")
 
-            if data.get("component") is not None and has_datasetType:
-                raise ValueError("datasetType can not be set if component is given.")
-            return data
-
-    else:
-
-        @pydantic.validator("dataId")
-        def _check_dataId(cls, v: Any, values: dict[str, Any]) -> Any:  # noqa: N805
-            if v and (d := "datasetType") in values and values[d] is None:
-                raise ValueError("Can not specify 'dataId' without specifying 'datasetType'")
-            return v
-
-        @pydantic.validator("component")
-        def _check_component(cls, v: Any, values: dict[str, Any]) -> Any:  # noqa: N805
-            # Component should not be given if datasetType is given
-            if v and (d := "datasetType") in values and values[d] is not None:
-                raise ValueError(f"datasetType ({values[d]}) can not be set if component is given ({v}).")
-            return v
+        if data.get("component") is not None and has_datasetType:
+            raise ValueError("datasetType can not be set if component is given.")
+        return data
 
     @classmethod
     def direct(

@@ -34,7 +34,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler._compat import _BaseModelCompat
+import pydantic
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
@@ -366,7 +366,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         return (self.from_record, (self.to_record(),))
 
 
-class SerializedStoredFileInfo(_BaseModelCompat):
+class SerializedStoredFileInfo(pydantic.BaseModel):
     """Serialized representation of `StoredFileInfo` properties."""
 
     formatter: str

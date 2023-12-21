@@ -35,8 +35,7 @@ from copy import deepcopy
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from lsst.daf.butler._compat import _BaseModelCompat
-from pydantic import StrictBool, StrictStr
+from pydantic import BaseModel, StrictBool, StrictStr
 
 from ._config_support import LookupKey
 from ._storage_class import StorageClass, StorageClassFactory
@@ -55,7 +54,7 @@ def _safeMakeMappingProxyType(data: Mapping | None) -> Mapping:
     return MappingProxyType(data)
 
 
-class SerializedDatasetType(_BaseModelCompat):
+class SerializedDatasetType(BaseModel):
     """Simplified model of a `DatasetType` suitable for serialization."""
 
     name: StrictStr

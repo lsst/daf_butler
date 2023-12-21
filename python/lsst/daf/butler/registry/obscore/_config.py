@@ -38,11 +38,9 @@ __all__ = [
 ]
 
 import enum
-from collections.abc import Mapping
 from typing import Any
 
 import pydantic
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
 from pydantic import StrictBool, StrictFloat, StrictInt, StrictStr
 
 
@@ -55,7 +53,7 @@ class ExtraColumnType(str, enum.Enum):
     string = "string"
 
 
-class ExtraColumnConfig(_BaseModelCompat):
+class ExtraColumnConfig(pydantic.BaseModel):
     """Configuration class describing specification of additional column in
     obscore table.
     """
@@ -73,7 +71,7 @@ class ExtraColumnConfig(_BaseModelCompat):
     """Documentation string for this column."""
 
 
-class DatasetTypeConfig(_BaseModelCompat):
+class DatasetTypeConfig(pydantic.BaseModel):
     """Configuration describing dataset type-related options."""
 
     dataproduct_type: str
@@ -112,7 +110,7 @@ class DatasetTypeConfig(_BaseModelCompat):
     values, or ExtraColumnConfig mappings."""
 
 
-class SpatialPluginConfig(_BaseModelCompat):
+class SpatialPluginConfig(pydantic.BaseModel):
     """Configuration class for a spatial plugin."""
 
     cls: str
@@ -122,7 +120,7 @@ class SpatialPluginConfig(_BaseModelCompat):
     """Configuration object passed to plugin ``initialize()`` method."""
 
 
-class ObsCoreConfig(_BaseModelCompat):
+class ObsCoreConfig(pydantic.BaseModel):
     """Configuration which controls conversion of Registry datasets into
     obscore records.
 
@@ -208,30 +206,13 @@ class ObsCoreManagerConfig(ObsCoreConfig):
     exactly one collection name which must be TAGGED collection.
     """
 
-    if PYDANTIC_V2:
-
-        @pydantic.model_validator(mode="after")  # type: ignore[attr-defined]
-        def validate_collection_type(self) -> ObsCoreManagerConfig:
-            """Check that contents of ``collections`` is consistent with
-            ``collection_type``.
-            """
-            if self.collection_type is ConfigCollectionType.TAGGED:
-                collections: list[str] | None = self.collections
-                if collections is None or len(collections) != 1:
-                    raise ValueError("'collections' must have one element when 'collection_type' is TAGGED")
-            return self
-
-    else:
-
-        @pydantic.validator("collection_type")
-        def validate_collection_type(
-            cls, value: ConfigCollectionType, values: Mapping[str, Any]  # noqa: N805
-        ) -> Any:
-            """Check that contents of ``collections`` is consistent with
-            ``collection_type``.
-            """
-            if value is ConfigCollectionType.TAGGED:
-                collections: list[str] | None = values["collections"]
-                if collections is None or len(collections) != 1:
-                    raise ValueError("'collections' must have one element when 'collection_type' is TAGGED")
-            return value
+    @pydantic.model_validator(mode="after")
+    def validate_collection_type(self) -> ObsCoreManagerConfig:
+        """Check that contents of ``collections`` is consistent with
+        ``collection_type``.
+        """
+        if self.collection_type is ConfigCollectionType.TAGGED:
+            collections: list[str] | None = self.collections
+            if collections is None or len(collections) != 1:
+                raise ValueError("'collections' must have one element when 'collection_type' is TAGGED")
+        return self
