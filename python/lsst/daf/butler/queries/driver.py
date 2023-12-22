@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("QueryDriver", "PageKey")
+__all__ = ("QueryDriver", "PageKey", "ResultSpec", "ResultPage")
 
 import uuid
 from abc import abstractmethod
