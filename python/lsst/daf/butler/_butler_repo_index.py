@@ -35,6 +35,7 @@ from typing import ClassVar
 from lsst.resources import ResourcePath
 
 from ._config import Config
+from ._utilities.thread_safe_cache import ThreadSafeCache
 
 
 class ButlerRepoIndex:
@@ -57,7 +58,7 @@ class ButlerRepoIndex:
     index_env_var: ClassVar[str] = "DAF_BUTLER_REPOSITORY_INDEX"
     """The name of the environment variable to read to locate the index."""
 
-    _cache: ClassVar[dict[ResourcePath, Config]] = {}
+    _cache: ClassVar[ThreadSafeCache[ResourcePath, Config]] = ThreadSafeCache()
     """Cache of indexes. In most scenarios only one index will be found
     and the environment will not change. In tests this may not be true."""
 
@@ -88,8 +89,9 @@ class ButlerRepoIndex:
         -----
         Does check the cache before reading the file.
         """
-        if index_uri in cls._cache:
-            return cls._cache[index_uri]
+        config = cls._cache.get(index_uri)
+        if config is not None:
+            return config
 
         try:
             repo_index = Config(index_uri)
@@ -100,7 +102,7 @@ class ButlerRepoIndex:
             raise RuntimeError(
                 f"Butler repository index file at {index_uri} could not be read: {type(e).__qualname__} {e}"
             ) from e
-        cls._cache[index_uri] = repo_index
+        repo_index = cls._cache.set_or_get(index_uri, repo_index)
 
         return repo_index
 
