@@ -39,6 +39,7 @@ from typing import Annotated, Literal, TypeAlias, Union, final
 
 import pydantic
 
+from ...column_spec import ColumnType
 from ._base import ColumnExpressionBase
 from ._column_literal import ColumnLiteral
 from ._column_reference import ColumnReference, _ColumnReference
@@ -64,6 +65,16 @@ class UnaryExpression(ColumnExpressionBase):
     def precedence(self) -> int:
         # Docstring inherited.
         return 1
+
+    @property
+    def column_type(self) -> ColumnType:
+        # Docstring inherited.
+        match self.operator:
+            case "-":
+                return self.operand.column_type
+            case "begin_of" | "end_of":
+                return "datetime"
+        raise AssertionError(f"Invalid unary expression operator {self.operator}.")
 
     def __str__(self) -> str:
         s = str(self.operand)
@@ -111,6 +122,13 @@ class BinaryExpression(ColumnExpressionBase):
                 return 2
             case "+" | "-":
                 return 3
+
+    @property
+    def column_type(self) -> ColumnType:
+        # Docstring inherited.
+        # TODO: we assume no mixed-type arithmetic; need to add a validator to
+        # reject such expresions.
+        return self.a.column_type
 
     def __str__(self) -> str:
         a = str(self.a)
@@ -163,6 +181,11 @@ class Reversed(ColumnExpressionBase):
     def precedence(self) -> int:
         # Docstring inherited.
         return self.operand.precedence
+
+    @property
+    def column_type(self) -> ColumnType:
+        # Docstring inherited.
+        return self.operand.column_type
 
     def __str__(self) -> str:
         return f"{self.operand} DESC"

@@ -32,6 +32,7 @@ __all__ = (
     "make_column_literal",
 )
 
+import uuid
 import warnings
 from base64 import b64decode, b64encode
 from functools import cached_property
@@ -45,7 +46,7 @@ from ..._timespan import Timespan
 from ...time_utils import TimeConverter
 from ._base import ColumnExpressionBase
 
-LiteralValue: TypeAlias = Union[int, str, float, bytes, astropy.time.Time, Timespan, Region]
+LiteralValue: TypeAlias = Union[int, str, float, bytes, uuid.UUID, astropy.time.Time, Timespan, Region]
 
 
 @final
@@ -59,7 +60,18 @@ class IntColumnLiteral(ColumnExpressionBase):
 
     @classmethod
     def from_value(cls, value: int) -> IntColumnLiteral:
-        """Construct from the wrapped value."""
+        """Construct from the wrapped value.
+
+        Parameters
+        ----------
+        value : `int`
+            Value to wrap.
+
+        Returns
+        -------
+        expression : `IntColumnLiteral`
+            Literal expression object.
+        """
         return cls.model_construct(value=value)
 
     @property
@@ -75,14 +87,25 @@ class IntColumnLiteral(ColumnExpressionBase):
 class StringColumnLiteral(ColumnExpressionBase):
     """A literal `str` value in a column expression."""
 
-    expression_type: Literal["str"] = "str"
+    expression_type: Literal["string"] = "string"
 
     value: str
     """The wrapped value after base64 encoding."""
 
     @classmethod
     def from_value(cls, value: str) -> StringColumnLiteral:
-        """Construct from the wrapped value."""
+        """Construct from the wrapped value.
+
+        Parameters
+        ----------
+        value : `str`
+            Value to wrap.
+
+        Returns
+        -------
+        expression : `StrColumnLiteral`
+            Literal expression object.
+        """
         return cls.model_construct(value=value)
 
     @property
@@ -105,7 +128,18 @@ class FloatColumnLiteral(ColumnExpressionBase):
 
     @classmethod
     def from_value(cls, value: float) -> FloatColumnLiteral:
-        """Construct from the wrapped value."""
+        """Construct from the wrapped value.
+
+        Parameters
+        ----------
+        value : `float`
+            Value to wrap.
+
+        Returns
+        -------
+        expression : `FloatColumnLiteral`
+            Literal expression object.
+        """
         return cls.model_construct(value=value)
 
     @property
@@ -118,14 +152,14 @@ class FloatColumnLiteral(ColumnExpressionBase):
 
 
 @final
-class BytesColumnLiteral(ColumnExpressionBase):
-    """A literal `bytes` value in a column expression.
+class HashColumnLiteral(ColumnExpressionBase):
+    """A literal `bytes` value representing a hash in a column expression.
 
     The original value is base64-encoded when serialized and decoded on first
     use.
     """
 
-    expression_type: Literal["bytes"] = "bytes"
+    expression_type: Literal["hash"] = "hash"
 
     encoded: bytes
     """The wrapped value after base64 encoding."""
@@ -136,8 +170,19 @@ class BytesColumnLiteral(ColumnExpressionBase):
         return b64decode(self.encoded)
 
     @classmethod
-    def from_value(cls, value: bytes) -> BytesColumnLiteral:
-        """Construct from the wrapped value."""
+    def from_value(cls, value: bytes) -> HashColumnLiteral:
+        """Construct from the wrapped value.
+
+        Parameters
+        ----------
+        value : `bytes`
+            Value to wrap.
+
+        Returns
+        -------
+        expression : `HashColumnLiteral`
+            Literal expression object.
+        """
         return cls.model_construct(encoded=b64encode(value))
 
     @property
@@ -150,14 +195,47 @@ class BytesColumnLiteral(ColumnExpressionBase):
 
 
 @final
-class TimeColumnLiteral(ColumnExpressionBase):
+class UUIDColumnLiteral(ColumnExpressionBase):
+    """A literal `uuid.UUID` value in a column expression."""
+
+    expression_type: Literal["uuid"] = "uuid"
+
+    value: uuid.UUID
+
+    @classmethod
+    def from_value(cls, value: uuid.UUID) -> UUIDColumnLiteral:
+        """Construct from the wrapped value.
+
+        Parameters
+        ----------
+        value : `uuid.UUID`
+            Value to wrap.
+
+        Returns
+        -------
+        expression : `UUIDColumnLiteral`
+            Literal expression object.
+        """
+        return cls.model_construct(value=value)
+
+    @property
+    def precedence(self) -> int:
+        # Docstring inherited.
+        return 0
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
+@final
+class DateTimeColumnLiteral(ColumnExpressionBase):
     """A literal `astropy.time.Time` value in a column expression.
 
     The time is converted into TAI nanoseconds since 1970-01-01 when serialized
     and restored from that on first use.
     """
 
-    expression_type: Literal["time"] = "time"
+    expression_type: Literal["datetime"] = "datetime"
 
     nsec: int
     """TAI nanoseconds since 1970-01-01."""
@@ -168,8 +246,19 @@ class TimeColumnLiteral(ColumnExpressionBase):
         return TimeConverter().nsec_to_astropy(self.nsec)
 
     @classmethod
-    def from_value(cls, value: astropy.time.Time) -> TimeColumnLiteral:
-        """Construct from the wrapped value."""
+    def from_value(cls, value: astropy.time.Time) -> DateTimeColumnLiteral:
+        """Construct from the wrapped value.
+
+        Parameters
+        ----------
+        value : `astropy.time.Time`
+            Value to wrap.
+
+        Returns
+        -------
+        expression : `DateTimeColumnLiteral`
+            Literal expression object.
+        """
         return cls.model_construct(nsec=TimeConverter().astropy_to_nsec(value))
 
     @property
@@ -212,7 +301,18 @@ class TimespanColumnLiteral(ColumnExpressionBase):
 
     @classmethod
     def from_value(cls, value: Timespan) -> TimespanColumnLiteral:
-        """Construct from the wrapped value."""
+        """Construct from the wrapped value.
+
+        Parameters
+        ----------
+        value : `..Timespan`
+            Value to wrap.
+
+        Returns
+        -------
+        expression : `TimespanColumnLiteral`
+            Literal expression object.
+        """
         return cls.model_construct(begin_nsec=value._nsec[0], end_nsec=value._nsec[1])
 
     @property
@@ -244,7 +344,18 @@ class RegionColumnLiteral(ColumnExpressionBase):
 
     @classmethod
     def from_value(cls, value: Region) -> RegionColumnLiteral:
-        """Construct from the wrapped value."""
+        """Construct from the wrapped value.
+
+        Parameters
+        ----------
+        value : `..Region`
+            Value to wrap.
+
+        Returns
+        -------
+        expression : `RegionColumnLiteral`
+            Literal expression object.
+        """
         return cls.model_construct(encoded=b64encode(value.encode()))
 
     @property
@@ -253,22 +364,34 @@ class RegionColumnLiteral(ColumnExpressionBase):
         return 0
 
     def __str__(self) -> str:
-        return "(bytes)"
+        return "(region)"
 
 
 ColumnLiteral: TypeAlias = Union[
     IntColumnLiteral,
     StringColumnLiteral,
     FloatColumnLiteral,
-    BytesColumnLiteral,
-    TimeColumnLiteral,
+    HashColumnLiteral,
+    UUIDColumnLiteral,
+    DateTimeColumnLiteral,
     TimespanColumnLiteral,
     RegionColumnLiteral,
 ]
 
 
 def make_column_literal(value: LiteralValue) -> ColumnLiteral:
-    """Construct a `ColumnLiteral` from the value it will wrap."""
+    """Construct a `ColumnLiteral` from the value it will wrap.
+
+    Parameters
+    ----------
+    value : `LiteralValue`
+        Value to wrap.
+
+    Returns
+    -------
+    expression : `ColumnLiteral`
+        Literal expression object.
+    """
     match value:
         case int():
             return IntColumnLiteral.from_value(value)
@@ -276,10 +399,12 @@ def make_column_literal(value: LiteralValue) -> ColumnLiteral:
             return StringColumnLiteral.from_value(value)
         case float():
             return FloatColumnLiteral.from_value(value)
+        case uuid.UUID():
+            return UUIDColumnLiteral.from_value(value)
         case bytes():
-            return BytesColumnLiteral.from_value(value)
+            return HashColumnLiteral.from_value(value)
         case astropy.time.Time():
-            return TimeColumnLiteral.from_value(value)
+            return DateTimeColumnLiteral.from_value(value)
         case Timespan():
             return TimespanColumnLiteral.from_value(value)
         case Region():

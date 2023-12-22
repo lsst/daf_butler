@@ -153,7 +153,7 @@ class OrderedSlice(RelationBase):
         for column in required_columns:
             match column:
                 case DimensionKeyReference(dimension=dimension):
-                    if dimension not in self.dimensions:
+                    if dimension.name not in self.dimensions:
                         raise InvalidRelationError(
                             f"Order-by column {column} is not in dimensions {self.dimensions}."
                         )
@@ -179,5 +179,18 @@ class OrderedSlice(RelationBase):
 def convert_order_by_args(
     tree: RootRelation, *args: str | OrderExpression | ExpressionProxy
 ) -> list[OrderExpression]:
-    """Convert ``order_by`` arguments to a list of column expressions."""
+    """Convert ``order_by`` arguments to a list of column expressions.
+
+    Parameters
+    ----------
+    tree : `RootRelation`
+        Relation whose rows will be ordered.
+    *args : `OrderExpression`, `str`, or `ExpressionObject`
+        Expression or column names to sort by.
+
+    Returns
+    -------
+    expressions : `list` [ `OrderExpression` ]
+        Standardized expression objects.
+    """
     raise NotImplementedError("TODO")

@@ -40,7 +40,7 @@ from ...dimensions import DataId, DimensionGroup, DimensionUniverse
 from ._base import InvalidRelationError, RelationBase
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import Predicate
-from .joins import JoinArg, JoinTuple, standardize_join_arg
+from .joins import JoinArg, JoinTuple, complete_joins, standardize_join_arg
 
 if TYPE_CHECKING:
     from ._column_expression import OrderExpression
@@ -56,12 +56,33 @@ def make_unit_relation(universe: DimensionUniverse) -> Select:
     relation tree.  This relation is a useful initial state because it is the
     identity relation for joins, in that joining any other relation to this
     relation yields that relation.
+
+    Parameters
+    ----------
+    universe : `..DimensionUniverse`
+        Definitions for all dimensions.
+
+    Returns
+    -------
+    relation : `Select`
+        A select relation with empty dimensions.
     """
     return make_dimension_relation(universe.empty.as_group())
 
 
 def make_dimension_relation(dimensions: DimensionGroup) -> Select:
-    """Make an initial relation with the given dimensions."""
+    """Make an initial relation with the given dimensions.
+
+    Parameters
+    ----------
+    dimensions : `..DimensionGroup`
+        Definitions for all dimensions.
+
+    Returns
+    -------
+    relation : `Select`
+        A select relation with the given dimensions.
+    """
     return Select.model_construct(dimensions=dimensions)
 
 
@@ -169,9 +190,9 @@ class Select(RelationBase):
             for column in where_term.gather_required_columns():
                 match column:
                     case DimensionKeyReference(dimension=dimension):
-                        full_dimension_names.add(dimension)
+                        full_dimension_names.add(dimension.name)
                     case DimensionFieldReference(element=element):
-                        full_dimension_names.update(self.dimensions.universe[element].minimal_group.names)
+                        full_dimension_names.update(element.minimal_group.names)
                     case DatasetFieldReference(dataset_type=dataset_type):
                         if dataset_type not in self.available_dataset_types:
                             raise InvalidRelationError(f"Dataset search for column {column} is not present.")
@@ -191,6 +212,28 @@ class Select(RelationBase):
     def find_first(self, dataset_type: str, dimensions: DimensionGroup) -> FindFirst:
         # Docstring inherited.
         return FindFirst(operand=self, dataset_type=dataset_type, dimensions=dimensions)
+
+    def complete_spatial_joins(self) -> frozenset[JoinTuple]:
+        """Return the complete set of spatial join pairs to include in this
+        relation, adding automatic pairs to the explicit ones as needed.
+        """
+        return complete_joins(
+            self.dimensions,
+            [operand.dimensions.spatial for operand in self.join_operands],
+            self.spatial_joins,
+            "spatial",
+        )
+
+    def complete_temporal_joins(self) -> frozenset[JoinTuple]:
+        """Return the complete set of spatial join pairs to include in this
+        relation, adding automatic pairs to the explicit ones as needed.
+        """
+        return complete_joins(
+            self.dimensions,
+            [operand.dimensions.temporal for operand in self.join_operands],
+            self.temporal_joins,
+            "temporal",
+        )
 
     @pydantic.model_validator(mode="after")
     def _validate_join_operands(self) -> Select:
@@ -228,7 +271,7 @@ class Select(RelationBase):
                 family = self.dimensions.universe[operand].temporal
                 if family is None:
                     raise InvalidRelationError(
-                        f"Temporal join operand {operand!r} is not associated with a region."
+                        f"Temporal join operand {operand!r} is not associated with a timespan."
                     )
                 return family.name
             elif operand in self.available_dataset_types:
@@ -238,7 +281,7 @@ class Select(RelationBase):
                     f"Temporal join operand {operand!r} is not in this join's dimensions or dataset types."
                 )
 
-        for a, b in self.spatial_joins:
+        for a, b in self.temporal_joins:
             if check_operand(a) == check_operand(b):
                 raise InvalidRelationError(
                     f"Temporal join between {a!r} and {b!r} is unnecessary or impossible."
@@ -266,7 +309,7 @@ class Select(RelationBase):
             for column in where_term.gather_required_columns():
                 match column:
                     case DimensionKeyReference(dimension=dimension):
-                        if dimension not in self.dimensions:
+                        if dimension.name not in self.dimensions:
                             raise InvalidRelationError(
                                 f"Column {column} is not in dimensions {self.dimensions}."
                             )
@@ -284,5 +327,21 @@ class Select(RelationBase):
 def convert_where_args(
     tree: RootRelation, *args: str | Predicate | DataId, bind: Mapping[str, Any] | None = None
 ) -> list[Predicate]:
-    """Convert ``where`` arguments to a list of column expressions."""
+    """Convert ``where`` arguments to a list of column expressions.
+
+    Parameters
+    ----------
+    tree : `RootRelation`
+        Relation whose rows will be filtered.
+    *args : `str`, `Predicate`, `DataCoordinate`, or `~collections.abc.Mapping`
+        Expressions to convert into predicates.
+    bind : `~collections.abc.Mapping`, optional
+        Mapping from identifier to literal value used when parsing string
+        expressions.
+
+    Returns
+    -------
+    predicates : `list` [ `Predicate` ]
+        Standardized predicates, to be combined via logical AND.
+    """
     raise NotImplementedError("TODO: Parse string expression.")

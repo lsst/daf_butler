@@ -39,11 +39,12 @@ __all__ = (
 
 from abc import ABC, abstractmethod
 from types import EllipsisType
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, cast
 
 import pydantic
 
 if TYPE_CHECKING:
+    from ...column_spec import ColumnType
     from ...dimensions import DimensionGroup
     from ._column_expression import OrderExpression
     from ._column_reference import ColumnReference
@@ -60,9 +61,7 @@ StringOrWildcard = Annotated[
 ]
 
 
-DatasetFieldName: TypeAlias = Literal[
-    "dataset_id", "dataset_type", "ingest_date", "run", "collection", "rank"
-]
+DatasetFieldName: TypeAlias = Literal["dataset_id", "ingest_date", "run", "collection", "rank", "timespan"]
 
 
 class InvalidRelationError(RuntimeError):
@@ -136,8 +135,6 @@ class RootRelationBase(RelationBase):
 
         Parameters
         ----------
-        other : `Relation`
-            Relation to join to this one.
         spatial : `tuple` [ `str`, `str` ] or `~collections.abc.Iterable` \
                 [ `tuple [ `str`, `str` ], optional
             A pair or pairs of dimension element names whose regions must
@@ -148,7 +145,6 @@ class RootRelationBase(RelationBase):
             dataset type names whose timespans must overlap.  Datasets in
             collections other than `~CollectionType.CALIBRATION` collections
             are associated with an unbounded timespan.
-
 
         Returns
         -------
@@ -163,13 +159,13 @@ class RootRelationBase(RelationBase):
         raise NotImplementedError()
 
     @abstractmethod
-    def where(self, *terms: Predicate) -> RootRelation:
+    def where(self, *args: Predicate) -> RootRelation:
         """Return a new relation that adds row filtering via a boolean column
         expression.
 
         Parameters
         ----------
-        *args
+        *args : `Predicate`
             Boolean column expressions that filter rows.  Arguments are
             combined with logical AND.
 
@@ -249,6 +245,8 @@ class ColumnExpressionBase(RelationTreeBase, ABC):
     be used in type annotations rather than the formally-open base class.
     """
 
+    expression_type: str
+
     @property
     @abstractmethod
     def precedence(self) -> int:
@@ -259,6 +257,16 @@ class ColumnExpressionBase(RelationTreeBase, ABC):
         itself.
         """
         raise NotImplementedError()
+
+    @property
+    def column_type(self) -> ColumnType:
+        """A string enumeration value representing the type of the column
+        expression.
+
+        The default implementation returns the object's `expression_type` tag,
+        which is appropriate only for literal columns.
+        """
+        return cast(ColumnType, self.expression_type)
 
     def gather_required_columns(self) -> set[ColumnReference]:
         """Return a `set` containing all `ColumnReference` objects embedded
@@ -286,6 +294,13 @@ class PredicateBase(RelationTreeBase, ABC):
         itself.
         """
         raise NotImplementedError()
+
+    @property
+    def column_type(self) -> Literal["bool"]:
+        """A string enumeration value representing the type of the column
+        expression.
+        """
+        return "bool"
 
     def gather_required_columns(self) -> set[ColumnReference]:
         """Return a `set` containing all `ColumnReference` objects embedded

@@ -33,6 +33,8 @@ from typing import Annotated, Literal, TypeAlias, Union, final
 
 import pydantic
 
+from ...column_spec import ColumnType
+from ...dimensions import Dimension, DimensionElement
 from ._base import ColumnExpressionBase, DatasetFieldName, StringOrWildcard
 
 
@@ -42,8 +44,8 @@ class DimensionKeyReference(ColumnExpressionBase):
 
     expression_type: Literal["dimension_key"] = "dimension_key"
 
-    dimension: str
-    """Name of the dimension."""
+    dimension: Dimension
+    """Definition of this dimension."""
 
     def gather_required_columns(self) -> set[ColumnReference]:
         # Docstring inherited.
@@ -54,8 +56,18 @@ class DimensionKeyReference(ColumnExpressionBase):
         # Docstring inherited.
         return 0
 
+    @property
+    def qualified_name(self) -> str:
+        # Docstring inherited.
+        return self.dimension.name
+
+    @property
+    def column_type(self) -> ColumnType:
+        # Docstring inherited.
+        return self.dimension.primary_key.type
+
     def __str__(self) -> str:
-        return self.dimension
+        return self.dimension.name
 
 
 @final
@@ -66,8 +78,8 @@ class DimensionFieldReference(ColumnExpressionBase):
 
     expression_type: Literal["dimension_field"] = "dimension_field"
 
-    element: str
-    """Name of the dimension element."""
+    element: DimensionElement
+    """Definition of the dimension element."""
 
     field: str
     """Name of the field (i.e. column) in the element's logical table."""
@@ -80,6 +92,16 @@ class DimensionFieldReference(ColumnExpressionBase):
     def precedence(self) -> int:
         # Docstring inherited.
         return 0
+
+    @property
+    def qualified_name(self) -> str:
+        # Docstring inherited.
+        return f"{self.element}:{self.field}"
+
+    @property
+    def column_type(self) -> ColumnType:
+        # Docstring inherited.
+        return self.element.schema.remainder[self.field].type
 
     def __str__(self) -> str:
         return f"{self.element}.{self.field}"
@@ -107,6 +129,29 @@ class DatasetFieldReference(ColumnExpressionBase):
     def precedence(self) -> int:
         # Docstring inherited.
         return 0
+
+    @property
+    def qualified_name(self) -> str:
+        # Docstring inherited.
+        return f"{self.dataset_type}:{self.field}"
+
+    @property
+    def column_type(self) -> ColumnType:
+        # Docstring inherited.
+        match self.field:
+            case "dataset_id":
+                return "uuid"
+            case "ingest_date":
+                return "datetime"
+            case "run":
+                return "string"
+            case "collection":
+                return "string"
+            case "rank":
+                return "int"
+            case "timespan":
+                return "timespan"
+        raise AssertionError(f"Invalid field {self.field!r} for dataset.")
 
     def __str__(self) -> str:
         if self.dataset_type is ...:
