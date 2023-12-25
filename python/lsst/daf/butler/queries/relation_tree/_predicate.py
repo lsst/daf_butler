@@ -71,8 +71,8 @@ class LogicalAnd(PredicateBase):
 
     def gather_required_columns(self) -> set[ColumnReference]:
         # Docstring inherited.
-        result = self.operands[0].gather_required_columns()
-        for operand in self.operands[1:]:
+        result: set[ColumnReference] = set()
+        for operand in self.operands:
             result.update(operand.gather_required_columns())
         return result
 
@@ -105,8 +105,8 @@ class LogicalOr(PredicateBase):
 
     def gather_required_columns(self) -> set[ColumnReference]:
         # Docstring inherited.
-        result = self.operands[0].gather_required_columns()
-        for operand in self.operands[1:]:
+        result: set[ColumnReference] = set()
+        for operand in self.operands:
             result.update(operand.gather_required_columns())
         return result
 
