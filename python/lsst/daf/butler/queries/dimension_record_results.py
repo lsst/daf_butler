@@ -39,7 +39,13 @@ from typing import Literal
 import pydantic
 
 from .._query_results import DimensionRecordQueryResults
-from ..dimensions import DimensionElement, DimensionRecord, DimensionRecordSet, DimensionRecordTable
+from ..dimensions import (
+    DimensionElement,
+    DimensionGroup,
+    DimensionRecord,
+    DimensionRecordSet,
+    DimensionRecordTable,
+)
 from .driver import PageKey, QueryDriver
 from .relation_tree import RootRelation, convert_order_by_args
 
@@ -49,6 +55,10 @@ class DimensionRecordResultSpec(pydantic.BaseModel):
 
     result_type: Literal["dimension_record"] = "dimension_record"
     element: DimensionElement
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        return self.element.minimal_group
 
 
 @dataclasses.dataclass

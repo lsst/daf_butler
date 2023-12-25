@@ -43,6 +43,7 @@ import pydantic
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
 from .._query_results import SingleTypeDatasetQueryResults
+from ..dimensions import DimensionGroup
 from .data_coordinate_results import (
     DataCoordinateResultSpec,
     DatasetQueryResults,
@@ -58,6 +59,10 @@ class DatasetRefResultSpec(pydantic.BaseModel):
     result_type: Literal["dataset_ref"] = "dataset_ref"
     dataset_type: DatasetType
     include_dimension_records: bool
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        return self.dataset_type.dimensions.as_group()
 
 
 class DatasetRefResultPage(pydantic.BaseModel):
