@@ -48,6 +48,7 @@ from unittest.mock import patch
 
 from lsst.daf.butler import (
     Butler,
+    ButlerFactory,
     DataCoordinate,
     DatasetRef,
     MissingDatasetTypeError,
@@ -252,8 +253,13 @@ class ButlerClientServerTestCase(unittest.TestCase):
                     collections=["collection1", "collection2"],
                     run="collection2",
                 )
+            butler_factory = ButlerFactory({"server": "https://test.example/api/butler"})
+            factory_created_butler = butler_factory.create_butler(label="server", access_token="token")
         self.assertIsInstance(butler, RemoteButler)
+        self.assertIsInstance(factory_created_butler, RemoteButler)
         self.assertEqual(butler._server_url, "https://test.example/api/butler/")
+        self.assertEqual(factory_created_butler._server_url, "https://test.example/api/butler/")
+
         self.assertEqual(butler.collections, ("collection1", "collection2"))
         self.assertEqual(butler.run, "collection2")
 

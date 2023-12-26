@@ -37,6 +37,7 @@ from . import progress  # most symbols are only used by handler implementors
 from . import ddl, time_utils
 from ._butler import *
 from ._butler_config import *
+from ._butler_factory import *
 from ._butler_repo_index import *
 from ._column_categorization import *
 from ._column_tags import *
