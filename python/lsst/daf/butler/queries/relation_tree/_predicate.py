@@ -29,6 +29,8 @@ from __future__ import annotations
 
 __all__ = (
     "Predicate",
+    "LiteralTrue",
+    "LiteralFalse",
     "LogicalAnd",
     "LogicalOr",
     "LogicalNot",
@@ -42,7 +44,7 @@ __all__ = (
 )
 
 import itertools
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, Union, final, overload
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union, final, overload
 
 import pydantic
 
@@ -56,6 +58,65 @@ if TYPE_CHECKING:
 
 
 ComparisonOperator: TypeAlias = Literal["==", "!=", "<", ">", ">=", "<=", "overlaps"]
+
+
+_T = TypeVar("_T", bound="Predicate")
+
+
+@final
+class LiteralTrue(PredicateBase):
+    """A boolean column expression that always evaluates to `True`."""
+
+    predicate_type: Literal["literal_true"] = "literal_true"
+
+    def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
+        return set()
+
+    @property
+    def precedence(self) -> int:
+        # Docstring inherited.
+        return 5
+
+    def logical_and(self, other: _T) -> _T:
+        # Docstring inherited.
+        return other
+
+    def logical_or(self, other: Predicate) -> LiteralTrue:
+        # Docstring inherited.
+        return self
+
+    def logical_not(self) -> LiteralFalse:
+        # Docstring inherited.
+        return LiteralFalse()
+
+
+@final
+class LiteralFalse(PredicateBase):
+    """A boolean column expression that always evaluates to `False`."""
+
+    predicate_type: Literal["literal_false"] = "literal_false"
+
+    def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
+        return set()
+
+    @property
+    def precedence(self) -> int:
+        # Docstring inherited.
+        return 5
+
+    def logical_and(self, other: Predicate) -> LiteralFalse:
+        # Docstring inherited.
+        return self
+
+    def logical_or(self, other: _T) -> _T:
+        # Docstring inherited.
+        return other
+
+    def logical_not(self) -> LiteralTrue:
+        # Docstring inherited.
+        return LiteralTrue()
 
 
 @final
@@ -81,15 +142,35 @@ class LogicalAnd(PredicateBase):
         # Docstring inherited.
         return 6
 
-    def logical_and(self, other: Predicate) -> LogicalAnd:
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
+    def logical_and(self, other: Predicate) -> Predicate:
         # Docstring inherited.
         match other:
             case LogicalAnd():
                 return LogicalAnd.model_construct(operands=self.operands + other.operands)
+            case LiteralTrue():
+                return self
+            case LiteralFalse():
+                return other
             case _:
                 return LogicalAnd.model_construct(operands=self.operands + (other,))
 
-    def logical_or(self, other: Predicate) -> LogicalAnd:
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAnd | LogicalAndOperand | LiteralFalse) -> LogicalAnd:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
         # Docstring inherited.
         match other:
             case LogicalAnd():
@@ -98,6 +179,10 @@ class LogicalAnd(PredicateBase):
                         [a.logical_or(b) for a, b in itertools.product(self.operands, other.operands)]
                     ),
                 )
+            case LiteralTrue():
+                return other
+            case LiteralFalse():
+                return self
             case _:
                 return LogicalAnd.model_construct(
                     operands=tuple([a.logical_or(other) for a in self.operands]),
@@ -141,15 +226,28 @@ class LogicalOr(PredicateBase):
         # Docstring inherited.
         return 7
 
-    def logical_and(self, other: Predicate) -> LogicalAnd:
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
+    def logical_and(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
         return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
+        ...
 
     @overload
     def logical_or(self, other: LogicalAnd) -> LogicalAnd:
         ...
 
     @overload
-    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalOr:
         ...
 
     def logical_or(self, other: Predicate) -> Predicate:
@@ -159,6 +257,10 @@ class LogicalOr(PredicateBase):
                 return LogicalAnd.model_construct(
                     operands=tuple([self.logical_or(b) for b in other.operands])
                 )
+            case LiteralTrue():
+                return other
+            case LiteralFalse():
+                return self
             case LogicalOr():
                 return LogicalOr.model_construct(operands=self.operands + other.operands)
             case _:
@@ -193,15 +295,28 @@ class LogicalNot(PredicateBase):
         # Docstring inherited.
         return 4
 
-    def logical_and(self, other: Predicate) -> LogicalAnd:
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
+    def logical_and(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
         return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LogicalNot:
+        ...
 
     @overload
     def logical_or(self, other: LogicalAnd) -> LogicalAnd:
         ...
 
     @overload
-    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
         ...
 
     def logical_or(self, other: Predicate) -> Predicate:
@@ -237,16 +352,28 @@ class IsNull(PredicateBase):
         # Docstring inherited.
         return 5
 
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
     def logical_and(self, other: Predicate) -> Predicate:
         # Docstring inherited.
         return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
+        ...
 
     @overload
     def logical_or(self, other: LogicalAnd) -> LogicalAnd:
         ...
 
     @overload
-    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
         ...
 
     def logical_or(self, other: Predicate) -> Predicate:
@@ -292,16 +419,28 @@ class Comparison(PredicateBase):
         # Docstring inherited.
         return 5
 
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
     def logical_and(self, other: Predicate) -> Predicate:
         # Docstring inherited.
         return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
+        ...
 
     @overload
     def logical_or(self, other: LogicalAnd) -> LogicalAnd:
         ...
 
     @overload
-    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
         ...
 
     def logical_or(self, other: Predicate) -> Predicate:
@@ -344,16 +483,28 @@ class InContainer(PredicateBase):
         # Docstring inherited.
         return 5
 
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
     def logical_and(self, other: Predicate) -> Predicate:
         # Docstring inherited.
         return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
+        ...
 
     @overload
     def logical_or(self, other: LogicalAnd) -> LogicalAnd:
         ...
 
     @overload
-    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
         ...
 
     def logical_or(self, other: Predicate) -> Predicate:
@@ -398,16 +549,28 @@ class InRange(PredicateBase):
         # Docstring inherited.
         return 5
 
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
     def logical_and(self, other: Predicate) -> Predicate:
         # Docstring inherited.
         return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
+        ...
 
     @overload
     def logical_or(self, other: LogicalAnd) -> LogicalAnd:
         ...
 
     @overload
-    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
         ...
 
     def logical_or(self, other: Predicate) -> Predicate:
@@ -457,16 +620,28 @@ class InRelation(PredicateBase):
         # Docstring inherited.
         return 5
 
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
     def logical_and(self, other: Predicate) -> Predicate:
         # Docstring inherited.
         return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
+        ...
 
     @overload
     def logical_or(self, other: LogicalAnd) -> LogicalAnd:
         ...
 
     @overload
-    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
         ...
 
     def logical_or(self, other: Predicate) -> Predicate:
@@ -502,16 +677,28 @@ class DataCoordinateConstraint(PredicateBase):
         # Docstring inherited.
         return 5
 
+    @overload
+    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
+        ...
+
+    @overload
+    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
+        ...
+
     def logical_and(self, other: Predicate) -> Predicate:
         # Docstring inherited.
         return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
+        ...
 
     @overload
     def logical_or(self, other: LogicalAnd) -> LogicalAnd:
         ...
 
     @overload
-    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
         ...
 
     def logical_or(self, other: Predicate) -> Predicate:
@@ -526,12 +713,36 @@ class DataCoordinateConstraint(PredicateBase):
         return str(DataCoordinate.from_required_values(self.dimensions, self.values))
 
 
-def _base_logical_and(a: LogicalAndOperand, b: Predicate) -> LogicalAnd:
+@overload
+def _base_logical_and(a: LogicalAndOperand, b: LiteralTrue) -> LogicalAndOperand:
+    ...
+
+
+@overload
+def _base_logical_and(a: LogicalAndOperand, b: LiteralFalse) -> LiteralFalse:
+    ...
+
+
+@overload
+def _base_logical_and(a: LogicalAndOperand, b: LogicalAnd | LogicalAndOperand) -> LogicalAnd:
+    ...
+
+
+def _base_logical_and(a: LogicalAndOperand, b: Predicate) -> Predicate:
     match b:
         case LogicalAnd():
             return LogicalAnd.model_construct(operands=(a,) + b.operands)
+        case LiteralTrue():
+            return a
+        case LiteralFalse():
+            return b
         case _:
             return LogicalAnd.model_construct(operands=(a, b))
+
+
+@overload
+def _base_logical_or(a: LogicalOrOperand, b: LiteralTrue) -> LiteralTrue:
+    ...
 
 
 @overload
@@ -540,7 +751,7 @@ def _base_logical_or(a: LogicalOrOperand, b: LogicalAnd) -> LogicalAnd:
 
 
 @overload
-def _base_logical_or(a: LogicalOrOperand, b: LogicalAndOperand) -> LogicalAndOperand:
+def _base_logical_or(a: LogicalOrOperand, b: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
     ...
 
 
@@ -550,6 +761,10 @@ def _base_logical_or(a: LogicalOrOperand, b: Predicate) -> Predicate:
             return LogicalAnd.model_construct(
                 operands=tuple(_base_logical_or(a, b_operand) for b_operand in b.operands)
             )
+        case LiteralTrue():
+            return b
+        case LiteralFalse():
+            return a
         case LogicalOr():
             return LogicalOr.model_construct(operands=(a,) + b.operands)
         case _:
@@ -573,6 +788,6 @@ LogicalOrOperand = Annotated[_LogicalOrOperand, pydantic.Field(discriminator="pr
 LogicalAndOperand = Annotated[_LogicalAndOperand, pydantic.Field(discriminator="predicate_type")]
 
 Predicate = Annotated[
-    Union[_LogicalAndOperand, LogicalAnd],
+    Union[_LogicalAndOperand, LogicalAnd, LiteralTrue, LiteralFalse],
     pydantic.Field(discriminator="predicate_type"),
 ]
