@@ -116,14 +116,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     ----------
     config : `ButlerConfig`
         The configuration for this Butler instance.
-    options : `ButlerInstanceOptions`
-        Default values and other settings for the Butler instance.
-    without_datastore : `bool`, optional
-        If `True` do not attach a datastore to this butler. Any attempts
-        to use a datastore will fail.
-    **kwargs : `str`
-        Default data ID key-value pairs.  These may only identify "governor"
-        dimensions like ``instrument`` and ``skymap``.
+    registry : `SqlRegistry`
+        The object that manages dataset metadata and relationships.
+    datastore : Datastore
+        The object that manages actual dataset storage.
+    storageClasses : StorageClassFactory
+        An object that maps known storage class names to objects that fully
+        describe them.
+
+    Notes
+    -----
+    Most users should call `DirectButler`.``create_from_config`` or the
+    top-level `Butler`.``from_config`` instead of using this constructor
+    directly.
     """
 
     # This is __new__ instead of __init__ because we have to support
@@ -136,52 +141,18 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     # is returned from Butler.__new__()
     def __new__(
         cls,
-        config: ButlerConfig,
         *,
-        options: ButlerInstanceOptions,
-        without_datastore: bool = False,
+        config: ButlerConfig,
+        registry: SqlRegistry,
+        datastore: Datastore,
+        storageClasses: StorageClassFactory,
     ) -> DirectButler:
         self = cast(DirectButler, super().__new__(cls))
-
-        defaults = RegistryDefaults(
-            collections=options.collections, run=options.run, infer=options.inferDefaults, **options.kwargs
-        )
         self._config = config
-        try:
-            butlerRoot = self._config.get("root", self._config.configDir)
-            writeable = options.writeable
-            if writeable is None:
-                writeable = options.run is not None
-            self._registry = _RegistryFactory(self._config).from_config(
-                butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
-            )
-            if without_datastore:
-                self._datastore = NullDatastore(None, None)
-            else:
-                self._datastore = Datastore.fromConfig(
-                    self._config, self._registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
-                )
-            # TODO: Once datastore drops dependency on registry we can
-            # construct datastore first and pass opaque tables to registry
-            # constructor.
-            self._registry.make_datastore_tables(self._datastore.get_opaque_table_definitions())
-            self.storageClasses = StorageClassFactory()
-            self.storageClasses.addFromConfig(self._config)
-        except Exception:
-            # Failures here usually mean that configuration is incomplete,
-            # just issue an error message which includes config file URI.
-            _LOG.error(f"Failed to instantiate Butler from config {self._config.configFile}.")
-            raise
+        self._registry = registry
+        self._datastore = datastore
+        self.storageClasses = storageClasses
 
-        if "run" in self._config or "collection" in self._config:
-            raise ValueError("Passing a run or collection via configuration is no longer supported.")
-
-        self._finish_init()
-
-        return self
-
-    def _finish_init(self) -> None:
-        """Finish the setup of a new DirectButler instance."""
         # For execution butler the datastore needs a special
         # dependency-inversion trick. This is not used by regular butler,
         # but we do not have a way to distinguish regular butler from execution
@@ -189,6 +160,64 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         self._datastore.set_retrieve_dataset_type_method(self._retrieve_dataset_type)
 
         self._registry_shim = RegistryShim(self)
+
+        return self
+
+    @classmethod
+    def create_from_config(
+        cls,
+        config: ButlerConfig,
+        *,
+        options: ButlerInstanceOptions,
+        without_datastore: bool = False,
+    ) -> DirectButler:
+        """Construct a Butler instance from a configuration file.
+
+        Parameters
+        ----------
+        config : `ButlerConfig`
+            The configuration for this Butler instance.
+        options : `ButlerInstanceOptions`
+            Default values and other settings for the Butler instance.
+        without_datastore : `bool`, optional
+            If `True` do not attach a datastore to this butler. Any attempts
+            to use a datastore will fail.
+        """
+        if "run" in config or "collection" in config:
+            raise ValueError("Passing a run or collection via configuration is no longer supported.")
+
+        defaults = RegistryDefaults(
+            collections=options.collections, run=options.run, infer=options.inferDefaults, **options.kwargs
+        )
+        try:
+            butlerRoot = config.get("root", config.configDir)
+            writeable = options.writeable
+            if writeable is None:
+                writeable = options.run is not None
+            registry = _RegistryFactory(config).from_config(
+                butlerRoot=butlerRoot, writeable=writeable, defaults=defaults
+            )
+            if without_datastore:
+                datastore: Datastore = NullDatastore(None, None)
+            else:
+                datastore = Datastore.fromConfig(
+                    config, registry.getDatastoreBridgeManager(), butlerRoot=butlerRoot
+                )
+            # TODO: Once datastore drops dependency on registry we can
+            # construct datastore first and pass opaque tables to registry
+            # constructor.
+            registry.make_datastore_tables(datastore.get_opaque_table_definitions())
+            storageClasses = StorageClassFactory()
+            storageClasses.addFromConfig(config)
+
+            return DirectButler(
+                config=config, registry=registry, datastore=datastore, storageClasses=storageClasses
+            )
+        except Exception:
+            # Failures here usually mean that configuration is incomplete,
+            # just issue an error message which includes config file URI.
+            _LOG.error(f"Failed to instantiate Butler from config {config.configFile}.")
+            raise
 
     def _clone(
         self,
@@ -199,17 +228,14 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         **kwargs: Any,
     ) -> DirectButler:
         # Docstring inherited
-        new_butler = cast(DirectButler, super().__new__(type(self)))
         defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
 
-        new_butler._registry = self._registry.copy(defaults)
-        new_butler._datastore = self._datastore
-        new_butler.storageClasses = self.storageClasses
-        new_butler._config = self._config
-
-        new_butler._finish_init()
-
-        return new_butler
+        return DirectButler(
+            registry=self._registry.copy(defaults),
+            config=self._config,
+            datastore=self._datastore,
+            storageClasses=self.storageClasses,
+        )
 
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
@@ -261,7 +287,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         butler : `Butler`
             A new `Butler` instance.
         """
-        return cls(
+        return cls.create_from_config(
             config=config,
             options=ButlerInstanceOptions(
                 collections=collections, run=run, writeable=writeable, kwargs=defaultDataId

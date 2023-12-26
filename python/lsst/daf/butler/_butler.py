@@ -299,7 +299,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         if butler_class_name is None or butler_class_name == "lsst.daf.butler.direct_butler.DirectButler":
             from .direct_butler import DirectButler
 
-            return DirectButler(
+            return DirectButler.create_from_config(
                 butler_config,
                 options=options,
                 without_datastore=without_datastore,
