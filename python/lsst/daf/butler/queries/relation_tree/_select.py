@@ -39,7 +39,7 @@ import pydantic
 from ...dimensions import DataId, DimensionGroup, DimensionUniverse
 from ._base import InvalidRelationError, RelationBase
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
-from ._predicate import Predicate
+from ._predicate import LiteralTrue, Predicate
 from .joins import JoinArg, JoinTuple, complete_joins, standardize_join_arg
 
 if TYPE_CHECKING:
@@ -128,7 +128,7 @@ class Select(RelationBase):
     whose timespans must overlap.
     """
 
-    where_terms: tuple[Predicate, ...] = ()
+    where_predicate: Predicate = LiteralTrue()
     """Boolean expression trees whose logical AND defines a row filter."""
 
     @cached_property
@@ -155,7 +155,7 @@ class Select(RelationBase):
                     join_operands=self.join_operands + other.join_operands,
                     spatial_joins=(self.spatial_joins | other.spatial_joins),
                     temporal_joins=(self.spatial_joins | other.spatial_joins),
-                    where_terms=self.where_terms + other.where_terms,
+                    where_predicate=self.where_predicate.logical_and(other.where_predicate),
                 )
             case FindFirst() | OrderedSlice():
                 return other.join(self)
@@ -165,7 +165,7 @@ class Select(RelationBase):
                     join_operands=self.join_operands + (other,),
                     spatial_joins=(self.spatial_joins),
                     temporal_joins=(self.spatial_joins),
-                    where_terms=self.where_terms,
+                    where_predicate=self.where_predicate,
                 )
         raise AssertionError("Invalid relation type for join.")
 
@@ -180,12 +180,13 @@ class Select(RelationBase):
             join_operands=self.join_operands,
             spatial_joins=self.spatial_joins | standardize_join_arg(spatial, "spatial"),
             temporal_joins=self.temporal_joins | standardize_join_arg(temporal, "temporal"),
-            where_terms=self.where_terms,
+            where_predicate=self.where_predicate,
         )
 
     def where(self, *terms: Predicate) -> Select:
         # Docstring inherited.
         full_dimension_names: set[str] = set(self.dimensions.names)
+        where_predicate = self.where_predicate
         for where_term in terms:
             for column in where_term.gather_required_columns():
                 match column:
@@ -196,13 +197,14 @@ class Select(RelationBase):
                     case DatasetFieldReference(dataset_type=dataset_type):
                         if dataset_type not in self.available_dataset_types:
                             raise InvalidRelationError(f"Dataset search for column {column} is not present.")
+            where_predicate = where_predicate.logical_and(where_term)
         full_dimensions = self.dimensions.universe.conform(full_dimension_names)
         return Select(
             dimensions=full_dimensions,
             join_operands=self.join_operands,
             spatial_joins=self.spatial_joins,
             temporal_joins=self.temporal_joins,
-            where_terms=self.where_terms + terms,
+            where_predicate=where_predicate,
         )
 
     def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> OrderedSlice:
@@ -305,22 +307,17 @@ class Select(RelationBase):
 
     @pydantic.model_validator(mode="after")
     def _validate_required_columns(self) -> Select:
-        for where_term in self.where_terms:
-            for column in where_term.gather_required_columns():
-                match column:
-                    case DimensionKeyReference(dimension=dimension):
-                        if dimension.name not in self.dimensions:
-                            raise InvalidRelationError(
-                                f"Column {column} is not in dimensions {self.dimensions}."
-                            )
-                    case DimensionFieldReference(element=element):
-                        if element not in self.dimensions.elements:
-                            raise InvalidRelationError(
-                                f"Column {column} is not in dimensions {self.dimensions}."
-                            )
-                    case DatasetFieldReference(dataset_type=dataset_type):
-                        if dataset_type not in self.available_dataset_types:
-                            raise InvalidRelationError(f"Dataset search for column {column} is not present.")
+        for column in self.where_predicate.gather_required_columns():
+            match column:
+                case DimensionKeyReference(dimension=dimension):
+                    if dimension.name not in self.dimensions:
+                        raise InvalidRelationError(f"Column {column} is not in dimensions {self.dimensions}.")
+                case DimensionFieldReference(element=element):
+                    if element not in self.dimensions.elements:
+                        raise InvalidRelationError(f"Column {column} is not in dimensions {self.dimensions}.")
+                case DatasetFieldReference(dataset_type=dataset_type):
+                    if dataset_type not in self.available_dataset_types:
+                        raise InvalidRelationError(f"Dataset search for column {column} is not present.")
         return self
 
 
