@@ -38,7 +38,7 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
 from lsst.utils.logging import getLogger
 
-from ._butler_config import ButlerConfig
+from ._butler_config import ButlerConfig, ButlerType
 from ._butler_instance_options import ButlerInstanceOptions
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
@@ -291,12 +291,10 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         # Load the Butler configuration.  This may involve searching the
         # environment to locate a configuration file.
         butler_config = ButlerConfig(config, searchPaths=searchPaths, without_datastore=without_datastore)
-        # Configuration optionally includes a class name specifying which
-        # implementation to use, DirectButler or RemoteButler.
-        butler_class_name = butler_config.get("cls")
+        butler_type = butler_config.get_butler_type()
 
         # Make DirectButler if class is not specified.
-        if butler_class_name is None or butler_class_name == "lsst.daf.butler.direct_butler.DirectButler":
+        if butler_type == ButlerType.DIRECT:
             from .direct_butler import DirectButler
 
             return DirectButler.create_from_config(
@@ -304,15 +302,11 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 options=options,
                 without_datastore=without_datastore,
             )
-        elif butler_class_name == "lsst.daf.butler.remote_butler.RemoteButler":
+        elif butler_type == ButlerType.REMOTE:
             from .remote_butler import RemoteButlerFactory
 
             factory = RemoteButlerFactory.create_factory_from_config(butler_config)
             return factory.create_butler_with_credentials_from_environment(butler_options=options)
-        else:
-            raise ValueError(
-                f"Butler configuration requests to load unknown Butler class {butler_class_name}"
-            )
 
     @staticmethod
     def makeRepo(
