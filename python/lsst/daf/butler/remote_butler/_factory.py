@@ -36,7 +36,7 @@ from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
 from ._authentication import get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
-from ._remote_butler import RemoteButler
+from ._remote_butler import RemoteButler, RemoteButlerCache
 
 
 class RemoteButlerFactory:
@@ -67,6 +67,7 @@ class RemoteButlerFactory:
             self.http_client = http_client
         else:
             self.http_client = httpx.Client()
+        self._cache = RemoteButlerCache()
 
     @staticmethod
     def create_factory_from_config(config: ButlerConfig) -> RemoteButlerFactory:
@@ -95,6 +96,7 @@ class RemoteButlerFactory:
             access_token=access_token,
             options=butler_options,
             server_url=self.server_url,
+            cache=self._cache,
         )
 
     def create_butler_with_credentials_from_environment(

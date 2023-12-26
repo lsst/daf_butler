@@ -31,6 +31,7 @@ __all__ = ("RemoteButler",)
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar, cast
 
 import httpx
@@ -46,6 +47,7 @@ from .._compat import _BaseModelCompat
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
+from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, RegistryDefaults
@@ -89,9 +91,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         Default values and other settings for the Butler instance.
     http_client : `httpx.Client`
         HTTP connection pool we will use to connect to the server.
-    access_token : `str` or `None`, optional
+    access_token : `str`
         Rubin Science Platform Gafaelfawr access token that will be used to
         authenticate with the server.
+    cache : RemoteButlerCache
+        Cache of data shared between multiple RemoteButler instances connected
+        to the same server.
 
     Notes
     -----
@@ -99,11 +104,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     `Butler.from_config` or `RemoteButlerFactory`.
     """
 
-    _dimensions: DimensionUniverse | None
     _registry_defaults: RegistryDefaults
     _client: httpx.Client
     _server_url: str
     _headers: dict[str, str]
+    _cache: RemoteButlerCache
 
     # This is __new__ instead of __init__ because we have to support
     # instantiation via the legacy constructor Butler.__new__(), which
@@ -114,13 +119,19 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     # a second time with the original arguments to Butler() when the instance
     # is returned from Butler.__new__()
     def __new__(
-        cls, *, server_url: str, options: ButlerInstanceOptions, http_client: httpx.Client, access_token: str
+        cls,
+        *,
+        server_url: str,
+        options: ButlerInstanceOptions,
+        http_client: httpx.Client,
+        access_token: str,
+        cache: RemoteButlerCache,
     ) -> RemoteButler:
         self = cast(RemoteButler, super().__new__(cls))
 
         self._client = http_client
         self._server_url = server_url
-        self._dimensions = None
+        self._cache = cache
 
         # TODO: RegistryDefaults should have finish() called on it, but this
         # requires getCollectionSummary() which is not yet implemented
@@ -142,15 +153,19 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     @property
     def dimensions(self) -> DimensionUniverse:
         # Docstring inherited.
-        if self._dimensions is not None:
-            return self._dimensions
+        with self._cache.access() as cache:
+            if cache.dimensions is not None:
+                return cache.dimensions
 
         response = self._client.get(self._get_url("universe"))
         response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
-        self._dimensions = DimensionUniverse(config)
-        return self._dimensions
+        universe = DimensionUniverse(config)
+        with self._cache.access() as cache:
+            if cache.dimensions is None:
+                cache.dimensions = universe
+            return cache.dimensions
 
     def _simplify_dataId(self, dataId: DataId | None, kwargs: dict[str, DataIdValue]) -> SerializedDataId:
         """Take a generic Data ID and convert it to a serializable form.
@@ -649,3 +664,13 @@ def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> D
         return datasetRefOrType.datasetType
     else:
         return None
+
+
+@dataclass
+class _RemoteButlerCacheData:
+    dimensions: DimensionUniverse | None = None
+
+
+class RemoteButlerCache(LockedObject[_RemoteButlerCacheData]):
+    def __init__(self) -> None:
+        super().__init__(_RemoteButlerCacheData())
