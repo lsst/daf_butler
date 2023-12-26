@@ -37,12 +37,12 @@ __all__ = (
     "InContainer",
     "InRange",
     "InRelation",
-    "StringPredicate",
     "DataCoordinateConstraint",
     "ComparisonOperator",
 )
 
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, Union, final
+import itertools
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, Union, final, overload
 
 import pydantic
 
@@ -66,7 +66,7 @@ class LogicalAnd(PredicateBase):
 
     predicate_type: Literal["and"] = "and"
 
-    operands: tuple[Predicate, ...] = pydantic.Field(min_length=2)
+    operands: tuple[LogicalAndOperand, ...] = pydantic.Field(min_length=2)
     """Upstream boolean expressions to combine."""
 
     def gather_required_columns(self) -> set[ColumnReference]:
@@ -81,15 +81,41 @@ class LogicalAnd(PredicateBase):
         # Docstring inherited.
         return 6
 
+    def logical_and(self, other: Predicate) -> LogicalAnd:
+        # Docstring inherited.
+        match other:
+            case LogicalAnd():
+                return LogicalAnd.model_construct(operands=self.operands + other.operands)
+            case _:
+                return LogicalAnd.model_construct(operands=self.operands + (other,))
+
+    def logical_or(self, other: Predicate) -> LogicalAnd:
+        # Docstring inherited.
+        match other:
+            case LogicalAnd():
+                return LogicalAnd.model_construct(
+                    operands=tuple(
+                        [a.logical_or(b) for a, b in itertools.product(self.operands, other.operands)]
+                    ),
+                )
+            case _:
+                return LogicalAnd.model_construct(
+                    operands=tuple([a.logical_or(other) for a in self.operands]),
+                )
+
+    def logical_not(self) -> Predicate:
+        # Docstring inherited.
+        first, *rest = self.operands
+        result: Predicate = first.logical_not()
+        for operand in rest:
+            result = result.logical_or(operand.logical_not())
+        return result
+
     def __str__(self) -> str:
         return " AND ".join(
             str(operand) if operand.precedence <= self.precedence else f"({operand})"
             for operand in self.operands
         )
-
-    def _flatten_and(self) -> tuple[Predicate, ...]:
-        # Docstring inherited.
-        return self.operands
 
 
 @final
@@ -100,7 +126,7 @@ class LogicalOr(PredicateBase):
 
     predicate_type: Literal["or"] = "or"
 
-    operands: tuple[Predicate, ...] = pydantic.Field(min_length=2)
+    operands: tuple[LogicalOrOperand, ...] = pydantic.Field(min_length=2)
     """Upstream boolean expressions to combine."""
 
     def gather_required_columns(self) -> set[ColumnReference]:
@@ -115,15 +141,38 @@ class LogicalOr(PredicateBase):
         # Docstring inherited.
         return 7
 
+    def logical_and(self, other: Predicate) -> LogicalAnd:
+        return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        match other:
+            case LogicalAnd():
+                return LogicalAnd.model_construct(
+                    operands=tuple([self.logical_or(b) for b in other.operands])
+                )
+            case LogicalOr():
+                return LogicalOr.model_construct(operands=self.operands + other.operands)
+            case _:
+                return LogicalOr.model_construct(operands=self.operands + (other,))
+
+    def logical_not(self) -> LogicalAnd:
+        # Docstring inherited.
+        return LogicalAnd.model_construct(operands=tuple([x.logical_not() for x in self.operands]))
+
     def __str__(self) -> str:
         return " OR ".join(
             str(operand) if operand.precedence <= self.precedence else f"({operand})"
             for operand in self.operands
         )
-
-    def _flatten_or(self) -> tuple[Predicate, ...]:
-        # Docstring inherited.
-        return self.operands
 
 
 @final
@@ -132,7 +181,7 @@ class LogicalNot(PredicateBase):
 
     predicate_type: Literal["not"] = "not"
 
-    operand: Predicate
+    operand: LogicalNotOperand
     """Upstream boolean expression to invert."""
 
     def gather_required_columns(self) -> set[ColumnReference]:
@@ -143,6 +192,25 @@ class LogicalNot(PredicateBase):
     def precedence(self) -> int:
         # Docstring inherited.
         return 4
+
+    def logical_and(self, other: Predicate) -> LogicalAnd:
+        return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_or(self, other)
+
+    def logical_not(self) -> LogicalNotOperand:
+        # Docstring inherited.
+        return self.operand
 
     def __str__(self) -> str:
         if self.operand.precedence <= self.precedence:
@@ -168,6 +236,26 @@ class IsNull(PredicateBase):
     def precedence(self) -> int:
         # Docstring inherited.
         return 5
+
+    def logical_and(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_or(self, other)
+
+    def logical_not(self) -> LogicalOrOperand:
+        # Docstring inherited.
+        return LogicalNot.model_construct(operand=self)
 
     def __str__(self) -> str:
         if self.operand.precedence <= self.precedence:
@@ -204,6 +292,26 @@ class Comparison(PredicateBase):
         # Docstring inherited.
         return 5
 
+    def logical_and(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_or(self, other)
+
+    def logical_not(self) -> LogicalOrOperand:
+        # Docstring inherited.
+        return LogicalNot.model_construct(operand=self)
+
     def __str__(self) -> str:
         a = str(self.a) if self.a.precedence <= self.precedence else f"({self.a})"
         b = str(self.b) if self.b.precedence <= self.precedence else f"({self.b})"
@@ -235,6 +343,26 @@ class InContainer(PredicateBase):
     def precedence(self) -> int:
         # Docstring inherited.
         return 5
+
+    def logical_and(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_or(self, other)
+
+    def logical_not(self) -> LogicalOrOperand:
+        # Docstring inherited.
+        return LogicalNot.model_construct(operand=self)
 
     def __str__(self) -> str:
         m = str(self.member) if self.member.precedence <= self.precedence else f"({self.member})"
@@ -269,6 +397,26 @@ class InRange(PredicateBase):
     def precedence(self) -> int:
         # Docstring inherited.
         return 5
+
+    def logical_and(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_or(self, other)
+
+    def logical_not(self) -> LogicalOrOperand:
+        # Docstring inherited.
+        return LogicalNot.model_construct(operand=self)
 
     def __str__(self) -> str:
         s = f"{self.start if self.start else ''}..{self.stop if self.stop is not None else ''}"
@@ -309,39 +457,30 @@ class InRelation(PredicateBase):
         # Docstring inherited.
         return 5
 
+    def logical_and(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_or(self, other)
+
+    def logical_not(self) -> LogicalOrOperand:
+        # Docstring inherited.
+        return LogicalNot.model_construct(operand=self)
+
     def __str__(self) -> str:
         m = str(self.member) if self.member.precedence <= self.precedence else f"({self.member})"
         c = str(self.column) if self.column.precedence <= self.precedence else f"({self.column})"
         return f"{m} IN [{{{self.relation}}}.{c}]"
-
-
-@final
-class StringPredicate(PredicateBase):
-    """A wrapper for boolean column expressions created by parsing a string
-    expression.
-
-    Remembering the original string is useful for error reporting.
-    """
-
-    predicate_type: Literal["string_predicate"] = "string_predicate"
-
-    where: str
-    """The string expression."""
-
-    tree: Predicate
-    """Boolean expression tree created from the string expression."""
-
-    def gather_required_columns(self) -> set[ColumnReference]:
-        # Docstring inherited.
-        return self.tree.gather_required_columns()
-
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 5
-
-    def __str__(self) -> str:
-        return f'parsed("{self.where}")'
 
 
 @final
@@ -363,22 +502,77 @@ class DataCoordinateConstraint(PredicateBase):
         # Docstring inherited.
         return 5
 
+    def logical_and(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_and(self, other)
+
+    @overload
+    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
+        ...
+
+    @overload
+    def logical_or(self, other: LogicalAndOperand) -> LogicalOr:
+        ...
+
+    def logical_or(self, other: Predicate) -> Predicate:
+        # Docstring inherited.
+        return _base_logical_or(self, other)
+
+    def logical_not(self) -> LogicalOrOperand:
+        # Docstring inherited.
+        return LogicalNot.model_construct(operand=self)
+
     def __str__(self) -> str:
         return str(DataCoordinate.from_required_values(self.dimensions, self.values))
 
 
+def _base_logical_and(a: LogicalAndOperand, b: Predicate) -> LogicalAnd:
+    match b:
+        case LogicalAnd():
+            return LogicalAnd.model_construct(operands=(a,) + b.operands)
+        case _:
+            return LogicalAnd.model_construct(operands=(a, b))
+
+
+@overload
+def _base_logical_or(a: LogicalOrOperand, b: LogicalAnd) -> LogicalAnd:
+    ...
+
+
+@overload
+def _base_logical_or(a: LogicalOrOperand, b: LogicalAndOperand) -> LogicalAndOperand:
+    ...
+
+
+def _base_logical_or(a: LogicalOrOperand, b: Predicate) -> Predicate:
+    match b:
+        case LogicalAnd():
+            return LogicalAnd.model_construct(
+                operands=tuple(_base_logical_or(a, b_operand) for b_operand in b.operands)
+            )
+        case LogicalOr():
+            return LogicalOr.model_construct(operands=(a,) + b.operands)
+        case _:
+            return LogicalOr.model_construct(operands=(a, b))
+
+
+_LogicalNotOperand = Union[
+    IsNull,
+    Comparison,
+    InContainer,
+    InRange,
+    InRelation,
+    DataCoordinateConstraint,
+]
+_LogicalOrOperand = Union[_LogicalNotOperand, LogicalNot]
+_LogicalAndOperand = Union[_LogicalOrOperand, LogicalOr]
+
+
+LogicalNotOperand = Annotated[_LogicalNotOperand, pydantic.Field(discriminator="predicate_type")]
+LogicalOrOperand = Annotated[_LogicalOrOperand, pydantic.Field(discriminator="predicate_type")]
+LogicalAndOperand = Annotated[_LogicalAndOperand, pydantic.Field(discriminator="predicate_type")]
+
 Predicate = Annotated[
-    Union[
-        LogicalAnd,
-        LogicalOr,
-        LogicalNot,
-        IsNull,
-        Comparison,
-        InContainer,
-        InRange,
-        InRelation,
-        StringPredicate,
-        DataCoordinateConstraint,
-    ],
+    Union[_LogicalAndOperand, LogicalAnd],
     pydantic.Field(discriminator="predicate_type"),
 ]

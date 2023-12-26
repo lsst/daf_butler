@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 # This module uses ExpressionProxy and its subclasses to wrap ColumnExpression,
 # but it just returns OrderExpression and Predicate objects directly, because
-# we don't need to overload an operators or define any methods on those.
+# we don't need to overload any operators or define any methods on those.
 
 
 class ExpressionProxy:
@@ -135,7 +135,7 @@ class ScalarExpressionProxy(ExpressionProxy):
 
         Parameters
         ----------
-        others : `Iterable`
+        others : `collections.abc.Iterable`
             An iterable of `ExpressionProxy` or values to be interpreted as
             literals.
 
@@ -268,7 +268,7 @@ class DimensionProxy(ScalarExpressionProxy, DimensionElementProxy):
 
     Parameters
     ----------
-    element : `DimensionElement`
+    dimension : `DimensionElement`
         Element this object wraps.
 
     Notes
@@ -355,22 +355,61 @@ class ExpressionFactory:
         return DatasetTypeProxy(name)
 
     def not_(self, operand: rt.Predicate) -> rt.Predicate:
-        """Apply a logical NOT operation to a boolean expression."""
-        return rt.LogicalNot.model_construct(operand=operand)
+        """Apply a logical NOT operation to a boolean expression.
 
-    def all(self, *args: rt.Predicate) -> rt.Predicate:
-        """Combine a sequence of boolean expressions with logical AND."""
-        operands: list[rt.Predicate] = []
-        for arg in args:
-            operands.extend(arg._flatten_and())
-        return rt.LogicalAnd.model_construct(operands=tuple(operands))
+        Parameters
+        ----------
+        operand : `relation_tree.Predicate`
+            Expression to invert.
 
-    def any(self, *args: rt.Predicate) -> rt.Predicate:
-        """Combine a sequence of boolean expressions with logical OR."""
-        operands: list[rt.Predicate] = []
+        Returns
+        -------
+        logical_not : `relation_tree.Predicate`
+            A boolean expression that evaluates to the opposite of ``operand``.
+        """
+        return operand.logical_not()
+
+    def all(self, first: rt.Predicate, /, *args: rt.Predicate) -> rt.Predicate:
+        """Combine a sequence of boolean expressions with logical AND.
+
+        Parameters
+        ----------
+        first : `relation_tree.Predicate`
+            First operand (required).
+        *args
+            Additional operands.
+
+        Returns
+        -------
+        logical_and : `relation_tree.Predicate`
+            A boolean expression that evaluates to `True` only if all operands
+            evaluate to `True.
+        """
+        result = first
         for arg in args:
-            operands.extend(arg._flatten_or())
-        return rt.LogicalOr.model_construct(operands=tuple(operands))
+            result = result.logical_and(arg)
+        return result
+
+    def any(self, first: rt.Predicate, /, *args: rt.Predicate) -> rt.Predicate:
+        """Combine a sequence of boolean expressions with logical OR.
+
+        Parameters
+        ----------
+        first : `relation_tree.Predicate`
+            First operand (required).
+        *args
+            Additional operands.
+
+        Returns
+        -------
+        logical_or : `relation_tree.Predicate`
+            A boolean expression that evaluates to `True` if any operand
+            evaluates to `True.
+        """
+        result = first
+        for arg in args:
+            result = result.logical_or(arg)
+        return result
 
     @staticmethod
     def literal(value: object) -> ExpressionProxy:
@@ -379,6 +418,16 @@ class ExpressionFactory:
         Expression proxy objects obtained from this factory can generally be
         compared directly to literals, so calling this method directly in user
         code should rarely be necessary.
+
+        Parameters
+        ----------
+        value : `object`
+            Value to include as a literal in an expression tree.
+
+        Returns
+        -------
+        expression : `ExpressionProxy`
+            Expression wrapper for this literal.
         """
         expression = rt.make_column_literal(value)
         match expression.expression_type:

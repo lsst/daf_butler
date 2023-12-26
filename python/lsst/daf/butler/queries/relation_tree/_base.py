@@ -39,7 +39,7 @@ __all__ = (
 
 from abc import ABC, abstractmethod
 from types import EllipsisType
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, cast
 
 import pydantic
 
@@ -279,6 +279,11 @@ class PredicateBase(RelationTreeBase, ABC):
     """Base class for objects that represent boolean column expressions in a
     relation tree.
 
+    A `Predicate` tree is always in conjunctive normal form (ANDs of ORs of
+    NOTs).  This is enforced by type annotations (and hence Pydantic
+    validation) and the `logical_and`, `logical_or`, and `logical_not` factory
+    methods.
+
     This is a closed hierarchy whose concrete, `~typing.final` derived classes
     are members of the `Predicate` union.  That union should generally be used
     in type annotations rather than the formally-open base class.
@@ -308,14 +313,51 @@ class PredicateBase(RelationTreeBase, ABC):
         """
         return set()
 
-    def _flatten_and(self) -> tuple[Predicate, ...]:
-        """Convert this expression to a sequence of predicates that should be
-        combined with logical AND.
-        """
-        return (self,)  # type: ignore[return-value]
+    # The 'other' arguments of the methods below are annotated as Any because
+    # MyPy doesn't correctly recognize subclass implementations that use
+    # @overload, and the signature of this base class doesn't really matter,
+    # since it's the union of all concrete implementations that's public;
+    # the base class exists largely as a place to hang docstrings.
 
-    def _flatten_or(self) -> tuple[Predicate, ...]:
-        """Convert this expression to a sequence of predicates that should be
-        combined with logical OR.
+    @abstractmethod
+    def logical_and(self, other: Any) -> Predicate:
+        """Return the logical AND of this predicate and another.
+
+        Parameters
+        ----------
+        other : `Predicate`
+            Other operand.
+
+        Returns
+        -------
+        result : `Predicate`
+            A predicate presenting the logical AND.
         """
-        return (self,)  # type: ignore[return-value]
+        raise NotImplementedError()
+
+    @abstractmethod
+    def logical_or(self, other: Any) -> Predicate:
+        """Return the logical OR of this predicate and another.
+
+        Parameters
+        ----------
+        other : `Predicate`
+            Other operand.
+
+        Returns
+        -------
+        result : `Predicate`
+            A predicate presenting the logical OR.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def logical_not(self) -> Predicate:
+        """Return the logical NOTof this predicate.
+
+        Returns
+        -------
+        result : `Predicate`
+            A predicate presenting the logical OR.
+        """
+        raise NotImplementedError()
