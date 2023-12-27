@@ -385,10 +385,7 @@ class ExpressionFactory:
             A boolean expression that evaluates to `True` only if all operands
             evaluate to `True.
         """
-        result = first
-        for arg in args:
-            result = result.logical_and(arg)
-        return result
+        return rt.LogicalAnd.fold(first, *args)
 
     def any(self, first: rt.Predicate, /, *args: rt.Predicate) -> rt.Predicate:
         """Combine a sequence of boolean expressions with logical OR.
@@ -406,10 +403,7 @@ class ExpressionFactory:
             A boolean expression that evaluates to `True` if any operand
             evaluates to `True.
         """
-        result = first
-        for arg in args:
-            result = result.logical_or(arg)
-        return result
+        return rt.LogicalOr.fold(first, *args)
 
     @staticmethod
     def literal(value: object) -> ExpressionProxy:

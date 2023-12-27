@@ -130,6 +130,28 @@ class LogicalAnd(PredicateBase):
     operands: tuple[LogicalAndOperand, ...] = pydantic.Field(min_length=2)
     """Upstream boolean expressions to combine."""
 
+    @staticmethod
+    def fold(first: Predicate, /, *args: Predicate) -> Predicate:
+        """Combine a sequence of boolean expressions with logical AND.
+
+        Parameters
+        ----------
+        first : `relation_tree.Predicate`
+            First operand (required).
+        *args
+            Additional operands.
+
+        Returns
+        -------
+        logical_and : `relation_tree.Predicate`
+            A boolean expression that evaluates to `True` only if all operands
+            evaluate to `True.
+        """
+        result = first
+        for arg in args:
+            result = result.logical_and(arg)
+        return result
+
     def gather_required_columns(self) -> set[ColumnReference]:
         # Docstring inherited.
         result: set[ColumnReference] = set()
@@ -213,6 +235,28 @@ class LogicalOr(PredicateBase):
 
     operands: tuple[LogicalOrOperand, ...] = pydantic.Field(min_length=2)
     """Upstream boolean expressions to combine."""
+
+    @staticmethod
+    def fold(first: Predicate, /, *args: Predicate) -> Predicate:
+        """Combine a sequence of boolean expressions with logical OR.
+
+        Parameters
+        ----------
+        first : `relation_tree.Predicate`
+            First operand (required).
+        *args
+            Additional operands.
+
+        Returns
+        -------
+        logical_or : `relation_tree.Predicate`
+            A boolean expression that evaluates to `True` if any operand
+            evaluates to `True.
+        """
+        result = first
+        for arg in args:
+            result = result.logical_or(arg)
+        return result
 
     def gather_required_columns(self) -> set[ColumnReference]:
         # Docstring inherited.
