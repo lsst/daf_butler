@@ -29,7 +29,7 @@ from __future__ import annotations
 __all__ = ("DimensionRecordStorageManager",)
 
 from abc import abstractmethod
-from collections.abc import Set
+from collections.abc import Iterable, Set
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Join, Relation
@@ -46,7 +46,16 @@ from ...dimensions.record_cache import DimensionRecordCache
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from .. import queries
+    from ...direct_query_driver import (  # Future query system (direct,server).
+        EmptySqlBuilder,
+        Postprocessing,
+        SqlBuilder,
+    )
+    from ...queries.relation_tree import (  # Future query system (direct,client,server).
+        DimensionFieldReference,
+        Predicate,
+    )
+    from .. import queries  # Old Registry.query* system.
     from ._database import Database, StaticTablesContext
 
 
@@ -355,6 +364,18 @@ class DimensionRecordStorageManager(VersionedExtension):
             Whether the returned relation represents a conservative join that
             needs refinement via native-iteration predicate.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_sql_builder(self, element: DimensionElement, fields: Set[DimensionFieldReference]) -> SqlBuilder:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def process_query_overlaps(
+        self,
+        predicate: Predicate,
+        join_operands: Iterable[DimensionGroup],
+    ) -> tuple[Predicate, EmptySqlBuilder | SqlBuilder, Postprocessing]:
         raise NotImplementedError()
 
     universe: DimensionUniverse

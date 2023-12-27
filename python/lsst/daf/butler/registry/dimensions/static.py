@@ -30,10 +30,11 @@ import dataclasses
 import itertools
 import logging
 from collections import defaultdict
-from collections.abc import Mapping, Sequence, Set
+from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+
 from lsst.daf.relation import Calculation, ColumnExpression, Join, Relation, sql
 
 from ... import ddl
@@ -53,11 +54,20 @@ from ...dimensions import (
     addDimensionForeignKey,
 )
 from ...dimensions.record_cache import DimensionRecordCache
+from ...direct_query_driver import (  # Future query system (direct,server).
+    EmptySqlBuilder,
+    Postprocessing,
+    SqlBuilder,
+)
+from ...queries.relation_tree import (  # Future query system (direct,client,server).
+    DimensionFieldReference,
+    Predicate,
+)
 from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext, VersionTuple
 
 if TYPE_CHECKING:
-    from .. import queries
+    from .. import queries  # Current Registry.query* system.
 
 
 # This has to be updated on every schema change
@@ -426,6 +436,22 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             )
         return overlaps, needs_refinement
 
+    def make_sql_builder(self, element: DimensionElement, fields: Set[DimensionFieldReference]) -> SqlBuilder:
+        assert element.hasTable(), "Guaranteed by caller."
+        table = self._tables[element.name]
+        result = SqlBuilder(table)
+        for dimension_name, column_name in zip(element.required.names, element.schema.required.names):
+            result.dimensions_provided[dimension_name] = [table.columns[column_name]]
+        result.extract_keys(element.implied.names)
+        for col_ref in fields:
+            if col_ref.field == "timespan":
+                result.timespans_provided[col_ref] = self._db.getTimespanRepresentation().from_columns(
+                    table.columns
+                )
+            else:
+                result.fields_provided[col_ref] = table.columns[col_ref.field]
+        return result
+
     def _make_relation(
         self,
         element: DimensionElement,
@@ -472,9 +498,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         assert element.has_own_table, "Only called for dimension elements with their own tables."
         _, table = self._overlap_tables[element.name]
         payload = sql.Payload[LogicalColumn](table)
-        payload.columns_available[DimensionKeyColumnTag(self.universe.commonSkyPix.name)] = (
-            payload.from_clause.columns.skypix_index
-        )
+        payload.columns_available[
+            DimensionKeyColumnTag(self.universe.commonSkyPix.name)
+        ] = payload.from_clause.columns.skypix_index
         for dimension_name in element.graph.required.names:
             payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
                 dimension_name
@@ -487,6 +513,13 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             payload=payload,
         )
         return leaf
+
+    def process_query_overlaps(
+        self,
+        predicate: Predicate,
+        join_operands: Iterable[DimensionGroup],
+    ) -> tuple[Predicate, SqlBuilder | EmptySqlBuilder, Postprocessing]:
+        raise NotImplementedError("TODO")
 
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:
