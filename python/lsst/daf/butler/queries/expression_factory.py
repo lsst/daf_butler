@@ -30,7 +30,6 @@ from __future__ import annotations
 __all__ = ("ExpressionFactory", "ExpressionProxy", "ScalarExpressionProxy", "TimespanProxy", "RegionProxy")
 
 from collections.abc import Iterable
-from types import EllipsisType
 from typing import TYPE_CHECKING, get_args
 
 from lsst.sphgeom import Region
@@ -294,7 +293,7 @@ class DatasetTypeProxy:
 
     Parameters
     ----------
-    dataset_type : `str` or ``...``
+    dataset_type : `str`
         Dataset type name or wildcard.  Wildcards are usable only when the
         query contains exactly one dataset type or a wildcard.
 
@@ -304,11 +303,11 @@ class DatasetTypeProxy:
     associated with datasets rather than their dimensions.
     """
 
-    def __init__(self, dataset_type: rt.StringOrWildcard):
+    def __init__(self, dataset_type: str):
         self._dataset_type = dataset_type
 
     def __repr__(self) -> str:
-        return self._dataset_type if self._dataset_type is not ... else "(...)"
+        return self._dataset_type
 
     # Attributes are actually fixed, but we implement them with __getattr__
     # and __dir__ to avoid repeating the list.  And someday they might expand
@@ -351,7 +350,7 @@ class ExpressionFactory:
             return DimensionProxy(element)
         return DimensionElementProxy(element)
 
-    def __getitem__(self, name: str | EllipsisType) -> DatasetTypeProxy:
+    def __getitem__(self, name: str) -> DatasetTypeProxy:
         return DatasetTypeProxy(name)
 
     def not_(self, operand: rt.Predicate) -> rt.Predicate:

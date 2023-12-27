@@ -32,14 +32,12 @@ __all__ = (
     "RootRelationBase",
     "ColumnExpressionBase",
     "PredicateBase",
-    "StringOrWildcard",
     "DatasetFieldName",
     "InvalidRelationError",
 )
 
 from abc import ABC, abstractmethod
-from types import EllipsisType
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import pydantic
 
@@ -50,14 +48,6 @@ if TYPE_CHECKING:
     from ._column_reference import ColumnReference
     from ._predicate import Predicate
     from ._relation import Relation, RootRelation
-
-
-StringOrWildcard = Annotated[
-    str | EllipsisType,
-    pydantic.PlainSerializer(lambda x: "..." if x is ... else x, return_type=str),
-    pydantic.BeforeValidator(lambda x: ... if x == "..." else x),
-    pydantic.GetPydanticSchema(lambda _s, h: h(str)),
-]
 
 
 DatasetFieldName: TypeAlias = Literal["dataset_id", "ingest_date", "run", "collection", "rank", "timespan"]

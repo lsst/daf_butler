@@ -35,7 +35,7 @@ import pydantic
 
 from ...column_spec import ColumnType
 from ...dimensions import Dimension, DimensionElement
-from ._base import ColumnExpressionBase, DatasetFieldName, InvalidRelationError, StringOrWildcard
+from ._base import ColumnExpressionBase, DatasetFieldName, InvalidRelationError
 
 
 @final
@@ -121,8 +121,8 @@ class DatasetFieldReference(ColumnExpressionBase):
 
     expression_type: Literal["dataset_field"] = "dataset_field"
 
-    dataset_type: StringOrWildcard
-    """Name of the dataset type, or ``...`` to match any dataset type."""
+    dataset_type: str
+    """Name of the dataset type to match any dataset type."""
 
     field: DatasetFieldName
     """Name of the field (i.e. column) in the dataset's logical table."""
@@ -160,10 +160,7 @@ class DatasetFieldReference(ColumnExpressionBase):
         raise AssertionError(f"Invalid field {self.field!r} for dataset.")
 
     def __str__(self) -> str:
-        if self.dataset_type is ...:
-            return self.field
-        else:
-            return f"{self.dataset_type}.{self.field}"
+        return f"{self.dataset_type}.{self.field}"
 
 
 # Union without Pydantic annotation for the discriminator, for use in nesting
