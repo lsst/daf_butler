@@ -56,7 +56,6 @@ from .relation_tree import (
     make_dimension_relation,
     make_unit_relation,
 )
-from .relation_tree.joins import JoinArg
 
 if TYPE_CHECKING:
     from .._query_results import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
@@ -513,49 +512,6 @@ class RelationQuery(Query):
         dimensions = self._driver.universe.conform(dimensions)
         return RelationQuery(
             tree=self._tree.join(make_dimension_relation(dimensions)),
-            driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
-        )
-
-    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> RelationQuery:
-        """Return a new query with new spatial or temporal join constraints.
-
-        Parameters
-        ----------
-        spatial : `tuple` [ `str`, `str` ] or `~collections.abc.Iterable` \
-                [ `tuple [ `str`, `str` ], optional
-            A pair or pairs of dimension element names whose regions must
-            overlap.
-        temporal : `tuple` [ `str`, `str` ] or `~collections.abc.Iterable` \
-                [ `tuple [ `str`, `str` ], optional
-            A pair or pairs of dimension element names and/or calibration
-            dataset type names whose timespans must overlap.  Datasets in
-            collections other than `~CollectionType.CALIBRATION` collections
-            are associated with an unbounded timespan.
-
-        Returns
-        -------
-        query : `Query`
-            A new query object with the given join criteria as well as any
-            join criteria already present in ``self``.
-
-        Notes
-        -----
-        Implicit spatial and temporal joins are also added to queries (when
-        they are actually executed) when an explicit join (of the sort added by
-        this method) is absent between any pair of spatial/temporal "families"
-        present in the query, and these implicit joins use the most
-        fine-grained overlap possible.  For example, in a query with dimensions
-        ``{instrument, visit, tract, patch}``, the implicit spatial join would
-        be between ``visit`` and ``patch``, but an explicit join between
-        ``visit`` and `tract`` would override it, because "tract" and "patch"
-        are in the same family (as are ``visit`` and ``visit_detector_region``,
-        but the latter is not used here because it is not present in the
-        example query dimensions).  For "skypix" dimensions like ``healpixN``
-        or `htmN`, all levels in the same system are in the same family.
-        """
-        return RelationQuery(
-            tree=self._tree.joined_on(spatial=spatial, temporal=temporal),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )

@@ -40,7 +40,6 @@ from ...dimensions import DataId, DimensionGroup, DimensionUniverse
 from ._base import InvalidRelationError, RelationBase
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import LiteralTrue, Predicate
-from .joins import JoinArg, JoinTuple, complete_joins, standardize_join_arg
 
 if TYPE_CHECKING:
     from ._column_expression import OrderExpression
@@ -118,16 +117,6 @@ class Select(RelationBase):
     ``detector`` table, but the ``physical_filter`` table will be joined in.
     """
 
-    spatial_joins: frozenset[JoinTuple] = frozenset()
-    """Pairs of dimension element names that should whose regions on the sky
-    must overlap.
-    """
-
-    temporal_joins: frozenset[JoinTuple] = frozenset()
-    """Pairs of dimension element names and calibration dataset type names
-    whose timespans must overlap.
-    """
-
     where_predicate: Predicate = LiteralTrue()
     """Boolean expression trees whose logical AND defines a row filter."""
 
@@ -153,8 +142,6 @@ class Select(RelationBase):
                 return Select(
                     dimensions=self.dimensions | other.dimensions,
                     join_operands=self.join_operands + other.join_operands,
-                    spatial_joins=(self.spatial_joins | other.spatial_joins),
-                    temporal_joins=(self.spatial_joins | other.spatial_joins),
                     where_predicate=self.where_predicate.logical_and(other.where_predicate),
                 )
             case FindFirst() | OrderedSlice():
@@ -163,25 +150,9 @@ class Select(RelationBase):
                 return Select(
                     dimensions=self.dimensions | other.dimensions,
                     join_operands=self.join_operands + (other,),
-                    spatial_joins=(self.spatial_joins),
-                    temporal_joins=(self.spatial_joins),
                     where_predicate=self.where_predicate,
                 )
         raise AssertionError("Invalid relation type for join.")
-
-    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> Select:
-        # Docstring inherited.
-        # We intentionally call Select(...) below rather than
-        # Select.model_construct(...) here to get validation of the new joins;
-        # if that gets expensive we should be able to get away with running
-        # just those validations on the result and using model_construct.
-        return Select(
-            dimensions=self.dimensions,
-            join_operands=self.join_operands,
-            spatial_joins=self.spatial_joins | standardize_join_arg(spatial, "spatial"),
-            temporal_joins=self.temporal_joins | standardize_join_arg(temporal, "temporal"),
-            where_predicate=self.where_predicate,
-        )
 
     def where(self, *terms: Predicate) -> Select:
         # Docstring inherited.
@@ -202,8 +173,6 @@ class Select(RelationBase):
         return Select(
             dimensions=full_dimensions,
             join_operands=self.join_operands,
-            spatial_joins=self.spatial_joins,
-            temporal_joins=self.temporal_joins,
             where_predicate=where_predicate,
         )
 
@@ -215,28 +184,6 @@ class Select(RelationBase):
         # Docstring inherited.
         return FindFirst(operand=self, dataset_type=dataset_type, dimensions=dimensions)
 
-    def complete_spatial_joins(self) -> frozenset[JoinTuple]:
-        """Return the complete set of spatial join pairs to include in this
-        relation, adding automatic pairs to the explicit ones as needed.
-        """
-        return complete_joins(
-            self.dimensions,
-            [operand.dimensions.spatial for operand in self.join_operands],
-            self.spatial_joins,
-            "spatial",
-        )
-
-    def complete_temporal_joins(self) -> frozenset[JoinTuple]:
-        """Return the complete set of spatial join pairs to include in this
-        relation, adding automatic pairs to the explicit ones as needed.
-        """
-        return complete_joins(
-            self.dimensions,
-            [operand.dimensions.temporal for operand in self.join_operands],
-            self.temporal_joins,
-            "temporal",
-        )
-
     @pydantic.model_validator(mode="after")
     def _validate_join_operands(self) -> Select:
         for operand in self.join_operands:
@@ -244,49 +191,6 @@ class Select(RelationBase):
                 raise InvalidRelationError(
                     f"Dimensions {operand.dimensions} of join operand {operand} are not a "
                     f"subset of the join's dimensions {self.dimensions}."
-                )
-        return self
-
-    @pydantic.model_validator(mode="after")
-    def _validate_spatial_joins(self) -> Select:
-        def check_operand(operand: str) -> str:
-            if operand not in self.dimensions.elements:
-                raise InvalidRelationError(
-                    f"Spatial join operand {operand!r} is not in this join's dimensions."
-                )
-            family = self.dimensions.universe[operand].spatial
-            if family is None:
-                raise InvalidRelationError(
-                    f"Spatial join operand {operand!r} is not associated with a region."
-                )
-            return family.name
-
-        for a, b in self.spatial_joins:
-            if check_operand(a) == check_operand(b):
-                raise InvalidRelationError(f"Spatial join between {a!r} and {b!r} is unnecessary.")
-        return self
-
-    @pydantic.model_validator(mode="after")
-    def _validate_temporal_joins(self) -> Select:
-        def check_operand(operand: str) -> str:
-            if operand in self.dimensions.elements:
-                family = self.dimensions.universe[operand].temporal
-                if family is None:
-                    raise InvalidRelationError(
-                        f"Temporal join operand {operand!r} is not associated with a timespan."
-                    )
-                return family.name
-            elif operand in self.available_dataset_types:
-                return "validity"
-            else:
-                raise InvalidRelationError(
-                    f"Temporal join operand {operand!r} is not in this join's dimensions or dataset types."
-                )
-
-        for a, b in self.temporal_joins:
-            if check_operand(a) == check_operand(b):
-                raise InvalidRelationError(
-                    f"Temporal join between {a!r} and {b!r} is unnecessary or impossible."
                 )
         return self
 

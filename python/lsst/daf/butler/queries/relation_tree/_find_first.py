@@ -43,7 +43,6 @@ if TYPE_CHECKING:
     from ._predicate import Predicate
     from ._relation import Relation
     from ._select import Select
-    from .joins import JoinArg
 
 
 @final
@@ -85,14 +84,6 @@ class FindFirst(RootRelationBase):
         raise InvalidRelationError(
             "Cannot join relations after a dataset find-first operation has been added. "
             "To avoid this error perform all joins before requesting dataset results."
-        )
-
-    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> FindFirst:
-        # Docstring inherited.
-        return FindFirst.model_construct(
-            operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
-            dataset_type=self.dataset_type,
-            dimensions=self.dimensions,
         )
 
     def where(self, *terms: Predicate) -> FindFirst:

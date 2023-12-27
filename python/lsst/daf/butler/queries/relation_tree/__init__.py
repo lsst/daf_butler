@@ -37,4 +37,3 @@ from ._ordered_slice import *
 from ._predicate import *
 from ._relation import *
 from ._select import *
-from .joins import JoinTuple

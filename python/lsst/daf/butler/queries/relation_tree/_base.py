@@ -50,7 +50,6 @@ if TYPE_CHECKING:
     from ._column_reference import ColumnReference
     from ._predicate import Predicate
     from ._relation import Relation, RootRelation
-    from .joins import JoinArg
 
 
 StringOrWildcard = Annotated[
@@ -125,36 +124,6 @@ class RootRelationBase(RelationBase):
         ------
         InvalidRelationError
             Raised if the join is ambiguous or otherwise invalid.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> RootRelation:
-        """Return a new relation that represents a join between ``self`` and
-        ``other``.
-
-        Parameters
-        ----------
-        spatial : `tuple` [ `str`, `str` ] or `~collections.abc.Iterable` \
-                [ `tuple [ `str`, `str` ], optional
-            A pair or pairs of dimension element names whose regions must
-            overlap.
-        temporal : `tuple` [ `str`, `str` ] or `~collections.abc.Iterable` \
-                [ `tuple [ `str`, `str` ], optional
-            A pair or pairs of dimension element names and/or calibration
-            dataset type names whose timespans must overlap.  Datasets in
-            collections other than `~CollectionType.CALIBRATION` collections
-            are associated with an unbounded timespan.
-
-        Returns
-        -------
-        result : `RootRelation`
-            A new relation that joins ``self`` and ``other``.
-
-        Raises
-        ------
-        InvalidRelationError
-            Raised if the join is invalid.
         """
         raise NotImplementedError()
 

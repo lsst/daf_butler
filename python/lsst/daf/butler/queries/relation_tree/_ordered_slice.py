@@ -47,7 +47,6 @@ if TYPE_CHECKING:
     from ..expression_factory import ExpressionProxy
     from ._predicate import Predicate
     from ._relation import OrderedSliceOperand, Relation, RootRelation
-    from .joins import JoinArg
 
 
 @final
@@ -99,15 +98,6 @@ class OrderedSlice(RelationBase):
         # OrderedSlice(...) rather than OrderedSlice.model_construct(...)
         # to check that the new operand is not itself an OrderedSlice.
         return OrderedSlice(operand=self.operand.join(other), order_terms=self.order_terms)
-
-    def joined_on(self, *, spatial: JoinArg = frozenset(), temporal: JoinArg = frozenset()) -> OrderedSlice:
-        # Docstring inherited.
-        return OrderedSlice.model_construct(
-            operand=self.operand.joined_on(spatial=spatial, temporal=temporal),
-            order_terms=self.order_terms,
-            offset=self.offset,
-            limit=self.limit,
-        )
 
     def where(self, *terms: Predicate) -> OrderedSlice:
         # Docstring inherited.
