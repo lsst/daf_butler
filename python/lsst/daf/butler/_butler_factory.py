@@ -58,11 +58,16 @@ class ButlerFactory:
 
     Notes
     -----
+    This interface is currently considered experimental and is subject to
+    change.
+
     For each label in the repository index, caches shared state to allow fast
     instantiation of new instances.
 
     Instance methods on this class are threadsafe. A single instance of
-    ButlerFactory can be shared between multiple threads.
+    `ButlerFactory` can be shared between multiple threads.  Note that
+    ``DirectButler`` itself is not currently threadsafe, so this guarantee does
+    not buy you much. See DM-42317.
     """
 
     def __init__(self, repositories: Mapping[str, str] | None = None) -> None:
