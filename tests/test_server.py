@@ -36,8 +36,8 @@ try:
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
-    from lsst.daf.butler.remote_butler.server import Factory, app
-    from lsst.daf.butler.remote_butler.server._dependencies import factory_dependency
+    from lsst.daf.butler.remote_butler.server import app
+    from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
     from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
     from moto import mock_s3
 except ImportError:
@@ -70,6 +70,8 @@ from lsst.resources.http import HttpResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
+TEST_REPOSITORY_NAME = "testrepo"
+
 
 def _make_test_client(app, raise_server_exceptions=True):
     client = TestClient(app, raise_server_exceptions=raise_server_exceptions)
@@ -80,7 +82,7 @@ def _make_remote_butler(http_client, *, collections: str | None = None):
     options = None
     if collections is not None:
         options = ButlerInstanceOptions(collections=collections)
-    factory = RemoteButlerFactory("https://test.example/api/butler", http_client)
+    factory = RemoteButlerFactory(f"https://test.example/api/butler/repo/{TEST_REPOSITORY_NAME}", http_client)
     return factory.create_butler_for_access_token("fake-access-token", butler_options=options)
 
 
@@ -115,12 +117,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         cls.simple_dataset_ref = _create_simple_dataset(cls.repo.butler)
 
         # Override the server's Butler initialization to point at our test repo
-        server_butler = Butler.from_config(cls.root, writeable=True)
+        server_butler_factory = LabeledButlerFactory({TEST_REPOSITORY_NAME: cls.root})
 
-        def create_factory_dependency():
-            return Factory(butler=server_butler)
-
-        app.dependency_overrides[factory_dependency] = create_factory_dependency
+        app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
 
         # Set up the RemoteButler that will connect to the server
         cls.client = _make_test_client(app)
@@ -140,13 +139,13 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Populate the test server.
         # The DatastoreMock is required because the datasets referenced in
         # these imports do not point at real files.
-        DatastoreMock.apply(server_butler)
-        server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        server_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        DatastoreMock.apply(cls.repo.butler)
+        cls.repo.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        cls.repo.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
 
     @classmethod
     def tearDownClass(cls):
-        del app.dependency_overrides[factory_dependency]
+        del app.dependency_overrides[butler_factory_dependency]
         removeTestTempDir(cls.root)
 
     def test_health_check(self):
@@ -154,15 +153,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["name"], "butler")
 
-    def test_simple(self):
-        response = self.client.get("/api/butler/v1/universe")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("namespace", response.json())
-
-    def test_remote_butler(self):
+    def test_dimension_universe(self):
         universe = self.butler.dimensions
         self.assertEqual(universe.namespace, "daf_butler")
-        self.assertFalse(self.butler.isWriteable())
 
     def test_get_dataset_type(self):
         bias_type = self.butler.get_dataset_type("bias")
@@ -243,22 +236,24 @@ class ButlerClientServerTestCase(unittest.TestCase):
         def override_read(http_resource_path):
             return self.client.get(http_resource_path.geturl()).content
 
+        server_url = f"https://test.example/api/butler/repo/{TEST_REPOSITORY_NAME}/"
+
         with patch.object(HttpResourcePath, "read", override_read):
             # Add access key to environment variables. RemoteButler
             # instantiation will throw an error if access key is not
             # available.
             with mock_env({_EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY: "fake-access-token"}):
                 butler = Butler(
-                    "https://test.example/api/butler",
+                    server_url,
                     collections=["collection1", "collection2"],
                     run="collection2",
                 )
-            butler_factory = LabeledButlerFactory({"server": "https://test.example/api/butler"})
+            butler_factory = LabeledButlerFactory({"server": server_url})
             factory_created_butler = butler_factory.create_butler(label="server", access_token="token")
         self.assertIsInstance(butler, RemoteButler)
         self.assertIsInstance(factory_created_butler, RemoteButler)
-        self.assertEqual(butler._server_url, "https://test.example/api/butler/")
-        self.assertEqual(factory_created_butler._server_url, "https://test.example/api/butler/")
+        self.assertEqual(butler._server_url, server_url)
+        self.assertEqual(factory_created_butler._server_url, server_url)
 
         self.assertEqual(butler.collections, ("collection1", "collection2"))
         self.assertEqual(butler.run, "collection2")

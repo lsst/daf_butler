@@ -25,22 +25,30 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from lsst.daf.butler import LabeledButlerFactory
 from lsst.daf.butler.direct_butler import DirectButler
 
 __all__ = ("Factory",)
 
 
 class Factory:
-    """Class to provide a cached Butler instance.
+    """Class for instantiating per-request dependencies, following the pattern
+    in `SQR-072 <https://sqr-072.lsst.io/>`_.
 
     Parameters
     ----------
-    butler : `DirectButler`
-        Butler to use.
+    repository : `str`
+        The label of the Butler repository requested by the user.
+    butler_factory : `LabeledButlerFactory`
+        Factory used to instantiate Butler instances.
     """
 
-    def __init__(self, *, butler: DirectButler):
-        self._butler = butler
+    def __init__(self, *, repository: str, butler_factory: LabeledButlerFactory):
+        self._repository = repository
+        self._butler_factory = butler_factory
 
     def create_butler(self) -> DirectButler:
-        return self._butler
+        butler = self._butler_factory.create_butler(label=self._repository, access_token=None)
+        if not isinstance(butler, DirectButler):
+            raise TypeError("Server can only use a DirectButler")
+        return butler

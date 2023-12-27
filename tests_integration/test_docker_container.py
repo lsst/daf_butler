@@ -24,13 +24,20 @@ def _run_server_docker():
 
         port = 8080
         butler_root = "/butler_root"
+
+        # Set up a repository index file to be read in by the server
+        index_filename = "repo_index.yaml"
+        repo_name = "testserver"
+        with open(os.path.join(temp_dir, index_filename), "wb") as fh:
+            fh.write(f"{repo_name}: {butler_root}\n".encode())
+
         docker_image = os.getenv("BUTLER_SERVER_DOCKER_IMAGE")
         if not docker_image:
             raise Exception("BUTLER_SERVER_DOCKER_IMAGE must be set")
         container = (
             DockerContainer(docker_image)
             .with_exposed_ports(port)
-            .with_env("BUTLER_SERVER_CONFIG_URI", butler_root)
+            .with_env("DAF_BUTLER_REPOSITORY_INDEX", f"{butler_root}/{index_filename}")
             .with_volume_mapping(temp_dir, butler_root, "rw")
         )
 
@@ -38,7 +45,7 @@ def _run_server_docker():
             server_host = container.get_container_host_ip()
             server_port = container.get_exposed_port(port)
             server_url = f"http://{server_host}:{server_port}"
-            full_server_url = f"{server_url}/api/butler"
+            full_server_url = f"{server_url}/api/butler/repo/{repo_name}"
             try:
                 _wait_for_startup(server_url)
                 yield full_server_url

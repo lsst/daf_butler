@@ -25,24 +25,34 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from functools import cache
+from typing import Annotated
 
-from lsst.daf.butler import Butler
-from lsst.daf.butler.direct_butler import DirectButler
+from fastapi import Depends
+from lsst.daf.butler import LabeledButlerFactory
 
-from ._config import get_config_from_env
 from ._factory import Factory
 
-
-@cache
-def _make_global_butler() -> DirectButler:
-    config = get_config_from_env()
-    butler = Butler.from_config(config.config_uri)
-    if not isinstance(butler, DirectButler):
-        raise TypeError("Server can only use a DirectButler")
-    return butler
+_butler_factory = LabeledButlerFactory()
 
 
-def factory_dependency() -> Factory:
-    """Return factory dependency for injection into FastAPI."""
-    return Factory(butler=_make_global_butler())
+async def butler_factory_dependency() -> LabeledButlerFactory:
+    """Return a global LabeledButlerFactory instance.  This will be used to
+    construct internal DirectButler instances for interacting with the Butler
+    repositories we are serving.
+    """
+    return _butler_factory
+
+
+async def factory_dependency(
+    repository: str, butler_factory: Annotated[LabeledButlerFactory, Depends(butler_factory_dependency)]
+) -> Factory:
+    """Return Factory object for injection into FastAPI.
+
+    Parameters
+    ----------
+    repository : `str`
+        Label of the repository for lookup from the repository index.
+    butler_factory : `LabeledButlerFactory`
+        Factory for instantiating DirectButlers.
+    """
+    return Factory(butler_factory=butler_factory, repository=repository)
