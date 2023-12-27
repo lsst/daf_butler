@@ -40,7 +40,7 @@ from typing import Annotated, Literal, TypeAlias, Union, final
 import pydantic
 
 from ...column_spec import ColumnType
-from ._base import ColumnExpressionBase
+from ._base import ColumnExpressionBase, InvalidRelationError
 from ._column_literal import ColumnLiteral
 from ._column_reference import ColumnReference, _ColumnReference
 
@@ -88,6 +88,19 @@ class UnaryExpression(ColumnExpressionBase):
             case "end_of":
                 return f"{s}.end"
 
+    @pydantic.model_validator(mode="after")
+    def _validate_types(self) -> UnaryExpression:
+        match (self.operator, self.operand.column_type):
+            case ("-" "int" | "float"):
+                pass
+            case ("begin_of" | "end_of", "timespan"):
+                pass
+            case _:
+                raise InvalidRelationError(
+                    f"Invalid column type {self.operand.column_type} for operator {self.operator!r}."
+                )
+        return self
+
 
 @final
 class BinaryExpression(ColumnExpressionBase):
@@ -126,8 +139,6 @@ class BinaryExpression(ColumnExpressionBase):
     @property
     def column_type(self) -> ColumnType:
         # Docstring inherited.
-        # TODO: we assume no mixed-type arithmetic; need to add a validator to
-        # reject such expresions.
         return self.a.column_type
 
     def __str__(self) -> str:
@@ -145,6 +156,24 @@ class BinaryExpression(ColumnExpressionBase):
                 if self.b.precedence >= self.precedence:
                     b = f"({b})"
         return f"({a} {self.operator} {b})"
+
+    @pydantic.model_validator(mode="after")
+    def _validate_types(self) -> BinaryExpression:
+        if self.a.column_type != self.b.column_type:
+            raise InvalidRelationError(
+                f"Column types for operator {self.operator} do not agree "
+                f"({self.a.column_type}, {self.b.column_type})."
+            )
+        match (self.operator, self.a.column_type):
+            case ("+" | "-" | "*" | "/", "int" | "float"):
+                pass
+            case ("%", "int"):
+                pass
+            case _:
+                raise InvalidRelationError(
+                    f"Invalid column type {self.a.column_type} for operator {self.operator!r}."
+                )
+        return self
 
 
 # Union without Pydantic annotation for the discriminator, for use in nesting
