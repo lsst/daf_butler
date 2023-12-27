@@ -54,7 +54,7 @@ from ._file_descriptor import *
 from ._formatter import *
 from ._labeled_butler_factory import *
 
-# Do not import 'instrument' or 'json' at all by default.
+# Do not import 'json' at all by default.
 from ._limited_butler import *
 from ._location import *
 from ._named import *

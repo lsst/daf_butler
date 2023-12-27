@@ -37,7 +37,6 @@ from .._topology import TopologicalFamily, TopologicalSpace
 if TYPE_CHECKING:
     from ._config import DimensionConfig
     from ._elements import Dimension, DimensionElement
-    from ._packer import DimensionPackerFactory
 
 
 class DimensionConstructionVisitor(ABC):
@@ -137,7 +136,6 @@ class DimensionConstructionBuilder:
         self.dimensions = NamedValueSet()
         self.elements = NamedValueSet()
         self.topology = {space: NamedValueSet() for space in TopologicalSpace.__members__.values()}
-        self.packers = {}
         self.version = version
         self.namespace = namespace
         self.config = config
@@ -221,9 +219,4 @@ class DimensionConstructionBuilder:
     topology: dict[TopologicalSpace, NamedValueSet[TopologicalFamily]]
     """Dictionary containing all `TopologicalFamily` objects
     (`dict` [ `TopologicalSpace`, `NamedValueSet` [ `TopologicalFamily` ] ] ).
-    """
-
-    packers: dict[str, DimensionPackerFactory]
-    """Dictionary containing all `DimensionPackerFactory` objects
-    (`dict` [ `str`, `DimensionPackerFactory` ] ).
     """

@@ -51,8 +51,6 @@ from ._group import DimensionGroup
 from ._skypix import SkyPixDimension, SkyPixSystem
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ._coordinate import DataCoordinate
-    from ._packer import DimensionPacker, DimensionPackerFactory
     from .construction import DimensionConstructionBuilder
 
 
@@ -148,7 +146,6 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         self._dimensions = builder.dimensions
         self._elements = builder.elements
         self._topology = builder.topology
-        self._packers = builder.packers
         self.dimensionConfig = builder.config
         commonSkyPix = self._dimensions[builder.commonSkyPixName]
         assert isinstance(commonSkyPix, SkyPixDimension)
@@ -558,31 +555,6 @@ class DimensionUniverse:  # numpydoc ignore=PR02
             result.reverse()
         return result
 
-    # TODO: Remove this method on DM-38687.
-    @deprecated(
-        "Deprecated in favor of configurable dimension packers.  Will be removed after v26.",
-        version="v26",
-        category=FutureWarning,
-    )
-    def makePacker(self, name: str, dataId: DataCoordinate) -> DimensionPacker:
-        """Make a dimension packer.
-
-        Constructs a `DimensionPacker` that can pack data ID dictionaries
-        into unique integers.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the packer, matching a key in the "packers" section of the
-            dimension configuration.
-        dataId : `DataCoordinate`
-            Fully-expanded data ID that identifies the at least the "fixed"
-            dimensions of the packer (i.e. those that are assumed/given,
-            setting the space over which packed integer IDs are unique).
-            ``dataId.hasRecords()`` must return `True`.
-        """
-        return self._packers[name](self, dataId)
-
     def getEncodeLength(self) -> int:
         """Return encoded size of graph.
 
@@ -673,8 +645,6 @@ class DimensionUniverse:  # numpydoc ignore=PR02
     _dimensionIndices: dict[str, int]
 
     _elementIndices: dict[str, int]
-
-    _packers: dict[str, DimensionPackerFactory]
 
     _populates: defaultdict[str, NamedValueSet[DimensionElement]]
 
