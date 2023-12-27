@@ -49,7 +49,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union,
 import pydantic
 
 from ...dimensions import DataCoordinate, DataIdValue, DimensionGroup
-from ._base import PredicateBase
+from ._base import InvalidRelationError, PredicateBase
 from ._column_expression import ColumnExpression
 from ._column_reference import ColumnReference
 
@@ -455,6 +455,26 @@ class Comparison(PredicateBase):
         a = str(self.a) if self.a.precedence <= self.precedence else f"({self.a})"
         b = str(self.b) if self.b.precedence <= self.precedence else f"({self.b})"
         return f"{a} {self.operator.upper()} {b}"
+
+    @pydantic.model_validator(mode="after")
+    def _validate_column_types(self) -> Comparison:
+        if self.a.column_type != self.b.column_type:
+            raise InvalidRelationError(
+                f"Column types for comparison {self} do not agree "
+                f"({self.a.column_type}, {self.b.column_type})."
+            )
+        match (self.operator, self.a.column_type):
+            case ("==" | "!=", _):
+                pass
+            case ("<" | ">" | ">=" | "<=", "int" | "string" | "float" | "datetime"):
+                pass
+            case ("overlaps", "region" | "timespan"):
+                pass
+            case _:
+                raise InvalidRelationError(
+                    f"Invalid column type {self.a.column_type} for operator {self.operator!r}."
+                )
+        return self
 
 
 @final
