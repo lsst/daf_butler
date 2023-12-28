@@ -268,6 +268,19 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(group.implied, ("physical_filter", "band"))
         self.assertCountEqual(group.elements - group.names, ("visit_detector_region", "visit_definition"))
         self.assertCountEqual(group.governors, {"instrument"})
+        for element in group.elements:
+            self.assertEqual(self.universe[element].has_own_table, element != "band", element)
+            self.assertEqual(
+                self.universe[element].implied_union_target,
+                "physical_filter" if element == "band" else None,
+                element,
+            )
+            self.assertEqual(
+                self.universe[element].defines_relationships,
+                element
+                in ("visit", "exposure", "physical_filter", "visit_definition", "visit_system_membership"),
+                element,
+            )
 
     def testCalibrationDimensions(self):
         group = self.universe.conform(["physical_filter", "detector"])
@@ -329,7 +342,7 @@ class DimensionTestCase(unittest.TestCase):
     def testSchemaGeneration(self):
         tableSpecs: NamedKeyDict[DimensionElement, ddl.TableSpec] = NamedKeyDict({})
         for element in self.universe.getStaticElements():
-            if element.hasTable and element.viewOf is None:
+            if element.has_own_table:
                 tableSpecs[element] = element.RecordClass.fields.makeTableSpec(
                     TimespanReprClass=TimespanDatabaseRepresentation.Compound,
                 )

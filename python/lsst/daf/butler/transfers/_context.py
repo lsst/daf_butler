@@ -170,16 +170,14 @@ class RepoExportContext:
         standardized_elements: Set[DimensionElement]
         if elements is None:
             standardized_elements = frozenset(
-                element
-                for element in self._registry.dimensions.elements
-                if element.hasTable() and element.viewOf is None
+                element for element in self._registry.dimensions.elements if element.has_own_table
             )
         else:
             standardized_elements = set()
             for element in elements:
                 if not isinstance(element, DimensionElement):
                     element = self._registry.dimensions[element]
-                if element.hasTable() and element.viewOf is None:
+                if element.has_own_table:
                     standardized_elements.add(element)
         for dataId in dataIds:
             # This is potentially quite slow, because it's approximately

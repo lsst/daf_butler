@@ -215,17 +215,15 @@ class DatabaseDimensionElement(DimensionElement):
         return self._metadata_columns
 
     @property
-    def viewOf(self) -> str | None:
+    def implied_union_target(self) -> DimensionElement | None:
         # Docstring inherited from DimensionElement.
-        # This is a bit encapsulation-breaking; these storage config values
-        # are supposed to be opaque here, and just forwarded on to some
-        # DimensionRecordStorage implementation.  The long-term fix is to
-        # move viewOf entirely, by changing the code that relies on it to rely
-        # on the DimensionRecordStorage object instead.
+        # This is a bit encapsulation-breaking, but it'll all be cleaned up
+        # soon when we get rid of the storage objects entirely.
         storage = self._storage.get("nested")
         if storage is None:
             storage = self._storage
-        return storage.get("view_of")
+        name = storage.get("view_of")
+        return self.universe[name] if name is not None else None
 
     @property
     def documentation(self) -> str:
@@ -430,6 +428,11 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     def alwaysJoin(self) -> bool:
         # Docstring inherited from DimensionElement.
         return self._alwaysJoin
+
+    @property
+    def defines_relationships(self) -> bool:
+        # Docstring inherited from DimensionElement.
+        return self._alwaysJoin or bool(self.implied)
 
     @property
     def populated_by(self) -> Dimension | None:

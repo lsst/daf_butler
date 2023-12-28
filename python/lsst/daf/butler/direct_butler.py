@@ -1656,9 +1656,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         self, source_butler: LimitedButler | Butler, source_refs: Iterable[DatasetRef]
     ) -> None:
         # Allowed dimensions in the target butler.
-        elements = frozenset(
-            element for element in self.dimensions.elements if element.hasTable() and element.viewOf is None
-        )
+        elements = frozenset(element for element in self.dimensions.elements if element.has_own_table)
 
         data_ids = {ref.dataId for ref in source_refs}
 
@@ -1858,11 +1856,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             # Collect all the dimension records for these refs.
             # All dimensions are to be copied but the list of valid dimensions
             # come from this butler's universe.
-            elements = frozenset(
-                element
-                for element in self.dimensions.elements
-                if element.hasTable() and element.viewOf is None
-            )
+            elements = frozenset(element for element in self.dimensions.elements if element.has_own_table)
             dataIds = {ref.dataId for ref in source_refs}
             dimension_records = self._extract_all_dimension_records_from_data_ids(
                 source_butler, dataIds, elements

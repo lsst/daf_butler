@@ -134,13 +134,15 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # to gather a mapping from the names of those targets back to their
         # views.
         view_targets = {
-            element.viewOf: element for element in universe.database_elements if element.viewOf is not None
+            element.implied_union_target.name: element
+            for element in universe.database_elements
+            if element.implied_union_target is not None
         }
         # We remember the spatial ones (grouped by family) so we can go back
         # and initialize overlap storage for them later.
         spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DatabaseDimensionRecordStorage]]()
         for element in universe.database_elements:
-            if element.viewOf is not None:
+            if element.implied_union_target is not None:
                 # We'll initialize this storage when the view's target is
                 # initialized.
                 continue

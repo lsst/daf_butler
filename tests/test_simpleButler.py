@@ -608,9 +608,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
 
-        elements = frozenset(
-            element for element in butler.dimensions.elements if element.hasTable() and element.viewOf is None
-        )
+        elements = frozenset(element for element in butler.dimensions.elements if element.has_own_table)
 
         # Get a visit-based dataId.
         data_ids = set(butler.registry.queryDataIds("visit", visit=1232, instrument="HSC"))

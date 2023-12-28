@@ -163,6 +163,11 @@ class SkyPixDimension(Dimension):
         # Docstring inherited from DimensionElement.hasTable.
         return False
 
+    @property
+    def has_own_table(self) -> bool:
+        # Docstring inherited from DimensionElement.
+        return False
+
     def makeStorage(self) -> SkyPixDimensionRecordStorage:
         """Make the storage record.
 

@@ -261,7 +261,7 @@ def addDimensionForeignKey(
     tableSpec.fields.add(fieldSpec)
     # Also add a foreign key constraint on the dependency table, but only if
     # there actually is one and we weren't told not to.
-    if dimension.hasTable() and dimension.viewOf is None and constraint:
+    if dimension.has_own_table and constraint:
         tableSpec.foreignKeys.append(_makeForeignKeySpec(dimension))
     return fieldSpec
 

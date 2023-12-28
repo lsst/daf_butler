@@ -1592,11 +1592,11 @@ class SqlRegistry:
                     raise DataIdValueError(
                         f"Could not fetch record for required dimension {element.name} via keys {keys}."
                     )
-                if element.alwaysJoin:
+                if element.defines_relationships:
                     raise InconsistentDataIdError(
                         f"Could not fetch record for element {element_name} via keys {keys}, ",
-                        "but it is marked alwaysJoin=True; this means one or more dimensions are not "
-                        "related.",
+                        "but it is marked as defining relationships; this means one or more dimensions are "
+                        "have inconsistent values.",
                     )
                 for d in element.implied:
                     keys.setdefault(d.name, None)

@@ -292,8 +292,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
             #   implied dependencies or the alwaysJoin flag establishes such a
             #   relationship.
             if columns_still_needed or (
-                (element.alwaysJoin or element.implied)
-                and frozenset(element.dimensions.names) not in relationships
+                element.defines_relationships and frozenset(element.dimensions.names) not in relationships
             ):
                 storage = self._managers.dimensions[element_name]
                 relation = storage.join(relation, default_join, context)
