@@ -253,17 +253,6 @@ class DimensionRecordStorage(ABC):
         """
         return None
 
-    @abstractmethod
-    def digestTables(self) -> list[sqlalchemy.schema.Table]:
-        """Return tables used for schema digest.
-
-        Returns
-        -------
-        tables : `list` [ `sqlalchemy.schema.Table` ]
-            Possibly empty list of tables for schema digest calculations.
-        """
-        raise NotImplementedError()
-
     def _build_sql_payload(
         self,
         from_clause: sqlalchemy.sql.FromClause,

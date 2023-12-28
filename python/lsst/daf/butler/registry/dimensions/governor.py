@@ -181,7 +181,3 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
                 cache[record.dataId] = record
             self._cache = cache
         return cast(Mapping[DataCoordinate, DimensionRecord], self._cache)
-
-    def digestTables(self) -> list[sqlalchemy.schema.Table]:
-        # Docstring inherited from DimensionRecordStorage.digestTables.
-        return [self._table]

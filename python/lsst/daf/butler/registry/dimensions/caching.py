@@ -164,7 +164,3 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 cache[record.dataId] = record
             self._cache = cache
         return self._cache
-
-    def digestTables(self) -> list[sqlalchemy.schema.Table]:
-        # Docstring inherited from DimensionRecordStorage.digestTables.
-        return self._nested.digestTables()

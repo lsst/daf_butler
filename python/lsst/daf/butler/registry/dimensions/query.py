@@ -31,7 +31,6 @@ __all__ = ["QueryDimensionRecordStorage"]
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-import sqlalchemy
 from lsst.daf.relation import Relation
 
 from ..._column_tags import DimensionKeyColumnTag
@@ -149,7 +148,3 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Given the restrictions imposed at construction, we know there's
         # nothing to actually fetch: everything we need is in the data ID.
         return self.element.RecordClass(**data_id.required)
-
-    def digestTables(self) -> list[sqlalchemy.schema.Table]:
-        # Docstring inherited from DimensionRecordStorage.digestTables.
-        return []

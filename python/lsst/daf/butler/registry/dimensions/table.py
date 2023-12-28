@@ -219,14 +219,6 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 # We updated something other than a region.
         return inserted_or_updated
 
-    def digestTables(self) -> list[sqlalchemy.schema.Table]:
-        # Docstring inherited from DimensionRecordStorage.digestTables.
-        result = [self._table]
-        if self._skypix_overlap_tables is not None:
-            result.append(self._skypix_overlap_tables.summary)
-            result.append(self._skypix_overlap_tables.overlaps)
-        return result
-
     def make_spatial_join_relation(
         self,
         other: DimensionElement,
