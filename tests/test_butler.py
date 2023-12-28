@@ -1233,6 +1233,17 @@ class ButlerTests(ButlerPutGetTests):
             new_metric = butler.get(datasetTypeName, dataId=dataId)
             self.assertEqual(new_metric, metric)
 
+    def testGetDatasetCollectionCaching(self):
+        # Prior to DM-41117, there was a bug where get_dataset would throw
+        # MissingCollectionError if you tried to fetch a dataset that was added
+        # after the collection cache was last updated.
+        reader_butler, datasetType = self.create_butler(self.default_run, "int", "datasettypename")
+        writer_butler = Butler.from_config(self.tmpConfigFile, writeable=True, run="new_run")
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+        put_ref = writer_butler.put(123, datasetType, dataId)
+        get_ref = reader_butler.get_dataset(put_ref.id)
+        self.assertEqual(get_ref.id, put_ref.id)
+
 
 class FileDatastoreButlerTests(ButlerTests):
     """Common tests and specialization of ButlerTests for butlers backed
