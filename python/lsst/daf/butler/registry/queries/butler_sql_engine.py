@@ -192,13 +192,13 @@ class ButlerSqlEngine(sql.Engine[LogicalColumn]):
                 # aside from the special 'rownum' window-function column).
                 search_columns = self.extract_mapping(target.columns, search.columns)
                 partition_by = [search_columns[tag] for tag in operation.dimensions]
-                rownum_column = sqlalchemy.sql.func.row_number()
+                row_number = sqlalchemy.sql.func.row_number()
                 if partition_by:
-                    rownum_column = rownum_column.over(
+                    rownum_column = row_number.over(
                         partition_by=partition_by, order_by=search_columns[operation.rank]
                     )
                 else:
-                    rownum_column = rownum_column.over(order_by=search_columns[operation.rank])
+                    rownum_column = row_number.over(order_by=search_columns[operation.rank])
                 window = self.select_items(
                     search_columns.items(), search, rownum_column.label("rownum")
                 ).subquery(f"{operation.rank.dataset_type}_window")
