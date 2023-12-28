@@ -40,8 +40,10 @@ from ..._named import NamedKeyDict
 from ...dimensions import (
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
+    Dimension,
     DimensionElement,
     DimensionGroup,
+    DimensionRecordSet,
     DimensionUniverse,
     GovernorDimension,
 )
@@ -196,6 +198,39 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             dimension_group_storage=dimension_group_storage,
             registry_schema_version=registry_schema_version,
         )
+
+    def get_sql_table(self, element: DimensionElement) -> sqlalchemy.Table:
+        # Docstring inherited.
+        return self._records[element].sql_table
+
+    def fetch_cache_dict(self) -> dict[str, DimensionRecordSet]:
+        # Docstring inherited.
+        result: dict[str, DimensionRecordSet] = {}
+        with self._db.transaction():
+            for element in self.universe.elements:
+                if not element.is_cached:
+                    continue
+                assert not element.temporal, (
+                    "Cached dimension elements should not be spatial or temporal, as that "
+                    "suggests a large number of records."
+                )
+                if element.implied_union_target is not None:
+                    assert isinstance(element, Dimension), "Only dimensions can be implied dependencies."
+                    table = self.get_sql_table(element.implied_union_target)
+                    sql = sqlalchemy.select(
+                        table.columns[element.name].label(element.primary_key.name)
+                    ).distinct()
+                else:
+                    table = self.get_sql_table(element)
+                    sql = sqlalchemy.select(
+                        *[table.columns[name].label(name) for name in element.schema.all.names]
+                    )
+                with self._db.query(sql) as results:
+                    result[element.name] = DimensionRecordSet(
+                        element=element,
+                        records=[element.RecordClass(**row) for row in results.mappings()],
+                    )
+        return result
 
     def get(self, element: DimensionElement | str) -> DimensionRecordStorage | None:
         # Docstring inherited from DimensionRecordStorageManager.

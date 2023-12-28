@@ -95,7 +95,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         return self._dimension
 
     @property
-    def table(self) -> sqlalchemy.schema.Table:
+    def sql_table(self) -> sqlalchemy.Table:
         return self._table
 
     def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:

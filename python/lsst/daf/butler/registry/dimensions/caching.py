@@ -109,6 +109,11 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.element.
         return self._nested.element
 
+    @property
+    def sql_table(self) -> sqlalchemy.Table:
+        # Docstring inherited.
+        return self._nested.sql_table
+
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         self._cache = None

@@ -50,6 +50,7 @@ from ...dimensions import (
     DimensionElement,
     DimensionGroup,
     DimensionRecord,
+    DimensionRecordSet,
     DimensionUniverse,
     GovernorDimension,
     SkyPixDimension,
@@ -86,6 +87,15 @@ class DimensionRecordStorage(ABC):
         (`DimensionElement`).
         """
         raise NotImplementedError()
+
+    @property
+    def sql_table(self) -> sqlalchemy.Table:
+        """The SQL table that holds this element's records.
+
+        If `DimensionElement.has_own_table` is `False`, this attribute may not
+        be accessed; the default implementation raises `AssertionError`.
+        """
+        raise AssertionError(f"Element {self.element} has no SQL table.")
 
     @abstractmethod
     def clearCaches(self) -> None:
@@ -334,7 +344,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
 
     @property
     @abstractmethod
-    def table(self) -> sqlalchemy.schema.Table:
+    def sql_table(self) -> sqlalchemy.schema.Table:
         """The SQLAlchemy table that backs this dimension
         (`sqlalchemy.schema.Table`).
         """
@@ -698,6 +708,31 @@ class DimensionRecordStorageManager(VersionedExtension):
         -------
         manager : `DimensionRecordStorageManager`
             An instance of a concrete `DimensionRecordStorageManager` subclass.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_sql_table(self, element: DimensionElement) -> sqlalchemy.Table:
+        """Return the SQL table for the given dimension element.
+
+        Parameters
+        ----------
+        element : `DimensionElement`
+            Element to lookup the table for.
+
+        Returns
+        -------
+        table : `sqlalchemy.Table`
+            SQL table.
+        """
+        raise NotImplementedError()
+
+    def fetch_cache_dict(self) -> dict[str, DimensionRecordSet]:
+        """Return a `dict` that can back a `DimensionRecordSet`.
+
+        This method is intended as the ``fetch`` callback argument to
+        `DimensionRecordCache`, in contexts where direct SQL queries are
+        possible.
         """
         raise NotImplementedError()
 

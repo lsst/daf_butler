@@ -143,6 +143,11 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.element.
         return self._element
 
+    @property
+    def sql_table(self) -> sqlalchemy.Table:
+        # Docstring inherited.
+        return self._table
+
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass

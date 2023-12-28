@@ -62,6 +62,7 @@ from ..dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
+from ..dimensions.record_cache import DimensionRecordCache
 from ..progress import Progress
 from ..registry import (
     ArgumentError,
@@ -236,7 +237,12 @@ class SqlRegistry:
             defaults = RegistryDefaults()
         return cls(database, defaults, managers)
 
-    def __init__(self, database: Database, defaults: RegistryDefaults, managers: RegistryManagerInstances):
+    def __init__(
+        self,
+        database: Database,
+        defaults: RegistryDefaults,
+        managers: RegistryManagerInstances,
+    ):
         self._db = database
         self._managers = managers
         self.storageClasses = StorageClassFactory()
@@ -244,7 +250,12 @@ class SqlRegistry:
         # can only be done after most of the rest of Registry has already been
         # initialized, and must be done before the property getter is used.
         self.defaults = defaults
-
+        # This is public to SqlRegistry's internal-to-daf_butler callers, but
+        # it is intentionally not part of RegistryShim.
+        self.dimension_record_cache = DimensionRecordCache(
+            self._managers.dimensions.universe,
+            fetch=self._managers.dimensions.fetch_cache_dict,
+        )
         # TODO: This is currently initialized by `make_datastore_tables`,
         # eventually we'll need to do it during construction.
         # The mapping is indexed by the opaque table name.
@@ -289,7 +300,9 @@ class SqlRegistry:
             # No need to copy, because `RegistryDefaults` is immutable; we
             # effectively copy on write.
             defaults = self.defaults
-        return type(self)(self._db, defaults, self._managers)
+        result = SqlRegistry(self._db, defaults, self._managers)
+        result.dimension_record_cache.load_from(self.dimension_record_cache)
+        return result
 
     @property
     def dimensions(self) -> DimensionUniverse:
