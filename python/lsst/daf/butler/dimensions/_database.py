@@ -226,6 +226,13 @@ class DatabaseDimensionElement(DimensionElement):
         return self.universe[name] if name is not None else None
 
     @property
+    def is_cached(self) -> bool:
+        # Docstring inherited.
+        # This is a bit encapsulation-breaking, but it'll all be cleaned up
+        # soon when we get rid of the storage objects entirely.
+        return "caching" in self._storage["cls"]
+
+    @property
     def documentation(self) -> str:
         # Docstring inherited from DimensionElement.
         return self._doc

@@ -151,6 +151,11 @@ class GovernorDimension(Dimension):
         return self._unique_keys
 
     @property
+    def is_cached(self) -> bool:
+        # Docstring inherited.
+        return True
+
+    @property
     def documentation(self) -> str:
         # Docstring inherited from DimensionElement.
         return self._doc

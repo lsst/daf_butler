@@ -420,6 +420,13 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         return bool(self.implied)
 
     @property
+    def is_cached(self) -> bool:
+        """Whether this element's records should be aggressively cached,
+        because they are small in number and rarely inserted.
+        """
+        return False
+
+    @property
     @abstractmethod
     def populated_by(self) -> Dimension | None:
         """The dimension that this element's records are always inserted,
