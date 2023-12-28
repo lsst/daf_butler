@@ -191,14 +191,16 @@ class ButlerSqlEngine(sql.Engine[LogicalColumn]):
                 # contains (at the same time, since they have the same columns,
                 # aside from the special 'rownum' window-function column).
                 search_columns = self.extract_mapping(target.columns, search.columns)
-                partition_by = [search_columns[tag] for tag in operation.dimensions]
-                rownum_column = sqlalchemy.sql.func.row_number()
+                partition_by = [
+                    _assert_column_is_directly_usable_by_sqlalchemy(search_columns[tag])
+                    for tag in operation.dimensions
+                ]
+                row_number = sqlalchemy.sql.func.row_number()
+                rank_column = _assert_column_is_directly_usable_by_sqlalchemy(search_columns[operation.rank])
                 if partition_by:
-                    rownum_column = rownum_column.over(
-                        partition_by=partition_by, order_by=search_columns[operation.rank]
-                    )
+                    rownum_column = row_number.over(partition_by=partition_by, order_by=rank_column)
                 else:
-                    rownum_column = rownum_column.over(order_by=search_columns[operation.rank])
+                    rownum_column = row_number.over(order_by=rank_column)
                 window = self.select_items(
                     search_columns.items(), search, rownum_column.label("rownum")
                 ).subquery(f"{operation.rank.dataset_type}_window")
@@ -209,3 +211,13 @@ class ButlerSqlEngine(sql.Engine[LogicalColumn]):
                 )
             case _:
                 return super().to_payload(relation)
+
+
+def _assert_column_is_directly_usable_by_sqlalchemy(column: LogicalColumn) -> sqlalchemy.sql.ColumnElement:
+    """Narrow a `LogicalColumn` to a SqlAlchemy ColumnElement, to satisfy the
+    typechecker in cases where no timespans are expected.
+    """
+    if isinstance(column, TimespanDatabaseRepresentation):
+        raise TypeError("Timespans not expected here.")
+
+    return column
