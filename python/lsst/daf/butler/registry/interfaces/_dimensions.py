@@ -27,7 +27,6 @@
 from __future__ import annotations
 
 __all__ = (
-    "DatabaseDimensionOverlapStorage",
     "DatabaseDimensionRecordStorage",
     "DimensionRecordStorage",
     "DimensionRecordStorageManager",
@@ -36,7 +35,7 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable, Mapping, Set
+from collections.abc import Callable, Mapping, Set
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
@@ -500,24 +499,6 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         """
         raise NotImplementedError()
 
-    def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
-        """Inform this record storage object of the object that will manage
-        the overlaps between this element and another element.
-
-        This will only be called if ``self.element.spatial is not None``,
-        and will be called immediately after construction (before any other
-        methods).  In the future, implementations will be required to call a
-        method on any connected overlap storage objects any time new records
-        for the element are inserted.
-
-        Parameters
-        ----------
-        overlaps : `DatabaseDimensionRecordStorage`
-            Object managing overlaps between this element and another
-            database-backed element.
-        """
-        raise NotImplementedError(f"{type(self).__name__} does not support spatial elements.")
-
     def make_spatial_join_relation(
         self,
         other: DimensionElement,
@@ -553,104 +534,6 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
             working out alternative approaches involving multiple joins.
         """
         return None
-
-
-class DatabaseDimensionOverlapStorage(ABC):
-    """A base class for objects that manage overlaps between a pair of
-    database-backed dimensions.
-    """
-
-    @classmethod
-    @abstractmethod
-    def initialize(
-        cls,
-        db: Database,
-        elementStorage: tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
-        governorStorage: tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
-        context: StaticTablesContext | None = None,
-    ) -> DatabaseDimensionOverlapStorage:
-        """Construct an instance of this class using a standardized interface.
-
-        Parameters
-        ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
-        elementStorage : `tuple` [ `DatabaseDimensionRecordStorage` ]
-            Storage objects for the elements this object will related.
-        governorStorage : `tuple` [ `GovernorDimensionRecordStorage` ]
-            Storage objects for the governor dimensions of the elements this
-            object will related.
-        context : `StaticTablesContext`, optional
-            If provided, an object to use to create any new tables.  If not
-            provided, ``db.ensureTableExists`` should be used instead.
-
-        Returns
-        -------
-        storage : `DatabaseDimensionOverlapStorage`
-            A new `DatabaseDimensionOverlapStorage` subclass instance.
-        """
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def elements(self) -> tuple[DatabaseDimensionElement, DatabaseDimensionElement]:
-        """The pair of elements whose overlaps this object manages.
-
-        The order of elements is the same as their ordering within the
-        `DimensionUniverse`.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def clearCaches(self) -> None:
-        """Clear any cached state about which overlaps have been
-        materialized.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
-        """Return tables used for schema digest.
-
-        Returns
-        -------
-        tables : `~collections.abc.Iterable` [ `sqlalchemy.schema.Table` ]
-            Possibly empty set of tables for schema digest calculations.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def make_relation(
-        self,
-        context: queries.SqlQueryContext,
-        governor_constraints: Mapping[str, Set[str]],
-    ) -> Relation | None:
-        """Return a `lsst.daf.relation.Relation` that represents the join
-        table.
-
-        High-level code should generally call
-        `DimensionRecordStorageManager.make_spatial_join_relation` (which
-        delegates to this) instead of calling this method directly.
-
-        Parameters
-        ----------
-        context : `.queries.SqlQueryContext`
-            Object that manages relation engines and database-side state
-            (e.g. temporary tables) for the query.
-        governor_constraints : `~collections.abc.Mapping` \
-                [ `str`, `~collections.abc.Set` ], optional
-            Constraints imposed by other aspects of the query on governor
-            dimensions; collections inconsistent with these constraints will be
-            skipped.
-
-        Returns
-        -------
-        relation : `lsst.daf.relation.Relation` or `None`
-            Join relation.  Should be `None` when no direct overlaps for this
-            combination are stored; higher-level code is responsible for
-            working out alternative approaches involving multiple joins.
-        """
-        raise NotImplementedError()
 
 
 class DimensionRecordStorageManager(VersionedExtension):

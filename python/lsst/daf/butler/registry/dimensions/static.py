@@ -38,7 +38,6 @@ from ... import ddl
 from ..._column_tags import DimensionKeyColumnTag
 from ..._named import NamedKeyDict
 from ...dimensions import (
-    DatabaseDimensionElement,
     DatabaseTopologicalFamily,
     Dimension,
     DimensionElement,
@@ -46,11 +45,11 @@ from ...dimensions import (
     DimensionRecordSet,
     DimensionUniverse,
     GovernorDimension,
+    addDimensionForeignKey,
 )
 from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import (
     Database,
-    DatabaseDimensionOverlapStorage,
     DatabaseDimensionRecordStorage,
     DimensionRecordStorage,
     DimensionRecordStorageManager,
@@ -83,9 +82,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     records : `NamedKeyDict`
         Mapping from `DimensionElement` to `DimensionRecordStorage` for that
         element.
-    overlaps : `list` [ `DatabaseDimensionOverlapStorage` ]
-        Objects that manage materialized overlaps between database-backed
-        dimensions.
     dimension_group_storage : `_DimensionGroupStorage`
         Object that manages saved `DimensionGroup` definitions.
     universe : `DimensionUniverse`
@@ -99,9 +95,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         db: Database,
         *,
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage],
-        overlaps: dict[
-            tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
-        ],
         dimension_group_storage: _DimensionGroupStorage,
         universe: DimensionUniverse,
         registry_schema_version: VersionTuple | None = None,
@@ -109,7 +102,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         super().__init__(universe=universe, registry_schema_version=registry_schema_version)
         self._db = db
         self._records = records
-        self._overlaps = overlaps
         self._dimension_group_storage = dimension_group_storage
 
     @classmethod
@@ -142,7 +134,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         }
         # We remember the spatial ones (grouped by family) so we can go back
         # and initialize overlap storage for them later.
-        spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DatabaseDimensionRecordStorage]]()
+        spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DimensionElement]]()
         for element in universe.database_elements:
             if element.implied_union_target is not None:
                 # We'll initialize this storage when the view's target is
@@ -151,7 +143,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             elementStorage = element.makeStorage(db, context=context, governors=governors)
             records[element] = elementStorage
             if element.spatial is not None:
-                spatial.setdefault(element.spatial, []).append(elementStorage)
+                spatial.setdefault(element.spatial, []).append(element)
             if (view_element := view_targets.get(element.name)) is not None:
                 view_element_storage = view_element.makeStorage(
                     db,
@@ -161,40 +153,20 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 )
                 records[view_element] = view_element_storage
                 if view_element.spatial is not None:
-                    spatial.setdefault(view_element.spatial, []).append(view_element_storage)
+                    spatial.setdefault(view_element.spatial, []).append(element)
 
-        # Finally we initialize overlap storage.  The implementation class for
-        # this is currently hard-coded (it's not obvious there will ever be
-        # others).  Note that overlaps between database-backed dimensions and
-        # skypix dimensions is internal to `DatabaseDimensionRecordStorage`,
-        # and hence is not included here.
-        from ..dimensions.overlaps import CrossFamilyDimensionOverlapStorage
+        # Add some tables for materialized overlaps between database
+        # dimensions.  We've never used these and no longer plan to, but we
+        # have to keep creating them to keep schema versioning consistent.
+        for name, table_spec in cls._make_legacy_overlap_table_specs(spatial).items():
+            context.addTable(name, table_spec)
 
-        overlaps: dict[
-            tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
-        ] = {}
-        for (family1, storages1), (family2, storages2) in itertools.combinations(spatial.items(), 2):
-            for elementStoragePair in itertools.product(storages1, storages2):
-                governorStoragePair = (governors[family1.governor], governors[family2.governor])
-                if elementStoragePair[0].element > elementStoragePair[1].element:
-                    elementStoragePair = (elementStoragePair[1], elementStoragePair[0])
-                    governorStoragePair = (governorStoragePair[1], governorStoragePair[1])
-                overlapStorage = CrossFamilyDimensionOverlapStorage.initialize(
-                    db,
-                    elementStoragePair,
-                    governorStoragePair,
-                    context=context,
-                )
-                elementStoragePair[0].connect(overlapStorage)
-                elementStoragePair[1].connect(overlapStorage)
-                overlaps[overlapStorage.elements] = overlapStorage
         # Create table that stores DimensionGraph definitions.
         dimension_group_storage = _DimensionGroupStorage.initialize(db, context, universe=universe)
         return cls(
             db=db,
             records=records,
             universe=universe,
-            overlaps=overlaps,
             dimension_group_storage=dimension_group_storage,
             registry_schema_version=registry_schema_version,
         )
@@ -359,6 +331,34 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
         return [_VERSION]
+
+    @classmethod
+    def _make_legacy_overlap_table_specs(
+        cls, spatial: NamedKeyDict[DatabaseTopologicalFamily, list[DimensionElement]]
+    ) -> dict[str, ddl.TableSpec]:
+        result: dict[str, ddl.TableSpec] = {}
+        for (_, elements1), (_, elements2) in itertools.combinations(spatial.items(), 2):
+            for element1, element2 in itertools.product(elements1, elements2):
+                if element1 > element2:
+                    (element2, element1) = (element1, element2)
+                assert element1.spatial is not None and element2.spatial is not None
+                assert element1.governor != element2.governor
+                assert element1.governor is not None and element2.governor is not None
+                summary_spec = ddl.TableSpec(fields=[])
+                addDimensionForeignKey(summary_spec, element1.governor, primaryKey=True)
+                addDimensionForeignKey(summary_spec, element2.governor, primaryKey=True)
+                result[f"{element1.name}_{element2.name}_overlap_summary"] = summary_spec
+                overlap_spec = ddl.TableSpec(fields=[])
+                addDimensionForeignKey(overlap_spec, element1.governor, primaryKey=True)
+                addDimensionForeignKey(overlap_spec, element2.governor, primaryKey=True)
+                for dimension in element1.required:
+                    if dimension != element1.governor:
+                        addDimensionForeignKey(overlap_spec, dimension, primaryKey=True)
+                for dimension in element2.required:
+                    if dimension != element2.governor:
+                        addDimensionForeignKey(overlap_spec, dimension, primaryKey=True)
+                result[f"{element1.name}_{element2.name}_overlap"] = overlap_spec
+        return result
 
 
 class _DimensionGroupStorage:

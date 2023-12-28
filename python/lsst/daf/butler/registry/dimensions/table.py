@@ -54,7 +54,6 @@ from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .. import queries
 from ..interfaces import (
     Database,
-    DatabaseDimensionOverlapStorage,
     DatabaseDimensionRecordStorage,
     GovernorDimensionRecordStorage,
     StaticTablesContext,
@@ -109,7 +108,6 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             )
         }
         self._skypix_overlap_tables = skypix_overlap_tables
-        self._otherOverlaps: dict[str, DatabaseDimensionOverlapStorage] = {}
 
     @classmethod
     def initialize(
@@ -229,11 +227,6 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             result.append(self._skypix_overlap_tables.overlaps)
         return result
 
-    def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
-        # Docstring inherited from DatabaseDimensionRecordStorage.
-        (other,) = set(overlaps.elements) - {self.element}
-        self._otherOverlaps[other.name] = overlaps
-
     def make_spatial_join_relation(
         self,
         other: DimensionElement,
@@ -245,7 +238,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             case SkyPixDimension() as skypix:
                 return self._make_skypix_join_relation(skypix, context)
             case DatabaseDimensionElement() as other:
-                return self._otherOverlaps[other.name].make_relation(context, governor_constraints)
+                return None
             case _:
                 raise TypeError(f"Unexpected dimension element type for spatial join: {other}.")
 
