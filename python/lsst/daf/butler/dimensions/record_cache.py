@@ -31,6 +31,7 @@ __all__ = ("DimensionRecordCache",)
 
 import copy
 from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 
 from ._record_set import DimensionRecordSet
 from ._universe import DimensionUniverse
@@ -51,6 +52,11 @@ class DimensionRecordCache(Mapping[str, DimensionRecordSet]):
         element name to a `DimensionRecordSet` of all records for that element.
         They keys of the returned `dict` must be exactly the elements in
         ``universe`` for which `DimensionElement.is_cached` is `True`.
+
+    Notes
+    -----
+    The nested `DimensionRecordSet` objects should never be modified in place
+    except when returned by the `modifying` context manager.
     """
 
     def __init__(self, universe: DimensionUniverse, fetch: Callable[[], dict[str, DimensionRecordSet]]):
@@ -63,6 +69,63 @@ class DimensionRecordCache(Mapping[str, DimensionRecordSet]):
         """Reset the cache, causing it to be fetched again on next use."""
         self._records = None
 
+    @contextmanager
+    def modifying(self, element: str) -> Iterator[DimensionRecordSet | None]:
+        """Return a context manager for modifying the cache and database
+        content consistently.
+
+        Parameters
+        ----------
+        element : `str`
+            Name of the dimension element whose records will be modified.
+            If this is not a cached record, `None` will be returned and the
+            context manager does nothing.
+
+        Returns
+        -------
+        context : `contextlib.AbstractContextManager` [ `DimensionRecordSet` \
+                or `None` ]
+            A context manager that when entered returns a `DimensionRecordSet`
+            that should be modified in-place, or `None` if the cache is
+            currently reset.
+
+        Notes
+        -----
+        The returned context manager resets the cache when entered, and only
+        restores the cache (along with the modifications to the returned
+        `DimensionRecordSet`) if an exception is not raised during the context.
+        It also takes care of updating any cache for "implied union" dimensions
+        (e.g. ``band``, in the default dimension universe) when their targets
+        are updated (e.g. ``physical_filter``).
+        """
+        if element in self:
+            records = self._records
+            self._records = None
+            if records is None:
+                yield None
+            else:
+                yield records[element]
+                for other_element_records in records.values():
+                    other_element = other_element_records.element
+                    # If we've just updated the records of a dimension element
+                    # that is the implied union target of another (i.e. we've
+                    # updated physical_filter, and thus possibly updated the
+                    # set of band values).  We need to update the cache for
+                    # the implied union target (i.e. band), too.
+                    if (
+                        other_element.implied_union_target is not None
+                        and other_element.implied_union_target.name == element
+                    ):
+                        other_element_records.update(
+                            other_element.RecordClass(
+                                **{other_element.name: getattr(record, other_element.name)}
+                            )
+                            for record in records[element]
+                        )
+            self._records = records
+        else:
+            yield None
+
     def load_from(self, other: DimensionRecordCache) -> None:
         """Load records from another cache, but do nothing if it doesn't
         currently have any records.
@@ -74,11 +137,12 @@ class DimensionRecordCache(Mapping[str, DimensionRecordSet]):
         """
         self._records = copy.deepcopy(other._records)
 
-    def __contains__(self, element: object) -> bool:
-        if self._records is None:
-            return element in self._keys
-        else:
-            return element in self._records
+    def __contains__(self, key: object) -> bool:
+        if not isinstance(key, str):
+            return False
+        if (element := self._universe.get(key)) is not None:
+            return element.is_cached
+        return False
 
     def __getitem__(self, element: str) -> DimensionRecordSet:
         if self._records is None:

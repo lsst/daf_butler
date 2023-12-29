@@ -38,7 +38,13 @@ from lsst.daf.relation import ColumnError, ColumnTag, Diagnostics, Relation, Sor
 from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionElement, DimensionGroup, DimensionRecord
+from ...dimensions import (
+    DataCoordinate,
+    DimensionElement,
+    DimensionGroup,
+    DimensionRecord,
+    DimensionRecordSet,
+)
 from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
 from ._query_backend import QueryBackend
@@ -77,11 +83,9 @@ class Query:
         either have records present in ``record_caches`` or all columns present
         in ``relation``, while a specific `DimensionElement` means that element
         does.
-    record_caches : `~collections.abc.Mapping` [ `DimensionElement`, \
-            `~collections.abc.Mapping`
-            [ `DataCoordinate`, `DimensionRecord` ] ], optional
-        Cached dimension record values, organized first by dimension element
-        and then by data ID.
+    record_caches : `~collections.abc.Mapping` [ `str`, \
+            `DimensionRecordSet` ], optional
+        Cached dimension record values.
 
     Notes
     -----
@@ -114,7 +118,7 @@ class Query:
         governor_constraints: Mapping[str, Set[str]],
         is_deferred: bool,
         has_record_columns: bool | DimensionElement,
-        record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
+        record_caches: Mapping[str, DimensionRecordSet] | None = None,
     ):
         self._dimensions = dimensions
         self._backend = backend
@@ -310,9 +314,9 @@ class Query:
                     raise ValueError("No default dimension element in query; 'element' must be given.")
                 case only_element_with_records:
                     element = only_element_with_records
-        if (cache := self._record_caches.get(element)) is not None:
+        if (cache := self._record_caches.get(element.name)) is not None:
             for data_id in self.iter_data_ids(element.minimal_group):
-                yield cache[data_id]
+                yield cache.find(data_id)
         else:
             reader = DimensionRecordReader(element)
             if not (reader.columns_required <= self.relation.columns):
@@ -557,8 +561,8 @@ class Query:
             element = self.dimensions.universe[element_name]
             if element_name in record_caches:
                 continue
-            if (cache := self._backend.get_dimension_record_cache(element_name, self._context)) is not None:
-                record_caches[element] = cache
+            if (cache := self._backend.get_dimension_record_cache(element_name)) is not None:
+                record_caches[element_name] = cache
             else:
                 columns_required.update(element.RecordClass.fields.columns.keys())
         # Modify the relation we have to remove any projections that dropped
@@ -719,10 +723,8 @@ class Query:
                     element = full_dimensions.universe[element_name]
                     if element in record_caches:
                         continue
-                    if (
-                        cache := self._backend.get_dimension_record_cache(element_name, self._context)
-                    ) is not None:
-                        record_caches[element] = cache
+                    if (cache := self._backend.get_dimension_record_cache(element_name)) is not None:
+                        record_caches[element_name] = cache
                     else:
                         base_columns_required.update(element.RecordClass.fields.columns.keys())
             # See if we need spatial joins between the current query and the
@@ -1008,7 +1010,7 @@ class Query:
         dimensions: DimensionGroup | None = None,
         governor_constraints: Mapping[str, Set[str]] | None = None,
         has_record_columns: bool | DimensionElement | None = None,
-        record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
+        record_caches: Mapping[str, DimensionRecordSet] | None = None,
     ) -> Query:
         """Return a modified copy of this query with some attributes replaced.
 
@@ -1035,7 +1037,7 @@ class Query:
         dimensions: DimensionGroup | None = None,
         governor_constraints: Mapping[str, Set[str]] | None = None,
         has_record_columns: bool | DimensionElement | None = None,
-        record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
+        record_caches: Mapping[str, DimensionRecordSet] | None = None,
     ) -> Query:
         """Return a modified query with a new relation while handling the
         ubiquitous ``defer`` parameter's logic.
@@ -1055,9 +1057,8 @@ class Query:
             See class docs.
         has_record_columns : `bool` or `DimensionElement`, optional
             See class docs.
-        record_caches : `~collections.abc.Mapping` [ `DimensionElement`, \
-                `~collections.abc.Mapping` \
-                [ `DataCoordinate`, `DimensionRecord` ] ], optional
+        record_caches : `~collections.abc.Mapping` [ `str`, \
+                `DimensionRecordSet`, optional
             See class docs.
 
         Returns

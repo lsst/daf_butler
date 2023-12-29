@@ -48,7 +48,7 @@ from lsst.daf.relation import (
 
 from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionGroup, DimensionRecord, DimensionUniverse
+from ...dimensions import DimensionGroup, DimensionRecordSet, DimensionUniverse
 from .._collection_type import CollectionType
 from .._exceptions import DatasetTypeError, MissingDatasetTypeError
 from ..wildcards import CollectionWildcard
@@ -699,7 +699,7 @@ class QueryBackend(Generic[_C]):
 
     @abstractmethod
     def resolve_governor_constraints(
-        self, dimensions: DimensionGroup, constraints: Mapping[str, Set[str]], context: _C
+        self, dimensions: DimensionGroup, constraints: Mapping[str, Set[str]]
     ) -> Mapping[str, Set[str]]:
         """Resolve governor dimension constraints provided by user input to
         a query against the content in the `Registry`.
@@ -713,9 +713,6 @@ class QueryBackend(Generic[_C]):
                 `~collections.abc.Set` [ `str` ] ]
             Constraints from user input to the query (e.g. from data IDs and
             string expression predicates).
-        context : `QueryContext`
-            Object that manages state for the query; used here to fetch the
-            governor dimension record cache if it has not already been loaded.
 
         Returns
         -------
@@ -734,9 +731,7 @@ class QueryBackend(Generic[_C]):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_dimension_record_cache(
-        self, element_name: str, context: _C
-    ) -> Mapping[DataCoordinate, DimensionRecord] | None:
+    def get_dimension_record_cache(self, element_name: str) -> DimensionRecordSet | None:
         """Return a local cache of all `DimensionRecord` objects for a
         dimension element, fetching it if necessary.
 
@@ -744,9 +739,6 @@ class QueryBackend(Generic[_C]):
         ----------
         element_name : `str`
             Name of the dimension element.
-        context : `.queries.SqlQueryContext`
-            Context to be used to execute queries when no cached result is
-            available.
 
         Returns
         -------

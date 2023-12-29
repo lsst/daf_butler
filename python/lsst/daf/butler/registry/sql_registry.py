@@ -246,16 +246,16 @@ class SqlRegistry:
         self._db = database
         self._managers = managers
         self.storageClasses = StorageClassFactory()
-        # Intentionally invoke property setter to initialize defaults.  This
-        # can only be done after most of the rest of Registry has already been
-        # initialized, and must be done before the property getter is used.
-        self.defaults = defaults
         # This is public to SqlRegistry's internal-to-daf_butler callers, but
         # it is intentionally not part of RegistryShim.
         self.dimension_record_cache = DimensionRecordCache(
             self._managers.dimensions.universe,
             fetch=self._managers.dimensions.fetch_cache_dict,
         )
+        # Intentionally invoke property setter to initialize defaults.  This
+        # can only be done after most of the rest of Registry has already been
+        # initialized, and must be done before the property getter is used.
+        self.defaults = defaults
         # TODO: This is currently initialized by `make_datastore_tables`,
         # eventually we'll need to do it during construction.
         # The mapping is indexed by the opaque table name.
@@ -335,6 +335,7 @@ class SqlRegistry:
         This may be necessary to enable querying for entities added by other
         registry instances after this one was constructed.
         """
+        self.dimension_record_cache.reset()
         with self._db.transaction():
             self._managers.refresh()
 
@@ -362,14 +363,8 @@ class SqlRegistry:
         ------
         `None`
         """
-        try:
-            with self._db.transaction(savepoint=savepoint):
-                yield
-        except BaseException:
-            # TODO: this clears the caches sometimes when we wouldn't actually
-            # need to.  Can we avoid that?
-            self._managers.dimensions.clearCaches()
-            raise
+        with self._db.transaction(savepoint=savepoint):
+            yield
 
     def resetConnectionPool(self) -> None:
         """Reset SQLAlchemy connection pool for `SqlRegistry` database.
@@ -904,7 +899,7 @@ class SqlRegistry:
                     "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections
-        backend = queries.SqlQueryBackend(self._db, self._managers)
+        backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
         with backend.caching_context():
             collection_wildcard = CollectionWildcard.from_expression(collections, require_ordered=True)
             if collection_wildcard.empty():
@@ -1574,7 +1569,6 @@ class SqlRegistry:
             for element_name in dataId.dimensions.elements:
                 records[element_name] = dataId.records[element_name]
         keys = dict(standardized.mapping)
-        context = queries.SqlQueryContext(self._db, self._managers.column_types)
         for element_name in standardized.dimensions.lookup_order:
             element = self.dimensions[element_name]
             record = records.get(element_name, ...)  # Use ... to mean not found; None might mean NULL
@@ -1587,9 +1581,10 @@ class SqlRegistry:
                     keys[element_name] = None
                     record = None
                 else:
-                    storage = self._managers.dimensions[element_name]
-                    record = storage.fetch_one(
-                        DataCoordinate.standardize(keys, dimensions=element.minimal_group), context
+                    record = self._managers.dimensions.fetch_one(
+                        element_name,
+                        DataCoordinate.standardize(keys, dimensions=element.minimal_group),
+                        self.dimension_record_cache,
                     )
                 records[element_name] = record
             if record is not None:
@@ -1648,17 +1643,22 @@ class SqlRegistry:
             differs from what is in the database, and should not be used when
             this is a concern.
         """
+        if isinstance(element, str):
+            element = self.dimensions[element]
         if conform:
-            if isinstance(element, str):
-                element = self.dimensions[element]
             records = [
                 row if isinstance(row, DimensionRecord) else element.RecordClass(**row) for row in data
             ]
         else:
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
-        storage = self._managers.dimensions[element]
-        storage.insert(*records, replace=replace, skip_existing=skip_existing)
+        self._managers.dimensions.insert(
+            element,
+            *records,
+            cache=self.dimension_record_cache,
+            replace=replace,
+            skip_existing=skip_existing,
+        )
 
     def syncDimensionData(
         self,
@@ -1707,8 +1707,7 @@ class SqlRegistry:
         else:
             # Ignore typing since caller said to trust them with conform=False.
             record = row  # type: ignore
-        storage = self._managers.dimensions[element]
-        return storage.sync(record, update=update)
+        return self._managers.dimensions.sync(record, self.dimension_record_cache, update=update)
 
     def queryDatasetTypes(
         self,
@@ -1868,7 +1867,7 @@ class SqlRegistry:
             Object that can be used to construct and perform advanced queries.
         """
         doomed_by = list(doomed_by)
-        backend = queries.SqlQueryBackend(self._db, self._managers)
+        backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
         context = backend.context()
         relation: Relation | None = None
         if doomed_by:
@@ -2482,7 +2481,7 @@ class SqlRegistry:
                 )
             collections = self.defaults.collections
         collection_wildcard = CollectionWildcard.from_expression(collections)
-        backend = queries.SqlQueryBackend(self._db, self._managers)
+        backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
         parent_dataset_type, _ = backend.resolve_single_dataset_type_wildcard(datasetType, components=False)
         timespan_tag = DatasetColumnTag(parent_dataset_type.name, "timespan")
         collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")

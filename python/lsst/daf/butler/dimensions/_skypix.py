@@ -47,7 +47,6 @@ from ._elements import Dimension, KeyColumnSpec, MetadataColumnSpec
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
-    from ..registry.interfaces import SkyPixDimensionRecordStorage
     from ._universe import DimensionUniverse
 
 
@@ -167,21 +166,6 @@ class SkyPixDimension(Dimension):
     def has_own_table(self) -> bool:
         # Docstring inherited from DimensionElement.
         return False
-
-    def makeStorage(self) -> SkyPixDimensionRecordStorage:
-        """Make the storage record.
-
-        Constructs the `DimensionRecordStorage` instance that should
-        be used to back this element in a registry.
-
-        Returns
-        -------
-        storage : `SkyPixDimensionRecordStorage`
-            Storage object that should back this element in a registry.
-        """
-        from ..registry.dimensions.skypix import BasicSkyPixDimensionRecordStorage
-
-        return BasicSkyPixDimensionRecordStorage(self)
 
     @property
     def unique_keys(self) -> NamedValueAbstractSet[KeyColumnSpec]:

@@ -38,21 +38,14 @@ from collections.abc import Iterable, Mapping, Set
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from lsst.utils import doImportType
 from lsst.utils.classes import cached_getter
 
-from .._named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
+from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
 from ._elements import Dimension, DimensionCombination, DimensionElement, KeyColumnSpec, MetadataColumnSpec
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
-    from ..registry.interfaces import (
-        Database,
-        DatabaseDimensionRecordStorage,
-        GovernorDimensionRecordStorage,
-        StaticTablesContext,
-    )
     from ._governor import GovernorDimension
     from ._universe import DimensionUniverse
 
@@ -251,51 +244,6 @@ class DatabaseDimensionElement(DimensionElement):
     def temporal(self) -> DatabaseTopologicalFamily | None:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return self.topology.get(TopologicalSpace.TEMPORAL)
-
-    def makeStorage(
-        self,
-        db: Database,
-        *,
-        context: StaticTablesContext | None = None,
-        governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
-        view_target: DatabaseDimensionRecordStorage | None = None,
-    ) -> DatabaseDimensionRecordStorage:
-        """Make the dimension record storage instance for this database.
-
-        Constructs the `DimensionRecordStorage` instance that should
-        be used to back this element in a registry.
-
-        Parameters
-        ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
-        context : `StaticTablesContext`, optional
-            If provided, an object to use to create any new tables.  If not
-            provided, ``db.ensureTableExists`` should be used instead.
-        governors : `NamedKeyMapping`
-            Mapping from `GovernorDimension` to the record storage backend for
-            that dimension, containing all governor dimensions.
-        view_target : `DatabaseDimensionRecordStorage`, optional
-            Storage object for the element this target's storage is a view of
-            (i.e. when `viewOf` is not `None`).
-
-        Returns
-        -------
-        storage : `DatabaseDimensionRecordStorage`
-            Storage object that should back this element in a registry.
-        """
-        from ..registry.interfaces import DatabaseDimensionRecordStorage
-
-        cls = doImportType(self._storage["cls"])
-        assert issubclass(cls, DatabaseDimensionRecordStorage)
-        return cls.initialize(
-            db,
-            self,
-            context=context,
-            config=self._storage,
-            governors=governors,
-            view_target=view_target,
-        )
 
 
 class DatabaseDimension(Dimension, DatabaseDimensionElement):

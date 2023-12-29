@@ -73,7 +73,7 @@ class QueryBuilder:
         self._context = backend.context() if context is None else context
         self.relation = self._context.make_initial_relation(relation)
         self._governor_constraints = self._backend.resolve_governor_constraints(
-            self.summary.dimensions, self.summary.where.governor_constraints, self._context
+            self.summary.dimensions, self.summary.where.governor_constraints
         )
 
     def joinDataset(

@@ -492,6 +492,5 @@ class RegistryManagerInstances(
         """Refresh all in-memory state by querying the database or clearing
         caches.
         """
-        self.dimensions.clearCaches()
         self.collections.refresh()
         self.datasets.refresh()

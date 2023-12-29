@@ -82,23 +82,20 @@ class _ExposureRegionFactory(ExposureRegionFactory):
         # Make a relation that starts with visit_definition (mapping between
         # exposure and visit).
         relation = context.make_initial_relation()
-        visit_definition_storage = self.dimensions.get(self.universe["visit_definition"])
-        if visit_definition_storage is None:
+        if "visit_definition" not in self.universe.elements.names:
             return None
-        relation = visit_definition_storage.join(relation, Join(), context)
+        relation = self.dimensions.join("visit_definition", relation, Join(), context)
         # Join in a table with either visit+detector regions or visit regions.
         if "detector" in dataId.dimensions:
-            visit_detector_region_storage = self.dimensions.get(self.universe["visit_detector_region"])
-            if visit_detector_region_storage is None:
+            if "visit_detector_region" not in self.universe:
                 return None
-            relation = visit_detector_region_storage.join(relation, Join(), context)
+            relation = self.dimensions.join("visit_detector_region", relation, Join(), context)
             constraint_data_id = dataId.subset(self.exposure_detector_dimensions)
             region_tag = DimensionRecordColumnTag("visit_detector_region", "region")
         else:
-            visit_storage = self.dimensions.get(self.universe["visit"])
-            if visit_storage is None:
+            if "visit" not in self.universe:
                 return None
-            relation = visit_storage.join(relation, Join(), context)
+            relation = self.dimensions.join("visit", relation, Join(), context)
             constraint_data_id = dataId.subset(self.exposure_dimensions)
             region_tag = DimensionRecordColumnTag("visit", "region")
         # Constrain the relation to match the given exposure and (if present)

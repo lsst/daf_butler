@@ -31,17 +31,11 @@ __all__ = ("GovernorDimension",)
 
 from collections.abc import Iterable, Mapping, Set
 from types import MappingProxyType
-from typing import TYPE_CHECKING
-
-from lsst.utils import doImportType
 
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
 from ._elements import Dimension, KeyColumnSpec, MetadataColumnSpec
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
-
-if TYPE_CHECKING:
-    from ..registry.interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
 
 
 class GovernorDimension(Dimension):
@@ -159,36 +153,6 @@ class GovernorDimension(Dimension):
     def documentation(self) -> str:
         # Docstring inherited from DimensionElement.
         return self._doc
-
-    def makeStorage(
-        self,
-        db: Database,
-        *,
-        context: StaticTablesContext | None = None,
-    ) -> GovernorDimensionRecordStorage:
-        """Make storage record.
-
-        Constructs the `DimensionRecordStorage` instance that should
-        be used to back this element in a registry.
-
-        Parameters
-        ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
-        context : `StaticTablesContext`, optional
-            If provided, an object to use to create any new tables.  If not
-            provided, ``db.ensureTableExists`` should be used instead.
-
-        Returns
-        -------
-        storage : `GovernorDimensionRecordStorage`
-            Storage object that should back this element in a registry.
-        """
-        from ..registry.interfaces import GovernorDimensionRecordStorage
-
-        cls = doImportType(self._storage["cls"])
-        assert issubclass(cls, GovernorDimensionRecordStorage)
-        return cls.initialize(db, self, context=context, config=self._storage)
 
 
 class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
