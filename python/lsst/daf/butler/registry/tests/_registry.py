@@ -1800,6 +1800,17 @@ class RegistryTests(ABC):
                     dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
                     [dataset2],
                 )
+        # Repeat the materialization tests with a dimension element that isn't
+        # cached, so there's no way we can know when building the query where
+        # there are any rows are not (there aren't).
+        dataIds = registry.queryDataIds(["exposure"]).subset(registry.dimensions.empty, unique=True)
+        with dataIds.materialize() as dataIds:
+            self.checkQueryResults(dataIds, [])
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False), []
+            )
+            self.checkQueryResults(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True), [])
+            self.checkQueryResults(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True), [])
         # Query for non-empty data IDs with a constraint on an empty-data-ID
         # dataset that exists.
         dataIds = registry.queryDataIds(["instrument"], datasets="schema", collections=...)
