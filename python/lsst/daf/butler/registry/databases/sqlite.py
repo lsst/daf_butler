@@ -91,25 +91,42 @@ class SqliteDatabase(Database):
         namespace: str | None = None,
         writeable: bool = True,
     ):
-        super().__init__(origin=origin, engine=engine, namespace=namespace)
-        # Get the filename from a call to 'PRAGMA database_list'.
-        with engine.connect() as connection, closing(connection.connection.cursor()) as cursor:
-            dbList = list(cursor.execute("PRAGMA database_list").fetchall())
-        if len(dbList) == 0:
-            raise RuntimeError("No database in connection.")
-        if namespace is None:
-            namespace = "main"
-        # Look for the filename associated with this namespace.
-        for _, dbname, filename in dbList:  # B007
-            if dbname == namespace:
-                break
-        else:
-            raise RuntimeError(f"No '{namespace}' database in connection.")
-        if not filename:
-            self.filename = None
-        else:
-            self.filename = filename
+        filename = _find_database_filename(engine, namespace)
+        self._init(
+            engine=engine,
+            origin=origin,
+            namespace=namespace,
+            writeable=writeable,
+            filename=filename,
+            metadata=None,
+        )
+
+    def _init(
+        self,
+        *,
+        engine: sqlalchemy.engine.Engine,
+        origin: int,
+        namespace: str | None = None,
+        writeable: bool = True,
+        filename: str | None,
+        metadata: sqlalchemy.schema.MetaData | None,
+    ) -> None:
+        # Initialization logic shared between ``__init__`` and ``clone``.
+        super().__init__(origin=origin, engine=engine, namespace=namespace, metadata=metadata)
         self._writeable = writeable
+        self.filename = filename
+
+    def clone(self) -> SqliteDatabase:
+        clone = self.__new__(type(self))
+        clone._init(
+            engine=self._engine,
+            origin=self.origin,
+            namespace=self.namespace,
+            writeable=self._writeable,
+            filename=self.filename,
+            metadata=self._metadata,
+        )
+        return clone
 
     @classmethod
     def makeDefaultUri(cls, root: str) -> str | None:
@@ -383,3 +400,26 @@ class SqliteDatabase(Database):
 
     Set to `None` for in-memory databases.
     """
+
+
+def _find_database_filename(
+    engine: sqlalchemy.engine.Engine,
+    namespace: str | None = None,
+) -> str | None:
+    # Get the filename from a call to 'PRAGMA database_list'.
+    with engine.connect() as connection, closing(connection.connection.cursor()) as cursor:
+        dbList = list(cursor.execute("PRAGMA database_list").fetchall())
+    if len(dbList) == 0:
+        raise RuntimeError("No database in connection.")
+    if namespace is None:
+        namespace = "main"
+    # Look for the filename associated with this namespace.
+    for _, dbname, filename in dbList:  # B007
+        if dbname == namespace:
+            break
+    else:
+        raise RuntimeError(f"No '{namespace}' database in connection.")
+    if not filename:
+        return None
+    else:
+        return filename
