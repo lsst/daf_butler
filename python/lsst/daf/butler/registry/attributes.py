@@ -85,6 +85,10 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         ],
     )
 
+    def clone(self, db: Database) -> DefaultButlerAttributeManager:
+        # Docstring inherited from ButlerAttributeManager.
+        return DefaultButlerAttributeManager(db, self._table, self._registry_schema_version)
+
     @classmethod
     def initialize(
         cls, db: Database, context: StaticTablesContext, registry_schema_version: VersionTuple | None = None
