@@ -37,7 +37,7 @@ __all__ = [
 
 from abc import abstractmethod
 from collections.abc import Iterable, Set
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
 from ..._timespan import Timespan
 from .._collection_type import CollectionType
@@ -210,6 +210,26 @@ class CollectionManager(Generic[_Key], VersionedExtension):
 
     def __init__(self, *, registry_schema_version: VersionTuple | None = None) -> None:
         super().__init__(registry_schema_version=registry_schema_version)
+
+    @abstractmethod
+    def clone(self, db: Database, caching_context: CachingContext) -> Self:
+        """Make an independent copy of this manager instance bound to a new
+        `Database` instance.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating the manager.
+        caching_context : `CachingContext`
+            New `CachingContext` object to use when instantiating the manager.
+
+        Returns
+        -------
+        instance : `CollectionManager`
+            New manager instance with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        raise NotImplementedError()
 
     @classmethod
     @abstractmethod
