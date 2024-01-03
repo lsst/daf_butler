@@ -122,10 +122,13 @@ class LabeledButlerFactory:
         config = ButlerConfig(config_uri)
         butler_type = config.get_butler_type()
 
-        if butler_type == ButlerType.DIRECT:
-            return _create_direct_butler_factory(config)
-        elif butler_type == ButlerType.REMOTE:
-            return _create_remote_butler_factory(config)
+        match butler_type:
+            case ButlerType.DIRECT:
+                return _create_direct_butler_factory(config)
+            case ButlerType.REMOTE:
+                return _create_remote_butler_factory(config)
+            case _:
+                raise TypeError(f"Unknown butler type '{butler_type}' for label '{label}'")
 
     def _get_config_uri(self, label: str) -> ResourcePathExpression:
         if self._repositories is None:

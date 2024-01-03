@@ -294,19 +294,22 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         butler_type = butler_config.get_butler_type()
 
         # Make DirectButler if class is not specified.
-        if butler_type == ButlerType.DIRECT:
-            from .direct_butler import DirectButler
+        match butler_type:
+            case ButlerType.DIRECT:
+                from .direct_butler import DirectButler
 
-            return DirectButler.create_from_config(
-                butler_config,
-                options=options,
-                without_datastore=without_datastore,
-            )
-        elif butler_type == ButlerType.REMOTE:
-            from .remote_butler import RemoteButlerFactory
+                return DirectButler.create_from_config(
+                    butler_config,
+                    options=options,
+                    without_datastore=without_datastore,
+                )
+            case ButlerType.REMOTE:
+                from .remote_butler import RemoteButlerFactory
 
-            factory = RemoteButlerFactory.create_factory_from_config(butler_config)
-            return factory.create_butler_with_credentials_from_environment(butler_options=options)
+                factory = RemoteButlerFactory.create_factory_from_config(butler_config)
+                return factory.create_butler_with_credentials_from_environment(butler_options=options)
+            case _:
+                raise TypeError(f"Unknown Butler type '{butler_type}'")
 
     @staticmethod
     def makeRepo(
