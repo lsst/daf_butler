@@ -143,6 +143,9 @@ class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
         super().__init__(registry_schema_version=registry_schema_version)
         self._storages: dict[str, DummyOpaqueTableStorage] = {}
 
+    def clone(self, db: Database) -> OpaqueTableStorageManager:
+        return self
+
     @classmethod
     def initialize(
         cls, db: Database, context: StaticTablesContext, registry_schema_version: VersionTuple | None = None
