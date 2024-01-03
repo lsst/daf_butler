@@ -28,14 +28,14 @@
 import tempfile
 import unittest
 
-from lsst.daf.butler import ButlerFactory
+from lsst.daf.butler import LabeledButlerFactory
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.tests import makeTestRepo
 from lsst.daf.butler.tests.utils import mock_env
 
 
 class ButlerFactoryTestCase(unittest.TestCase):
-    """Test ButlerFactory."""
+    """Test LabeledButlerFactory."""
 
     # RemoteButler cases aren't tested in this file because RemoteButler's
     # dependencies aren't available in rubin-env.  RemoteButler gets covered in
@@ -52,14 +52,14 @@ class ButlerFactoryTestCase(unittest.TestCase):
             index_file.write(f"test_repo: {self.config_file_uri}\n".encode())
             index_file.flush()
             with mock_env({"DAF_BUTLER_REPOSITORY_INDEX": index_file.name}):
-                factory = ButlerFactory()
+                factory = LabeledButlerFactory()
                 self._test_factory(factory)
 
     def test_factory_via_custom_index(self):
-        factory = ButlerFactory({"test_repo": self.config_file_uri})
+        factory = LabeledButlerFactory({"test_repo": self.config_file_uri})
         self._test_factory(factory)
 
-    def _test_factory(self, factory: ButlerFactory) -> None:
+    def _test_factory(self, factory: LabeledButlerFactory) -> None:
         butler = factory.create_butler(label="test_repo", access_token=None)
         self.assertIsInstance(butler, DirectButler)
         # This identical second call covers a read from the cache.

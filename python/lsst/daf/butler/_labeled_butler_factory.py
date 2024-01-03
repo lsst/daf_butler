@@ -25,7 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("ButlerFactory",)
+__all__ = ("LabeledButlerFactory",)
 
 from typing import Callable, Mapping
 
@@ -42,7 +42,7 @@ _FactoryFunction = Callable[[str | None], Butler]
 instance."""
 
 
-class ButlerFactory:
+class LabeledButlerFactory:
     """Factory for efficiently instantiating Butler instances from the
     repository index file.  This is intended for use from long-lived services
     that want to instantiate a separate Butler instance for each end user
@@ -65,7 +65,7 @@ class ButlerFactory:
     instantiation of new instances.
 
     Instance methods on this class are threadsafe. A single instance of
-    `ButlerFactory` can be shared between multiple threads.  Note that
+    `LabeledButlerFactory` can be shared between multiple threads.  Note that
     ``DirectButler`` itself is not currently threadsafe, so this guarantee does
     not buy you much. See DM-42317.
     """
@@ -86,7 +86,7 @@ class ButlerFactory:
         ----------
         label : `str`
             Label of the repository to instantiate, from the ``repositories``
-            parameter to the `ButlerFactory` constructor or the global
+            parameter to the `LabeledButlerFactory` constructor or the global
             repository index file.
         access_token : `str` | `None`
             Gafaelfawr access token used to authenticate to a Butler server.
