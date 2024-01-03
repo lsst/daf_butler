@@ -27,6 +27,8 @@
 
 import unittest
 
+from lsst.daf.butler._utilities.locked_object import LockedObject
+from lsst.daf.butler._utilities.named_locks import NamedLocks
 from lsst.daf.butler._utilities.thread_safe_cache import ThreadSafeCache
 
 
@@ -41,6 +43,40 @@ class ThreadSafeCacheTestCase(unittest.TestCase):
         self.assertEqual(cache.set_or_get("key", "b"), "a")
         self.assertEqual(cache.get("key"), "a")
         self.assertIsNone(cache.get("other"))
+
+
+class NamedLocksTestCase(unittest.TestCase):
+    """Test NamedLocks."""
+
+    def test_named_locks(self):
+        locks = NamedLocks()
+        lock1 = locks._get_lock("a")
+        lock2 = locks._get_lock("b")
+        lock3 = locks._get_lock("a")
+
+        self.assertIs(lock1, lock3)
+        self.assertIsNot(lock1, lock2)
+
+        self.assertFalse(lock1.locked())
+        self.assertFalse(lock2.locked())
+        with locks.lock("a"):
+            self.assertTrue(lock1.locked())
+            self.assertFalse(lock2.locked())
+        self.assertFalse(lock1.locked())
+        self.assertFalse(lock2.locked())
+
+
+class LockedObjectTestCase(unittest.TestCase):
+    """Test LockedObject."""
+
+    def test_named_locks(self):
+        data = object()
+        locked_obj = LockedObject(data)
+        self.assertFalse(locked_obj._lock.locked())
+        with locked_obj.access() as accessed:
+            self.assertTrue(locked_obj._lock.locked())
+            self.assertIs(data, accessed)
+        self.assertFalse(locked_obj._lock.locked())
 
 
 if __name__ == "__main__":
