@@ -421,7 +421,6 @@ class RegistryManagerInstances(
         kwargs["collections"] = types.collections.initialize(
             database,
             context,
-            dimensions=kwargs["dimensions"],
             caching_context=caching_context,
             registry_schema_version=schema_versions.get("collections"),
         )
