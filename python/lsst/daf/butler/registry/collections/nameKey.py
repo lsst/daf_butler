@@ -102,6 +102,15 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
             registry_schema_version=registry_schema_version,
         )
 
+    def clone(self, db: Database, caching_context: CachingContext) -> NameKeyCollectionManager:
+        return NameKeyCollectionManager(
+            db,
+            tables=self._tables,
+            collectionIdName=self._collectionIdName,
+            caching_context=caching_context,
+            registry_schema_version=self._registry_schema_version,
+        )
+
     @classmethod
     def getCollectionForeignKeyName(cls, prefix: str = "collection") -> str:
         # Docstring inherited from CollectionManager.
