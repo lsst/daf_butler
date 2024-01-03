@@ -35,6 +35,7 @@ import contextlib
 import copy
 import os
 from collections.abc import Sequence
+from enum import Enum
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
@@ -46,6 +47,8 @@ from .registry import RegistryConfig
 from .transfers import RepoTransferFormatConfig
 
 CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig, DatastoreConfig, RepoTransferFormatConfig)
+
+ButlerType = Enum("ButlerType", ["DIRECT", "REMOTE"])
 
 
 class ButlerConfig(Config):
@@ -191,3 +194,20 @@ class ButlerConfig(Config):
         # Not needed if there is never information in a butler config file
         # not present in component configurations
         self.update(butlerConfig)
+
+    def get_butler_type(self) -> ButlerType:
+        # Configuration optionally includes a class name specifying which
+        # implementation to use, DirectButler or RemoteButler.
+        butler_class_name = self.get("cls")
+        if butler_class_name is None:
+            # There are many existing DirectButler configurations that are
+            # missing the ``cls`` property.
+            return ButlerType.DIRECT
+        elif butler_class_name == "lsst.daf.butler.direct_butler.DirectButler":
+            return ButlerType.DIRECT
+        elif butler_class_name == "lsst.daf.butler.remote_butler.RemoteButler":
+            return ButlerType.REMOTE
+        else:
+            raise ValueError(
+                f"Butler configuration requests to load unknown Butler class {butler_class_name}"
+            )

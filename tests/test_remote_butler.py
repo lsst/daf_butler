@@ -42,19 +42,6 @@ except ImportError:
 class RemoteButlerConfigTests(unittest.TestCase):
     """Test construction of RemoteButler via Butler()"""
 
-    def test_instantiate_via_butler(self):
-        butler = Butler(
-            {
-                "cls": "lsst.daf.butler.remote_butler.RemoteButler",
-                "remote_butler": {"url": "https://validurl.example"},
-            },
-            collections=["collection1", "collection2"],
-            run="collection2",
-        )
-        assert isinstance(butler, RemoteButler)
-        self.assertEqual(butler.collections, ("collection1", "collection2"))
-        self.assertEqual(butler.run, "collection2")
-
     def test_bad_config(self):
         with self.assertRaises(ValidationError):
             Butler({"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "!"}})

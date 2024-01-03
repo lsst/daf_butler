@@ -31,29 +31,28 @@ __all__ = ("RemoteButler",)
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
-from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar, cast
 
 import httpx
 from lsst.daf.butler import __version__
 from lsst.daf.butler.datastores.fileDatastoreClient import get_dataset_as_python_object
-from lsst.daf.butler.repo_relocation import replaceRoot
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
 from pydantic import parse_obj_as
 
 from .._butler import Butler
-from .._butler_config import ButlerConfig
+from .._butler_instance_options import ButlerInstanceOptions
 from .._compat import _BaseModelCompat
-from .._config import Config
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
+from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
-from ._authentication import get_authentication_headers, get_authentication_token_from_environment
-from ._config import RemoteButlerConfigModel
+from ._authentication import get_authentication_headers
 from .server_models import (
     CollectionList,
     DatasetTypeName,
@@ -81,105 +80,71 @@ _InputCollectionList = str | Sequence[str] | None
 """
 
 
-class RemoteButler(Butler):
+class RemoteButler(Butler):  # numpydoc ignore=PR02
     """A `Butler` that can be used to connect through a remote server.
 
     Parameters
     ----------
-    config : `ButlerConfig`, `Config` or `str`, optional
-        Configuration. Anything acceptable to the `ButlerConfig` constructor.
-        If a directory path is given the configuration will be read from a
-        ``butler.yaml`` file in that location. If `None` is given default
-        values will be used. If ``config`` contains "cls" key then its value is
-        used as a name of butler class and it must be a sub-class of this
-        class, otherwise `DirectButler` is instantiated.
-    collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
-        An expression specifying the collections to be searched (in order) when
-        reading datasets.
-        This may be a `str` collection name or an iterable thereof.
-        See :ref:`daf_butler_collection_expressions` for more information.
-        These collections are not registered automatically and must be
-        manually registered before they are used by any method, but they may be
-        manually registered after the `Butler` is initialized.
-    run : `str`, optional
-        Name of the `~CollectionType.RUN` collection new datasets should be
-        inserted into.  If ``collections`` is `None` and ``run`` is not `None`,
-        ``collections`` will be set to ``[run]``.  If not `None`, this
-        collection will automatically be registered.  If this is not set (and
-        ``writeable`` is not set either), a read-only butler will be created.
-    searchPaths : `list` of `str`, optional
-        Directory paths to search when calculating the full Butler
-        configuration.  Not used if the supplied config is already a
-        `ButlerConfig`.
-    writeable : `bool`, optional
-        Explicitly sets whether the butler supports write operations.  If not
-        provided, a read-write butler is created if any of ``run``, ``tags``,
-        or ``chains`` is non-empty.
-    inferDefaults : `bool`, optional
-        If `True` (default) infer default data ID values from the values
-        present in the datasets in ``collections``: if all collections have the
-        same value (or no value) for a governor dimension, that value will be
-        the default for that dimension.  Nonexistent collections are ignored.
-        If a default value is provided explicitly for a governor dimension via
-        ``**kwargs``, no default will be inferred for that dimension.
-    http_client : `httpx.Client` or `None`, optional
-        Client to use to connect to the server. This is generally only
-        necessary for test code.
-    access_token : `str` or `None`, optional
-        Explicit access token to use when connecting to the server. If not
-        given an attempt will be found to obtain one from the environment.
-    **kwargs : `Any`
-        Parameters that can be used to set defaults for governor dimensions.
+    server_url : `str`
+        URL of the Butler server we will connect to.
+    options : `ButlerInstanceOptions`
+        Default values and other settings for the Butler instance.
+    http_client : `httpx.Client`
+        HTTP connection pool we will use to connect to the server.
+    access_token : `str`
+        Rubin Science Platform Gafaelfawr access token that will be used to
+        authenticate with the server.
+    cache : RemoteButlerCache
+        Cache of data shared between multiple RemoteButler instances connected
+        to the same server.
+
+    Notes
+    -----
+    Instead of using this constructor, most users should use either
+    `Butler.from_config` or `RemoteButlerFactory`.
     """
 
-    def __init__(
-        self,
-        # These parameters are inherited from the Butler() constructor
-        config: Config | ResourcePathExpression | None = None,
-        *,
-        collections: Any = None,
-        run: str | None = None,
-        searchPaths: Sequence[ResourcePathExpression] | None = None,
-        writeable: bool | None = None,
-        inferDefaults: bool = True,
-        # Parameters unique to RemoteButler
-        http_client: httpx.Client | None = None,
-        access_token: str | None = None,
-        **kwargs: Any,
-    ):
-        butler_config = ButlerConfig(config, searchPaths, without_datastore=True)
-        # There is a convention in Butler config files where <butlerRoot> in a
-        # configuration option refers to the directory containing the
-        # configuration file. We allow this for the remote butler's URL so
-        # that the server doesn't have to know which hostname it is being
-        # accessed from.
-        server_url_key = ("remote_butler", "url")
-        if server_url_key in butler_config:
-            butler_config[server_url_key] = replaceRoot(
-                butler_config[server_url_key], butler_config.configDir
-            )
-        self._config = RemoteButlerConfigModel.model_validate(butler_config)
+    _registry_defaults: RegistryDefaults
+    _client: httpx.Client
+    _server_url: str
+    _headers: dict[str, str]
+    _cache: RemoteButlerCache
 
-        self._dimensions: DimensionUniverse | None = None
+    # This is __new__ instead of __init__ because we have to support
+    # instantiation via the legacy constructor Butler.__new__(), which
+    # reads the configuration and selects which subclass to instantiate.  The
+    # interaction between __new__ and __init__ is kind of wacky in Python.  If
+    # we were using __init__ here, __init__ would be called twice (once when
+    # the RemoteButler instance is constructed inside Butler.from_config(), and
+    # a second time with the original arguments to Butler() when the instance
+    # is returned from Butler.__new__()
+    def __new__(
+        cls,
+        *,
+        server_url: str,
+        options: ButlerInstanceOptions,
+        http_client: httpx.Client,
+        access_token: str,
+        cache: RemoteButlerCache,
+    ) -> RemoteButler:
+        self = cast(RemoteButler, super().__new__(cls))
+
+        self._client = http_client
+        self._server_url = server_url
+        self._cache = cache
+
         # TODO: RegistryDefaults should have finish() called on it, but this
         # requires getCollectionSummary() which is not yet implemented
-        self._registry_defaults = RegistryDefaults(collections, run, inferDefaults, **kwargs)
+        self._registry_defaults = RegistryDefaults(
+            options.collections, options.run, options.inferDefaults, **options.kwargs
+        )
 
-        if http_client is not None:
-            # We have injected a client explicitly in to the class.
-            # This is generally done for testing.
-            self._client = http_client
-        else:
-            server_url = str(self._config.remote_butler.url)
-            auth_headers = {}
-            if access_token is None:
-                access_token = get_authentication_token_from_environment(server_url)
-            if access_token is not None:
-                auth_headers = get_authentication_headers(access_token)
+        auth_headers = get_authentication_headers(access_token)
+        headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
 
-            headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
-            headers.update(auth_headers)
-            self._client = httpx.Client(headers=headers, base_url=server_url)
+        self._headers = auth_headers | headers
+
+        return self
 
     def isWriteable(self) -> bool:
         # Docstring inherited.
@@ -188,15 +153,19 @@ class RemoteButler(Butler):
     @property
     def dimensions(self) -> DimensionUniverse:
         # Docstring inherited.
-        if self._dimensions is not None:
-            return self._dimensions
+        with self._cache.access() as cache:
+            if cache.dimensions is not None:
+                return cache.dimensions
 
         response = self._client.get(self._get_url("universe"))
         response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
-        self._dimensions = DimensionUniverse(config)
-        return self._dimensions
+        universe = DimensionUniverse(config)
+        with self._cache.access() as cache:
+            if cache.dimensions is None:
+                cache.dimensions = universe
+            return cache.dimensions
 
     def _simplify_dataId(self, dataId: DataId | None, kwargs: dict[str, DataIdValue]) -> SerializedDataId:
         """Take a generic Data ID and convert it to a serializable form.
@@ -629,18 +598,21 @@ class RemoteButler(Butler):
         path : `str`
             The full path to the endpoint.
         """
-        return f"{version}/{path}"
+        slash = "" if self._server_url.endswith("/") else "/"
+        return f"{self._server_url}{slash}{version}/{path}"
 
     def _post(self, path: str, model: _BaseModelCompat) -> httpx.Response:
         """Send a POST request to the Butler server."""
         json = model.model_dump_json(exclude_unset=True).encode("utf-8")
         url = self._get_url(path)
-        return self._client.post(url, content=json, headers={"content-type": "application/json"})
+        return self._client.post(
+            url, content=json, headers=self._headers | {"content-type": "application/json"}
+        )
 
     def _get(self, path: str) -> httpx.Response:
         """Send a GET request to the Butler server."""
         url = self._get_url(path)
-        return self._client.get(url)
+        return self._client.get(url, headers=self._headers)
 
     def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
         """Deserialize a Pydantic model from the body of an HTTP response."""
@@ -671,6 +643,16 @@ class RemoteButler(Butler):
         else:
             return DatasetTypeName(datasetTypeOrName)
 
+    def _clone(
+        self,
+        *,
+        collections: Any = None,
+        run: str | None = None,
+        inferDefaults: bool = True,
+        **kwargs: Any,
+    ) -> RemoteButler:
+        raise NotImplementedError()
+
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
     """Return the DatasetType associated with the argument, or None if the
@@ -682,3 +664,13 @@ def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> D
         return datasetRefOrType.datasetType
     else:
         return None
+
+
+@dataclass
+class _RemoteButlerCacheData:
+    dimensions: DimensionUniverse | None = None
+
+
+class RemoteButlerCache(LockedObject[_RemoteButlerCacheData]):
+    def __init__(self) -> None:
+        super().__init__(_RemoteButlerCacheData())

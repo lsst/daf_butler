@@ -25,5 +25,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._factory import *
-from ._remote_butler import *
+from contextlib import contextmanager
+from threading import Lock
+from typing import Generic, Iterator, TypeVar
+
+_T = TypeVar("_T")
+
+
+class LockedObject(Generic[_T]):
+    """Wraps an object to enforce that all accesses to the object are performed
+    while holding a mutex lock.
+
+    Parameters
+    ----------
+    obj : `object`
+        The object that will be returned from the ``access()`` method.
+    """
+
+    def __init__(self, obj: _T):
+        self._lock = Lock()
+        self._obj = obj
+
+    @contextmanager
+    def access(self) -> Iterator[_T]:
+        with self._lock:
+            yield self._obj

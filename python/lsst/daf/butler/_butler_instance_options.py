@@ -25,5 +25,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._factory import *
-from ._remote_butler import *
+__all__ = ("ButlerInstanceOptions",)
+
+import dataclasses
+from typing import Any
+
+
+@dataclasses.dataclass(frozen=True)
+class ButlerInstanceOptions:
+    """The parameters passed to `Butler.from_config` or the Butler convenience
+    constructor.  These configure defaults and other settings for a Butler
+    instance. These settings are common to all Butler subclasses. See `Butler`
+    for the documentation of these properties.
+    """
+
+    collections: Any = None
+    run: str | None = None
+    writeable: bool | None = None
+    inferDefaults: bool = True
+    kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)

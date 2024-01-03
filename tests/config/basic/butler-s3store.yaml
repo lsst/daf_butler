@@ -1,2 +1,3 @@
 datastore: !include s3Datastore.yaml
 storageClasses: !include storageClasses.yaml
+cls: lsst.daf.butler.direct_butler.DirectButler

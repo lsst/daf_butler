@@ -1,9 +1,11 @@
 import contextlib
 import os
 import tempfile
+import time
 import unittest
 
-from lsst.daf.butler import Butler
+import httpx
+from lsst.daf.butler.remote_butler import RemoteButlerFactory
 from lsst.daf.butler.tests.utils import MetricTestRepo
 from testcontainers.core.container import DockerContainer
 
@@ -35,9 +37,11 @@ def _run_server_docker():
         with container:
             server_host = container.get_container_host_ip()
             server_port = container.get_exposed_port(port)
-            server_url = f"http://{server_host}:{server_port}/api/butler"
+            server_url = f"http://{server_host}:{server_port}"
+            full_server_url = f"{server_url}/api/butler"
             try:
-                yield server_url
+                _wait_for_startup(server_url)
+                yield full_server_url
             finally:
                 (stdout, stderr) = container.get_logs()
                 if stdout:
@@ -46,6 +50,22 @@ def _run_server_docker():
                 if stderr:
                     print("STDERR:")
                     print(stderr.decode())
+
+
+def _wait_for_startup(server_url):
+    max_retries = 30
+    attempt = 0
+    exception = None
+    while attempt < max_retries:
+        attempt += 1
+        try:
+            httpx.get(server_url)
+            return
+        except Exception as e:
+            exception = e
+            time.sleep(1)
+
+    raise RuntimeError("Timed out waiting for server port to open on container.") from exception
 
 
 class ButlerDockerTestCase(unittest.TestCase):
@@ -58,7 +78,9 @@ class ButlerDockerTestCase(unittest.TestCase):
         cls.server_uri = cls.enterClassContext(_run_server_docker())
 
     def test_get_dataset_type(self):
-        butler = Butler(self.server_uri)
+        butler = RemoteButlerFactory.create_factory_for_url(self.server_uri).create_butler_for_access_token(
+            "fake-access-token"
+        )
         dataset_type = butler.get_dataset_type("test_metric_comp")
         self.assertEqual(dataset_type.name, "test_metric_comp")
 

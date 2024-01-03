@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 __all__ = ()
 
 import os
@@ -324,3 +326,17 @@ class MetricTestRepo:
         return self.butler.put(
             metric, self.datasetType if datasetType is None else datasetType, dataId, run=run
         )
+
+
+@contextmanager
+def mock_env(new_environment: dict[str, str]) -> Iterator[None]:
+    """Context manager to clear the process environment variables, replace them
+    with new values, and restore them at the end of the test.
+
+    Parameters
+    ----------
+    new_environment : `dict`[`str`, `str`]
+        New environment variable values.
+    """
+    with patch.dict(os.environ, new_environment, clear=True):
+        yield

@@ -38,7 +38,8 @@ from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
 from lsst.utils.logging import getLogger
 
-from ._butler_config import ButlerConfig
+from ._butler_config import ButlerConfig, ButlerType
+from ._butler_instance_options import ButlerInstanceOptions
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
 from ._limited_butler import LimitedButler
@@ -105,6 +106,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         the default for that dimension.  Nonexistent collections are ignored.
         If a default value is provided explicitly for a governor dimension via
         ``**kwargs``, no default will be inferred for that dimension.
+    without_datastore : `bool`, optional
+        If `True` do not attach a datastore to this butler. Any attempts
+        to use a datastore will fail.
     **kwargs : `Any`
         Additional keyword arguments passed to a constructor of actual butler
         class.
@@ -125,59 +129,24 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         searchPaths: Sequence[ResourcePathExpression] | None = None,
         writeable: bool | None = None,
         inferDefaults: bool = True,
+        without_datastore: bool = False,
         **kwargs: Any,
     ) -> Butler:
         if cls is Butler:
-            cls = cls._find_butler_class(config, searchPaths)
+            return Butler.from_config(
+                config=config,
+                collections=collections,
+                run=run,
+                searchPaths=searchPaths,
+                writeable=writeable,
+                inferDefaults=inferDefaults,
+                without_datastore=without_datastore,
+                **kwargs,
+            )
+
         # Note: we do not pass any parameters to __new__, Python will pass them
         # to __init__ after __new__ returns sub-class instance.
         return super().__new__(cls)
-
-    @staticmethod
-    def _find_butler_class(
-        config: Config | ResourcePathExpression | None = None,
-        searchPaths: Sequence[ResourcePathExpression] | None = None,
-    ) -> type[Butler]:
-        """Find actual class to instantiate.
-
-        Parameters
-        ----------
-        config : `ButlerConfig`, `Config` or `str`, optional
-            Configuration. Anything acceptable to the `ButlerConfig`
-            constructor. If a directory path is given the configuration will be
-            read from a ``butler.yaml`` file in that location. If `None` is
-            given default values will be used. If ``config`` contains "cls"
-            key then its value is used as a name of butler class and it must be
-            a sub-class of this class, otherwise `DirectButler` is
-            instantiated.
-        searchPaths : `list` of `str`, optional
-            Directory paths to search when calculating the full Butler
-            configuration.  Not used if the supplied config is already a
-            `ButlerConfig`.
-
-        Returns
-        -------
-        butler_class : `type`
-            The type of `Butler` to instantiate.
-        """
-        butler_class_name: str | None = None
-        if config is not None:
-            # Check for optional "cls" key in config.
-            if not isinstance(config, Config):
-                config = ButlerConfig(config, searchPaths=searchPaths)
-            butler_class_name = config.get("cls")
-
-        # Make DirectButler if class is not specified.
-        butler_class: type[Butler]
-        if butler_class_name is None:
-            from .direct_butler import DirectButler
-
-            butler_class = DirectButler
-        else:
-            butler_class = doImportType(butler_class_name)
-            if not issubclass(butler_class, Butler):
-                raise TypeError(f"{butler_class_name} is not a subclass of Butler")
-        return butler_class
 
     @classmethod
     def from_config(
@@ -189,6 +158,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         searchPaths: Sequence[ResourcePathExpression] | None = None,
         writeable: bool | None = None,
         inferDefaults: bool = True,
+        without_datastore: bool = False,
         **kwargs: Any,
     ) -> Butler:
         """Create butler instance from configuration.
@@ -233,9 +203,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             are ignored.  If a default value is provided explicitly for a
             governor dimension via ``**kwargs``, no default will be inferred
             for that dimension.
+        without_datastore : `bool`, optional
+            If `True` do not attach a datastore to this butler. Any attempts
+            to use a datastore will fail.
         **kwargs : `Any`
-            Additional keyword arguments passed to a constructor of actual
-            butler class.
+            Default data ID key-value pairs.  These may only identify
+            "governor" dimensions like ``instrument`` and ``skymap``.
 
         Returns
         -------
@@ -297,16 +270,46 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         arguments provided, but it defaults to `False` when there are not
         collection arguments.
         """
-        cls = cls._find_butler_class(config, searchPaths)
-        return cls(
-            config,
-            collections=collections,
-            run=run,
-            searchPaths=searchPaths,
-            writeable=writeable,
-            inferDefaults=inferDefaults,
-            **kwargs,
+        # DirectButler used to have a way to specify a "copy constructor" by
+        # passing the "butler" parameter to its constructor.  This
+        # functionality has been moved out of the constructor into
+        # Butler._clone(), but the new interface is not public yet.
+        butler = kwargs.pop("butler", None)
+        if butler is not None:
+            if not isinstance(butler, Butler):
+                raise TypeError("'butler' parameter must be a Butler instance")
+            if config is not None or searchPaths is not None or writeable is not None:
+                raise TypeError(
+                    "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
+                )
+            return butler._clone(collections=collections, run=run, inferDefaults=inferDefaults, **kwargs)
+
+        options = ButlerInstanceOptions(
+            collections=collections, run=run, writeable=writeable, inferDefaults=inferDefaults, kwargs=kwargs
         )
+
+        # Load the Butler configuration.  This may involve searching the
+        # environment to locate a configuration file.
+        butler_config = ButlerConfig(config, searchPaths=searchPaths, without_datastore=without_datastore)
+        butler_type = butler_config.get_butler_type()
+
+        # Make DirectButler if class is not specified.
+        match butler_type:
+            case ButlerType.DIRECT:
+                from .direct_butler import DirectButler
+
+                return DirectButler.create_from_config(
+                    butler_config,
+                    options=options,
+                    without_datastore=without_datastore,
+                )
+            case ButlerType.REMOTE:
+                from .remote_butler import RemoteButlerFactory
+
+                factory = RemoteButlerFactory.create_factory_from_config(butler_config)
+                return factory.create_butler_with_credentials_from_environment(butler_options=options)
+            case _:
+                raise TypeError(f"Unknown Butler type '{butler_type}'")
 
     @staticmethod
     def makeRepo(
@@ -1689,5 +1692,20 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             collection wildcard is passed when ``find_first`` is `True`, or
             when ``collections`` is `None` and default butler collections are
             not defined.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _clone(
+        self,
+        *,
+        collections: Any = None,
+        run: str | None = None,
+        inferDefaults: bool = True,
+        **kwargs: Any,
+    ) -> Butler:
+        """Return a new Butler instance connected to the same repository
+        as this one, but overriding ``collections``, ``run``,
+        ``inferDefaults``, and default data ID.
         """
         raise NotImplementedError()

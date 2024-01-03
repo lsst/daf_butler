@@ -25,5 +25,37 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._factory import *
-from ._remote_butler import *
+from contextlib import contextmanager
+from threading import Lock
+from typing import Iterator
+
+
+class NamedLocks:
+    """Maintains a collection of separate mutex locks, indexed by name."""
+
+    def __init__(self) -> None:
+        self._lookup_lock = Lock()
+        self._named_locks = dict[str, Lock]()
+
+    @contextmanager
+    def lock(self, name: str) -> Iterator[None]:
+        """Return a context manager that acquires a mutex lock when entered and
+        releases it when exited.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the lock.  A separate lock instance is created for each
+            distinct name.
+        """
+        with self._get_lock(name):
+            yield
+
+    def _get_lock(self, name: str) -> Lock:
+        with self._lookup_lock:
+            lock = self._named_locks.get(name, None)
+            if lock is None:
+                lock = Lock()
+                self._named_locks[name] = lock
+
+            return lock
