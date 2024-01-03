@@ -134,8 +134,6 @@ class CollectionSummaryManager:
         Interface to the underlying database engine and namespace.
     collections : `CollectionManager`
         Manager object for the collections in this `Registry`.
-    dimensions : `DimensionRecordStorageManager`
-        Manager object for the dimensions in this `Registry`.
     tables : `CollectionSummaryTables`
         Struct containing the tables that hold collection summaries.
     dataset_type_table : `sqlalchemy.schema.Table`
@@ -149,7 +147,6 @@ class CollectionSummaryManager:
         db: Database,
         *,
         collections: CollectionManager,
-        dimensions: DimensionRecordStorageManager,
         tables: CollectionSummaryTables[sqlalchemy.schema.Table],
         dataset_type_table: sqlalchemy.schema.Table,
         caching_context: CachingContext,
@@ -157,10 +154,43 @@ class CollectionSummaryManager:
         self._db = db
         self._collections = collections
         self._collectionKeyName = collections.getCollectionForeignKeyName()
-        self._dimensions = dimensions
         self._tables = tables
         self._dataset_type_table = dataset_type_table
         self._caching_context = caching_context
+
+    def clone(
+        self,
+        *,
+        db: Database,
+        collections: CollectionManager,
+        caching_context: CachingContext,
+    ) -> CollectionSummaryManager:
+        """Make an independent copy of this manager instance bound to new
+        instances of `Database` and other managers.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating the manager.
+        collections : `CollectionManager`
+            New `CollectionManager` object to use when instantiating the
+            manager.
+        caching_context : `CachingContext`
+            New `CachingContext` object to use when instantiating the manager.
+
+        Returns
+        -------
+        instance : `CollectionSummaryManager`
+            New manager instance with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        return CollectionSummaryManager(
+            db=db,
+            collections=collections,
+            tables=self._tables,
+            dataset_type_table=self._dataset_type_table,
+            caching_context=caching_context,
+        )
 
     @classmethod
     def initialize(
@@ -210,7 +240,6 @@ class CollectionSummaryManager:
         return cls(
             db=db,
             collections=collections,
-            dimensions=dimensions,
             tables=tables,
             dataset_type_table=dataset_type_table,
             caching_context=caching_context,

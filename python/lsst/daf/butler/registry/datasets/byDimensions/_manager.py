@@ -547,6 +547,24 @@ class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStora
     _autoincrement: bool = False
     _idColumnType: type = ddl.GUID
 
+    def clone(
+        self,
+        *,
+        db: Database,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
+    ) -> ByDimensionsDatasetRecordStorageManagerUUID:
+        return ByDimensionsDatasetRecordStorageManagerUUID(
+            db=db,
+            collections=collections,
+            dimensions=dimensions,
+            static=self._static,
+            summaries=self._summaries.clone(db=db, collections=collections, caching_context=caching_context),
+            caching_context=caching_context,
+            registry_schema_version=self._registry_schema_version,
+        )
+
     @classmethod
     def supportsIdGenerationMode(cls, mode: DatasetIdGenEnum) -> bool:
         # Docstring inherited from DatasetRecordStorageManager.

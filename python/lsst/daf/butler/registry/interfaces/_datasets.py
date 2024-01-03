@@ -332,6 +332,39 @@ class DatasetRecordStorageManager(VersionedExtension):
     def __init__(self, *, registry_schema_version: VersionTuple | None = None) -> None:
         super().__init__(registry_schema_version=registry_schema_version)
 
+    @abstractmethod
+    def clone(
+        self,
+        *,
+        db: Database,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+        caching_context: CachingContext,
+    ) -> DatasetRecordStorageManager:
+        """Make an independent copy of this manager instance bound to new
+        instances of `Database` and other managers.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating the manager.
+        collections : `CollectionManager`
+            New `CollectionManager` object to use when instantiating the
+            manager.
+        dimensions : `DimensionRecordStorageManager`
+            New `DimensionRecordStorageManager` object to use when
+            instantiating the manager.
+        caching_context : `CachingContext`
+            New `CachingContext` object to use when instantiating the manager.
+
+        Returns
+        -------
+        instance : `DatasetRecordStorageManager`
+            New manager instance with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        raise NotImplementedError()
+
     @classmethod
     @abstractmethod
     def initialize(
