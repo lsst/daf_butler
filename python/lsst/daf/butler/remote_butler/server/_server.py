@@ -45,7 +45,12 @@ log = logging.getLogger(__name__)
 
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.include_router(external_router, prefix=_DEFAULT_API_PATH)
+
+# A single instance of the server can serve data from multiple Butler
+# repositories.  This 'repository' path placeholder is consumed by
+# factory_dependency().
+repository_placeholder = "{repository}"
+app.include_router(external_router, prefix=f"{_DEFAULT_API_PATH}/repo/{repository_placeholder}")
 
 
 @app.exception_handler(MissingDatasetTypeError)
