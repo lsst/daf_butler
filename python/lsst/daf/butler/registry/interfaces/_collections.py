@@ -47,7 +47,6 @@ from ._versioning import VersionedExtension, VersionTuple
 if TYPE_CHECKING:
     from .._caching_context import CachingContext
     from ._database import Database, StaticTablesContext
-    from ._dimensions import DimensionRecordStorageManager
 
 
 _Key = TypeVar("_Key")
@@ -219,7 +218,6 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         db: Database,
         context: StaticTablesContext,
         *,
-        dimensions: DimensionRecordStorageManager,
         caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> CollectionManager:
@@ -233,8 +231,6 @@ class CollectionManager(Generic[_Key], VersionedExtension):
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present in a layer
             implemented with this manager.
-        dimensions : `DimensionRecordStorageManager`
-            Manager object for the dimensions in this `Registry`.
         caching_context : `CachingContext`
             Object controlling caching of information returned by managers.
         registry_schema_version : `VersionTuple` or `None`

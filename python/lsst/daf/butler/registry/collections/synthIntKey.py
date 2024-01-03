@@ -48,7 +48,7 @@ from ._base import (
 
 if TYPE_CHECKING:
     from .._caching_context import CachingContext
-    from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext
+    from ..interfaces import Database, StaticTablesContext
 
 
 _KEY_FIELD_SPEC = ddl.FieldSpec(
@@ -89,7 +89,6 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
         db: Database,
         context: StaticTablesContext,
         *,
-        dimensions: DimensionRecordStorageManager,
         caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> SynthIntKeyCollectionManager:
@@ -98,7 +97,6 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
             db,
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
             collectionIdName="collection_id",
-            dimensions=dimensions,
             caching_context=caching_context,
             registry_schema_version=registry_schema_version,
         )

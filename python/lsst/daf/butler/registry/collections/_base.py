@@ -46,7 +46,7 @@ from ..wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
     from .._caching_context import CachingContext
-    from ..interfaces import Database, DimensionRecordStorageManager
+    from ..interfaces import Database
 
 
 def _makeCollectionForeignKey(
@@ -173,8 +173,6 @@ class DefaultCollectionManager(CollectionManager[K]):
         Named tuple of SQLAlchemy table objects.
     collectionIdName : `str`
         Name of the column in collections table that identifies it (PK).
-    dimensions : `DimensionRecordStorageManager`
-        Manager object for the dimensions in this `Registry`.
     caching_context : `CachingContext`
         Caching context to use.
     registry_schema_version : `VersionTuple` or `None`, optional
@@ -193,7 +191,6 @@ class DefaultCollectionManager(CollectionManager[K]):
         tables: CollectionTablesTuple,
         collectionIdName: str,
         *,
-        dimensions: DimensionRecordStorageManager,
         caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ):
@@ -201,7 +198,6 @@ class DefaultCollectionManager(CollectionManager[K]):
         self._db = db
         self._tables = tables
         self._collectionIdName = collectionIdName
-        self._dimensions = dimensions
         self._caching_context = caching_context
 
     def refresh(self) -> None:
