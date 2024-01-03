@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
+from .._utilities.thread_safe_cache import ThreadSafeCache
 from ..ddl import FieldSpec, TableSpec
 from .interfaces import (
     Database,
@@ -158,6 +159,10 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
     metaTable : `sqlalchemy.schema.Table`
         SQLAlchemy representation of the table that records which opaque
         logical tables exist.
+    tables : `ThreadSafeCache` [`str`, `~sqlalchemy.schema.Table`]
+        Mapping from string to table, to track which tables have already been
+        created.  This mapping is shared between cloned instances of this
+        manager.
     registry_schema_version : `VersionTuple` or `None`, optional
         Version of registry schema.
     """
@@ -166,12 +171,18 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
         self,
         db: Database,
         metaTable: sqlalchemy.schema.Table,
+        tables: ThreadSafeCache[str, sqlalchemy.schema.Table],
         registry_schema_version: VersionTuple | None = None,
     ):
         super().__init__(registry_schema_version=registry_schema_version)
         self._db = db
         self._metaTable = metaTable
-        self._storage: dict[str, OpaqueTableStorage] = {}
+        self._tables = tables
+
+    def clone(self, db: Database) -> ByNameOpaqueTableStorageManager:
+        return ByNameOpaqueTableStorageManager(
+            db, self._metaTable, self._tables, self._registry_schema_version
+        )
 
     _META_TABLE_NAME: ClassVar[str] = "opaque_meta"
 
@@ -187,15 +198,23 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
     ) -> OpaqueTableStorageManager:
         # Docstring inherited from OpaqueTableStorageManager.
         metaTable = context.addTable(cls._META_TABLE_NAME, cls._META_TABLE_SPEC)
-        return cls(db=db, metaTable=metaTable, registry_schema_version=registry_schema_version)
+        return cls(
+            db=db,
+            metaTable=metaTable,
+            tables=ThreadSafeCache(),
+            registry_schema_version=registry_schema_version,
+        )
 
     def get(self, name: str) -> OpaqueTableStorage | None:
         # Docstring inherited from OpaqueTableStorageManager.
-        return self._storage.get(name)
+        table = self._tables.get(name)
+        if table is None:
+            return None
+        return ByNameOpaqueTableStorage(name=name, table=table, db=self._db)
 
     def register(self, name: str, spec: TableSpec) -> OpaqueTableStorage:
         # Docstring inherited from OpaqueTableStorageManager.
-        result = self._storage.get(name)
+        result = self.get(name)
         if result is None:
             # Create the table itself.  If it already exists but wasn't in
             # the dict because it was added by another client since this one
@@ -204,8 +223,9 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
             # Add a row to the meta table so we can find this table in the
             # future.  Also okay if that already exists, so we use sync.
             self._db.sync(self._metaTable, keys={"table_name": name})
-            result = ByNameOpaqueTableStorage(name=name, table=table, db=self._db)
-            self._storage[name] = result
+            self._tables.set_or_get(name, table)
+            result = self.get(name)
+            assert result is not None
         return result
 
     @classmethod
