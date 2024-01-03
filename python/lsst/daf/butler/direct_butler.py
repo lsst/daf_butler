@@ -126,9 +126,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
     Notes
     -----
-    Most users should call `DirectButler`.``create_from_config`` or the
-    top-level `Butler`.``from_config`` instead of using this constructor
-    directly.
+    Most users should call the top-level `Butler`.``from_config`` instead of
+    using this constructor directly.
     """
 
     # This is __new__ instead of __init__ because we have to support
@@ -182,6 +181,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         without_datastore : `bool`, optional
             If `True` do not attach a datastore to this butler. Any attempts
             to use a datastore will fail.
+
+        Notes
+        -----
+        Most users should call the top-level `Butler`.``from_config``
+        instead of using this function directly.
         """
         if "run" in config or "collection" in config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
@@ -2361,6 +2365,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         return data_ids
 
     _config: ButlerConfig
+    """Configuration for this Butler instance."""
 
     _registry: SqlRegistry
     """The object that manages dataset metadata and relationships
@@ -2384,3 +2389,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     """
 
     _registry_shim: RegistryShim
+    """Shim object to provide a legacy public interface for querying via the
+    the ``registry`` property.
+    """

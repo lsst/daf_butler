@@ -49,7 +49,6 @@ class RemoteButlerFactory:
     server_url : `str`
         The URL of the Butler server that RemoteButler instances created by
         this factory will connect to.
-
     http_client : `httpx.Client`, optional
         The httpx connection pool that RemoteButler instances created by this
         factory will use for making HTTP requests.  If omitted, creates a new
