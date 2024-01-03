@@ -50,7 +50,7 @@ class LabeledButlerFactory:
 
     Parameters
     ----------
-    repositories : `Mapping`[`str`, `str`], optional
+    repositories : `~collections.abc.Mapping` [`str`, `str`], optional
         Keys are arbitrary labels, and values are URIs to Butler configuration
         files.  If not provided, defaults to the global repository index
         configured by the ``DAF_BUTLER_REPOSITORY_INDEX`` environment variable
@@ -94,6 +94,11 @@ class LabeledButlerFactory:
             `RemoteButler`.  If you only use `DirectButler`, this may be
             `None`.
 
+        Raises
+        ------
+        KeyError
+            Raised if the label is not found in the index.
+
         Notes
         -----
         For a service making requests on behalf of end users, the access token
@@ -134,7 +139,10 @@ class LabeledButlerFactory:
         if self._repositories is None:
             return ButlerRepoIndex.get_repo_uri(label)
         else:
-            return self._repositories[label]
+            config_uri = self._repositories.get(label)
+            if config_uri is None:
+                raise KeyError(f"Unknown repository label '{label}'")
+            return config_uri
 
 
 def _create_direct_butler_factory(config: ButlerConfig) -> _FactoryFunction:
