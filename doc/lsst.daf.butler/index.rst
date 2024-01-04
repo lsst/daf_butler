@@ -201,10 +201,6 @@ General utilities
    :no-main-docstr:
    :headings: ^"
 
-.. automodapi:: lsst.daf.butler.instrument
-   :no-main-docstr:
-   :headings: ^"
-
 .. automodapi:: lsst.daf.butler.json
    :no-main-docstr:
    :headings: ^"

@@ -29,7 +29,6 @@ from __future__ import annotations
 
 __all__ = ("DimensionConfig",)
 
-import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
@@ -45,7 +44,6 @@ from ._database import (
 )
 from ._elements import KeyColumnSpec, MetadataColumnSpec
 from ._governor import GovernorDimensionConstructionVisitor
-from ._packer import DimensionPackerConstructionVisitor
 from ._skypix import SkyPixConstructionVisitor
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
@@ -77,8 +75,7 @@ class DimensionConfig(ConfigSubset):
     - topology: a nested dictionary with ``spatial`` and ``temporal`` keys,
       with dictionary values that each define a `StandardTopologicalFamily`.
 
-    - packers: a nested dictionary whose entries define factories for a
-      `DimensionPacker` instance.
+    - packers: ignored.
 
     See the documentation for the linked classes above for more information
     on the configuration syntax.
@@ -267,31 +264,6 @@ class DimensionConfig(ConfigSubset):
                     members=members,
                 )
 
-    # TODO: remove this method and callers on DM-38687.
-    # Note that the corresponding entries in the dimensions config should
-    # not be removed at that time, because that's formally a schema migration.
-    def _extractPackerVisitors(self) -> Iterator[DimensionConstructionVisitor]:
-        """Process the 'packers' section of the configuration.
-
-        Yields construction visitors for each `DimensionPackerFactory`.
-
-        Yields
-        ------
-        visitor : `DimensionConstructionVisitor`
-            Object that adds a `DinmensionPackerFactory` to an
-            under-construction `DimensionUniverse`.
-        """
-        with warnings.catch_warnings():
-            # Don't warn when deprecated code calls other deprecated code.
-            warnings.simplefilter("ignore", FutureWarning)
-            for name, subconfig in self["packers"].items():
-                yield DimensionPackerConstructionVisitor(
-                    name=name,
-                    clsName=subconfig["cls"],
-                    fixed=subconfig["fixed"],
-                    dimensions=subconfig["dimensions"],
-                )
-
     def makeBuilder(self) -> DimensionConstructionBuilder:
         """Construct a `DinmensionConstructionBuilder`.
 
@@ -313,5 +285,4 @@ class DimensionConfig(ConfigSubset):
         builder.update(self._extractSkyPixVisitors())
         builder.update(self._extractElementVisitors())
         builder.update(self._extractTopologyVisitors())
-        builder.update(self._extractPackerVisitors())
         return builder

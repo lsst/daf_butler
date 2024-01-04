@@ -45,7 +45,7 @@ import numbers
 import warnings
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Mapping, Set
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from deprecated.sphinx import deprecated
 from lsst.daf.butler._compat import _BaseModelCompat
@@ -873,50 +873,6 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             return timespans[0]
         else:
             return Timespan.intersection(*timespans)
-
-    @overload
-    def pack(self, name: str, *, returnMaxBits: Literal[True]) -> tuple[int, int]:
-        ...
-
-    @overload
-    def pack(self, name: str, *, returnMaxBits: Literal[False]) -> int:
-        ...
-
-    # TODO: Remove this method and its overloads above on DM-38687.
-    @deprecated(
-        "Deprecated in favor of configurable dimension packers.  Will be removed after v26.",
-        version="v26",
-        category=FutureWarning,
-    )
-    def pack(self, name: str, *, returnMaxBits: bool = False) -> tuple[int, int] | int:
-        """Pack this data ID into an integer.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the `DimensionPacker` algorithm (as defined in the
-            dimension configuration).
-        returnMaxBits : `bool`, optional
-            If `True` (`False` is default), return the maximum number of
-            nonzero bits in the returned integer across all data IDs.
-
-        Returns
-        -------
-        packed : `int`
-            Integer ID.  This ID is unique only across data IDs that have
-            the same values for the packer's "fixed" dimensions.
-        maxBits : `int`, optional
-            Maximum number of nonzero bits in ``packed``.  Not returned unless
-            ``returnMaxBits`` is `True`.
-
-        Notes
-        -----
-        Accessing this attribute if `hasRecords` returns `False` is a logic
-        error that may or may not raise an exception, depending on the
-        implementation and whether assertions are enabled.
-        """
-        assert self.hasRecords(), "pack() may only be called if hasRecords() returns True."
-        return self.universe.makePacker(name, self).pack(self, returnMaxBits=returnMaxBits)
 
     def to_simple(self, minimal: bool = False) -> SerializedDataCoordinate:
         """Convert this class to a simple python type.
