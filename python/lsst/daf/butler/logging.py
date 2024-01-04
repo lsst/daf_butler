@@ -37,9 +37,7 @@ from typing import IO, Any, ClassVar, Union, overload
 
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
-from pydantic import ConfigDict, PrivateAttr
-
-from ._compat import PYDANTIC_V2, _BaseModelCompat
+from pydantic import BaseModel, ConfigDict, PrivateAttr, RootModel
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
@@ -174,7 +172,7 @@ class ButlerMDC:
             logging.setLogRecordFactory(cls._old_factory)
 
 
-class ButlerLogRecord(_BaseModelCompat):
+class ButlerLogRecord(BaseModel):
     """A model representing a `logging.LogRecord`.
 
     A `~logging.LogRecord` always uses the current time in its record
@@ -199,14 +197,7 @@ class ButlerLogRecord(_BaseModelCompat):
     exc_info: str | None = None
     MDC: dict[str, str]
 
-    if PYDANTIC_V2:
-        model_config = ConfigDict(frozen=True)
-    else:
-
-        class Config:
-            """Pydantic model configuration."""
-
-            allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
     @classmethod
     def from_record(cls, record: LogRecord) -> "ButlerLogRecord":
@@ -289,20 +280,8 @@ class ButlerLogRecord(_BaseModelCompat):
 Record = LogRecord | ButlerLogRecord
 
 
-if PYDANTIC_V2:
-    from pydantic import RootModel  # type: ignore
-
-    class _ButlerLogRecords(RootModel):
-        root: list[ButlerLogRecord]
-
-else:
-
-    class _ButlerLogRecords(_BaseModelCompat):  # type:ignore[no-redef]
-        __root__: list[ButlerLogRecord]
-
-        @property
-        def root(self) -> list[ButlerLogRecord]:
-            return self.__root__
+class _ButlerLogRecords(RootModel):
+    root: list[ButlerLogRecord]
 
 
 # Do not inherit from MutableSequence since mypy insists on the values
@@ -321,10 +300,7 @@ class ButlerLogRecords(_ButlerLogRecords):
         records : iterable of `ButlerLogRecord`
             The records to seed this class with.
         """
-        if PYDANTIC_V2:
-            return cls(list(records))  # type: ignore
-        else:
-            return cls(__root__=list(records))  # type: ignore
+        return cls.model_construct(root=list(records))
 
     @classmethod
     def from_file(cls, filename: str) -> "ButlerLogRecords":
@@ -522,10 +498,7 @@ class ButlerLogRecords(_ButlerLogRecords):
         # case.
         item = self.root[index]
         if isinstance(item, list):
-            if PYDANTIC_V2:
-                return type(self)(item)  # type: ignore
-            else:
-                return type(self)(__root__=item)  # type: ignore
+            return type(self)(item)
         else:
             return item
 
@@ -573,10 +546,7 @@ class ButlerLogRecordHandler(StreamHandler):
 
     def __init__(self) -> None:
         super().__init__()
-        if PYDANTIC_V2:
-            self.records = ButlerLogRecords([])  # type: ignore
-        else:
-            self.records = ButlerLogRecords(__root__=[])  # type: ignore
+        self.records = ButlerLogRecords.model_construct(root=[])
 
     def emit(self, record: LogRecord) -> None:
         self.records.append(record)

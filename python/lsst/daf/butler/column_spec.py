@@ -47,11 +47,10 @@ import pydantic
 from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
-from ._compat import _BaseModelCompat
 from ._timespan import Timespan
 
 
-class _BaseColumnSpec(_BaseModelCompat, ABC):
+class _BaseColumnSpec(pydantic.BaseModel, ABC):
     """Base class for descriptions of table columns."""
 
     name: str = pydantic.Field(description="""Name of the column.""")

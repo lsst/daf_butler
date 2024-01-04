@@ -35,7 +35,6 @@ from typing import Any
 import pydantic
 from lsst.resources import ResourcePath, ResourcePathExpression
 
-from .._compat import PYDANTIC_V2
 from .._config import Config, ConfigSubset
 from .._topology import TopologicalSpace
 from ._database import (
@@ -191,28 +190,17 @@ class DimensionConfig(ConfigSubset):
             `StandardDimensionCombination` to an under-construction
             `DimensionUniverse`.
         """
-        if PYDANTIC_V2:
-            # MyPy is confused by the typing.Annotated usage and/or how
-            # Pydantic annotated TypeAdapter.
-            key_adapter: pydantic.TypeAdapter[KeyColumnSpec] = pydantic.TypeAdapter(  # type: ignore
-                KeyColumnSpec  # type: ignore
-            )
-            validate_key = key_adapter.validate_python
-            metadata_adapter: pydantic.TypeAdapter[MetadataColumnSpec] = pydantic.TypeAdapter(  # type: ignore
-                MetadataColumnSpec  # type: ignore
-            )
-            validate_metadata = metadata_adapter.validate_python
-        else:
-
-            def validate_key(value: Any) -> KeyColumnSpec:  # type: ignore[misc]
-                return pydantic.parse_obj_as(KeyColumnSpec, value)  # type: ignore
-
-            def validate_metadata(value: Any) -> MetadataColumnSpec:  # type: ignore[misc]
-                return pydantic.parse_obj_as(MetadataColumnSpec, value)  # type: ignore
-
+        # MyPy is confused by the typing.Annotated usage and/or how
+        # Pydantic annotated TypeAdapter.
+        key_adapter: pydantic.TypeAdapter[KeyColumnSpec] = pydantic.TypeAdapter(  # type: ignore
+            KeyColumnSpec  # type: ignore
+        )
+        metadata_adapter: pydantic.TypeAdapter[MetadataColumnSpec] = pydantic.TypeAdapter(  # type: ignore
+            MetadataColumnSpec  # type: ignore
+        )
         for name, subconfig in self["elements"].items():
-            metadata_columns = [validate_metadata(c) for c in subconfig.get("metadata", ())]
-            unique_keys = [validate_key(c) for c in subconfig.get("keys", ())]
+            metadata_columns = [metadata_adapter.validate_python(c) for c in subconfig.get("metadata", ())]
+            unique_keys = [key_adapter.validate_python(c) for c in subconfig.get("keys", ())]
             for unique_key in unique_keys:
                 unique_key.nullable = False
             if subconfig.get("governor", False):

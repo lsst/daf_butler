@@ -25,18 +25,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from pydantic import AnyHttpUrl
-
-from .._compat import _BaseModelCompat
+from pydantic import AnyHttpUrl, BaseModel
 
 
-class RemoteButlerOptionsModel(_BaseModelCompat):
+class RemoteButlerOptionsModel(BaseModel):
     """Model representing the remote server connection."""
 
     url: AnyHttpUrl
 
 
-class RemoteButlerConfigModel(_BaseModelCompat):
+class RemoteButlerConfigModel(BaseModel):
     """Configuration representing a remote butler."""
 
     remote_butler: RemoteButlerOptionsModel

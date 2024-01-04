@@ -36,13 +36,13 @@ __all__ = (
 import contextlib
 import dataclasses
 import re
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from types import EllipsisType
 from typing import Any
 
 from deprecated.sphinx import deprecated
-from lsst.daf.butler._compat import PYDANTIC_V2
 from lsst.utils.iteration import ensure_iterable
+from pydantic import RootModel
 
 from .._dataset_type import DatasetType
 from ..utils import globToRegex
@@ -265,21 +265,8 @@ class CategorizedWildcard:
     """
 
 
-if PYDANTIC_V2:
-    from pydantic import RootModel  # type: ignore
-
-    class _CollectionSearch(RootModel):
-        root: tuple[str, ...]
-
-else:
-    from pydantic import BaseModel
-
-    class _CollectionSearch(BaseModel, Sequence[str]):  # type: ignore
-        __root__: tuple[str, ...]
-
-        @property
-        def root(self) -> tuple[str, ...]:
-            return self.__root__
+class _CollectionSearch(RootModel):
+    root: tuple[str, ...]
 
 
 @deprecated(
@@ -354,10 +341,7 @@ class CollectionSearch(_CollectionSearch):
         for name in wildcard.strings:
             if name not in deduplicated:
                 deduplicated.append(name)
-        if PYDANTIC_V2:
-            model = cls(tuple(deduplicated))  # type: ignore
-        else:
-            model = cls(__root__=tuple(deduplicated))  # type: ignore
+        model = cls(tuple(deduplicated))
         return model
 
     def explicitNames(self) -> Iterator[str]:

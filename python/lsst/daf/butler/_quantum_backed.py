@@ -38,11 +38,11 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
+import pydantic
 from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePathExpression
 
 from ._butler_config import ButlerConfig
-from ._compat import _BaseModelCompat
 from ._config import Config
 from ._dataset_ref import DatasetId, DatasetRef
 from ._dataset_type import DatasetType
@@ -596,7 +596,7 @@ class QuantumBackedButler(LimitedButler):
         )
 
 
-class QuantumProvenanceData(_BaseModelCompat):
+class QuantumProvenanceData(pydantic.BaseModel):
     """A serializable struct for per-quantum provenance information and
     datastore records.
 

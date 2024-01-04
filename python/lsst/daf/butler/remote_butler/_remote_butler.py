@@ -39,11 +39,10 @@ from lsst.daf.butler import __version__
 from lsst.daf.butler.datastores.fileDatastoreClient import get_dataset_as_python_object
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
-from pydantic import parse_obj_as
+from pydantic import BaseModel, TypeAdapter
 
 from .._butler import Butler
 from .._butler_instance_options import ButlerInstanceOptions
-from .._compat import _BaseModelCompat
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
@@ -73,11 +72,13 @@ if TYPE_CHECKING:
     from ..transfers import RepoExportContext
 
 
-_AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=_BaseModelCompat)
+_AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=BaseModel)
 """Generic type variable that accepts any Pydantic model class."""
 _InputCollectionList = str | Sequence[str] | None
 """The possible types of the ``collections`` parameter of most Butler methods.
 """
+
+_SERIALIZED_DATA_ID_TYPE_ADAPTER = TypeAdapter(SerializedDataId)
 
 
 class RemoteButler(Butler):  # numpydoc ignore=PR02
@@ -189,7 +190,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         else:
             dataId = dict(dataId)
 
-        return parse_obj_as(SerializedDataId, dataId | kwargs)
+        return _SERIALIZED_DATA_ID_TYPE_ADAPTER.validate_python(dataId | kwargs)
 
     def _caching_context(self) -> AbstractContextManager[None]:
         # Docstring inherited.
@@ -601,7 +602,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         slash = "" if self._server_url.endswith("/") else "/"
         return f"{self._server_url}{slash}{version}/{path}"
 
-    def _post(self, path: str, model: _BaseModelCompat) -> httpx.Response:
+    def _post(self, path: str, model: BaseModel) -> httpx.Response:
         """Send a POST request to the Butler server."""
         json = model.model_dump_json(exclude_unset=True).encode("utf-8")
         url = self._get_url(path)

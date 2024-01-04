@@ -31,11 +31,10 @@ __all__ = ()
 
 from collections.abc import Mapping
 
-from lsst.daf.butler._compat import _BaseModelCompat
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 
-class DictConvertibleModel(_BaseModelCompat):
+class DictConvertibleModel(BaseModel):
     """A Pydantic model to/from dict conversion in which the `dict`
     representation is intentionally different from Pydantic's own `dict`
     conversions.

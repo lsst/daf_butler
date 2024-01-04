@@ -34,9 +34,9 @@ __all__ = ("DatastoreRecordData", "SerializedDatastoreRecordData")
 import dataclasses
 import uuid
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
-from lsst.daf.butler._compat import PYDANTIC_V2, _BaseModelCompat
+import pydantic
 
 from .._dataset_ref import DatasetId
 from ..dimensions import DimensionUniverse
@@ -46,16 +46,13 @@ from .stored_file_info import StoredDatastoreItemInfo
 if TYPE_CHECKING:
     from ..registry import Registry
 
-# Pydantic 2 requires we be explicit about the types that are used in
-# datastore records. Without this UUID can not be handled. Pydantic v1
-# wants the opposite and does not work unless we use Any.
-if PYDANTIC_V2:
-    _Record: TypeAlias = dict[str, int | str | uuid.UUID | None]
-else:
-    _Record: TypeAlias = dict[str, Any]  # type: ignore
+# Pydantic requires the possible value types to be explicitly enumerated in
+# order for `uuid.UUID` in particular to work.  `typing.Any` does not work
+# here.
+_Record: TypeAlias = dict[str, int | str | uuid.UUID | None]
 
 
-class SerializedDatastoreRecordData(_BaseModelCompat):
+class SerializedDatastoreRecordData(pydantic.BaseModel):
     """Representation of a `DatastoreRecordData` suitable for serialization."""
 
     dataset_ids: list[uuid.UUID]

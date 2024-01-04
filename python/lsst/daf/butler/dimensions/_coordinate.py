@@ -47,8 +47,8 @@ from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+import pydantic
 from deprecated.sphinx import deprecated
-from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.sphgeom import IntersectionRegion, Region
 from lsst.utils.introspection import find_outside_stacklevel
 
@@ -82,7 +82,7 @@ SerializedDataId = dict[str, DataIdValue]
 """
 
 
-class SerializedDataCoordinate(_BaseModelCompat):
+class SerializedDataCoordinate(pydantic.BaseModel):
     """Simplified model for serializing a `DataCoordinate`."""
 
     dataId: SerializedDataId

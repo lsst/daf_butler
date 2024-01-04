@@ -33,8 +33,8 @@ import warnings
 from collections.abc import Iterable, Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast
 
+import pydantic
 from deprecated.sphinx import deprecated
-from lsst.daf.butler._compat import _BaseModelCompat
 from lsst.utils.classes import cached_getter, immutable
 from lsst.utils.introspection import find_outside_stacklevel
 
@@ -51,7 +51,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
 
 
-class SerializedDimensionGraph(_BaseModelCompat):
+class SerializedDimensionGraph(pydantic.BaseModel):
     """Simplified model of a `DimensionGraph` suitable for serialization."""
 
     names: list[str]
