@@ -30,13 +30,11 @@ from __future__ import annotations
 __all__ = ("Quantum", "SerializedQuantum", "DimensionRecordsAccumulator")
 
 import sys
-import warnings
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 import pydantic
 from lsst.utils import doImportType
-from lsst.utils.introspection import find_outside_stacklevel
 
 from ._dataset_ref import DatasetRef, SerializedDatasetRef
 from ._dataset_type import DatasetType, SerializedDatasetType
@@ -409,7 +407,6 @@ class Quantum:
         cls,
         simple: SerializedQuantum,
         universe: DimensionUniverse,
-        reconstitutedDimensions: dict[int, tuple[str, DimensionRecord]] | None = None,
     ) -> Quantum:
         """Construct a new object from a simplified form.
 
@@ -421,24 +418,8 @@ class Quantum:
             The value returned by a call to `to_simple`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions.
-        reconstitutedDimensions : `dict` of `int` to `DimensionRecord` or None
-            A mapping of ids to dimension records to be used when populating
-            dimensions for this Quantum. If supplied it will be used in place
-            of the dimension Records stored with the SerializedQuantum, if a
-            required dimension has already been loaded. Otherwise the record
-            will be unpersisted from the SerializedQuatnum and added to the
-            reconstitutedDimensions dict (if not None). Defaults to None.
-            Deprecated, any argument will be ignored.  Will be removed after
-            v26.
         """
         initInputs: MutableMapping[DatasetType, DatasetRef] = {}
-        if reconstitutedDimensions is not None:
-            # TODO: remove this argument on DM-40150.
-            warnings.warn(
-                "The reconstitutedDimensions argument is now ignored and may be removed after v26",
-                category=FutureWarning,
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-            )
 
         # Unpersist all the init inputs
         for key, (value, dimensionIds) in simple.initInputs.items():
