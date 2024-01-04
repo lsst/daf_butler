@@ -358,7 +358,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             qbb.put({"data": cast(int, ref.dataId["detector"]) ** 2}, ref)
 
         provenance1 = qbb.extract_provenance_data()
-        prov_json = provenance1.json()
+        prov_json = provenance1.model_dump_json()
         provenance2 = QuantumProvenanceData.direct(**json.loads(prov_json))
         for provenance in (provenance1, provenance2):
             input_ids = {ref.id for ref in self.input_refs + self.init_inputs_refs}
