@@ -249,8 +249,8 @@ class DimensionTestCase(unittest.TestCase):
                 "tract",
                 "patch",
             }
-            | {f"htm{level}" for level in range(25)}
-            | {f"healpix{level}" for level in range(18)},
+            | {f"htm{level}" for level in range(1, 25)}
+            | {f"healpix{level}" for level in range(1, 18)},
         )
 
     def testGraphs(self):

@@ -402,13 +402,13 @@ class DimensionElement(TopologicalRelationshipEndpoint):
 
     @property
     def implied_union_target(self) -> DimensionElement | None:
-        """If not `None`, the name of an element whose implied values for
-        this element form the set of allowable values.
+        """If not `None`, another element whose implied values for this element
+        form the set of allowable values.
 
         For example, in the default dimension universe, the allowed values for
-        ``band`` is the union of all ``band`` values in the
-        ``physical_filter`` table, so the `implied_union_target` for ``band``
-        is ``physical_filter``.
+        ``band`` is the union of all ``band`` values in the ``physical_filter``
+        table, so the `implied_union_target` for ``band`` is
+        ``physical_filter``.
         """
         return None
 

@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Set
+from collections.abc import Set
 from typing import TYPE_CHECKING
 
 from .._named import NamedValueSet
@@ -44,25 +44,10 @@ class DimensionConstructionVisitor(ABC):
 
     An abstract base class for adding one or more entities to a
     `DimensionConstructionBuilder`.
-
-    Parameters
-    ----------
-    name : `str`
-        Name of an entity being added.  This must be unique across all
-        entities, which include `DimensionElement`, `TopologicalFamily`, and
-        `DimensionPackerFactory` objects.  The visitor may add other entities
-        as well, as long as only the named entity is referenced by other
-        entities in the universe.
     """
 
-    def __init__(self, name: str):
-        self.name = name
-
-    def __str__(self) -> str:
-        return self.name
-
     @abstractmethod
-    def hasDependenciesIn(self, others: Set[str]) -> bool:
+    def has_dependencies_in(self, others: Set[str]) -> bool:
         """Test if dependencies have already been constructed.
 
         Tests whether other entities this visitor depends on have already
@@ -83,11 +68,13 @@ class DimensionConstructionVisitor(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def visit(self, builder: DimensionConstructionBuilder) -> None:
+    def visit(self, name: str, builder: DimensionConstructionBuilder) -> None:
         """Modify the given builder object to include responsible entities.
 
         Parameters
         ----------
+        name : `str`
+            Name of the entity being added.
         builder : `DimensionConstructionBuilder`
             Builder to modify in-place and from which dependencies can be
             obtained.
@@ -95,8 +82,7 @@ class DimensionConstructionVisitor(ABC):
         Notes
         -----
         Subclasses may assume (and callers must guarantee) that
-        `hasDependenciesIn` would return `False` prior to `visit` being
-        called.
+        `hasDependenciesIn` would return `False` prior to `visit` being called.
         """
         raise NotImplementedError()
 
@@ -120,8 +106,6 @@ class DimensionConstructionBuilder:
         The dimension universe to be used.
     namespace : `str`, optional
         The namespace to assign to this universe.
-    visitors : `~collections.abc.Iterable` [ `DimensionConstructionVisitor` ]
-        Visitor instances to include from the start.
     """
 
     def __init__(
@@ -131,7 +115,6 @@ class DimensionConstructionBuilder:
         config: DimensionConfig,
         *,
         namespace: str | None = None,
-        visitors: Iterable[DimensionConstructionVisitor] = (),
     ) -> None:
         self.dimensions = NamedValueSet()
         self.elements = NamedValueSet()
@@ -140,28 +123,19 @@ class DimensionConstructionBuilder:
         self.namespace = namespace
         self.config = config
         self.commonSkyPixName = commonSkyPixName
-        self._todo: dict[str, DimensionConstructionVisitor] = {v.name: v for v in visitors}
+        self._todo: dict[str, DimensionConstructionVisitor] = {}
 
-    def add(self, visitor: DimensionConstructionVisitor) -> None:
+    def add(self, name: str, visitor: DimensionConstructionVisitor) -> None:
         """Add a single visitor to the builder.
 
         Parameters
         ----------
+        name : `str`
+            Name of the object the visitor creates.
         visitor : `DimensionConstructionVisitor`
             Visitor instance to add.
         """
-        self._todo[visitor.name] = visitor
-
-    def update(self, visitors: Iterable[DimensionConstructionVisitor]) -> None:
-        """Add multiple visitors to the builder.
-
-        Parameters
-        ----------
-        visitors : `~collections.abc.Iterable` \
-                [ `DimensionConstructionVisitor` ]
-            Visitor instances to add.
-        """
-        self._todo.update((v.name, v) for v in visitors)
+        self._todo[name] = visitor
 
     def finish(self) -> None:
         """Complete construction of the builder.
@@ -174,13 +148,13 @@ class DimensionConstructionBuilder:
             unblocked = [
                 name
                 for name, visitor in self._todo.items()
-                if not visitor.hasDependenciesIn(self._todo.keys())
+                if not visitor.has_dependencies_in(self._todo.keys())
             ]
             unblocked.sort()  # Break ties lexicographically.
             if not unblocked:
                 raise RuntimeError(f"Cycle or unmet dependency in dimension elements: {self._todo.keys()}.")
             for name in unblocked:
-                self._todo.pop(name).visit(self)
+                self._todo.pop(name).visit(name, self)
 
     version: int
     """Version number for the `DimensionUniverse` (`int`).

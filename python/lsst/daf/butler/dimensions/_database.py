@@ -120,8 +120,6 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
 
     Parameters
     ----------
-    name : `str`
-        Name of the family.
     space : `TopologicalSpace`
         Space in which this family's regions live.
     members : `~collections.abc.Iterable` [ `str` ]
@@ -129,19 +127,18 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
         priority used in `choose` (first-choice member first).
     """
 
-    def __init__(self, name: str, space: TopologicalSpace, members: Iterable[str]):
-        super().__init__(name)
+    def __init__(self, space: TopologicalSpace, members: Iterable[str]):
         self._space = space
         self._members = tuple(members)
 
-    def hasDependenciesIn(self, others: Set[str]) -> bool:
+    def has_dependencies_in(self, others: Set[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
         return not others.isdisjoint(self._members)
 
-    def visit(self, builder: DimensionConstructionBuilder) -> None:
+    def visit(self, name: str, builder: DimensionConstructionBuilder) -> None:
         # Docstring inherited from DimensionConstructionVisitor.
-        members = NamedValueSet(builder.elements[name] for name in self._members)
-        family = DatabaseTopologicalFamily(self.name, self._space, members=members.freeze())
+        members = NamedValueSet(builder.elements[member_name] for member_name in self._members)
+        family = DatabaseTopologicalFamily(name, self._space, members=members.freeze())
         builder.topology[self._space].add(family)
         for member in members:
             assert isinstance(member, DatabaseDimension | DatabaseDimensionCombination)
@@ -156,22 +153,21 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
 class DatabaseDimensionElement(DimensionElement):
     """An intermediate base class for `DimensionElement` database classes.
 
-    Theese classes are ones whose instances map directly to a database
-    table or query.
+    Instances of these element classes map directly to a database table or
+    query.
 
     Parameters
     ----------
     name : `str`
         Name of the dimension.
-    storage : `dict`
-        Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
-        that will back this element in the registry (in a "cls" key) along
-        with any other construction keyword arguments (in other keys).
     implied : `NamedValueAbstractSet` [ `Dimension` ]
         Other dimensions whose keys are included in this dimension's (logical)
         table as foreign keys.
     metadata_columns : `NamedValueAbstractSet` [ `MetadataColumnSpec` ]
         Field specifications for all non-key fields in this dimension's table.
+    is_cached : `bool`
+        Whether this element's records should be persistently cached in the
+        client.
     doc : `str`
         Extended description of this element.
     """
@@ -179,17 +175,17 @@ class DatabaseDimensionElement(DimensionElement):
     def __init__(
         self,
         name: str,
-        storage: dict,
         *,
         implied: NamedValueAbstractSet[Dimension],
         metadata_columns: NamedValueAbstractSet[MetadataColumnSpec],
+        is_cached: bool,
         doc: str,
     ):
         self._name = name
-        self._storage = storage
         self._implied = implied
         self._metadata_columns = metadata_columns
         self._topology: dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
+        self._is_cached = is_cached
         self._doc = doc
 
     @property
@@ -208,22 +204,9 @@ class DatabaseDimensionElement(DimensionElement):
         return self._metadata_columns
 
     @property
-    def implied_union_target(self) -> DimensionElement | None:
-        # Docstring inherited from DimensionElement.
-        # This is a bit encapsulation-breaking, but it'll all be cleaned up
-        # soon when we get rid of the storage objects entirely.
-        storage = self._storage.get("nested")
-        if storage is None:
-            storage = self._storage
-        name = storage.get("view_of")
-        return self.universe[name] if name is not None else None
-
-    @property
     def is_cached(self) -> bool:
         # Docstring inherited.
-        # This is a bit encapsulation-breaking, but it'll all be cleaned up
-        # soon when we get rid of the storage objects entirely.
-        return "caching" in self._storage["cls"]
+        return self._is_cached
 
     @property
     def documentation(self) -> str:
@@ -253,10 +236,6 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
     ----------
     name : `str`
         Name of the dimension.
-    storage : `dict`
-        Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
-        that will back this element in the registry (in a "cls" key) along
-        with any other construction keyword arguments (in other keys).
     required : `NamedValueSet` [ `Dimension` ]
         Other dimensions whose keys are part of the compound primary key for
         this dimension's (logical) table, as well as references to their own
@@ -273,6 +252,12 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used
         to define unique constraints.
+    implied_union_target : `str` or `None`
+        If not `None`, the name of an element whose implied values for
+        this element form the set of allowable values.
+    is_cached : `bool`
+        Whether this element's records should be persistently cached in the
+        client.
     doc : `str`
         Extended description of this element.
 
@@ -287,18 +272,22 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
     def __init__(
         self,
         name: str,
-        storage: dict,
         *,
         required: NamedValueSet[Dimension],
         implied: NamedValueAbstractSet[Dimension],
         metadata_columns: NamedValueAbstractSet[MetadataColumnSpec],
         unique_keys: NamedValueAbstractSet[KeyColumnSpec],
+        implied_union_target: str | None,
+        is_cached: bool,
         doc: str,
     ):
-        super().__init__(name, storage=storage, implied=implied, metadata_columns=metadata_columns, doc=doc)
+        super().__init__(
+            name, implied=implied, metadata_columns=metadata_columns, is_cached=is_cached, doc=doc
+        )
         required.add(self)
         self._required = required.freeze()
         self._unique_keys = unique_keys
+        self._implied_union_target = implied_union_target
 
     @property
     def required(self) -> NamedValueAbstractSet[Dimension]:
@@ -310,6 +299,13 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
         # Docstring inherited from Dimension.
         return self._unique_keys
 
+    @property
+    def implied_union_target(self) -> DimensionElement | None:
+        # Docstring inherited from DimensionElement.
+        # This is a bit encapsulation-breaking, but it'll all be cleaned up
+        # soon when we get rid of the storage objects entirely.
+        return self.universe[self._implied_union_target] if self._implied_union_target is not None else None
+
 
 class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElement):
     """A combination class that maps directly to a database table or query.
@@ -318,10 +314,6 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     ----------
     name : `str`
         Name of the dimension.
-    storage : `dict`
-        Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
-        that will back this element in the registry (in a "cls" key) along
-        with any other construction keyword arguments (in other keys).
     required : `NamedValueAbstractSet` [ `Dimension` ]
         Dimensions whose keys define the compound primary key for this
         combinations's (logical) table, as well as references to their own
@@ -332,7 +324,10 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     metadata_columns : `NamedValueAbstractSet` [ `MetadataColumnSpec` ]
         Field specifications for all non-key fields in this combination's
         table.
-    alwaysJoin : `bool`, optional
+    is_cached : `bool`
+        Whether this element's records should be persistently cached in the
+        client.
+    always_join : `bool`, optional
         If `True`, always include this element in any query or data ID in
         which its ``required`` dimensions appear, because it defines a
         relationship between those dimensions that must always be satisfied.
@@ -360,18 +355,20 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     def __init__(
         self,
         name: str,
-        storage: dict,
         *,
         required: NamedValueAbstractSet[Dimension],
         implied: NamedValueAbstractSet[Dimension],
         metadata_columns: NamedValueAbstractSet[MetadataColumnSpec],
-        alwaysJoin: bool,
+        is_cached: bool,
+        always_join: bool,
         populated_by: Dimension | None,
         doc: str,
     ):
-        super().__init__(name, storage=storage, implied=implied, metadata_columns=metadata_columns, doc=doc)
+        super().__init__(
+            name, implied=implied, metadata_columns=metadata_columns, is_cached=is_cached, doc=doc
+        )
         self._required = required
-        self._alwaysJoin = alwaysJoin
+        self._always_join = always_join
         self._populated_by = populated_by
 
     @property
@@ -382,129 +379,14 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     @property
     def alwaysJoin(self) -> bool:
         # Docstring inherited from DimensionElement.
-        return self._alwaysJoin
+        return self._always_join
 
     @property
     def defines_relationships(self) -> bool:
         # Docstring inherited from DimensionElement.
-        return self._alwaysJoin or bool(self.implied)
+        return self._always_join or bool(self.implied)
 
     @property
     def populated_by(self) -> Dimension | None:
         # Docstring inherited.
         return self._populated_by
-
-
-class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
-    """Construction visitor for database dimension and dimension combination.
-
-    Specifically, a construction visitor for `DatabaseDimension` and
-    `DatabaseDimensionCombination`.
-
-    Parameters
-    ----------
-    name : `str`
-        Name of the dimension.
-    storage : `dict`
-        Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
-        that will back this element in the registry (in a "cls" key) along
-        with any other construction keyword arguments (in other keys).
-    required : `~collections.abc.Set` [ `Dimension` ]
-        Names of dimensions whose keys define the compound primary key for this
-        element's (logical) table, as well as references to their own
-        tables.
-    implied : `~collections.abc.Set` [ `Dimension` ]
-        Names of dimension whose keys are included in this elements's
-        (logical) table as foreign keys.
-    doc : `str`
-        Extended description of this element.
-    metadata_columns : `~collections.abc.Iterable` [ `MetadataColumnSpec` ]
-        Field specifications for all non-key fields in this element's table.
-    unique_keys : `~collections.abc.Iterable` [ `KeyColumnSpec` ]
-        Fields that can each be used to uniquely identify this dimension (given
-        values for all required dimensions).  The first of these is used as
-        (part of) this dimension's table's primary key, while others are used
-        to define unique constraints.  Should be empty for
-        `DatabaseDimensionCombination` definitions.
-    alwaysJoin : `bool`, optional
-        If `True`, always include this element in any query or data ID in
-        which its ``required`` dimensions appear, because it defines a
-        relationship between those dimensions that must always be satisfied.
-        Should only be provided when a `DimensionCombination` is being
-        constructed.
-    populated_by : `Dimension`, optional
-        The dimension that this element's records are always inserted,
-        exported, and imported alongside.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        storage: dict,
-        required: set[str],
-        implied: set[str],
-        doc: str,
-        metadata_columns: Iterable[MetadataColumnSpec] = (),
-        unique_keys: Iterable[KeyColumnSpec] = (),
-        alwaysJoin: bool = False,
-        populated_by: str | None = None,
-    ):
-        super().__init__(name)
-        self._storage = storage
-        self._required = required
-        self._implied = implied
-        self._metadata_columns = NamedValueSet(metadata_columns).freeze()
-        self._unique_keys = NamedValueSet(unique_keys).freeze()
-        self._alwaysJoin = alwaysJoin
-        self._populated_by = populated_by
-        self._doc = doc
-
-    def hasDependenciesIn(self, others: Set[str]) -> bool:
-        # Docstring inherited from DimensionConstructionVisitor.
-        return not (self._required.isdisjoint(others) and self._implied.isdisjoint(others))
-
-    def visit(self, builder: DimensionConstructionBuilder) -> None:
-        # Docstring inherited from DimensionConstructionVisitor.
-        # Expand required dependencies.
-        for name in tuple(self._required):  # iterate over copy
-            self._required.update(builder.dimensions[name].required.names)
-        # Transform required and implied Dimension names into instances,
-        # and reorder to match builder's order.
-        required: NamedValueSet[Dimension] = NamedValueSet()
-        implied: NamedValueSet[Dimension] = NamedValueSet()
-        for dimension in builder.dimensions:
-            if dimension.name in self._required:
-                required.add(dimension)
-            if dimension.name in self._implied:
-                implied.add(dimension)
-
-        if self._unique_keys:
-            if self._alwaysJoin:
-                raise RuntimeError(f"'alwaysJoin' is not a valid option for Dimension object {self.name}.")
-            # Special handling for creating Dimension instances.
-            dimension = DatabaseDimension(
-                self.name,
-                storage=self._storage,
-                required=required,
-                implied=implied.freeze(),
-                metadata_columns=self._metadata_columns,
-                unique_keys=self._unique_keys,
-                doc=self._doc,
-            )
-            builder.dimensions.add(dimension)
-            builder.elements.add(dimension)
-        else:
-            # Special handling for creating DimensionCombination instances.
-            combination = DatabaseDimensionCombination(
-                self.name,
-                storage=self._storage,
-                required=required,
-                implied=implied.freeze(),
-                doc=self._doc,
-                metadata_columns=self._metadata_columns,
-                alwaysJoin=self._alwaysJoin,
-                populated_by=(
-                    builder.dimensions[self._populated_by] if self._populated_by is not None else None
-                ),
-            )
-            builder.elements.add(combination)
