@@ -113,15 +113,9 @@ def associate(**kwargs: Any) -> None:
     metavar=typeStrAcceptsMultiple,
     help="Dimensions that should be skipped during import",
 )
-@click.option("--reuse-ids", is_flag=True, help="Force re-use of imported dataset IDs for integer IDs.")
 @options_file_option()
 def butler_import(*args: Any, **kwargs: Any) -> None:
     """Import data into a butler repository."""
-    # `reuse_ids`` is not used by `butlerImport`.
-    reuse_ids = kwargs.pop("reuse_ids", False)
-    if reuse_ids:
-        click.echo("WARNING: --reuse-ids option is deprecated and will be removed after v26.")
-
     script.butlerImport(*args, **kwargs)
 
 
