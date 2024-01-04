@@ -278,7 +278,7 @@ transfer_dimensions_option = MWOptionDecorator(
 )
 
 
-verbose_option = MWOptionDecorator("-v", "--verbose", help="Increase verbosity.", is_flag=True)
+verbose_option = MWOptionDecorator("-v", "--verbose/--no-verbose", help="Increase verbosity.", is_flag=True)
 
 
 where_option = MWOptionDecorator(
