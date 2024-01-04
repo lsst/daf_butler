@@ -1123,7 +1123,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         self,
         *datasets: FileDataset,
         transfer: str | None = "auto",
-        run: str | None = None,
         record_validation_info: bool = True,
     ) -> None:
         """Store and register one or more datasets that already exist on disk.
@@ -1145,10 +1144,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             If not `None`, must be one of 'auto', 'move', 'copy', 'direct',
             'split', 'hardlink', 'relsymlink' or 'symlink', indicating how to
             transfer the file.
-        run : `str`, optional
-            The name of the run ingested datasets should be added to,
-            overriding ``self.run``. This parameter is now deprecated since
-            the run is encoded in the ``FileDataset``.
         record_validation_info : `bool`, optional
             If `True`, the default, the datastore can record validation
             information associated with the file. If `False` the datastore

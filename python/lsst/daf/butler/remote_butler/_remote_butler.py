@@ -447,7 +447,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self,
         *datasets: FileDataset,
         transfer: str | None = "auto",
-        run: str | None = None,
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited.

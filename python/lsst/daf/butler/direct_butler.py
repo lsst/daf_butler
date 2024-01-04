@@ -1440,7 +1440,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         self,
         *datasets: FileDataset,
         transfer: str | None = "auto",
-        run: str | None = None,
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited.
@@ -1464,8 +1463,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             tuple[DatasetType, str], dict[DataCoordinate, FileDataset]
         ] = defaultdict(dict)
 
-        used_run = False
-
         # And the nested loop that populates it:
         for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
             # Somewhere to store pre-existing refs if we have an
@@ -1473,7 +1470,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             existingRefs: list[DatasetRef] = []
 
             for ref in dataset.refs:
-                assert ref.run is not None  # For mypy
                 group_key = (ref.datasetType, ref.run)
 
                 if ref.dataId in groupedDataIds[group_key]:
@@ -1500,14 +1496,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 dataset.refs = existingRefs
             else:
                 groupedData[group_key].append(dataset)
-
-        if not used_run and run is not None:
-            warnings.warn(
-                "All DatasetRefs to be ingested had resolved dataset IDs. The value given to the "
-                f"'run' parameter ({run!r}) was not used and the parameter will be removed in the future.",
-                category=FutureWarning,
-                stacklevel=3,  # Take into account the @transactional decorator.
-            )
 
         # Now we can bulk-insert into Registry for each DatasetType.
         for (datasetType, this_run), grouped_datasets in progress.iter_item_chunks(
