@@ -34,7 +34,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import Any, ClassVar
 
-from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath
 
 from ._dataset_ref import DatasetRef
@@ -420,18 +419,6 @@ class LimitedButler(ABC):
         repository (`DimensionUniverse`).
         """
         raise NotImplementedError()
-
-    # TODO: remove on DM-40080.
-    @property
-    @deprecated(
-        reason="The Butler.datastore property is now deprecated. Butler APIs should now exist with the "
-        "relevant functionality. Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def datastore(self) -> Datastore:
-        """The object that manages actual dataset storage (`Datastore`)."""
-        return self._datastore
 
     _datastore: Datastore
     """The object that manages actual dataset storage (`Datastore`)."""
