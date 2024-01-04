@@ -289,7 +289,7 @@ class ButlerPutGetTests(TestCaseMixin):
                 ref = butler.put(metric, *args, **kwargs)
                 self.assertIsInstance(ref, DatasetRef)
 
-                # Test getDirect
+                # Test get of a ref.
                 metricOut = butler.get(ref)
                 self.assertEqual(metric, metricOut)
                 # Test get
@@ -1101,7 +1101,7 @@ class ButlerTests(ButlerPutGetTests):
                 # Store a dataset
                 ref = butler.put(metric, datasetTypeName, dataId)
                 self.assertIsInstance(ref, DatasetRef)
-                # Test getDirect
+                # Test get of a ref.
                 metricOut = butler.get(ref)
                 self.assertEqual(metric, metricOut)
                 # Test get

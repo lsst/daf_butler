@@ -907,20 +907,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return ref
 
-    # TODO: remove on DM-40067.
-    @transactional
-    @deprecated(
-        reason="Butler.put() now behaves like Butler.putDirect() when given a DatasetRef."
-        " Please use Butler.put(). Be aware that you may need to adjust your usage if you"
-        " were relying on the run parameter to determine the run."
-        " Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def putDirect(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
-        # Docstring inherited.
-        return self.put(obj, ref)
-
     @transactional
     def put(
         self,
@@ -1002,89 +988,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         self._datastore.put(obj, ref)
 
         return ref
-
-    # TODO: remove on DM-40067.
-    @deprecated(
-        reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
-        " Please use Butler.get(). Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def getDirect(
-        self,
-        ref: DatasetRef,
-        *,
-        parameters: dict[str, Any] | None = None,
-        storageClass: StorageClass | str | None = None,
-    ) -> Any:
-        """Retrieve a stored dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Resolved reference to an already stored dataset.
-        parameters : `dict`
-            Additional StorageClass-defined options to control reading,
-            typically used to efficiently read only a subset of the dataset.
-        storageClass : `StorageClass` or `str`, optional
-            The storage class to be used to override the Python type
-            returned by this method. By default the returned type matches
-            the dataset type definition for this dataset. Specifying a
-            read `StorageClass` can force a different type to be returned.
-            This type must be compatible with the original type.
-
-        Returns
-        -------
-        obj : `object`
-            The dataset.
-        """
-        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
-
-    # TODO: remove on DM-40067.
-    @deprecated(
-        reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
-        "Please use Butler.getDeferred(). Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def getDirectDeferred(
-        self,
-        ref: DatasetRef,
-        *,
-        parameters: dict[str, Any] | None = None,
-        storageClass: str | StorageClass | None = None,
-    ) -> DeferredDatasetHandle:
-        """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
-        from a resolved `DatasetRef`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Resolved reference to an already stored dataset.
-        parameters : `dict`
-            Additional StorageClass-defined options to control reading,
-            typically used to efficiently read only a subset of the dataset.
-        storageClass : `StorageClass` or `str`, optional
-            The storage class to be used to override the Python type
-            returned by this method. By default the returned type matches
-            the dataset type definition for this dataset. Specifying a
-            read `StorageClass` can force a different type to be returned.
-            This type must be compatible with the original type.
-
-        Returns
-        -------
-        obj : `DeferredDatasetHandle`
-            A handle which can be used to retrieve a dataset at a later time.
-
-        Raises
-        ------
-        LookupError
-            Raised if no matching dataset exists in the `Registry`.
-        """
-        # Check that dataset is known to the datastore.
-        if not self._datastore.knows(ref):
-            raise LookupError(f"Dataset reference {ref} is not known to datastore.")
-        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
         self,
