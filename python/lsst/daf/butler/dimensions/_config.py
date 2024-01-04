@@ -440,6 +440,25 @@ class _ElementConfig(pydantic.BaseModel, DimensionConstructionVisitor):
         description="Non-key columns that provide extra information about a dimension element.",
     )
 
+    is_cached: bool = pydantic.Field(
+        default=False,
+        description="Whether this element's records should be cached in the client.",
+    )
+
+    implied_union_target: str | None = pydantic.Field(
+        default=None,
+        description=textwrap.dedent(
+            """\
+            Another dimension whose stored values for this dimension form the
+            set of all allowed values.
+
+            The target dimension must have this dimension in its "implies"
+            list.  This means the current dimension will have no table of its
+            own in the database.
+            """
+        ),
+    )
+
     governor: bool = pydantic.Field(
         default=False,
         description=textwrap.dedent(
@@ -449,6 +468,8 @@ class _ElementConfig(pydantic.BaseModel, DimensionConstructionVisitor):
             Governor dimensions are expected to have a tiny number of rows and
             must be explicitly provided in any dimension expression in which
             dependent dimensions appear.
+
+            Implies is_cached=True.
             """
         ),
     )
@@ -478,9 +499,11 @@ class _ElementConfig(pydantic.BaseModel, DimensionConstructionVisitor):
         _LegacyTableDimensionStorage,
         _LegacyImpliedUnionDimensionStorage,
         _LegacyCachingDimensionStorage,
+        None,
     ] = pydantic.Field(
         description="How this dimension element's rows should be stored in the database and client.",
         discriminator="cls",
+        default=None,
     )
 
     def has_dependencies_in(self, others: Set[str]) -> bool:
@@ -524,8 +547,8 @@ class _ElementConfig(pydantic.BaseModel, DimensionConstructionVisitor):
                 implied=implied.freeze(),
                 metadata_columns=NamedValueSet(self.metadata).freeze(),
                 unique_keys=NamedValueSet(self.keys).freeze(),
-                is_cached=self.storage.is_cached,
-                implied_union_target=self.storage.implied_union_target,
+                is_cached=self.is_cached,
+                implied_union_target=self.implied_union_target,
                 doc=self.doc,
             )
             builder.dimensions.add(dimension)
@@ -539,7 +562,7 @@ class _ElementConfig(pydantic.BaseModel, DimensionConstructionVisitor):
                 implied=implied.freeze(),
                 doc=self.doc,
                 metadata_columns=NamedValueSet(self.metadata).freeze(),
-                is_cached=self.storage.is_cached,
+                is_cached=self.is_cached,
                 always_join=self.always_join,
                 populated_by=(
                     builder.dimensions[self.populated_by] if self.populated_by is not None else None
@@ -572,14 +595,16 @@ class _ElementConfig(pydantic.BaseModel, DimensionConstructionVisitor):
         return self
 
     @pydantic.model_validator(mode="after")
-    def _governor_storage(self) -> _ElementConfig:
-        if self.governor and type(self.storage) is not _LegacyGovernorDimensionStorage:
-            raise ValueError("Governor dimensions must use governor dimension storage.")
-        return self
-
-    @pydantic.model_validator(mode="after")
-    def _implied_union_restrictions(self) -> _ElementConfig:
-        if type(self.storage) is _LegacyImpliedUnionDimensionStorage:
+    def _storage(self) -> _ElementConfig:
+        if self.storage is not None:
+            # 'storage' is legacy; pull its implications into the regular
+            # attributes and set it to None for consistency.
+            self.is_cached = self.storage.is_cached
+            self.implied_union_target = self.storage.implied_union_target
+            self.storage = None
+        if self.governor:
+            self.is_cached = True
+        if self.implied_union_target is not None:
             if self.requires:
                 raise ValueError("Implied-union dimension may not have required dependencies.")
             if self.implies:
