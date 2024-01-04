@@ -243,7 +243,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.assertEqual(qbb._actual_inputs, {ref.id for ref in input_refs + self.init_inputs_refs})
         self.assertEqual(qbb._unavailable_inputs, {ref.id for ref in self.missing_refs})
 
-    def test_datasetExistsDirect(self) -> None:
+    def test_stored(self) -> None:
         """Test for dataset existence method"""
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(

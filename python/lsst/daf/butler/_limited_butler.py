@@ -343,28 +343,6 @@ class LimitedButler(ABC):
         """
         return self._datastore.mexists(refs)
 
-    # TODO: remove on DM-40079.
-    @deprecated(
-        reason="Butler.datasetExistsDirect() has been replaced by Butler.stored(). "
-        "Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def datasetExistsDirect(self, ref: DatasetRef) -> bool:
-        """Return `True` if a dataset is actually present in the Datastore.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Resolved reference to a dataset.
-
-        Returns
-        -------
-        exists : `bool`
-            Whether the dataset exists in the Datastore.
-        """
-        return self.stored(ref)
-
     def markInputUnused(self, ref: DatasetRef) -> None:
         """Indicate that a predicted input was not actually used when
         processing a `Quantum`.

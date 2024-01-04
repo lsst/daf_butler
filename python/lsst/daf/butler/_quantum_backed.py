@@ -523,7 +523,7 @@ class QuantumBackedButler(LimitedButler):
           aren't actually used.  We rely on task authors to use
           `markInputUnused` to address this.
 
-        - We assume that the execution system will call ``datasetExistsDirect``
+        - We assume that the execution system will call ``stored``
           on all predicted inputs prior to execution, in order to populate the
           "available inputs" set.  This is what I envision
           '`~lsst.ctrl.mpexec.SingleQuantumExecutor` doing after we update it

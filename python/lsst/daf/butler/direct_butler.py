@@ -46,7 +46,6 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
 
-from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
 from lsst.utils.iteration import ensure_iterable
@@ -1348,61 +1347,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     existence[ref] |= DatasetExistence._ASSUMED
 
         return existence
-
-    # TODO: remove on DM-40079.
-    @deprecated(
-        reason="Butler.datasetExists() has been replaced by Butler.exists(). Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def datasetExists(
-        self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        dataId: DataId | None = None,
-        *,
-        collections: Any = None,
-        **kwargs: Any,
-    ) -> bool:
-        """Return True if the Dataset is actually present in the Datastore.
-
-        Parameters
-        ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            When `DatasetRef` the `dataId` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataCoordinate`
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument.
-        collections : Any, optional
-            Collections to be searched, overriding ``self.collections``.
-            Can be any of the types supported by the ``collections`` argument
-            to butler construction.
-        **kwargs
-            Additional keyword arguments used to augment or construct a
-            `DataCoordinate`.  See `DataCoordinate.standardize`
-            parameters.
-
-        Raises
-        ------
-        LookupError
-            Raised if the dataset is not even present in the Registry.
-        ValueError
-            Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry.
-        NoDefaultCollectionError
-            Raised if no collections were provided.
-        """
-        # A resolved ref may be given that is not known to this butler.
-        if isinstance(datasetRefOrType, DatasetRef):
-            ref = self._registry.getDataset(datasetRefOrType.id)
-            if ref is None:
-                raise LookupError(
-                    f"Resolved DatasetRef with id {datasetRefOrType.id} is not known to registry."
-                )
-        else:
-            ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self._datastore.exists(ref)
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
         # Docstring inherited.
