@@ -50,7 +50,7 @@ from .repo_relocation import BUTLER_ROOT_TAG
 
 if TYPE_CHECKING:
     from ._dataset_existence import DatasetExistence
-    from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
+    from ._dataset_ref import DatasetId, DatasetRef
     from ._dataset_type import DatasetType
     from ._deferredDatasetHandle import DeferredDatasetHandle
     from ._file_dataset import FileDataset
@@ -1124,7 +1124,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         *datasets: FileDataset,
         transfer: str | None = "auto",
         run: str | None = None,
-        idGenerationMode: DatasetIdGenEnum | None = None,
         record_validation_info: bool = True,
     ) -> None:
         """Store and register one or more datasets that already exist on disk.
@@ -1150,9 +1149,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             The name of the run ingested datasets should be added to,
             overriding ``self.run``. This parameter is now deprecated since
             the run is encoded in the ``FileDataset``.
-        idGenerationMode : `DatasetIdGenEnum`, optional
-            Specifies option for generating dataset IDs. Parameter is
-            deprecated.
         record_validation_info : `bool`, optional
             If `True`, the default, the datastore can record validation
             information associated with the file. If `False` the datastore

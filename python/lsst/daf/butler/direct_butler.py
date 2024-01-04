@@ -84,7 +84,7 @@ from .utils import transactional
 if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol
 
-    from ._dataset_ref import DatasetId, DatasetIdGenEnum
+    from ._dataset_ref import DatasetId
     from ._file_dataset import FileDataset
     from ._query import Query
     from .datastore import DatasetRefURIs
@@ -1441,7 +1441,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         *datasets: FileDataset,
         transfer: str | None = "auto",
         run: str | None = None,
-        idGenerationMode: DatasetIdGenEnum | None = None,
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited.
@@ -1451,14 +1450,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         _LOG.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
         if not datasets:
             return
-
-        if idGenerationMode is not None:
-            warnings.warn(
-                "The idGenerationMode parameter is no longer used and is ignored. "
-                " Will be removed after v26.0",
-                FutureWarning,
-                stacklevel=2,
-            )
 
         progress = Progress("lsst.daf.butler.Butler.ingest", level=logging.DEBUG)
 
