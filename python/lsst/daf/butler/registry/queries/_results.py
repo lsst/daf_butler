@@ -339,8 +339,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             dimensions = self.dimensions
         else:
             dimensions = self.universe.conform(dimensions)
-        parent_dataset_type, _ = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, components=False, explicit_only=True
+        parent_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, explicit_only=True
         )
         query = self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True)
         return query.iter_data_ids_and_dataset_refs(parent_dataset_type, dimensions)
