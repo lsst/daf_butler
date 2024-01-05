@@ -20,36 +20,30 @@ elements:
       physical_filters and detectors and a numbering system for the exposures
       and visits that represent observations with it.
     keys:
-      -
-        name: name
+      - name: name
         type: string
         length: 16
     metadata:
-      -
-        name: visit_max
+      - name: visit_max
         type: int
         doc: >
           Maximum value for the 'visit' field for visits associated with
           this instrument (exclusive).
-      -
-        name: visit_system
+      - name: visit_system
         type: int
         doc: >
           The preferred visit system for this instrument.
-      -
-        name: exposure_max
+      - name: exposure_max
         type: int
         doc: >
           Maximum value for the 'exposure' field for exposures associated with
           this instrument (exclusive).
-      -
-        name: detector_max
+      - name: detector_max
         type: int
         doc: >
           Maximum value for the 'detector' field for detectors associated with
           this instrument (exclusive).
-      -
-        name: class_name
+      - name: class_name
         type: string
         length: 64
         doc: >
@@ -65,8 +59,7 @@ elements:
       abstract filter can be used to relate similar physical filters, and
       is typically the filter associated with coadds.
     keys:
-      -
-        name: name
+      - name: name
         type: string
         length: 32
     storage:
@@ -81,8 +74,7 @@ elements:
       used to identify datasets that can only be associated with a single
       observation.
     keys:
-      -
-        name: name
+      - name: name
         type: string
         length: 32
     requires:
@@ -100,8 +92,7 @@ elements:
       model wavelength-dependent effects such as differential chromatic
       refraction.
     keys:
-      -
-        name: id
+      - name: id
         type: int
     requires:
       - band
@@ -116,28 +107,23 @@ elements:
       of that detector; that requires specifying an exposure or visit as
       well).
     keys:
-      -
-        name: id
+      - name: id
         type: int
-      -
-        name: full_name
+      - name: full_name
         type: string
         length: 32
     requires: [instrument]
     metadata:
-      -
-        name: name_in_raft
+      - name: name_in_raft
         type: string
         length: 32
-      -
-        name: raft
+      - name: raft
         type: string
         length: 32
         doc: >
           A string name for a group of detectors with an instrument-dependent
           interpretation.
-      -
-        name: purpose
+      - name: purpose
         type: string
         length: 32
         doc: >
@@ -156,18 +142,15 @@ elements:
       The visit table contains metadata that is both meaningful only for
       science exposures and the same for all exposures in a visit.
     keys:
-      -
-        name: id
+      - name: id
         type: int
-      -
-        name: name
+      - name: name
         type: string
         length: 64
     requires: [instrument]
     implies: [physical_filter]
     metadata:
-      -
-        name: day_obs
+      - name: day_obs
         type: int
         doc: >
           Day of observation as defined by the observatory (YYYYMMDD format).
@@ -177,41 +160,35 @@ elements:
         type: int
         doc: >
           The sequence number of the first exposure that is part of this visit.
-      -
-        name: exposure_time
+      - name: exposure_time
         type: float
         doc: >
           The total exposure time of the visit in seconds.  This should
           be equal to the sum of the exposure_time values for all
           constituent exposures (i.e. it should not include time between
           exposures).
-      -
-        name: target_name
+      - name: target_name
         type: string
         length: 64
         doc: Object of interest for this visit or survey field name.
-      -
-        name: observation_reason
+      - name: observation_reason
         type: string
         length: 68
         doc: >
           The reason this visit was taken. (e.g. science,
           filter scan, unknown, various).
-      -
-        name: science_program
+      - name: science_program
         type: string
         length: 64
         doc: Observing program (survey or proposal) identifier.
-      -
-        name: azimuth
+      - name: azimuth
         type: float
         doc: >
           Approximate azimuth of the telescope in degrees during the visit.
           Can only be approximate since it is continually changing during
           an observation and multiple exposures can be combined from a
           relatively long period.
-      -
-        name: zenith_angle
+      - name: zenith_angle
         type: float
         doc: >
           Approximate zenith angle in degrees during the visit.
@@ -236,111 +213,92 @@ elements:
       would be the same for all exposures within a visit with the exception
       of the exposure.group entry.
     keys:
-      -
-        name: id
+      - name: id
         type: int
-      -
-        name: obs_id
+      - name: obs_id
         type: string
         length: 64
     requires: [instrument]
     implies: [physical_filter]
     metadata:
-      -
-        name: exposure_time
+      - name: exposure_time
         type: float
         doc: Duration of the exposure with shutter open (seconds).
-      -
-        name: dark_time
+      - name: dark_time
         type: float
         doc: Duration of the exposure with shutter closed (seconds).
-      -
-        name: observation_type
+      - name: observation_type
         type: string
         length: 16
         doc: The observation type of this exposure (e.g. dark, bias, science).
-      -
-        name: observation_reason
+      - name: observation_reason
         type: string
         length: 68
         doc: >
           The reason this observation was taken. (e.g. science,
           filter scan, unknown).
-      -
-        name: day_obs
+      - name: day_obs
         type: int
         doc: >
           Day of observation as defined by the observatory (YYYYMMDD format).
-      -
-        name: seq_num
+      - name: seq_num
         type: int
         doc: >
           Counter for the observation within a larger sequence. Context
           of the sequence number is observatory specific. Can be
           a global counter or counter within day_obs.
-      -
-        name: seq_start
+      - name: seq_start
         type: int
         doc: >
           Earliest sequence number that might be related to this exposure.
-      -
-        name: seq_end
+      - name: seq_end
         type: int
         doc: >
           Oldest sequence number that might be related to this exposure.
-      -
-        name: group_name
+      - name: group_name
         type: string
         length: 64
         doc: >
           String group identifier associated with this exposure by the
           acquisition system.
-      -
-        name: group_id
+      - name: group_id
         type: int
         doc: >
           Integer group identifier associated with this exposure by the
           acquisition system.
-      -
-        name: target_name
+      - name: target_name
         type: string
         length: 64
         doc: Object of interest for this observation or survey field name.
-      -
-        name: science_program
+      - name: science_program
         type: string
         length: 64
         doc: >
           Observing program (survey, proposal, engineering project)
           identifier.
-      -
-        name: tracking_ra
+      - name: tracking_ra
         type: float
         doc: >
           Tracking ICRS Right Ascension of boresight in degrees. Can be NULL
           for observations that are not on sky.
-      -
-        name: tracking_dec
+      - name: tracking_dec
         type: float
         doc: >
           Tracking ICRS Declination of boresight in degrees. Can be NULL for
           observations that are not on sky.
-      -
-        name: sky_angle
+      - name: sky_angle
         type: float
         doc: >
           Angle of the instrument focal plane on the sky in degrees. Can
           be NULL for observations that are not on sky, or for observations
           where the sky angle changes during the observation.
-      -
-        name: azimuth
+      - name: azimuth
         type: float
         doc: >
           Azimuth of the telescope at the start of the exposure in degrees.
           Can be NULL for observations that are not on sky, or for observations
           where the azimuth is not relevant.
-      -
-        name: zenith_angle
+      - name: zenith_angle
         type: float
         doc: >
           Angle in degrees from the zenith at the start of the exposure.
@@ -359,12 +317,10 @@ elements:
       A set of tracts and patches that subdivide the sky into rectangular
       regions with simple projections and intentional overlaps.
     keys:
-      -
-        name: name
+      - name: name
         type: string
         length: 64
-      -
-        name: hash
+      - name: hash
         type: hash
         nbytes: 40
         doc: >
@@ -391,8 +347,7 @@ elements:
       A large rectangular region mapped to the sky with a single map
       projection, associated with a particular skymap.
     keys:
-      -
-        name: id
+      - name: id
         type: int
     requires: [skymap]
     storage:
@@ -402,19 +357,16 @@ elements:
     doc: >
       A rectangular region within a tract.
     keys:
-      -
-        name: id
+      - name: id
         type: int
     requires: [skymap, tract]
     metadata:
-      -
-        name: cell_x
+      - name: cell_x
         type: int
         nullable: false
         doc: >
           Which column this patch occupies in the tract's grid of patches.
-      -
-        name: cell_y
+      - name: cell_y
         type: int
         nullable: false
         doc: >
@@ -442,11 +394,9 @@ elements:
       for which both the "one-to-one" visit system and a "group by header metadata" visit
       system will define the same single-exposure visit.
     keys:
-      -
-        name: id
+      - name: id
         type: int
-      -
-        name: name
+      - name: name
         type: string
         length: 32
     requires: [instrument]
