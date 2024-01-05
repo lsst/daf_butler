@@ -184,6 +184,14 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         )
         self._bridges: dict[str, EphemeralDatastoreRegistryBridge] = {}
 
+    def clone(self, *, db: Database, opaque: OpaqueTableStorageManager) -> DatastoreRegistryBridgeManager:
+        return DummyDatastoreRegistryBridgeManager(
+            opaque=opaque,
+            universe=self.universe,
+            datasetIdColumnType=self.datasetIdColumnType,
+            registry_schema_version=self._registry_schema_version,
+        )
+
     @classmethod
     def initialize(
         cls,
