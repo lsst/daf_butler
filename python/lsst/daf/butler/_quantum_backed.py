@@ -39,7 +39,6 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import pydantic
-from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePathExpression
 
 from ._butler_config import ButlerConfig
@@ -380,23 +379,6 @@ class QuantumBackedButler(LimitedButler):
         # Docstring inherited.
         return True
 
-    # TODO: remove on DM-40067.
-    @deprecated(
-        reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
-        " Please use Butler.get(). Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def getDirect(
-        self,
-        ref: DatasetRef,
-        *,
-        parameters: dict[str, Any] | None = None,
-        storageClass: str | StorageClass | None = None,
-    ) -> Any:
-        # Docstring inherited.
-        return self.get(ref, parameters=parameters, storageClass=storageClass)
-
     def get(
         self,
         ref: DatasetRef,
@@ -419,23 +401,6 @@ class QuantumBackedButler(LimitedButler):
             self._actual_inputs.add(ref.id)
             self._available_inputs.add(ref.id)
         return obj
-
-    # TODO: remove on DM-40067.
-    @deprecated(
-        reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
-        "Please use Butler.getDeferred(). Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def getDirectDeferred(
-        self,
-        ref: DatasetRef,
-        *,
-        parameters: dict[str, Any] | None = None,
-        storageClass: str | StorageClass | None = None,
-    ) -> DeferredDatasetHandle:
-        # Docstring inherited.
-        return self.getDeferred(ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
         self,
@@ -553,12 +518,12 @@ class QuantumBackedButler(LimitedButler):
         authors from having to worry about while still recording very
         detailed information.  But it has two small weaknesses:
 
-        - Calling `getDirectDeferred` or `getDirect` is enough to mark a
+        - Calling `getDeferred` or `get` is enough to mark a
           dataset as an "actual input", which may mark some datasets that
           aren't actually used.  We rely on task authors to use
           `markInputUnused` to address this.
 
-        - We assume that the execution system will call ``datasetExistsDirect``
+        - We assume that the execution system will call ``stored``
           on all predicted inputs prior to execution, in order to populate the
           "available inputs" set.  This is what I envision
           '`~lsst.ctrl.mpexec.SingleQuantumExecutor` doing after we update it

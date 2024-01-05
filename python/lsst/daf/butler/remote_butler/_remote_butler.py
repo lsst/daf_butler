@@ -43,7 +43,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from .._butler import Butler
 from .._butler_instance_options import ButlerInstanceOptions
-from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, SerializedDatasetRef
+from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
 from .._utilities.locked_object import LockedObject
@@ -447,8 +447,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self,
         *datasets: FileDataset,
         transfer: str | None = "auto",
-        run: str | None = None,
-        idGenerationMode: DatasetIdGenEnum | None = None,
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited.

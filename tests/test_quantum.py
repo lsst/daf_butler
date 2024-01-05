@@ -178,14 +178,14 @@ class QuantumTestCase(unittest.TestCase):
         self.assertEqual(quantum, quantum.from_simple(serialized, DimensionUniverse()))
 
         # verify direct works
-        jsonVersion = json.loads(serialized.json())
+        jsonVersion = json.loads(serialized.model_dump_json())
         fromDirect = SerializedQuantum.direct(**jsonVersion)
         self.assertEqual(fromDirect, serialized)
 
         # verify direct with records works
         quantum, _ = self._buildFullQuantum(taskName, addRecords=True)
         serialized = quantum.to_simple()
-        jsonVersion = json.loads(serialized.json())
+        jsonVersion = json.loads(serialized.model_dump_json())
         fromDirect = SerializedQuantum.direct(**jsonVersion)
         self.assertEqual(fromDirect, serialized)
 

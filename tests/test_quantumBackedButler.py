@@ -186,7 +186,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.assertEqual(qbb._actual_output_refs, set())
 
     def test_getput(self) -> None:
-        """Test for getDirect/putDirect methods"""
+        """Test for get/put methods"""
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -219,7 +219,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.assertEqual(qbb._actual_output_refs, set(self.output_refs))
 
     def test_getDeferred(self) -> None:
-        """Test for getDirectDeferred method"""
+        """Test for getDeferred method"""
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
             config=self.config, quantum=quantum, dimensions=self.universe, dataset_types=self.dataset_types
@@ -243,7 +243,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         self.assertEqual(qbb._actual_inputs, {ref.id for ref in input_refs + self.init_inputs_refs})
         self.assertEqual(qbb._unavailable_inputs, {ref.id for ref in self.missing_refs})
 
-    def test_datasetExistsDirect(self) -> None:
+    def test_stored(self) -> None:
         """Test for dataset existence method"""
         quantum = self.make_quantum()
         qbb = QuantumBackedButler.initialize(
@@ -275,7 +275,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         # _available_inputs is not
         self.assertEqual(qbb._available_inputs, {ref.id for ref in input_refs + self.init_inputs_refs})
         self.assertEqual(qbb._actual_inputs, set())
-        self.assertEqual(qbb._unavailable_inputs, set())  # this is not consistent with getDirect?
+        self.assertEqual(qbb._unavailable_inputs, set())  # this is not consistent with get?
 
     def test_markInputUnused(self) -> None:
         """Test for markInputUnused method"""
@@ -358,7 +358,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             qbb.put({"data": cast(int, ref.dataId["detector"]) ** 2}, ref)
 
         provenance1 = qbb.extract_provenance_data()
-        prov_json = provenance1.json()
+        prov_json = provenance1.model_dump_json()
         provenance2 = QuantumProvenanceData.direct(**json.loads(prov_json))
         for provenance in (provenance1, provenance2):
             input_ids = {ref.id for ref in self.input_refs + self.init_inputs_refs}

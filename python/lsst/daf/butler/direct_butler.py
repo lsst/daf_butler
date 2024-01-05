@@ -46,7 +46,6 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
 
-from deprecated.sphinx import deprecated
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
 from lsst.utils.iteration import ensure_iterable
@@ -85,7 +84,7 @@ from .utils import transactional
 if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol
 
-    from ._dataset_ref import DatasetId, DatasetIdGenEnum
+    from ._dataset_ref import DatasetId
     from ._file_dataset import FileDataset
     from ._query import Query
     from .datastore import DatasetRefURIs
@@ -907,20 +906,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return ref
 
-    # TODO: remove on DM-40067.
-    @transactional
-    @deprecated(
-        reason="Butler.put() now behaves like Butler.putDirect() when given a DatasetRef."
-        " Please use Butler.put(). Be aware that you may need to adjust your usage if you"
-        " were relying on the run parameter to determine the run."
-        " Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def putDirect(self, obj: Any, ref: DatasetRef, /) -> DatasetRef:
-        # Docstring inherited.
-        return self.put(obj, ref)
-
     @transactional
     def put(
         self,
@@ -1002,89 +987,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         self._datastore.put(obj, ref)
 
         return ref
-
-    # TODO: remove on DM-40067.
-    @deprecated(
-        reason="Butler.get() now behaves like Butler.getDirect() when given a DatasetRef."
-        " Please use Butler.get(). Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def getDirect(
-        self,
-        ref: DatasetRef,
-        *,
-        parameters: dict[str, Any] | None = None,
-        storageClass: StorageClass | str | None = None,
-    ) -> Any:
-        """Retrieve a stored dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Resolved reference to an already stored dataset.
-        parameters : `dict`
-            Additional StorageClass-defined options to control reading,
-            typically used to efficiently read only a subset of the dataset.
-        storageClass : `StorageClass` or `str`, optional
-            The storage class to be used to override the Python type
-            returned by this method. By default the returned type matches
-            the dataset type definition for this dataset. Specifying a
-            read `StorageClass` can force a different type to be returned.
-            This type must be compatible with the original type.
-
-        Returns
-        -------
-        obj : `object`
-            The dataset.
-        """
-        return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
-
-    # TODO: remove on DM-40067.
-    @deprecated(
-        reason="Butler.getDeferred() now behaves like getDirectDeferred() when given a DatasetRef. "
-        "Please use Butler.getDeferred(). Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def getDirectDeferred(
-        self,
-        ref: DatasetRef,
-        *,
-        parameters: dict[str, Any] | None = None,
-        storageClass: str | StorageClass | None = None,
-    ) -> DeferredDatasetHandle:
-        """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
-        from a resolved `DatasetRef`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Resolved reference to an already stored dataset.
-        parameters : `dict`
-            Additional StorageClass-defined options to control reading,
-            typically used to efficiently read only a subset of the dataset.
-        storageClass : `StorageClass` or `str`, optional
-            The storage class to be used to override the Python type
-            returned by this method. By default the returned type matches
-            the dataset type definition for this dataset. Specifying a
-            read `StorageClass` can force a different type to be returned.
-            This type must be compatible with the original type.
-
-        Returns
-        -------
-        obj : `DeferredDatasetHandle`
-            A handle which can be used to retrieve a dataset at a later time.
-
-        Raises
-        ------
-        LookupError
-            Raised if no matching dataset exists in the `Registry`.
-        """
-        # Check that dataset is known to the datastore.
-        if not self._datastore.knows(ref):
-            raise LookupError(f"Dataset reference {ref} is not known to datastore.")
-        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def getDeferred(
         self,
@@ -1446,61 +1348,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         return existence
 
-    # TODO: remove on DM-40079.
-    @deprecated(
-        reason="Butler.datasetExists() has been replaced by Butler.exists(). Will be removed after v26.0.",
-        version="v26.0",
-        category=FutureWarning,
-    )
-    def datasetExists(
-        self,
-        datasetRefOrType: DatasetRef | DatasetType | str,
-        dataId: DataId | None = None,
-        *,
-        collections: Any = None,
-        **kwargs: Any,
-    ) -> bool:
-        """Return True if the Dataset is actually present in the Datastore.
-
-        Parameters
-        ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            When `DatasetRef` the `dataId` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataCoordinate`
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument.
-        collections : Any, optional
-            Collections to be searched, overriding ``self.collections``.
-            Can be any of the types supported by the ``collections`` argument
-            to butler construction.
-        **kwargs
-            Additional keyword arguments used to augment or construct a
-            `DataCoordinate`.  See `DataCoordinate.standardize`
-            parameters.
-
-        Raises
-        ------
-        LookupError
-            Raised if the dataset is not even present in the Registry.
-        ValueError
-            Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry.
-        NoDefaultCollectionError
-            Raised if no collections were provided.
-        """
-        # A resolved ref may be given that is not known to this butler.
-        if isinstance(datasetRefOrType, DatasetRef):
-            ref = self._registry.getDataset(datasetRefOrType.id)
-            if ref is None:
-                raise LookupError(
-                    f"Resolved DatasetRef with id {datasetRefOrType.id} is not known to registry."
-                )
-        else:
-            ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
-        return self._datastore.exists(ref)
-
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
         # Docstring inherited.
         if not self.isWriteable():
@@ -1593,8 +1440,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         self,
         *datasets: FileDataset,
         transfer: str | None = "auto",
-        run: str | None = None,
-        idGenerationMode: DatasetIdGenEnum | None = None,
         record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited.
@@ -1604,14 +1449,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         _LOG.verbose("Ingesting %d file dataset%s.", len(datasets), "" if len(datasets) == 1 else "s")
         if not datasets:
             return
-
-        if idGenerationMode is not None:
-            warnings.warn(
-                "The idGenerationMode parameter is no longer used and is ignored. "
-                " Will be removed after v26.0",
-                FutureWarning,
-                stacklevel=2,
-            )
 
         progress = Progress("lsst.daf.butler.Butler.ingest", level=logging.DEBUG)
 
@@ -1626,8 +1463,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             tuple[DatasetType, str], dict[DataCoordinate, FileDataset]
         ] = defaultdict(dict)
 
-        used_run = False
-
         # And the nested loop that populates it:
         for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
             # Somewhere to store pre-existing refs if we have an
@@ -1635,7 +1470,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             existingRefs: list[DatasetRef] = []
 
             for ref in dataset.refs:
-                assert ref.run is not None  # For mypy
                 group_key = (ref.datasetType, ref.run)
 
                 if ref.dataId in groupedDataIds[group_key]:
@@ -1662,14 +1496,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 dataset.refs = existingRefs
             else:
                 groupedData[group_key].append(dataset)
-
-        if not used_run and run is not None:
-            warnings.warn(
-                "All DatasetRefs to be ingested had resolved dataset IDs. The value given to the "
-                f"'run' parameter ({run!r}) was not used and the parameter will be removed in the future.",
-                category=FutureWarning,
-                stacklevel=3,  # Take into account the @transactional decorator.
-            )
 
         # Now we can bulk-insert into Registry for each DatasetType.
         for (datasetType, this_run), grouped_datasets in progress.iter_item_chunks(
