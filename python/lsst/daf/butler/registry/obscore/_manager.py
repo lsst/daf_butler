@@ -176,6 +176,21 @@ class ObsCoreLiveTableManager(ObsCoreTableManager):
         else:
             raise ValueError(f"Unexpected value of collection_type: {config.collection_type}")
 
+    def clone(self, *, db: Database, dimensions: DimensionRecordStorageManager) -> ObsCoreLiveTableManager:
+        return ObsCoreLiveTableManager(
+            db=db,
+            table=self.table,
+            schema=self.schema,
+            universe=self.universe,
+            config=self.config,
+            dimensions=dimensions,
+            # Current spatial plugins are safe to share without cloning -- they
+            # are immutable and do not use their Database object outside of
+            # 'initialize'.
+            spatial_plugins=self.spatial_plugins,
+            registry_schema_version=self._registry_schema_version,
+        )
+
     @classmethod
     def initialize(
         cls,
