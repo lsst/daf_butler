@@ -1217,10 +1217,18 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             actual_type = self.get_dataset_type(dataset_type)
         else:
             actual_type = dataset_type
-        data_id, kwargs = self._rewrite_data_id(data_id, actual_type, **kwargs)
+
+        # Store the component for later.
+        component_name = actual_type.component()
+        if actual_type.isComponent():
+            parent_type = actual_type.makeCompositeDatasetType()
+        else:
+            parent_type = actual_type
+
+        data_id, kwargs = self._rewrite_data_id(data_id, parent_type, **kwargs)
 
         ref = self._registry.findDataset(
-            dataset_type,
+            parent_type,
             data_id,
             collections=collections,
             timespan=timespan,
@@ -1229,8 +1237,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         )
         if ref is not None and dimension_records:
             ref = ref.expanded(self._registry.expandDataId(ref.dataId, dimensions=ref.datasetType.dimensions))
+        if ref is not None and component_name:
+            ref = ref.makeComponentRef(component_name)
         if ref is not None and storage_class is not None:
             ref = ref.overrideStorageClass(storage_class)
+
         return ref
 
     def retrieveArtifacts(
