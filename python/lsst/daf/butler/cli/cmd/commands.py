@@ -442,6 +442,8 @@ def query_collections(*args: Any, **kwargs: Any) -> None:
 @options_file_option()
 def query_dataset_types(*args: Any, **kwargs: Any) -> None:
     """Get the dataset types in a repository."""
+    # Drop the components option.
+    kwargs.pop("components")
     table = script.queryDatasetTypes(*args, **kwargs)
     if table:
         table.pprint_all()
