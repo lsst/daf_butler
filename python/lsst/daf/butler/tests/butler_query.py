@@ -45,7 +45,13 @@ from .._dataset_type import DatasetType
 from .._exceptions import EmptyQueryResultError
 from ..dimensions import DataCoordinate, DataCoordinateSet, SkyPixDimension
 from ..registry._collection_type import CollectionType
-from ..registry._exceptions import DataIdValueError, DatasetTypeError, DatasetTypeExpressionError, MissingCollectionError, MissingDatasetTypeError
+from ..registry._exceptions import (
+    DataIdValueError,
+    DatasetTypeError,
+    DatasetTypeExpressionError,
+    MissingCollectionError,
+    MissingDatasetTypeError,
+)
 from ..transfers import YamlRepoImportBackend
 from .utils import TestCaseMixin
 
