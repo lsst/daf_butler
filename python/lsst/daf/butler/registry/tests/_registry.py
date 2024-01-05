@@ -524,7 +524,7 @@ class RegistryTests(ABC):
         self.loadData(registry, "datasets.yaml")
         with self.assertRaises(OrphanedRecordError):
             registry.removeDatasetType("flat")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DatasetTypeError):
             registry.removeDatasetType(DatasetType.nameWithComponent("flat", "image"))
 
     def testImportDatasetsUUID(self):
@@ -599,9 +599,8 @@ class RegistryTests(ABC):
     def testComponentLookups(self):
         """Test searching for component datasets via their parents.
 
-        All of the behavior here is deprecated, so many of these tests are
-        currently wrapped in a context to check that we get a warning whenever
-        a component dataset is actually returned.
+        Components can no longer be found by registry. This test checks
+        that this now fails.
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
@@ -618,8 +617,8 @@ class RegistryTests(ABC):
         self.assertIsInstance(parentRefResolved, DatasetRef)
         self.assertEqual(childType, parentRefResolved.makeComponentRef("wcs").datasetType)
         # Search for a single dataset with findDataset.
-        childRef1 = registry.findDataset("bias.wcs", collections=collection, dataId=parentRefResolved.dataId)
-        self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
+        with self.assertRaises(DatasetTypeError):
+            registry.findDataset("bias.wcs", collections=collection, dataId=parentRefResolved.dataId)
 
     def testCollections(self):
         """Tests for registry methods that manage collections."""
