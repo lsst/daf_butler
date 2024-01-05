@@ -1,4 +1,4 @@
-version: 4
+version: 5
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
@@ -50,8 +50,6 @@ elements:
           Full class name of the Instrument class associated with this
           instrument.
     governor: true
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage
 
   band:
     doc: >
@@ -62,11 +60,8 @@ elements:
       - name: name
         type: string
         length: 32
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
-      nested:
-        cls: lsst.daf.butler.registry.dimensions.query.QueryDimensionRecordStorage
-        view_of: physical_filter
+    is_cached: true
+    implied_union_target: physical_filter
 
   physical_filter:
     doc: >
@@ -81,10 +76,7 @@ elements:
       - instrument
     implies:
       - band
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
-      nested:
-        cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+    is_cached: true
 
   subfilter:
     doc: >
@@ -96,10 +88,7 @@ elements:
         type: int
     requires:
       - band
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
-      nested:
-        cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+    is_cached: true
 
   detector:
     doc: >
@@ -129,10 +118,7 @@ elements:
         doc: >
           Role of the detector; typically one of "SCIENCE", "WAVEFRONT",
           or "GUIDE", though instruments may define additional values.
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
-      nested:
-        cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+    is_cached: true
 
   visit:
     doc: >
@@ -195,8 +181,6 @@ elements:
           Can only be approximate since it is continuously changing during
           an observation and multiple exposures can be combined from a
           relatively long period.
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   exposure:
     doc: >
@@ -309,8 +293,6 @@ elements:
           This can be if the data itself were simulated or if
           parts of the header came from simulated systems, such as observations
           in the lab that are recorded as on-sky.
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   skymap:
     doc: >
@@ -339,8 +321,6 @@ elements:
         doc: >
           Number of patches in the y direction in each tract.
     governor: true
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage
 
   tract:
     doc: >
@@ -350,8 +330,6 @@ elements:
       - name: id
         type: int
     requires: [skymap]
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   patch:
     doc: >
@@ -371,8 +349,6 @@ elements:
         nullable: false
         doc: >
           Which row this patch occupies in the tract's grid of patches.
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   visit_detector_region:
     doc: >
@@ -380,8 +356,6 @@ elements:
       visit-detector combinations.
     requires: [visit, detector]
     populated_by: visit
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   visit_system:
     doc: >
@@ -400,10 +374,7 @@ elements:
         type: string
         length: 32
     requires: [instrument]
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
-      nested:
-        cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+    is_cached: true
 
   visit_definition:
     doc: >
@@ -412,8 +383,6 @@ elements:
     requires: [exposure, visit]
     populated_by: visit
     always_join: true
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   visit_system_membership:
     doc: >
@@ -422,8 +391,6 @@ elements:
     requires: [visit, visit_system]
     populated_by: visit
     always_join: true
-    storage:
-      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
 topology:
   spatial:
