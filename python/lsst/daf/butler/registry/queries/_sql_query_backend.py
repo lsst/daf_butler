@@ -112,7 +112,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         expression: Any,
         missing: list[str] | None = None,
         explicit_only: bool = False,
-    ) -> dict[DatasetType, list[str | None]]:
+    ) -> list[DatasetType]:
         # Docstring inherited.
         return self._managers.datasets.resolve_wildcard(
             expression,
