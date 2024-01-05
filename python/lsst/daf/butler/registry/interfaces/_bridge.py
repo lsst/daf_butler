@@ -293,6 +293,32 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         self.universe = universe
         self.datasetIdColumnType = datasetIdColumnType
 
+    @abstractmethod
+    def clone(
+        self,
+        *,
+        db: Database,
+        opaque: OpaqueTableStorageManager,
+    ) -> DatastoreRegistryBridgeManager:
+        """Make an independent copy of this manager instance bound to new
+        instances of `Database` and other managers.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating the manager.
+        opaque : `OpaqueTableStorageManager`
+            New `OpaqueTableStorageManager` object to use when instantiating
+            the manager.
+
+        Returns
+        -------
+        instance : `DatastoreRegistryBridgeManager`
+            New manager instance with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        raise NotImplementedError()
+
     @classmethod
     @abstractmethod
     def initialize(
