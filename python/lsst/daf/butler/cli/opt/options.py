@@ -111,12 +111,12 @@ collections_option = MWOptionDecorator(
 
 components_option = MWOptionDecorator(
     "--components/--no-components",
-    default=False,
+    default=None,
     help=unwrap(
         """For --components, apply all expression patterns to
         component dataset type names as well. For --no-components,
         never apply patterns to components. Only --no-components
-        is now supported."""
+        is now supported. Option will be removed after v27."""
     ),
 )
 
