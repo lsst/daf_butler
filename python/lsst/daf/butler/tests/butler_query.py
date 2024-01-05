@@ -45,7 +45,7 @@ from .._dataset_type import DatasetType
 from .._exceptions import EmptyQueryResultError
 from ..dimensions import DataCoordinate, DataCoordinateSet, SkyPixDimension
 from ..registry._collection_type import CollectionType
-from ..registry._exceptions import DataIdValueError, DatasetTypeError, MissingCollectionError
+from ..registry._exceptions import DataIdValueError, DatasetTypeError, DatasetTypeExpressionError, MissingCollectionError, MissingDatasetTypeError
 from ..transfers import YamlRepoImportBackend
 from .utils import TestCaseMixin
 
@@ -449,9 +449,8 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 ["potato"],
             ),
         ]
-        # The behavior of these additional queries is slated to change in the
-        # future, so we also check for deprecation warnings.
-        with self.assertWarns(FutureWarning):
+
+        with self.assertRaises(MissingDatasetTypeError):
             queries_and_snippets.append(
                 (
                     # Dataset type name doesn't match any existing dataset
@@ -460,7 +459,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                     ["nonexistent"],
                 )
             )
-        with self.assertWarns(FutureWarning):
+        with self.assertRaises(MissingDatasetTypeError):
             queries_and_snippets.append(
                 (
                     # Dataset type name doesn't match any existing dataset
@@ -488,7 +487,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # This query does yield results, but should also emit a warning because
         # dataset type patterns to queryDataIds is deprecated; just look for
         # the warning.
-        with self.assertWarns(FutureWarning):
+        with self.assertRaises(DatasetTypeExpressionError):
             _query_data_ids(["detector"], datasets=re.compile("^nonexistent$"), collections=...)
 
         # These queries yield no results due to problems that can be identified
