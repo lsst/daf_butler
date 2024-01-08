@@ -1671,8 +1671,8 @@ class SqlRegistry:
         conform : `bool`, optional
             If `False` (`True` is default) perform no checking or conversions,
             and assume that ``element`` is a `DimensionElement` instance and
-            ``data`` is a one or more `DimensionRecord` instances of the
-            appropriate subclass.
+            ``data`` is a `DimensionRecord` instances of the appropriate
+            subclass.
         update : `bool`, optional
             If `True` (`False` is default), update the existing record in the
             database if there is a conflict.
