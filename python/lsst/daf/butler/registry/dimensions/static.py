@@ -112,6 +112,16 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         self._overlap_tables = overlap_tables
         self._dimension_group_storage = dimension_group_storage
 
+    def clone(self, db: Database) -> StaticDimensionRecordStorageManager:
+        return StaticDimensionRecordStorageManager(
+            db,
+            tables=self._tables,
+            overlap_tables=self._overlap_tables,
+            dimension_group_storage=self._dimension_group_storage.clone(db),
+            universe=self.universe,
+            registry_schema_version=self._registry_schema_version,
+        )
+
     @classmethod
     def initialize(
         cls,
@@ -781,6 +791,25 @@ class _DimensionGroupStorage:
         self._universe = universe
         self._keysByGroup: dict[DimensionGroup, int] = {universe.empty.as_group(): 0}
         self._groupsByKey: dict[int, DimensionGroup] = {0: universe.empty.as_group()}
+
+    def clone(self, db: Database) -> _DimensionGroupStorage:
+        """Make an independent copy of this manager instance bound to a new
+        `Database` instance.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating the manager.
+
+        Returns
+        -------
+        instance : `_DimensionGroupStorage`
+            New manager instance with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        return _DimensionGroupStorage(
+            db=db, idTable=self._idTable, definitionTable=self._definitionTable, universe=self._universe
+        )
 
     @classmethod
     def initialize(
