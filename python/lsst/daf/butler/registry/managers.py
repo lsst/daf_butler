@@ -470,6 +470,46 @@ class RegistryManagerInstances(
         kwargs["caching_context"] = caching_context
         return cls(**kwargs)
 
+    def clone(
+        self,
+        db: Database,
+    ) -> RegistryManagerInstances:
+        """Make an independent copy of the manager instances with a new
+        `Database` instance.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating managers.
+
+        Returns
+        -------
+        instances : `RegistryManagerInstances`
+            New manager instances with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        caching_context = CachingContext()
+        dimensions = self.dimensions.clone(db)
+        collections = self.collections.clone(db, caching_context)
+        opaque = self.opaque.clone(db)
+        datasets = self.datasets.clone(
+            db=db, collections=collections, dimensions=dimensions, caching_context=caching_context
+        )
+        obscore = None
+        if self.obscore is not None:
+            obscore = self.obscore.clone(db=db, dimensions=dimensions)
+        return RegistryManagerInstances(
+            attributes=self.attributes.clone(db),
+            dimensions=dimensions,
+            collections=collections,
+            datasets=datasets,
+            opaque=opaque,
+            datastores=self.datastores.clone(db=db, opaque=opaque),
+            obscore=obscore,
+            column_types=self.column_types,
+            caching_context=caching_context,
+        )
+
     def as_dict(self) -> Mapping[str, VersionedExtension]:
         """Return contained managers as a dictionary with manager type name as
         a key.
