@@ -187,7 +187,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         self,
         element: DimensionElement,
         *records: DimensionRecord,
-        cache: DimensionRecordCache,
         replace: bool = False,
         skip_existing: bool = False,
     ) -> None:
@@ -198,27 +197,20 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             element, records, replace=replace
         )
         table = self._tables[element.name]
-        with cache.modifying(element.name) as cache_records:
-            with self._db.transaction():
-                if replace:
-                    self._db.replace(table, *rows)
-                elif skip_existing:
-                    self._db.ensure(table, *rows, primary_key_only=True)
-                else:
-                    self._db.insert(table, *rows)
-                self._insert_overlaps(
-                    element, overlap_insert_rows, overlap_delete_rows, skip_existing=skip_existing
-                )
-                for related_element_name, summary_rows in overlap_summary_rows.items():
-                    self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
-            # Database transaction succeeded; update the cache to keep them
-            # consistent.
-            if cache_records is not None:
-                cache_records.update(records, replace=not skip_existing)
+        with self._db.transaction():
+            if replace:
+                self._db.replace(table, *rows)
+            elif skip_existing:
+                self._db.ensure(table, *rows, primary_key_only=True)
+            else:
+                self._db.insert(table, *rows)
+            self._insert_overlaps(
+                element, overlap_insert_rows, overlap_delete_rows, skip_existing=skip_existing
+            )
+            for related_element_name, summary_rows in overlap_summary_rows.items():
+                self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
 
-    def sync(
-        self, record: DimensionRecord, cache: DimensionRecordCache, update: bool = False
-    ) -> bool | dict[str, Any]:
+    def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         # Docstring inherited.
         if not record.definition.has_own_table:
             raise TypeError(f"Cannot sync {record.definition.name} records.")
@@ -236,31 +228,24 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         keys = {}
         for name in record.fields.required.names:
             keys[name] = compared.pop(name)
-        with cache.modifying(record.definition.name) as cache_records:
-            with self._db.transaction():
-                _, inserted_or_updated = self._db.sync(
-                    self._tables[record.definition.name],
-                    keys=keys,
-                    compared=compared,
-                    update=update,
-                )
-                if inserted_or_updated:
-                    if inserted_or_updated is True:
-                        # Inserted a new row, so we just need to insert new
-                        # overlap rows (if there are any).
-                        self._insert_overlaps(record.definition, overlap_insert_rows, overlap_delete_rows=[])
-                    elif "region" in inserted_or_updated:
-                        # Updated the region, so we need to delete old overlap
-                        # rows and insert new ones.
-                        self._insert_overlaps(record.definition, overlap_insert_rows, overlap_delete_rows)
-                    for related_element_name, summary_rows in overlap_summary_rows.items():
-                        self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
-                # We updated something other than a region; no need to change
-                # the overlap regions.
-            # Database transaction succeeded; update the cache to keep them
-            # consistent.
-            if cache_records is not None and inserted_or_updated:
-                cache_records.add(record, replace=update)
+        with self._db.transaction():
+            _, inserted_or_updated = self._db.sync(
+                self._tables[record.definition.name],
+                keys=keys,
+                compared=compared,
+                update=update,
+            )
+            if inserted_or_updated:
+                if inserted_or_updated is True:
+                    # Inserted a new row, so we just need to insert new
+                    # overlap rows (if there are any).
+                    self._insert_overlaps(record.definition, overlap_insert_rows, overlap_delete_rows=[])
+                elif "region" in inserted_or_updated:
+                    # Updated the region, so we need to delete old overlap
+                    # rows and insert new ones.
+                    self._insert_overlaps(record.definition, overlap_insert_rows, overlap_delete_rows)
+                for related_element_name, summary_rows in overlap_summary_rows.items():
+                    self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
         return inserted_or_updated
 
     def fetch_one(

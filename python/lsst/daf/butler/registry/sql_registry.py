@@ -1643,10 +1643,11 @@ class SqlRegistry:
         else:
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
+        if element.name in self.dimension_record_cache:
+            self.dimension_record_cache.reset()
         self._managers.dimensions.insert(
             element,
             *records,
-            cache=self.dimension_record_cache,
             replace=replace,
             skip_existing=skip_existing,
         )
@@ -1698,7 +1699,9 @@ class SqlRegistry:
         else:
             # Ignore typing since caller said to trust them with conform=False.
             record = row  # type: ignore
-        return self._managers.dimensions.sync(record, self.dimension_record_cache, update=update)
+        if record.definition.name in self.dimension_record_cache:
+            self.dimension_record_cache.reset()
+        return self._managers.dimensions.sync(record, update=update)
 
     def queryDatasetTypes(
         self,
