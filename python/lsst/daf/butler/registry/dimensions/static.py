@@ -26,6 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import logging
 from collections import defaultdict
@@ -193,21 +194,19 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited.
         if not element.has_own_table:
             raise TypeError(f"Cannot insert {element.name} records.")
-        rows, overlap_insert_rows, overlap_delete_rows, overlap_summary_rows = self._make_record_db_rows(
-            element, records, replace=replace
-        )
+        db_rows = self._make_record_db_rows(element, records, replace=replace)
         table = self._tables[element.name]
         with self._db.transaction():
             if replace:
-                self._db.replace(table, *rows)
+                self._db.replace(table, *db_rows.main_rows)
             elif skip_existing:
-                self._db.ensure(table, *rows, primary_key_only=True)
+                self._db.ensure(table, *db_rows.main_rows, primary_key_only=True)
             else:
-                self._db.insert(table, *rows)
+                self._db.insert(table, *db_rows.main_rows)
             self._insert_overlaps(
-                element, overlap_insert_rows, overlap_delete_rows, skip_existing=skip_existing
+                element, db_rows.overlap_insert_rows, db_rows.overlap_delete_rows, skip_existing=skip_existing
             )
-            for related_element_name, summary_rows in overlap_summary_rows.items():
+            for related_element_name, summary_rows in db_rows.overlap_summary_rows.items():
                 self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
 
     def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
@@ -219,12 +218,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # to compute them in advance always *outside* the database transaction
         # than to compute them only as-needed inside the database transaction,
         # since in-transaction time is especially precious.
-        (
-            (compared,),
-            overlap_insert_rows,
-            overlap_delete_rows,
-            overlap_summary_rows,
-        ) = self._make_record_db_rows(record.definition, [record], replace=True)
+        db_rows = self._make_record_db_rows(record.definition, [record], replace=True)
+        (compared,) = db_rows.main_rows
         keys = {}
         for name in record.fields.required.names:
             keys[name] = compared.pop(name)
@@ -239,12 +234,16 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 if inserted_or_updated is True:
                     # Inserted a new row, so we just need to insert new
                     # overlap rows (if there are any).
-                    self._insert_overlaps(record.definition, overlap_insert_rows, overlap_delete_rows=[])
+                    self._insert_overlaps(
+                        record.definition, db_rows.overlap_insert_rows, overlap_delete_rows=[]
+                    )
                 elif "region" in inserted_or_updated:
                     # Updated the region, so we need to delete old overlap
                     # rows and insert new ones.
-                    self._insert_overlaps(record.definition, overlap_insert_rows, overlap_delete_rows)
-                for related_element_name, summary_rows in overlap_summary_rows.items():
+                    self._insert_overlaps(
+                        record.definition, db_rows.overlap_insert_rows, db_rows.overlap_delete_rows
+                    )
+                for related_element_name, summary_rows in db_rows.overlap_summary_rows.items():
                     self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
         return inserted_or_updated
 
@@ -607,29 +606,22 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
 
     def _make_record_db_rows(
         self, element: DimensionElement, records: Sequence[DimensionRecord], replace: bool
-    ) -> tuple[
-        list[dict[str, Any]],
-        list[dict[str, Any]],
-        list[dict[str, Any]],
-        dict[str, list[dict[str, Any]]],
-    ]:
-        rows = [record.toDict() for record in records]
+    ) -> _DimensionRecordDatabaseRows:
+        result = _DimensionRecordDatabaseRows()
+        result.main_rows = [record.toDict() for record in records]
         if element.temporal is not None:
             TimespanReprClass = self._db.getTimespanRepresentation()
-            for row in rows:
+            for row in result.main_rows:
                 timespan = row.pop("timespan")
                 TimespanReprClass.update(timespan, result=row)
-        overlap_delete_rows = []
-        overlap_insert_rows = []
         if element.spatial is not None:
-            overlap_insert_rows = self._compute_common_skypix_overlap_inserts(element, records)
+            result.overlap_insert_rows = self._compute_common_skypix_overlap_inserts(element, records)
             if replace:
-                overlap_delete_rows = self._compute_common_skypix_overlap_deletes(records)
-        overlap_summary_rows = {}
+                result.overlap_delete_rows = self._compute_common_skypix_overlap_deletes(records)
         if element in self.universe.governor_dimensions:
             for related_element_name in self._overlap_tables.keys():
                 if self.universe[related_element_name].governor == element:
-                    overlap_summary_rows[related_element_name] = [
+                    result.overlap_summary_rows[related_element_name] = [
                         {
                             "skypix_system": self.universe.commonSkyPix.system.name,
                             "skypix_level": self.universe.commonSkyPix.level,
@@ -637,7 +629,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                         }
                         for record in records
                     ]
-        return rows, overlap_insert_rows, overlap_delete_rows, overlap_summary_rows
+        return result
 
     def _compute_common_skypix_overlap_deletes(
         self, records: Sequence[DimensionRecord]
@@ -729,6 +721,32 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                     f"Data repository has overlaps between {element} and {bad_skypix_names} that "
                     "are not supported by this version of daf_butler.  Please use a newer version."
                 )
+
+
+@dataclasses.dataclass
+class _DimensionRecordDatabaseRows:
+    """Rows to be inserted into the database whenever a DimensionRecord is
+    added.
+    """
+
+    main_rows: list[dict[str, Any]] = dataclasses.field(default_factory=list)
+    """Rows for the dimension element table itself."""
+
+    overlap_insert_rows: list[dict[str, Any]] = dataclasses.field(default_factory=list)
+    """Rows for overlaps with the common skypix dimension."""
+
+    overlap_delete_rows: list[dict[str, Any]] = dataclasses.field(default_factory=list)
+    """Rows for overlaps with the common skypix dimension that should be
+    deleted before inserting new ones.
+    """
+
+    overlap_summary_rows: dict[str, list[dict[str, Any]]] = dataclasses.field(default_factory=dict)
+    """Rows that record which overlaps between skypix dimensiosn and other
+    dimension elements are stored.
+
+    This is populated when inserting governor dimension rows, with keys being
+    the names of spatial dimension elements associated with that governor.
+    """
 
 
 class _DimensionGroupStorage:
