@@ -76,6 +76,24 @@ class DimensionRecordStorageManager(VersionedExtension):
         super().__init__(registry_schema_version=registry_schema_version)
         self.universe = universe
 
+    @abstractmethod
+    def clone(self, db: Database) -> DimensionRecordStorageManager:
+        """Make an independent copy of this manager instance bound to a new
+        `Database` instance.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating the manager.
+
+        Returns
+        -------
+        instance : `DatasetRecordStorageManager`
+            New manager instance with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        raise NotImplementedError()
+
     @classmethod
     @abstractmethod
     def initialize(
