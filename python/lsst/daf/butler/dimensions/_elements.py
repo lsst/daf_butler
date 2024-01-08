@@ -219,7 +219,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         Return `True` if this element is associated with a table
         (even if that table "belongs" to another element).
         """
-        return True
+        return self.has_own_table or self.implied_union_target is not None
 
     universe: DimensionUniverse
     """The universe of all compatible dimensions with which this element is
@@ -383,7 +383,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
 
         (`str` or `None`).
         """
-        return None
+        return self.implied_union_target.name if self.implied_union_target is not None else None
 
     @property
     def alwaysJoin(self) -> bool:
@@ -392,6 +392,37 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         If `True`, always include this element in any query or data ID in
         which its ``required`` dimensions appear, because it defines a
         relationship between those dimensions that must always be satisfied.
+        """
+        return False
+
+    @property
+    def has_own_table(self) -> bool:
+        """Whether this element should have its own table in the database."""
+        return self.implied_union_target is None
+
+    @property
+    def implied_union_target(self) -> DimensionElement | None:
+        """If not `None`, the name of an element whose implied values for
+        this element form the set of allowable values.
+
+        For example, in the default dimension universe, the allowed values for
+        ``band`` is the union of all ``band`` values in the
+        ``physical_filter`` table, so the `implied_union_target` for ``band``
+        is ``physical_filter``.
+        """
+        return None
+
+    @property
+    def defines_relationships(self) -> bool:
+        """Whether this element's records define one or more relationships that
+        must be satisfied in rows over dimensions that include it.
+        """
+        return bool(self.implied)
+
+    @property
+    def is_cached(self) -> bool:
+        """Whether this element's records should be aggressively cached,
+        because they are small in number and rarely inserted.
         """
         return False
 

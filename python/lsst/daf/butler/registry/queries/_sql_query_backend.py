@@ -37,7 +37,8 @@ from lsst.daf.relation import ColumnError, ColumnExpression, ColumnTag, Join, Pr
 from ..._column_categorization import ColumnCategorization
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionGroup, DimensionRecord, DimensionUniverse
+from ...dimensions import DimensionGroup, DimensionRecordSet, DimensionUniverse
+from ...dimensions.record_cache import DimensionRecordCache
 from .._collection_type import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, Database
@@ -57,15 +58,17 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         Object that abstracts the database engine.
     managers : `RegistryManagerInstances`
         Struct containing the manager objects that back a `SqlRegistry`.
+    dimension_record_cache : `DimensionRecordCache`
+        Cache of all records for dimension elements with
+        `~DimensionElement.is_cached` `True`.
     """
 
     def __init__(
-        self,
-        db: Database,
-        managers: RegistryManagerInstances,
+        self, db: Database, managers: RegistryManagerInstances, dimension_record_cache: DimensionRecordCache
     ):
         self._db = db
         self._managers = managers
+        self._dimension_record_cache = dimension_record_cache
 
     @property
     def universe(self) -> DimensionUniverse:
@@ -223,7 +226,6 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                 element1,
                 element2,
                 context=context,
-                governor_constraints=governor_constraints,
                 existing_relationships=relationships,
             )
             if needs_refinement:
@@ -292,11 +294,9 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
             #   implied dependencies or the alwaysJoin flag establishes such a
             #   relationship.
             if columns_still_needed or (
-                (element.alwaysJoin or element.implied)
-                and frozenset(element.dimensions.names) not in relationships
+                element.defines_relationships and frozenset(element.dimensions.names) not in relationships
             ):
-                storage = self._managers.dimensions[element_name]
-                relation = storage.join(relation, default_join, context)
+                relation = self._managers.dimensions.join(element_name, relation, default_join, context)
         # At this point we've joined in all of the element relations that
         # definitely need to be included, but we may not have all of the
         # dimension key columns in the query that we want.  To fill out that
@@ -307,8 +307,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         # get to those required dependencies.
         for dimension_name in reversed(dimensions.names.as_tuple()):
             if DimensionKeyColumnTag(dimension_name) not in relation.columns:
-                storage = self._managers.dimensions[dimension_name]
-                relation = storage.join(relation, default_join, context)
+                relation = self._managers.dimensions.join(dimension_name, relation, default_join, context)
 
         # Add the predicates we constructed earlier, with a transfer to native
         # iteration first if necessary.
@@ -329,15 +328,15 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         return relation
 
     def resolve_governor_constraints(
-        self, dimensions: DimensionGroup, constraints: Mapping[str, Set[str]], context: SqlQueryContext
+        self, dimensions: DimensionGroup, constraints: Mapping[str, Set[str]]
     ) -> Mapping[str, Set[str]]:
         # Docstring inherited.
         result: dict[str, Set[str]] = {}
         for dimension_name in dimensions.governors:
-            storage = self._managers.dimensions[dimension_name]
-            records = storage.get_record_cache(context)
-            assert records is not None, "Governor dimensions are always cached."
-            all_values = {cast(str, data_id[dimension_name]) for data_id in records}
+            all_values = {
+                cast(str, record.dataId[dimension_name])
+                for record in self._dimension_record_cache[dimension_name]
+            }
             if (constraint_values := constraints.get(dimension_name)) is not None:
                 if not (constraint_values <= all_values):
                     raise DataIdValueError(
@@ -349,9 +348,9 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                 result[dimension_name] = all_values
         return result
 
-    def get_dimension_record_cache(
-        self,
-        element_name: str,
-        context: SqlQueryContext,
-    ) -> Mapping[DataCoordinate, DimensionRecord] | None:
-        return self._managers.dimensions[element_name].get_record_cache(context)
+    def get_dimension_record_cache(self, element_name: str) -> DimensionRecordSet | None:
+        return (
+            self._dimension_record_cache[element_name]
+            if element_name in self._dimension_record_cache
+            else None
+        )

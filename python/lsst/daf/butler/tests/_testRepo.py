@@ -119,7 +119,7 @@ def makeTestRepo(
     butler = Butler.from_config(newConfig, writeable=True)
     dimensionRecords = _makeRecords(dataIds, butler.dimensions)
     for dimension, records in dimensionRecords.items():
-        if butler.dimensions[dimension].viewOf is None:
+        if butler.dimensions[dimension].has_own_table:
             butler.registry.insertDimensionData(dimension, *records)
     return butler
 
@@ -483,9 +483,9 @@ def addDataIdValue(butler: Butler, dimension: str, value: str | int, **related: 
             # asked for); those are also asserted by the caller to already
             # exist.
             continue
-        if dimension_obj.viewOf is not None:
+        if not dimension_obj.has_own_table:
             # Don't need to bother generating full records for dimensions whose
-            # records are just a view into some other's records anyway.
+            # records are not actually stored.
             continue
         record_dicts_by_dimension[dimension_obj] = _makeDimensionRecordDict(data_id, dimension_obj)
 

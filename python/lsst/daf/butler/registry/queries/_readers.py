@@ -42,7 +42,13 @@ from lsst.utils.classes import cached_getter
 from ..._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionElement, DimensionGroup, DimensionRecord
+from ...dimensions import (
+    DataCoordinate,
+    DimensionElement,
+    DimensionGroup,
+    DimensionRecord,
+    DimensionRecordSet,
+)
 
 if TYPE_CHECKING:
     from lsst.daf.relation import ColumnTag
@@ -58,7 +64,7 @@ class DataCoordinateReader(ABC):
         dimensions: DimensionGroup,
         full: bool = True,
         records: bool = False,
-        record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
+        record_caches: Mapping[str, DimensionRecordSet] | None = None,
     ) -> DataCoordinateReader:
         """Construct a concrete reader for a set of dimensions.
 
@@ -73,9 +79,8 @@ class DataCoordinateReader(ABC):
         records : `bool`, optional
             Whether to attach dimension records.
         record_caches : `~collections.abc.Mapping`, optional
-            Nested mapping (outer keys are dimension elements, inner keys are
-            data IDs for that element) of cached dimension records.  Ignored
-            unless ``records=True``.
+            Mapping of cached dimension records.  Ignored unless
+            ``records=True``.
 
         Returns
         -------
@@ -190,8 +195,7 @@ class _ExpandedDataCoordinateReader(DataCoordinateReader):
     full_reader : `_FullDataCoordinateReader`
         Reader for full data IDs that don't have records.
     record_caches : `~collections.abc.Mapping`
-        Nested mapping (outer keys are dimension elements, inner keys are data
-        IDs for that element) of cached dimension records.
+        Mapping of cached dimension records.
     record_readers : `~collections.abc.Mapping`
         Mapping from `DimensionElement` to `DimensionRecordReaders`.  Should
         include all elements in the data coordinate's dimensions that are not
@@ -201,7 +205,7 @@ class _ExpandedDataCoordinateReader(DataCoordinateReader):
     def __init__(
         self,
         full_reader: _FullDataCoordinateReader,
-        record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]],
+        record_caches: Mapping[str, DimensionRecordSet],
         record_readers: Mapping[DimensionElement, DimensionRecordReader],
     ):
         self._full_reader = full_reader
@@ -214,8 +218,8 @@ class _ExpandedDataCoordinateReader(DataCoordinateReader):
         # Docstring inherited.
         full = self._full_reader.read(row)
         records = {}
-        for element, cache in self._record_caches.items():
-            records[element.name] = cache[full.subset(element.graph)]
+        for element_name, cache in self._record_caches.items():
+            records[element_name] = cache.find(full.subset(cache.element.minimal_group))
         for element, reader in self._record_readers.items():
             records[element.name] = reader.read(row)
         return full.expanded(records)
@@ -258,7 +262,7 @@ class DatasetRefReader:
         full: bool = True,
         translate_collection: Callable[[Any], str] | None = None,
         records: bool = False,
-        record_caches: Mapping[DimensionElement, Mapping[DataCoordinate, DimensionRecord]] | None = None,
+        record_caches: Mapping[str, DimensionRecordSet] | None = None,
     ):
         self._data_coordinate_reader = DataCoordinateReader.make(
             dataset_type.dimensions.as_group(), full=full, records=records, record_caches=record_caches

@@ -127,7 +127,6 @@ class ColumnTypeInfo:
                     sql.Engine.EMPTY_COLUMNS_NAME,
                     dtype=sql.Engine.EMPTY_COLUMNS_TYPE,
                     nullable=True,
-                    default=True,
                 )
             )
         for tag in columns:

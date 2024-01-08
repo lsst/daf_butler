@@ -27,35 +27,33 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from collections import defaultdict
-from collections.abc import Mapping, Set
-from typing import TYPE_CHECKING, cast
+from collections.abc import Sequence, Set
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
-from lsst.daf.relation import Relation
+from lsst.daf.relation import Calculation, ColumnExpression, Join, Relation, sql
 
 from ... import ddl
-from ..._column_tags import DimensionKeyColumnTag
+from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
+from ..._column_type_info import LogicalColumn
 from ..._named import NamedKeyDict
 from ...dimensions import (
-    DatabaseDimensionElement,
     DatabaseTopologicalFamily,
+    DataCoordinate,
+    Dimension,
     DimensionElement,
     DimensionGroup,
+    DimensionRecord,
+    DimensionRecordSet,
     DimensionUniverse,
-    GovernorDimension,
+    SkyPixDimension,
+    addDimensionForeignKey,
 )
+from ...dimensions.record_cache import DimensionRecordCache
 from .._exceptions import MissingSpatialOverlapError
-from ..interfaces import (
-    Database,
-    DatabaseDimensionOverlapStorage,
-    DatabaseDimensionRecordStorage,
-    DimensionRecordStorage,
-    DimensionRecordStorageManager,
-    GovernorDimensionRecordStorage,
-    StaticTablesContext,
-    VersionTuple,
-)
+from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext, VersionTuple
 
 if TYPE_CHECKING:
     from .. import queries
@@ -63,6 +61,8 @@ if TYPE_CHECKING:
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(6, 0, 2)
+
+_LOG = logging.getLogger(__name__)
 
 
 class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
@@ -78,12 +78,15 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     ----------
     db : `Database`
         Interface to the underlying database engine and namespace.
-    records : `NamedKeyDict`
-        Mapping from `DimensionElement` to `DimensionRecordStorage` for that
-        element.
-    overlaps : `list` [ `DatabaseDimensionOverlapStorage` ]
-        Objects that manage materialized overlaps between database-backed
-        dimensions.
+    tables : `dict` [ `str`, `sqlalchemy.Table` ]
+        Mapping from dimension element name to SQL table, for all elements that
+        have `DimensionElement.has_own_table` `True`.
+    overlap_tables : `dict` [ `str`, `tuple` [ `sqlalchemy.Table`, \
+            `sqlalchemy.Table` ] ]
+        Mapping from dimension element name to SQL table holding overlaps
+        between the common skypix dimension and that element, for all elements
+        that have `DimensionElement.has_own_table` `True` and
+        `DimensionElement.spatial` not `None`.
     dimension_group_storage : `_DimensionGroupStorage`
         Object that manages saved `DimensionGroup` definitions.
     universe : `DimensionUniverse`
@@ -96,18 +99,16 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         self,
         db: Database,
         *,
-        records: NamedKeyDict[DimensionElement, DimensionRecordStorage],
-        overlaps: dict[
-            tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
-        ],
+        tables: dict[str, sqlalchemy.Table],
+        overlap_tables: dict[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
         dimension_group_storage: _DimensionGroupStorage,
         universe: DimensionUniverse,
         registry_schema_version: VersionTuple | None = None,
     ):
         super().__init__(universe=universe, registry_schema_version=registry_schema_version)
         self._db = db
-        self._records = records
-        self._overlaps = overlaps
+        self._tables = tables
+        self._overlap_tables = overlap_tables
         self._dimension_group_storage = dimension_group_storage
 
     @classmethod
@@ -120,94 +121,195 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         registry_schema_version: VersionTuple | None = None,
     ) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
-        # Start by initializing governor dimensions; those go both in the main
-        # 'records' mapping we'll pass to init, and a local dictionary that we
-        # can pass in when initializing storage for DatabaseDimensionElements.
-        governors = NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage]()
-        records = NamedKeyDict[DimensionElement, DimensionRecordStorage]()
+        tables: dict[str, sqlalchemy.Table] = {}
+        # Define tables for governor dimensions, which are never spatial or
+        # temporal and always have tables.
         for dimension in universe.governor_dimensions:
-            governorStorage = dimension.makeStorage(db, context=context)
-            governors[dimension] = governorStorage
-            records[dimension] = governorStorage
-        # Next we initialize storage for DatabaseDimensionElements.  Some
-        # elements' storage may be views into anothers; we'll do a first pass
-        # to gather a mapping from the names of those targets back to their
-        # views.
-        view_targets = {
-            element.viewOf: element for element in universe.database_elements if element.viewOf is not None
-        }
-        # We remember the spatial ones (grouped by family) so we can go back
-        # and initialize overlap storage for them later.
-        spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DatabaseDimensionRecordStorage]]()
+            spec = dimension.RecordClass.fields.makeTableSpec(
+                TimespanReprClass=db.getTimespanRepresentation()
+            )
+            tables[dimension.name] = context.addTable(dimension.name, spec)
+        # Define tables for database dimension elements, which may or may not
+        # have their own tables and may be spatial or temporal.
+        spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DimensionElement]]()
+        overlap_tables: dict[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = {}
         for element in universe.database_elements:
-            if element.viewOf is not None:
-                # We'll initialize this storage when the view's target is
-                # initialized.
+            if not element.has_own_table:
                 continue
-            elementStorage = element.makeStorage(db, context=context, governors=governors)
-            records[element] = elementStorage
+            spec = element.RecordClass.fields.makeTableSpec(TimespanReprClass=db.getTimespanRepresentation())
+            tables[element.name] = context.addTable(element.name, spec)
             if element.spatial is not None:
-                spatial.setdefault(element.spatial, []).append(elementStorage)
-            if (view_element := view_targets.get(element.name)) is not None:
-                view_element_storage = view_element.makeStorage(
-                    db,
-                    context=context,
-                    governors=governors,
-                    view_target=elementStorage,
-                )
-                records[view_element] = view_element_storage
-                if view_element.spatial is not None:
-                    spatial.setdefault(view_element.spatial, []).append(view_element_storage)
-
-        # Finally we initialize overlap storage.  The implementation class for
-        # this is currently hard-coded (it's not obvious there will ever be
-        # others).  Note that overlaps between database-backed dimensions and
-        # skypix dimensions is internal to `DatabaseDimensionRecordStorage`,
-        # and hence is not included here.
-        from ..dimensions.overlaps import CrossFamilyDimensionOverlapStorage
-
-        overlaps: dict[
-            tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
-        ] = {}
-        for (family1, storages1), (family2, storages2) in itertools.combinations(spatial.items(), 2):
-            for elementStoragePair in itertools.product(storages1, storages2):
-                governorStoragePair = (governors[family1.governor], governors[family2.governor])
-                if elementStoragePair[0].element > elementStoragePair[1].element:
-                    elementStoragePair = (elementStoragePair[1], elementStoragePair[0])
-                    governorStoragePair = (governorStoragePair[1], governorStoragePair[1])
-                overlapStorage = CrossFamilyDimensionOverlapStorage.initialize(
-                    db,
-                    elementStoragePair,
-                    governorStoragePair,
-                    context=context,
-                )
-                elementStoragePair[0].connect(overlapStorage)
-                elementStoragePair[1].connect(overlapStorage)
-                overlaps[overlapStorage.elements] = overlapStorage
-        # Create table that stores DimensionGraph definitions.
+                spatial.setdefault(element.spatial, []).append(element)
+                overlap_tables[element.name] = cls._make_skypix_overlap_tables(context, element)
+        # Add some tables for materialized overlaps between database
+        # dimensions.  We've never used these and no longer plan to, but we
+        # have to keep creating them to keep schema versioning consistent.
+        cls._make_legacy_overlap_tables(context, spatial)
+        # Create tables that store DimensionGraph definitions.
         dimension_group_storage = _DimensionGroupStorage.initialize(db, context, universe=universe)
         return cls(
             db=db,
-            records=records,
+            tables=tables,
+            overlap_tables=overlap_tables,
             universe=universe,
-            overlaps=overlaps,
             dimension_group_storage=dimension_group_storage,
             registry_schema_version=registry_schema_version,
         )
 
-    def get(self, element: DimensionElement | str) -> DimensionRecordStorage | None:
-        # Docstring inherited from DimensionRecordStorageManager.
-        r = self._records.get(element)
-        if r is None:
-            if (dimension := self.universe.skypix_dimensions.get(element)) is not None:
-                return dimension.makeStorage()
-        return r
-
-    def register(self, element: DimensionElement) -> DimensionRecordStorage:
-        # Docstring inherited from DimensionRecordStorageManager.
-        result = self.get(element)
-        assert result, "All records instances should be created in initialize()."
+    def fetch_cache_dict(self) -> dict[str, DimensionRecordSet]:
+        # Docstring inherited.
+        result: dict[str, DimensionRecordSet] = {}
+        with self._db.transaction():
+            for element in self.universe.elements:
+                if not element.is_cached:
+                    continue
+                assert not element.temporal, (
+                    "Cached dimension elements should not be spatial or temporal, as that "
+                    "suggests a large number of records."
+                )
+                if element.implied_union_target is not None:
+                    assert isinstance(element, Dimension), "Only dimensions can be implied dependencies."
+                    table = self._tables[element.implied_union_target.name]
+                    sql = sqlalchemy.select(
+                        table.columns[element.name].label(element.primary_key.name)
+                    ).distinct()
+                else:
+                    table = self._tables[element.name]
+                    sql = table.select()
+                with self._db.query(sql) as results:
+                    result[element.name] = DimensionRecordSet(
+                        element=element,
+                        records=[element.RecordClass(**row) for row in results.mappings()],
+                    )
         return result
+
+    def insert(
+        self,
+        element: DimensionElement,
+        *records: DimensionRecord,
+        cache: DimensionRecordCache,
+        replace: bool = False,
+        skip_existing: bool = False,
+    ) -> None:
+        # Docstring inherited.
+        if not element.has_own_table:
+            raise TypeError(f"Cannot insert {element.name} records.")
+        rows, overlap_insert_rows, overlap_delete_rows, overlap_summary_rows = self._make_record_db_rows(
+            element, records, replace=replace
+        )
+        table = self._tables[element.name]
+        with cache.modifying(element.name) as cache_records:
+            with self._db.transaction():
+                if replace:
+                    self._db.replace(table, *rows)
+                elif skip_existing:
+                    self._db.ensure(table, *rows, primary_key_only=True)
+                else:
+                    self._db.insert(table, *rows)
+                self._insert_overlaps(
+                    element, overlap_insert_rows, overlap_delete_rows, skip_existing=skip_existing
+                )
+                for related_element_name, summary_rows in overlap_summary_rows.items():
+                    self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
+            # Database transaction succeeded; update the cache to keep them
+            # consistent.
+            if cache_records is not None:
+                cache_records.update(records, replace=not skip_existing)
+
+    def sync(
+        self, record: DimensionRecord, cache: DimensionRecordCache, update: bool = False
+    ) -> bool | dict[str, Any]:
+        # Docstring inherited.
+        if not record.definition.has_own_table:
+            raise TypeError(f"Cannot sync {record.definition.name} records.")
+        # We might not need the overlap rows at all; we won't know until we try
+        # to insert the main row.  But we figure it's better to spend the time
+        # to compute them in advance always *outside* the database transaction
+        # than to compute them only as-needed inside the database transaction,
+        # since in-transaction time is especially precious.
+        (
+            (compared,),
+            overlap_insert_rows,
+            overlap_delete_rows,
+            overlap_summary_rows,
+        ) = self._make_record_db_rows(record.definition, [record], replace=True)
+        keys = {}
+        for name in record.fields.required.names:
+            keys[name] = compared.pop(name)
+        with cache.modifying(record.definition.name) as cache_records:
+            with self._db.transaction():
+                _, inserted_or_updated = self._db.sync(
+                    self._tables[record.definition.name],
+                    keys=keys,
+                    compared=compared,
+                    update=update,
+                )
+                if inserted_or_updated:
+                    if inserted_or_updated is True:
+                        # Inserted a new row, so we just need to insert new
+                        # overlap rows (if there are any).
+                        self._insert_overlaps(record.definition, overlap_insert_rows, overlap_delete_rows=[])
+                    elif "region" in inserted_or_updated:
+                        # Updated the region, so we need to delete old overlap
+                        # rows and insert new ones.
+                        self._insert_overlaps(record.definition, overlap_insert_rows, overlap_delete_rows)
+                    for related_element_name, summary_rows in overlap_summary_rows.items():
+                        self._db.ensure(self._overlap_tables[related_element_name][0], *summary_rows)
+                # We updated something other than a region; no need to change
+                # the overlap regions.
+            # Database transaction succeeded; update the cache to keep them
+            # consistent.
+            if cache_records is not None and inserted_or_updated:
+                cache_records.add(record, replace=update)
+        return inserted_or_updated
+
+    def fetch_one(
+        self,
+        element_name: str,
+        data_id: DataCoordinate,
+        cache: DimensionRecordCache,
+    ) -> DimensionRecord | None:
+        # Docstring inherited.
+        element = self.universe[element_name]
+        if element_name in cache:
+            try:
+                return cache[element_name].find(data_id)
+            except LookupError:
+                return None
+        if element.implied_union_target is not None:
+            assert isinstance(element, Dimension), "Only dimensions can be implied dependencies."
+            table = self._tables[element.implied_union_target.name]
+            sql = sqlalchemy.select(table.columns[element.name].label(element.primary_key.name)).where(
+                table.columns[element_name] == data_id[element_name]
+            )
+        elif isinstance(element, SkyPixDimension):
+            id = data_id[element_name]
+            return element.RecordClass(id=id, region=element.pixelization.pixel(id))
+        else:
+            table = self._tables[element.name]
+            sql = table.select().where(
+                *[
+                    table.columns[column_name] == data_id[dimension_name]
+                    for column_name, dimension_name in zip(
+                        element.schema.required.names, element.required.names
+                    )
+                ]
+            )
+        with self._db.query(sql) as results:
+            row = results.fetchone()
+            if row is None:
+                return None
+            if element.temporal is not None:
+                mapping = dict(**row._mapping)
+                timespan = self._db.getTimespanRepresentation().extract(mapping)
+                for name in self._db.getTimespanRepresentation().getFieldNames():
+                    del mapping[name]
+                mapping["timespan"] = timespan
+            else:
+                # MyPy says this isn't a real collections.abc.Mapping, but it
+                # sure behaves like one.
+                mapping = row._mapping  # type: ignore
+            return element.RecordClass(**mapping)
 
     def save_dimension_group(self, graph: DimensionGroup) -> int:
         # Docstring inherited from DimensionRecordStorageManager.
@@ -217,17 +319,55 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         return self._dimension_group_storage.load(key)
 
-    def clearCaches(self) -> None:
-        # Docstring inherited from DimensionRecordStorageManager.
-        for storage in self._records.values():
-            storage.clearCaches()
+    def join(
+        self,
+        element_name: str,
+        target: Relation,
+        join: Join,
+        context: queries.SqlQueryContext,
+    ) -> Relation:
+        # Docstring inherited.
+        element = self.universe[element_name]
+        # We use Join.partial(...).apply(...) instead of Join.apply(..., ...)
+        # for the "backtracking" insertion capabilities of the former; more
+        # specifically, if `target` is a tree that starts with SQL relations
+        # and ends with iteration-engine operations (e.g. region-overlap
+        # postprocessing), this will try to perform the join upstream in the
+        # SQL engine before the transfer to iteration.
+        if element.has_own_table:
+            return join.partial(self._make_relation(element, context)).apply(target)
+        elif element.implied_union_target is not None:
+            columns = DimensionKeyColumnTag(element.name)
+            return join.partial(
+                self._make_relation(element.implied_union_target, context)
+                .with_only_columns(
+                    {columns},
+                    preferred_engine=context.preferred_engine,
+                    require_preferred_engine=True,
+                )
+                .without_duplicates()
+            ).apply(target)
+        elif isinstance(element, SkyPixDimension):
+            assert join.predicate.as_trivial(), "Expected trivial join predicate for skypix relation."
+            id_column = DimensionKeyColumnTag(element.name)
+            assert id_column in target.columns, "Guaranteed by QueryBuilder.make_dimension_target."
+            function_name = f"{element.name}_region"
+            context.iteration_engine.functions[function_name] = element.pixelization.pixel
+            calculation = Calculation(
+                tag=DimensionRecordColumnTag(element.name, "region"),
+                expression=ColumnExpression.function(function_name, ColumnExpression.reference(id_column)),
+            )
+            return calculation.apply(
+                target, preferred_engine=context.iteration_engine, transfer=True, backtrack=True
+            )
+        else:
+            raise AssertionError(f"Unexpected definition of {element_name!r}.")
 
     def make_spatial_join_relation(
         self,
         element1: str,
         element2: str,
         context: queries.SqlQueryContext,
-        governor_constraints: Mapping[str, Set[str]],
         existing_relationships: Set[frozenset[str]] = frozenset(),
     ) -> tuple[Relation, bool]:
         # Docstring inherited.
@@ -236,69 +376,44 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         )
         if overlap_relationship in existing_relationships:
             return context.preferred_engine.make_join_identity_relation(), False
-        storage1 = self[element1]
-        storage2 = self[element2]
         overlaps: Relation | None = None
         needs_refinement: bool = False
-        match (storage1, storage2):
-            case [
-                DatabaseDimensionRecordStorage() as db_storage1,
-                DatabaseDimensionRecordStorage() as db_storage2,
-            ]:
-                # Construction guarantees that we only need to try this in one
-                # direction; either both storage objects know about the other
-                # or neither do.
-                overlaps = db_storage1.make_spatial_join_relation(
-                    db_storage2.element, context, governor_constraints
+        if element1 == self.universe.commonSkyPix.name:
+            (element1, element2) = (element2, element1)
+
+        if element1 in self._overlap_tables:
+            if element2 in self._overlap_tables:
+                # Use commonSkyPix as an intermediary with post-query
+                # refinement.
+                have_overlap1_already = (
+                    frozenset(self.universe[element1].dimensions.names | {self.universe.commonSkyPix.name})
+                    in existing_relationships
                 )
-                if overlaps is None:
-                    # No direct materialized overlaps; use commonSkyPix as an
-                    # intermediary.
-                    have_overlap1_already = (
-                        frozenset(
-                            self.universe[element1].dimensions.names | {self.universe.commonSkyPix.name}
-                        )
-                        in existing_relationships
-                    )
-                    have_overlap2_already = (
-                        frozenset(
-                            self.universe[element2].dimensions.names | {self.universe.commonSkyPix.name}
-                        )
-                        in existing_relationships
-                    )
-                    overlap1 = context.preferred_engine.make_join_identity_relation()
-                    overlap2 = context.preferred_engine.make_join_identity_relation()
-                    if not have_overlap1_already:
-                        overlap1 = cast(
-                            Relation,
-                            db_storage1.make_spatial_join_relation(
-                                self.universe.commonSkyPix, context, governor_constraints
-                            ),
-                        )
-                    if not have_overlap2_already:
-                        overlap2 = cast(
-                            Relation,
-                            db_storage2.make_spatial_join_relation(
-                                self.universe.commonSkyPix, context, governor_constraints
-                            ),
-                        )
-                    overlaps = overlap1.join(overlap2)
-                    if not have_overlap1_already and not have_overlap2_already:
-                        # Drop the common skypix ID column from the overlap
-                        # relation we return, since we don't want that column
-                        # to be mistakenly equated with any other appearance of
-                        # that column, since this would mangle queries like
-                        # "join visit to tract and tract to healpix10", by
-                        # incorrectly requiring all visits and healpix10 pixels
-                        # share common skypix pixels, not just tracts.
-                        columns = set(overlaps.columns)
-                        columns.remove(DimensionKeyColumnTag(self.universe.commonSkyPix.name))
-                        overlaps = overlaps.with_only_columns(columns)
-                    needs_refinement = True
-            case [DatabaseDimensionRecordStorage() as db_storage, other]:
-                overlaps = db_storage.make_spatial_join_relation(other.element, context, governor_constraints)
-            case [other, DatabaseDimensionRecordStorage() as db_storage]:
-                overlaps = db_storage.make_spatial_join_relation(other.element, context, governor_constraints)
+                have_overlap2_already = (
+                    frozenset(self.universe[element2].dimensions.names | {self.universe.commonSkyPix.name})
+                    in existing_relationships
+                )
+                overlap1 = context.preferred_engine.make_join_identity_relation()
+                overlap2 = context.preferred_engine.make_join_identity_relation()
+                if not have_overlap1_already:
+                    overlap1 = self._make_common_skypix_join_relation(self.universe[element1], context)
+                if not have_overlap2_already:
+                    overlap2 = self._make_common_skypix_join_relation(self.universe[element2], context)
+                overlaps = overlap1.join(overlap2)
+                if not have_overlap1_already and not have_overlap2_already:
+                    # Drop the common skypix ID column from the overlap
+                    # relation we return, since we don't want that column
+                    # to be mistakenly equated with any other appearance of
+                    # that column, since this would mangle queries like
+                    # "join visit to tract and tract to healpix10", by
+                    # incorrectly requiring all visits and healpix10 pixels
+                    # share common skypix pixels, not just tracts.
+                    columns = set(overlaps.columns)
+                    columns.remove(DimensionKeyColumnTag(self.universe.commonSkyPix.name))
+                    overlaps = overlaps.with_only_columns(columns)
+                needs_refinement = True
+            elif element2 == self.universe.commonSkyPix.name:
+                overlaps = self._make_common_skypix_join_relation(self.universe[element1], context)
         if overlaps is None:
             # In the future, there's a lot more we could try here:
             #
@@ -318,10 +433,318 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             )
         return overlaps, needs_refinement
 
+    def _make_relation(
+        self,
+        element: DimensionElement,
+        context: queries.SqlQueryContext,
+    ) -> Relation:
+        table = self._tables[element.name]
+        payload = sql.Payload[LogicalColumn](table)
+        for tag, field_name in element.RecordClass.fields.columns.items():
+            if field_name == "timespan":
+                payload.columns_available[tag] = self._db.getTimespanRepresentation().from_columns(
+                    table.columns, name=field_name
+                )
+            else:
+                payload.columns_available[tag] = table.columns[field_name]
+        return context.sql_engine.make_leaf(
+            payload.columns_available.keys(),
+            name=element.name,
+            payload=payload,
+        )
+
+    def _make_common_skypix_join_relation(
+        self,
+        element: DimensionElement,
+        context: queries.SqlQueryContext,
+    ) -> Relation:
+        """Construct a subquery expression containing overlaps between the
+        common skypix dimension and the given dimension element.
+
+        Parameters
+        ----------
+        element : `DimensionElement`
+            Spatial dimension element whose overlaps with the common skypix
+            system are represented by the returned relation.
+        context : `.queries.SqlQueryContext`
+            Object that manages relation engines and database-side state
+            (e.g. temporary tables) for the query.
+
+        Returns
+        -------
+        relation : `sql.Relation`
+            Join relation.
+        """
+        assert element.spatial is not None, "Only called for spatial dimension elements."
+        assert element.has_own_table, "Only called for dimension elements with their own tables."
+        _, table = self._overlap_tables[element.name]
+        payload = sql.Payload[LogicalColumn](table)
+        payload.columns_available[
+            DimensionKeyColumnTag(self.universe.commonSkyPix.name)
+        ] = payload.from_clause.columns.skypix_index
+        for dimension_name in element.graph.required.names:
+            payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
+                dimension_name
+            ]
+        payload.where.append(table.columns.skypix_system == self.universe.commonSkyPix.system.name)
+        payload.where.append(table.columns.skypix_level == self.universe.commonSkyPix.level)
+        leaf = context.sql_engine.make_leaf(
+            payload.columns_available.keys(),
+            name=f"{element.name}_{self.universe.commonSkyPix.name}_overlap",
+            payload=payload,
+        )
+        return leaf
+
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.
         return [_VERSION]
+
+    @classmethod
+    def _make_skypix_overlap_tables(
+        cls, context: StaticTablesContext, element: DimensionElement
+    ) -> tuple[sqlalchemy.Table, sqlalchemy.Table]:
+        assert element.governor is not None
+        summary_spec = ddl.TableSpec(
+            fields=[
+                ddl.FieldSpec(
+                    name="skypix_system",
+                    dtype=sqlalchemy.String,
+                    length=16,
+                    nullable=False,
+                    primaryKey=True,
+                ),
+                ddl.FieldSpec(
+                    name="skypix_level",
+                    dtype=sqlalchemy.SmallInteger,
+                    nullable=False,
+                    primaryKey=True,
+                ),
+            ]
+        )
+        addDimensionForeignKey(summary_spec, element.governor, primaryKey=True)
+        overlap_spec = ddl.TableSpec(
+            fields=[
+                ddl.FieldSpec(
+                    name="skypix_system",
+                    dtype=sqlalchemy.String,
+                    length=16,
+                    nullable=False,
+                    primaryKey=True,
+                ),
+                ddl.FieldSpec(
+                    name="skypix_level",
+                    dtype=sqlalchemy.SmallInteger,
+                    nullable=False,
+                    primaryKey=True,
+                ),
+                # (more columns added below)
+            ],
+            unique=set(),
+            indexes={
+                # This index has the same fields as the PK, in a different
+                # order, to facilitate queries that know skypix_index and want
+                # to find the other element.
+                ddl.IndexSpec(
+                    "skypix_system",
+                    "skypix_level",
+                    "skypix_index",
+                    *element.graph.required.names,
+                ),
+            },
+            foreignKeys=[
+                # Foreign key to summary table.  This makes sure we don't
+                # materialize any overlaps without remembering that we've done
+                # so in the summary table, though it can't prevent the converse
+                # of adding a summary row without adding overlap row (either of
+                # those is a logic bug, of course, but we want to be defensive
+                # about those).  Using ON DELETE CASCADE, it'd be very easy to
+                # implement "disabling" an overlap materialization, because we
+                # can just delete the summary row.
+                # Note that the governor dimension column is added below, in
+                # the call to addDimensionForeignKey.
+                ddl.ForeignKeySpec(
+                    f"{element.name}_skypix_overlap_summary",
+                    source=("skypix_system", "skypix_level", element.governor.name),
+                    target=("skypix_system", "skypix_level", element.governor.name),
+                    onDelete="CASCADE",
+                ),
+            ],
+        )
+        # Add fields for the standard element this class manages overlaps for.
+        # This is guaranteed to add a column for the governor dimension,
+        # because that's a required dependency of element.
+        for dimension in element.required:
+            addDimensionForeignKey(overlap_spec, dimension, primaryKey=True)
+        # Add field for the actual skypix index.  We do this later because I
+        # think we care (at least a bit) about the order in which the primary
+        # key is defined, in that we want a non-summary column like this one
+        # to appear after the governor dimension column.
+        overlap_spec.fields.add(
+            ddl.FieldSpec(
+                name="skypix_index",
+                dtype=sqlalchemy.BigInteger,
+                nullable=False,
+                primaryKey=True,
+            )
+        )
+        return (
+            context.addTable(f"{element.name}_skypix_overlap_summary", summary_spec),
+            context.addTable(f"{element.name}_skypix_overlap", overlap_spec),
+        )
+
+    @classmethod
+    def _make_legacy_overlap_tables(
+        cls,
+        context: StaticTablesContext,
+        spatial: NamedKeyDict[DatabaseTopologicalFamily, list[DimensionElement]],
+    ) -> None:
+        for (_, elements1), (_, elements2) in itertools.combinations(spatial.items(), 2):
+            for element1, element2 in itertools.product(elements1, elements2):
+                if element1 > element2:
+                    (element2, element1) = (element1, element2)
+                assert element1.spatial is not None and element2.spatial is not None
+                assert element1.governor != element2.governor
+                assert element1.governor is not None and element2.governor is not None
+                summary_spec = ddl.TableSpec(fields=[])
+                addDimensionForeignKey(summary_spec, element1.governor, primaryKey=True)
+                addDimensionForeignKey(summary_spec, element2.governor, primaryKey=True)
+                context.addTable(f"{element1.name}_{element2.name}_overlap_summary", summary_spec)
+                overlap_spec = ddl.TableSpec(fields=[])
+                addDimensionForeignKey(overlap_spec, element1.governor, primaryKey=True)
+                addDimensionForeignKey(overlap_spec, element2.governor, primaryKey=True)
+                for dimension in element1.required:
+                    if dimension != element1.governor:
+                        addDimensionForeignKey(overlap_spec, dimension, primaryKey=True)
+                for dimension in element2.required:
+                    if dimension != element2.governor:
+                        addDimensionForeignKey(overlap_spec, dimension, primaryKey=True)
+                context.addTable(f"{element1.name}_{element2.name}_overlap", overlap_spec)
+
+    def _make_record_db_rows(
+        self, element: DimensionElement, records: Sequence[DimensionRecord], replace: bool
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        dict[str, list[dict[str, Any]]],
+    ]:
+        rows = [record.toDict() for record in records]
+        if element.temporal is not None:
+            TimespanReprClass = self._db.getTimespanRepresentation()
+            for row in rows:
+                timespan = row.pop("timespan")
+                TimespanReprClass.update(timespan, result=row)
+        overlap_delete_rows = []
+        overlap_insert_rows = []
+        if element.spatial is not None:
+            overlap_insert_rows = self._compute_common_skypix_overlap_inserts(element, records)
+            if replace:
+                overlap_delete_rows = self._compute_common_skypix_overlap_deletes(records)
+        overlap_summary_rows = {}
+        if element in self.universe.governor_dimensions:
+            for related_element_name in self._overlap_tables.keys():
+                if self.universe[related_element_name].governor == element:
+                    overlap_summary_rows[related_element_name] = [
+                        {
+                            "skypix_system": self.universe.commonSkyPix.system.name,
+                            "skypix_level": self.universe.commonSkyPix.level,
+                            element.name: record.dataId[element.name],
+                        }
+                        for record in records
+                    ]
+        return rows, overlap_insert_rows, overlap_delete_rows, overlap_summary_rows
+
+    def _compute_common_skypix_overlap_deletes(
+        self, records: Sequence[DimensionRecord]
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "skypix_system": self.universe.commonSkyPix.system.name,
+                "skypix_level": self.universe.commonSkyPix.level,
+                **record.dataId.required,
+            }
+            for record in records
+        ]
+
+    def _compute_common_skypix_overlap_inserts(
+        self,
+        element: DimensionElement,
+        records: Sequence[DimensionRecord],
+    ) -> list[dict[str, Any]]:
+        _LOG.debug("Precomputing common skypix overlaps for %s.", element.name)
+        overlap_records: list[dict[str, Any]] = []
+        for record in records:
+            if record.region is None:
+                continue
+            base_overlap_record = dict(record.dataId.required)
+            base_overlap_record["skypix_system"] = self.universe.commonSkyPix.system.name
+            base_overlap_record["skypix_level"] = self.universe.commonSkyPix.level
+            for begin, end in self.universe.commonSkyPix.pixelization.envelope(record.region):
+                for index in range(begin, end):
+                    overlap_records.append({"skypix_index": index, **base_overlap_record})
+        return overlap_records
+
+    def _insert_overlaps(
+        self,
+        element: DimensionElement,
+        overlap_insert_rows: list[dict[str, Any]],
+        overlap_delete_rows: list[dict[str, Any]],
+        skip_existing: bool = False,
+    ) -> None:
+        if overlap_delete_rows:
+            # Since any of the new records might have replaced existing ones
+            # that already have overlap records, and we don't know which, we
+            # have no choice but to delete all overlaps for these records and
+            # recompute them. We include the skypix_system and skypix_level
+            # column values explicitly instead of just letting the query search
+            # for all of those related to the given records, because they are
+            # the first columns in the primary key, and hence searching with
+            # them will be way faster (and we don't want to add a new index
+            # just for this operation).
+            _LOG.debug("Deleting old common skypix overlaps for %s.", element.name)
+            self._db.delete(
+                self._overlap_tables[element.name][1],
+                ["skypix_system", "skypix_level"] + list(element.minimal_group.required),
+                *overlap_delete_rows,
+            )
+        if overlap_insert_rows:
+            _LOG.debug("Inserting %d new skypix overlap rows for %s.", len(overlap_insert_rows), element.name)
+            if skip_existing:
+                self._db.ensure(
+                    self._overlap_tables[element.name][1], *overlap_insert_rows, primary_key_only=True
+                )
+            else:
+                self._db.insert(self._overlap_tables[element.name][1], *overlap_insert_rows)
+            # We have only ever put overlaps with the commonSkyPix system into
+            # this table, and *probably* only ever will. But the schema leaves
+            # open the possibility that we should be inserting overlaps for
+            # some other skypix system, as we once thought we'd support.  In
+            # case that door opens again in the future, we need to check the
+            # "overlap summary" table to see if are any skypix systems other
+            # than the common skypix system and raise (rolling back the entire
+            # transaction) if there are.
+            summary_table = self._overlap_tables[element.name][0]
+            check_sql = (
+                sqlalchemy.sql.select(summary_table.columns.skypix_system, summary_table.columns.skypix_level)
+                .select_from(summary_table)
+                .where(
+                    sqlalchemy.sql.not_(
+                        sqlalchemy.sql.and_(
+                            summary_table.columns.skypix_system == self.universe.commonSkyPix.system.name,
+                            summary_table.columns.skypix_level == self.universe.commonSkyPix.level,
+                        )
+                    )
+                )
+            )
+            with self._db.query(check_sql) as sql_result:
+                bad_summary_rows = sql_result.fetchall()
+            if bad_summary_rows:
+                bad_skypix_names = [f"{row.skypix_system}{row.skypix.level}" for row in bad_summary_rows]
+                raise RuntimeError(
+                    f"Data repository has overlaps between {element} and {bad_skypix_names} that "
+                    "are not supported by this version of daf_butler.  Please use a newer version."
+                )
 
 
 class _DimensionGroupStorage:

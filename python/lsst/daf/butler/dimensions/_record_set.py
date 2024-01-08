@@ -379,13 +379,16 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             self._by_required_values[required_values] = result
         return result
 
-    def add(self, value: DimensionRecord) -> None:
+    def add(self, value: DimensionRecord, replace: bool = True) -> None:
         """Add a new record to the set.
 
         Parameters
         ----------
         value : `DimensionRecord`
             Record to add.
+        replace : `bool`, optional
+            If `True` (default) replace any existing record with the same data
+            ID.  If `False` the existing record will be kept.
 
         Raises
         ------
@@ -396,15 +399,21 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             raise ValueError(
                 f"Cannot add record {value} for {value.definition.name!r} to set for {self.element!r}."
             )
-        self._by_required_values[value.dataId.required_values] = value
+        if replace:
+            self._by_required_values[value.dataId.required_values] = value
+        else:
+            self._by_required_values.setdefault(value.dataId.required_values, value)
 
-    def update(self, values: Iterable[DimensionRecord]) -> None:
+    def update(self, values: Iterable[DimensionRecord], replace: bool = True) -> None:
         """Add new records to the set.
 
         Parameters
         ----------
         values : `~collections.abc.Iterable` [ `DimensionRecord` ]
-            Record to add.
+            Records to add.
+        replace : `bool`, optional
+            If `True` (default) replace any existing records with the same data
+            IDs.  If `False` the existing records will be kept.
 
         Raises
         ------
@@ -412,7 +421,7 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             Raised if ``value.element != self.element``.
         """
         for value in values:
-            self.add(value)
+            self.add(value, replace=replace)
 
     def update_from_data_coordinates(self, data_coordinates: Iterable[DataCoordinate]) -> None:
         """Add records to the set by extracting and deduplicating them from

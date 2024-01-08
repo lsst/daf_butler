@@ -62,6 +62,7 @@ from ..dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
+from ..dimensions.record_cache import DimensionRecordCache
 from ..progress import Progress
 from ..registry import (
     ArgumentError,
@@ -236,15 +237,25 @@ class SqlRegistry:
             defaults = RegistryDefaults()
         return cls(database, defaults, managers)
 
-    def __init__(self, database: Database, defaults: RegistryDefaults, managers: RegistryManagerInstances):
+    def __init__(
+        self,
+        database: Database,
+        defaults: RegistryDefaults,
+        managers: RegistryManagerInstances,
+    ):
         self._db = database
         self._managers = managers
         self.storageClasses = StorageClassFactory()
+        # This is public to SqlRegistry's internal-to-daf_butler callers, but
+        # it is intentionally not part of RegistryShim.
+        self.dimension_record_cache = DimensionRecordCache(
+            self._managers.dimensions.universe,
+            fetch=self._managers.dimensions.fetch_cache_dict,
+        )
         # Intentionally invoke property setter to initialize defaults.  This
         # can only be done after most of the rest of Registry has already been
         # initialized, and must be done before the property getter is used.
         self.defaults = defaults
-
         # TODO: This is currently initialized by `make_datastore_tables`,
         # eventually we'll need to do it during construction.
         # The mapping is indexed by the opaque table name.
@@ -289,7 +300,9 @@ class SqlRegistry:
             # No need to copy, because `RegistryDefaults` is immutable; we
             # effectively copy on write.
             defaults = self.defaults
-        return type(self)(self._db, defaults, self._managers)
+        result = SqlRegistry(self._db, defaults, self._managers)
+        result.dimension_record_cache.load_from(self.dimension_record_cache)
+        return result
 
     @property
     def dimensions(self) -> DimensionUniverse:
@@ -322,6 +335,7 @@ class SqlRegistry:
         This may be necessary to enable querying for entities added by other
         registry instances after this one was constructed.
         """
+        self.dimension_record_cache.reset()
         with self._db.transaction():
             self._managers.refresh()
 
@@ -349,14 +363,8 @@ class SqlRegistry:
         ------
         `None`
         """
-        try:
-            with self._db.transaction(savepoint=savepoint):
-                yield
-        except BaseException:
-            # TODO: this clears the caches sometimes when we wouldn't actually
-            # need to.  Can we avoid that?
-            self._managers.dimensions.clearCaches()
-            raise
+        with self._db.transaction(savepoint=savepoint):
+            yield
 
     def resetConnectionPool(self) -> None:
         """Reset SQLAlchemy connection pool for `SqlRegistry` database.
@@ -891,7 +899,7 @@ class SqlRegistry:
                     "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections
-        backend = queries.SqlQueryBackend(self._db, self._managers)
+        backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
         with backend.caching_context():
             collection_wildcard = CollectionWildcard.from_expression(collections, require_ordered=True)
             if collection_wildcard.empty():
@@ -1561,7 +1569,6 @@ class SqlRegistry:
             for element_name in dataId.dimensions.elements:
                 records[element_name] = dataId.records[element_name]
         keys = dict(standardized.mapping)
-        context = queries.SqlQueryContext(self._db, self._managers.column_types)
         for element_name in standardized.dimensions.lookup_order:
             element = self.dimensions[element_name]
             record = records.get(element_name, ...)  # Use ... to mean not found; None might mean NULL
@@ -1574,9 +1581,10 @@ class SqlRegistry:
                     keys[element_name] = None
                     record = None
                 else:
-                    storage = self._managers.dimensions[element_name]
-                    record = storage.fetch_one(
-                        DataCoordinate.standardize(keys, dimensions=element.minimal_group), context
+                    record = self._managers.dimensions.fetch_one(
+                        element_name,
+                        DataCoordinate.standardize(keys, dimensions=element.minimal_group),
+                        self.dimension_record_cache,
                     )
                 records[element_name] = record
             if record is not None:
@@ -1592,11 +1600,11 @@ class SqlRegistry:
                     raise DataIdValueError(
                         f"Could not fetch record for required dimension {element.name} via keys {keys}."
                     )
-                if element.alwaysJoin:
+                if element.defines_relationships:
                     raise InconsistentDataIdError(
                         f"Could not fetch record for element {element_name} via keys {keys}, ",
-                        "but it is marked alwaysJoin=True; this means one or more dimensions are not "
-                        "related.",
+                        "but it is marked as defining relationships; this means one or more dimensions are "
+                        "have inconsistent values.",
                     )
                 for d in element.implied:
                     keys.setdefault(d.name, None)
@@ -1635,17 +1643,22 @@ class SqlRegistry:
             differs from what is in the database, and should not be used when
             this is a concern.
         """
+        if isinstance(element, str):
+            element = self.dimensions[element]
         if conform:
-            if isinstance(element, str):
-                element = self.dimensions[element]
             records = [
                 row if isinstance(row, DimensionRecord) else element.RecordClass(**row) for row in data
             ]
         else:
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
-        storage = self._managers.dimensions[element]
-        storage.insert(*records, replace=replace, skip_existing=skip_existing)
+        self._managers.dimensions.insert(
+            element,
+            *records,
+            cache=self.dimension_record_cache,
+            replace=replace,
+            skip_existing=skip_existing,
+        )
 
     def syncDimensionData(
         self,
@@ -1694,8 +1707,7 @@ class SqlRegistry:
         else:
             # Ignore typing since caller said to trust them with conform=False.
             record = row  # type: ignore
-        storage = self._managers.dimensions[element]
-        return storage.sync(record, update=update)
+        return self._managers.dimensions.sync(record, self.dimension_record_cache, update=update)
 
     def queryDatasetTypes(
         self,
@@ -1855,7 +1867,7 @@ class SqlRegistry:
             Object that can be used to construct and perform advanced queries.
         """
         doomed_by = list(doomed_by)
-        backend = queries.SqlQueryBackend(self._db, self._managers)
+        backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
         context = backend.context()
         relation: Relation | None = None
         if doomed_by:
@@ -2469,7 +2481,7 @@ class SqlRegistry:
                 )
             collections = self.defaults.collections
         collection_wildcard = CollectionWildcard.from_expression(collections)
-        backend = queries.SqlQueryBackend(self._db, self._managers)
+        backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
         parent_dataset_type, _ = backend.resolve_single_dataset_type_wildcard(datasetType, components=False)
         timespan_tag = DatasetColumnTag(parent_dataset_type.name, "timespan")
         collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
