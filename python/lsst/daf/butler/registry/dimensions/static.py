@@ -29,7 +29,7 @@ from __future__ import annotations
 import itertools
 import logging
 from collections import defaultdict
-from collections.abc import Sequence, Set
+from collections.abc import Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
@@ -299,6 +299,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             row = results.fetchone()
             if row is None:
                 return None
+            mapping: Mapping
             if element.temporal is not None:
                 mapping = dict(**row._mapping)
                 timespan = self._db.getTimespanRepresentation().extract(mapping)
@@ -306,9 +307,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                     del mapping[name]
                 mapping["timespan"] = timespan
             else:
-                # MyPy says this isn't a real collections.abc.Mapping, but it
-                # sure behaves like one.
-                mapping = row._mapping  # type: ignore
+                mapping = row._mapping
             return element.RecordClass(**mapping)
 
     def save_dimension_group(self, graph: DimensionGroup) -> int:
