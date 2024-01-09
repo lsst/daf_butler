@@ -2397,13 +2397,18 @@ class NullDatastoreTestCase(unittest.TestCase):
 
     def test_fallback(self) -> None:
         # Read the butler config and mess with the datastore section.
-        bad_config = Config(os.path.join(self.root, "butler.yaml"))
+        config_path = os.path.join(self.root, "butler.yaml")
+        bad_config = Config(config_path)
         bad_config["datastore", "cls"] = "lsst.not.a.datastore.Datastore"
+        bad_config.dumpToUri(config_path)
 
         with self.assertRaises(RuntimeError):
-            Butler.from_config(bad_config)
+            Butler(self.root, without_datastore=False)
 
-        butler = Butler.from_config(bad_config, writeable=True, without_datastore=True)
+        with self.assertRaises(RuntimeError):
+            Butler.from_config(self.root, without_datastore=False)
+
+        butler = Butler.from_config(self.root, writeable=True, without_datastore=True)
         self.assertIsInstance(butler._datastore, NullDatastore)
 
         # Check that registry is working.
