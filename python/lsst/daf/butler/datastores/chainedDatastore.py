@@ -89,9 +89,8 @@ class ChainedDatastore(Datastore):
         indicates the order to use for read operations.
     bridgeManager : `DatastoreRegistryBridgeManager`
         Object that manages the interface between `Registry` and datastores.
-    butlerRoot : `str`, optional
-        New datastore root to use to override the configuration value. This
-        root is sent to each child datastore.
+    datastores : `list` [`Datastore`]
+        All the child datastores known to this datastore.
 
     Notes
     -----
@@ -183,22 +182,13 @@ class ChainedDatastore(Datastore):
 
     def __init__(
         self,
-        config: Config | ResourcePathExpression,
+        config: DatastoreConfig,
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: str | None = None,
+        datastores: list[Datastore],
     ):
         super().__init__(config, bridgeManager)
 
-        # Scan for child datastores and instantiate them with the same registry
-        self.datastores = []
-        for c in self.config["datastores"]:
-            c = DatastoreConfig(c)
-            datastoreType = doImportType(c["cls"])
-            if not issubclass(datastoreType, Datastore):
-                raise TypeError(f"Imported child class {c['cls']} is not a Datastore")
-            datastore = datastoreType(c, bridgeManager, butlerRoot=butlerRoot)
-            log.debug("Creating child datastore %s", datastore.name)
-            self.datastores.append(datastore)
+        self.datastores = list(datastores)
 
         # Name ourself based on our children
         if self.datastores:
@@ -233,6 +223,30 @@ class ChainedDatastore(Datastore):
             self.datastoreConstraints = (None,) * len(self.datastores)
 
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
+
+    @classmethod
+    def _create_from_config(
+        cls,
+        config: DatastoreConfig,
+        bridgeManager: DatastoreRegistryBridgeManager,
+        butlerRoot: ResourcePathExpression | None,
+    ) -> ChainedDatastore:
+        # Scan for child datastores and instantiate them with the same registry
+        datastores = []
+        for c in config["datastores"]:
+            c = DatastoreConfig(c)
+            datastoreType = doImportType(c["cls"])
+            if not issubclass(datastoreType, Datastore):
+                raise TypeError(f"Imported child class {c['cls']} is not a Datastore")
+            datastore = datastoreType._create_from_config(c, bridgeManager, butlerRoot=butlerRoot)
+            log.debug("Creating child datastore %s", datastore.name)
+            datastores.append(datastore)
+
+        return ChainedDatastore(config, bridgeManager, datastores)
+
+    def clone(self, bridgeManager: DatastoreRegistryBridgeManager) -> Datastore:
+        datastores = [ds.clone(bridgeManager) for ds in self.datastores]
+        return ChainedDatastore(self.config, bridgeManager, datastores)
 
     @property
     def names(self) -> tuple[str, ...]:

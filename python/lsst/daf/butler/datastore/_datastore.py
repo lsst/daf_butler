@@ -287,8 +287,6 @@ class Datastore(metaclass=ABCMeta):
         referring to a configuration file.
     bridgeManager : `DatastoreRegistryBridgeManager`
         Object that manages the interface between `Registry` and datastores.
-    butlerRoot : `str`, optional
-        New datastore root to use to override the configuration value.
     """
 
     defaultConfigFile: ClassVar[str | None] = None
@@ -381,18 +379,18 @@ class Datastore(metaclass=ABCMeta):
         butlerRoot : `str`, optional
             Butler root directory.
         """
-        cls = doImportType(config["datastore", "cls"])
+        config = DatastoreConfig(config)
+        cls = doImportType(config["cls"])
         if not issubclass(cls, Datastore):
-            raise TypeError(f"Imported child class {config['datastore', 'cls']} is not a Datastore")
-        return cls(config=config, bridgeManager=bridgeManager, butlerRoot=butlerRoot)
+            raise TypeError(f"Imported child class {config['cls']} is not a Datastore")
+        return cls._create_from_config(config=config, bridgeManager=bridgeManager, butlerRoot=butlerRoot)
 
     def __init__(
         self,
-        config: Config | ResourcePathExpression,
+        config: DatastoreConfig,
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: ResourcePathExpression | None = None,
     ):
-        self.config = DatastoreConfig(config)
+        self.config = config
         self.name = "ABCDataStore"
         self._transaction: DatastoreTransaction | None = None
 
@@ -402,6 +400,39 @@ class Datastore(metaclass=ABCMeta):
         # And read the constraints list
         constraintsConfig = self.config.get("constraints")
         self.constraints = Constraints(constraintsConfig, universe=bridgeManager.universe)
+
+    @classmethod
+    @abstractmethod
+    def _create_from_config(
+        cls,
+        config: DatastoreConfig,
+        bridgeManager: DatastoreRegistryBridgeManager,
+        butlerRoot: ResourcePathExpression | None,
+    ) -> Datastore:
+        """`Datastore`.``fromConfig`` calls this to instantiate Datastore
+        subclasses.  This is the primary constructor for the individual
+        Datastore subclasses.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def clone(self, bridgeManager: DatastoreRegistryBridgeManager) -> Datastore:
+        """Make an independent copy of this Datastore with a different
+        `DatastoreRegistryBridgeManager` instance.
+
+        Parameters
+        ----------
+        bridgeManager : `DatastoreRegistryBridgeManager`
+            New `DatastoreRegistryBridgeManager` object to use when
+            instantiating managers.
+
+        Returns
+        -------
+        datastore : `Datastore`
+            New `Datastore` instance with the same configuration as the
+            existing instance.
+        """
+        raise NotImplementedError()
 
     def __str__(self) -> str:
         return self.name
@@ -1321,6 +1352,18 @@ class NullDatastore(Datastore):
     butlerRoot : `~lsst.resources.ResourcePathExpression` or `None`
         Ignored.
     """
+
+    @classmethod
+    def _create_from_config(
+        cls,
+        config: Config,
+        bridgeManager: DatastoreRegistryBridgeManager,
+        butlerRoot: ResourcePathExpression | None = None,
+    ) -> NullDatastore:
+        return NullDatastore(config, bridgeManager, butlerRoot)
+
+    def clone(self, bridgeManager: DatastoreRegistryBridgeManager) -> Datastore:
+        return self
 
     @classmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:

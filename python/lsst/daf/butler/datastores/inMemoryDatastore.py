@@ -39,12 +39,12 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
 from lsst.daf.butler import DatasetId, DatasetRef, StorageClass
-from lsst.daf.butler.datastore import DatasetRefURIs
+from lsst.daf.butler.datastore import DatasetRefURIs, DatastoreConfig
 from lsst.daf.butler.datastore.generic_base import GenericBaseDatastore, post_process_get
 from lsst.daf.butler.datastore.record_data import DatastoreRecordData
 from lsst.daf.butler.datastore.stored_file_info import StoredDatastoreItemInfo
 from lsst.daf.butler.utils import transactional
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey
@@ -86,8 +86,6 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         Configuration.
     bridgeManager : `DatastoreRegistryBridgeManager`
         Object that manages the interface between `Registry` and datastores.
-    butlerRoot : `str`, optional
-        Unused parameter.
 
     Notes
     -----
@@ -111,9 +109,8 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
 
     def __init__(
         self,
-        config: Config | str,
+        config: DatastoreConfig,
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: str | None = None,
     ):
         super().__init__(config, bridgeManager)
 
@@ -133,6 +130,25 @@ class InMemoryDatastore(GenericBaseDatastore[StoredMemoryItemInfo]):
         self.related: dict[DatasetId, set[DatasetId]] = {}
 
         self._trashedIds: set[DatasetId] = set()
+
+    @classmethod
+    def _create_from_config(
+        cls,
+        config: DatastoreConfig,
+        bridgeManager: DatastoreRegistryBridgeManager,
+        butlerRoot: ResourcePathExpression | None,
+    ) -> InMemoryDatastore:
+        return InMemoryDatastore(config, bridgeManager)
+
+    def clone(self, bridgeManager: DatastoreRegistryBridgeManager) -> InMemoryDatastore:
+        clone = InMemoryDatastore(self.config, bridgeManager)
+        # Sharing these objects is not thread-safe, but this class is only used
+        # in single-threaded test code.
+        clone.datasets = self.datasets
+        clone.records = self.records
+        clone.related = self.related
+        clone._trashedIds = self._trashedIds
+        return clone
 
     @classmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:

@@ -40,10 +40,11 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, DimensionGroup, StorageClass
+from lsst.daf.butler.datastore import Datastore
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import Config, DatasetId, Datastore, Dimension, DimensionGraph
+    from lsst.daf.butler import Config, DatasetId, Dimension, DimensionGraph
 
 
 class DatasetTestHelper:
@@ -175,7 +176,7 @@ class DatastoreTestHelper:
             registry = registryClass()
         else:
             registry = self.registry
-        return self.datastoreType(config=config, bridgeManager=registry.getDatastoreBridgeManager())
+        return Datastore.fromConfig(config=config, bridgeManager=registry.getDatastoreBridgeManager())
 
 
 class BadWriteFormatter(YamlFormatter):
