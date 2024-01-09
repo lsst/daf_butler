@@ -1,0 +1,5 @@
+* Removed dataset type component query support from all Registry methods.
+  The main ``Registry.query*`` methods now warn if a ``components`` parameter is given and raise if it has a value other than `False`.
+  The components parameters will be removed completely after v27.
+* Removed ``CollectionSearch`` class.
+  A simple `tuple` is now used for this.
