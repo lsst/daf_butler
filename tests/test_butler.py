@@ -604,7 +604,8 @@ class ButlerTests(ButlerPutGetTests):
         butler2 = Butler.from_config(butler=butler, collections=["other"])
         self.assertEqual(butler2.collections, ("other",))
         self.assertIsNone(butler2.run)
-        self.assertIs(butler._datastore, butler2._datastore)
+        self.assertEqual(type(butler._datastore), type(butler2._datastore))
+        self.assertEqual(butler._datastore.config, butler2._datastore.config)
 
         # Test that we can use an environment variable to find this
         # repository.
