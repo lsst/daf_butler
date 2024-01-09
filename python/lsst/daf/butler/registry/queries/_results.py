@@ -698,6 +698,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         """
         return DataCoordinateQueryResults(self._query.projected(defer=True))
 
+    @deprecated("Deprecated, will be removed after v27.", version="v27", category=FutureWarning)
     def withComponents(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
         """Return a new query results object for the same parent datasets but
         different components.
