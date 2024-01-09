@@ -615,11 +615,17 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         directly from queries.
         """
         for parent_results in self.byParentDatasetType():
-            for component in parent_results.components:
+            for component in parent_results._components:
                 dataset_type = parent_results.parentDatasetType
                 if component is not None:
                     dataset_type = dataset_type.makeComponentDatasetType(component)
-                yield (dataset_type, parent_results.withComponents((component,)))
+                if tuple(parent_results._components) == (component,):
+                    # Usual case, and in the future (after component support
+                    # has been fully removed) the only case.
+                    yield dataset_type, parent_results
+                else:
+                    # General case that emits a deprecation warning.
+                    yield (dataset_type, parent_results.withComponents((component,)))
 
 
 class ParentDatasetQueryResults(DatasetQueryResults):
