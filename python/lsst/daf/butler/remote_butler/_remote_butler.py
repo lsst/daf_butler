@@ -489,6 +489,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         skip_missing: bool = True,
         register_dataset_types: bool = False,
         transfer_dimensions: bool = False,
+        dry_run: bool = False,
     ) -> Collection[DatasetRef]:
         # Docstring inherited.
         raise NotImplementedError()

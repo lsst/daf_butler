@@ -2366,6 +2366,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
+        dry_run: bool = False,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Docstring inherited
         if type(self) is not type(source_datastore):
@@ -2490,9 +2491,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
                     # Rely on source_records being a defaultdict.
                     source_records[missing].extend(dataset_records)
+            log.verbose("Completed scan for missing data files")
 
         # See if we already have these records
-        target_records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
+        if not dry_run:
+            target_records = self._get_stored_records_associated_with_refs(
+                refs, ignore_datastore_records=True
+            )
+        else:
+            # In dry-run mode we assume there is nothing in target repo.
+            # (otherwise everything would report that no work is needed.)
+            target_records = []
 
         # The artifacts to register
         artifacts = []
@@ -2560,10 +2569,14 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                     # is there this might indicate that a previous transfer
                     # was interrupted but was not able to be rolled back
                     # completely (eg pre-emption) so follow Datastore default
-                    # and overwrite.
-                    target_location.uri.transfer_from(
-                        source_location.uri, transfer=transfer, overwrite=True, transaction=self._transaction
-                    )
+                    # and overwrite. Do not copy if we are in dry-run mode.
+                    if not dry_run:
+                        target_location.uri.transfer_from(
+                            source_location.uri,
+                            transfer=transfer,
+                            overwrite=True,
+                            transaction=self._transaction,
+                        )
 
                 artifacts.append((ref, info))
 
@@ -2579,7 +2592,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # datastore records to agree. Note that this can potentially lead
         # to difficulties if the dataset has previously been ingested
         # disassembled and is somehow now assembled, or vice versa.
-        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.REPLACE)
+        if not dry_run:
+            self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.REPLACE)
 
         if already_present:
             n_skipped = len(already_present)
