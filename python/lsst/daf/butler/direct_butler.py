@@ -232,11 +232,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     ) -> DirectButler:
         # Docstring inherited
         defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
+        registry = self._registry.copy(defaults)
 
         return DirectButler(
-            registry=self._registry.copy(defaults),
+            registry=registry,
             config=self._config,
-            datastore=self._datastore,
+            datastore=self._datastore.clone(registry.getDatastoreBridgeManager()),
             storageClasses=self.storageClasses,
         )
 
