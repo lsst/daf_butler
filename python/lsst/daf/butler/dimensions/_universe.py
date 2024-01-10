@@ -42,6 +42,7 @@ from lsst.utils.classes import cached_getter, immutable
 from .._config import Config
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
+from .._utilities.thread_safe_cache import ThreadSafeCache
 from ._config import _DEFAULT_NAMESPACE, DimensionConfig
 from ._database import DatabaseDimensionElement
 from ._elements import Dimension, DimensionElement
@@ -91,7 +92,7 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         called; this will be called if needed by `DimensionUniverse`.
     """
 
-    _instances: ClassVar[dict[tuple[int, str], DimensionUniverse]] = {}
+    _instances: ClassVar[ThreadSafeCache[tuple[int, str], DimensionUniverse]] = ThreadSafeCache()
     """Singleton dictionary of all instances, keyed by version.
 
     For internal use only.
@@ -142,7 +143,7 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         # copying from builder.
         self = object.__new__(cls)
         assert self is not None
-        self._cached_groups = {}
+        self._cached_groups = ThreadSafeCache()
         self._dimensions = builder.dimensions
         self._elements = builder.elements
         self._topology = builder.topology
@@ -166,7 +167,6 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         # the receiving process.
         self._version = version
         self._namespace = namespace
-        cls._instances[self._version, self._namespace] = self
 
         # Build mappings from element to index.  These are used for
         # topological-sort comparison operators in DimensionElement itself.
@@ -180,7 +180,7 @@ class DimensionUniverse:  # numpydoc ignore=PR02
             if element.populated_by is not None:
                 self._populates[element.populated_by.name].add(element)
 
-        return self
+        return cls._instances.set_or_get((self._version, self._namespace), self)
 
     @property
     def version(self) -> int:
@@ -602,16 +602,16 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         if namespace is None:
             # Old pickled universe.
             namespace = _DEFAULT_NAMESPACE
-        try:
-            return cls._instances[version, namespace]
-        except KeyError as err:
+        instance = cls._instances.get((version, namespace))
+        if instance is None:
             raise pickle.UnpicklingError(
                 f"DimensionUniverse with version '{version}' and namespace {namespace!r} "
                 "not found.  Note that DimensionUniverse objects are not "
                 "truly serialized; when using pickle to transfer them "
                 "between processes, an equivalent instance with the same "
                 "version must already exist in the receiving process."
-            ) from err
+            )
+        return instance
 
     def __reduce__(self) -> tuple:
         return (self._unpickle, (self._version, self._namespace))
@@ -632,7 +632,7 @@ class DimensionUniverse:  # numpydoc ignore=PR02
     dimensionConfig: DimensionConfig
     """The configuration used to create this Universe (`DimensionConfig`)."""
 
-    _cached_groups: dict[frozenset[str], DimensionGroup]
+    _cached_groups: ThreadSafeCache[frozenset[str], DimensionGroup]
 
     _dimensions: NamedValueAbstractSet[Dimension]
 
