@@ -449,7 +449,7 @@ class FileTemplate:
         # context should only happen in unit tests; in general we need all
         # dimensions to fill out templates).
         fields: dict[str, object] = {
-            k: ref.dataId.get(k) for k in ref.datasetType.dimensions.names if ref.dataId.get(k) is not None
+            k: v for k in ref.datasetType.dimensions.names if (v := ref.dataId.get(k)) is not None
         }
         # Extra information that can be included using . syntax
         extras = {}
