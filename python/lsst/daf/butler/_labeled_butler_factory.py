@@ -64,10 +64,11 @@ class LabeledButlerFactory:
     For each label in the repository index, caches shared state to allow fast
     instantiation of new instances.
 
-    Instance methods on this class are threadsafe. A single instance of
-    `LabeledButlerFactory` can be shared between multiple threads.  Note that
-    ``DirectButler`` itself is not currently threadsafe, so this guarantee does
-    not buy you much. See DM-42317.
+    Instance methods on this class are threadsafe -- a single instance of
+    `LabeledButlerFactory` can be used concurrently by multiple threads. It is
+    NOT safe for a single `Butler` instance returned by this factory to be used
+    concurrently by multiple threads.  However, separate `Butler` instances can
+    safely be used by separate threads.
     """
 
     def __init__(self, repositories: Mapping[str, str] | None = None) -> None:
@@ -151,13 +152,6 @@ def _create_direct_butler_factory(config: ButlerConfig) -> _FactoryFunction:
     def create_butler(access_token: str | None) -> Butler:
         # Access token is ignored because DirectButler does not use Gafaelfawr
         # authentication.
-
-        # TODO DM-42317: This is not actually safe in its current form, because
-        # clone returns an object that has non-thread-safe mutable state shared
-        # between the original and cloned instance.
-        # However, current services are already sharing a single global
-        # non-cloned Butler instance, so this isn't making things worse than
-        # they already are.
         return butler._clone()
 
     return create_butler
