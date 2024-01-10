@@ -31,11 +31,11 @@ __all__ = (
     "DataCoordinateQueryResults",
     "DatasetQueryResults",
     "DimensionRecordQueryResults",
-    "ParentDatasetQueryResults",
+    "SingleTypeDatasetQueryResults",
 )
 
 from abc import abstractmethod
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any
 
@@ -422,15 +422,14 @@ class DatasetQueryResults(Iterable[DatasetRef]):
     """
 
     @abstractmethod
-    def by_parent_dataset_type(self) -> Iterator[ParentDatasetQueryResults]:
-        """Group results by parent dataset type.
+    def by_dataset_type(self) -> Iterator[SingleTypeDatasetQueryResults]:
+        """Group results by dataset type.
 
         Returns
         -------
-        iter : `~collections.abc.Iterator` [ `ParentDatasetQueryResults` ]
+        iter : `~collections.abc.Iterator` [ `SingleTypeDatasetQueryResults` ]
             An iterator over `DatasetQueryResults` instances that are each
-            responsible for a single parent dataset type (either just that
-            dataset type, one or more of its component dataset types, or both).
+            responsible for a single dataset type.
         """
         raise NotImplementedError()
 
@@ -546,19 +545,19 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         raise NotImplementedError()
 
 
-class ParentDatasetQueryResults(DatasetQueryResults):
+class SingleTypeDatasetQueryResults(DatasetQueryResults):
     """An object that represents results from a query for datasets with a
     single parent `DatasetType`.
     """
 
     @abstractmethod
-    def materialize(self) -> AbstractContextManager[ParentDatasetQueryResults]:
+    def materialize(self) -> AbstractContextManager[SingleTypeDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         raise NotImplementedError()
 
     @property
     @abstractmethod
-    def parent_dataset_type(self) -> DatasetType:
+    def dataset_type(self) -> DatasetType:
         """The parent dataset type for all datasets in this iterable
         (`DatasetType`).
         """
@@ -576,20 +575,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def with_components(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
-        """Return a new query results object for the same parent datasets but
-        different components.
-
-        Parameters
-        ----------
-        components : `~collections.abc.Sequence` [ `str` or `None` ]
-            Names of components to include in iteration.  `None` may be
-            included (at most once) to include the parent dataset type.
-        """
-        raise NotImplementedError()
-
-    def expanded(self) -> ParentDatasetQueryResults:
+    def expanded(self) -> SingleTypeDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
         raise NotImplementedError()
 

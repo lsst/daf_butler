@@ -34,7 +34,7 @@ from numpy import array
 from .._butler import Butler
 
 
-def queryDatasetTypes(repo: str, verbose: bool, glob: Iterable[str], components: bool | None) -> Table:
+def queryDatasetTypes(repo: str, verbose: bool, glob: Iterable[str]) -> Table:
     """Get the dataset types in a repository.
 
     Parameters
@@ -48,12 +48,6 @@ def queryDatasetTypes(repo: str, verbose: bool, glob: Iterable[str], components:
     glob : iterable [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
-    components : `bool` or `None`
-        If `True`, apply all glob patterns to component dataset type
-        names as well.  If `False`, never apply patterns to components. If
-        `None` (default), apply patterns to components only if their parent
-        datasets were not matched by the expression. Fully-specified component
-        datasets (`str` or `DatasetType` instances) are always included.
 
     Returns
     -------
@@ -63,7 +57,7 @@ def queryDatasetTypes(repo: str, verbose: bool, glob: Iterable[str], components:
     """
     butler = Butler.from_config(repo, without_datastore=True)
     expression = glob or ...
-    datasetTypes = butler.registry.queryDatasetTypes(components=components, expression=expression)
+    datasetTypes = butler.registry.queryDatasetTypes(expression=expression)
     if verbose:
         table = Table(
             array(

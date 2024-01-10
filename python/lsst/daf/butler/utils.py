@@ -132,3 +132,15 @@ def globToRegex(expressions: str | EllipsisType | None | list[str]) -> list[str 
             res = e
         results.append(res)
     return results
+
+
+class _Marker:
+    """Private class to use as a default value when you want to know that
+    a default parameter has been over-ridden.
+    """
+
+
+_DefaultMarker = _Marker()
+"""Default value to give to a parameter when you want to know if the value
+has been over-ridden.
+"""

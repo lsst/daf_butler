@@ -37,7 +37,7 @@ from .direct_query_results import (
     DirectDataCoordinateQueryResults,
     DirectDatasetQueryResults,
     DirectDimensionRecordQueryResults,
-    DirectParentDatasetQueryResults,
+    DirectSingleTypeDatasetQueryResults,
 )
 from .registry import queries as registry_queries
 from .registry.sql_registry import SqlRegistry
@@ -103,7 +103,7 @@ class DirectQuery(Query):
             **kwargs,
         )
         if isinstance(registry_query_result, registry_queries.ParentDatasetQueryResults):
-            return DirectParentDatasetQueryResults(registry_query_result)
+            return DirectSingleTypeDatasetQueryResults(registry_query_result)
         else:
             return DirectDatasetQueryResults(registry_query_result)
 

@@ -110,14 +110,14 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
     def resolve_dataset_type_wildcard(
         self,
         expression: Any,
-        components: bool | None = None,
         missing: list[str] | None = None,
         explicit_only: bool = False,
-        components_deprecated: bool = True,
-    ) -> dict[DatasetType, list[str | None]]:
+    ) -> list[DatasetType]:
         # Docstring inherited.
         return self._managers.datasets.resolve_wildcard(
-            expression, components, missing, explicit_only, components_deprecated
+            expression,
+            missing,
+            explicit_only,
         )
 
     def filter_dataset_collections(

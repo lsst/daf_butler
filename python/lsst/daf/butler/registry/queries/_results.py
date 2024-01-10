@@ -53,6 +53,7 @@ from ...dimensions import (
     DimensionGroup,
     DimensionRecord,
 )
+from .._exceptions import DatasetTypeError
 from ._query import Query
 from ._structs import OrderByClause
 
@@ -229,12 +230,12 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def findDatasets(
         self,
-        datasetType: Any,
+        datasetType: DatasetType | str,
         collections: Any,
         *,
         findFirst: bool = True,
-        components: bool | None = None,
-    ) -> DatasetQueryResults:
+        components: bool = False,
+    ) -> ParentDatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
         Parameters
@@ -254,16 +255,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             passed in).  If `True`, ``collections`` must not contain regular
             expressions and may not be ``...``.
         components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.  If
-            `None` (default), apply patterns to components only if their parent
-            datasets were not matched by the expression.  Fully-specified
-            component datasets (`str` or `DatasetType` instances) are always
-            included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
 
         Returns
         -------
@@ -278,13 +271,18 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         MissingDatasetTypeError
             Raised if the given dataset type is not registered.
         """
-        parent_dataset_type, components_found = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, components=components, explicit_only=True
+        if components is not False:
+            raise DatasetTypeError(
+                "Dataset component queries are no longer supported by Registry.  Use "
+                "DatasetType methods to obtain components from parent dataset types instead."
+            )
+        resolved_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, explicit_only=True
         )
         return ParentDatasetQueryResults(
-            self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True),
-            parent_dataset_type,
-            components_found,
+            self._query.find_datasets(resolved_dataset_type, collections, find_first=findFirst, defer=True),
+            resolved_dataset_type,
+            [None],
         )
 
     def findRelatedDatasets(
@@ -341,8 +339,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             dimensions = self.dimensions
         else:
             dimensions = self.universe.conform(dimensions)
-        parent_dataset_type, _ = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, components=False, explicit_only=True
+        parent_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, explicit_only=True
         )
         query = self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True)
         return query.iter_data_ids_and_dataset_refs(parent_dataset_type, dimensions)
@@ -617,11 +615,17 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         directly from queries.
         """
         for parent_results in self.byParentDatasetType():
-            for component in parent_results.components:
+            for component in parent_results._components:
                 dataset_type = parent_results.parentDatasetType
                 if component is not None:
                     dataset_type = dataset_type.makeComponentDatasetType(component)
-                yield (dataset_type, parent_results.withComponents((component,)))
+                if tuple(parent_results._components) == (component,):
+                    # Usual case, and in the future (after component support
+                    # has been fully removed) the only case.
+                    yield dataset_type, parent_results
+                else:
+                    # General case that emits a deprecation warning.
+                    yield (dataset_type, parent_results.withComponents((component,)))
 
 
 class ParentDatasetQueryResults(DatasetQueryResults):
@@ -700,6 +704,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         """
         return DataCoordinateQueryResults(self._query.projected(defer=True))
 
+    @deprecated("Deprecated, will be removed after v27.", version="v27", category=FutureWarning)
     def withComponents(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
         """Return a new query results object for the same parent datasets but
         different components.

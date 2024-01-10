@@ -53,6 +53,7 @@ from .registry._collection_summary import CollectionSummary
 from .registry._collection_type import CollectionType
 from .registry._defaults import RegistryDefaults
 from .registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
+from .utils import _DefaultMarker, _Marker
 
 if TYPE_CHECKING:
     from .direct_butler import DirectButler
@@ -281,7 +282,7 @@ class RegistryShim(Registry):
         self,
         expression: Any = ...,
         *,
-        components: bool | None = None,
+        components: bool | _Marker = _DefaultMarker,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         # Docstring inherited from a base class.
@@ -309,7 +310,7 @@ class RegistryShim(Registry):
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: bool | None = None,
+        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -337,7 +338,7 @@ class RegistryShim(Registry):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | None = None,
+        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -363,7 +364,7 @@ class RegistryShim(Registry):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | None = None,
+        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,

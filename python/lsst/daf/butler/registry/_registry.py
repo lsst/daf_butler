@@ -1010,7 +1010,7 @@ class Registry(ABC):
         self,
         expression: Any = ...,
         *,
-        components: bool | None = False,
+        components: bool = False,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
@@ -1024,16 +1024,8 @@ class Registry(ABC):
             default. See :ref:`daf_butler_dataset_type_expressions` for more
             information.
         components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.
-            If `None`, apply patterns to components only if their
-            parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -1117,7 +1109,7 @@ class Registry(ABC):
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: bool | None = False,
+        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -1163,16 +1155,8 @@ class Registry(ABC):
             ``collections`` must not contain regular expressions and may not
             be ``...``.
         components : `bool`, optional
-            If `True`, apply all dataset expression patterns to component
-            dataset type names as well.  If `False`, never apply patterns to
-            components.  If `None`, apply patterns to components only
-            if their parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -1239,7 +1223,7 @@ class Registry(ABC):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | None = False,
+        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -1284,16 +1268,8 @@ class Registry(ABC):
             key column of a dimension table) dimension name.  See
             :ref:`daf_butler_dimension_expressions` for more information.
         components : `bool`, optional
-            If `True`, apply all dataset expression patterns to component
-            dataset type names as well.  If `False`, never apply patterns to
-            components.  If `None`, apply patterns to components only
-            if their parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -1351,7 +1327,7 @@ class Registry(ABC):
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | None = False,
+        components: bool = False,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -1384,12 +1360,8 @@ class Registry(ABC):
             `queryDataIds` and :ref:`daf_butler_dimension_expressions` for more
             information.
         components : `bool`, optional
-            Whether to apply dataset expressions to components as well.
-            See `queryDataIds` for more information.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.

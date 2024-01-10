@@ -29,20 +29,17 @@ from __future__ import annotations
 __all__ = (
     "CategorizedWildcard",
     "CollectionWildcard",
-    "CollectionSearch",
     "DatasetTypeWildcard",
 )
 
 import contextlib
 import dataclasses
 import re
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from types import EllipsisType
 from typing import Any
 
-from deprecated.sphinx import deprecated
 from lsst.utils.iteration import ensure_iterable
-from pydantic import RootModel
 
 from .._dataset_type import DatasetType
 from ..utils import globToRegex
@@ -263,110 +260,6 @@ class CategorizedWildcard:
     """Two-item tuples that relate string values to other objects
     (`list` [ `tuple` [ `str`, `Any` ] ]).
     """
-
-
-class _CollectionSearch(RootModel):
-    root: tuple[str, ...]
-
-
-@deprecated(
-    reason="Tuples of string collection names are now preferred.  Will be removed after v26.",
-    version="v25.0",
-    category=FutureWarning,
-)
-class CollectionSearch(_CollectionSearch):
-    """An ordered search path of collections.
-
-    The `fromExpression` method should almost always be used to construct
-    instances, as the regular constructor performs no checking of inputs (and
-    that can lead to confusing error messages downstream).
-
-    Notes
-    -----
-    A `CollectionSearch` is used to find a single dataset (or set of datasets
-    with different dataset types or data IDs) according to its dataset type and
-    data ID, giving preference to collections in the order in which they are
-    specified.  A `CollectionWildcard` can be constructed from a broader range
-    of expressions but does not order the collections to be searched.
-
-    `CollectionSearch` is an immutable sequence of `str` collection names.
-
-    A `CollectionSearch` instance constructed properly (e.g. via
-    `fromExpression`) is a unique representation of a particular search path;
-    it is exactly the same internally and compares as equal to any
-    `CollectionSearch` constructed from an equivalent expression, regardless of
-    how different the original expressions appear.
-    """
-
-    @classmethod
-    def fromExpression(cls, expression: Any) -> CollectionSearch:
-        """Process a general expression to construct a `CollectionSearch`
-        instance.
-
-        Parameters
-        ----------
-        expression : `~typing.Any`
-            May be:
-
-            - a `str` collection name;
-            - an iterable of `str` collection names;
-            - another `CollectionSearch` instance (passed through unchanged).
-
-            Duplicate entries will be removed (preserving the first appearance
-            of each collection name).
-
-        Returns
-        -------
-        collections : `CollectionSearch`
-            A `CollectionSearch` instance.
-        """
-        # First see if this is already a CollectionSearch; just pass that
-        # through unchanged.  This lets us standardize expressions (and turn
-        # single-pass iterators into multi-pass iterables) in advance and pass
-        # them down to other routines that accept arbitrary expressions.
-        if isinstance(expression, cls):
-            return expression
-        try:
-            wildcard = CategorizedWildcard.fromExpression(
-                expression,
-                allowAny=False,
-                allowPatterns=False,
-            )
-        except TypeError as err:
-            raise CollectionExpressionError(str(err)) from None
-        assert wildcard is not ...
-        assert not wildcard.patterns
-        assert not wildcard.items
-        deduplicated = []
-        for name in wildcard.strings:
-            if name not in deduplicated:
-                deduplicated.append(name)
-        model = cls(tuple(deduplicated))
-        return model
-
-    def explicitNames(self) -> Iterator[str]:
-        """Iterate over collection names that were specified explicitly."""
-        yield from self.root
-
-    def __iter__(self) -> Iterator[str]:  # type: ignore
-        yield from self.root
-
-    def __len__(self) -> int:
-        return len(self.root)
-
-    def __getitem__(self, index: Any) -> str:
-        return self.root[index]
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, CollectionSearch):
-            return self.root == other.root
-        return False
-
-    def __str__(self) -> str:
-        return "[{}]".format(", ".join(self))
-
-    def __repr__(self) -> str:
-        return f"CollectionSearch({self.root!r})"
 
 
 @dataclasses.dataclass(frozen=True)

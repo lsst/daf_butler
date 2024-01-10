@@ -33,7 +33,6 @@ from ._defaults import *
 from ._exceptions import *
 from ._registry import *
 from ._registry_factory import *
-from .wildcards import CollectionSearch
 
 # Some modules intentionally not imported, either because they are purely
 # internal (e.g. nameShrinker.py) or they contain implementations that are

@@ -46,7 +46,7 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict(repo=None, verbose=False, glob=(), components=False)
+        return dict(repo=None, verbose=False, glob=())
 
     @staticmethod
     def command():
@@ -63,12 +63,12 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
     def test_all(self):
         """Test all parameters."""
         self.run_test(
-            ["query-dataset-types", "here", "--verbose", "foo*", "--components"],
-            self.makeExpected(repo="here", verbose=True, glob=("foo*",), components=True),
+            ["query-dataset-types", "here", "--verbose", "foo*"],
+            self.makeExpected(repo="here", verbose=True, glob=("foo*",)),
         )
         self.run_test(
-            ["query-dataset-types", "here", "--verbose", "foo*", "--no-components"],
-            self.makeExpected(repo="here", verbose=True, glob=("foo*",), components=False),
+            ["query-dataset-types", "here", "--verbose", "foo*"],
+            self.makeExpected(repo="here", verbose=True, glob=("foo*",)),
         )
 
 

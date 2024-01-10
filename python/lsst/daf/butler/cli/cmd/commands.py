@@ -442,6 +442,11 @@ def query_collections(*args: Any, **kwargs: Any) -> None:
 @options_file_option()
 def query_dataset_types(*args: Any, **kwargs: Any) -> None:
     """Get the dataset types in a repository."""
+    # Drop the components option.
+    components = kwargs.pop("components")
+    if components is not None:
+        comp_opt_str = "" if components else "no-"
+        click.echo(f"WARNING: --{comp_opt_str}components option is deprecated and will be removed after v27.")
     table = script.queryDatasetTypes(*args, **kwargs)
     if table:
         table.pprint_all()

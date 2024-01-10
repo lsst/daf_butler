@@ -75,6 +75,7 @@ from ..registry import (
     DatasetTypeError,
     DimensionNameError,
     InconsistentDataIdError,
+    MissingDatasetTypeError,
     NoDefaultCollectionError,
     OrphanedRecordError,
     RegistryConfig,
@@ -85,7 +86,7 @@ from ..registry import (
 from ..registry.interfaces import ChainedCollectionRecord, ReadOnlyDatabaseError, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
-from ..utils import transactional
+from ..utils import _DefaultMarker, _Marker, transactional
 
 if TYPE_CHECKING:
     from .._butler_config import ButlerConfig
@@ -905,25 +906,17 @@ class SqlRegistry:
             if collection_wildcard.empty():
                 return None
             matched_collections = backend.resolve_collection_wildcard(collection_wildcard)
-            parent_dataset_type, components = backend.resolve_single_dataset_type_wildcard(
-                datasetType, components_deprecated=False
-            )
-            if len(components) > 1:
-                raise DatasetTypeError(
-                    f"findDataset requires exactly one dataset type; got multiple components {components} "
-                    f"for parent dataset type {parent_dataset_type.name}."
-                )
-            component = components[0]
+            resolved_dataset_type = backend.resolve_single_dataset_type_wildcard(datasetType)
             dataId = DataCoordinate.standardize(
                 dataId,
-                dimensions=parent_dataset_type.dimensions,
+                dimensions=resolved_dataset_type.dimensions,
                 universe=self.dimensions,
                 defaults=self.defaults.dataId,
                 **kwargs,
             )
             governor_constraints = {name: {cast(str, dataId[name])} for name in dataId.dimensions.governors}
             (filtered_collections,) = backend.filter_dataset_collections(
-                [parent_dataset_type],
+                [resolved_dataset_type],
                 matched_collections,
                 governor_constraints=governor_constraints,
             ).values()
@@ -939,17 +932,17 @@ class SqlRegistry:
                 requested_columns = {"dataset_id", "run", "collection"}
                 with backend.context() as context:
                     predicate = context.make_data_coordinate_predicate(
-                        dataId.subset(parent_dataset_type.dimensions), full=False
+                        dataId.subset(resolved_dataset_type.dimensions), full=False
                     )
                     if timespan is not None:
                         requested_columns.add("timespan")
                         predicate = predicate.logical_and(
                             context.make_timespan_overlap_predicate(
-                                DatasetColumnTag(parent_dataset_type.name, "timespan"), timespan
+                                DatasetColumnTag(resolved_dataset_type.name, "timespan"), timespan
                             )
                         )
                     relation = backend.make_dataset_query_relation(
-                        parent_dataset_type, filtered_collections, requested_columns, context
+                        resolved_dataset_type, filtered_collections, requested_columns, context
                     ).with_rows_satisfying(predicate)
                     rows = list(context.fetch_iterable(relation))
             else:
@@ -960,7 +953,7 @@ class SqlRegistry:
                 best_row = rows[0]
             else:
                 rank_by_collection_key = {record.key: n for n, record in enumerate(filtered_collections)}
-                collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
+                collection_tag = DatasetColumnTag(resolved_dataset_type.name, "collection")
                 row_iter = iter(rows)
                 best_row = next(row_iter)
                 best_rank = rank_by_collection_key[best_row[collection_tag]]
@@ -975,16 +968,14 @@ class SqlRegistry:
                         assert timespan is not None, "Rank ties should be impossible given DB constraints."
                 if have_tie:
                     raise LookupError(
-                        f"Ambiguous calibration lookup for {parent_dataset_type.name} in collections "
+                        f"Ambiguous calibration lookup for {resolved_dataset_type.name} in collections "
                         f"{collection_wildcard.strings} with timespan {timespan}."
                     )
             reader = queries.DatasetRefReader(
-                parent_dataset_type,
+                resolved_dataset_type,
                 translate_collection=lambda k: self._managers.collections[k].name,
             )
             ref = reader.read(best_row, data_id=dataId)
-            if component is not None:
-                ref = ref.makeComponentRef(component)
             if datastore_records:
                 ref = self.get_datastore_records(ref)
 
@@ -1713,7 +1704,7 @@ class SqlRegistry:
         self,
         expression: Any = ...,
         *,
-        components: bool | None = False,
+        components: bool | _Marker = _DefaultMarker,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
@@ -1727,16 +1718,8 @@ class SqlRegistry:
             default. See :ref:`daf_butler_dataset_type_expressions` for more
             information.
         components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.
-            If `None`, apply patterns to components only if their
-            parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
         missing : `list` of `str`, optional
             String dataset type names that were explicitly given (i.e. not
             regular expression patterns) but not found will be appended to this
@@ -1753,19 +1736,20 @@ class SqlRegistry:
         lsst.daf.butler.registry.DatasetTypeExpressionError
             Raised when ``expression`` is invalid.
         """
+        if components is not _DefaultMarker:
+            if components is not False:
+                raise DatasetTypeError(
+                    "Dataset component queries are no longer supported by Registry.  Use "
+                    "DatasetType methods to obtain components from parent dataset types instead."
+                )
+            else:
+                warnings.warn(
+                    "The components parameter is ignored. It will be removed after v27.",
+                    category=FutureWarning,
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+                )
         wildcard = DatasetTypeWildcard.from_expression(expression)
-        composition_dict = self._managers.datasets.resolve_wildcard(
-            wildcard,
-            components=components,
-            missing=missing,
-        )
-        result: list[DatasetType] = []
-        for parent_dataset_type, components_for_parent in composition_dict.items():
-            result.extend(
-                parent_dataset_type.makeComponentDatasetType(c) if c is not None else parent_dataset_type
-                for c in components_for_parent
-            )
-        return result
+        return self._managers.datasets.resolve_wildcard(wildcard, missing=missing)
 
     def queryCollections(
         self,
@@ -1914,11 +1898,10 @@ class SqlRegistry:
         self,
         datasets: Any,
         collections: CollectionArgType | None,
-        components: bool | None,
         mode: Literal["find_first"] | Literal["find_all"] | Literal["constrain"] = "constrain",
         *,
         doomed_by: list[str],
-    ) -> tuple[dict[DatasetType, list[str | None]], CollectionWildcard | None]:
+    ) -> tuple[list[DatasetType], CollectionWildcard | None]:
         """Preprocess dataset arguments passed to query* methods.
 
         Parameters
@@ -1929,17 +1912,6 @@ class SqlRegistry:
         collections : `str`, `re.Pattern`, or iterable of these
             Expression identifying collections to be searched.  See
             `queryCollections` for details.
-        components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.
-            If `None` (default), apply patterns to components only if their
-            parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
         mode : `str`, optional
             The way in which datasets are being used in this query; one of:
 
@@ -1960,13 +1932,12 @@ class SqlRegistry:
 
         Returns
         -------
-        composition : `defaultdict` [ `DatasetType`, `list` [ `str` ] ]
-            Dictionary mapping parent dataset type to `list` of components
-            matched for that dataset type (or `None` for the parent itself).
+        dataset_types : `list` [ `DatasetType` ]
+            List of matched dataset types.
         collections : `CollectionWildcard`
             Processed collection expression.
         """
-        composition: dict[DatasetType, list[str | None]] = {}
+        dataset_types: list[DatasetType] = []
         collection_wildcard: CollectionWildcard | None = None
         if datasets is not None:
             if collections is None:
@@ -1980,23 +1951,19 @@ class SqlRegistry:
                         f"Collection pattern(s) {collection_wildcard.patterns} not allowed in this context."
                     )
             missing: list[str] = []
-            composition = self._managers.datasets.resolve_wildcard(
-                datasets, components=components, missing=missing, explicit_only=(mode == "constrain")
+            dataset_types = self._managers.datasets.resolve_wildcard(
+                datasets, missing=missing, explicit_only=(mode == "constrain")
             )
             if missing and mode == "constrain":
-                # After v26 this should raise MissingDatasetTypeError, to be
-                # implemented on DM-36303.
-                warnings.warn(
-                    f"Dataset type(s) {missing} are not registered; this will be an error after v26.",
-                    FutureWarning,
-                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+                raise MissingDatasetTypeError(
+                    f"Dataset type(s) {missing} are not registered.",
                 )
             doomed_by.extend(f"Dataset type {name} is not registered." for name in missing)
         elif collections:
             # I think this check should actually be `collections is not None`,
             # but it looks like some CLI scripts use empty tuple as default.
             raise ArgumentError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
-        return composition, collection_wildcard
+        return dataset_types, collection_wildcard
 
     def queryDatasets(
         self,
@@ -2007,7 +1974,7 @@ class SqlRegistry:
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
-        components: bool | None = False,
+        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -2053,16 +2020,8 @@ class SqlRegistry:
             ``collections`` must not contain regular expressions and may not
             be ``...``.
         components : `bool`, optional
-            If `True`, apply all dataset expression patterns to component
-            dataset type names as well.  If `False`, never apply patterns to
-            components.  If `None`, apply patterns to components only
-            if their parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -2117,12 +2076,23 @@ class SqlRegistry:
         query), and then use multiple (generally much simpler) calls to
         `queryDatasets` with the returned data IDs passed as constraints.
         """
+        if components is not _DefaultMarker:
+            if components is not False:
+                raise DatasetTypeError(
+                    "Dataset component queries are no longer supported by Registry.  Use "
+                    "DatasetType methods to obtain components from parent dataset types instead."
+                )
+            else:
+                warnings.warn(
+                    "The components parameter is ignored. It will be removed after v27.",
+                    category=FutureWarning,
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+                )
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
-        dataset_composition, collection_wildcard = self._standardize_query_dataset_args(
+        resolved_dataset_types, collection_wildcard = self._standardize_query_dataset_args(
             datasetType,
             collections,
-            components,
             mode="find_first" if findFirst else "find_all",
             doomed_by=doomed_by,
         )
@@ -2130,11 +2100,11 @@ class SqlRegistry:
             doomed_by.append("No datasets can be found because collection list is empty.")
             return queries.ChainedDatasetQueryResults([], doomed_by=doomed_by)
         parent_results: list[queries.ParentDatasetQueryResults] = []
-        for parent_dataset_type, components_for_parent in dataset_composition.items():
+        for resolved_dataset_type in resolved_dataset_types:
             # The full set of dimensions in the query is the combination of
             # those needed for the DatasetType and those explicitly requested,
             # if any.
-            dimension_names = set(parent_dataset_type.dimensions.names)
+            dimension_names = set(resolved_dataset_type.dimensions.names)
             if dimensions is not None:
                 dimension_names.update(self.dimensions.conform(dimensions).names)
             # Construct the summary structure needed to construct a
@@ -2147,7 +2117,7 @@ class SqlRegistry:
                 bind=bind,
                 defaults=self.defaults.dataId,
                 check=check,
-                datasets=[parent_dataset_type],
+                datasets=[resolved_dataset_type],
             )
             builder = self._makeQueryBuilder(summary)
             # Add the dataset subquery to the query, telling the QueryBuilder
@@ -2155,12 +2125,12 @@ class SqlRegistry:
             # only if we need to findFirst.  Note that if any of the
             # collections are actually wildcard expressions, and
             # findFirst=True, this will raise TypeError for us.
-            builder.joinDataset(parent_dataset_type, collection_wildcard, isResult=True, findFirst=findFirst)
+            builder.joinDataset(
+                resolved_dataset_type, collection_wildcard, isResult=True, findFirst=findFirst
+            )
             query = builder.finish()
             parent_results.append(
-                queries.ParentDatasetQueryResults(
-                    query, parent_dataset_type, components=components_for_parent
-                )
+                queries.ParentDatasetQueryResults(query, resolved_dataset_type, components=[None])
             )
         if not parent_results:
             doomed_by.extend(
@@ -2183,7 +2153,7 @@ class SqlRegistry:
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | None = None,
+        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -2228,16 +2198,8 @@ class SqlRegistry:
             key column of a dimension table) dimension name.  See
             :ref:`daf_butler_dimension_expressions` for more information.
         components : `bool`, optional
-            If `True`, apply all dataset expression patterns to component
-            dataset type names as well.  If `False`, never apply patterns to
-            components.  If `None`, apply patterns to components only
-            if their parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -2284,11 +2246,23 @@ class SqlRegistry:
         lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
         """
+        if components is not _DefaultMarker:
+            if components is not False:
+                raise DatasetTypeError(
+                    "Dataset component queries are no longer supported by Registry.  Use "
+                    "DatasetType methods to obtain components from parent dataset types instead."
+                )
+            else:
+                warnings.warn(
+                    "The components parameter is ignored. It will be removed after v27.",
+                    category=FutureWarning,
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+                )
         requested_dimensions = self.dimensions.conform(dimensions)
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
-        dataset_composition, collection_wildcard = self._standardize_query_dataset_args(
-            datasets, collections, components, doomed_by=doomed_by
+        resolved_dataset_types, collection_wildcard = self._standardize_query_dataset_args(
+            datasets, collections, doomed_by=doomed_by
         )
         if collection_wildcard is not None and collection_wildcard.empty():
             doomed_by.append("No data coordinates can be found because collection list is empty.")
@@ -2300,10 +2274,10 @@ class SqlRegistry:
             bind=bind,
             defaults=self.defaults.dataId,
             check=check,
-            datasets=dataset_composition.keys(),
+            datasets=resolved_dataset_types,
         )
         builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
-        for datasetType in dataset_composition:
+        for datasetType in resolved_dataset_types:
             builder.joinDataset(datasetType, collection_wildcard, isResult=False)
         query = builder.finish()
 
@@ -2317,7 +2291,7 @@ class SqlRegistry:
         datasets: Any = None,
         collections: CollectionArgType | None = None,
         where: str = "",
-        components: bool | None = None,
+        components: bool | _Marker = _DefaultMarker,
         bind: Mapping[str, Any] | None = None,
         check: bool = True,
         **kwargs: Any,
@@ -2353,9 +2327,8 @@ class SqlRegistry:
             Whether to apply dataset expressions to components as well.
             See `queryDataIds` for more information.
 
-            Values other than `False` are deprecated, and only `False` will be
-            supported after v26.  After v27 this argument will be removed
-            entirely.
+            Must be `False`.  Provided only for backwards compatibility. After
+            v27 this argument will be removed entirely.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
             ``where`` expression, keyed by the identifiers they replace.
@@ -2393,6 +2366,18 @@ class SqlRegistry:
         lsst.daf.butler.registry.UserExpressionError
             Raised when ``where`` expression is invalid.
         """
+        if components is not _DefaultMarker:
+            if components is not False:
+                raise DatasetTypeError(
+                    "Dataset component queries are no longer supported by Registry.  Use "
+                    "DatasetType methods to obtain components from parent dataset types instead."
+                )
+            else:
+                warnings.warn(
+                    "The components parameter is ignored. It will be removed after v27.",
+                    category=FutureWarning,
+                    stacklevel=find_outside_stacklevel("lsst.daf.butler"),
+                )
         if not isinstance(element, DimensionElement):
             try:
                 element = self.dimensions[element]
@@ -2402,8 +2387,8 @@ class SqlRegistry:
                 ) from e
         doomed_by: list[str] = []
         data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
-        dataset_composition, collection_wildcard = self._standardize_query_dataset_args(
-            datasets, collections, components, doomed_by=doomed_by
+        resolved_dataset_types, collection_wildcard = self._standardize_query_dataset_args(
+            datasets, collections, doomed_by=doomed_by
         )
         if collection_wildcard is not None and collection_wildcard.empty():
             doomed_by.append("No dimension records can be found because collection list is empty.")
@@ -2415,10 +2400,10 @@ class SqlRegistry:
             bind=bind,
             defaults=self.defaults.dataId,
             check=check,
-            datasets=dataset_composition.keys(),
+            datasets=resolved_dataset_types,
         )
         builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
-        for datasetType in dataset_composition:
+        for datasetType in resolved_dataset_types:
             builder.joinDataset(datasetType, collection_wildcard, isResult=False)
         query = builder.finish().with_record_columns(element.name)
         return queries.DatabaseDimensionRecordQueryResults(query, element)
@@ -2482,7 +2467,7 @@ class SqlRegistry:
             collections = self.defaults.collections
         collection_wildcard = CollectionWildcard.from_expression(collections)
         backend = queries.SqlQueryBackend(self._db, self._managers, self.dimension_record_cache)
-        parent_dataset_type, _ = backend.resolve_single_dataset_type_wildcard(datasetType, components=False)
+        parent_dataset_type = backend.resolve_single_dataset_type_wildcard(datasetType)
         timespan_tag = DatasetColumnTag(parent_dataset_type.name, "timespan")
         collection_tag = DatasetColumnTag(parent_dataset_type.name, "collection")
         for parent_collection_record in backend.resolve_collection_wildcard(
