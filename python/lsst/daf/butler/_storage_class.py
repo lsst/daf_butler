@@ -35,17 +35,8 @@ import builtins
 import itertools
 import logging
 from collections import ChainMap
-from collections.abc import (
-    Callable,
-    Collection,
-    ItemsView,
-    Iterator,
-    KeysView,
-    Mapping,
-    Sequence,
-    Set,
-    ValuesView,
-)
+from collections.abc import Callable, Collection, Mapping, Sequence, Set
+from threading import RLock
 from typing import Any
 
 from lsst.utils import doImportType
@@ -641,6 +632,7 @@ class StorageClassFactory(metaclass=Singleton):
     def __init__(self, config: StorageClassConfig | str | None = None):
         self._storageClasses: dict[str, StorageClass] = {}
         self._configs: list[StorageClassConfig] = []
+        self._lock = RLock()
 
         # Always seed with the default config
         self.addFromConfig(StorageClassConfig())
@@ -656,8 +648,9 @@ class StorageClassFactory(metaclass=Singleton):
         summary : `str`
             Summary of the factory status.
         """
-        sep = "\n"
-        return f"""Number of registered StorageClasses: {len(self._storageClasses)}
+        with self._lock:
+            sep = "\n"
+            return f"""Number of registered StorageClasses: {len(self._storageClasses)}
 
 StorageClasses
 --------------
@@ -687,26 +680,15 @@ StorageClasses
         StorageClass.name to be in the factory but StorageClass to not be
         in the factory.
         """
-        if isinstance(storageClassOrName, str):
-            return storageClassOrName in self._storageClasses
-        elif isinstance(storageClassOrName, StorageClass) and storageClassOrName.name in self._storageClasses:
-            return storageClassOrName == self._storageClasses[storageClassOrName.name]
-        return False
-
-    def __len__(self) -> int:
-        return len(self._storageClasses)
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._storageClasses)
-
-    def values(self) -> ValuesView[StorageClass]:
-        return self._storageClasses.values()
-
-    def keys(self) -> KeysView[str]:
-        return self._storageClasses.keys()
-
-    def items(self) -> ItemsView[str, StorageClass]:
-        return self._storageClasses.items()
+        with self._lock:
+            if isinstance(storageClassOrName, str):
+                return storageClassOrName in self._storageClasses
+            elif (
+                isinstance(storageClassOrName, StorageClass)
+                and storageClassOrName.name in self._storageClasses
+            ):
+                return storageClassOrName == self._storageClasses[storageClassOrName.name]
+            return False
 
     def addFromConfig(self, config: StorageClassConfig | Config | str) -> None:
         """Add more `StorageClass` definitions from a config file.
@@ -718,7 +700,6 @@ StorageClasses
             key if part of a global configuration.
         """
         sconfig = StorageClassConfig(config)
-        self._configs.append(sconfig)
 
         # Since we can not assume that we will get definitions of
         # components or parents before their classes are defined
@@ -793,8 +774,10 @@ StorageClasses
         context = f"when adding definitions from {', '.join(files)}" if files else ""
         log.debug("Adding definitions from config %s", ", ".join(files))
 
-        for name in list(sconfig.keys()):
-            processStorageClass(name, sconfig, context)
+        with self._lock:
+            self._configs.append(sconfig)
+            for name in list(sconfig.keys()):
+                processStorageClass(name, sconfig, context)
 
     @staticmethod
     def makeNewStorageClass(
@@ -872,7 +855,8 @@ StorageClasses
         KeyError
             The requested storage class name is not registered.
         """
-        return self._storageClasses[storageClassName]
+        with self._lock:
+            return self._storageClasses[storageClassName]
 
     def findStorageClass(self, pytype: type, compare_types: bool = False) -> StorageClass:
         """Find the storage class associated with this python type.
@@ -903,18 +887,21 @@ StorageClasses
         storage classes. This method will currently return the first that
         matches.
         """
-        result = self._find_storage_class(pytype, False)
-        if result:
-            return result
-
-        if compare_types:
-            # The fast comparison failed and we were asked to try the
-            # variant that might involve code imports.
-            result = self._find_storage_class(pytype, True)
+        with self._lock:
+            result = self._find_storage_class(pytype, False)
             if result:
                 return result
 
-        raise KeyError(f"Unable to find a StorageClass associated with type {get_full_type_name(pytype)!r}")
+            if compare_types:
+                # The fast comparison failed and we were asked to try the
+                # variant that might involve code imports.
+                result = self._find_storage_class(pytype, True)
+                if result:
+                    return result
+
+            raise KeyError(
+                f"Unable to find a StorageClass associated with type {get_full_type_name(pytype)!r}"
+            )
 
     def _find_storage_class(self, pytype: type, compare_types: bool) -> StorageClass | None:
         """Iterate through all storage classes to find a match.
@@ -936,10 +923,11 @@ StorageClasses
         -----
         Helper method for ``findStorageClass``.
         """
-        for storageClass in self.values():
-            if storageClass.is_type(pytype, compare_types=compare_types):
-                return storageClass
-        return None
+        with self._lock:
+            for storageClass in self._storageClasses.values():
+                if storageClass.is_type(pytype, compare_types=compare_types):
+                    return storageClass
+            return None
 
     def registerStorageClass(self, storageClass: StorageClass, msg: str | None = None) -> None:
         """Store the `StorageClass` in the factory.
@@ -960,19 +948,20 @@ StorageClasses
             If a storage class has already been registered with
             that storage class name and the previous definition differs.
         """
-        if storageClass.name in self._storageClasses:
-            existing = self.getStorageClass(storageClass.name)
-            if existing != storageClass:
-                errmsg = f" {msg}" if msg else ""
-                raise ValueError(
-                    f"New definition for StorageClass {storageClass.name} ({storageClass!r}) "
-                    f"differs from current definition ({existing!r}){errmsg}"
-                )
-            if type(existing) is StorageClass and type(storageClass) is not StorageClass:
-                # Replace generic with specialist subclass equivalent.
+        with self._lock:
+            if storageClass.name in self._storageClasses:
+                existing = self.getStorageClass(storageClass.name)
+                if existing != storageClass:
+                    errmsg = f" {msg}" if msg else ""
+                    raise ValueError(
+                        f"New definition for StorageClass {storageClass.name} ({storageClass!r}) "
+                        f"differs from current definition ({existing!r}){errmsg}"
+                    )
+                if type(existing) is StorageClass and type(storageClass) is not StorageClass:
+                    # Replace generic with specialist subclass equivalent.
+                    self._storageClasses[storageClass.name] = storageClass
+            else:
                 self._storageClasses[storageClass.name] = storageClass
-        else:
-            self._storageClasses[storageClass.name] = storageClass
 
     def _unregisterStorageClass(self, storageClassName: str) -> None:
         """Remove the named StorageClass from the factory.
@@ -992,7 +981,8 @@ StorageClasses
         This method is intended to simplify testing of StorageClassFactory
         functionality and it is not expected to be required for normal usage.
         """
-        del self._storageClasses[storageClassName]
+        with self._lock:
+            del self._storageClasses[storageClassName]
 
     def reset(self) -> None:
         """Remove all storage class entries from factory and reset to
@@ -1000,6 +990,7 @@ StorageClasses
 
         This is useful for test code where a known start state is useful.
         """
-        self._storageClasses.clear()
-        # Seed with the default config.
-        self.addFromConfig(StorageClassConfig())
+        with self._lock:
+            self._storageClasses.clear()
+            # Seed with the default config.
+            self.addFromConfig(StorageClassConfig())
