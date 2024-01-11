@@ -49,7 +49,12 @@ class Location:
 
     __slots__ = ("_datastoreRootUri", "_path", "_uri")
 
-    def __init__(self, datastoreRootUri: None | ResourcePathExpression, path: ResourcePathExpression):
+    def __init__(
+        self,
+        datastoreRootUri: None | ResourcePathExpression,
+        path: ResourcePathExpression,
+        _trusted_path: bool = False,
+    ):
         # Be careful not to force a relative local path to absolute path
         path_uri = ResourcePath(path, forceAbsolute=False)
 
@@ -78,7 +83,7 @@ class Location:
 
         # Check that the resulting URI is inside the datastore
         # This can go wrong if we were given ../dir as path
-        if self._datastoreRootUri is not None:
+        if self._datastoreRootUri is not None and not _trusted_path:
             pathInStore = self.uri.relative_to(self._datastoreRootUri)
             if pathInStore is None:
                 raise ValueError(f"Unexpectedly {path} jumps out of {self._datastoreRootUri}")
@@ -209,7 +214,7 @@ class LocationFactory:
         """Return the network location of root location of the `Datastore`."""
         return self._datastoreRootUri.netloc
 
-    def fromPath(self, path: ResourcePathExpression) -> Location:
+    def fromPath(self, path: ResourcePathExpression, _trusted_path: bool = False) -> Location:
         """Create a `Location` from a POSIX path.
 
         Parameters
@@ -224,6 +229,9 @@ class LocationFactory:
             The equivalent `Location`.
         """
         path = ResourcePath(path, forceAbsolute=False)
-        if path.isabs():
+        return self.from_uri(path, _trusted_path=_trusted_path)
+
+    def from_uri(self, uri: ResourcePath, _trusted_path: bool = False) -> Location:
+        if uri.isabs():
             raise ValueError("LocationFactory path must be relative to datastore, not absolute.")
-        return Location(self._datastoreRootUri, path)
+        return Location(self._datastoreRootUri, uri, _trusted_path=_trusted_path)

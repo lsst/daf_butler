@@ -832,7 +832,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # dataIds returning the same and causing overwrite confusion.
         template.validateTemplate(ref)
 
-        location = self.locationFactory.fromPath(template.format(ref))
+        location = self.locationFactory.fromPath(template.format(ref), _trusted_path=True)
 
         # Get the formatter based on the storage class
         storageClass = ref.datasetType.storageClass
@@ -1026,7 +1026,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # A relative path is assumed to be relative to the datastore
             # in this context
             if not srcUri.isabs():
-                tgtLocation = self.locationFactory.fromPath(srcUri.ospath)
+                tgtLocation = self.locationFactory.fromPath(srcUri.ospath, _trusted_path=False)
             else:
                 # Work out the path in the datastore from an absolute URI
                 # This is required to be within the datastore.
@@ -1036,7 +1036,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                         f"Unexpectedly learned that {srcUri} is not within datastore {self.root}"
                     )
                 if pathInStore:
-                    tgtLocation = self.locationFactory.fromPath(pathInStore)
+                    tgtLocation = self.locationFactory.fromPath(pathInStore, _trusted_path=True)
                 elif transfer == "split":
                     # Outside the datastore but treat that as a direct ingest
                     # instead.
@@ -1194,7 +1194,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # Ingesting a file from outside the datastore.
         # This involves a new name.
         template = self.templates.getTemplate(ref)
-        location = self.locationFactory.fromPath(template.format(ref))
+        location = self.locationFactory.fromPath(template.format(ref), _trusted_path=True)
 
         # Get the extension
         ext = srcUri.getExtension()
