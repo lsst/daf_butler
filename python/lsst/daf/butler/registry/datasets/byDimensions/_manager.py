@@ -307,8 +307,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                     self._fetch_dataset_types()
                     # Try again
                     _, storage = self._caching_context.dataset_types.get(name)
-                if self._caching_context.dataset_types.full:
-                    # If not in cache then dataset type is not defined.
+                if storage is not None:
                     return storage
         record = self._fetch_dataset_type_record(name)
         if record is not None:
