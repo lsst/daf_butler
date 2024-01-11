@@ -147,7 +147,16 @@ class LabeledButlerFactory:
 
 
 def _create_direct_butler_factory(config: ButlerConfig) -> _FactoryFunction:
+    import lsst.daf.butler.direct_butler
+
+    # Create a 'template' Butler that will be cloned when callers request an
+    # instance.
     butler = Butler.from_config(config)
+    assert isinstance(butler, lsst.daf.butler.direct_butler.DirectButler)
+
+    # Load caches so that data is available in cloned instances without
+    # needing to refetch it from the database for every instance.
+    butler._preload_cache()
 
     def create_butler(access_token: str | None) -> Butler:
         # Access token is ignored because DirectButler does not use Gafaelfawr
