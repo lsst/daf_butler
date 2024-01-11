@@ -237,7 +237,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         return DirectButler(
             registry=registry,
             config=self._config,
-            datastore=self._datastore.clone(registry.getDatastoreBridgeManager()),
+            datastore=self._datastore,
             storageClasses=self.storageClasses,
         )
 

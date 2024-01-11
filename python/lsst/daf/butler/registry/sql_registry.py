@@ -294,10 +294,8 @@ class SqlRegistry:
             # No need to copy, because `RegistryDefaults` is immutable; we
             # effectively copy on write.
             defaults = self.defaults
-        db = self._db.clone()
-        result = SqlRegistry(db, defaults, self._managers.clone(db))
-        result._datastore_record_classes = dict(self._datastore_record_classes)
-        result.dimension_record_cache.load_from(self.dimension_record_cache)
+        result = SqlRegistry(self._db, defaults, self._managers)
+        result.dimension_record_cache = self.dimension_record_cache
         return result
 
     @property
