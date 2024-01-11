@@ -1,0 +1,5 @@
+The ``Datastore`` base class was changed so that subclasses are no longer
+required to have the same constructor parameters as the base class.  Subclasses
+are now required to implement ``_create_from_config`` for creating an instance
+from the ``Datastore.fromConfig`` static method, and ``clone`` for creating a
+copy of an existing instance.
