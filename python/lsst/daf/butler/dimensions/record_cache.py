@@ -137,6 +137,12 @@ class DimensionRecordCache(Mapping[str, DimensionRecordSet]):
         """
         self._records = copy.deepcopy(other._records)
 
+    def preload_cache(self) -> None:
+        """Fetch the cache from the DB if it has not already been fetched."""
+        if self._records is None:
+            self._records = self._fetch()
+            assert self._records.keys() == set(self._keys), "Logic bug in fetch callback."
+
     def __contains__(self, key: object) -> bool:
         if not isinstance(key, str):
             return False
@@ -145,9 +151,8 @@ class DimensionRecordCache(Mapping[str, DimensionRecordSet]):
         return False
 
     def __getitem__(self, element: str) -> DimensionRecordSet:
-        if self._records is None:
-            self._records = self._fetch()
-            assert self._records.keys() == set(self._keys), "Logic bug in fetch callback."
+        self.preload_cache()
+        assert self._records is not None
         return self._records[element]
 
     def __iter__(self) -> Iterator[str]:
