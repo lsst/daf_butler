@@ -31,10 +31,11 @@ __all__ = ("DirectQueryDriver",)
 
 from collections.abc import Iterable, Mapping, Set
 from types import EllipsisType
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Any, cast, overload
 
 import sqlalchemy
 
+from .. import ddl
 from .._dataset_type import DatasetType
 from ..dimensions import DataIdValue, DimensionElement, DimensionGroup, DimensionUniverse
 from ..queries import relation_tree as rt
@@ -47,6 +48,7 @@ from ..registry.managers import RegistryManagerInstances
 
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
+    from ..timespan_database_representation import TimespanDatabaseRepresentation
     from ._postprocessing import Postprocessing
     from ._sql_builder import EmptySqlBuilder, SqlBuilder
 
@@ -185,7 +187,7 @@ class DirectQueryDriver(QueryDriver):
                 sql_select, postprocessing = sql_builder.sql_select(
                     columns_to_select,
                     postprocessing,
-                    order_by=order_by,
+                    order_by=[self._build_sql_order_by_expression(sql_builder, term) for term in order_by],
                     limit=limit,
                     offset=offset,
                 )
@@ -206,7 +208,7 @@ class DirectQueryDriver(QueryDriver):
                 sql_select, postprocessing = sql_builder.sql_select(
                     columns_to_select,
                     postprocessing,
-                    order_by=order_by,
+                    order_by=[self._build_sql_order_by_expression(sql_builder, term) for term in order_by],
                     limit=limit,
                     offset=offset,
                 )
@@ -219,8 +221,16 @@ class DirectQueryDriver(QueryDriver):
         tree: rt.Select,
         columns_required: Set[rt.ColumnReference],
     ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing]:
+        # Process spatial and temporal constraints and joins, creating a
+        # SqlBuilder that we'll use to make the SQL query we'll run, a
+        # Postprocessing object that describes any processing we have to do on
+        # the SQL query results in Python, and a rewritten WHERE predicate.
+        # That predicate is where we'll put any spatial or temporal join
+        # expressions that happen in SQL, since it's simplifies this code, and
+        # the DB should consider WHERE terms AND'd together equivalent to the
+        # JOIN ON clause.
         where_predicate, sql_builder, postprocessing = self._managers.dimensions.process_query_overlaps(
-            tree.where_predicate, [operand.dimensions for operand in tree.join_operands]
+            tree.dimensions, tree.where_predicate, [operand.dimensions for operand in tree.join_operands]
         )
         columns_required = set(columns_required)
         columns_required.update(where_predicate.gather_required_columns())
@@ -233,7 +243,7 @@ class DirectQueryDriver(QueryDriver):
         # From here down, 'columns_required' is no long authoritative.
         del columns_required
         # Process explicit join operands.  This also returns a set of dimension
-        # elements whose tables should be joined in in order to enforce
+        # elements whose tables should be joined in, in order to enforce
         # one-to-many or many-to-many relationships that should be part of this
         # query's dimensions but were not provided by any join operand.
         sql_builder, relationship_elements = self._process_join_operands(
@@ -248,8 +258,7 @@ class DirectQueryDriver(QueryDriver):
                 self._managers.dimensions.make_sql_builder(element, fields_for_element)
             )
         # See if any dimension keys are still missing, and if so join in their
-        # tables.  Note that we know there are no fields needed from these,
-        # and no temporal joins in play.
+        # tables.  Note that we know there are no fields needed from these.
         while not (sql_builder.dimensions_provided.keys() >= full_dimensions.names):
             # Look for opportunities to join in multiple dimensions at once.
             missing_dimension_names = full_dimensions.names - sql_builder.dimensions_provided.keys()
@@ -419,3 +428,97 @@ class DirectQueryDriver(QueryDriver):
                 case _:
                     raise AssertionError(f"Invalid join operand {join_operand}.")
         return sql_builder, relationship_elements
+
+    def _build_sql_order_by_expression(
+        self, sql_builder: SqlBuilder | EmptySqlBuilder, term: rt.OrderExpression
+    ) -> sqlalchemy.ColumnElement[Any]:
+        if term.expression_type == "reversed":
+            return cast(
+                sqlalchemy.ColumnElement[Any],
+                self._build_sql_column_expression(sql_builder, term.operand),
+            ).desc()
+        return cast(sqlalchemy.ColumnElement[Any], self._build_sql_column_expression(sql_builder, term))
+
+    def _build_sql_column_expression(
+        self, sql_builder: SqlBuilder | EmptySqlBuilder, expression: rt.ColumnExpression
+    ) -> sqlalchemy.ColumnElement[Any] | TimespanDatabaseRepresentation:
+        match expression:
+            case rt.TimespanColumnLiteral():
+                return self._timespan_db_repr.fromLiteral(expression.value)
+            case _ if expression.is_literal:
+                return sqlalchemy.sql.literal(
+                    cast(rt.ColumnLiteral, expression).value,
+                    type_=ddl.VALID_CONFIG_COLUMN_TYPES[expression.column_type],
+                )
+            case rt.DimensionKeyReference():
+                return sql_builder.dimensions_provided[expression.dimension.name][0]
+            case rt.DimensionFieldReference() | rt.DatasetFieldReference():
+                if expression.column_type == "timespan":
+                    return sql_builder.timespans_provided[expression]
+                else:
+                    return sql_builder.fields_provided[expression]
+            case rt.UnaryExpression():
+                operand = cast(
+                    sqlalchemy.ColumnElement[Any],
+                    self._build_sql_column_expression(sql_builder, expression.operand),
+                )
+                match expression.operator:
+                    case "-":
+                        return -operand
+                    case "begin_of":
+                        return operand.lower()
+                    case "end_of":
+                        return operand.upper()
+            case rt.BinaryExpression():
+                a = cast(
+                    sqlalchemy.ColumnElement[Any],
+                    self._build_sql_column_expression(sql_builder, expression.a),
+                )
+                b = cast(
+                    sqlalchemy.ColumnElement[Any],
+                    self._build_sql_column_expression(sql_builder, expression.b),
+                )
+                match expression.operator:
+                    case "+":
+                        return a + b
+                    case "-":
+                        return a - b
+                    case "*":
+                        return a * b
+                    case "/":
+                        return a / b
+                    case "%":
+                        return a % b
+        raise AssertionError(f"Unexpected column expression {expression}.")
+
+    def _build_sql_predicate(
+        self, sql_builder: SqlBuilder | EmptySqlBuilder, predicate: rt.Predicate
+    ) -> sqlalchemy.ColumnElement[bool]:
+        match predicate:
+            case rt.Comparison():
+                a: Any = self._build_sql_column_expression(sql_builder, predicate.a)
+                b: Any = self._build_sql_column_expression(sql_builder, predicate.b)
+                match predicate.operator:
+                    case "==":
+                        return a != (b)
+                    case "!=":
+                        return a != b
+                    case "overlaps":
+                        return a.overlaps(b)
+                    case "<":
+                        return a < b
+                    case ">":
+                        return a > b
+                    case ">=":
+                        return a >= b
+                    case "<=":
+                        return a <= b
+            case rt.IsNull():
+                operand: Any = self._build_sql_column_expression(sql_builder, predicate.operand)
+                if predicate.operand.column_type == "timespan":
+                    return operand.isNull()
+                else:
+                    return operand == sqlalchemy.null()
+            case _:
+                raise NotImplementedError("TODO")
+        raise AssertionError(f"Unexpected column predicate {predicate}.")

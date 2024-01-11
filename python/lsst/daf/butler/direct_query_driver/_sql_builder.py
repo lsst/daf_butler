@@ -32,7 +32,7 @@ __all__ = ("SqlBuilder", "EmptySqlBuilder")
 import dataclasses
 import itertools
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
@@ -102,7 +102,7 @@ class EmptySqlBuilder(_BaseSqlBuilder):
         postprocessing: Postprocessing,
         *,
         sql_columns_to_select: Iterable[sqlalchemy.ColumnElement] = (),
-        order_by: Iterable[rt.OrderExpression] = (),
+        order_by: Iterable[sqlalchemy.ColumnElement[Any]] = (),
         limit: int | None = None,
         offset: int = 0,
     ) -> tuple[sqlalchemy.Select, Postprocessing]:
@@ -120,9 +120,11 @@ class SqlBuilder(_BaseSqlBuilder):
     sql_from_clause: sqlalchemy.FromClause
     sql_where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
 
-    def extract_keys(self, dimensions: Iterable[str]) -> SqlBuilder:
+    def extract_keys(self, dimensions: Iterable[str], **kwargs: str) -> SqlBuilder:
         for dimension_name in dimensions:
             self.dimensions_provided[dimension_name] = [self.sql_from_clause.columns[dimension_name]]
+        for k, v in kwargs.items():
+            self.dimensions_provided[v] = [self.sql_from_clause.columns[k]]
         return self
 
     def extract_fields(
@@ -159,7 +161,7 @@ class SqlBuilder(_BaseSqlBuilder):
         postprocessing: Postprocessing,
         *,
         sql_columns_to_select: Iterable[sqlalchemy.ColumnElement] = (),
-        order_by: Iterable[rt.OrderExpression] = (),
+        order_by: Iterable[sqlalchemy.ColumnElement[Any]] = (),
         limit: int | None = None,
         offset: int = 0,
     ) -> tuple[sqlalchemy.Select, Postprocessing]:
@@ -178,9 +180,11 @@ class SqlBuilder(_BaseSqlBuilder):
         sql_columns.extend(sql_columns_to_select)
         self.handle_empty_columns(sql_columns)
         result = sqlalchemy.select(*sql_columns).select_from(self.sql_from_clause)
+        if self.sql_where_terms:
+            result = result.where(*self.sql_where_terms)
         # Add ORDER BY, LIMIT, and OFFSET clauses as appropriate.
         if order_by:
-            result = result.order_by(*[self.build_sql_order_by_expression(term) for term in order_by])
+            result = result.order_by(*order_by)
         if not postprocessing:
             if offset:
                 result = result.offset(offset)
@@ -193,14 +197,3 @@ class SqlBuilder(_BaseSqlBuilder):
     def where_sql(self, *arg: sqlalchemy.ColumnElement[bool]) -> SqlBuilder:
         self.sql_where_terms.extend(arg)
         return self
-
-    def build_sql_order_by_expression(self, term: rt.OrderExpression) -> sqlalchemy.ColumnElement:
-        if term.expression_type == "reversed":
-            return self.build_sql_column_expression(term.operand).desc()
-        return self.build_sql_column_expression(term)
-
-    def build_sql_column_expression(self, expression: rt.ColumnExpression) -> sqlalchemy.ColumnElement:
-        raise NotImplementedError("TODO")
-
-    def build_sql_predicate(self, predicate: rt.Predicate) -> sqlalchemy.ColumnElement:
-        raise NotImplementedError("TODO")

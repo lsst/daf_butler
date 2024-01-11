@@ -220,6 +220,14 @@ class Reversed(ColumnExpressionBase):
         return f"{self.operand} DESC"
 
 
+def _validate_order_expression(expression: _ColumnExpression | Reversed) -> _ColumnExpression | Reversed:
+    if expression.column_type not in ("int", "string", "float", "datetime"):
+        raise InvalidRelationError(f"Column type {expression.column_type} of {expression} is not ordered.")
+    return expression
+
+
 OrderExpression: TypeAlias = Annotated[
-    Union[_ColumnExpression, Reversed], pydantic.Field(discriminator="expression_type")
+    Union[_ColumnExpression, Reversed],
+    pydantic.Field(discriminator="expression_type"),
+    pydantic.AfterValidator(_validate_order_expression),
 ]

@@ -373,6 +373,7 @@ class DimensionRecordStorageManager(VersionedExtension):
     @abstractmethod
     def process_query_overlaps(
         self,
+        dimensions: DimensionGroup,
         predicate: Predicate,
         join_operands: Iterable[DimensionGroup],
     ) -> tuple[Predicate, EmptySqlBuilder | SqlBuilder, Postprocessing]:

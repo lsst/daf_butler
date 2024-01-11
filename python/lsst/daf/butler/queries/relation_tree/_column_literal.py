@@ -52,13 +52,13 @@ from lsst.sphgeom import Region
 
 from ..._timespan import Timespan
 from ...time_utils import TimeConverter
-from ._base import ColumnExpressionBase
+from ._base import ColumnLiteralBase
 
 LiteralValue: TypeAlias = Union[int, str, float, bytes, uuid.UUID, astropy.time.Time, Timespan, Region]
 
 
 @final
-class IntColumnLiteral(ColumnExpressionBase):
+class IntColumnLiteral(ColumnLiteralBase):
     """A literal `int` value in a column expression."""
 
     expression_type: Literal["int"] = "int"
@@ -82,17 +82,12 @@ class IntColumnLiteral(ColumnExpressionBase):
         """
         return cls.model_construct(value=value)
 
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
-
     def __str__(self) -> str:
         return repr(self.value)
 
 
 @final
-class StringColumnLiteral(ColumnExpressionBase):
+class StringColumnLiteral(ColumnLiteralBase):
     """A literal `str` value in a column expression."""
 
     expression_type: Literal["string"] = "string"
@@ -116,17 +111,12 @@ class StringColumnLiteral(ColumnExpressionBase):
         """
         return cls.model_construct(value=value)
 
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
-
     def __str__(self) -> str:
         return repr(self.value)
 
 
 @final
-class FloatColumnLiteral(ColumnExpressionBase):
+class FloatColumnLiteral(ColumnLiteralBase):
     """A literal `float` value in a column expression."""
 
     expression_type: Literal["float"] = "float"
@@ -150,17 +140,12 @@ class FloatColumnLiteral(ColumnExpressionBase):
         """
         return cls.model_construct(value=value)
 
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
-
     def __str__(self) -> str:
         return repr(self.value)
 
 
 @final
-class HashColumnLiteral(ColumnExpressionBase):
+class HashColumnLiteral(ColumnLiteralBase):
     """A literal `bytes` value representing a hash in a column expression.
 
     The original value is base64-encoded when serialized and decoded on first
@@ -193,17 +178,12 @@ class HashColumnLiteral(ColumnExpressionBase):
         """
         return cls.model_construct(encoded=b64encode(value))
 
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
-
     def __str__(self) -> str:
         return "(bytes)"
 
 
 @final
-class UUIDColumnLiteral(ColumnExpressionBase):
+class UUIDColumnLiteral(ColumnLiteralBase):
     """A literal `uuid.UUID` value in a column expression."""
 
     expression_type: Literal["uuid"] = "uuid"
@@ -226,17 +206,12 @@ class UUIDColumnLiteral(ColumnExpressionBase):
         """
         return cls.model_construct(value=value)
 
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
-
     def __str__(self) -> str:
         return str(self.value)
 
 
 @final
-class DateTimeColumnLiteral(ColumnExpressionBase):
+class DateTimeColumnLiteral(ColumnLiteralBase):
     """A literal `astropy.time.Time` value in a column expression.
 
     The time is converted into TAI nanoseconds since 1970-01-01 when serialized
@@ -269,11 +244,6 @@ class DateTimeColumnLiteral(ColumnExpressionBase):
         """
         return cls.model_construct(nsec=TimeConverter().astropy_to_nsec(value))
 
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
-
     def __str__(self) -> str:
         # Trap dubious year warnings in case we have timespans from
         # simulated data in the future
@@ -283,7 +253,7 @@ class DateTimeColumnLiteral(ColumnExpressionBase):
 
 
 @final
-class TimespanColumnLiteral(ColumnExpressionBase):
+class TimespanColumnLiteral(ColumnLiteralBase):
     """A literal `Timespan` value in a column expression.
 
     The timespan bounds are converted into TAI nanoseconds since 1970-01-01
@@ -323,17 +293,12 @@ class TimespanColumnLiteral(ColumnExpressionBase):
         """
         return cls.model_construct(begin_nsec=value._nsec[0], end_nsec=value._nsec[1])
 
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
-
     def __str__(self) -> str:
         return str(self.value)
 
 
 @final
-class RegionColumnLiteral(ColumnExpressionBase):
+class RegionColumnLiteral(ColumnLiteralBase):
     """A literal `lsst.sphgeom.Region` value in a column expression.
 
     The region is encoded to base64 `bytes` when serialized, and decoded on
@@ -365,11 +330,6 @@ class RegionColumnLiteral(ColumnExpressionBase):
             Literal expression object.
         """
         return cls.model_construct(encoded=b64encode(value.encode()))
-
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
 
     def __str__(self) -> str:
         return "(region)"

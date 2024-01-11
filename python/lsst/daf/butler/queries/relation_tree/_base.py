@@ -37,7 +37,7 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, cast
 
 import pydantic
 
@@ -206,6 +206,8 @@ class ColumnExpressionBase(RelationTreeBase, ABC):
 
     expression_type: str
 
+    is_literal: ClassVar[bool] = False
+
     @property
     @abstractmethod
     def precedence(self) -> int:
@@ -218,6 +220,37 @@ class ColumnExpressionBase(RelationTreeBase, ABC):
         raise NotImplementedError()
 
     @property
+    @abstractmethod
+    def column_type(self) -> ColumnType:
+        """A string enumeration value representing the type of the column
+        expression.
+
+        The default implementation returns the object's `expression_type` tag,
+        which is appropriate only for literal columns.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def gather_required_columns(self) -> set[ColumnReference]:
+        """Return a `set` containing all `ColumnReference` objects embedded
+        recursively in this expression.
+        """
+        raise NotImplementedError()
+
+
+class ColumnLiteralBase(ColumnExpressionBase):
+    is_literal: ClassVar[bool] = True
+
+    @property
+    def precedence(self) -> int:
+        # Docstring inherited.
+        return 0
+
+    def gather_required_columns(self) -> set[ColumnReference]:
+        # Docstring inherited.
+        return set()
+
+    @property
     def column_type(self) -> ColumnType:
         """A string enumeration value representing the type of the column
         expression.
@@ -226,12 +259,6 @@ class ColumnExpressionBase(RelationTreeBase, ABC):
         which is appropriate only for literal columns.
         """
         return cast(ColumnType, self.expression_type)
-
-    def gather_required_columns(self) -> set[ColumnReference]:
-        """Return a `set` containing all `ColumnReference` objects embedded
-        recursively in this expression.
-        """
-        return set()
 
 
 class PredicateBase(RelationTreeBase, ABC):

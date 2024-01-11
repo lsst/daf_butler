@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("OverlapsHandler",)
+__all__ = ("OverlapsVisitor",)
 
 import itertools
 from collections.abc import Hashable, Iterable, Sequence, Set
@@ -127,7 +127,7 @@ class _NaiveDisjointSet(Generic[_T]):
         return len(self._subsets)
 
 
-class OverlapsHandler:
+class OverlapsVisitor:
     """A helper class for dealing with spatial and temporal overlaps in a
     query.
 
@@ -149,27 +149,60 @@ class OverlapsHandler:
         self._spatial_connections = _NaiveDisjointSet(self.dimensions.spatial)
         self._temporal_connections = _NaiveDisjointSet(self.dimensions.temporal)
 
-    def process(self, predicate: rt.Predicate, parents: Set[Literal["and", "or", "not"]]) -> rt.Predicate:
+    def run(self, predicate: rt.Predicate, join_operands: Iterable[DimensionGroup]) -> rt.Predicate:
+        result = self.process_predicate(predicate, frozenset())
+        for join_operand_dimensions in join_operands:
+            self.add_join_operand_connections(join_operand_dimensions)
+        for a, b in self.compute_automatic_spatial_joins():
+            result = result.logical_and(
+                self.visit_spatial_join(
+                    rt.Comparison(
+                        a=rt.DimensionFieldReference(element=a, field="region"),
+                        b=rt.DimensionFieldReference(element=b, field="region"),
+                        operator="overlaps",
+                    ),
+                    a=a,
+                    b=b,
+                    parents=frozenset(),
+                )
+            )
+        for a, b in self.compute_automatic_temporal_joins():
+            result = result.logical_and(
+                self.visit_temporal_dimension_join(
+                    rt.Comparison(
+                        a=rt.DimensionFieldReference(element=a, field="timespan"),
+                        b=rt.DimensionFieldReference(element=b, field="timespan"),
+                        operator="overlaps",
+                    ),
+                    a=a,
+                    b=b,
+                    parents=frozenset(),
+                )
+            )
+        return result
+
+    def process_predicate(
+        self, predicate: rt.Predicate, parents: Set[Literal["and", "or", "not"]]
+    ) -> rt.Predicate:
         """Process a WHERE-clause predicate.
 
         This method traverses a `relation_tree.Predicate` tree and calls the
-        various ``handle_*`` methods when it encounters a spatial or temporal
+        various ``visit_*`` methods when it encounters a spatial or temporal
         overlap expression.
 
         Parameters
         ----------
         predicate : `relation_tree.Predicate`
             Tree to process.
-        parents : `~collections.abc.Set` of "and", "or", and "not" literals, \
-                optional
+        parents : `~collections.abc.Set` of "and", "or", and "not" literals
             What kinds of logical operators are used to connect this predicate
-            to others, to be modified and forwarded to ``handle_*`` methods.
+            to others, to be modified and forwarded to ``visit_*`` methods.
 
         Returns
         -------
         predicate : `relation_tree.Predicate`
             Processed predicate, with overlap comparisons replaced according to
-            the return values of the ``handle_*`` methods.
+            the return values of the ``visit_*`` methods.
         """
         match predicate:
             case rt.LogicalAnd() | rt.LogicalOr():
@@ -177,7 +210,7 @@ class OverlapsHandler:
                 any_changed = False
                 parents |= {predicate.predicate_type}
                 for operand in predicate.operands:
-                    if (new_operand := self.process(operand, parents)) is not operand:
+                    if (new_operand := self.process_predicate(operand, parents)) is not operand:
                         any_changed = True
                     processed.append(new_operand)
                 if any_changed:
@@ -186,16 +219,16 @@ class OverlapsHandler:
                     return predicate
             case rt.LogicalNot():
                 if (
-                    new_operand := self.process(predicate.operand, parents | {"not"})
+                    new_operand := self.process_predicate(predicate.operand, parents | {"not"})
                 ) is not predicate.operand:
                     return new_operand.logical_not()
                 else:
                     return predicate
             case rt.Comparison(operator="overlaps"):
                 if predicate.a.column_type == "region":
-                    return self.handle_spatial_overlap(predicate, parents)
+                    return self.visit_spatial_overlap(predicate, parents)
                 elif predicate.b.column_type == "timespan":
-                    return self.handle_temporal_overlap(predicate, parents)
+                    return self.visit_temporal_overlap(predicate, parents)
                 else:
                     raise AssertionError(f"Unexpected column type {predicate.a.column_type} for overlap.")
             case _:
@@ -290,7 +323,7 @@ class OverlapsHandler:
             )
         ]
 
-    def handle_spatial_overlap(
+    def visit_spatial_overlap(
         self,
         comparison: rt.Comparison,
         parents: Set[Literal["and", "or", "not"]],
@@ -305,7 +338,7 @@ class OverlapsHandler:
             Predicate object to handle.
         parents : `~collections.abc.Set` of "and", "or", and "not" literals
             What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``handle_*`` methods.
+            to others, to be forwarded to other ``visit_*`` methods.
 
         Returns
         -------
@@ -315,14 +348,14 @@ class OverlapsHandler:
         """
         match comparison.a, comparison.b:
             case rt.DimensionFieldReference(element=a), rt.DimensionFieldReference(element=b):
-                return self.handle_spatial_join(comparison, a, b, parents)
+                return self.visit_spatial_join(comparison, a, b, parents)
             case rt.DimensionFieldReference(element=element), rt.RegionColumnLiteral(value=region):
-                return self.handle_spatial_constraint(comparison, element, region, parents)
+                return self.visit_spatial_constraint(comparison, element, region, parents)
             case rt.RegionColumnLiteral(value=region), rt.DimensionFieldReference(element=element):
-                return self.handle_spatial_constraint(comparison, element, region, parents)
+                return self.visit_spatial_constraint(comparison, element, region, parents)
         raise AssertionError(f"Unexpected arguments for spatial overlap: {comparison.a}, {comparison.b}.")
 
-    def handle_temporal_overlap(
+    def visit_temporal_overlap(
         self,
         comparison: rt.Comparison,
         parents: Set[Literal["and", "or", "not"]],
@@ -337,7 +370,7 @@ class OverlapsHandler:
             Predicate object to handle.
         parents : `~collections.abc.Set` of "and", "or", and "not" literals
             What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``handle_*`` methods.
+            to others, to be forwarded to other ``visit_*`` methods.
 
         Returns
         -------
@@ -347,7 +380,7 @@ class OverlapsHandler:
         """
         match comparison.a, comparison.b:
             case rt.DimensionFieldReference(element=a), rt.DimensionFieldReference(element=b):
-                return self.handle_temporal_dimension_join(comparison, a, b, parents)
+                return self.visit_temporal_dimension_join(comparison, a, b, parents)
             case _:
                 # We don't bother differentiating any other kind of temporal
                 # comparison, because in all foreseeable database schemas we
@@ -356,7 +389,7 @@ class OverlapsHandler:
                 # should be straightforwardly convertible to SQL.
                 return comparison
 
-    def handle_spatial_join(
+    def visit_spatial_join(
         self,
         comparison: rt.Comparison,
         a: DimensionElement,
@@ -379,7 +412,7 @@ class OverlapsHandler:
             The other element in the join.
         parents : `~collections.abc.Set` of "and", "or", and "not" literals
             What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``handle_*`` methods.
+            to others, to be forwarded to other ``visit_*`` methods.
 
         Returns
         -------
@@ -394,7 +427,7 @@ class OverlapsHandler:
         )
         return comparison
 
-    def handle_spatial_constraint(
+    def visit_spatial_constraint(
         self,
         comparison: rt.Comparison,
         element: DimensionElement,
@@ -416,7 +449,7 @@ class OverlapsHandler:
             The literal region in the comparison.
         parents : `~collections.abc.Set` of "and", "or", and "not" literals
             What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``handle_*`` methods.
+            to others, to be forwarded to other ``visit_*`` methods.
 
         Returns
         -------
@@ -426,7 +459,7 @@ class OverlapsHandler:
         """
         return comparison
 
-    def handle_temporal_dimension_join(
+    def visit_temporal_dimension_join(
         self,
         comparison: rt.Comparison,
         a: DimensionElement,
@@ -449,7 +482,7 @@ class OverlapsHandler:
             The other element in the join.
         parents : `~collections.abc.Set` of "and", "or", and "not" literals
             What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``handle_*`` methods.
+            to others, to be forwarded to other ``visit_*`` methods.
 
         Returns
         -------
