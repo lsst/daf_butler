@@ -563,6 +563,11 @@ class SingleTypeDatasetQueryResults(DatasetQueryResults):
         raise NotImplementedError()
 
     @property
+    def dimensions(self) -> DimensionGroup:
+        """The dimensions of the dataset type returned by this query."""
+        return self.dataset_type.dimensions.as_group()
+
+    @property
     @abstractmethod
     def data_ids(self) -> DataCoordinateQueryResults:
         """A lazy-evaluation object representing a query for just the data

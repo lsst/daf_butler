@@ -46,8 +46,9 @@ from ..dimensions import (
     DimensionRecordSet,
     DimensionRecordTable,
 )
+from .convert_args import convert_order_by_args
 from .driver import PageKey, QueryDriver
-from .relation_tree import RootRelation, convert_order_by_args
+from .relation_tree import RootRelation
 
 
 class DimensionRecordResultSpec(pydantic.BaseModel):
@@ -129,10 +130,6 @@ class RelationDimensionRecordQueryResults(DimensionRecordQueryResults):
             page = self._driver.fetch_next_page(self._spec, page.next_key)
             yield page.as_set()
 
-    # TODO: might want to make this `str`, in keeping with RFC-834's philosophy
-    # of keeping DimensionElement out of public APIs (this old-query-system
-    # version of this one was accidentally omitted from that RFC, but we don't
-    # need an RFC to change it in the new system).
     @property
     def element(self) -> DimensionElement:
         # Docstring inherited.

@@ -28,8 +28,7 @@
 from __future__ import annotations
 
 __all__ = (
-    "RelationBase",
-    "RootRelationBase",
+    "RelationTreeBase",
     "ColumnExpressionBase",
     "PredicateBase",
     "DatasetFieldName",
@@ -43,11 +42,8 @@ import pydantic
 
 if TYPE_CHECKING:
     from ...column_spec import ColumnType
-    from ...dimensions import DimensionGroup
-    from ._column_expression import OrderExpression
     from ._column_reference import ColumnReference
     from ._predicate import Predicate
-    from ._relation import Relation, RootRelation
 
 
 DatasetFieldName: TypeAlias = Literal["dataset_id", "ingest_date", "run", "collection", "rank", "timespan"]
@@ -63,136 +59,6 @@ class RelationTreeBase(pydantic.BaseModel):
     """Base class for all non-primitive types in a relation tree."""
 
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
-
-
-class RelationBase(RelationTreeBase, ABC):
-    """Base class for objects that represent relations in a relation tree.
-
-    This is a closed hierarchy whose concrete, `~typing.final` derived classes
-    are members of the `Relation` union.  That union should generally be used
-    in type annotations rather than the formally-open base class.
-
-    `Relation` types are also required to have a ``dimensions`` attribute of
-    type `DimensionGroup`, but are permitted to implement this as a regular
-    attribute or `property`, and there is no way to express that in a base
-    class.
-    """
-
-    @property
-    @abstractmethod
-    def available_dataset_types(self) -> frozenset[str]:
-        """The dataset types whose ID columns (at least) are available from
-        this relation.
-        """
-        raise NotImplementedError()
-
-
-class RootRelationBase(RelationBase):
-    """Base class for relations that can occupy the root of a relation tree.
-
-    This is a closed hierarchy whose concrete, `~typing.final` derived classes
-    are members of the `RootRelation` union.  That union should generally be
-    used in type annotations rather than the formally-open base class.
-    """
-
-    @abstractmethod
-    def join(self, other: Relation) -> RootRelation:
-        """Return a new relation that represents a join between ``self`` and
-        ``other``.
-
-        Parameters
-        ----------
-        other : `Relation`
-            Relation to join to this one.
-
-        Returns
-        -------
-        result : `RootRelation`
-            A new relation that joins ``self`` and ``other``.
-
-        Raises
-        ------
-        InvalidRelationError
-            Raised if the join is ambiguous or otherwise invalid.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def where(self, *args: Predicate) -> RootRelation:
-        """Return a new relation that adds row filtering via a boolean column
-        expression.
-
-        Parameters
-        ----------
-        *args : `Predicate`
-            Boolean column expressions that filter rows.  Arguments are
-            combined with logical AND.
-
-        Returns
-        -------
-        result : `RootRelation`
-            A new relation that with row filtering.
-
-        Raises
-        ------
-        InvalidRelationError
-            Raised if a column expression requires a dataset column that is not
-            already present in the relation tree.
-
-        Notes
-        -----
-        If an expression references a dimension or dimension element that is
-        not already present in the relation tree, it will be joined in, but
-        dataset searches must already be joined into a relation tree in order
-        to reference their fields in expressions.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> RootRelation:
-        """Return a new relation that sorts and/or applies positional slicing.
-
-        Parameters
-        ----------
-        *terms : `str` or `OrderExpression`
-            Expression objects to use for ordering.
-        limit : `int` or `None`, optional
-            Upper limit on the number of returned records.
-        offset : `int`, optional
-            The number of records to skip before returning at most ``limit``
-            records.
-
-        Returns
-        -------
-        result : `RootRelation`
-            A new relation object whose results will be sorted and/or
-            positionally sliced.
-
-        Raises
-        ------
-        InvalidRelationError
-            Raised if a column expression requires a dataset column that is not
-            already present in the relation tree.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def find_first(self, dataset_type: str, dimensions: DimensionGroup) -> RootRelation:
-        """Return a new relation that searches a dataset's collections in the
-        for the first match for each dataset type and data ID.
-
-        Parameters
-        ----------
-        dataset_type : `str`
-            Name of the dataset type.  Must be available in the relation tree
-            already.
-        dimensions : `DimensionGroup`
-            Dimensions to group by.  This is typically the dimensions of the
-            dataset type, but in certain cases (such as calibration lookups)
-            it may be useful to user a superset of the dataset type's
-            dimensions.
-        """
-        raise NotImplementedError()
 
 
 class ColumnExpressionBase(RelationTreeBase, ABC):

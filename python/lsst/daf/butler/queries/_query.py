@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._query import Query
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
+from .convert_args import convert_order_by_args, convert_where_args
 from .data_coordinate_results import DataCoordinateResultSpec, RelationDataCoordinateQueryResults
 from .dataset_results import (
     ChainedDatasetQueryResults,
@@ -44,15 +45,10 @@ from .dimension_record_results import DimensionRecordResultSpec, RelationDimensi
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory, ExpressionProxy
 from .relation_tree import (
-    DataCoordinateUpload,
-    DatasetSearch,
     InvalidRelationError,
-    Materialization,
     OrderExpression,
     Predicate,
     RootRelation,
-    convert_order_by_args,
-    convert_where_args,
     make_dimension_relation,
     make_unit_relation,
 )
@@ -204,12 +200,10 @@ class RelationQuery(Query):
                     raise InvalidRelationError(
                         f"Unordered collections argument {collections} requires find_first=False."
                     )
-                tree = tree.join(
-                    DatasetSearch.model_construct(
-                        dataset_type=name,
-                        dimensions=resolved_dataset_type.dimensions.as_group(),
-                        collections=tuple(resolved_collections),
-                    )
+                tree = tree.join_dataset(
+                    dataset_type=name,
+                    dimensions=resolved_dataset_type.dimensions.as_group(),
+                    collections=tuple(resolved_collections),
                 )
             elif collections is not None:
                 raise InvalidRelationError(
@@ -219,7 +213,7 @@ class RelationQuery(Query):
             if where_terms:
                 tree = tree.where(*where_terms)
             if find_first:
-                tree = tree.find_first(name, resolved_dataset_type.dimensions.as_group())
+                tree = tree.find_first_dataset(name, resolved_dataset_type.dimensions.as_group())
             spec = DatasetRefResultSpec.model_construct(
                 dataset_type=resolved_dataset_type, include_dimension_records=self._include_dimension_records
             )
@@ -397,35 +391,48 @@ class RelationQuery(Query):
             include_dimension_records=self._include_dimension_records,
         )
 
-    def materialize(self, *, dataset_types: Iterable[str] | None = ()) -> RelationQuery:
+    def materialize(
+        self,
+        *,
+        datasets: Iterable[str] | None = None,
+        dimensions: Iterable[str] | DimensionGroup | None = None,
+    ) -> RelationQuery:
         """Execute the query, save its results to a temporary location, and
         return a new query that represents fetching or joining against those
         saved results.
 
         Parameters
         ----------
-        dataset_types : `~collections.abc.Iterable` [ `str` ], optional
+        datasets : `~collections.abc.Iterable` [ `str` ], optional
             Names of dataset types whose ID fields (at least) should be
             included in the temporary results; default is to include all
             datasets types whose ID columns are currently available to the
             query.  Dataset searches over multiple collections are not
             resolved, but enough information is preserved to resolve them
             downstream of the materialization.
+        dimensions : `~collections.abc.Iterable` [ `str` ] or \
+                `DimensionGroup`, optional
+            Dimensions to include in the temporary results.  Default is to
+            include all dimensions in the query.
 
         Returns
         -------
         query : `Query`
             A new query object whose that represents the materialized rows.
         """
-        if dataset_types is None:
-            dataset_types = self._tree.available_dataset_types
+        if datasets is None:
+            datasets = self._tree.available_dataset_types
         else:
-            dataset_types = frozenset(dataset_types)
-        key = self._driver.materialize(self._tree, dataset_types)
+            datasets = frozenset(datasets)
+        if dimensions is None:
+            dimensions = self._tree.result_dimensions
+        else:
+            dimensions = self._driver.universe.conform(dimensions)
+        key = self._driver.materialize(self._tree, datasets, dimensions)
         return RelationQuery(
             self._driver,
-            tree=make_unit_relation(self._driver.universe).join(
-                Materialization.model_construct(key=key, operand=self._tree, dataset_types=dataset_types)
+            tree=make_unit_relation(self._driver.universe).join_materialization(
+                key, datasets=datasets, dimensions=dimensions
             ),
             include_dimension_records=self._include_dimension_records,
         )
@@ -453,12 +460,10 @@ class RelationQuery(Query):
             restricted to those consistent with the found data IDs.
         """
         return RelationQuery(
-            tree=self._tree.join(
-                DatasetSearch.model_construct(
-                    dataset_type=dataset_type,
-                    collections=tuple(collections),
-                    dimensions=self._driver.get_dataset_dimensions(dataset_type),
-                )
+            tree=self._tree.join_dataset(
+                dataset_type=dataset_type,
+                collections=tuple(collections),
+                dimensions=self._driver.get_dataset_dimensions(dataset_type),
             ),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
@@ -490,7 +495,7 @@ class RelationQuery(Query):
             raise RuntimeError("Cannot upload an empty data coordinate set.")
         key = self._driver.upload_data_coordinates(dimensions, rows)
         return RelationQuery(
-            tree=self._tree.join(DataCoordinateUpload(dimensions=dimensions, key=key)),
+            tree=self._tree.join_data_coordinate_upload(dimensions=dimensions, key=key),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
@@ -606,7 +611,7 @@ class RelationQuery(Query):
         if dimensions is None:
             dimensions = self._driver.get_dataset_dimensions(dataset_type)
         return RelationQuery(
-            tree=self._tree.find_first(dataset_type, dimensions),
+            tree=self._tree.find_first_dataset(dataset_type, dimensions),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )

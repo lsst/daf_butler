@@ -127,13 +127,14 @@ class SqlBuilder(_BaseSqlBuilder):
             self.dimensions_provided[v] = [self.sql_from_clause.columns[k]]
         return self
 
-    def extract_fields(
+    def extract_columns(
         self, fields: Iterable[rt.ColumnReference], timespan_db_repr: type[TimespanDatabaseRepresentation]
     ) -> SqlBuilder:
         for col_ref in fields:
             if col_ref.expression_type == "dimension_key":
-                # Logic branch is for MyPy: rule out DimensionKeyReference.
-                pass
+                self.dimensions_provided[col_ref.dimension.name].append(
+                    self.sql_from_clause.columns[col_ref.qualified_name]
+                )
             elif col_ref.column_type == "timespan":
                 self.timespans_provided[col_ref] = timespan_db_repr.from_columns(
                     self.sql_from_clause.columns, col_ref.qualified_name
@@ -167,6 +168,7 @@ class SqlBuilder(_BaseSqlBuilder):
     ) -> tuple[sqlalchemy.Select, Postprocessing]:
         # Build the list of columns for the SELECT clause itself.
         sql_columns: list[sqlalchemy.ColumnElement] = []
+        # TODO: sort this list so nothing is dependent on set iteration order.
         columns_to_select = list(set(columns_to_select) | postprocessing.gather_columns_required())
         for col_ref in columns_to_select:
             if col_ref.expression_type == "dimension_key":

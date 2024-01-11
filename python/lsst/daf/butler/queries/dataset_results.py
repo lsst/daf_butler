@@ -50,7 +50,7 @@ from .data_coordinate_results import (
     RelationDataCoordinateQueryResults,
 )
 from .driver import PageKey, QueryDriver
-from .relation_tree import Materialization, RootRelation, make_unit_relation
+from .relation_tree import RootRelation, make_unit_relation
 
 
 class DatasetRefResultSpec(pydantic.BaseModel):
@@ -113,13 +113,12 @@ class RelationSingleTypeDatasetQueryResults(SingleTypeDatasetQueryResults):
     @contextmanager
     def materialize(self) -> Iterator[RelationSingleTypeDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
-        key = self._driver.materialize(self._tree, frozenset())
+        datasets = frozenset({self.dataset_type.name})
+        key = self._driver.materialize(self._tree, datasets=datasets, dimensions=self.dimensions)
         yield RelationSingleTypeDatasetQueryResults(
             self._driver,
-            tree=make_unit_relation(self._driver.universe).join(
-                Materialization.model_construct(
-                    key=key, operand=self._tree, dataset_types=frozenset({self.dataset_type.name})
-                )
+            tree=make_unit_relation(self._driver.universe).join_materialization(
+                key, datasets=datasets, dimensions=self.dimensions
             ),
             spec=self._spec,
         )

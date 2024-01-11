@@ -29,7 +29,7 @@ from __future__ import annotations
 
 __all__ = ("DirectQueryDriver",)
 
-from collections.abc import Iterable, Mapping, Set
+from collections.abc import Iterable, Set
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any, cast, overload
 
@@ -77,7 +77,7 @@ class DirectQueryDriver(QueryDriver):
         self._timespan_db_repr = db.getTimespanRepresentation()
         self._managers = managers
         self._materialization_tables: dict[rt.MaterializationKey, sqlalchemy.Table] = {}
-        self._upload_tables: dict[rt.UploadKey, sqlalchemy.Table] = {}
+        self._upload_tables: dict[rt.DataCoordinateUploadKey, sqlalchemy.Table] = {}
 
     @property
     def universe(self) -> DimensionUniverse:
@@ -129,13 +129,15 @@ class DirectQueryDriver(QueryDriver):
     def fetch_next_page(self, result_spec: ResultSpec, key: PageKey) -> ResultPage:
         raise NotImplementedError("TODO")
 
-    def materialize(self, tree: rt.RootRelation, dataset_types: frozenset[str]) -> rt.MaterializationKey:
+    def materialize(
+        self, tree: rt.RootRelation, datasets: frozenset[str], dimensions: DimensionGroup
+    ) -> rt.MaterializationKey:
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
     def upload_data_coordinates(
         self, dimensions: DimensionGroup, rows: Iterable[tuple[DataIdValue, ...]]
-    ) -> rt.UploadKey:
+    ) -> rt.DataCoordinateUploadKey:
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
@@ -171,54 +173,29 @@ class DirectQueryDriver(QueryDriver):
         self,
         tree: rt.RootRelation,
         columns_to_select: Set[rt.ColumnReference],
-        *,
-        columns_required: Set[rt.ColumnReference] = frozenset(),
-        order_by: Iterable[rt.OrderExpression] = (),
-        limit: int | None = None,
-        offset: int = 0,
     ) -> tuple[sqlalchemy.Select, Postprocessing]:
-        columns_required = set(columns_required)
-        columns_required.update(columns_to_select)
-        for term in order_by:
-            columns_required.update(term.gather_required_columns())
-        match tree:
-            case rt.Select():
-                sql_builder, postprocessing = self._process_select_tree(tree, columns_required)
-                sql_select, postprocessing = sql_builder.sql_select(
-                    columns_to_select,
-                    postprocessing,
-                    order_by=[self._build_sql_order_by_expression(sql_builder, term) for term in order_by],
-                    limit=limit,
-                    offset=offset,
-                )
-            case rt.OrderedSlice():
-                assert (
-                    not order_by and limit is None and not offset
-                ), "order_by/limit/offset args are for recursion only"
-                sql_select, postprocessing = self._build_sql_select(
-                    tree.operand,
-                    columns_to_select,
-                    columns_required=columns_required,
-                    order_by=tree.order_terms,
-                    limit=tree.limit,
-                    offset=tree.offset,
-                )
-            case rt.FindFirst():
-                sql_builder, postprocessing = self._process_find_first_tree(tree, columns_required)
-                sql_select, postprocessing = sql_builder.sql_select(
-                    columns_to_select,
-                    postprocessing,
-                    order_by=[self._build_sql_order_by_expression(sql_builder, term) for term in order_by],
-                    limit=limit,
-                    offset=offset,
-                )
-            case _:
-                raise AssertionError(f"Invalid root relation: {tree}.")
-        return sql_select, postprocessing
+        if tree.find_first:
+            sql_builder, postprocessing = self._make_find_first_sql_builder(
+                tree,
+                tree.find_first.dataset_type,
+                tree.find_first.dimensions,
+                columns_to_select,
+            )
+        else:
+            sql_builder, postprocessing = self._make_vanilla_sql_builder(tree, columns_to_select)
+        # TODO: make results unique over columns_to_select, while taking into
+        # account postprocessing columns
+        return sql_builder.sql_select(
+            columns_to_select,
+            postprocessing,
+            order_by=[self._build_sql_order_by_expression(sql_builder, term) for term in tree.order_terms],
+            limit=tree.limit,
+            offset=tree.offset,
+        )
 
-    def _process_select_tree(
+    def _make_vanilla_sql_builder(
         self,
-        tree: rt.Select,
+        tree: rt.RootRelation,
         columns_required: Set[rt.ColumnReference],
     ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing]:
         # Process spatial and temporal constraints and joins, creating a
@@ -230,7 +207,7 @@ class DirectQueryDriver(QueryDriver):
         # the DB should consider WHERE terms AND'd together equivalent to the
         # JOIN ON clause.
         where_predicate, sql_builder, postprocessing = self._managers.dimensions.process_query_overlaps(
-            tree.dimensions, tree.where_predicate, [operand.dimensions for operand in tree.join_operands]
+            tree.dimensions, tree.predicate, tree.join_operand_dimensions
         )
         columns_required = set(columns_required)
         columns_required.update(where_predicate.gather_required_columns())
@@ -242,17 +219,50 @@ class DirectQueryDriver(QueryDriver):
         )
         # From here down, 'columns_required' is no long authoritative.
         del columns_required
-        # Process explicit join operands.  This also returns a set of dimension
-        # elements whose tables should be joined in, in order to enforce
-        # one-to-many or many-to-many relationships that should be part of this
-        # query's dimensions but were not provided by any join operand.
-        sql_builder, relationship_elements = self._process_join_operands(
-            sql_builder, tree.join_operands, full_dimensions, datasets_to_join
-        )
-        # Actually join in all of the dimension tables that provide either
-        # fields or relationships.
-        for element in relationship_elements:
-            dimension_tables_to_join.setdefault(element, set())
+        # Process data coordinate upload joins.
+        for upload_key, upload_dimensions in tree.data_coordinate_uploads.items():
+            sql_builder = sql_builder.join(
+                SqlBuilder(self._upload_tables[upload_key]).extract_keys(upload_dimensions.required)
+            )
+        # Process materialization joins.
+        for materialization_key, materialization_spec in tree.materializations.items():
+            sql_builder = sql_builder.join(
+                SqlBuilder(self._upload_tables[materialization_key]).extract_keys(
+                    materialization_spec.dimensions.names
+                )
+            )
+            if materialization_spec.datasets & datasets_to_join.keys():
+                raise NotImplementedError("TODO")
+        # Process dataset joins:
+        for dataset_type, dataset_spec in tree.datasets.items():
+            raise NotImplementedError("TODO")
+        # Record that we need to join in DimensionElements whose tables define
+        # one-to-many and many-to-many relationships.  Data coordinate uploads,
+        # materializations, and datasets can also provide these relationships.
+        for element_name in full_dimensions.elements:
+            if (element := self._universe[element_name]).defines_relationships:
+                # Data coordinate uploads and dataset tables only have required
+                # dimensions, and can hence only provide relationships
+                # involving those.
+                if any(
+                    element.minimal_group.names <= upload_dimensions.required
+                    for upload_dimensions in tree.data_coordinate_uploads.values()
+                ):
+                    continue
+                if any(
+                    element.minimal_group.names <= dataset_spec.dimensions.required
+                    for dataset_spec in tree.datasets.values()
+                ):
+                    continue
+                # Materializations have all key columns for their dimensions.
+                if any(
+                    element in materialization_spec.dimensions.names
+                    for materialization_spec in tree.materializations.values()
+                ):
+                    continue
+                dimension_tables_to_join.setdefault(element, set())
+        # Join in dimension element tables that we know we need relationships
+        # or columns from.
         for element, fields_for_element in dimension_tables_to_join.items():
             sql_builder = sql_builder.join(
                 self._managers.dimensions.make_sql_builder(element, fields_for_element)
@@ -276,12 +286,16 @@ class DirectQueryDriver(QueryDriver):
             sql_builder = sql_builder.join(self._managers.dimensions.make_sql_builder(best, frozenset()))
         raise NotImplementedError("TODO")
 
-    def _process_find_first_tree(
-        self, tree: rt.FindFirst, columns_required: Set[rt.ColumnReference]
+    def _make_find_first_sql_builder(
+        self,
+        tree: rt.RootRelation,
+        dataset_type: str,
+        dimensions: DimensionGroup,
+        columns_to_select: Set[rt.ColumnReference],
     ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing]:
         # The query we're building looks like this:
         #
-        # WITH {dst}_search AS (
+        # WITH {dst}_base AS (
         #     {target}
         #     ...
         # )
@@ -289,9 +303,9 @@ class DirectQueryDriver(QueryDriver):
         #     {dst}_window.*,
         # FROM (
         #     SELECT
-        #         {dst}_search.*,
+        #         {dst}_base.*,
         #         ROW_NUMBER() OVER (
-        #             PARTITION BY {dst_search}.{operation.dimensions}
+        #             PARTITION BY {dst_base}.{dimensions}
         #             ORDER BY {operation.rank}
         #         ) AS rownum
         #     ) {dst}_window
@@ -304,39 +318,39 @@ class DirectQueryDriver(QueryDriver):
         # 'columns_required' to populate the SELECT clause list, because this
         # isn't the outermost query, and hence we need to propagate columns
         # we'll use but not return to the user through it.
-        rank_column = rt.DatasetFieldReference.model_construct(dataset_type=tree.dataset_type, field="rank")
-        search_select, postprocessing = self._build_sql_select(tree.operand, columns_required | {rank_column})
-        columns_required |= postprocessing.gather_columns_required()
-        search_cte = search_select.cte(f"{tree.dataset_type}_search")
+        rank = rt.DatasetFieldReference.model_construct(dataset_type=dataset_type, field="rank")
+        internal_columns = set(columns_to_select)
+        internal_columns.add(rank)
+        for term in tree.order_terms:
+            internal_columns.update(term.gather_required_columns())
+        base_sql_builder, postprocessing = self._make_vanilla_sql_builder(tree, internal_columns)
+        base_select, postprocessing = base_sql_builder.sql_select(internal_columns, postprocessing)
+        internal_columns.update(postprocessing.gather_columns_required())
+        base_cte = base_select.cte(f"{dataset_type}_base")
         # Now we fill out the SELECT from the CTE, and the subquery it
         # contains (at the same time, since they have the same columns,
         # aside from the special 'rownum' window-function column). Once
-        # again the SELECT clause is populated by 'columns_required'.
-        partition_by = [search_cte.columns[d] for d in tree.dimensions.required]
+        # again the SELECT clause is populated by 'internal_columns'.
+        partition_by = [base_cte.columns[d] for d in dimensions.required]
         rownum_column: sqlalchemy.ColumnElement[int] = sqlalchemy.sql.func.row_number()
         if partition_by:
             rownum_column = rownum_column.over(
-                partition_by=partition_by, order_by=search_cte.columns[rank_column.qualified_name]
+                partition_by=partition_by, order_by=base_cte.columns[rank.qualified_name]
             )
         else:
-            rownum_column = rownum_column.over(order_by=search_cte.columns[rank_column.qualified_name])
+            rownum_column = rownum_column.over(order_by=base_cte.columns[rank.qualified_name])
         window_select, postprocessing = (
-            SqlBuilder(search_cte)
-            .extract_keys(tree.dimensions.names)
-            .extract_fields(columns_required, self._timespan_db_repr)
-            .sql_select(
-                columns_required,
-                postprocessing,
-                sql_columns_to_select=[rownum_column.label("rownum")],
-            )
+            SqlBuilder(base_cte)
+            .extract_columns(internal_columns, self._timespan_db_repr)
+            .sql_select(internal_columns, postprocessing, sql_columns_to_select=partition_by)
         )
-        window_subquery = window_select.subquery(f"{tree.dataset_type}_window")
-        return (
+        window_subquery = window_select.subquery(f"{dataset_type}_window")
+        sql_builder = (
             SqlBuilder(window_subquery)
-            .extract_keys(tree.dimensions.names)
-            .extract_fields(columns_required, self._timespan_db_repr)
-            .where_sql(window_subquery.c.rownum == 1)
-        ), postprocessing
+            .extract_columns(internal_columns, self._timespan_db_repr)
+            .where_sql(window_subquery.columns.rownum == 1)
+        )
+        return sql_builder, postprocessing
 
     def _categorize_columns(
         self,
@@ -365,69 +379,6 @@ class DirectQueryDriver(QueryDriver):
             elif col_ref.expression_type == "dataset_field":
                 datasets[col_ref.dataset_type].add(col_ref)
         return self._universe.conform(dimension_names), dimension_tables, datasets
-
-    def _process_join_operands(
-        self,
-        sql_builder: SqlBuilder | EmptySqlBuilder,
-        join_operands: Iterable[rt.JoinOperand],
-        dimensions: DimensionGroup,
-        datasets: Mapping[str, Set[rt.DatasetFieldReference]],
-    ) -> tuple[SqlBuilder | EmptySqlBuilder, Set[DimensionElement]]:
-        # Make a set of DimensionElements whose tables need to be joined in to
-        # make sure the output rows reflect one-to-many and many-to-many
-        # relationships.  We'll remove from this as we join in dataset
-        # searches, data ID uploads, and materializations, because those can
-        # also provide those relationships.
-        relationship_elements: set[DimensionElement] = {
-            element
-            for name in dimensions.elements
-            if (element := self._universe[name]).implied or element.alwaysJoin
-        }
-        for join_operand in join_operands:
-            match join_operand:
-                case rt.DatasetSearch():
-                    # Drop relationship elements whose dimensions are a subset
-                    # of the *required* dimensions of the dataset, since
-                    # dataset tables only have columns for required dimensions.
-                    relationship_elements = {
-                        element
-                        for element in relationship_elements
-                        if not (element.minimal_group.names <= join_operand.dimensions.required)
-                    }
-                    raise NotImplementedError("TODO")
-                case rt.DataCoordinateUpload():
-                    sql_builder = sql_builder.join(
-                        SqlBuilder(self._upload_tables[join_operand.key]).extract_keys(
-                            join_operand.dimensions.required
-                        )
-                    )
-                    # Drop relationship elements whose dimensions are a subset
-                    # of the *required* dimensions of the upload, since uploads
-                    # only have columns for required dimensions.
-                    relationship_elements = {
-                        element
-                        for element in relationship_elements
-                        if not (element.minimal_group.names <= join_operand.dimensions.required)
-                    }
-                case rt.Materialization():
-                    if join_operand.dataset_types:
-                        raise NotImplementedError("TODO")
-                    sql_builder = sql_builder.join(
-                        SqlBuilder(self._materialization_tables[join_operand.key]).extract_keys(
-                            join_operand.dimensions.names
-                        )
-                    )
-                    # Drop relationship elements whose dimensions are a subset
-                    # dimensions of the materialization, since materializations
-                    # have full dimension columns.
-                    relationship_elements = {
-                        element
-                        for element in relationship_elements
-                        if not (element.minimal_group <= join_operand.dimensions)
-                    }
-                case _:
-                    raise AssertionError(f"Invalid join operand {join_operand}.")
-        return sql_builder, relationship_elements
 
     def _build_sql_order_by_expression(
         self, sql_builder: SqlBuilder | EmptySqlBuilder, term: rt.OrderExpression

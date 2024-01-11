@@ -43,14 +43,9 @@ from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
 from .._query_results import DataCoordinateQueryResults, DatasetQueryResults
 from ..dimensions import DataCoordinate, DimensionGroup
+from .convert_args import convert_order_by_args
 from .driver import QueryDriver
-from .relation_tree import (
-    InvalidRelationError,
-    Materialization,
-    RootRelation,
-    convert_order_by_args,
-    make_unit_relation,
-)
+from .relation_tree import InvalidRelationError, RootRelation, make_unit_relation
 
 if TYPE_CHECKING:
     from .driver import PageKey
@@ -125,11 +120,11 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
     @contextmanager
     def materialize(self) -> Iterator[DataCoordinateQueryResults]:
         # Docstring inherited.
-        key = self._driver.materialize(self._tree, frozenset())
+        key = self._driver.materialize(self._tree, datasets=frozenset(), dimensions=self.dimensions)
         yield RelationDataCoordinateQueryResults(
             self._driver,
-            tree=make_unit_relation(self._driver.universe).join(
-                Materialization.model_construct(key=key, operand=self._tree, dataset_types=frozenset())
+            tree=make_unit_relation(self._driver.universe).join_materialization(
+                key=key, datasets=frozenset(), dimensions=self.dimensions
             ),
             spec=self._spec,
         )

@@ -44,7 +44,7 @@ from .data_coordinate_results import DataCoordinateResultPage, DataCoordinateRes
 from .dataset_results import DatasetRefResultPage, DatasetRefResultSpec
 from .dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
 from .general_results import GeneralResultPage, GeneralResultSpec
-from .relation_tree import MaterializationKey, RootRelation, UploadKey
+from .relation_tree import DataCoordinateUploadKey, MaterializationKey, RootRelation
 
 PageKey: TypeAlias = uuid.UUID
 
@@ -190,7 +190,9 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def materialize(self, tree: RootRelation, dataset_types: frozenset[str]) -> MaterializationKey:
+    def materialize(
+        self, tree: RootRelation, datasets: frozenset[str], dimensions: DimensionGroup
+    ) -> MaterializationKey:
         """Execute a relation tree, saving results to temporary storage for use
         in later queries.
 
@@ -198,9 +200,11 @@ class QueryDriver(AbstractContextManager[None]):
         ----------
         tree : `RootRelation`
             Relation tree to evaluate.
-        dataset_types : `frozenset` [ `str` ]
+        datasets : `frozenset` [ `str` ]
             Names of dataset types whose ID columns (at least) should be
             preserved.
+        dimensions : `DimensionGroup`
+            Dimensions whose key columns should be preserved.
 
         Returns
         -------
@@ -214,7 +218,7 @@ class QueryDriver(AbstractContextManager[None]):
     @abstractmethod
     def upload_data_coordinates(
         self, dimensions: DimensionGroup, rows: Iterable[tuple[DataIdValue, ...]]
-    ) -> UploadKey:
+    ) -> DataCoordinateUploadKey:
         """Upload a table of data coordinates for use in later queries.
 
         Parameters

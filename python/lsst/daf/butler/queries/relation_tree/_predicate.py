@@ -54,7 +54,7 @@ from ._column_expression import ColumnExpression
 from ._column_reference import ColumnReference
 
 if TYPE_CHECKING:
-    from ._relation import RootRelation
+    from ._root_relation import RootRelation
 
 
 ComparisonOperator: TypeAlias = Literal["==", "!=", "<", ">", ">=", "<=", "overlaps"]
