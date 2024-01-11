@@ -229,6 +229,16 @@ class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unit
     )
 
 
+class ClonedSqliteFileRegistryNameKeyCollMgrUUIDTestCase(
+    SqliteFileRegistryNameKeyCollMgrUUIDTestCase, unittest.TestCase
+):
+    """Test that NameKeyCollectionManager still works after cloning."""
+
+    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry:
+        original = super().makeRegistry(share_repo_with)
+        return original.copy()
+
+
 class SqliteFileRegistrySynthIntKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
     """Tests for `Registry` backed by a SQLite file-based database.
 
