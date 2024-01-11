@@ -453,9 +453,10 @@ class FileTemplate:
         }
         # Extra information that can be included using . syntax
         extras = {}
+        can_use_extra_records = False
         if isinstance(ref.dataId, DataCoordinate):
             if ref.dataId.hasRecords():
-                extras = {k: ref.dataId.records[k] for k in ref.dataId.dimensions.elements}
+                can_use_extra_records = True
             skypix_alias = self._determine_skypix_alias(ref)
             if skypix_alias is not None:
                 fields["skypix"] = fields[skypix_alias]
@@ -498,6 +499,9 @@ class FileTemplate:
             # Check for request for additional information from the dataId
             if "." in field_name:
                 primary, secondary = field_name.split(".")
+                if can_use_extra_records and primary not in extras and primary in fields:
+                    extras[primary] = ref.dataId.records[primary]
+
                 if primary in extras:
                     record = extras[primary]
                     # Only fill in the fields if we have a value, the
