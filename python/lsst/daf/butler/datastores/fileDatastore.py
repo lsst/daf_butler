@@ -896,7 +896,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             outside the root.
         """
         # Relative path will always be relative to datastore
-        pathUri = ResourcePath(path, forceAbsolute=False)
+        pathUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
         return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(
@@ -941,7 +941,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             raise NotImplementedError(f"Transfer mode {transfer} not supported.")
 
         # A relative URI indicates relative to datastore root
-        srcUri = ResourcePath(path, forceAbsolute=False)
+        srcUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
         if not srcUri.isabs():
             srcUri = self.root.join(path)
 
@@ -1016,7 +1016,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         # Create URI of the source path, do not need to force a relative
         # path to absolute.
-        srcUri = ResourcePath(path, forceAbsolute=False)
+        srcUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
 
         # Track whether we have read the size of the source yet
         have_sized = False
@@ -1794,13 +1794,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
                 # Add the "#predicted" URI fragment to indicate this is a
                 # guess
-                uris.componentURIs[component] = ResourcePath(comp_location.uri.geturl() + "#predicted")
+                uris.componentURIs[component] = ResourcePath(
+                    comp_location.uri.geturl() + "#predicted", forceDirectory=comp_location.uri.dirLike
+                )
 
         else:
             location, _ = self._determine_put_formatter_location(ref)
 
             # Add the "#predicted" URI fragment to indicate this is a guess
-            uris.primaryURI = ResourcePath(location.uri.geturl() + "#predicted")
+            uris.primaryURI = ResourcePath(
+                location.uri.geturl() + "#predicted", forceDirectory=location.uri.dirLike
+            )
 
         return uris
 
@@ -2734,7 +2738,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             else:
                 # mypy needs help
                 assert directoryUri is not None, "directoryUri must be defined to get here"
-                storeUri = ResourcePath(location.uri)
+                storeUri = ResourcePath(location.uri, forceDirectory=False)
 
                 # if the datastore has an absolute URI to a resource, we
                 # have two options:
@@ -2744,7 +2748,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 # For now go with option 2
                 if location.pathInStore.isabs():
                     template = self.templates.getTemplate(ref)
-                    newURI = ResourcePath(template.format(ref), forceAbsolute=False)
+                    newURI = ResourcePath(template.format(ref), forceAbsolute=False, forceDirectory=False)
                     pathInStore = str(newURI.updatedExtension(location.pathInStore.getExtension()))
 
                 exportUri = directoryUri.join(pathInStore)

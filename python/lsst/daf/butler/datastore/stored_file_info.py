@@ -313,7 +313,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         location : `Location`
             The location of the item within this datastore.
         """
-        uriInStore = ResourcePath(self.path, forceAbsolute=False)
+        uriInStore = ResourcePath(self.path, forceAbsolute=False, forceDirectory=False)
         if uriInStore.isabs():
             location = Location(None, uriInStore)
         else:

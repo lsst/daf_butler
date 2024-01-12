@@ -368,7 +368,7 @@ class Config(MutableMapping):
         path : `lsst.resources.ResourcePathExpression`
             Path or a URI to a persisted config file.
         """
-        uri = ResourcePath(path)
+        uri = ResourcePath(path, forceDirectory=False)
         ext = uri.getExtension()
         if ext == ".yaml":
             log.debug("Opening YAML config file: %s", uri.geturl())
@@ -472,7 +472,9 @@ class Config(MutableMapping):
                 subConfigs = []
                 for fileName in includes:
                     # Expand any shell variables -- this could be URI
-                    fileName = ResourcePath(os.path.expandvars(fileName), forceAbsolute=False)
+                    fileName = ResourcePath(
+                        os.path.expandvars(fileName), forceAbsolute=False, forceDirectory=False
+                    )
                     found = None
                     if fileName.isabs():
                         found = fileName
@@ -1190,7 +1192,7 @@ class ConfigSubset(Config):
             # Supplied search paths have highest priority
             fullSearchPath: list[ResourcePath | str] = []
             if searchPaths:
-                fullSearchPath = [ResourcePath(path) for path in searchPaths]
+                fullSearchPath = [ResourcePath(path, forceDirectory=True) for path in searchPaths]
 
             # Read default paths from environment
             fullSearchPath.extend(self.defaultSearchPaths())
@@ -1301,7 +1303,7 @@ class ConfigSubset(Config):
             to an explicit resource (which will ignore the search path)
             which is assumed to exist.
         """
-        uri = ResourcePath(configFile)
+        uri = ResourcePath(configFile, forceDirectory=False)
         if uri.isabs() and uri.exists():
             # Assume this resource exists
             self._updateWithOtherConfigFile(configFile)

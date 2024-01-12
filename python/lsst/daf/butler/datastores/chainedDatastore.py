@@ -585,7 +585,9 @@ class ChainedDatastore(Datastore):
                 # to find the paths now rather than try to infer how
                 # each datastore has stored them in the internal prep class.
                 paths = (
-                    {ResourcePath(dataset.path) for dataset in okForChild} if transfer == "move" else set()
+                    {ResourcePath(dataset.path, forceDirectory=False) for dataset in okForChild}
+                    if transfer == "move"
+                    else set()
                 )
                 children.append((datastore, prepDataForChild, paths))
         if allFailuresAreNotImplementedError:
