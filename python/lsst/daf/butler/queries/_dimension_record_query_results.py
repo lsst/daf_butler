@@ -66,21 +66,21 @@ class DimensionRecordQueryResults(QueryResultsBase):
         self._spec = spec
 
     def __iter__(self) -> Iterator[DimensionRecord]:
-        page = self._driver.execute(self._tree, self._spec)
+        page = self._driver.execute(self._spec, self._tree)
         yield from page.rows
         while page.next_key is not None:
             page = self._driver.fetch_next_page(self._spec, page.next_key)
             yield from page.rows
 
     def iter_table_pages(self) -> Iterator[DimensionRecordTable]:
-        page = self._driver.execute(self._tree, self._spec)
+        page = self._driver.execute(self._spec, self._tree)
         yield page.as_table()
         while page.next_key is not None:
             page = self._driver.fetch_next_page(self._spec, page.next_key)
             yield page.as_table()
 
     def iter_set_pages(self) -> Iterator[DimensionRecordSet]:
-        page = self._driver.execute(self._tree, self._spec)
+        page = self._driver.execute(self._spec, self._tree)
         yield page.as_set()
         while page.next_key is not None:
             page = self._driver.fetch_next_page(self._spec, page.next_key)

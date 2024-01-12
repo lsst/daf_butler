@@ -95,24 +95,24 @@ class DirectQueryDriver(QueryDriver):
         return self._universe
 
     @overload
-    def execute(self, tree: qt.QueryTree, result_spec: DataCoordinateResultSpec) -> DataCoordinateResultPage:
+    def execute(self, result_spec: DataCoordinateResultSpec, tree: qt.QueryTree) -> DataCoordinateResultPage:
         ...
 
     @overload
     def execute(
-        self, tree: qt.QueryTree, result_spec: DimensionRecordResultSpec
+        self, result_spec: DimensionRecordResultSpec, tree: qt.QueryTree
     ) -> DimensionRecordResultPage:
         ...
 
     @overload
-    def execute(self, tree: qt.QueryTree, result_spec: DatasetRefResultSpec) -> DatasetRefResultPage:
+    def execute(self, result_spec: DatasetRefResultSpec, tree: qt.QueryTree) -> DatasetRefResultPage:
         ...
 
     @overload
-    def execute(self, tree: qt.QueryTree, result_spec: GeneralResultSpec) -> GeneralResultPage:
+    def execute(self, result_spec: GeneralResultSpec, tree: qt.QueryTree) -> GeneralResultPage:
         ...
 
-    def execute(self, tree: qt.QueryTree, result_spec: ResultSpec) -> ResultPage:
+    def execute(self, result_spec: ResultSpec, tree: qt.QueryTree) -> ResultPage:
         raise NotImplementedError("TODO")
 
     @overload

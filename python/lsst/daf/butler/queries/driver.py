@@ -163,35 +163,35 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @overload
-    def execute(self, tree: QueryTree, result_spec: DataCoordinateResultSpec) -> DataCoordinateResultPage:
+    def execute(self, result_spec: DataCoordinateResultSpec, tree: QueryTree) -> DataCoordinateResultPage:
         ...
 
     @overload
-    def execute(self, tree: QueryTree, result_spec: DimensionRecordResultSpec) -> DimensionRecordResultPage:
+    def execute(self, result_spec: DimensionRecordResultSpec, tree: QueryTree) -> DimensionRecordResultPage:
         ...
 
     @overload
-    def execute(self, tree: QueryTree, result_spec: DatasetRefResultSpec) -> DatasetRefResultPage:
+    def execute(self, result_spec: DatasetRefResultSpec, tree: QueryTree) -> DatasetRefResultPage:
         ...
 
     @overload
-    def execute(self, tree: QueryTree, result_spec: GeneralResultSpec) -> GeneralResultPage:
+    def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> GeneralResultPage:
         ...
 
     @abstractmethod
-    def execute(self, tree: QueryTree, result_spec: ResultSpec) -> ResultPage:
+    def execute(self, result_spec: ResultSpec, tree: QueryTree) -> ResultPage:
         """Execute a query and return the first result page.
 
         Parameters
         ----------
-        tree : `QueryTree`
-            Query tree to evaluate.
         result_spec : `ResultSpec`
             The kind of results the user wants from the query.  This can affect
             the actual query (i.e. SQL and Python postprocessing) that is run,
             e.g. by changing what is in the SQL SELECT clause and even what
             tables are joined in, but it never changes the number or order of
             result rows.
+        tree : `QueryTree`
+            Query tree to evaluate.
 
         Returns
         -------
