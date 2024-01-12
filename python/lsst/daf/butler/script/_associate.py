@@ -58,7 +58,7 @@ def associate(
     find_first : `bool`
         Whether to find the first match or not.
     """
-    butler = Butler.from_config(repo, writeable=True)
+    butler = Butler.from_config(repo, writeable=True, without_datastore=True)
 
     butler.registry.registerCollection(collection, CollectionType.TAGGED)
 
