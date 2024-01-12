@@ -29,6 +29,8 @@ from __future__ import annotations
 
 __all__ = ("Location", "LocationFactory")
 
+import copy
+
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 
@@ -91,6 +93,17 @@ class Location:
             pathInStore = self.uri.relative_to(self._datastoreRootUri)
             if pathInStore is None:
                 raise ValueError(f"Unexpectedly {path} jumps out of {self._datastoreRootUri}")
+
+    def clone(self) -> Location:
+        """Return a copy of this location as a new instance.
+
+        Returns
+        -------
+        location : `Location`
+            An identical location as a new instance.
+        """
+        # Shallow copy is fine because all the members are immutable.
+        return copy.copy(self)
 
     def __str__(self) -> str:
         return str(self.uri)
