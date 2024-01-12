@@ -377,6 +377,57 @@ class FileTemplate:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{self.template}")'
 
+    def grouped_fields(self) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+        """Return all the fields, grouped by their type.
+
+        Returns
+        -------
+        grouped : `dict` [ `set` [ `str` ]]
+            The fields grouped by their type. The keys for this dict are
+            ``standard``, ``special``, ``subfield``, and
+            ``parent``. If  field ``a.b`` is present, ``a`` will not be
+            included in ``standard`` but will be included in ``parent``.
+        grouped_optional : `dict` [ `set` [ `str` ]]
+            As for ``grouped`` but the optional fields.
+        """
+        fmt = string.Formatter()
+        parts = fmt.parse(self.template)
+
+        grouped: dict[str, set[str]] = {
+            "standard": set(),
+            "special": set(),
+            "subfield": set(),
+            "parent": set(),
+        }
+        grouped_optional: dict[str, set[str]] = {
+            "standard": set(),
+            "special": set(),
+            "subfield": set(),
+            "parent": set(),
+        }
+
+        for _, field_name, format_spec, _ in parts:
+            if field_name is not None and format_spec is not None:
+                subfield = None
+                key = "standard"
+                if field_name in self.specialFields:
+                    key = "special"
+                elif "." in field_name:
+                    # This needs to be added twice.
+                    subfield = field_name
+                    key = "parent"
+                    field_name, _ = field_name.split(".")
+
+                if "?" in format_spec:
+                    target = grouped_optional
+                else:
+                    target = grouped
+                target[key].add(field_name)
+                if subfield is not None:
+                    target["subfield"].add(subfield)
+
+        return grouped, grouped_optional
+
     def fields(self, optionals: bool = False, specials: bool = False, subfields: bool = False) -> set[str]:
         """Return the field names used in this template.
 
@@ -406,13 +457,13 @@ class FileTemplate:
         names = set()
         for _, field_name, format_spec, _ in parts:
             if field_name is not None and format_spec is not None:
-                if "?" in format_spec and not optionals:
+                if not optionals and "?" in format_spec:
                     continue
 
                 if not specials and field_name in self.specialFields:
                     continue
 
-                if "." in field_name and not subfields:
+                if not subfields and "." in field_name:
                     field_name, _ = field_name.split(".")
 
                 names.add(field_name)
@@ -607,8 +658,17 @@ class FileTemplate:
         used to compare the available dimensions with those specified in the
         template.
         """
+        grouped_fields, grouped_optionals = self.grouped_fields()
+
         # Check that the template has run
-        withSpecials = self.fields(specials=True, optionals=True)
+        withSpecials = (
+            grouped_fields["standard"]
+            | grouped_fields["parent"]
+            | grouped_fields["special"]
+            | grouped_optionals["standard"]
+            | grouped_optionals["parent"]
+            | grouped_optionals["special"]
+        )
 
         if "collection" in withSpecials:
             raise FileTemplateValidationError(
@@ -623,7 +683,12 @@ class FileTemplate:
         # Check that there are some dimension fields in the template
         # The id is allowed instead if present since that also uniquely
         # identifies the file in the datastore.
-        allfields = self.fields(optionals=True)
+        allfields = (
+            grouped_fields["standard"]
+            | grouped_fields["parent"]
+            | grouped_optionals["standard"]
+            | grouped_optionals["parent"]
+        )
         if not allfields and "id" not in withSpecials:
             raise FileTemplateValidationError(
                 f"Template '{self}' does not seem to have any fields corresponding to dimensions."
@@ -659,7 +724,9 @@ class FileTemplate:
                         f"Template '{self}' has no component but {entity} refers to a component."
                     )
             else:
-                mandatorySpecials = self.fields(specials=True)
+                mandatorySpecials = (
+                    grouped_fields["standard"] | grouped_fields["parent"] | grouped_fields["special"]
+                )
                 if "component" in mandatorySpecials:
                     raise FileTemplateValidationError(
                         f"Template '{self}' has mandatory component but "
@@ -694,7 +761,7 @@ class FileTemplate:
             minimal.remove(skypix_alias)
             maximal.remove(skypix_alias)
 
-        required = self.fields(optionals=False)
+        required = grouped_fields["standard"] | grouped_fields["parent"]
 
         # Calculate any field usage that does not match a dimension
         if not required.issubset(maximal):
