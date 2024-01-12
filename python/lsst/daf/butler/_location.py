@@ -62,7 +62,7 @@ class Location:
         _trusted_path: bool = False,
     ):
         # Be careful not to force a relative local path to absolute path
-        path_uri = ResourcePath(path, forceAbsolute=False)
+        path_uri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
 
         if isinstance(datastoreRootUri, str):
             datastoreRootUri = ResourcePath(datastoreRootUri, forceDirectory=True)
@@ -127,7 +127,7 @@ class Location:
             if root is None:
                 uri = self._path
             else:
-                uri = root.join(self._path)
+                uri = root.join(self._path, forceDirectory=False)
             self._uri = uri
         return self._uri
 
@@ -231,9 +231,7 @@ class LocationFactory:
         """Return the network location of root location of the `Datastore`."""
         return self._datastoreRootUri.netloc
 
-    def fromPath(
-        self, path: ResourcePathExpression, *, force_directory=False, _trusted_path: bool = False
-    ) -> Location:
+    def fromPath(self, path: ResourcePathExpression, *, _trusted_path: bool = False) -> Location:
         """Create a `Location` from a POSIX path.
 
         Parameters
@@ -241,10 +239,7 @@ class LocationFactory:
         path : `str` or `lsst.resources.ResourcePath`
             A standard POSIX path, relative to the `Datastore` root.
             If it is a `lsst.resources.ResourcePath` it must not be absolute.
-        force_directory : `bool`, optional
-            By default all locations created from this constructor are assumed
-            to refer to files within a datastore. Can be set to `True` if this
-            location is referring to a directory within the datastore.
+            Is assumed to refer to a file and not a directory in the datastore.
         _trusted_path : `bool`, optional
             If `True`, the path is not checked to see if it is really inside
             the datastore.
@@ -254,7 +249,7 @@ class LocationFactory:
         location : `Location`
             The equivalent `Location`.
         """
-        path = ResourcePath(path, forceAbsolute=False, forceDirectory=force_directory)
+        path = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
         return self.from_uri(path, _trusted_path=_trusted_path)
 
     def from_uri(self, uri: ResourcePath, *, _trusted_path: bool = False) -> Location:
