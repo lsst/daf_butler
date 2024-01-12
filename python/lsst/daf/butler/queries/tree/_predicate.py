@@ -49,12 +49,12 @@ from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union,
 import pydantic
 
 from ...dimensions import DataCoordinate, DataIdValue, DimensionGroup
-from ._base import InvalidRelationError, PredicateBase
+from ._base import InvalidQueryTreeError, PredicateBase
 from ._column_expression import ColumnExpression
 from ._column_reference import ColumnReference
 
 if TYPE_CHECKING:
-    from ._root_relation import RootRelation
+    from ._query_tree import QueryTree
 
 
 ComparisonOperator: TypeAlias = Literal["==", "!=", "<", ">", ">=", "<=", "overlaps"]
@@ -503,7 +503,7 @@ class Comparison(PredicateBase):
     @pydantic.model_validator(mode="after")
     def _validate_column_types(self) -> Comparison:
         if self.a.column_type != self.b.column_type:
-            raise InvalidRelationError(
+            raise InvalidQueryTreeError(
                 f"Column types for comparison {self} do not agree "
                 f"({self.a.column_type}, {self.b.column_type})."
             )
@@ -515,7 +515,7 @@ class Comparison(PredicateBase):
             case ("overlaps", "region" | "timespan"):
                 pass
             case _:
-                raise InvalidRelationError(
+                raise InvalidQueryTreeError(
                     f"Invalid column type {self.a.column_type} for operator {self.operator!r}."
                 )
         return self
@@ -670,7 +670,7 @@ class InRelation(PredicateBase):
     column: ColumnExpression
     """Expression to extract from `relation`."""
 
-    relation: RootRelation
+    relation: QueryTree
     """Relation whose rows from `column` represent the container."""
 
     def gather_required_columns(self) -> set[ColumnReference]:

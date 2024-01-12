@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = (
     "DataCoordinateResultSpec",
     "DataCoordinateResultPage",
-    "RelationDataCoordinateQueryResults",
+    "DataCoordinateQueryResults2",
 )
 
 from collections.abc import Iterable, Iterator
@@ -45,7 +45,7 @@ from .._query_results import DataCoordinateQueryResults, DatasetQueryResults
 from ..dimensions import DataCoordinate, DimensionGroup
 from .convert_args import convert_order_by_args
 from .driver import QueryDriver
-from .relation_tree import InvalidRelationError, RootRelation, make_unit_relation
+from .tree import InvalidQueryTreeError, MaterializationSpec, QueryTree, make_unit_query_tree
 
 if TYPE_CHECKING:
     from .driver import PageKey
@@ -71,18 +71,16 @@ class DataCoordinateResultPage(pydantic.BaseModel):
     rows: list[DataCoordinate]
 
 
-class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
-    """Implementation of `DataCoordinateQueryResults` for the relation-based
+class DataCoordinateQueryResults2(DataCoordinateQueryResults):
+    """Implementation of `DataCoordinateQueryResults` for the tree-based
     query system.
 
     Parameters
     ----------
     driver : `QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `RootRelation`
-        Description of the query as a tree of relation operations.  The
-        instance returned directly by the `Butler._query` entry point should
-        be constructed via `make_unit_relation`.
+    tree : `QueryTree`
+        Description of the query as a tree of joins and column expressions.
     spec : `DataCoordinateResultSpec`
         Specification for the details of the data IDs to return.
 
@@ -92,7 +90,7 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
     we won't need an ABC if this is the only implementation.
     """
 
-    def __init__(self, driver: QueryDriver, tree: RootRelation, spec: DataCoordinateResultSpec):
+    def __init__(self, driver: QueryDriver, tree: QueryTree, spec: DataCoordinateResultSpec):
         self._driver = driver
         self._tree = tree
         self._spec = spec
@@ -120,11 +118,14 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
     @contextmanager
     def materialize(self) -> Iterator[DataCoordinateQueryResults]:
         # Docstring inherited.
-        key = self._driver.materialize(self._tree, datasets=frozenset(), dimensions=self.dimensions)
-        yield RelationDataCoordinateQueryResults(
+        key, _ = self._driver.materialize(self._tree, dimensions=self.dimensions, datasets=frozenset())
+        yield DataCoordinateQueryResults2(
             self._driver,
-            tree=make_unit_relation(self._driver.universe).join_materialization(
-                key=key, datasets=frozenset(), dimensions=self.dimensions
+            tree=make_unit_query_tree(self._driver.universe).join_materialization(
+                key,
+                MaterializationSpec.model_construct(
+                    dimensions=self.dimensions, resolved_datasets=frozenset()
+                ),
             ),
             spec=self._spec,
         )
@@ -137,7 +138,7 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
         # Docstring inherited.
         if self.has_records():
             return self
-        return RelationDataCoordinateQueryResults(
+        return DataCoordinateQueryResults2(
             self._driver,
             tree=self._tree,
             spec=DataCoordinateResultSpec.model_construct(
@@ -157,14 +158,14 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
         else:
             dimensions = self._driver.universe.conform(dimensions)
             if not dimensions <= self.dimensions:
-                raise InvalidRelationError(
+                raise InvalidQueryTreeError(
                     f"New dimensions {dimensions} are not a subset of the current "
                     f"dimensions {self.dimensions}."
                 )
         # TODO: right now I'm assuming we'll deduplicate all query results (per
         # page), even if we have to do that in Python, so the 'unique' argument
         # doesn't do anything.
-        return RelationDataCoordinateQueryResults(
+        return DataCoordinateQueryResults2(
             self._driver,
             tree=self._tree,
             spec=DataCoordinateResultSpec.model_construct(
@@ -191,7 +192,9 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
-        return self._driver.count(self._tree, exact=exact, discard=discard)
+        return self._driver.count(
+            self._tree, dimensions=self._spec.dimensions, datasets=frozenset(), exact=exact, discard=discard
+        )
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         # Docstring inherited.
@@ -203,7 +206,7 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
 
     def order_by(self, *args: str) -> DataCoordinateQueryResults:
         # Docstring inherited.
-        return RelationDataCoordinateQueryResults(
+        return DataCoordinateQueryResults2(
             driver=self._driver,
             tree=self._tree.order_by(*convert_order_by_args(self._tree, *args)),
             spec=self._spec,
@@ -211,7 +214,7 @@ class RelationDataCoordinateQueryResults(DataCoordinateQueryResults):
 
     def limit(self, limit: int | None = None, offset: int = 0) -> DataCoordinateQueryResults:
         # Docstring inherited.
-        return RelationDataCoordinateQueryResults(
+        return DataCoordinateQueryResults2(
             driver=self._driver,
             tree=self._tree.order_by(limit=limit, offset=offset),
             spec=self._spec,

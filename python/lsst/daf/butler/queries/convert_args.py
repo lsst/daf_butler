@@ -34,17 +34,17 @@ from typing import Any
 
 from ..dimensions import DataId
 from .expression_factory import ExpressionProxy
-from .relation_tree import OrderExpression, Predicate, RootRelation
+from .tree import OrderExpression, Predicate, QueryTree
 
 
 def convert_where_args(
-    tree: RootRelation, *args: str | Predicate | DataId, bind: Mapping[str, Any] | None = None
+    tree: QueryTree, *args: str | Predicate | DataId, bind: Mapping[str, Any] | None = None
 ) -> list[Predicate]:
     """Convert ``where`` arguments to a list of column expressions.
 
     Parameters
     ----------
-    tree : `RootRelation`
+    tree : `QueryTree`
         Relation whose rows will be filtered.
     *args : `str`, `Predicate`, `DataCoordinate`, or `~collections.abc.Mapping`
         Expressions to convert into predicates.
@@ -61,13 +61,13 @@ def convert_where_args(
 
 
 def convert_order_by_args(
-    tree: RootRelation, *args: str | OrderExpression | ExpressionProxy
+    tree: QueryTree, *args: str | OrderExpression | ExpressionProxy
 ) -> list[OrderExpression]:
     """Convert ``order_by`` arguments to a list of column expressions.
 
     Parameters
     ----------
-    tree : `RootRelation`
+    tree : `QueryTree`
         Relation whose rows will be ordered.
     *args : `OrderExpression`, `str`, or `ExpressionObject`
         Expression or column names to sort by.

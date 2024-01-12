@@ -27,30 +27,27 @@
 
 from __future__ import annotations
 
-__all__ = ("RelationQuery",)
+__all__ = ("Query2",)
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Set
 from typing import TYPE_CHECKING, Any
 
 from .._query import Query
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
-from .convert_args import convert_order_by_args, convert_where_args
-from .data_coordinate_results import DataCoordinateResultSpec, RelationDataCoordinateQueryResults
-from .dataset_results import (
-    ChainedDatasetQueryResults,
-    DatasetRefResultSpec,
-    RelationSingleTypeDatasetQueryResults,
-)
-from .dimension_record_results import DimensionRecordResultSpec, RelationDimensionRecordQueryResults
+from .convert_args import convert_where_args
+from .data_coordinate_results import DataCoordinateQueryResults2, DataCoordinateResultSpec
+from .dataset_results import ChainedDatasetQueryResults, DatasetRefResultSpec, SingleTypeDatasetQueryResults2
+from .dimension_record_results import DimensionRecordQueryResults2, DimensionRecordResultSpec
 from .driver import QueryDriver
-from .expression_factory import ExpressionFactory, ExpressionProxy
-from .relation_tree import (
-    InvalidRelationError,
-    OrderExpression,
+from .expression_factory import ExpressionFactory
+from .tree import (
+    DatasetSpec,
+    InvalidQueryTreeError,
+    MaterializationSpec,
     Predicate,
-    RootRelation,
-    make_dimension_relation,
-    make_unit_relation,
+    QueryTree,
+    make_dimension_query_tree,
+    make_unit_query_tree,
 )
 
 if TYPE_CHECKING:
@@ -58,18 +55,18 @@ if TYPE_CHECKING:
     from ..registry import CollectionArgType
 
 
-class RelationQuery(Query):
-    """Implementation of the Query interface backed by a relation tree and a
+class Query2(Query):
+    """Implementation of the Query interface backed by a `QueryTree` and a
     `QueryDriver`.
 
     Parameters
     ----------
     driver : `QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `RootRelation`
-        Description of the query as a tree of relation operations.  The
-        instance returned directly by the `Butler._query` entry point should
-        be constructed via `make_unit_relation`.
+    tree : `QueryTree`
+        Description of the query as a tree of joins and column expressions.
+        The instance returned directly by the `Butler._query` entry point
+        should be constructed via `make_unit_query_tree`.
     include_dimension_records : `bool`
         Whether query result objects created from this query should be expanded
         to include dimension records.
@@ -80,7 +77,7 @@ class RelationQuery(Query):
     if this is the only implementation.
     """
 
-    def __init__(self, driver: QueryDriver, tree: RootRelation, include_dimension_records: bool):
+    def __init__(self, driver: QueryDriver, tree: QueryTree, include_dimension_records: bool):
         self._driver = driver
         self._tree = tree
         self._include_dimension_records = include_dimension_records
@@ -91,9 +88,9 @@ class RelationQuery(Query):
         return self._tree.dimensions
 
     @property
-    def dataset_types(self) -> frozenset[str]:
+    def dataset_types(self) -> Set[str]:
         """The names of dataset types joined into the query."""
-        return self._tree.available_dataset_types
+        return self._tree.datasets.keys()
 
     @property
     def expression_factory(self) -> ExpressionFactory:
@@ -163,13 +160,13 @@ class RelationQuery(Query):
         data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
         tree = self._tree
         if not dimensions >= self._tree.dimensions:
-            tree = tree.join(make_dimension_relation(dimensions))
+            tree = tree.join(make_dimension_query_tree(dimensions))
         if data_id or where:
             tree = tree.where(*convert_where_args(self._tree, where, data_id, bind=bind, **kwargs))
         result_spec = DataCoordinateResultSpec(
             dimensions=dimensions, include_dimension_records=self._include_dimension_records
         )
-        return RelationDataCoordinateQueryResults(self._driver, tree, result_spec)
+        return DataCoordinateQueryResults2(self._driver, tree, result_spec)
 
     # TODO add typing.overload variants for single-dataset-type and patterns.
 
@@ -188,38 +185,38 @@ class RelationQuery(Query):
         resolved_dataset_types = self._driver.resolve_dataset_type_wildcard(dataset_type)
         data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
         where_terms = convert_where_args(self._tree, where, data_id, bind=bind, **kwargs)
-        single_type_results: list[RelationSingleTypeDatasetQueryResults] = []
+        single_type_results: list[SingleTypeDatasetQueryResults2] = []
         for name, resolved_dataset_type in resolved_dataset_types.items():
             tree = self._tree
-            if name not in tree.available_dataset_types:
+            if name not in tree.datasets:
                 resolved_collections, collections_ordered = self._driver.resolve_collection_wildcard(
                     # TODO: drop regex support from base signature.
                     collections,  # type: ignore
                 )
                 if find_first and not collections_ordered:
-                    raise InvalidRelationError(
+                    raise InvalidQueryTreeError(
                         f"Unordered collections argument {collections} requires find_first=False."
                     )
                 tree = tree.join_dataset(
-                    dataset_type=name,
-                    dimensions=resolved_dataset_type.dimensions.as_group(),
-                    collections=tuple(resolved_collections),
+                    name,
+                    DatasetSpec.model_construct(
+                        dimensions=resolved_dataset_type.dimensions.as_group(),
+                        collections=tuple(resolved_collections),
+                    ),
                 )
             elif collections is not None:
-                raise InvalidRelationError(
+                raise InvalidQueryTreeError(
                     f"Dataset type {name!r} was already joined into this query but new collections "
                     f"{collections!r} were still provided."
                 )
             if where_terms:
                 tree = tree.where(*where_terms)
             if find_first:
-                tree = tree.find_first_dataset(name, resolved_dataset_type.dimensions.as_group())
+                tree = tree.find_first(name)
             spec = DatasetRefResultSpec.model_construct(
                 dataset_type=resolved_dataset_type, include_dimension_records=self._include_dimension_records
             )
-            single_type_results.append(
-                RelationSingleTypeDatasetQueryResults(self._driver, tree=tree, spec=spec)
-            )
+            single_type_results.append(SingleTypeDatasetQueryResults2(self._driver, tree=tree, spec=spec))
         if len(single_type_results) == 1:
             return single_type_results[0]
         else:
@@ -240,11 +237,11 @@ class RelationQuery(Query):
         data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
         tree = self._tree
         if element not in tree.dimensions.elements:
-            tree = tree.join(make_dimension_relation(self._driver.universe[element].minimal_group))
+            tree = tree.join(make_dimension_query_tree(self._driver.universe[element].minimal_group))
         if data_id or where:
             tree = tree.where(*convert_where_args(self._tree, where, data_id, bind=bind, **kwargs))
         result_spec = DimensionRecordResultSpec(element=self._driver.universe[element])
-        return RelationDimensionRecordQueryResults(self._driver, tree, result_spec)
+        return DimensionRecordQueryResults2(self._driver, tree, result_spec)
 
     # TODO: add general, dict-row results method and QueryResults.
 
@@ -253,36 +250,11 @@ class RelationQuery(Query):
     # about which should be duplicated in Query and QueryResults, and which
     # should not, and get naming consistent.
 
-    def with_dimension_records(self) -> RelationQuery:
+    def with_dimension_records(self) -> Query2:
         """Return a new Query that will always include dimension records in
         any `DataCoordinate` or `DatasetRef` results.
         """
-        return RelationQuery(self._driver, self._tree, include_dimension_records=True)
-
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        """Return the number of rows this query would return.
-
-        Parameters
-        ----------
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed to account for that filtering in the count.  If `False`, the
-            result may be an upper bound.
-        discard : `bool`, optional
-            If `True`, compute the exact count even if it would require running
-            the full query and then throwing away the result rows after
-            counting them.  If `False`, this is an error, as the user would
-            usually be better off executing the query first to fetch its rows
-            into a new query (or passing ``exact=False``).  Ignored if
-            ``exact=False``.
-
-        Returns
-        -------
-        count : `int`
-            The number of rows the query would return, or an upper bound if
-            ``exact=False``.
-        """
-        return self._driver.count(self._tree, exact=exact, discard=discard)
+        return Query2(self._driver, self._tree, include_dimension_records=True)
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         """Test whether the query would return any rows.
@@ -326,94 +298,28 @@ class RelationQuery(Query):
         """
         return self._driver.explain_no_results(self._tree, execute=execute)
 
-    def order_by(self, *args: str | OrderExpression | ExpressionProxy) -> RelationQuery:
-        """Return a new query that sorts any results returned.
-
-        Parameters
-        ----------
-        *args : `str` or `OrderExpression`
-            Column names or expression objects to use for ordering. Names can
-            be prefixed with minus (``-``) to use descending ordering.
-
-        Returns
-        -------
-        query : `Query`
-            A new query object whose results will be sorted.
-
-        Notes
-        -----
-        Multiple `order_by` calls are combined; this::
-
-            q.order_by(*a).order_by(*b)
-
-        is equivalent to this::
-
-            q.order_by(*(b + a))
-
-        Note that this is consistent with sorting first by ``a`` and then by
-        ``b``.
-
-        If an expression references a dimension or dimension element that is
-        not already present in the query, it will be joined in, but dataset
-        searches must already be joined into a query in order to reference
-        their fields in expressions.
-        """
-        return RelationQuery(
-            tree=self._tree.order_by(*convert_order_by_args(self._tree, *args)),
-            driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
-        )
-
-    def limit(self, limit: int | None = None, offset: int = 0) -> RelationQuery:
-        """Return a new query with results limited by positional slicing.
-
-        Parameters
-        ----------
-        limit : `int` or `None`, optional
-            Upper limit on the number of returned records.
-        offset : `int`, optional
-            The number of records to skip before returning at most ``limit``
-            records.
-
-        Returns
-        -------
-        query : `Query`
-            A new query object whose results will be sliced.
-
-        Notes
-        -----
-        Multiple `limit` calls are combined, with ``offset`` summed and the
-        minimum ``limit``.
-        """
-        return RelationQuery(
-            tree=self._tree.order_by(limit=limit, offset=offset),
-            driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
-        )
-
     def materialize(
         self,
         *,
-        datasets: Iterable[str] | None = None,
         dimensions: Iterable[str] | DimensionGroup | None = None,
-    ) -> RelationQuery:
+        datasets: Iterable[str] | None = None,
+    ) -> Query2:
         """Execute the query, save its results to a temporary location, and
         return a new query that represents fetching or joining against those
         saved results.
 
         Parameters
         ----------
-        datasets : `~collections.abc.Iterable` [ `str` ], optional
-            Names of dataset types whose ID fields (at least) should be
-            included in the temporary results; default is to include all
-            datasets types whose ID columns are currently available to the
-            query.  Dataset searches over multiple collections are not
-            resolved, but enough information is preserved to resolve them
-            downstream of the materialization.
         dimensions : `~collections.abc.Iterable` [ `str` ] or \
                 `DimensionGroup`, optional
             Dimensions to include in the temporary results.  Default is to
             include all dimensions in the query.
+        datasets : `~collections.abc.Iterable` [ `str` ], optional
+            Names of dataset types that should be included in the new query;
+            default is to include all datasets types currently available to the
+            query.  Only resolved datasets UUIDs will actually be materialized;
+            datasets whose UUIDs cannot be resolved be continue to be
+            represented in the query via a join on their dimensions.
 
         Returns
         -------
@@ -421,27 +327,27 @@ class RelationQuery(Query):
             A new query object whose that represents the materialized rows.
         """
         if datasets is None:
-            datasets = self._tree.available_dataset_types
+            datasets = frozenset(self._tree.datasets)
         else:
             datasets = frozenset(datasets)
         if dimensions is None:
-            dimensions = self._tree.result_dimensions
+            dimensions = self._tree.dimensions
         else:
             dimensions = self._driver.universe.conform(dimensions)
-        key = self._driver.materialize(self._tree, datasets, dimensions)
-        return RelationQuery(
-            self._driver,
-            tree=make_unit_relation(self._driver.universe).join_materialization(
-                key, datasets=datasets, dimensions=dimensions
-            ),
-            include_dimension_records=self._include_dimension_records,
+        key, resolved_datasets = self._driver.materialize(self._tree, dimensions, datasets)
+        tree = make_unit_query_tree(self._driver.universe).join_materialization(
+            key,
+            MaterializationSpec.model_construct(dimensions=dimensions, resolved_datasets=resolved_datasets),
         )
+        for dataset_type_name in datasets:
+            tree = tree.join_dataset(dataset_type_name, self._tree.datasets[dataset_type_name])
+        return Query2(self._driver, tree=tree, include_dimension_records=self._include_dimension_records)
 
     def join_dataset_search(
         self,
         dataset_type: str,
         collections: Iterable[str],
-    ) -> RelationQuery:
+    ) -> Query2:
         """Return a new query with a search for a dataset joined in.
 
         Parameters
@@ -459,17 +365,19 @@ class RelationQuery(Query):
             A new query object with dataset columns available and rows
             restricted to those consistent with the found data IDs.
         """
-        return RelationQuery(
+        return Query2(
             tree=self._tree.join_dataset(
-                dataset_type=dataset_type,
-                collections=tuple(collections),
-                dimensions=self._driver.get_dataset_dimensions(dataset_type),
+                dataset_type,
+                DatasetSpec.model_construct(
+                    collections=tuple(collections),
+                    dimensions=self._driver.get_dataset_dimensions(dataset_type),
+                ),
             ),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
 
-    def join_data_coordinates(self, iterable: Iterable[DataCoordinate]) -> RelationQuery:
+    def join_data_coordinates(self, iterable: Iterable[DataCoordinate]) -> Query2:
         """Return a new query that joins in an explicit table of data IDs.
 
         Parameters
@@ -494,13 +402,13 @@ class RelationQuery(Query):
         if dimensions is None:
             raise RuntimeError("Cannot upload an empty data coordinate set.")
         key = self._driver.upload_data_coordinates(dimensions, rows)
-        return RelationQuery(
+        return Query2(
             tree=self._tree.join_data_coordinate_upload(dimensions=dimensions, key=key),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
 
-    def join_dimensions(self, dimensions: Iterable[str] | DimensionGroup) -> RelationQuery:
+    def join_dimensions(self, dimensions: Iterable[str] | DimensionGroup) -> Query2:
         """Return a new query that joins the logical tables for additional
         dimensions.
 
@@ -515,8 +423,8 @@ class RelationQuery(Query):
             A new query object with the dimensions joined in.
         """
         dimensions = self._driver.universe.conform(dimensions)
-        return RelationQuery(
-            tree=self._tree.join(make_dimension_relation(dimensions)),
+        return Query2(
+            tree=self._tree.join(make_dimension_query_tree(dimensions)),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
@@ -526,7 +434,7 @@ class RelationQuery(Query):
         *args: str | Predicate | DataId,
         bind: Mapping[str, Any] | None = None,
         **kwargs: Any,
-    ) -> RelationQuery:
+    ) -> Query2:
         """Return a query with a boolean-expression filter on its rows.
 
         Parameters
@@ -558,15 +466,13 @@ class RelationQuery(Query):
         searches must already be joined into a query in order to reference
         their fields in expressions.
         """
-        return RelationQuery(
+        return Query2(
             tree=self._tree.where(*convert_where_args(self._tree, *args, bind=bind, **kwargs)),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )
 
-    def find_first(
-        self, dataset_type: str | None = None, dimensions: DimensionGroup | None = None
-    ) -> RelationQuery:
+    def find_first(self, dataset_type: str | None = None) -> Query2:
         """Return a query that resolves the datasets by searching collections
         in order after grouping by data ID.
 
@@ -575,10 +481,6 @@ class RelationQuery(Query):
         dataset_type : `str`, optional
             Dataset type name of the datasets to resolve.  May be omitted if
             the query has exactly one dataset type joined in.
-        dimensions : `~collections.abc.Iterable` [ `str` ] or \
-                `DimensionGroup`, optional
-            Dimensions of the data IDs to group by.  If not provided, the
-            dataset type's dimensions are used (not the query's dimensions).
 
         Returns
         -------
@@ -592,26 +494,20 @@ class RelationQuery(Query):
         This operation is typically applied automatically when obtain a results
         object from the query, but in rare cases it may need to be added
         directly by this method, such as prior to a `materialization` or when
-        the query is being used as the container in a `relation_tree.InRange`
+        the query is being used as the container in a `query_tree.InRange`
         expression.
         """
-        if not self._tree.available_dataset_types:
-            raise InvalidRelationError("Query does not have any dataset searches joined in.")
+        if not self._tree.datasets:
+            raise InvalidQueryTreeError("Query does not have any dataset searches joined in.")
         if dataset_type is None:
             try:
-                (dataset_type,) = self._tree.available_dataset_types
+                (dataset_type,) = self._tree.datasets
             except ValueError:
-                raise InvalidRelationError(
+                raise InvalidQueryTreeError(
                     "Find-first dataset type must be provided if the query has more than one."
                 ) from None
-        elif dataset_type not in self._tree.available_dataset_types:
-            raise InvalidRelationError(
-                f"Find-first dataset type {dataset_type} is not present in query."
-            ) from None
-        if dimensions is None:
-            dimensions = self._driver.get_dataset_dimensions(dataset_type)
-        return RelationQuery(
-            tree=self._tree.find_first_dataset(dataset_type, dimensions),
+        return Query2(
+            tree=self._tree.find_first(dataset_type),
             driver=self._driver,
             include_dimension_records=self._include_dimension_records,
         )

@@ -28,11 +28,11 @@
 from __future__ import annotations
 
 __all__ = (
-    "RelationTreeBase",
+    "QueryTreeBase",
     "ColumnExpressionBase",
     "PredicateBase",
     "DatasetFieldName",
-    "InvalidRelationError",
+    "InvalidQueryTreeError",
 )
 
 from abc import ABC, abstractmethod
@@ -49,30 +49,29 @@ if TYPE_CHECKING:
 DatasetFieldName: TypeAlias = Literal["dataset_id", "ingest_date", "run", "collection", "rank", "timespan"]
 
 
-class InvalidRelationError(RuntimeError):
-    """Exception raised when an operation would create an invalid relation
-    tree.
-    """
+class InvalidQueryTreeError(RuntimeError):
+    """Exception raised when a query tree is or would not be valid."""
 
 
-class RelationTreeBase(pydantic.BaseModel):
-    """Base class for all non-primitive types in a relation tree."""
+class QueryTreeBase(pydantic.BaseModel):
+    """Base class for all non-primitive types in a query tree."""
 
     model_config = pydantic.ConfigDict(frozen=True, extra="forbid", strict=True)
 
 
-class ColumnExpressionBase(RelationTreeBase, ABC):
+class ColumnExpressionBase(QueryTreeBase, ABC):
     """Base class for objects that represent non-boolean column expressions in
-    a relation tree.
+    a query tree.
 
     This is a closed hierarchy whose concrete, `~typing.final` derived classes
     are members of the `ColumnExpression` union.  That union should generally
-    be used in type annotations rather than the formally-open base class.
+    be used in type annotations rather than the technically-open base class.
     """
 
     expression_type: str
 
     is_literal: ClassVar[bool] = False
+    """Whether this expression wraps a literal Python value."""
 
     @property
     @abstractmethod
@@ -90,9 +89,6 @@ class ColumnExpressionBase(RelationTreeBase, ABC):
     def column_type(self) -> ColumnType:
         """A string enumeration value representing the type of the column
         expression.
-
-        The default implementation returns the object's `expression_type` tag,
-        which is appropriate only for literal columns.
         """
         raise NotImplementedError()
 
@@ -105,7 +101,16 @@ class ColumnExpressionBase(RelationTreeBase, ABC):
 
 
 class ColumnLiteralBase(ColumnExpressionBase):
+    """Base class for objects that represent literal values as column
+    expressions in a query tree.
+
+    This is a closed hierarchy whose concrete, `~typing.final` derived classes
+    are members of the `ColumnLiteral` union.  That union should generally be
+    used in type annotations rather than the technically-open base class.
+    """
+
     is_literal: ClassVar[bool] = True
+    """Whether this expression wraps a literal Python value."""
 
     @property
     def precedence(self) -> int:
@@ -118,18 +123,13 @@ class ColumnLiteralBase(ColumnExpressionBase):
 
     @property
     def column_type(self) -> ColumnType:
-        """A string enumeration value representing the type of the column
-        expression.
-
-        The default implementation returns the object's `expression_type` tag,
-        which is appropriate only for literal columns.
-        """
+        # Docstring inherited.
         return cast(ColumnType, self.expression_type)
 
 
-class PredicateBase(RelationTreeBase, ABC):
+class PredicateBase(QueryTreeBase, ABC):
     """Base class for objects that represent boolean column expressions in a
-    relation tree.
+    query tree.
 
     A `Predicate` tree is always in conjunctive normal form (ANDs of ORs of
     NOTs).  This is enforced by type annotations (and hence Pydantic
@@ -138,7 +138,7 @@ class PredicateBase(RelationTreeBase, ABC):
 
     This is a closed hierarchy whose concrete, `~typing.final` derived classes
     are members of the `Predicate` union.  That union should generally be used
-    in type annotations rather than the formally-open base class.
+    in type annotations rather than the technically-open base class.
     """
 
     @property

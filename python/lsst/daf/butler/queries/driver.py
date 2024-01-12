@@ -44,7 +44,7 @@ from .data_coordinate_results import DataCoordinateResultPage, DataCoordinateRes
 from .dataset_results import DatasetRefResultPage, DatasetRefResultSpec
 from .dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
 from .general_results import GeneralResultPage, GeneralResultSpec
-from .relation_tree import DataCoordinateUploadKey, MaterializationKey, RootRelation
+from .tree import DataCoordinateUploadKey, MaterializationKey, QueryTree
 
 PageKey: TypeAlias = uuid.UUID
 
@@ -62,7 +62,7 @@ ResultPage: TypeAlias = Annotated[
 
 
 class QueryDriver(AbstractContextManager[None]):
-    """Base class for the implementation object inside `RelationQuery` objects
+    """Base class for the implementation object inside `Query2` objects
     that is specialized for DirectButler vs. RemoteButler.
 
     Notes
@@ -76,13 +76,13 @@ class QueryDriver(AbstractContextManager[None]):
     - result-page Parquet files that were never fetched (RemoteButler);
     - uploaded Parquet files used to fill temporary database tables
       (RemoteButler);
-    - cached content needed to construct query relation trees, like collection
-      summaries (potentially all Butlers).
+    - cached content needed to construct SQL queries, like collection summaries
+      (potentially all Butlers).
 
     When possible, these sorts of things should be cleaned up earlier when they
     are no longer needed, and the Butler server will still have to guard
-    against the context manager's ``__exit__`` signal never reaching it, but
-    a context manager will take care of these much more often than relying on
+    against the context manager's ``__exit__`` signal never reaching it, but a
+    context manager will take care of these much more often than relying on
     garbage collection and ``__del__`` would.
     """
 
@@ -93,31 +93,29 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @overload
-    def execute(self, tree: RootRelation, result_spec: DataCoordinateResultSpec) -> DataCoordinateResultPage:
+    def execute(self, tree: QueryTree, result_spec: DataCoordinateResultSpec) -> DataCoordinateResultPage:
         ...
 
     @overload
-    def execute(
-        self, tree: RootRelation, result_spec: DimensionRecordResultSpec
-    ) -> DimensionRecordResultPage:
+    def execute(self, tree: QueryTree, result_spec: DimensionRecordResultSpec) -> DimensionRecordResultPage:
         ...
 
     @overload
-    def execute(self, tree: RootRelation, result_spec: DatasetRefResultSpec) -> DatasetRefResultPage:
+    def execute(self, tree: QueryTree, result_spec: DatasetRefResultSpec) -> DatasetRefResultPage:
         ...
 
     @overload
-    def execute(self, tree: RootRelation, result_spec: GeneralResultSpec) -> GeneralResultPage:
+    def execute(self, tree: QueryTree, result_spec: GeneralResultSpec) -> GeneralResultPage:
         ...
 
     @abstractmethod
-    def execute(self, tree: RootRelation, result_spec: ResultSpec) -> ResultPage:
+    def execute(self, tree: QueryTree, result_spec: ResultSpec) -> ResultPage:
         """Execute a query and return the first result page.
 
         Parameters
         ----------
-        tree : `Relation`
-            Description of the query as a tree of relation operations.
+        tree : `QueryTree`
+            Query tree to evaluate.
         result_spec : `ResultSpec`
             The kind of results the user wants from the query.  This can affect
             the actual query (i.e. SQL and Python postprocessing) that is run,
@@ -191,27 +189,32 @@ class QueryDriver(AbstractContextManager[None]):
 
     @abstractmethod
     def materialize(
-        self, tree: RootRelation, datasets: frozenset[str], dimensions: DimensionGroup
-    ) -> MaterializationKey:
-        """Execute a relation tree, saving results to temporary storage for use
+        self,
+        tree: QueryTree,
+        dimensions: DimensionGroup,
+        datasets: frozenset[str],
+    ) -> tuple[MaterializationKey, frozenset[str]]:
+        """Execute a query tree, saving results to temporary storage for use
         in later queries.
 
         Parameters
         ----------
-        tree : `RootRelation`
-            Relation tree to evaluate.
-        datasets : `frozenset` [ `str` ]
-            Names of dataset types whose ID columns (at least) should be
-            preserved.
+        tree : `QueryTree`
+            Query tree to evaluate.
         dimensions : `DimensionGroup`
             Dimensions whose key columns should be preserved.
+        datasets : `frozenset` [ `str` ]
+            Names of dataset types whose ID columns should be materialized
+            if they are fully resolved.
 
         Returns
         -------
         key
             Unique identifier for the result rows that allows them to be
-            referenced in a `Materialization` relation instance in relation
-            trees executed later.
+            referenced in a `QueryTree`.
+        resolved_datasets : `frozenset` [  `str` ]
+            Names of dataset types that were resolved and had their UUIDs
+            materialized.
         """
         raise NotImplementedError()
 
@@ -233,19 +236,32 @@ class QueryDriver(AbstractContextManager[None]):
         -------
         key
             Unique identifier for the upload that allows it to be referenced in
-            a `DataCoordinateUpload` relation instance in relation trees
-            executed later.
+            a `QueryTree`.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def count(self, tree: RootRelation, *, exact: bool, discard: bool) -> int:
+    def count(
+        self,
+        tree: QueryTree,
+        *,
+        dimensions: DimensionGroup,
+        datasets: frozenset[str],
+        exact: bool,
+        discard: bool,
+    ) -> int:
         """Return the number of rows a query would return.
 
         Parameters
         ----------
-        tree : `Relation`
-            Description of the query as a tree of relation operations.
+        tree : `QueryTree`
+            Query tree to evaluate.
+        dimensions : `DimensionGroup`
+            Dimension keys whose distinct rows should be counted.  Must be a
+            subset of ``tree.dimensions``.
+        datasets : `frozenset` [ `str` ]
+            Datasets whose IDs might also count towards row distinctness, if
+            they are unresolved.
         exact : `bool`, optional
             If `True`, run the full query and perform post-query filtering if
             needed to account for that filtering in the count.  If `False`, the
@@ -261,13 +277,13 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def any(self, tree: RootRelation, *, execute: bool, exact: bool) -> bool:
+    def any(self, tree: QueryTree, *, execute: bool, exact: bool) -> bool:
         """Test whether the query would return any rows.
 
         Parameters
         ----------
-        tree : `Relation`
-            Description of the query as a tree of relation operations.
+        tree : `QueryTree`
+            Query tree to evaluate.
         execute : `bool`, optional
             If `True`, execute at least a ``LIMIT 1`` query if it cannot be
             determined prior to execution that the query would return no rows.
@@ -287,14 +303,14 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def explain_no_results(self, tree: RootRelation, execute: bool) -> Iterable[str]:
+    def explain_no_results(self, tree: QueryTree, execute: bool) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
 
         Parameters
         ----------
-        tree : `Relation`
-            Description of the query as a tree of relation operations.
+        tree : `QueryTree`
+            Query tree to evaluate.
         execute : `bool`, optional
             If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
             of aspects of the tree to more precisely determine where rows were

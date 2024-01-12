@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
-from ..queries import relation_tree as rt
+from ..queries import tree as qt
 from ._postprocessing import Postprocessing
 
 if TYPE_CHECKING:
@@ -50,11 +50,11 @@ class _BaseSqlBuilder:
     )
 
     fields_provided: dict[
-        rt.DimensionFieldReference | rt.DatasetFieldReference, sqlalchemy.ColumnElement
+        qt.DimensionFieldReference | qt.DatasetFieldReference, sqlalchemy.ColumnElement
     ] = dataclasses.field(default_factory=dict, kw_only=True)
 
     timespans_provided: dict[
-        rt.DimensionFieldReference | rt.DatasetFieldReference, TimespanDatabaseRepresentation
+        qt.DimensionFieldReference | qt.DatasetFieldReference, TimespanDatabaseRepresentation
     ] = dataclasses.field(default_factory=dict, kw_only=True)
 
     EMPTY_COLUMNS_NAME: ClassVar[str] = "IGNORED"
@@ -98,7 +98,7 @@ class EmptySqlBuilder(_BaseSqlBuilder):
 
     def sql_select(
         self,
-        columns_to_select: Iterable[rt.ColumnReference],
+        columns_to_select: Iterable[qt.ColumnReference],
         postprocessing: Postprocessing,
         *,
         sql_columns_to_select: Iterable[sqlalchemy.ColumnElement] = (),
@@ -128,7 +128,7 @@ class SqlBuilder(_BaseSqlBuilder):
         return self
 
     def extract_columns(
-        self, fields: Iterable[rt.ColumnReference], timespan_db_repr: type[TimespanDatabaseRepresentation]
+        self, fields: Iterable[qt.ColumnReference], timespan_db_repr: type[TimespanDatabaseRepresentation]
     ) -> SqlBuilder:
         for col_ref in fields:
             if col_ref.expression_type == "dimension_key":
@@ -158,7 +158,7 @@ class SqlBuilder(_BaseSqlBuilder):
 
     def sql_select(
         self,
-        columns_to_select: Iterable[rt.ColumnReference],
+        columns_to_select: Iterable[qt.ColumnReference],
         postprocessing: Postprocessing,
         *,
         sql_columns_to_select: Iterable[sqlalchemy.ColumnElement] = (),

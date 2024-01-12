@@ -51,7 +51,7 @@ if TYPE_CHECKING:
         Postprocessing,
         SqlBuilder,
     )
-    from ...queries.relation_tree import (  # Future query system (direct,client,server).
+    from ...queries.tree import (  # Future query system (direct,client,server).
         DimensionFieldReference,
         Predicate,
     )

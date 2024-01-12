@@ -38,7 +38,7 @@ import sqlalchemy
 from .. import ddl
 from .._dataset_type import DatasetType
 from ..dimensions import DataIdValue, DimensionElement, DimensionGroup, DimensionUniverse
-from ..queries import relation_tree as rt
+from ..queries import tree as qt
 from ..queries.data_coordinate_results import DataCoordinateResultPage, DataCoordinateResultSpec
 from ..queries.dataset_results import DatasetRefResultPage, DatasetRefResultSpec
 from ..queries.dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
@@ -76,34 +76,32 @@ class DirectQueryDriver(QueryDriver):
         self._universe = universe
         self._timespan_db_repr = db.getTimespanRepresentation()
         self._managers = managers
-        self._materialization_tables: dict[rt.MaterializationKey, sqlalchemy.Table] = {}
-        self._upload_tables: dict[rt.DataCoordinateUploadKey, sqlalchemy.Table] = {}
+        self._materialization_tables: dict[qt.MaterializationKey, sqlalchemy.Table] = {}
+        self._upload_tables: dict[qt.DataCoordinateUploadKey, sqlalchemy.Table] = {}
 
     @property
     def universe(self) -> DimensionUniverse:
         return self._universe
 
     @overload
-    def execute(
-        self, tree: rt.RootRelation, result_spec: DataCoordinateResultSpec
-    ) -> DataCoordinateResultPage:
+    def execute(self, tree: qt.QueryTree, result_spec: DataCoordinateResultSpec) -> DataCoordinateResultPage:
         ...
 
     @overload
     def execute(
-        self, tree: rt.RootRelation, result_spec: DimensionRecordResultSpec
+        self, tree: qt.QueryTree, result_spec: DimensionRecordResultSpec
     ) -> DimensionRecordResultPage:
         ...
 
     @overload
-    def execute(self, tree: rt.RootRelation, result_spec: DatasetRefResultSpec) -> DatasetRefResultPage:
+    def execute(self, tree: qt.QueryTree, result_spec: DatasetRefResultSpec) -> DatasetRefResultPage:
         ...
 
     @overload
-    def execute(self, tree: rt.RootRelation, result_spec: GeneralResultSpec) -> GeneralResultPage:
+    def execute(self, tree: qt.QueryTree, result_spec: GeneralResultSpec) -> GeneralResultPage:
         ...
 
-    def execute(self, tree: rt.RootRelation, result_spec: ResultSpec) -> ResultPage:
+    def execute(self, tree: qt.QueryTree, result_spec: ResultSpec) -> ResultPage:
         raise NotImplementedError("TODO")
 
     @overload
@@ -130,26 +128,37 @@ class DirectQueryDriver(QueryDriver):
         raise NotImplementedError("TODO")
 
     def materialize(
-        self, tree: rt.RootRelation, datasets: frozenset[str], dimensions: DimensionGroup
-    ) -> rt.MaterializationKey:
+        self,
+        tree: qt.QueryTree,
+        dimensions: DimensionGroup,
+        datasets: frozenset[str],
+    ) -> tuple[qt.MaterializationKey, frozenset[str]]:
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
     def upload_data_coordinates(
         self, dimensions: DimensionGroup, rows: Iterable[tuple[DataIdValue, ...]]
-    ) -> rt.DataCoordinateUploadKey:
+    ) -> qt.DataCoordinateUploadKey:
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
-    def count(self, tree: rt.RootRelation, *, exact: bool, discard: bool) -> int:
+    def count(
+        self,
+        tree: qt.QueryTree,
+        *,
+        dimensions: DimensionGroup,
+        datasets: frozenset[str],
+        exact: bool,
+        discard: bool,
+    ) -> int:
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
-    def any(self, tree: rt.RootRelation, *, execute: bool, exact: bool) -> bool:
+    def any(self, tree: qt.QueryTree, *, execute: bool, exact: bool) -> bool:
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
-    def explain_no_results(self, tree: rt.RootRelation, execute: bool) -> Iterable[str]:
+    def explain_no_results(self, tree: qt.QueryTree, execute: bool) -> Iterable[str]:
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
@@ -171,14 +180,15 @@ class DirectQueryDriver(QueryDriver):
 
     def _build_sql_select(
         self,
-        tree: rt.RootRelation,
-        columns_to_select: Set[rt.ColumnReference],
+        tree: qt.QueryTree,
+        dimensions: DimensionGroup,
+        columns_to_select: Set[qt.ColumnReference],
     ) -> tuple[sqlalchemy.Select, Postprocessing]:
-        if tree.find_first:
+        if tree.find_first_dataset:
             sql_builder, postprocessing = self._make_find_first_sql_builder(
                 tree,
-                tree.find_first.dataset_type,
-                tree.find_first.dimensions,
+                tree.find_first_dataset,
+                dimensions,
                 columns_to_select,
             )
         else:
@@ -195,8 +205,8 @@ class DirectQueryDriver(QueryDriver):
 
     def _make_vanilla_sql_builder(
         self,
-        tree: rt.RootRelation,
-        columns_required: Set[rt.ColumnReference],
+        tree: qt.QueryTree,
+        columns_required: Set[qt.ColumnReference],
     ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing]:
         # Process spatial and temporal constraints and joins, creating a
         # SqlBuilder that we'll use to make the SQL query we'll run, a
@@ -214,8 +224,8 @@ class DirectQueryDriver(QueryDriver):
         columns_required.update(postprocessing.gather_columns_required())
         # Now that we're done gathering columns_required, we categorize them
         # into mappings keyed by what kind of table they come from:
-        full_dimensions, dimension_tables_to_join, datasets_to_join = self._categorize_columns(
-            tree.dimensions, columns_required, tree.available_dataset_types
+        full_dimensions, dimension_tables_to_join, datasets_subqueries_to_join = self._categorize_columns(
+            tree.dimensions, columns_required, tree.datasets.keys()
         )
         # From here down, 'columns_required' is no long authoritative.
         del columns_required
@@ -231,9 +241,9 @@ class DirectQueryDriver(QueryDriver):
                     materialization_spec.dimensions.names
                 )
             )
-            if materialization_spec.datasets & datasets_to_join.keys():
+            if materialization_spec.resolved_datasets:
                 raise NotImplementedError("TODO")
-        # Process dataset joins:
+        # Process dataset joins.
         for dataset_type, dataset_spec in tree.datasets.items():
             raise NotImplementedError("TODO")
         # Record that we need to join in DimensionElements whose tables define
@@ -288,10 +298,10 @@ class DirectQueryDriver(QueryDriver):
 
     def _make_find_first_sql_builder(
         self,
-        tree: rt.RootRelation,
+        tree: qt.QueryTree,
         dataset_type: str,
         dimensions: DimensionGroup,
-        columns_to_select: Set[rt.ColumnReference],
+        columns_to_select: Set[qt.ColumnReference],
     ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing]:
         # The query we're building looks like this:
         #
@@ -318,7 +328,7 @@ class DirectQueryDriver(QueryDriver):
         # 'columns_required' to populate the SELECT clause list, because this
         # isn't the outermost query, and hence we need to propagate columns
         # we'll use but not return to the user through it.
-        rank = rt.DatasetFieldReference.model_construct(dataset_type=dataset_type, field="rank")
+        rank = qt.DatasetFieldReference.model_construct(dataset_type=dataset_type, field="rank")
         internal_columns = set(columns_to_select)
         internal_columns.add(rank)
         for term in tree.order_terms:
@@ -355,16 +365,16 @@ class DirectQueryDriver(QueryDriver):
     def _categorize_columns(
         self,
         dimensions: DimensionGroup,
-        columns: Iterable[rt.ColumnReference],
-        available_dataset_types: frozenset[str],
+        columns: Iterable[qt.ColumnReference],
+        datasets: Set[str],
     ) -> tuple[
         DimensionGroup,
-        dict[DimensionElement, set[rt.DimensionFieldReference]],
-        dict[str, set[rt.DatasetFieldReference]],
+        dict[DimensionElement, set[qt.DimensionFieldReference]],
+        dict[str, set[qt.DatasetFieldReference]],
     ]:
         dimension_names = set(dimensions.names)
-        dimension_tables: dict[DimensionElement, set[rt.DimensionFieldReference]] = {}
-        datasets: dict[str, set[rt.DatasetFieldReference]] = {name: set() for name in available_dataset_types}
+        dimension_tables: dict[DimensionElement, set[qt.DimensionFieldReference]] = {}
+        dataset_subqueries: dict[str, set[qt.DatasetFieldReference]] = {name: set() for name in datasets}
         for col_ref in columns:
             if col_ref.expression_type == "dimension_key":
                 dimension_names.add(col_ref.dimension.name)
@@ -377,11 +387,11 @@ class DirectQueryDriver(QueryDriver):
                 else:
                     dimension_tables.setdefault(col_ref.element, set()).add(col_ref)
             elif col_ref.expression_type == "dataset_field":
-                datasets[col_ref.dataset_type].add(col_ref)
-        return self._universe.conform(dimension_names), dimension_tables, datasets
+                dataset_subqueries[col_ref.dataset_type].add(col_ref)
+        return self._universe.conform(dimension_names), dimension_tables, dataset_subqueries
 
     def _build_sql_order_by_expression(
-        self, sql_builder: SqlBuilder | EmptySqlBuilder, term: rt.OrderExpression
+        self, sql_builder: SqlBuilder | EmptySqlBuilder, term: qt.OrderExpression
     ) -> sqlalchemy.ColumnElement[Any]:
         if term.expression_type == "reversed":
             return cast(
@@ -391,24 +401,24 @@ class DirectQueryDriver(QueryDriver):
         return cast(sqlalchemy.ColumnElement[Any], self._build_sql_column_expression(sql_builder, term))
 
     def _build_sql_column_expression(
-        self, sql_builder: SqlBuilder | EmptySqlBuilder, expression: rt.ColumnExpression
+        self, sql_builder: SqlBuilder | EmptySqlBuilder, expression: qt.ColumnExpression
     ) -> sqlalchemy.ColumnElement[Any] | TimespanDatabaseRepresentation:
         match expression:
-            case rt.TimespanColumnLiteral():
+            case qt.TimespanColumnLiteral():
                 return self._timespan_db_repr.fromLiteral(expression.value)
             case _ if expression.is_literal:
                 return sqlalchemy.sql.literal(
-                    cast(rt.ColumnLiteral, expression).value,
+                    cast(qt.ColumnLiteral, expression).value,
                     type_=ddl.VALID_CONFIG_COLUMN_TYPES[expression.column_type],
                 )
-            case rt.DimensionKeyReference():
+            case qt.DimensionKeyReference():
                 return sql_builder.dimensions_provided[expression.dimension.name][0]
-            case rt.DimensionFieldReference() | rt.DatasetFieldReference():
+            case qt.DimensionFieldReference() | qt.DatasetFieldReference():
                 if expression.column_type == "timespan":
                     return sql_builder.timespans_provided[expression]
                 else:
                     return sql_builder.fields_provided[expression]
-            case rt.UnaryExpression():
+            case qt.UnaryExpression():
                 operand = cast(
                     sqlalchemy.ColumnElement[Any],
                     self._build_sql_column_expression(sql_builder, expression.operand),
@@ -420,7 +430,7 @@ class DirectQueryDriver(QueryDriver):
                         return operand.lower()
                     case "end_of":
                         return operand.upper()
-            case rt.BinaryExpression():
+            case qt.BinaryExpression():
                 a = cast(
                     sqlalchemy.ColumnElement[Any],
                     self._build_sql_column_expression(sql_builder, expression.a),
@@ -443,10 +453,10 @@ class DirectQueryDriver(QueryDriver):
         raise AssertionError(f"Unexpected column expression {expression}.")
 
     def _build_sql_predicate(
-        self, sql_builder: SqlBuilder | EmptySqlBuilder, predicate: rt.Predicate
+        self, sql_builder: SqlBuilder | EmptySqlBuilder, predicate: qt.Predicate
     ) -> sqlalchemy.ColumnElement[bool]:
         match predicate:
-            case rt.Comparison():
+            case qt.Comparison():
                 a: Any = self._build_sql_column_expression(sql_builder, predicate.a)
                 b: Any = self._build_sql_column_expression(sql_builder, predicate.b)
                 match predicate.operator:
@@ -464,7 +474,7 @@ class DirectQueryDriver(QueryDriver):
                         return a >= b
                     case "<=":
                         return a <= b
-            case rt.IsNull():
+            case qt.IsNull():
                 operand: Any = self._build_sql_column_expression(sql_builder, predicate.operand)
                 if predicate.operand.column_type == "timespan":
                     return operand.isNull()

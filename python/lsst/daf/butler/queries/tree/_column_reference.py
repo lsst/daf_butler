@@ -35,7 +35,7 @@ import pydantic
 
 from ...column_spec import ColumnType
 from ...dimensions import Dimension, DimensionElement
-from ._base import ColumnExpressionBase, DatasetFieldName, InvalidRelationError
+from ._base import ColumnExpressionBase, DatasetFieldName, InvalidQueryTreeError
 
 
 @final
@@ -109,7 +109,7 @@ class DimensionFieldReference(ColumnExpressionBase):
     @pydantic.model_validator(mode="after")
     def _validate_field(self) -> DimensionFieldReference:
         if self.field not in self.element.schema.remainder.names:
-            raise InvalidRelationError(f"Dimension field {self.element.name}.{self.field} does not exist.")
+            raise InvalidQueryTreeError(f"Dimension field {self.element.name}.{self.field} does not exist.")
         return self
 
 

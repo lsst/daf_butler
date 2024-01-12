@@ -40,7 +40,7 @@ from typing import Annotated, Literal, TypeAlias, Union, final
 import pydantic
 
 from ...column_spec import ColumnType
-from ._base import ColumnExpressionBase, InvalidRelationError
+from ._base import ColumnExpressionBase, InvalidQueryTreeError
 from ._column_literal import ColumnLiteral
 from ._column_reference import ColumnReference, _ColumnReference
 
@@ -96,7 +96,7 @@ class UnaryExpression(ColumnExpressionBase):
             case ("begin_of" | "end_of", "timespan"):
                 pass
             case _:
-                raise InvalidRelationError(
+                raise InvalidQueryTreeError(
                     f"Invalid column type {self.operand.column_type} for operator {self.operator!r}."
                 )
         return self
@@ -160,7 +160,7 @@ class BinaryExpression(ColumnExpressionBase):
     @pydantic.model_validator(mode="after")
     def _validate_types(self) -> BinaryExpression:
         if self.a.column_type != self.b.column_type:
-            raise InvalidRelationError(
+            raise InvalidQueryTreeError(
                 f"Column types for operator {self.operator} do not agree "
                 f"({self.a.column_type}, {self.b.column_type})."
             )
@@ -170,7 +170,7 @@ class BinaryExpression(ColumnExpressionBase):
             case ("%", "int"):
                 pass
             case _:
-                raise InvalidRelationError(
+                raise InvalidQueryTreeError(
                     f"Invalid column type {self.a.column_type} for operator {self.operator!r}."
                 )
         return self
@@ -222,7 +222,7 @@ class Reversed(ColumnExpressionBase):
 
 def _validate_order_expression(expression: _ColumnExpression | Reversed) -> _ColumnExpression | Reversed:
     if expression.column_type not in ("int", "string", "float", "datetime"):
-        raise InvalidRelationError(f"Column type {expression.column_type} of {expression} is not ordered.")
+        raise InvalidQueryTreeError(f"Column type {expression.column_type} of {expression} is not ordered.")
     return expression
 
 

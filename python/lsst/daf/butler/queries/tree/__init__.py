@@ -30,4 +30,4 @@ from ._column_expression import *
 from ._column_literal import *
 from ._column_reference import *
 from ._predicate import *
-from ._root_relation import *
+from ._query_tree import *

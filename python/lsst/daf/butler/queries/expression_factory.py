@@ -35,11 +35,11 @@ from typing import TYPE_CHECKING, get_args
 from lsst.sphgeom import Region
 
 from ..dimensions import DimensionElement, DimensionUniverse
-from . import relation_tree as rt
+from . import tree as qt
 
 if TYPE_CHECKING:
     from .._timespan import Timespan
-    from ._query import RelationQuery
+    from ._query import Query2
 
 # This module uses ExpressionProxy and its subclasses to wrap ColumnExpression,
 # but it just returns OrderExpression and Predicate objects directly, because
@@ -52,30 +52,30 @@ class ExpressionProxy:
 
     Parameters
     ----------
-    expression : `relation_tree.ColumnExpression`
+    expression : `tree.ColumnExpression`
         Underlying expression object.
     """
 
-    def __init__(self, expression: rt.ColumnExpression):
+    def __init__(self, expression: qt.ColumnExpression):
         self._expression = expression
 
     def __repr__(self) -> str:
         return str(self._expression)
 
     @property
-    def is_null(self) -> rt.Predicate:
+    def is_null(self) -> qt.Predicate:
         """A boolean expression that tests whether this expression is NULL."""
-        return rt.IsNull.model_construct(operand=self._expression)
+        return qt.IsNull.model_construct(operand=self._expression)
 
     @staticmethod
-    def _make_expression(other: object) -> rt.ColumnExpression:
+    def _make_expression(other: object) -> qt.ColumnExpression:
         if isinstance(other, ExpressionProxy):
             return other._expression
         else:
-            return rt.make_column_literal(other)
+            return qt.make_column_literal(other)
 
-    def _make_comparison(self, other: object, operator: rt.ComparisonOperator) -> rt.Predicate:
-        return rt.Comparison.model_construct(
+    def _make_comparison(self, other: object, operator: qt.ComparisonOperator) -> qt.Predicate:
+        return qt.Comparison.model_construct(
             a=self._expression, b=self._make_expression(other), operator=operator
         )
 
@@ -84,31 +84,31 @@ class ScalarExpressionProxy(ExpressionProxy):
     """An `ExpressionProxy` specialized for simple single-value columns."""
 
     @property
-    def desc(self) -> rt.Reversed:
+    def desc(self) -> qt.Reversed:
         """An ordering expression that indicates that the sort on this
         expression should be reversed.
         """
-        return rt.Reversed.model_construct(operand=self._expression)
+        return qt.Reversed.model_construct(operand=self._expression)
 
-    def __eq__(self, other: object) -> rt.Predicate:  # type: ignore[override]
+    def __eq__(self, other: object) -> qt.Predicate:  # type: ignore[override]
         return self._make_comparison(other, "==")
 
-    def __ne__(self, other: object) -> rt.Predicate:  # type: ignore[override]
+    def __ne__(self, other: object) -> qt.Predicate:  # type: ignore[override]
         return self._make_comparison(other, "!=")
 
-    def __lt__(self, other: object) -> rt.Predicate:  # type: ignore[override]
+    def __lt__(self, other: object) -> qt.Predicate:  # type: ignore[override]
         return self._make_comparison(other, "<")
 
-    def __le__(self, other: object) -> rt.Predicate:  # type: ignore[override]
+    def __le__(self, other: object) -> qt.Predicate:  # type: ignore[override]
         return self._make_comparison(other, "<=")
 
-    def __gt__(self, other: object) -> rt.Predicate:  # type: ignore[override]
+    def __gt__(self, other: object) -> qt.Predicate:  # type: ignore[override]
         return self._make_comparison(other, ">")
 
-    def __ge__(self, other: object) -> rt.Predicate:  # type: ignore[override]
+    def __ge__(self, other: object) -> qt.Predicate:  # type: ignore[override]
         return self._make_comparison(other, ">=")
 
-    def in_range(self, start: int = 0, stop: int | None = None, step: int = 1) -> rt.Predicate:
+    def in_range(self, start: int = 0, stop: int | None = None, step: int = 1) -> qt.Predicate:
         """Return a boolean expression that tests whether this expression is
         within a literal integer range.
 
@@ -123,12 +123,12 @@ class ScalarExpressionProxy(ExpressionProxy):
 
         Returns
         -------
-        predicate : `relation_tree.Predicate`
+        predicate : `tree.Predicate`
             Boolean expression object.
         """
-        return rt.InRange.model_construct(member=self._expression, start=start, stop=stop, step=step)
+        return qt.InRange.model_construct(member=self._expression, start=start, stop=stop, step=step)
 
-    def in_iterable(self, others: Iterable) -> rt.Predicate:
+    def in_iterable(self, others: Iterable) -> qt.Predicate:
         """Return a boolean expression that tests whether this expression
         evaluates to a value that is in an iterable of other expressions.
 
@@ -140,14 +140,14 @@ class ScalarExpressionProxy(ExpressionProxy):
 
         Returns
         -------
-        predicate : `relation_tree.Predicate`
+        predicate : `tree.Predicate`
             Boolean expression object.
         """
-        return rt.InContainer.model_construct(
+        return qt.InContainer.model_construct(
             member=self._expression, container=tuple([self._make_expression(item) for item in others])
         )
 
-    def in_query(self, column: ExpressionProxy, query: RelationQuery) -> rt.Predicate:
+    def in_query(self, column: ExpressionProxy, query: Query2) -> qt.Predicate:
         """Return a boolean expression that test whether this expression
         evaluates to a value that is in a single-column selection from another
         query.
@@ -161,10 +161,10 @@ class ScalarExpressionProxy(ExpressionProxy):
 
         Returns
         -------
-        predicate : `relation_tree.Predicate`
+        predicate : `tree.Predicate`
             Boolean expression object.
         """
-        return rt.InRelation.model_construct(
+        return qt.InRelation.model_construct(
             member=self._expression, column=column._expression, relation=query._tree
         )
 
@@ -176,17 +176,17 @@ class TimespanProxy(ExpressionProxy):
     def begin(self) -> ExpressionProxy:
         """An expression representing the lower bound (inclusive)."""
         return ExpressionProxy(
-            rt.UnaryExpression.model_construct(operand=self._expression, operator="begin_of")
+            qt.UnaryExpression.model_construct(operand=self._expression, operator="begin_of")
         )
 
     @property
     def end(self) -> ExpressionProxy:
         """An expression representing the upper bound (exclusive)."""
         return ExpressionProxy(
-            rt.UnaryExpression.model_construct(operand=self._expression, operator="end_of")
+            qt.UnaryExpression.model_construct(operand=self._expression, operator="end_of")
         )
 
-    def overlaps(self, other: TimespanProxy | Timespan) -> rt.Predicate:
+    def overlaps(self, other: TimespanProxy | Timespan) -> qt.Predicate:
         """Return a boolean expression representing an overlap test between
         this timespan and another.
 
@@ -197,7 +197,7 @@ class TimespanProxy(ExpressionProxy):
 
         Returns
         -------
-        predicate : `relation_tree.Predicate`
+        predicate : `tree.Predicate`
             Boolean expression object.
         """
         return self._make_comparison(other, "overlaps")
@@ -206,7 +206,7 @@ class TimespanProxy(ExpressionProxy):
 class RegionProxy(ExpressionProxy):
     """An `ExpressionProxy` specialized for region columns and literals."""
 
-    def overlaps(self, other: RegionProxy | Region) -> rt.Predicate:
+    def overlaps(self, other: RegionProxy | Region) -> qt.Predicate:
         """Return a boolean expression representing an overlap test between
         this region and another.
 
@@ -217,7 +217,7 @@ class RegionProxy(ExpressionProxy):
 
         Returns
         -------
-        predicate : `relation_tree.Predicate`
+        predicate : `tree.Predicate`
             Boolean expression object.
         """
         return self._make_comparison(other, "overlaps")
@@ -244,7 +244,7 @@ class DimensionElementProxy:
         return self._element.name
 
     def __getattr__(self, field: str) -> ExpressionProxy:
-        expression = rt.DimensionFieldReference(element=self._element.name, field=field)
+        expression = qt.DimensionFieldReference(element=self._element.name, field=field)
         match field:
             case "region":
                 return RegionProxy(expression)
@@ -284,7 +284,7 @@ class DimensionProxy(ScalarExpressionProxy, DimensionElementProxy):
     """
 
     def __init__(self, dimension: DimensionElement):
-        ScalarExpressionProxy.__init__(self, rt.DimensionKeyReference(dimension=dimension.name))
+        ScalarExpressionProxy.__init__(self, qt.DimensionKeyReference(dimension=dimension.name))
         DimensionElementProxy.__init__(self, dimension)
 
 
@@ -314,16 +314,16 @@ class DatasetTypeProxy:
     # to include Datastore record fields.
 
     def __getattr__(self, field: str) -> ExpressionProxy:
-        if field not in get_args(rt.DatasetFieldName):
+        if field not in get_args(qt.DatasetFieldName):
             raise AttributeError(field)
-        expression = rt.DatasetFieldReference(dataset_type=self._dataset_type, field=field)
+        expression = qt.DatasetFieldReference(dataset_type=self._dataset_type, field=field)
         if field == "timespan":
             return TimespanProxy(expression)
         return ScalarExpressionProxy(expression)
 
     def __dir__(self) -> list[str]:
         result = list(super().__dir__())
-        result.extend(get_args(rt.DatasetFieldName))
+        result.extend(get_args(qt.DatasetFieldName))
         return result
 
 
@@ -353,56 +353,56 @@ class ExpressionFactory:
     def __getitem__(self, name: str) -> DatasetTypeProxy:
         return DatasetTypeProxy(name)
 
-    def not_(self, operand: rt.Predicate) -> rt.Predicate:
+    def not_(self, operand: qt.Predicate) -> qt.Predicate:
         """Apply a logical NOT operation to a boolean expression.
 
         Parameters
         ----------
-        operand : `relation_tree.Predicate`
-            Expression to invert.
+        operand : `tree.Predicate`
+            Expression to invetree.
 
         Returns
         -------
-        logical_not : `relation_tree.Predicate`
+        logical_not : `tree.Predicate`
             A boolean expression that evaluates to the opposite of ``operand``.
         """
         return operand.logical_not()
 
-    def all(self, first: rt.Predicate, /, *args: rt.Predicate) -> rt.Predicate:
+    def all(self, first: qt.Predicate, /, *args: qt.Predicate) -> qt.Predicate:
         """Combine a sequence of boolean expressions with logical AND.
 
         Parameters
         ----------
-        first : `relation_tree.Predicate`
+        first : `tree.Predicate`
             First operand (required).
         *args
             Additional operands.
 
         Returns
         -------
-        logical_and : `relation_tree.Predicate`
+        logical_and : `tree.Predicate`
             A boolean expression that evaluates to `True` only if all operands
             evaluate to `True.
         """
-        return rt.LogicalAnd.fold(first, *args)
+        return qt.LogicalAnd.fold(first, *args)
 
-    def any(self, first: rt.Predicate, /, *args: rt.Predicate) -> rt.Predicate:
+    def any(self, first: qt.Predicate, /, *args: qt.Predicate) -> qt.Predicate:
         """Combine a sequence of boolean expressions with logical OR.
 
         Parameters
         ----------
-        first : `relation_tree.Predicate`
+        first : `tree.Predicate`
             First operand (required).
         *args
             Additional operands.
 
         Returns
         -------
-        logical_or : `relation_tree.Predicate`
+        logical_or : `tree.Predicate`
             A boolean expression that evaluates to `True` if any operand
             evaluates to `True.
         """
-        return rt.LogicalOr.fold(first, *args)
+        return qt.LogicalOr.fold(first, *args)
 
     @staticmethod
     def literal(value: object) -> ExpressionProxy:
@@ -422,7 +422,7 @@ class ExpressionFactory:
         expression : `ExpressionProxy`
             Expression wrapper for this literal.
         """
-        expression = rt.make_column_literal(value)
+        expression = qt.make_column_literal(value)
         match expression.expression_type:
             case "timespan":
                 return TimespanProxy(expression)

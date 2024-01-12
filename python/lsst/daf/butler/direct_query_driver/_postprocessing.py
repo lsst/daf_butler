@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING
 from lsst.sphgeom import Region
 
 from ..dimensions import DimensionElement
-from ..queries import relation_tree as rt
+from ..queries import tree as qt
 
 if TYPE_CHECKING:
     pass
@@ -50,12 +50,12 @@ class Postprocessing:
     )
     spatial_where_filtering: list[tuple[DimensionElement, Region]] = dataclasses.field(default_factory=list)
 
-    def gather_columns_required(self) -> Set[rt.ColumnReference]:
-        result: set[rt.ColumnReference] = set()
+    def gather_columns_required(self) -> Set[qt.ColumnReference]:
+        result: set[qt.ColumnReference] = set()
         for element in itertools.chain.from_iterable(self.spatial_join_filtering):
-            result.add(rt.DimensionFieldReference.model_construct(element=element, field="region"))
+            result.add(qt.DimensionFieldReference.model_construct(element=element, field="region"))
         for element, _ in self.spatial_join_filtering:
-            result.add(rt.DimensionFieldReference.model_construct(element=element, field="region"))
+            result.add(qt.DimensionFieldReference.model_construct(element=element, field="region"))
         return result
 
     def __bool__(self) -> bool:

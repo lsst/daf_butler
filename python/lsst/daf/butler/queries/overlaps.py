@@ -37,7 +37,7 @@ from lsst.sphgeom import Region
 
 from .._topology import TopologicalFamily
 from ..dimensions import DimensionElement, DimensionGroup
-from . import relation_tree as rt
+from . import tree as qt
 
 _T = TypeVar("_T", bound=Hashable)
 
@@ -149,16 +149,16 @@ class OverlapsVisitor:
         self._spatial_connections = _NaiveDisjointSet(self.dimensions.spatial)
         self._temporal_connections = _NaiveDisjointSet(self.dimensions.temporal)
 
-    def run(self, predicate: rt.Predicate, join_operands: Iterable[DimensionGroup]) -> rt.Predicate:
+    def run(self, predicate: qt.Predicate, join_operands: Iterable[DimensionGroup]) -> qt.Predicate:
         result = self.process_predicate(predicate, frozenset())
         for join_operand_dimensions in join_operands:
             self.add_join_operand_connections(join_operand_dimensions)
         for a, b in self.compute_automatic_spatial_joins():
             result = result.logical_and(
                 self.visit_spatial_join(
-                    rt.Comparison(
-                        a=rt.DimensionFieldReference(element=a, field="region"),
-                        b=rt.DimensionFieldReference(element=b, field="region"),
+                    qt.Comparison(
+                        a=qt.DimensionFieldReference(element=a, field="region"),
+                        b=qt.DimensionFieldReference(element=b, field="region"),
                         operator="overlaps",
                     ),
                     a=a,
@@ -169,9 +169,9 @@ class OverlapsVisitor:
         for a, b in self.compute_automatic_temporal_joins():
             result = result.logical_and(
                 self.visit_temporal_dimension_join(
-                    rt.Comparison(
-                        a=rt.DimensionFieldReference(element=a, field="timespan"),
-                        b=rt.DimensionFieldReference(element=b, field="timespan"),
+                    qt.Comparison(
+                        a=qt.DimensionFieldReference(element=a, field="timespan"),
+                        b=qt.DimensionFieldReference(element=b, field="timespan"),
                         operator="overlaps",
                     ),
                     a=a,
@@ -182,8 +182,8 @@ class OverlapsVisitor:
         return result
 
     def process_predicate(
-        self, predicate: rt.Predicate, parents: Set[Literal["and", "or", "not"]]
-    ) -> rt.Predicate:
+        self, predicate: qt.Predicate, parents: Set[Literal["and", "or", "not"]]
+    ) -> qt.Predicate:
         """Process a WHERE-clause predicate.
 
         This method traverses a `relation_tree.Predicate` tree and calls the
@@ -205,8 +205,8 @@ class OverlapsVisitor:
             the return values of the ``visit_*`` methods.
         """
         match predicate:
-            case rt.LogicalAnd() | rt.LogicalOr():
-                processed: list[rt.Predicate] = []
+            case qt.LogicalAnd() | qt.LogicalOr():
+                processed: list[qt.Predicate] = []
                 any_changed = False
                 parents |= {predicate.predicate_type}
                 for operand in predicate.operands:
@@ -217,14 +217,14 @@ class OverlapsVisitor:
                     return type(predicate).fold(*processed)
                 else:
                     return predicate
-            case rt.LogicalNot():
+            case qt.LogicalNot():
                 if (
                     new_operand := self.process_predicate(predicate.operand, parents | {"not"})
                 ) is not predicate.operand:
                     return new_operand.logical_not()
                 else:
                     return predicate
-            case rt.Comparison(operator="overlaps"):
+            case qt.Comparison(operator="overlaps"):
                 if predicate.a.column_type == "region":
                     return self.visit_spatial_overlap(predicate, parents)
                 elif predicate.b.column_type == "timespan":
@@ -301,13 +301,13 @@ class OverlapsVisitor:
             # All of the joins we need are already present.
             return []
         if connections.n_subsets > 2:
-            raise rt.InvalidRelationError(
+            raise qt.InvalidQueryTreeError(
                 f"Too many disconnected sets of {kind} families for an automatic "
                 f"join: {connections.subsets()}.  Add explicit {kind} joins to avoid this error."
             )
         a_subset, b_subset = connections.subsets()
         if len(a_subset) > 1 or len(b_subset) > 1:
-            raise rt.InvalidRelationError(
+            raise qt.InvalidQueryTreeError(
                 f"A {kind} join is needed between {a_subset} and {b_subset}, but which join to "
                 "add is ambiguous.  Add an explicit spatial join to avoid this error."
             )
@@ -325,9 +325,9 @@ class OverlapsVisitor:
 
     def visit_spatial_overlap(
         self,
-        comparison: rt.Comparison,
+        comparison: qt.Comparison,
         parents: Set[Literal["and", "or", "not"]],
-    ) -> rt.Predicate:
+    ) -> qt.Predicate:
         """Dispatch a spatial overlap comparison predicate to handlers.
 
         This method should rarely (if ever) need to be overridden.
@@ -347,19 +347,19 @@ class OverlapsVisitor:
             processed tree.
         """
         match comparison.a, comparison.b:
-            case rt.DimensionFieldReference(element=a), rt.DimensionFieldReference(element=b):
+            case qt.DimensionFieldReference(element=a), qt.DimensionFieldReference(element=b):
                 return self.visit_spatial_join(comparison, a, b, parents)
-            case rt.DimensionFieldReference(element=element), rt.RegionColumnLiteral(value=region):
+            case qt.DimensionFieldReference(element=element), qt.RegionColumnLiteral(value=region):
                 return self.visit_spatial_constraint(comparison, element, region, parents)
-            case rt.RegionColumnLiteral(value=region), rt.DimensionFieldReference(element=element):
+            case qt.RegionColumnLiteral(value=region), qt.DimensionFieldReference(element=element):
                 return self.visit_spatial_constraint(comparison, element, region, parents)
         raise AssertionError(f"Unexpected arguments for spatial overlap: {comparison.a}, {comparison.b}.")
 
     def visit_temporal_overlap(
         self,
-        comparison: rt.Comparison,
+        comparison: qt.Comparison,
         parents: Set[Literal["and", "or", "not"]],
-    ) -> rt.Predicate:
+    ) -> qt.Predicate:
         """Dispatch a temporal overlap comparison predicate to handlers.
 
         This method should rarely (if ever) need to be overridden.
@@ -379,7 +379,7 @@ class OverlapsVisitor:
             processed tree.
         """
         match comparison.a, comparison.b:
-            case rt.DimensionFieldReference(element=a), rt.DimensionFieldReference(element=b):
+            case qt.DimensionFieldReference(element=a), qt.DimensionFieldReference(element=b):
                 return self.visit_temporal_dimension_join(comparison, a, b, parents)
             case _:
                 # We don't bother differentiating any other kind of temporal
@@ -391,11 +391,11 @@ class OverlapsVisitor:
 
     def visit_spatial_join(
         self,
-        comparison: rt.Comparison,
+        comparison: qt.Comparison,
         a: DimensionElement,
         b: DimensionElement,
         parents: Set[Literal["and", "or", "not"]],
-    ) -> rt.Predicate:
+    ) -> qt.Predicate:
         """Handle a spatial overlap comparison between two dimension elements.
 
         The default implementation updates the set of known spatial connections
@@ -421,7 +421,7 @@ class OverlapsVisitor:
             processed tree.
         """
         if a.spatial == b.spatial:
-            raise rt.InvalidRelationError(f"Spatial join between {a} and {b} is not necessary.")
+            raise qt.InvalidQueryTreeError(f"Spatial join between {a} and {b} is not necessary.")
         self._spatial_connections.merge(
             cast(TopologicalFamily, a.spatial), cast(TopologicalFamily, b.spatial)
         )
@@ -429,11 +429,11 @@ class OverlapsVisitor:
 
     def visit_spatial_constraint(
         self,
-        comparison: rt.Comparison,
+        comparison: qt.Comparison,
         element: DimensionElement,
         region: Region,
         parents: Set[Literal["and", "or", "not"]],
-    ) -> rt.Predicate:
+    ) -> qt.Predicate:
         """Handle a spatial overlap comparison between a dimension element and
         a literal region.
 
@@ -461,11 +461,11 @@ class OverlapsVisitor:
 
     def visit_temporal_dimension_join(
         self,
-        comparison: rt.Comparison,
+        comparison: qt.Comparison,
         a: DimensionElement,
         b: DimensionElement,
         parents: Set[Literal["and", "or", "not"]],
-    ) -> rt.Comparison:
+    ) -> qt.Comparison:
         """Handle a temporal overlap comparison between two dimension elements.
 
         The default implementation updates the set of known temporal
@@ -491,7 +491,7 @@ class OverlapsVisitor:
             processed tree.
         """
         if a.temporal == b.temporal:
-            raise rt.InvalidRelationError(f"Temporal join between {a} and {b} is not necessary.")
+            raise qt.InvalidQueryTreeError(f"Temporal join between {a} and {b} is not necessary.")
         self._temporal_connections.merge(
             cast(TopologicalFamily, a.temporal), cast(TopologicalFamily, b.temporal)
         )

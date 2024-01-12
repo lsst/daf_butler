@@ -28,14 +28,14 @@
 from __future__ import annotations
 
 __all__ = (
-    "RootRelation",
-    "make_unit_relation",
-    "make_dimension_relation",
+    "QueryTree",
+    "make_unit_query_tree",
+    "make_dimension_query_tree",
     "DataCoordinateUploadKey",
     "MaterializationKey",
     "MaterializationSpec",
     "DatasetSpec",
-    "FindFirstSpec",
+    "DeferredValidationQueryTree",
 )
 
 import uuid
@@ -47,7 +47,7 @@ import pydantic
 
 from ...dimensions import DimensionGroup, DimensionUniverse
 from ...pydantic_utils import DeferredValidation
-from ._base import InvalidRelationError, RelationTreeBase
+from ._base import InvalidQueryTreeError, QueryTreeBase
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import LiteralTrue, Predicate
 
@@ -60,13 +60,14 @@ DataCoordinateUploadKey: TypeAlias = uuid.UUID
 MaterializationKey: TypeAlias = uuid.UUID
 
 
-def make_unit_relation(universe: DimensionUniverse) -> RootRelation:
-    """Make an initial relation with empty dimensions and a single logical row.
+def make_unit_query_tree(universe: DimensionUniverse) -> QueryTree:
+    """Make an initial query tree with empty dimensions and a single logical
+    row.
 
     This method should be used by `Butler._query` to construct the initial
-    relation tree.  This relation is a useful initial state because it is the
-    identity relation for joins, in that joining any other relation to this
-    relation yields that relation.
+    query tree.  This tree is a useful initial state because it is the
+    identity for joins, in that joining any other query tree to this
+    query tree yields that query tree.
 
     Parameters
     ----------
@@ -75,14 +76,14 @@ def make_unit_relation(universe: DimensionUniverse) -> RootRelation:
 
     Returns
     -------
-    relation : `Select`
-        A select relation with empty dimensions.
+    tree : `QueryTree`
+        A tree with empty dimensions.
     """
-    return make_dimension_relation(universe.empty.as_group())
+    return make_dimension_query_tree(universe.empty.as_group())
 
 
-def make_dimension_relation(dimensions: DimensionGroup) -> RootRelation:
-    """Make an initial relation with the given dimensions.
+def make_dimension_query_tree(dimensions: DimensionGroup) -> QueryTree:
+    """Make an initial query tree with the given dimensions.
 
     Parameters
     ----------
@@ -91,23 +92,39 @@ def make_dimension_relation(dimensions: DimensionGroup) -> RootRelation:
 
     Returns
     -------
-    relation : `Select`
-        A select relation with the given dimensions.
+    tree : `QueryTree`
+        A tree with the given dimensions.
     """
-    return RootRelation.model_construct(dimensions=dimensions)
+    return QueryTree.model_construct(dimensions=dimensions)
 
 
 @final
-class MaterializationSpec(RelationTreeBase):
-    datasets: frozenset[str]
-    """Dataset types whose IDs were stored in the materialization."""
+class MaterializationSpec(QueryTreeBase):
+    """Information about a materialized query tree (e.g. one executed into a
+    temporary table) that has been joined into another query tree.
+    """
 
     dimensions: DimensionGroup
     """Dimensions whose keys were stored in the materialization."""
 
+    resolved_datasets: frozenset[str]
+    """Datasets that were fully resolved in the materialization (only one
+    dataset for each data ID).
+
+    The UUIDs of these datasets are stored in the materialization, while those
+    for unresolved datasets are not, in order to allow materializations to
+    always be unique over dimensions alone.
+    """
+
 
 @final
-class DatasetSpec(RelationTreeBase):
+class DatasetSpec(QueryTreeBase):
+    """Information about a dataset search joined into a query tree.
+
+    The dataset type name is the key of the dictionary (in `QueryTree`) where
+    this type is used as a value.
+    """
+
     collections: tuple[str, ...]
     """The collections to search.
 
@@ -127,30 +144,33 @@ class DatasetSpec(RelationTreeBase):
 
 
 @final
-class FindFirstSpec(RelationTreeBase):
-    dataset_type: str
-    """The type of the datasets being searched for."""
+class QueryTree(QueryTreeBase):
+    """A declarative, serializable description of a butler query.
 
-    dimensions: DimensionGroup
-    """The dimensions of the relation.
-
-    This must be a subset of the dimensions of its operand, and is most
-    frequently the dimensions of the dataset type.
+    This class's attributes describe the columns that "available" to be
+    returned or used in ``where`` or ``order_by`` expressions, but it does not
+    carry information about the columns that are actually included in result
+    rows, or what kind of butler primitive (e.g. `DataCoordinate` or
+    `DatasetRef`) those rows might be transformed into.
     """
 
-
-@final
-class RootRelation(RelationTreeBase):
     dimensions: DimensionGroup
-    """The dimensions whose keys are joined into the relation."""
+    """The dimensions whose keys are joined into the query.
+    """
 
     datasets: Mapping[str, DatasetSpec] = pydantic.Field(default_factory=dict)
+    """Dataset searches that have been joined into the query."""
 
     data_coordinate_uploads: Mapping[DataCoordinateUploadKey, DimensionGroup] = pydantic.Field(
         default_factory=dict
     )
+    """Uploaded tables of data ID values that have been joined into the query.
+    """
 
     materializations: Mapping[MaterializationKey, MaterializationSpec] = pydantic.Field(default_factory=dict)
+    """Tables of result rows from other queries that have been stored
+    temporarily on the server.
+    """
 
     predicate: Predicate = LiteralTrue()
     """Boolean expression trees whose logical AND defines a row filter."""
@@ -164,20 +184,16 @@ class RootRelation(RelationTreeBase):
     limit: int | None = None
     """Maximum number of rows to return, or `None` for no bound."""
 
-    find_first: FindFirstSpec | None = None
+    find_first_dataset: str | None = None
     """A single result dataset type to search collections for in order,
-    yielding one dataset for each of the nested dimensions.
+    yielding one dataset for data ID with ``result_dimensions``.
     """
 
     @cached_property
-    def available_dataset_types(self) -> frozenset[str]:
-        result = frozenset(self.datasets.keys())
-        for materialization_spec in self.materializations.values():
-            result |= materialization_spec.datasets
-        return result
-
-    @cached_property
     def join_operand_dimensions(self) -> frozenset[DimensionGroup]:
+        """A set of sets of the dimensions of all data coordinate uploads,
+        dataset searches, and materializations.
+        """
         result: set[DimensionGroup] = set(self.data_coordinate_uploads.values())
         for dataset_spec in self.datasets.values():
             result.add(dataset_spec.dimensions)
@@ -185,52 +201,48 @@ class RootRelation(RelationTreeBase):
             result.add(materialization_spec.dimensions)
         return frozenset(result)
 
-    @property
-    def result_dimensions(self) -> DimensionGroup:
-        return self.dimensions if self.find_first is None else self.find_first.dimensions
-
-    def join(self, other: RootRelation) -> RootRelation:
-        """Return a new relation that represents a join between ``self`` and
+    def join(self, other: QueryTree) -> QueryTree:
+        """Return a new tree that represents a join between ``self`` and
         ``other``.
 
         Parameters
         ----------
-        other : `RootRelation`
-            Relation to join to this one.
+        other : `QueryTree`
+            Tree to join to this one.
 
         Returns
         -------
-        result : `RootRelation`
-            A new relation that joins ``self`` and ``other``.
+        result : `QueryTree`
+            A new tree that joins ``self`` and ``other``.
 
         Raises
         ------
-        InvalidRelationError
+        InvalidQueryTreeError
             Raised if the join is ambiguous or otherwise invalid.
         """
-        if self.find_first is not None or other.find_first is not None:
-            raise InvalidRelationError(
+        if self.find_first_dataset is not None or other.find_first_dataset is not None:
+            raise InvalidQueryTreeError(
                 "Cannot join queries after a dataset find-first operation has been added. "
                 "To avoid this error perform all joins before requesting dataset results."
             )
         if self.offset or self.limit is not None or other.offset or other.limit is not None:
-            raise InvalidRelationError(
+            raise InvalidQueryTreeError(
                 "Cannot join queries after an offset/limit slice has been added. "
                 "To avoid this error perform all joins before adding an offset/limit slice, "
                 "since those can only be performed on the final query."
             )
         if self.order_terms and other.order_terms:  # if one is sorted, fine.
-            raise InvalidRelationError(
+            raise InvalidQueryTreeError(
                 "Cannot join two queries if both are either sorted. "
                 "To avoid this error perform all joins before adding any sorting, "
                 "since those can only be performed on the final query."
             )
-        if not self.available_dataset_types.isdisjoint(other.available_dataset_types):
-            raise InvalidRelationError(
+        if not self.datasets.keys().isdisjoint(other.datasets.keys()):
+            raise InvalidQueryTreeError(
                 "Cannot join when both sides include the same dataset type: "
-                f"{self.available_dataset_types & other.available_dataset_types}."
+                f"{self.datasets.keys() & other.datasets.keys()}."
             )
-        return RootRelation.model_construct(
+        return QueryTree.model_construct(
             dimensions=self.dimensions | other.dimensions,
             datasets={**self.datasets, **other.datasets},
             data_coordinate_uploads={**self.data_coordinate_uploads, **other.data_coordinate_uploads},
@@ -241,8 +253,21 @@ class RootRelation(RelationTreeBase):
 
     def join_data_coordinate_upload(
         self, key: DataCoordinateUploadKey, dimensions: DimensionGroup
-    ) -> RootRelation:
-        # TODO: docs
+    ) -> QueryTree:
+        """Return a new tree that joins in an uploaded table of data ID values.
+
+        Parameters
+        ----------
+        key : `DataCoordinateUploadKey`
+            Unique identifier for this upload, as assigned by a `QueryDriver`.
+        dimensions : `DimensionGroup`
+            Dimensions of the data IDs.
+
+        Returns
+        -------
+        result : `QueryTree`
+            A new tree that joins in the data ID table.
+        """
         if key in self.data_coordinate_uploads:
             assert (
                 dimensions == self.data_coordinate_uploads[key]
@@ -256,47 +281,67 @@ class RootRelation(RelationTreeBase):
             )
         )
 
-    def join_materialization(
-        self, key: MaterializationKey, dimensions: DimensionGroup, datasets: frozenset[str]
-    ) -> RootRelation:
-        # TODO: docs
-        spec = MaterializationSpec.model_construct(dimensions=dimensions, datasets=datasets)
+    def join_materialization(self, key: MaterializationKey, spec: MaterializationSpec) -> QueryTree:
+        """Return a new tree that joins in temporarily stored results from
+        another query.
+
+        Parameters
+        ----------
+        key : `MaterializationKey`
+            Unique identifier for this materialization, as assigned by a
+            `QueryDriver`.
+        spec : `MaterializationSpec`
+            Struct containing the dimensions and resolved dataset types stored
+            in the materialization.
+
+        Returns
+        -------
+        result : `QueryTree`
+            A new tree that joins in the materialization.
+        """
         if key in self.materializations:
             assert spec == self.materializations[key], f"Different specs for the same materialization {key}!"
             return self
-        if not spec.datasets.isdisjoint(self.available_dataset_types):
-            raise InvalidRelationError(
-                f"Materialization includes dataset(s) {spec.datasets & self.available_dataset_types} that "
-                "are already present in the query."
-            )
         materializations = dict(self.materializations)
         materializations[key] = spec
         return self.model_copy(
             update=dict(dimensions=self.dimensions | spec.dimensions, materializations=materializations)
         )
 
-    def join_dataset(
-        self, dataset_type: str, dimensions: DimensionGroup, collections: tuple[str, ...]
-    ) -> RootRelation:
-        # TODO: docs
-        spec = DatasetSpec.model_construct(dimensions=dimensions, collections=collections)
+    def join_dataset(self, dataset_type: str, spec: DatasetSpec) -> QueryTree:
+        """Return a new tree joins in a search for a dataset.
+
+        Parameters
+        ----------
+        dataset_type : `str`
+            Name of dataset type to join in.
+        spec : `DatasetSpec`
+            Struct containing the collection search path and dataset type
+            dimensions.
+
+        Returns
+        -------
+        result : `QueryTree`
+            A new tree that joins in the dataset search.
+
+        Raises
+        ------
+        InvalidQueryTreeError
+            Raised if this dataset type is already present in the query tree.
+        """
         if dataset_type in self.datasets:
             if spec != self.datasets[dataset_type]:
-                raise InvalidRelationError(
+                raise InvalidQueryTreeError(
                     f"Dataset type {dataset_type!r} is already present in the query, with different "
                     "collections and/or dimensions."
                 )
             return self
-        if dataset_type in self.available_dataset_types:
-            raise InvalidRelationError(
-                f"Dataset type {dataset_type!r} is already present in the query via a materialization."
-            )
         datasets = dict(self.datasets)
         datasets[dataset_type] = spec
         return self.model_copy(update=dict(dimensions=self.dimensions | spec.dimensions, datasets=datasets))
 
-    def where(self, *terms: Predicate) -> RootRelation:
-        """Return a new relation that adds row filtering via a boolean column
+    def where(self, *terms: Predicate) -> QueryTree:
+        """Return a new tree that adds row filtering via a boolean column
         expression.
 
         Parameters
@@ -307,21 +352,21 @@ class RootRelation(RelationTreeBase):
 
         Returns
         -------
-        result : `RootRelation`
-            A new relation that with row filtering.
+        result : `QueryTree`
+            A new tree that with row filtering.
 
         Raises
         ------
-        InvalidRelationError
+        InvalidQueryTreeError
             Raised if a column expression requires a dataset column that is not
-            already present in the relation tree.
+            already present in the query tree.
 
         Notes
         -----
         If an expression references a dimension or dimension element that is
-        not already present in the relation tree, it will be joined in, but
-        datasets must already be joined into a relation tree in order to
-        reference their fields in expressions.
+        not already present in the query tree, it will be joined in, but
+        datasets must already be joined into a query tree in order to reference
+        their fields in expressions.
         """
         full_dimension_names: set[str] = set(self.dimensions.names)
         where_predicate = self.predicate
@@ -334,13 +379,13 @@ class RootRelation(RelationTreeBase):
                         full_dimension_names.update(element.minimal_group.names)
                     case DatasetFieldReference(dataset_type=dataset_type):
                         if dataset_type not in self.datasets:
-                            raise InvalidRelationError(f"Dataset search for column {column} is not present.")
+                            raise InvalidQueryTreeError(f"Dataset search for column {column} is not present.")
             where_predicate = where_predicate.logical_and(where_term)
         full_dimensions = self.dimensions.universe.conform(full_dimension_names)
         return self.model_copy(update=dict(dimensions=full_dimensions, where_predicate=where_predicate))
 
-    def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> RootRelation:
-        """Return a new relation that sorts and/or applies positional slicing.
+    def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> QueryTree:
+        """Return a new tree that sorts and/or applies positional slicing.
 
         Parameters
         ----------
@@ -354,13 +399,12 @@ class RootRelation(RelationTreeBase):
 
         Returns
         -------
-        result : `RootRelation`
-            A new relation object whose results will be sorted and/or
-            positionally sliced.
+        result : `QueryTree`
+            A new tree whose results will be sorted and/or positionally sliced.
 
         Raises
         ------
-        InvalidRelationError
+        InvalidQueryTreeError
             Raised if a column expression requires a dataset column that is not
             already present in the queries, or if the query already contains
             offset/limit constraints.
@@ -368,14 +412,14 @@ class RootRelation(RelationTreeBase):
         Notes
         -----
         If an expression references a dimension or dimension element that is
-        not already present in the queries, it will be joined in, but datasets
-        must already be joined into a queries in order to reference their
-        fields in expressions.
+        not already present in the query tree, it will be joined in, but
+        datasets must already be joined into a queries in order to reference
+        their fields in expressions.
         """
         if not terms and not offset and limit is None:
             return self
         if self.offset or self.limit is not None:
-            raise InvalidRelationError(
+            raise InvalidQueryTreeError(
                 "Cannot add sorting or new offset/limit to a query that already has offset/limit. "
                 "To avoid this error add sorting first (since it is always applied first) or "
                 "at the same time that offset/limit are added."
@@ -390,7 +434,7 @@ class RootRelation(RelationTreeBase):
                         full_dimension_names.update(element.minimal_group.names)
                     case DatasetFieldReference(dataset_type=dataset_type):
                         if dataset_type not in self.datasets:
-                            raise InvalidRelationError(f"Dataset search for column {column} is not present.")
+                            raise InvalidQueryTreeError(f"Dataset search for column {column} is not present.")
         full_dimensions = self.dimensions.universe.conform(full_dimension_names)
         return self.model_copy(
             update=dict(
@@ -398,60 +442,50 @@ class RootRelation(RelationTreeBase):
             )
         )
 
-    def find_first_dataset(self, dataset_type: str, dimensions: DimensionGroup) -> RootRelation:
-        """Return a new relation that searches a dataset's collections in
+    def find_first(self, dataset_type: str) -> QueryTree:
+        """Return a new tree that searches a dataset's collections in
         order for the first match for each dataset type and data ID.
 
         Parameters
         ----------
         dataset_type : `str`
-            Name of the dataset type.  Must be available in the relation tree
+            Name of the dataset type.  Must be available in the query tree
             already.
-        dimensions : `DimensionGroup`
-            Dimensions to group by.  This is typically the dimensions of the
-            dataset type, but in certain cases (such as calibration lookups)
-            it may be useful to user a superset of the dataset type's
-            dimensions.
 
         Returns
         -------
-        result : `RootRelation`
-            A new root relation that includes the find-first search.
+        result : `QueryTree`
+            A new tree that includes the find-first search.
         """
-        if self.find_first is not None:
-            raise InvalidRelationError(
+        if self.find_first_dataset is not None:
+            raise InvalidQueryTreeError(
                 f"Cannot add a find-first search for {dataset_type!r} to a query that already has a "
-                f"find-first search for {self.find_first.dataset_type!r}."
+                f"find-first search for {self.find_first_dataset!r}."
             )
         if self.offset or self.limit is not None:
-            raise InvalidRelationError(
+            raise InvalidQueryTreeError(
                 f"Cannot add a find-first search for {dataset_type!r} to a query that has offset or limit. "
                 "To avoid this error add the find-first search and then add the offset or limit constraint, "
                 "since this matches the order in which those operations will actually be applied."
             )
-        if dataset_type not in self.available_dataset_types:
-            raise InvalidRelationError(
+        if dataset_type not in self.datasets:
+            raise InvalidQueryTreeError(
                 f"Dataset {dataset_type!r} must be joined in before it can be used in a find-first search."
             )
-        return self.model_copy(
-            update=dict(
-                dimensions=self.dimensions | dimensions,
-                find_first=FindFirstSpec.model_construct(dataset_type=dataset_type, dimensions=dimensions),
-            )
-        )
+        return self.model_copy(update=dict(find_first_dataset=dataset_type))
 
     @pydantic.model_validator(mode="after")
-    def _validate_join_operands(self) -> RootRelation:
+    def _validate_join_operands(self) -> QueryTree:
         for dimensions in self.join_operand_dimensions:
             if not dimensions.issubset(self.dimensions):
-                raise InvalidRelationError(
+                raise InvalidQueryTreeError(
                     f"Dimensions {dimensions} of join operand are not a "
-                    f"subset of the root relation's dimensions {self.dimensions}."
+                    f"subset of the query tree's dimensions {self.dimensions}."
                 )
         return self
 
     @pydantic.model_validator(mode="after")
-    def _validate_required_columns(self) -> RootRelation:
+    def _validate_required_columns(self) -> QueryTree:
         required_columns = self.predicate.gather_required_columns()
         for term in self.order_terms:
             required_columns.update(term.gather_required_columns())
@@ -459,15 +493,19 @@ class RootRelation(RelationTreeBase):
             match column:
                 case DimensionKeyReference(dimension=dimension):
                     if dimension.name not in self.dimensions:
-                        raise InvalidRelationError(f"Column {column} is not in dimensions {self.dimensions}.")
+                        raise InvalidQueryTreeError(
+                            f"Column {column} is not in dimensions {self.dimensions}."
+                        )
                 case DimensionFieldReference(element=element):
                     if element not in self.dimensions.elements:
-                        raise InvalidRelationError(f"Column {column} is not in dimensions {self.dimensions}.")
+                        raise InvalidQueryTreeError(
+                            f"Column {column} is not in dimensions {self.dimensions}."
+                        )
                 case DatasetFieldReference(dataset_type=dataset_type):
-                    if dataset_type not in self.available_dataset_types:
-                        raise InvalidRelationError(f"Dataset search for column {column} is not present.")
+                    if dataset_type not in self.datasets:
+                        raise InvalidQueryTreeError(f"Dataset search for column {column} is not present.")
         return self
 
 
-class DeferredValidationRootRelation(DeferredValidation[RootRelation]):
+class DeferredValidationQueryTree(DeferredValidation[QueryTree]):
     pass

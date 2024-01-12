@@ -48,7 +48,7 @@ from ..dimensions import (
 )
 from .convert_args import convert_order_by_args
 from .driver import PageKey, QueryDriver
-from .relation_tree import RootRelation
+from .tree import QueryTree
 
 
 class DimensionRecordResultSpec(pydantic.BaseModel):
@@ -83,18 +83,16 @@ class DimensionRecordResultPage:
             return DimensionRecordSet(self.spec.element, self.rows)
 
 
-class RelationDimensionRecordQueryResults(DimensionRecordQueryResults):
-    """Implementation of DimensionRecordQueryResults for the relation-based
+class DimensionRecordQueryResults2(DimensionRecordQueryResults):
+    """Implementation of DimensionRecordQueryResults for the tree-based
     query system.
 
     Parameters
     ----------
     driver : `QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `RootRelation`
-        Description of the query as a tree of relation operations.  The
-        instance returned directly by the `Butler._query` entry point should
-        be constructed via `make_unit_relation`.
+    tree : `QueryTree`
+        Description of the query as a tree of joins and column expressions.
     spec : `DimensionRecordResultSpec`
         Specification for the details of the records to return.
 
@@ -104,7 +102,7 @@ class RelationDimensionRecordQueryResults(DimensionRecordQueryResults):
     we won't need an ABC if this is the only implementation.
     """
 
-    def __init__(self, driver: QueryDriver, tree: RootRelation, spec: DimensionRecordResultSpec):
+    def __init__(self, driver: QueryDriver, tree: QueryTree, spec: DimensionRecordResultSpec):
         self._driver = driver
         self._tree = tree
         self._spec = spec
@@ -141,7 +139,9 @@ class RelationDimensionRecordQueryResults(DimensionRecordQueryResults):
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
-        return self._driver.count(self._tree, exact=exact, discard=discard)
+        return self._driver.count(
+            self._tree, dimensions=self._spec.dimensions, datasets=frozenset(), exact=exact, discard=discard
+        )
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         # Docstring inherited.
@@ -149,7 +149,7 @@ class RelationDimensionRecordQueryResults(DimensionRecordQueryResults):
 
     def order_by(self, *args: str) -> DimensionRecordQueryResults:
         # Docstring inherited.
-        return RelationDimensionRecordQueryResults(
+        return DimensionRecordQueryResults2(
             driver=self._driver,
             tree=self._tree.order_by(*convert_order_by_args(self._tree, *args)),
             spec=self._spec,
@@ -157,7 +157,7 @@ class RelationDimensionRecordQueryResults(DimensionRecordQueryResults):
 
     def limit(self, limit: int | None = None, offset: int = 0) -> DimensionRecordQueryResults:
         # Docstring inherited.
-        return RelationDimensionRecordQueryResults(
+        return DimensionRecordQueryResults2(
             driver=self._driver,
             tree=self._tree.order_by(limit=limit, offset=offset),
             spec=self._spec,

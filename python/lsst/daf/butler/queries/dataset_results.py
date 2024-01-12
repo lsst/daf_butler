@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = (
     "DatasetRefResultSpec",
     "DatasetRefResultPage",
-    "RelationSingleTypeDatasetQueryResults",
+    "SingleTypeDatasetQueryResults2",
 )
 
 import itertools
@@ -45,12 +45,12 @@ from .._dataset_type import DatasetType
 from .._query_results import SingleTypeDatasetQueryResults
 from ..dimensions import DimensionGroup
 from .data_coordinate_results import (
+    DataCoordinateQueryResults2,
     DataCoordinateResultSpec,
     DatasetQueryResults,
-    RelationDataCoordinateQueryResults,
 )
 from .driver import PageKey, QueryDriver
-from .relation_tree import RootRelation, make_unit_relation
+from .tree import MaterializationSpec, QueryTree, make_unit_query_tree
 
 
 class DatasetRefResultSpec(pydantic.BaseModel):
@@ -77,18 +77,16 @@ class DatasetRefResultPage(pydantic.BaseModel):
     rows: list[DatasetRef]
 
 
-class RelationSingleTypeDatasetQueryResults(SingleTypeDatasetQueryResults):
-    """Implementation of `SingleTypeDatasetQueryResults` for the relation-based
+class SingleTypeDatasetQueryResults2(SingleTypeDatasetQueryResults):
+    """Implementation of `SingleTypeDatasetQueryResults` for the tree-based
     query system.
 
     Parameters
     ----------
     driver : `QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `RootRelation`
-        Description of the query as a tree of relation operations.  The
-        instance returned directly by the `Butler._query` entry point should be
-        constructed via `make_unit_relation`.
+    tree : `QueryTree`
+        Description of the query as a tree of joins and column expressions.
     spec : `DatasetRefResultSpec`
         Specification for the details of the dataset references to return.
 
@@ -98,7 +96,7 @@ class RelationSingleTypeDatasetQueryResults(SingleTypeDatasetQueryResults):
     because we won't need an ABC if this is the only implementation.
     """
 
-    def __init__(self, driver: QueryDriver, tree: RootRelation, spec: DatasetRefResultSpec):
+    def __init__(self, driver: QueryDriver, tree: QueryTree, spec: DatasetRefResultSpec):
         self._driver = driver
         self._tree = tree
         self._spec = spec
@@ -111,15 +109,22 @@ class RelationSingleTypeDatasetQueryResults(SingleTypeDatasetQueryResults):
             yield from page.rows
 
     @contextmanager
-    def materialize(self) -> Iterator[RelationSingleTypeDatasetQueryResults]:
+    def materialize(self) -> Iterator[SingleTypeDatasetQueryResults2]:
         # Docstring inherited from DatasetQueryResults.
         datasets = frozenset({self.dataset_type.name})
-        key = self._driver.materialize(self._tree, datasets=datasets, dimensions=self.dimensions)
-        yield RelationSingleTypeDatasetQueryResults(
+        key, resolved_datasets = self._driver.materialize(
+            self._tree, dimensions=self.dimensions, datasets=datasets
+        )
+        yield SingleTypeDatasetQueryResults2(
             self._driver,
-            tree=make_unit_relation(self._driver.universe).join_materialization(
-                key, datasets=datasets, dimensions=self.dimensions
-            ),
+            tree=make_unit_query_tree(self._driver.universe)
+            .join_materialization(
+                key,
+                MaterializationSpec.model_construct(
+                    dimensions=self.dimensions, resolved_datasets=resolved_datasets
+                ),
+            )
+            .join_dataset(self.dataset_type.name, self._tree.datasets[self.dataset_type.name]),
             spec=self._spec,
         )
         # TODO: Right now we just rely on the QueryDriver context instead of
@@ -133,9 +138,9 @@ class RelationSingleTypeDatasetQueryResults(SingleTypeDatasetQueryResults):
         return self._spec.dataset_type
 
     @property
-    def data_ids(self) -> RelationDataCoordinateQueryResults:
+    def data_ids(self) -> DataCoordinateQueryResults2:
         # Docstring inherited.
-        return RelationDataCoordinateQueryResults(
+        return DataCoordinateQueryResults2(
             self._driver,
             tree=self._tree,
             spec=DataCoordinateResultSpec.model_construct(
@@ -144,11 +149,11 @@ class RelationSingleTypeDatasetQueryResults(SingleTypeDatasetQueryResults):
             ),
         )
 
-    def expanded(self) -> RelationSingleTypeDatasetQueryResults:
+    def expanded(self) -> SingleTypeDatasetQueryResults2:
         # Docstring inherited.
         if self._spec.include_dimension_records:
             return self
-        return RelationSingleTypeDatasetQueryResults(
+        return SingleTypeDatasetQueryResults2(
             self._driver,
             tree=self._tree,
             spec=DatasetRefResultSpec.model_construct(
@@ -162,7 +167,13 @@ class RelationSingleTypeDatasetQueryResults(SingleTypeDatasetQueryResults):
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
-        return self._driver.count(self._tree, exact=exact, discard=discard)
+        return self._driver.count(
+            self._tree,
+            dimensions=self._spec.dimensions,
+            datasets=frozenset({self._spec.dataset_type.name}),
+            exact=exact,
+            discard=discard,
+        )
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         # Docstring inherited.

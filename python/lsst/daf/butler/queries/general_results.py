@@ -37,7 +37,7 @@ from typing import Any, Literal
 import pydantic
 
 from .driver import PageKey
-from .relation_tree import ColumnReference
+from .tree import ColumnReference
 
 
 class GeneralResultSpec(pydantic.BaseModel):
