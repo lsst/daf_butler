@@ -27,32 +27,102 @@
 
 from __future__ import annotations
 
-__all__ = ("QueryDriver", "PageKey", "ResultSpec", "ResultPage")
+__all__ = (
+    "QueryDriver",
+    "PageKey",
+    "ResultPage",
+    "DataCoordinateResultPage",
+    "DimensionRecordResultPage",
+    "DatasetRefResultPage",
+    "GeneralResultPage",
+)
 
+import dataclasses
 import uuid
 from abc import abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Set
 from contextlib import AbstractContextManager
 from types import EllipsisType
-from typing import Annotated, TypeAlias, Union, overload
+from typing import Annotated, Any, TypeAlias, Union, overload
 
 import pydantic
 
+from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
-from ..dimensions import DataIdValue, DimensionGroup, DimensionUniverse
-from .data_coordinate_results import DataCoordinateResultPage, DataCoordinateResultSpec
-from .dataset_results import DatasetRefResultPage, DatasetRefResultSpec
-from .dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
-from .general_results import GeneralResultPage, GeneralResultSpec
+from ..dimensions import (
+    DataCoordinate,
+    DataIdValue,
+    DimensionGroup,
+    DimensionRecord,
+    DimensionRecordSet,
+    DimensionRecordTable,
+    DimensionUniverse,
+)
+from .result_specs import (
+    DataCoordinateResultSpec,
+    DatasetRefResultSpec,
+    DimensionRecordResultSpec,
+    GeneralResultSpec,
+    ResultSpec,
+)
 from .tree import DataCoordinateUploadKey, MaterializationKey, QueryTree
 
 PageKey: TypeAlias = uuid.UUID
 
 
-ResultSpec: TypeAlias = Annotated[
-    Union[DataCoordinateResultSpec, DimensionRecordResultSpec, DatasetRefResultSpec, GeneralResultSpec],
-    pydantic.Field(discriminator="result_type"),
-]
+class DataCoordinateResultPage(pydantic.BaseModel):
+    """A single page of results from a data coordinate query."""
+
+    spec: DataCoordinateResultSpec
+    next_key: PageKey | None
+
+    # TODO: On DM-41114 this will become a custom container that normalizes out
+    # attached DimensionRecords and is Pydantic-friendly.  Right now this model
+    # isn't actually serializable.
+    rows: list[DataCoordinate]
+
+
+@dataclasses.dataclass
+class DimensionRecordResultPage:
+    """A single page of results from a dimension record query."""
+
+    spec: DimensionRecordResultSpec
+    next_key: PageKey | None
+    rows: Iterable[DimensionRecord]
+
+    def as_table(self) -> DimensionRecordTable:
+        if isinstance(self.rows, DimensionRecordTable):
+            return self.rows
+        else:
+            return DimensionRecordTable(self.spec.element, self.rows)
+
+    def as_set(self) -> DimensionRecordSet:
+        if isinstance(self.rows, DimensionRecordSet):
+            return self.rows
+        else:
+            return DimensionRecordSet(self.spec.element, self.rows)
+
+
+class DatasetRefResultPage(pydantic.BaseModel):
+    """A single page of results from a dataset ref query."""
+
+    spec: DatasetRefResultSpec
+    next_key: PageKey | None
+
+    # TODO: On DM-41115 this will become a custom container that normalizes out
+    # attached DimensionRecords and is Pydantic-friendly.  Right now this model
+    # isn't actually serializable.
+    rows: list[DatasetRef]
+
+
+class GeneralResultPage(pydantic.BaseModel):
+    """A single page of results from a general query."""
+
+    spec: GeneralResultSpec
+    next_key: PageKey | None
+
+    # Raw tabular data, with columns in the same order as spec.columns.
+    rows: list[tuple[Any, ...]]
 
 
 ResultPage: TypeAlias = Annotated[
@@ -246,7 +316,7 @@ class QueryDriver(AbstractContextManager[None]):
         tree: QueryTree,
         *,
         dimensions: DimensionGroup,
-        datasets: frozenset[str],
+        datasets: Set[str],
         exact: bool,
         discard: bool,
     ) -> int:
@@ -259,7 +329,7 @@ class QueryDriver(AbstractContextManager[None]):
         dimensions : `DimensionGroup`
             Dimension keys whose distinct rows should be counted.  Must be a
             subset of ``tree.dimensions``.
-        datasets : `frozenset` [ `str` ]
+        datasets : `~collections.abc.Set` [ `str` ]
             Datasets whose IDs might also count towards row distinctness, if
             they are unresolved.
         exact : `bool`, optional

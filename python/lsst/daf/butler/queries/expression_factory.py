@@ -39,7 +39,7 @@ from . import tree as qt
 
 if TYPE_CHECKING:
     from .._timespan import Timespan
-    from ._query import Query2
+    from ._query import Query
 
 # This module uses ExpressionProxy and its subclasses to wrap ColumnExpression,
 # but it just returns OrderExpression and Predicate objects directly, because
@@ -147,7 +147,7 @@ class ScalarExpressionProxy(ExpressionProxy):
             member=self._expression, container=tuple([self._make_expression(item) for item in others])
         )
 
-    def in_query(self, column: ExpressionProxy, query: Query2) -> qt.Predicate:
+    def in_query(self, column: ExpressionProxy, query: Query) -> qt.Predicate:
         """Return a boolean expression that test whether this expression
         evaluates to a value that is in a single-column selection from another
         query.

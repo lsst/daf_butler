@@ -24,3 +24,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from ._base import *
+from ._data_coordinate_query_results import *
+from ._dataset_query_results import *
+from ._dimension_record_query_results import *
+from ._query import *

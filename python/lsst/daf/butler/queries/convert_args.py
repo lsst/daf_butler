@@ -29,23 +29,30 @@ from __future__ import annotations
 
 __all__ = ("convert_where_args", "convert_order_by_args")
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from typing import Any
 
-from ..dimensions import DataId
+from ..dimensions import DataId, DimensionGroup
 from .expression_factory import ExpressionProxy
-from .tree import OrderExpression, Predicate, QueryTree
+from .tree import OrderExpression, Predicate
 
 
 def convert_where_args(
-    tree: QueryTree, *args: str | Predicate | DataId, bind: Mapping[str, Any] | None = None
-) -> list[Predicate]:
-    """Convert ``where`` arguments to a list of column expressions.
+    dimensions: DimensionGroup,
+    datasets: Set[str],
+    *args: str | Predicate | DataId,
+    bind: Mapping[str, Any] | None = None,
+) -> tuple[Predicate, ...]:
+    """Convert ``where`` arguments to a sequence of column expressions.
 
     Parameters
     ----------
-    tree : `QueryTree`
-        Relation whose rows will be filtered.
+    dimensions : `DimensionGroup`
+        Dimensions already present in the query this filter is being applied
+        to.  Returned predicates *may* reference dimensions outside this set.
+    datasets : `~collections.abc.Set` [ `str` ]
+        Dataset types already present in the query this filter is being applied
+        to.  Returned predicates may only reference datasets in this set.
     *args : `str`, `Predicate`, `DataCoordinate`, or `~collections.abc.Mapping`
         Expressions to convert into predicates.
     bind : `~collections.abc.Mapping`, optional
@@ -54,27 +61,31 @@ def convert_where_args(
 
     Returns
     -------
-    predicates : `list` [ `Predicate` ]
+    predicates : `tuple` [ `Predicate`, ... ]
         Standardized predicates, to be combined via logical AND.
     """
     raise NotImplementedError("TODO: Parse string expression.")
 
 
 def convert_order_by_args(
-    tree: QueryTree, *args: str | OrderExpression | ExpressionProxy
-) -> list[OrderExpression]:
-    """Convert ``order_by`` arguments to a list of column expressions.
+    dimensions: DimensionGroup, datasets: Set[str], *args: str | OrderExpression | ExpressionProxy
+) -> tuple[OrderExpression, ...]:
+    """Convert ``order_by`` arguments to a sequence of column expressions.
 
     Parameters
     ----------
-    tree : `QueryTree`
-        Relation whose rows will be ordered.
+    dimensions : `DimensionGroup`
+        Dimensions already present in the query whose rows are being sorted.
+        Returned terms may only reference dimensions in this set.
+    datasets : `~collections.abc.Set` [ `str` ]
+        Dataset types already present in the query whose rows are being sorted.
+        Returned terms may only reference datasets in this set.
     *args : `OrderExpression`, `str`, or `ExpressionObject`
         Expression or column names to sort by.
 
     Returns
     -------
-    expressions : `list` [ `OrderExpression` ]
+    expressions : `tuple` [ `OrderExpression`, ... ]
         Standardized expression objects.
     """
     raise NotImplementedError("TODO")

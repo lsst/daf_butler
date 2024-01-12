@@ -41,7 +41,7 @@ __all__ = (
 import uuid
 from collections.abc import Mapping
 from functools import cached_property
-from typing import TYPE_CHECKING, TypeAlias, final
+from typing import TypeAlias, final
 
 import pydantic
 
@@ -50,10 +50,6 @@ from ...pydantic_utils import DeferredValidation
 from ._base import InvalidQueryTreeError, QueryTreeBase
 from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
 from ._predicate import LiteralTrue, Predicate
-
-if TYPE_CHECKING:
-    from ._column_expression import OrderExpression
-
 
 DataCoordinateUploadKey: TypeAlias = uuid.UUID
 
@@ -175,15 +171,6 @@ class QueryTree(QueryTreeBase):
     predicate: Predicate = LiteralTrue()
     """Boolean expression trees whose logical AND defines a row filter."""
 
-    order_terms: tuple[OrderExpression, ...] = ()
-    """Expressions to sort the rows by."""
-
-    offset: int = 0
-    """Index of the first row to return."""
-
-    limit: int | None = None
-    """Maximum number of rows to return, or `None` for no bound."""
-
     find_first_dataset: str | None = None
     """A single result dataset type to search collections for in order,
     yielding one dataset for data ID with ``result_dimensions``.
@@ -225,18 +212,6 @@ class QueryTree(QueryTreeBase):
                 "Cannot join queries after a dataset find-first operation has been added. "
                 "To avoid this error perform all joins before requesting dataset results."
             )
-        if self.offset or self.limit is not None or other.offset or other.limit is not None:
-            raise InvalidQueryTreeError(
-                "Cannot join queries after an offset/limit slice has been added. "
-                "To avoid this error perform all joins before adding an offset/limit slice, "
-                "since those can only be performed on the final query."
-            )
-        if self.order_terms and other.order_terms:  # if one is sorted, fine.
-            raise InvalidQueryTreeError(
-                "Cannot join two queries if both are either sorted. "
-                "To avoid this error perform all joins before adding any sorting, "
-                "since those can only be performed on the final query."
-            )
         if not self.datasets.keys().isdisjoint(other.datasets.keys()):
             raise InvalidQueryTreeError(
                 "Cannot join when both sides include the same dataset type: "
@@ -248,7 +223,6 @@ class QueryTree(QueryTreeBase):
             data_coordinate_uploads={**self.data_coordinate_uploads, **other.data_coordinate_uploads},
             materializations={**self.materializations, **other.materializations},
             predicate=self.predicate.logical_and(other.predicate),
-            order_terms=self.order_terms + other.order_terms,  # at least one of these is empty
         )
 
     def join_data_coordinate_upload(
@@ -384,64 +358,6 @@ class QueryTree(QueryTreeBase):
         full_dimensions = self.dimensions.universe.conform(full_dimension_names)
         return self.model_copy(update=dict(dimensions=full_dimensions, where_predicate=where_predicate))
 
-    def order_by(self, *terms: OrderExpression, limit: int | None = None, offset: int = 0) -> QueryTree:
-        """Return a new tree that sorts and/or applies positional slicing.
-
-        Parameters
-        ----------
-        *terms : `str` or `OrderExpression`
-            Expression objects to use for ordering.
-        limit : `int` or `None`, optional
-            Upper limit on the number of returned records.
-        offset : `int`, optional
-            The number of records to skip before returning at most ``limit``
-            records.
-
-        Returns
-        -------
-        result : `QueryTree`
-            A new tree whose results will be sorted and/or positionally sliced.
-
-        Raises
-        ------
-        InvalidQueryTreeError
-            Raised if a column expression requires a dataset column that is not
-            already present in the queries, or if the query already contains
-            offset/limit constraints.
-
-        Notes
-        -----
-        If an expression references a dimension or dimension element that is
-        not already present in the query tree, it will be joined in, but
-        datasets must already be joined into a queries in order to reference
-        their fields in expressions.
-        """
-        if not terms and not offset and limit is None:
-            return self
-        if self.offset or self.limit is not None:
-            raise InvalidQueryTreeError(
-                "Cannot add sorting or new offset/limit to a query that already has offset/limit. "
-                "To avoid this error add sorting first (since it is always applied first) or "
-                "at the same time that offset/limit are added."
-            )
-        full_dimension_names: set[str] = set(self.dimensions.names)
-        for term in terms:
-            for column in term.gather_required_columns():
-                match column:
-                    case DimensionKeyReference(dimension=dimension):
-                        full_dimension_names.add(dimension.name)
-                    case DimensionFieldReference(element=element):
-                        full_dimension_names.update(element.minimal_group.names)
-                    case DatasetFieldReference(dataset_type=dataset_type):
-                        if dataset_type not in self.datasets:
-                            raise InvalidQueryTreeError(f"Dataset search for column {column} is not present.")
-        full_dimensions = self.dimensions.universe.conform(full_dimension_names)
-        return self.model_copy(
-            update=dict(
-                dimensions=full_dimensions, order_terms=terms + self.order_terms, limit=limit, offset=offset
-            )
-        )
-
     def find_first(self, dataset_type: str) -> QueryTree:
         """Return a new tree that searches a dataset's collections in
         order for the first match for each dataset type and data ID.
@@ -462,12 +378,6 @@ class QueryTree(QueryTreeBase):
                 f"Cannot add a find-first search for {dataset_type!r} to a query that already has a "
                 f"find-first search for {self.find_first_dataset!r}."
             )
-        if self.offset or self.limit is not None:
-            raise InvalidQueryTreeError(
-                f"Cannot add a find-first search for {dataset_type!r} to a query that has offset or limit. "
-                "To avoid this error add the find-first search and then add the offset or limit constraint, "
-                "since this matches the order in which those operations will actually be applied."
-            )
         if dataset_type not in self.datasets:
             raise InvalidQueryTreeError(
                 f"Dataset {dataset_type!r} must be joined in before it can be used in a find-first search."
@@ -486,10 +396,7 @@ class QueryTree(QueryTreeBase):
 
     @pydantic.model_validator(mode="after")
     def _validate_required_columns(self) -> QueryTree:
-        required_columns = self.predicate.gather_required_columns()
-        for term in self.order_terms:
-            required_columns.update(term.gather_required_columns())
-        for column in required_columns:
+        for column in self.predicate.gather_required_columns():
             match column:
                 case DimensionKeyReference(dimension=dimension):
                     if dimension.name not in self.dimensions:

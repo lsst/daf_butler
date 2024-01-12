@@ -39,11 +39,22 @@ from .. import ddl
 from .._dataset_type import DatasetType
 from ..dimensions import DataIdValue, DimensionElement, DimensionGroup, DimensionUniverse
 from ..queries import tree as qt
-from ..queries.data_coordinate_results import DataCoordinateResultPage, DataCoordinateResultSpec
-from ..queries.dataset_results import DatasetRefResultPage, DatasetRefResultSpec
-from ..queries.dimension_record_results import DimensionRecordResultPage, DimensionRecordResultSpec
-from ..queries.driver import PageKey, QueryDriver, ResultPage, ResultSpec
-from ..queries.general_results import GeneralResultPage, GeneralResultSpec
+from ..queries.driver import (
+    DataCoordinateResultPage,
+    DatasetRefResultPage,
+    DimensionRecordResultPage,
+    GeneralResultPage,
+    PageKey,
+    QueryDriver,
+    ResultPage,
+)
+from ..queries.result_specs import (
+    DataCoordinateResultSpec,
+    DatasetRefResultSpec,
+    DimensionRecordResultSpec,
+    GeneralResultSpec,
+    ResultSpec,
+)
 from ..registry.managers import RegistryManagerInstances
 
 if TYPE_CHECKING:
@@ -147,7 +158,7 @@ class DirectQueryDriver(QueryDriver):
         tree: qt.QueryTree,
         *,
         dimensions: DimensionGroup,
-        datasets: frozenset[str],
+        datasets: Set[str],
         exact: bool,
         discard: bool,
     ) -> int:
@@ -194,14 +205,8 @@ class DirectQueryDriver(QueryDriver):
         else:
             sql_builder, postprocessing = self._make_vanilla_sql_builder(tree, columns_to_select)
         # TODO: make results unique over columns_to_select, while taking into
-        # account postprocessing columns
-        return sql_builder.sql_select(
-            columns_to_select,
-            postprocessing,
-            order_by=[self._build_sql_order_by_expression(sql_builder, term) for term in tree.order_terms],
-            limit=tree.limit,
-            offset=tree.offset,
-        )
+        # account postprocessing columns.
+        return sql_builder.sql_select(columns_to_select, postprocessing)
 
     def _make_vanilla_sql_builder(
         self,
@@ -324,15 +329,13 @@ class DirectQueryDriver(QueryDriver):
         #
 
         # We'll start with the Common Table Expression (CTE) at the top, which
-        # we mostly get from _build_sql_selet.  Note that we need to use
-        # 'columns_required' to populate the SELECT clause list, because this
-        # isn't the outermost query, and hence we need to propagate columns
-        # we'll use but not return to the user through it.
+        # we mostly get from _make_vanilla_sql_builder.  Note that we need to
+        # use 'columns_required' to populate the SELECT clause list, because
+        # this isn't the outermost query, and hence we need to propagate
+        # columns we'll use but not return to the user through it.
         rank = qt.DatasetFieldReference.model_construct(dataset_type=dataset_type, field="rank")
         internal_columns = set(columns_to_select)
         internal_columns.add(rank)
-        for term in tree.order_terms:
-            internal_columns.update(term.gather_required_columns())
         base_sql_builder, postprocessing = self._make_vanilla_sql_builder(tree, internal_columns)
         base_select, postprocessing = base_sql_builder.sql_select(internal_columns, postprocessing)
         internal_columns.update(postprocessing.gather_columns_required())

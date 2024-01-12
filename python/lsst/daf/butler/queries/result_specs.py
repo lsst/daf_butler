@@ -28,16 +28,55 @@
 from __future__ import annotations
 
 __all__ = (
-    "GeneralResultSpec",
-    "GeneralResultPage",
+    "ResultSpecBase",
+    "DataCoordinateResultSpec",
+    "DimensionRecordResultSpec",
+    "DatasetRefResultSpec",
 )
 
-from typing import Any, Literal
+from typing import Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
-from .driver import PageKey
-from .tree import ColumnReference
+from .._dataset_type import DatasetType
+from ..dimensions import DimensionElement, DimensionGroup
+from .tree import ColumnReference, OrderExpression
+
+
+class ResultSpecBase(pydantic.BaseModel):
+    """Base class for all query-result specification objects."""
+
+    order_by: tuple[OrderExpression, ...] = ()
+    """Expressions to sort the rows by."""
+
+    offset: int = 0
+    """Index of the first row to return."""
+
+    limit: int | None = None
+    """Maximum number of rows to return, or `None` for no bound."""
+
+
+class DataCoordinateResultSpec(ResultSpecBase):
+    """Specification for a query that yields `DataCoordinate` objects."""
+
+    result_type: Literal["data_coordinate"] = "data_coordinate"
+    dimensions: DimensionGroup
+    include_dimension_records: bool
+
+
+class DimensionRecordResultSpec(ResultSpecBase):
+    """Specification for a query that yields `DimensionRecord` objects."""
+
+    result_type: Literal["dimension_record"] = "dimension_record"
+    element: DimensionElement
+
+
+class DatasetRefResultSpec(ResultSpecBase):
+    """Specification for a query that yields `DatasetRef` objects."""
+
+    result_type: Literal["dataset_ref"] = "dataset_ref"
+    dataset_type: DatasetType
+    include_dimension_records: bool
 
 
 class GeneralResultSpec(pydantic.BaseModel):
@@ -49,11 +88,7 @@ class GeneralResultSpec(pydantic.BaseModel):
     columns: tuple[ColumnReference, ...]
 
 
-class GeneralResultPage(pydantic.BaseModel):
-    """A single page of results from a general query."""
-
-    spec: GeneralResultSpec
-    next_key: PageKey | None
-
-    # Raw tabular data, with columns in the same order as spec.columns.
-    rows: list[tuple[Any, ...]]
+ResultSpec: TypeAlias = Annotated[
+    Union[DataCoordinateResultSpec, DimensionRecordResultSpec, DatasetRefResultSpec, GeneralResultSpec],
+    pydantic.Field(discriminator="result_type"),
+]

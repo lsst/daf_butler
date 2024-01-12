@@ -27,17 +27,22 @@
 
 from __future__ import annotations
 
-__all__ = ("Query2",)
+__all__ = ("Query",)
 
 from collections.abc import Iterable, Mapping, Set
 from typing import TYPE_CHECKING, Any
 
-from .._query import Query
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
+from ._base import HomogeneousQueryBase
+from ._data_coordinate_query_results import DataCoordinateQueryResults, DataCoordinateResultSpec
+from ._dataset_query_results import (
+    ChainedDatasetQueryResults,
+    DatasetQueryResults,
+    DatasetRefResultSpec,
+    SingleTypeDatasetQueryResults,
+)
+from ._dimension_record_query_results import DimensionRecordQueryResults, DimensionRecordResultSpec
 from .convert_args import convert_where_args
-from .data_coordinate_results import DataCoordinateQueryResults2, DataCoordinateResultSpec
-from .dataset_results import ChainedDatasetQueryResults, DatasetRefResultSpec, SingleTypeDatasetQueryResults2
-from .dimension_record_results import DimensionRecordQueryResults2, DimensionRecordResultSpec
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory
 from .tree import (
@@ -51,13 +56,11 @@ from .tree import (
 )
 
 if TYPE_CHECKING:
-    from .._query_results import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
     from ..registry import CollectionArgType
 
 
-class Query2(Query):
-    """Implementation of the Query interface backed by a `QueryTree` and a
-    `QueryDriver`.
+class Query(HomogeneousQueryBase):
+    """A method-chaining builder for butler queries.
 
     Parameters
     ----------
@@ -67,25 +70,16 @@ class Query2(Query):
         Description of the query as a tree of joins and column expressions.
         The instance returned directly by the `Butler._query` entry point
         should be constructed via `make_unit_query_tree`.
-    include_dimension_records : `bool`
-        Whether query result objects created from this query should be expanded
-        to include dimension records.
 
     Notes
     -----
-    Ideally this will eventually just be "Query", because we won't need an ABC
-    if this is the only implementation.
+    This largely mimics and considerably expands the `Query` ABC defined in
+    `lsst.daf.butler._query`, but the intent is to replace that ABC with this
+    concrete class, rather than inherit from it.
     """
 
-    def __init__(self, driver: QueryDriver, tree: QueryTree, include_dimension_records: bool):
-        self._driver = driver
-        self._tree = tree
-        self._include_dimension_records = include_dimension_records
-
-    @property
-    def dimensions(self) -> DimensionGroup:
-        """The dimensions joined into the query."""
-        return self._tree.dimensions
+    def __init__(self, driver: QueryDriver, tree: QueryTree):
+        super().__init__(driver, tree)
 
     @property
     def dataset_types(self) -> Set[str]:
@@ -147,26 +141,33 @@ class Query2(Query):
     def data_ids(
         self,
         dimensions: DimensionGroup | Iterable[str] | str,
-        *,
-        # TODO: Arguments below are redundant with chaining methods; which ones
-        # are so convenient we have to keep them?
-        data_id: DataId | None = None,
-        where: str | Predicate = "",
-        bind: Mapping[str, Any] | None = None,
-        **kwargs: Any,
     ) -> DataCoordinateQueryResults:
-        # Docstring inherited.
+        """Query for data IDs matching user-provided criteria.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGroup`, `str`, or \
+                `~collections.abc.Iterable` [`str`]
+            The dimensions of the data IDs to yield, as either `DimensionGroup`
+            instances or `str`.  Will be automatically expanded to a complete
+            `DimensionGroup`.
+
+        Returns
+        -------
+        dataIds : `DataCoordinateQueryResults`
+            Data IDs matching the given query parameters.  These are guaranteed
+            to identify all dimensions (`DataCoordinate.hasFull` returns
+            `True`), but will not contain `DimensionRecord` objects
+            (`DataCoordinate.hasRecords` returns `False`).  Call
+            `~DataCoordinateQueryResults.with_dimension_records` on the
+            returned object to fetch those.
+        """
         dimensions = self._driver.universe.conform(dimensions)
-        data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
         tree = self._tree
         if not dimensions >= self._tree.dimensions:
             tree = tree.join(make_dimension_query_tree(dimensions))
-        if data_id or where:
-            tree = tree.where(*convert_where_args(self._tree, where, data_id, bind=bind, **kwargs))
-        result_spec = DataCoordinateResultSpec(
-            dimensions=dimensions, include_dimension_records=self._include_dimension_records
-        )
-        return DataCoordinateQueryResults2(self._driver, tree, result_spec)
+        result_spec = DataCoordinateResultSpec(dimensions=dimensions, include_dimension_records=False)
+        return DataCoordinateQueryResults(self._driver, tree, result_spec)
 
     # TODO add typing.overload variants for single-dataset-type and patterns.
 
@@ -176,16 +177,63 @@ class Query2(Query):
         collections: CollectionArgType | None = None,
         *,
         find_first: bool = True,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        **kwargs: Any,
     ) -> DatasetQueryResults:
-        # Docstring inherited.
+        """Query for and iterate over dataset references matching user-provided
+        criteria.
+
+        Parameters
+        ----------
+        dataset_type : dataset type expression
+            An expression that fully or partially identifies the dataset types
+            to be queried.  Allowed types include `DatasetType`, `str`,
+            `re.Pattern`, and iterables thereof.  The special value ``...`` can
+            be used to query all dataset types.  See
+            :ref:`daf_butler_dataset_type_expressions` for more information.
+        collections : collection expression, optional
+            An expression that identifies the collections to search, such as a
+            `str` (for full matches or partial matches via globs), `re.Pattern`
+            (for partial matches), or iterable thereof.  ``...`` can be used to
+            search all collections (actually just all `~CollectionType.RUN`
+            collections, because this will still find all datasets).
+            If not provided, the default collections are used.  See
+            :ref:`daf_butler_collection_expressions` for more information.
+        find_first : `bool`, optional
+            If `True` (default), for each result data ID, only yield one
+            `DatasetRef` of each `DatasetType`, from the first collection in
+            which a dataset of that dataset type appears (according to the
+            order of ``collections`` passed in).  If `True`, ``collections``
+            must not contain regular expressions and may not be ``...``.
+
+        Returns
+        -------
+        refs : `.queries.DatasetQueryResults`
+            Dataset references matching the given query criteria.  Nested data
+            IDs are guaranteed to include values for all implied dimensions
+            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
+            include dimension records (`DataCoordinate.hasRecords` will be
+            `False`) unless
+            `~.queries.DatasetQueryResults.with_dimension_records` is
+            called on the result object (which returns a new one).
+
+        Raises
+        ------
+        lsst.daf.butler.registry.DatasetTypeExpressionError
+            Raised when ``dataset_type`` expression is invalid.
+        TypeError
+            Raised when the arguments are incompatible, such as when a
+            collection wildcard is passed when ``find_first`` is `True`, or
+            when ``collections`` is `None` and default butler collections are
+            not defined.
+
+        Notes
+        -----
+        When multiple dataset types are queried in a single call, the
+        results of this operation are equivalent to querying for each dataset
+        type separately in turn, and no information about the relationships
+        between datasets of different types is included.
+        """
         resolved_dataset_types = self._driver.resolve_dataset_type_wildcard(dataset_type)
-        data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
-        where_terms = convert_where_args(self._tree, where, data_id, bind=bind, **kwargs)
-        single_type_results: list[SingleTypeDatasetQueryResults2] = []
+        single_type_results: list[SingleTypeDatasetQueryResults] = []
         for name, resolved_dataset_type in resolved_dataset_types.items():
             tree = self._tree
             if name not in tree.datasets:
@@ -209,101 +257,44 @@ class Query2(Query):
                     f"Dataset type {name!r} was already joined into this query but new collections "
                     f"{collections!r} were still provided."
                 )
-            if where_terms:
-                tree = tree.where(*where_terms)
             if find_first:
                 tree = tree.find_first(name)
             spec = DatasetRefResultSpec.model_construct(
-                dataset_type=resolved_dataset_type, include_dimension_records=self._include_dimension_records
+                dataset_type=resolved_dataset_type, include_dimension_records=False
             )
-            single_type_results.append(SingleTypeDatasetQueryResults2(self._driver, tree=tree, spec=spec))
+            single_type_results.append(SingleTypeDatasetQueryResults(self._driver, tree=tree, spec=spec))
         if len(single_type_results) == 1:
             return single_type_results[0]
         else:
             return ChainedDatasetQueryResults(tuple(single_type_results))
 
-    def dimension_records(
-        self,
-        element: str,
-        *,
-        # TODO: Arguments below are redundant with chaining methods; which ones
-        # are so convenient we have to keep them?
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> DimensionRecordQueryResults:
-        # Docstring inherited.
-        data_id = DataCoordinate.standardize(data_id, universe=self._driver.universe, **kwargs)
+    def dimension_records(self, element: str) -> DimensionRecordQueryResults:
+        """Query for dimension information matching user-provided criteria.
+
+        Parameters
+        ----------
+        element : `str`
+            The name of a dimension element to obtain records for.
+
+        Returns
+        -------
+        records : `.queries.DimensionRecordQueryResults`
+            Data IDs matching the given query parameters.
+        """
         tree = self._tree
         if element not in tree.dimensions.elements:
             tree = tree.join(make_dimension_query_tree(self._driver.universe[element].minimal_group))
-        if data_id or where:
-            tree = tree.where(*convert_where_args(self._tree, where, data_id, bind=bind, **kwargs))
         result_spec = DimensionRecordResultSpec(element=self._driver.universe[element])
-        return DimensionRecordQueryResults2(self._driver, tree, result_spec)
+        return DimensionRecordQueryResults(self._driver, tree, result_spec)
 
     # TODO: add general, dict-row results method and QueryResults.
-
-    # TODO: methods below are not part of the base Query, but they have
-    # counterparts on at least some QueryResults objects.  We need to think
-    # about which should be duplicated in Query and QueryResults, and which
-    # should not, and get naming consistent.
-
-    def with_dimension_records(self) -> Query2:
-        """Return a new Query that will always include dimension records in
-        any `DataCoordinate` or `DatasetRef` results.
-        """
-        return Query2(self._driver, self._tree, include_dimension_records=True)
-
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        """Test whether the query would return any rows.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
-            determined prior to execution that the query would return no rows.
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed, until at least one result row is found.  If `False`, the
-            returned result does not account for post-query filtering, and
-            hence may be `True` even when all result rows would be filtered
-            out.
-
-        Returns
-        -------
-        any : `bool`
-            `True` if the query would (or might, depending on arguments) yield
-            result rows.  `False` if it definitely would not.
-        """
-        return self._driver.any(self._tree, execute=execute, exact=exact)
-
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        """Return human-readable messages that may help explain why the query
-        yields no results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
-            of aspects of the tree to more precisely determine where rows were
-            filtered out.
-
-        Returns
-        -------
-        messages : `~collections.abc.Iterable` [ `str` ]
-            String messages that describe reasons the query might not yield any
-            results.
-        """
-        return self._driver.explain_no_results(self._tree, execute=execute)
 
     def materialize(
         self,
         *,
         dimensions: Iterable[str] | DimensionGroup | None = None,
         datasets: Iterable[str] | None = None,
-    ) -> Query2:
+    ) -> Query:
         """Execute the query, save its results to a temporary location, and
         return a new query that represents fetching or joining against those
         saved results.
@@ -341,13 +332,13 @@ class Query2(Query):
         )
         for dataset_type_name in datasets:
             tree = tree.join_dataset(dataset_type_name, self._tree.datasets[dataset_type_name])
-        return Query2(self._driver, tree=tree, include_dimension_records=self._include_dimension_records)
+        return Query(self._driver, tree)
 
     def join_dataset_search(
         self,
         dataset_type: str,
         collections: Iterable[str],
-    ) -> Query2:
+    ) -> Query:
         """Return a new query with a search for a dataset joined in.
 
         Parameters
@@ -365,7 +356,7 @@ class Query2(Query):
             A new query object with dataset columns available and rows
             restricted to those consistent with the found data IDs.
         """
-        return Query2(
+        return Query(
             tree=self._tree.join_dataset(
                 dataset_type,
                 DatasetSpec.model_construct(
@@ -374,10 +365,9 @@ class Query2(Query):
                 ),
             ),
             driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
         )
 
-    def join_data_coordinates(self, iterable: Iterable[DataCoordinate]) -> Query2:
+    def join_data_coordinates(self, iterable: Iterable[DataCoordinate]) -> Query:
         """Return a new query that joins in an explicit table of data IDs.
 
         Parameters
@@ -402,13 +392,11 @@ class Query2(Query):
         if dimensions is None:
             raise RuntimeError("Cannot upload an empty data coordinate set.")
         key = self._driver.upload_data_coordinates(dimensions, rows)
-        return Query2(
-            tree=self._tree.join_data_coordinate_upload(dimensions=dimensions, key=key),
-            driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
+        return Query(
+            tree=self._tree.join_data_coordinate_upload(dimensions=dimensions, key=key), driver=self._driver
         )
 
-    def join_dimensions(self, dimensions: Iterable[str] | DimensionGroup) -> Query2:
+    def join_dimensions(self, dimensions: Iterable[str] | DimensionGroup) -> Query:
         """Return a new query that joins the logical tables for additional
         dimensions.
 
@@ -423,10 +411,9 @@ class Query2(Query):
             A new query object with the dimensions joined in.
         """
         dimensions = self._driver.universe.conform(dimensions)
-        return Query2(
+        return Query(
             tree=self._tree.join(make_dimension_query_tree(dimensions)),
             driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
         )
 
     def where(
@@ -434,7 +421,7 @@ class Query2(Query):
         *args: str | Predicate | DataId,
         bind: Mapping[str, Any] | None = None,
         **kwargs: Any,
-    ) -> Query2:
+    ) -> Query:
         """Return a query with a boolean-expression filter on its rows.
 
         Parameters
@@ -466,13 +453,14 @@ class Query2(Query):
         searches must already be joined into a query in order to reference
         their fields in expressions.
         """
-        return Query2(
-            tree=self._tree.where(*convert_where_args(self._tree, *args, bind=bind, **kwargs)),
+        return Query(
+            tree=self._tree.where(
+                *convert_where_args(self.dimensions, self.dataset_types, *args, bind=bind, **kwargs)
+            ),
             driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
         )
 
-    def find_first(self, dataset_type: str | None = None) -> Query2:
+    def find_first(self, dataset_type: str | None = None) -> Query:
         """Return a query that resolves the datasets by searching collections
         in order after grouping by data ID.
 
@@ -506,8 +494,4 @@ class Query2(Query):
                 raise InvalidQueryTreeError(
                     "Find-first dataset type must be provided if the query has more than one."
                 ) from None
-        return Query2(
-            tree=self._tree.find_first(dataset_type),
-            driver=self._driver,
-            include_dimension_records=self._include_dimension_records,
-        )
+        return Query(tree=self._tree.find_first(dataset_type), driver=self._driver)
