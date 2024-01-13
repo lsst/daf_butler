@@ -244,7 +244,7 @@ class DirectQueryDriver(QueryDriver):
         columns_required.update(postprocessing.gather_columns_required())
         # Now that we're done gathering columns_required, we categorize them
         # into mappings keyed by what kind of table they come from:
-        full_dimensions, dimension_tables_to_join, datasets_subqueries_to_join = self._categorize_columns(
+        dimension_tables_to_join, datasets_subqueries_to_join = self._categorize_columns(
             tree.dimensions, columns_required, tree.datasets.keys()
         )
         # From here down, 'columns_required' is no long authoritative.
@@ -269,7 +269,7 @@ class DirectQueryDriver(QueryDriver):
         # Record that we need to join in DimensionElements whose tables define
         # one-to-many and many-to-many relationships.  Data coordinate uploads,
         # materializations, and datasets can also provide these relationships.
-        for element_name in full_dimensions.elements:
+        for element_name in tree.dimensions.elements:
             if (element := self._universe[element_name]).defines_relationships:
                 # Data coordinate uploads and dataset tables only have required
                 # dimensions, and can hence only provide relationships
@@ -299,20 +299,15 @@ class DirectQueryDriver(QueryDriver):
             )
         # See if any dimension keys are still missing, and if so join in their
         # tables.  Note that we know there are no fields needed from these.
-        while not (sql_builder.dimensions_provided.keys() >= full_dimensions.names):
+        while not (sql_builder.dimensions_provided.keys() >= tree.dimensions.names):
             # Look for opportunities to join in multiple dimensions at once.
-            missing_dimension_names = full_dimensions.names - sql_builder.dimensions_provided.keys()
+            missing_dimension_names = tree.dimensions.names - sql_builder.dimensions_provided.keys()
             best = self._universe[
                 max(
                     missing_dimension_names,
                     key=lambda name: len(self._universe[name].dimensions.names & missing_dimension_names),
                 )
             ]
-            if best.viewOf:
-                best = self._universe[best.viewOf]
-                full_dimensions = full_dimensions | best.minimal_group
-            if not best.hasTable():
-                raise NotImplementedError(f"No way to join missing dimension {best.name!r} into query.")
             sql_builder = sql_builder.join(self._managers.dimensions.make_sql_builder(best, frozenset()))
         raise NotImplementedError("TODO")
 
@@ -386,27 +381,24 @@ class DirectQueryDriver(QueryDriver):
         columns: Iterable[qt.ColumnReference],
         datasets: Set[str],
     ) -> tuple[
-        DimensionGroup,
         dict[DimensionElement, set[qt.DimensionFieldReference]],
         dict[str, set[qt.DatasetFieldReference]],
     ]:
-        dimension_names = set(dimensions.names)
         dimension_tables: dict[DimensionElement, set[qt.DimensionFieldReference]] = {}
         dataset_subqueries: dict[str, set[qt.DatasetFieldReference]] = {name: set() for name in datasets}
         for col_ref in columns:
             if col_ref.expression_type == "dimension_key":
-                dimension_names.add(col_ref.dimension.name)
+                assert (
+                    col_ref.dimension.name in dimensions
+                ), "QueryTree should guarantee all dimension column references expand the dimensions."
             elif col_ref.expression_type == "dimension_field":
-                # The only field for SkyPix dimensions is their region, and we
-                # can always compute those from the ID outside the query
-                # system.
-                if col_ref.element in dimensions.universe.skypix_dimensions:
-                    dimension_names.add(col_ref.element.name)
-                else:
-                    dimension_tables.setdefault(col_ref.element, set()).add(col_ref)
+                assert (
+                    col_ref.element.minimal_group <= dimensions
+                ), "QueryTree should guarantee all dimension column references expand the dimensions."
+                dimension_tables.setdefault(col_ref.element, set()).add(col_ref)
             elif col_ref.expression_type == "dataset_field":
                 dataset_subqueries[col_ref.dataset_type].add(col_ref)
-        return self._universe.conform(dimension_names), dimension_tables, dataset_subqueries
+        return dimension_tables, dataset_subqueries
 
     def _build_sql_order_by_expression(
         self, sql_builder: SqlBuilder | EmptySqlBuilder, term: qt.OrderExpression

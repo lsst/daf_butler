@@ -61,7 +61,7 @@ from ...direct_query_driver import (  # Future query system (direct,server).
     Postprocessing,
     SqlBuilder,
 )
-from ...queries import relation_tree as rt  # Future query system (direct,client,server)
+from ...queries import tree as qt  # Future query system (direct,client,server)
 from ...queries.overlaps import OverlapsVisitor
 from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext, VersionTuple
@@ -437,9 +437,13 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         return overlaps, needs_refinement
 
     def make_sql_builder(
-        self, element: DimensionElement, fields: Set[rt.DimensionFieldReference]
+        self, element: DimensionElement, fields: Set[qt.DimensionFieldReference]
     ) -> SqlBuilder:
-        assert element.hasTable(), "Guaranteed by caller."
+        if element.implied_union_target is not None:
+            assert not fields, "Dimensions with implied-union storage never have fields."
+            return self.make_sql_builder(element.implied_union_target, fields).project(element.required.names)
+        if not element.has_own_table:
+            raise NotImplementedError(f"Cannot join dimension element {element} with no table.")
         table = self._tables[element.name]
         result = SqlBuilder(table)
         for dimension_name, column_name in zip(element.required.names, element.schema.required.names):
@@ -457,12 +461,12 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     def process_query_overlaps(
         self,
         dimensions: DimensionGroup,
-        predicate: rt.Predicate,
+        predicate: qt.Predicate,
         join_operands: Iterable[DimensionGroup],
-    ) -> tuple[rt.Predicate, SqlBuilder | EmptySqlBuilder, Postprocessing]:
+    ) -> tuple[qt.Predicate, SqlBuilder | EmptySqlBuilder, Postprocessing]:
         overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(dimensions, self._overlap_tables)
         new_predicate = overlaps_visitor.run(predicate, join_operands)
-        return new_predicate, *overlaps_visitor.finish()
+        return new_predicate, overlaps_visitor.sql_builder, overlaps_visitor.postprocessing
 
     def _make_relation(
         self,
@@ -995,20 +999,19 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
     ):
         super().__init__(dimensions)
-        self._sql_builder: SqlBuilder | EmptySqlBuilder = EmptySqlBuilder()
-        self._postprocessing = Postprocessing()
-        self._common_skypix = dimensions.universe.commonSkyPix
-        self._overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables
-        self._common_skypix_overlaps_done: set[DatabaseDimensionElement] = set()
-        self._mediated_overlaps_to_do: set[tuple[DatabaseDimensionElement, DatabaseDimensionElement]] = set()
+        self.sql_builder: SqlBuilder | EmptySqlBuilder = EmptySqlBuilder()
+        self.postprocessing = Postprocessing()
+        self.common_skypix = dimensions.universe.commonSkyPix
+        self.overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables
+        self.common_skypix_overlaps_done: set[DatabaseDimensionElement] = set()
 
     def visit_spatial_constraint(
         self,
-        comparison: rt.Comparison,
+        comparison: qt.Comparison,
         element: DimensionElement,
         region: Region,
         parents: AbstractSet[Literal["and", "or", "not"]],
-    ) -> rt.Predicate:
+    ) -> qt.Predicate:
         # Reject spatial constraints that are nested inside OR or NOT, because
         # the postprocessing needed for those would be a lot harder.
         if "or" in parents or "not" in parents:
@@ -1021,14 +1024,39 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         match element:
             case DatabaseDimensionElement():
                 # If this is a database dimension element like tract, patch, or
-                # visit, join in the overlaps between that element and the
-                # common skypix dimension, add some postprocessing to perform
-                # the actual overlap test, and indicate that we'll want to do
-                # an index-in-ranges test in SQL on the common skypix
-                # dimension.
-                self._join_common_skypix_overlap(element)
-                skypix = self._common_skypix
-                self._postprocessing.spatial_where_filtering.append((element, region))
+                # visit, we need to:
+                # - join in the common skypix overlap table for this element;
+                # - constrain the common skypix index to be inside the
+                #   ranges that overlap the region as a SQL where clause;
+                # - add postprocessing to reject rows where the database
+                #   dimension element's region doesn't actually overlap the
+                #   region.
+                self.postprocessing.spatial_where_filtering.append((element, region))
+                if self.common_skypix.name in self.dimensions:
+                    # The common skypix dimension should be part of the query
+                    # as a first-class dimension, so we can join in the overlap
+                    # table directly, and fall through to the end of this
+                    # function to construct a Predicate that will turn into the
+                    # SQL WHERE clause we want.
+                    self._join_common_skypix_overlap(element)
+                    skypix = self.common_skypix
+                else:
+                    # We need to hide the common skypix dimension from the
+                    # larger query, so we make a subquery out of the overlap
+                    # table that embeds the SQL WHERE clause we want and then
+                    # projects out that dimension (with SELECT DISTINCT, to
+                    # avoid introducing duplicate rows into the larger query).
+                    overlap_sql_builder = self._make_common_skypix_overlap_sql_builder(element)
+                    sql_where_or: list[sqlalchemy.ColumnElement[bool]] = []
+                    sql_skypix_col = overlap_sql_builder.dimensions_provided[self.common_skypix.name][0]
+                    for begin, end in self.common_skypix.pixelization.envelope(region):
+                        sql_where_or.append(sqlalchemy.and_(sql_skypix_col >= begin, sql_skypix_col < end))
+                    self.sql_builder = self.sql_builder.join(
+                        overlap_sql_builder.project(element.required.names)
+                    )
+                    # Short circuit here since the SQL WHERE clause has already
+                    # been embedded in the subquery.
+                    return qt.LiteralTrue()
             case SkyPixDimension():
                 # If this is a skypix dimension, we can do a index-in-ranges
                 # test directly on that dimension.  Note that this doesn't on
@@ -1037,6 +1065,9 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 # out (generally this will require a dataset using that skypix
                 # dimension to be joined in, unless this is the common skypix
                 # system).
+                assert (
+                    element.name in self.dimensions
+                ), "QueryTree guarantees dimensions are expanded when constraints are added."
                 skypix = element
             case _:
                 raise NotImplementedError(
@@ -1044,19 +1075,19 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 )
         # Convert the region-overlap constraint into a skypix
         # index range-membership constraint in SQL...
-        result = rt.LiteralTrue()
-        skypix_col_ref = rt.DimensionKeyReference.model_construct(dimension=skypix)
+        result = qt.LiteralTrue()
+        skypix_col_ref = qt.DimensionKeyReference.model_construct(dimension=skypix)
         for begin, end in skypix.pixelization.envelope(region):
-            result = result.logical_or(rt.InRange(member=skypix_col_ref, start=begin, stop=end))
+            result = result.logical_or(qt.InRange(member=skypix_col_ref, start=begin, stop=end))
         return result
 
     def visit_spatial_join(
         self,
-        comparison: rt.Comparison,
+        comparison: qt.Comparison,
         a: DimensionElement,
         b: DimensionElement,
         parents: AbstractSet[Literal["and", "or", "not"]],
-    ) -> rt.Predicate:
+    ) -> qt.Predicate:
         # Reject spatial joins that are nested inside OR or NOT, because the
         # postprocessing needed for those would be a lot harder.
         if "or" in parents or "not" in parents:
@@ -1066,67 +1097,49 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         # later.
         super().visit_spatial_join(comparison, a, b, parents)
         match (a, b):
-            case (self._common_skypix, DatabaseDimensionElement() as b):
+            case (self.common_skypix, DatabaseDimensionElement() as b):
                 self._join_common_skypix_overlap(b)
-            case (DatabaseDimensionElement() as a, self._common_skypix):
+            case (DatabaseDimensionElement() as a, self.common_skypix):
                 self._join_common_skypix_overlap(a)
             case (DatabaseDimensionElement() as a, DatabaseDimensionElement() as b):
-                if str(a) < str(b):
-                    self._mediated_overlaps_to_do.add((a, b))
+                if self.common_skypix.name in self.dimensions:
+                    # We want the common skypix dimension to appear in the
+                    # query as a first-class dimension, so just join in the
+                    # two overlap tables directly.
+                    self._join_common_skypix_overlap(a)
+                    self._join_common_skypix_overlap(b)
                 else:
-                    self._mediated_overlaps_to_do.add((b, a))
+                    # We do not want the common skypix system to appear in the
+                    # query or cause duplicate rows, so we join the two overlap
+                    # tables in a subquery that projects out the common skypix
+                    # index column with SELECT DISTINCT.
+                    self.sql_builder = self.sql_builder.join(
+                        self._make_common_skypix_overlap_sql_builder(a)
+                        .join(self._make_common_skypix_overlap_sql_builder(b))
+                        .project(list(a.required.names) + list(b.required.names))
+                    )
+                # In both cases we add postprocessing to check that the regions
+                # really do overlap, since overlapping the same common skypix
+                # tile is necessary but not sufficient for that.
+                self.postprocessing.spatial_join_filtering.append((a, b))
             case _:
                 raise NotImplementedError(f"Unsupported combination for spatial join: {a, b}.")
-        return rt.LiteralTrue()
-
-    def finish(self) -> tuple[SqlBuilder | EmptySqlBuilder, Postprocessing]:
-        for a, b in self._mediated_overlaps_to_do:
-            # If either overlap with common skypix is already present for some
-            # other join or constraint, just use it.
-            if a in self._common_skypix_overlaps_done:
-                self._join_common_skypix_overlap(b)
-            elif b in self._common_skypix_overlaps_done:
-                self._join_common_skypix_overlap(a)
-            else:
-                # If not, join in a SELECT DISTINCT subquery that drops the
-                # common skypix dimension instead, since we're going to want
-                # unique rows and this is one source of duplicates.
-                subquery, _ = (
-                    self._make_common_skypix_overlap_sql_builder(a)
-                    .join(self._make_common_skypix_overlap_sql_builder(b))
-                    .sql_select(
-                        [
-                            rt.DimensionKeyReference.model_construct(dimension=d)
-                            for d in itertools.chain(a.required, b.required)
-                        ],
-                        self._postprocessing,
-                    )
-                )
-                self._sql_builder.join(
-                    SqlBuilder(subquery.distinct().subquery(f"{a}_{b}_overlap")).extract_keys(
-                        itertools.chain(a.required.names, b.required.names)
-                    )
-                )
-            # In all cases we add postprocessing to check that the regions
-            # really do overlap, since overlapping the same common skypix tile
-            # is necessary but not sufficient for that.
-            self._postprocessing.spatial_join_filtering.append((a, b))
-        return self._sql_builder, self._postprocessing
+        return qt.LiteralTrue()
 
     def _join_common_skypix_overlap(self, element: DatabaseDimensionElement) -> None:
-        if element not in self._common_skypix_overlaps_done:
-            self._sql_builder = self._sql_builder.join(self._make_common_skypix_overlap_sql_builder(element))
-            self._common_skypix_overlaps_done.add(element)
+        if element not in self.common_skypix_overlaps_done:
+            self.sql_builder = self.sql_builder.join(self._make_common_skypix_overlap_sql_builder(element))
+            self.common_skypix_overlaps_done.add(element)
 
     def _make_common_skypix_overlap_sql_builder(self, element: DatabaseDimensionElement) -> SqlBuilder:
-        _, overlap_table = self._overlap_tables[element.name]
-        return self._sql_builder.join(
+        _, overlap_table = self.overlap_tables[element.name]
+        return self.sql_builder.join(
             SqlBuilder(overlap_table)
-            .extract_keys(element.required.names, skypix_index=self._common_skypix.name)
+            .extract_keys(element.required.names, skypix_index=self.common_skypix.name)
             .where_sql(
                 sqlalchemy.and_(
-                    overlap_table.c.skypix_system == self._common_skypix.system.name,
-                    overlap_table.c.skypix_level == self._common_skypix.level,
+                    overlap_table.c.skypix_system == self.common_skypix.system.name,
+                    overlap_table.c.skypix_level == self.common_skypix.level,
                 )
             )
         )

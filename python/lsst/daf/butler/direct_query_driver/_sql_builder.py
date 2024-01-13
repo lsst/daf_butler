@@ -199,3 +199,10 @@ class SqlBuilder(_BaseSqlBuilder):
     def where_sql(self, *arg: sqlalchemy.ColumnElement[bool]) -> SqlBuilder:
         self.sql_where_terms.extend(arg)
         return self
+
+    def project(self, dimensions: Iterable[str]) -> SqlBuilder:
+        sql_columns = [self.dimensions_provided[name][0].label(name) for name in dimensions]
+        sql_select = sqlalchemy.select(*sql_columns).select_from(self.sql_from_clause).distinct()
+        if self.sql_where_terms:
+            sql_select = sql_select.where(*self.sql_where_terms)
+        return SqlBuilder(sql_select.subquery()).extract_keys(dimensions)
