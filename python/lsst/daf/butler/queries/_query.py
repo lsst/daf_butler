@@ -30,9 +30,12 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 from collections.abc import Iterable, Mapping, Set
-from typing import TYPE_CHECKING, Any
+from types import EllipsisType
+from typing import Any, overload
 
+from .._dataset_type import DatasetType
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
+from ..registry import DatasetTypeError, MissingDatasetTypeError
 from ._base import HomogeneousQueryBase
 from ._data_coordinate_query_results import DataCoordinateQueryResults, DataCoordinateResultSpec
 from ._dataset_query_results import (
@@ -42,11 +45,11 @@ from ._dataset_query_results import (
     SingleTypeDatasetQueryResults,
 )
 from ._dimension_record_query_results import DimensionRecordQueryResults, DimensionRecordResultSpec
-from .convert_args import convert_where_args
+from .convert_args import convert_dataset_search_args, convert_where_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory
 from .tree import (
-    DatasetSpec,
+    DatasetSearch,
     InvalidQueryTreeError,
     MaterializationSpec,
     Predicate,
@@ -54,9 +57,6 @@ from .tree import (
     make_dimension_query_tree,
     make_unit_query_tree,
 )
-
-if TYPE_CHECKING:
-    from ..registry import CollectionArgType
 
 
 class Query(HomogeneousQueryBase):
@@ -169,12 +169,30 @@ class Query(HomogeneousQueryBase):
         result_spec = DataCoordinateResultSpec(dimensions=dimensions, include_dimension_records=False)
         return DataCoordinateQueryResults(self._driver, tree, result_spec)
 
-    # TODO add typing.overload variants for single-dataset-type and patterns.
+    @overload
+    def datasets(
+        self,
+        dataset_type: str | DatasetType,
+        collections: str | Iterable[str] | None = None,
+        *,
+        find_first: bool = True,
+    ) -> SingleTypeDatasetQueryResults:
+        ...
+
+    @overload
+    def datasets(
+        self,
+        dataset_type: Iterable[str | DatasetType] | EllipsisType,
+        collections: str | Iterable[str] | None = None,
+        *,
+        find_first: bool = True,
+    ) -> DatasetQueryResults:
+        ...
 
     def datasets(
         self,
-        dataset_type: Any,
-        collections: CollectionArgType | None = None,
+        dataset_type: str | DatasetType | Iterable[str | DatasetType] | EllipsisType,
+        collections: str | Iterable[str] | None = None,
         *,
         find_first: bool = True,
     ) -> DatasetQueryResults:
@@ -183,20 +201,15 @@ class Query(HomogeneousQueryBase):
 
         Parameters
         ----------
-        dataset_type : dataset type expression
-            An expression that fully or partially identifies the dataset types
-            to be queried.  Allowed types include `DatasetType`, `str`,
-            `re.Pattern`, and iterables thereof.  The special value ``...`` can
-            be used to query all dataset types.  See
-            :ref:`daf_butler_dataset_type_expressions` for more information.
-        collections : collection expression, optional
-            An expression that identifies the collections to search, such as a
-            `str` (for full matches or partial matches via globs), `re.Pattern`
-            (for partial matches), or iterable thereof.  ``...`` can be used to
-            search all collections (actually just all `~CollectionType.RUN`
-            collections, because this will still find all datasets).
-            If not provided, the default collections are used.  See
-            :ref:`daf_butler_collection_expressions` for more information.
+        dataset_type : `str`, `DatasetType`, \
+                `~collections.abc.Iterable` [ `str` or `DatasetType` ], \
+                or ``...``
+            The dataset type or types to search for.  Passing ``...`` searches
+            for all datasets in the given collections.
+        collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            The collection or collections to search, in order.  If not provided
+            or `None`, and the dataset has not already been joined into the
+            query, the default collection search path for this butler is used.
         find_first : `bool`, optional
             If `True` (default), for each result data ID, only yield one
             `DatasetRef` of each `DatasetType`, from the first collection in
@@ -232,33 +245,27 @@ class Query(HomogeneousQueryBase):
         type separately in turn, and no information about the relationships
         between datasets of different types is included.
         """
-        resolved_dataset_types = self._driver.resolve_dataset_type_wildcard(dataset_type)
+        resolved_dataset_searches = convert_dataset_search_args(
+            dataset_type, self._driver.resolve_collection_path(collections)
+        )
         single_type_results: list[SingleTypeDatasetQueryResults] = []
-        for name, resolved_dataset_type in resolved_dataset_types.items():
+        for resolved_dataset_type, resolved_collections in resolved_dataset_searches:
             tree = self._tree
-            if name not in tree.datasets:
-                resolved_collections, collections_ordered = self._driver.resolve_collection_wildcard(
-                    # TODO: drop regex support from base signature.
-                    collections,  # type: ignore
-                )
-                if find_first and not collections_ordered:
-                    raise InvalidQueryTreeError(
-                        f"Unordered collections argument {collections} requires find_first=False."
-                    )
+            if resolved_dataset_type.name not in tree.datasets:
                 tree = tree.join_dataset(
-                    name,
-                    DatasetSpec.model_construct(
+                    resolved_dataset_type.name,
+                    DatasetSearch.model_construct(
                         dimensions=resolved_dataset_type.dimensions.as_group(),
-                        collections=tuple(resolved_collections),
+                        collections=resolved_collections,
                     ),
                 )
             elif collections is not None:
                 raise InvalidQueryTreeError(
-                    f"Dataset type {name!r} was already joined into this query but new collections "
-                    f"{collections!r} were still provided."
+                    f"Dataset type {resolved_dataset_type.name!r} was already joined into this query "
+                    f"but new collections {collections!r} were still provided."
                 )
             if find_first:
-                tree = tree.find_first(name)
+                tree = tree.find_first(resolved_dataset_type.name)
             spec = DatasetRefResultSpec.model_construct(
                 dataset_type=resolved_dataset_type, include_dimension_records=False
             )
@@ -337,7 +344,8 @@ class Query(HomogeneousQueryBase):
     def join_dataset_search(
         self,
         dataset_type: str,
-        collections: Iterable[str],
+        collections: Iterable[str] | None = None,
+        dimensions: DimensionGroup | None = None,
     ) -> Query:
         """Return a new query with a search for a dataset joined in.
 
@@ -345,23 +353,62 @@ class Query(HomogeneousQueryBase):
         ----------
         dataset_type : `str`
             Name of the dataset type.  May not refer to a dataset component.
-        collections : `~collections.abc.Iterable` [ `str` ]
+        collections : `~collections.abc.Iterable` [ `str` ], optional
             Iterable of collections to search.  Order is preserved, but will
             not matter if the dataset search is only used as a constraint on
-            dimensions or if ``find_first=False`` when requesting results.
+            dimensions or if ``find_first=False`` when requesting results. If
+            not present or `None`, the default collection search path will be
+            used.
+        dimensions : `DimensionGroup`, optional
+            The dimensions to assume for the dataset type if it is not
+            registered, or check if it is.  When the dataset is not registered
+            and this is not provided, `MissingDatasetTypeError` is raised,
+            since we cannot construct a query without knowing the dataset's
+            dimensions; providing this argument causes the returned query to
+            instead return no rows.
 
         Returns
         -------
         query : `Query`
             A new query object with dataset columns available and rows
             restricted to those consistent with the found data IDs.
+
+        Raises
+        ------
+        DatasetTypeError
+            Raised if the dimensions were provided but they do not match the
+            registered dataset type.
+        MissingDatasetTypeError
+            Raised if the dimensions were not provided and the dataset type was
+            not registered.
         """
+        resolved_dataset_search = convert_dataset_search_args(
+            dataset_type, self._driver.resolve_collection_path(collections)
+        )
+        if not resolved_dataset_search:
+            resolved_collections: tuple[str, ...] = ()
+            try:
+                resolved_dimensions = self._driver.get_dataset_dimensions(dataset_type)
+            except MissingDatasetTypeError:
+                if dimensions is None:
+                    raise
+                else:
+                    resolved_dimensions = dimensions
+        elif len(resolved_dataset_search) > 1:
+            raise TypeError(f"join_dataset_search expects a single dataset type, not {dataset_type!r}.")
+        else:
+            resolved_dataset_type, resolved_collections = resolved_dataset_search[0]
+            resolved_dimensions = resolved_dataset_type.dimensions.as_group()
+        if dimensions is not None and dimensions != resolved_dimensions:
+            raise DatasetTypeError(
+                f"Given dimensions {dimensions} for dataset type {dataset_type!r} do not match the "
+                f"registered dimensions {resolved_dimensions}."
+            )
         return Query(
             tree=self._tree.join_dataset(
                 dataset_type,
-                DatasetSpec.model_construct(
-                    collections=tuple(collections),
-                    dimensions=self._driver.get_dataset_dimensions(dataset_type),
+                DatasetSearch.model_construct(
+                    collections=resolved_collections, dimensions=resolved_dimensions
                 ),
             ),
             driver=self._driver,

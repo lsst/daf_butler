@@ -30,13 +30,12 @@ from __future__ import annotations
 __all__ = ("DirectQueryDriver",)
 
 from collections.abc import Iterable, Set
-from types import EllipsisType
 from typing import TYPE_CHECKING, Any, cast, overload
 
 import sqlalchemy
+from lsst.utils.iteration import ensure_iterable
 
 from .. import ddl
-from .._dataset_type import DatasetType
 from ..dimensions import DataIdValue, DimensionElement, DimensionGroup, DimensionUniverse
 from ..queries import tree as qt
 from ..queries.driver import (
@@ -55,6 +54,8 @@ from ..queries.result_specs import (
     GeneralResultSpec,
     ResultSpec,
 )
+from ..registry import CollectionSummary, CollectionType, RegistryDefaults
+from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
 
 if TYPE_CHECKING:
@@ -75,6 +76,9 @@ class DirectQueryDriver(QueryDriver):
         Definitions of all dimensions.
     managers : `RegistryManagerInstances`
         Struct of registry manager objects.
+    defaults : `RegistryDefaults`
+        Struct holding the default collection search path and governor
+        dimensions.
     """
 
     def __init__(
@@ -82,11 +86,13 @@ class DirectQueryDriver(QueryDriver):
         db: Database,
         universe: DimensionUniverse,
         managers: RegistryManagerInstances,
+        defaults: RegistryDefaults,
     ):
         self._db = db
         self._universe = universe
         self._timespan_db_repr = db.getTimespanRepresentation()
         self._managers = managers
+        self._defaults = defaults
         self._materialization_tables: dict[qt.MaterializationKey, sqlalchemy.Table] = {}
         self._upload_tables: dict[qt.DataCoordinateUploadKey, sqlalchemy.Table] = {}
 
@@ -173,45 +179,54 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         raise NotImplementedError("TODO")
 
-    def resolve_collection_wildcard(
-        self, collections: str | Iterable[str] | EllipsisType | None = None
-    ) -> tuple[list[str], bool]:
-        # Docstring inherited.
-        raise NotImplementedError("TODO")
-
-    def resolve_dataset_type_wildcard(
-        self, dataset_type: str | DatasetType | Iterable[str] | Iterable[DatasetType] | EllipsisType
-    ) -> dict[str, DatasetType]:
-        # Docstring inherited.
-        raise NotImplementedError("TODO")
-
     def get_dataset_dimensions(self, name: str) -> DimensionGroup:
-        # Docstring inherited.
-        raise NotImplementedError("TODO")
+        # Docsring inherited
+        return self._managers.datasets[name].datasetType.dimensions.as_group()
+
+    def resolve_collection_path(
+        self, collections: Iterable[str] | str | None
+    ) -> list[tuple[CollectionRecord, CollectionSummary]]:
+        if collections is None:
+            collections = self._defaults.collections
+        collections = ensure_iterable(collections)
+        result: list[tuple[CollectionRecord, CollectionSummary]] = []
+        done: set[str] = set()
+
+        def recurse(collection_names: Iterable[str]) -> None:
+            for collection_name in collection_names:
+                if collection_name not in done:
+                    done.add(collection_name)
+                    record = self._managers.collections.find(collection_name)
+
+                    if record.type is CollectionType.CHAINED:
+                        recurse(cast(ChainedCollectionRecord, record).children)
+                    else:
+                        result.append((record, self._managers.datasets.getCollectionSummary(record)))
+
+        return result
 
     def _build_sql_select(
         self,
         tree: qt.QueryTree,
-        dimensions: DimensionGroup,
-        columns_to_select: Set[qt.ColumnReference],
+        result_spec: ResultSpec,
     ) -> tuple[sqlalchemy.Select, Postprocessing]:
         if tree.find_first_dataset:
             sql_builder, postprocessing = self._make_find_first_sql_builder(
                 tree,
                 tree.find_first_dataset,
-                dimensions,
-                columns_to_select,
+                result_spec.dimensions,
+                result_spec.columns,
             )
         else:
-            sql_builder, postprocessing = self._make_vanilla_sql_builder(tree, columns_to_select)
+            sql_builder, postprocessing = self._make_vanilla_sql_builder(tree, result_spec.columns)
         # TODO: make results unique over columns_to_select, while taking into
         # account postprocessing columns.
-        return sql_builder.sql_select(columns_to_select, postprocessing)
+        return sql_builder.sql_select(result_spec.columns, postprocessing)
 
     def _make_vanilla_sql_builder(
         self,
         tree: qt.QueryTree,
-        columns_required: Set[qt.ColumnReference],
+        columns_required: Iterable[qt.ColumnReference],
     ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing]:
         # Process spatial and temporal constraints and joins, creating a
         # SqlBuilder that we'll use to make the SQL query we'll run, a
@@ -306,7 +321,7 @@ class DirectQueryDriver(QueryDriver):
         tree: qt.QueryTree,
         dataset_type: str,
         dimensions: DimensionGroup,
-        columns_to_select: Set[qt.ColumnReference],
+        columns_to_select: Iterable[qt.ColumnReference],
     ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing]:
         # The query we're building looks like this:
         #

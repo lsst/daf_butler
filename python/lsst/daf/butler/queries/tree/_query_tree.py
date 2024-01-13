@@ -34,7 +34,7 @@ __all__ = (
     "DataCoordinateUploadKey",
     "MaterializationKey",
     "MaterializationSpec",
-    "DatasetSpec",
+    "DatasetSearch",
     "DeferredValidationQueryTree",
 )
 
@@ -114,7 +114,7 @@ class MaterializationSpec(QueryTreeBase):
 
 
 @final
-class DatasetSpec(QueryTreeBase):
+class DatasetSearch(QueryTreeBase):
     """Information about a dataset search joined into a query tree.
 
     The dataset type name is the key of the dictionary (in `QueryTree`) where
@@ -154,7 +154,7 @@ class QueryTree(QueryTreeBase):
     """The dimensions whose keys are joined into the query.
     """
 
-    datasets: Mapping[str, DatasetSpec] = pydantic.Field(default_factory=dict)
+    datasets: Mapping[str, DatasetSearch] = pydantic.Field(default_factory=dict)
     """Dataset searches that have been joined into the query."""
 
     data_coordinate_uploads: Mapping[DataCoordinateUploadKey, DimensionGroup] = pydantic.Field(
@@ -282,7 +282,7 @@ class QueryTree(QueryTreeBase):
             update=dict(dimensions=self.dimensions | spec.dimensions, materializations=materializations)
         )
 
-    def join_dataset(self, dataset_type: str, spec: DatasetSpec) -> QueryTree:
+    def join_dataset(self, dataset_type: str, spec: DatasetSearch) -> QueryTree:
         """Return a new tree joins in a search for a dataset.
 
         Parameters

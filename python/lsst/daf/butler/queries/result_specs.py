@@ -34,13 +34,20 @@ __all__ = (
     "DatasetRefResultSpec",
 )
 
+from functools import cached_property
 from typing import Annotated, Literal, TypeAlias, Union
 
 import pydantic
 
 from .._dataset_type import DatasetType
 from ..dimensions import DimensionElement, DimensionGroup
-from .tree import ColumnReference, OrderExpression
+from .tree import (
+    ColumnReference,
+    DatasetFieldReference,
+    DimensionFieldReference,
+    DimensionKeyReference,
+    OrderExpression,
+)
 
 
 class ResultSpecBase(pydantic.BaseModel):
@@ -63,12 +70,40 @@ class DataCoordinateResultSpec(ResultSpecBase):
     dimensions: DimensionGroup
     include_dimension_records: bool
 
+    @cached_property
+    def columns(self) -> tuple[ColumnReference, ...]:
+        result = [
+            DimensionKeyReference.model_construct(dimension=self.dimensions.universe.dimensions[name])
+            for name in self.dimensions.data_coordinate_keys
+        ]
+        if self.include_dimension_records:
+            raise NotImplementedError("TODO")
+        return tuple(result)
+
 
 class DimensionRecordResultSpec(ResultSpecBase):
     """Specification for a query that yields `DimensionRecord` objects."""
 
     result_type: Literal["dimension_record"] = "dimension_record"
     element: DimensionElement
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        return self.element.minimal_group
+
+    @cached_property
+    def columns(self) -> tuple[ColumnReference, ...]:
+        result: list[ColumnReference] = [
+            DimensionKeyReference.model_construct(dimension=dimension) for dimension in self.element.required
+        ]
+        result.extend(
+            DimensionKeyReference.model_construct(dimension=dimension) for dimension in self.element.implied
+        )
+        result.extend(
+            DimensionFieldReference.model_construct(element=self.element, field=field)
+            for field in self.element.schema.remainder.names
+        )
+        return tuple(result)
 
 
 class DatasetRefResultSpec(ResultSpecBase):
@@ -78,6 +113,24 @@ class DatasetRefResultSpec(ResultSpecBase):
     dataset_type: DatasetType
     include_dimension_records: bool
 
+    @property
+    def dimensions(self) -> DimensionGroup:
+        return self.dataset_type.dimensions.as_group()
+
+    @cached_property
+    def columns(self) -> tuple[ColumnReference, ...]:
+        result: list[ColumnReference] = [
+            DimensionKeyReference.model_construct(dimension=self.dimensions.universe.dimensions[name])
+            for name in self.dimensions.data_coordinate_keys
+        ]
+        if self.include_dimension_records:
+            raise NotImplementedError("TODO")
+        result.append(
+            DatasetFieldReference.model_construct(dataset_type=self.dataset_type.name, field="dataset_id")
+        )
+        result.append(DatasetFieldReference.model_construct(dataset_type=self.dataset_type.name, field="run"))
+        return tuple(result)
+
 
 class GeneralResultSpec(pydantic.BaseModel):
     """Specification for a query that yields a table with
@@ -86,6 +139,10 @@ class GeneralResultSpec(pydantic.BaseModel):
 
     result_type: Literal["general"] = "general"
     columns: tuple[ColumnReference, ...]
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        raise NotImplementedError()
 
 
 ResultSpec: TypeAlias = Annotated[

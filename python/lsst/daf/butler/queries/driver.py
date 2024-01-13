@@ -42,13 +42,11 @@ import uuid
 from abc import abstractmethod
 from collections.abc import Iterable, Set
 from contextlib import AbstractContextManager
-from types import EllipsisType
 from typing import Annotated, Any, TypeAlias, Union, overload
 
 import pydantic
 
 from .._dataset_ref import DatasetRef
-from .._dataset_type import DatasetType
 from ..dimensions import (
     DataCoordinate,
     DataIdValue,
@@ -58,6 +56,8 @@ from ..dimensions import (
     DimensionRecordTable,
     DimensionUniverse,
 )
+from ..registry import CollectionSummary
+from ..registry.interfaces import CollectionRecord
 from .result_specs import (
     DataCoordinateResultSpec,
     DatasetRefResultSpec,
@@ -146,7 +146,7 @@ class QueryDriver(AbstractContextManager[None]):
     - result-page Parquet files that were never fetched (RemoteButler);
     - uploaded Parquet files used to fill temporary database tables
       (RemoteButler);
-    - cached content needed to construct SQL queries, like collection summaries
+    - cached content needed to construct query trees, like collection summaries
       (potentially all Butlers).
 
     When possible, these sorts of things should be cleaned up earlier when they
@@ -395,49 +395,42 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def resolve_collection_wildcard(
-        self, collections: str | Iterable[str] | EllipsisType | None = None
-    ) -> tuple[list[str], bool]:
-        """Resolve a collection argument into a sequence of collection names.
+    def resolve_collection_path(
+        self, collections: Iterable[str] | str | None
+    ) -> list[tuple[CollectionRecord, CollectionSummary]]:
+        """Process a collection search path argument into a `list` of
+        collection records and summaries.
 
         Parameters
         ----------
-        collections : `str`, `~collections.abc.Iterable` [ `str` ], ``...``,
-                or `None`, optional
-            Collection search path argument.  If `None`, the default
-            collections for the client should be used, if there are any.
+        collections : `~collections.abc.Iterable` [ `str` ], `str`, or `None`
+            The collection or collections to search.  If `None`, the default
+            collections should be used, and `NoDefaultCollectionError` should
+            be raised if there are no default collections.
 
         Returns
         -------
-        matched : `list` [ `str` ]
-            Matching collection names.  `~CollectionType.CHAINED` collections
-            are included directly rather than flattened.
-        ordered : `bool`
-            If `True`, the expression specified an order that can be used in
-            a find-first search.
-        """
-        raise NotImplementedError()
+        collection_info : `list` [ `tuple` [ `CollectionRecord`, \
+                `CollectionSummary` ] ]
+            A `list` of pairs of `CollectionRecord` and `CollectionSummary`
+            that flattens out all `~CollectionType.CHAINED` collections into
+            their children while maintaining the same order and avoiding
+            duplicates.
 
-    @abstractmethod
-    def resolve_dataset_type_wildcard(
-        self, dataset_type: str | DatasetType | Iterable[str] | Iterable[DatasetType] | EllipsisType
-    ) -> dict[str, DatasetType]:
-        """Resolve a dataset type argument into a mapping of `DatasetType`
-        objects.
+        Raises
+        ------
+        NoDefaultCollectionError
+            Raised if ``collections is None`` and there are no default
+            collections.
+        MissingCollectionError
+            Raised if any collection in ``collections`` does not exist.
 
-        Parameters
-        ----------
-        dataset_type : `str`, `DatasetType`, `~collections.abc.Iterable` \
-                [ `str` ], `~collections.abc.Iterable` [ `DatasetType` ], \
-                or ``...``
-            Dataset type name, object, or wildcard to resolve.
-
-        Returns
-        -------
-        matched : `dict` [ `str`, `DatasetType` ]
-            Mapping from dataset type name to dataset type.  Storage classes
-            passed in should be preserved, but component dataset types should
-            result in an exception.
+        Notes
+        -----
+        Implementations are generally expected to cache the collection records
+        and summaries they obtain (including the records for
+        `~CollectionType.CHAINED` collections that are not returned) in order
+        to optimize multiple calls with collections in common.
         """
         raise NotImplementedError()
 
@@ -454,5 +447,10 @@ class QueryDriver(AbstractContextManager[None]):
         -------
         dimensions : `DimensionGroup`
             Dimensions of the dataset type.
+
+        Raises
+        ------
+        MissingDatasetTypeError
+            Raised if the dataset type is not registered.
         """
         raise NotImplementedError()
