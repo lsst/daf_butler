@@ -38,8 +38,6 @@ databases, a "schema" is also another term for a namespace.
 """
 from __future__ import annotations
 
-from lsst import sphgeom
-
 __all__ = (
     "TableSpec",
     "FieldSpec",
@@ -51,6 +49,7 @@ __all__ = (
     "GUID",
 )
 
+import functools
 import logging
 import uuid
 from base64 import b64decode, b64encode
@@ -61,7 +60,7 @@ from typing import TYPE_CHECKING, Any
 
 import astropy.time
 import sqlalchemy
-from lsst.sphgeom import Region
+from lsst.sphgeom import Region, UnionRegion
 from lsst.utils.iteration import ensure_iterable
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -168,7 +167,7 @@ LocalBase64Bytes = Base64Bytes
 
 
 class Base64Region(Base64Bytes):
-    """A SQLAlchemy custom type for Python `sphgeom.Region`.
+    """A SQLAlchemy custom type for Python `lsst.sphgeom.Region`.
 
     Maps Python `sphgeom.Region` to a base64-encoded `sqlalchemy.String`.
     """
@@ -183,11 +182,38 @@ class Base64Region(Base64Bytes):
     def process_result_value(self, value: str | None, dialect: sqlalchemy.engine.Dialect) -> Region | None:
         if value is None:
             return None
-        return Region.decode(super().process_result_value(value, dialect))
+        return functools.reduce(
+            UnionRegion,
+            [
+                # For some reason super() doesn't work here!
+                Region.decode(Base64Bytes.process_result_value(self, union_member, dialect))
+                for union_member in value.split(":")
+            ],
+        )
 
     @property
-    def python_type(self) -> type[sphgeom.Region]:
-        return sphgeom.Region
+    def python_type(self) -> type[Region]:
+        return Region
+
+    @classmethod
+    def union_agg(
+        cls, column: sqlalchemy.ColumnElement[Base64Region]
+    ) -> sqlalchemy.ColumnElement[Base64Region]:
+        """Return a SQLAlchemy aggregate expression that computes the union of
+        a set of unions.
+
+        Parameters
+        ----------
+        column : `sqlalchemy.ColumnElement`
+            SQLAlchemy column expression representing the regions to be
+            combined.
+
+        Returns
+        -------
+        union_column : `sqlalchemy.ColumnElement`
+            SQLAlchemy column expression representing the union.
+        """
+        return sqlalchemy.cast(sqlalchemy.func.string_agg(column, ":"), type_=Base64Region)
 
 
 class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
