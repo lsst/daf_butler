@@ -1037,11 +1037,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
         full_check : `bool`, optional
-            If `True`, an additional check will be made for dataset artifact
-            existence. This will involve additional overhead due to the need
-            to query an external system. If `False` registry and datastore
-            will solely be asked if they know about the dataset but no
-            check for the artifact will be performed.
+            If `True`, a check will be made for the actual existence of a
+            dataset artifact. This will involve additional overhead due to
+            the need to query an external system. If `False`, this check will
+            be omitted, and the registry and datastore will solely be asked
+            if they know about the dataset but no direct check for the
+            artifact will be performed.
         collections : Any, optional
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
@@ -1078,11 +1079,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         refs : iterable of `DatasetRef`
             The datasets to be checked.
         full_check : `bool`, optional
-            If `True`, an additional check will be made for dataset artifact
-            existence. This will involve additional overhead due to the need
-            to query an external system. If `False` registry and datastore
-            will solely be asked if they know about the dataset but no
-            check for the artifact will be performed.
+            If `True`, a check will be made for the actual existence of each
+            dataset artifact. This will involve additional overhead due to
+            the need to query an external system. If `False`, this check will
+            be omitted, and the registry and datastore will solely be asked
+            if they know about the dataset(s) but no direct check for the
+            artifact(s) will be performed.
 
         Returns
         -------
