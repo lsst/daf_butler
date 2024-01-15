@@ -42,7 +42,7 @@ from typing import Any
 
 import astropy.time
 import sqlalchemy
-from lsst.sphgeom import Circle, ConvexPolygon, UnitVector3d
+from lsst.sphgeom import Circle, ConvexPolygon, Mq3cPixelization, UnionRegion, UnitVector3d
 
 from ..._timespan import Timespan
 from ..interfaces import Database, DatabaseConflictError, ReadOnlyDatabaseError, SchemaAlreadyDefinedError
@@ -1235,4 +1235,82 @@ class DatabaseTests(ABC):
         self.assertCountEqual(
             [row._mapping for row in self.query_list(new_db, select_values_joined)],
             [{"value": 11, "name": "b1"}, {"value": 13, "name": "b3"}],
+        )
+
+    def test_select_unique_aggregate_region(self) -> None:
+        """Test Database.select_unique. and ddl.Base64Region.union_agg."""
+        db = self.makeEmptyDatabase()
+        with db.declareStaticTables(create=True) as context:
+            t = context.addTable(
+                "t",
+                ddl.TableSpec(
+                    [
+                        ddl.FieldSpec("id", sqlalchemy.BigInteger(), nullable=False),
+                        ddl.FieldSpec("name", sqlalchemy.String(16), nullable=False),
+                        ddl.FieldSpec.for_region(),
+                    ]
+                ),
+            )
+        pixelization = Mq3cPixelization(10)
+        db.insert(
+            t,
+            {"id": 1, "name": "a", "region": pixelization.quad(12058870)},
+            {"id": 2, "name": "a", "region": pixelization.quad(12058871)},
+            {"id": 3, "name": "b", "region": pixelization.quad(12058872)},
+            {"id": 3, "name": "b", "region": pixelization.quad(12058873)},
+        )
+        # This should evaluate to a SELECT DISTINCT in both SQLite and
+        # PostgreSQL.
+        self.assertCountEqual(
+            self.query_list(db, db.select_unique(t, [("i", t.c.id, "key")])), [(1,), (2,), (3,)]
+        )
+        # This should use DISTINCT ON in PostgreSQL and GROUP BY in SQLite.
+        self.assertCountEqual(
+            self.query_list(db, db.select_unique(t, [("i", t.c.id, "key"), ("n", t.c.name, "natural")])),
+            [(1, "a"), (2, "a"), (3, "b")],
+        )
+        # This should use GROUP BY in both databases, with no need for the
+        # implementation to add an aggregate function for the 'natural'
+        # columns (since there aren't any).
+        self.assertCountEqual(
+            [
+                (row.i, row.r.encode())
+                for row in self.query_list(
+                    db,
+                    db.select_unique(
+                        t,
+                        [("i", t.c.id, "key"), ("r", ddl.Base64Region.union_agg(t.c.region), "aggregate")],
+                    ),
+                )
+            ],
+            [
+                (1, pixelization.quad(12058870).encode()),
+                (2, pixelization.quad(12058871).encode()),
+                (3, UnionRegion(pixelization.quad(12058872), pixelization.quad(12058873)).encode()),
+            ],
+        )
+        # This should use GROUP BY in both databases, with no aggregate
+        # function on the 'natural' columns in SQLite, the new "any_value" in
+        # PostgreSQL 16+, and the possibly-less-efficient but still correct
+        # "max" for older PostgreSQL versions.
+        self.assertCountEqual(
+            [
+                (row.i, row.n, row.r.encode())
+                for row in self.query_list(
+                    db,
+                    db.select_unique(
+                        t,
+                        [
+                            ("i", t.c.id, "key"),
+                            ("n", t.c.name, "natural"),
+                            ("r", ddl.Base64Region.union_agg(t.c.region), "aggregate"),
+                        ],
+                    ),
+                )
+            ],
+            [
+                (1, "a", pixelization.quad(12058870).encode()),
+                (2, "a", pixelization.quad(12058871).encode()),
+                (3, "b", UnionRegion(pixelization.quad(12058872), pixelization.quad(12058873)).encode()),
+            ],
         )
