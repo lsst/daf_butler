@@ -34,7 +34,7 @@ import sqlite3
 import urllib.parse
 from collections.abc import Iterable
 from contextlib import AbstractContextManager, closing
-from typing import Any
+from typing import Any, Literal
 
 import sqlalchemy
 import sqlalchemy.dialects.sqlite
@@ -394,6 +394,25 @@ class SqliteDatabase(Database):
             for row in rows
         ]
         return sqlalchemy.sql.union_all(*selects).alias(name)
+
+    def select_unique(
+        self,
+        from_clause: sqlalchemy.FromClause,
+        columns: Iterable[tuple[str, sqlalchemy.ColumnElement[Any], Literal["key", "natural", "aggregate"]]],
+    ) -> sqlalchemy.Select:
+        # Docstring inherited.
+        base_select = sqlalchemy.select(
+            *[sql_column.label(key) for key, sql_column, _ in columns]
+        ).select_from(from_clause)
+        if all(category == "key" for _, _, category in columns):
+            # This is a simple SELECT DISTINCT on all columns.
+            return base_select.distinct()
+        else:
+            # SQLite extends standard SQL to support SELECT clause columns that
+            # are not in the GROUP BY clause or in an aggregate function.
+            return base_select.group_by(
+                *[base_select.selected_columns[label] for label, _, category in columns if category == "key"]
+            )
 
     filename: str | None
     """Name of the file this database is connected to (`str` or `None`).

@@ -33,7 +33,7 @@ __all__ = ["PostgresqlDatabase"]
 import re
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
-from typing import Any
+from typing import Any, Literal
 
 import psycopg2
 import sqlalchemy
@@ -332,6 +332,49 @@ class PostgresqlDatabase(Database):
     ) -> sqlalchemy.sql.FromClause:
         # Docstring inherited.
         return super().constant_rows(fields, *rows, name=name)
+
+    def select_unique(
+        self,
+        from_clause: sqlalchemy.FromClause,
+        columns: Iterable[tuple[str, sqlalchemy.ColumnElement[Any], Literal["key", "natural", "aggregate"]]],
+    ) -> sqlalchemy.Select:
+        # Docstring inherited.
+        if not any(category == "aggregate" for _, _, category in columns):
+            select_columns = [sql_column.label(label) for label, sql_column, _ in columns]
+            base_select = sqlalchemy.select(*select_columns).select_from(from_clause)
+            distinct_columns = [
+                base_select.selected_columns[label] for label, _, category in columns if category == "key"
+            ]
+            if len(distinct_columns) == len(select_columns):
+                # This is a simple SELECT DISTINCT.
+                return base_select.distinct()
+            else:
+                # All modern versions of PostgreSQL support DISTINCT ON, and
+                # that's sufficient if there are no aggregates.
+                return base_select.distinct(*distinct_columns)
+        else:
+            if self._pg_version >= (16, 0):
+                # PostgreSQL 16 (finally) adds the "any_value" function, which
+                # is exactly what we want for the naturally unique columns.
+                natural_agg: Any = sqlalchemy.func.any_value
+            else:
+                # For older PostgreSQL versions we have no choice but to use
+                # "max" or "min" and hope that it sometimes gets optimized
+                # away.
+                natural_agg = sqlalchemy.func.max
+            base_select = sqlalchemy.select(
+                *[
+                    (
+                        sql_column.label(label)
+                        if category != "natural"
+                        else natural_agg(sql_column).label(label)
+                    )
+                    for label, sql_column, category in columns
+                ]
+            ).select_from(from_clause)
+            return base_select.group_by(
+                *[base_select.selected_columns[label] for label, _, category in columns if category == "key"]
+            )
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):

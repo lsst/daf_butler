@@ -44,7 +44,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, cast, final
+from typing import Any, Literal, cast, final
 
 import astropy.time
 import sqlalchemy
@@ -1923,6 +1923,40 @@ class Database(ABC):
         not just hard database engine limits.
         """
         return 100
+
+    def select_unique(
+        self,
+        from_clause: sqlalchemy.FromClause,
+        columns: Iterable[tuple[str, sqlalchemy.ColumnElement[Any], Literal["key", "natural", "aggregate"]]],
+    ) -> sqlalchemy.Select:
+        """Return a modified copy of a SELECT statement that enforces unique
+        rows.
+
+        Parameters
+        ----------
+        from_clause : `sqlalchemy.FromClause`
+            SQL ``FROM`` clause to select from.
+        columns : `~collections.abc.Iterable` [ `tuple` [ `str`, \
+                `sqlalchemy.ColumnElement`, `str` ] ]
+            List of columns to select, as 3-tuples of:
+
+            - the name of the column to use as a label;
+            - the SQLAlchemy column expression;
+            - a string enumeration of the category; one of "key", "natural", or
+              "aggregate".
+
+            Key columns are those whose values should be unique.  Natural
+            columns are those that will naturally have unique values if the key
+            columns have unique values.  Aggregates are column expressions
+            defined by aggregate functions.
+
+        Returns
+        -------
+        select : `sqlalchemy.Select`
+            SQL ``SELECT`` statement with some combination of ``DISTINCT``,
+            ``DISTINCT ON``, and ``GROUP BY``.
+        """
+        raise NotImplementedError()
 
     origin: int
     """An integer ID that should be used as the default for any datasets,
