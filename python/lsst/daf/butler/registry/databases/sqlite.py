@@ -395,6 +395,23 @@ class SqliteDatabase(Database):
         ]
         return sqlalchemy.sql.union_all(*selects).alias(name)
 
+    @property
+    def has_distinct_on(self) -> bool:
+        # Docstring inherited.
+        return False
+
+    @property
+    def has_any_aggregate(self) -> bool:
+        # Docstring inherited.
+        return True
+
+    def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:
+        # Docstring inherited.
+        # In SQLite, columns are permitted in the SELECT clause without an
+        # aggregate function even if they're not in the GROUP BY, with an
+        # arbitrary value picked if there is more than one.
+        return column
+
     filename: str | None
     """Name of the file this database is connected to (`str` or `None`).
 

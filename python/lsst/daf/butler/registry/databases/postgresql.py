@@ -26,6 +26,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from sqlalchemy.sql.expression import ColumnElement as ColumnElement
+
 from ... import ddl, time_utils
 
 __all__ = ["PostgresqlDatabase"]
@@ -332,6 +334,20 @@ class PostgresqlDatabase(Database):
     ) -> sqlalchemy.sql.FromClause:
         # Docstring inherited.
         return super().constant_rows(fields, *rows, name=name)
+
+    @property
+    def has_distinct_on(self) -> bool:
+        # Docstring inherited.
+        return True
+
+    @property
+    def has_any_aggregate(self) -> bool:
+        # Docstring inherited.
+        return self._pg_version >= (16, 0)
+
+    def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:
+        # Docstring inherited.x
+        return sqlalchemy.func.any_value(column)
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
