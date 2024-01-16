@@ -29,7 +29,7 @@ from __future__ import annotations
 
 __all__ = ("Location", "LocationFactory")
 
-import copy
+from typing import Any, Self
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 
@@ -94,7 +94,7 @@ class Location:
             if pathInStore is None:
                 raise ValueError(f"Unexpectedly {path} jumps out of {self._datastoreRootUri}")
 
-    def clone(self) -> Location:
+    def clone(self) -> Self:
         """Return a copy of this location as a new instance.
 
         Returns
@@ -102,8 +102,22 @@ class Location:
         location : `Location`
             An identical location as a new instance.
         """
-        # Shallow copy is fine because all the members are immutable.
-        return copy.copy(self)
+        # The properties associated with this object are all immutable
+        # so we can copy them directly to the clone.
+        clone = object.__new__(type(self))
+        clone._path = self._path
+        clone._datastoreRootUri = self._datastoreRootUri
+        clone._uri = None
+        return clone
+
+    def __copy__(self) -> Self:
+        """Copy constructor."""
+        # Implement here because the __new__ method confuses things
+        return self.clone()
+
+    def __deepcopy__(self, memo: Any) -> Self:
+        """Deepcopy the object."""
+        return self.clone()
 
     def __str__(self) -> str:
         return str(self.uri)
