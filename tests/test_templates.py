@@ -159,6 +159,9 @@ class TestFileTemplates(unittest.TestCase):
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("{id}/fixed")
 
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("{run}/../{datasetType}_{visit}")
+
     def testRunOrCollectionNeeded(self):
         tmplstr = "{datasetType}/{visit:05d}/{physical_filter}"
         with self.assertRaises(FileTemplateValidationError):

@@ -699,6 +699,11 @@ class FileTemplate:
                 f"Template '{self}' does not seem to have any fields corresponding to dimensions."
             )
 
+        # Do not allow ../ in the template to confuse where the file might
+        # end up.
+        if "../" in self.template:
+            raise FileTemplateValidationError("A file template should not include jump to parent directory.")
+
         # Require that if "id" is in the template then it must exist in the
         # file part -- this avoids templates like "{id}/fixed" where the file
         # name is fixed but the directory has the ID.
