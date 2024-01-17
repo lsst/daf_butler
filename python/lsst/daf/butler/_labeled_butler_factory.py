@@ -27,7 +27,7 @@
 
 __all__ = ("LabeledButlerFactory",)
 
-from typing import Callable, Mapping
+from collections.abc import Callable, Mapping
 
 from lsst.resources import ResourcePathExpression
 
