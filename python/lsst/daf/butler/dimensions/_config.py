@@ -29,21 +29,20 @@ from __future__ import annotations
 
 __all__ = ("DimensionConfig",)
 
-from collections.abc import Iterator, Mapping, Sequence
-from typing import Any
+import textwrap
+from collections.abc import Mapping, Sequence, Set
+from typing import Any, ClassVar, Literal, Union, final
 
 import pydantic
 from lsst.resources import ResourcePath, ResourcePathExpression
+from lsst.sphgeom import PixelizationABC
+from lsst.utils.doImport import doImportType
 
 from .._config import Config, ConfigSubset
+from .._named import NamedValueSet
 from .._topology import TopologicalSpace
-from ._database import (
-    DatabaseDimensionElementConstructionVisitor,
-    DatabaseTopologicalFamilyConstructionVisitor,
-)
-from ._elements import KeyColumnSpec, MetadataColumnSpec
-from ._governor import GovernorDimensionConstructionVisitor
-from ._skypix import SkyPixConstructionVisitor
+from ._database import DatabaseTopologicalFamilyConstructionVisitor
+from ._elements import Dimension, KeyColumnSpec, MetadataColumnSpec
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 # The default namespace to use on older dimension config files that only
@@ -157,103 +156,8 @@ class DimensionConfig(ConfigSubset):
         externalConfig = type(self)(file, validate=False)
         self.update(externalConfig)
 
-    def _extractSkyPixVisitors(self) -> Iterator[DimensionConstructionVisitor]:
-        """Process the 'skypix' section of the configuration.
-
-        Yields a construction visitor for each `SkyPixSystem`.
-
-        Yields
-        ------
-        visitor : `DimensionConstructionVisitor`
-            Object that adds a skypix system and its dimensions to an
-            under-construction `DimensionUniverse`.
-        """
-        config = self["skypix"]
-        systemNames = set(config.keys())
-        systemNames.remove("common")
-        for systemName in sorted(systemNames):
-            subconfig = config[systemName]
-            pixelizationClassName = subconfig["class"]
-            maxLevel = subconfig.get("max_level", 24)
-            yield SkyPixConstructionVisitor(systemName, pixelizationClassName, maxLevel)
-
-    def _extractElementVisitors(self) -> Iterator[DimensionConstructionVisitor]:
-        """Process the 'elements' section of the configuration.
-
-        Yields a construction visitor for each `StandardDimension` or
-        `StandardDimensionCombination`.
-
-        Yields
-        ------
-        visitor : `DimensionConstructionVisitor`
-            Object that adds a `StandardDimension` or
-            `StandardDimensionCombination` to an under-construction
-            `DimensionUniverse`.
-        """
-        # MyPy is confused by the typing.Annotated usage and/or how
-        # Pydantic annotated TypeAdapter.
-        key_adapter: pydantic.TypeAdapter[KeyColumnSpec] = pydantic.TypeAdapter(  # type: ignore
-            KeyColumnSpec  # type: ignore
-        )
-        metadata_adapter: pydantic.TypeAdapter[MetadataColumnSpec] = pydantic.TypeAdapter(  # type: ignore
-            MetadataColumnSpec  # type: ignore
-        )
-        for name, subconfig in self["elements"].items():
-            metadata_columns = [metadata_adapter.validate_python(c) for c in subconfig.get("metadata", ())]
-            unique_keys = [key_adapter.validate_python(c) for c in subconfig.get("keys", ())]
-            for unique_key in unique_keys:
-                unique_key.nullable = False
-            if subconfig.get("governor", False):
-                unsupported = {"required", "implied", "viewOf", "alwaysJoin"}
-                if not unsupported.isdisjoint(subconfig.keys()):
-                    raise RuntimeError(
-                        f"Unsupported config key(s) for governor {name}: {unsupported & subconfig.keys()}."
-                    )
-                if not subconfig.get("cached", True):
-                    raise RuntimeError(f"Governor dimension {name} is always cached.")
-                yield GovernorDimensionConstructionVisitor(
-                    name=name,
-                    storage=subconfig["storage"],
-                    metadata_columns=metadata_columns,
-                    unique_keys=unique_keys,
-                    doc=subconfig.get("doc", ""),
-                )
-            else:
-                yield DatabaseDimensionElementConstructionVisitor(
-                    name=name,
-                    storage=subconfig["storage"],
-                    required=set(subconfig.get("requires", ())),
-                    implied=set(subconfig.get("implies", ())),
-                    metadata_columns=metadata_columns,
-                    alwaysJoin=subconfig.get("always_join", False),
-                    unique_keys=unique_keys,
-                    populated_by=subconfig.get("populated_by", None),
-                    doc=subconfig.get("doc", ""),
-                )
-
-    def _extractTopologyVisitors(self) -> Iterator[DimensionConstructionVisitor]:
-        """Process the 'topology' section of the configuration.
-
-        Yields a construction visitor for each `StandardTopologicalFamily`.
-
-        Yields
-        ------
-        visitor : `DimensionConstructionVisitor`
-            Object that adds a `StandardTopologicalFamily` to an
-            under-construction `DimensionUniverse` and updates its member
-            `DimensionElement` instances.
-        """
-        for spaceName, subconfig in self.get("topology", {}).items():
-            space = TopologicalSpace.__members__[spaceName.upper()]
-            for name, members in subconfig.items():
-                yield DatabaseTopologicalFamilyConstructionVisitor(
-                    name=name,
-                    space=space,
-                    members=members,
-                )
-
     def makeBuilder(self) -> DimensionConstructionBuilder:
-        """Construct a `DinmensionConstructionBuilder`.
+        """Construct a `DimensionConstructionBuilder`.
 
         The builder will reflect this configuration.
 
@@ -264,13 +168,500 @@ class DimensionConfig(ConfigSubset):
             configuration.  The `~DimensionConstructionBuilder.finish` method
             will not have been called.
         """
+        validated = _UniverseConfig.model_validate(self.toDict())
         builder = DimensionConstructionBuilder(
-            self["version"],
-            self["skypix", "common"],
+            validated.version,
+            validated.skypix.common,
             self,
-            namespace=self.get("namespace", _DEFAULT_NAMESPACE),
+            namespace=validated.namespace,
         )
-        builder.update(self._extractSkyPixVisitors())
-        builder.update(self._extractElementVisitors())
-        builder.update(self._extractTopologyVisitors())
+        for system_name, system_config in sorted(validated.skypix.systems.items()):
+            builder.add(system_name, system_config)
+        for element_name, element_config in validated.elements.items():
+            builder.add(element_name, element_config)
+        for family_name, members in validated.topology.spatial.items():
+            builder.add(
+                family_name,
+                DatabaseTopologicalFamilyConstructionVisitor(space=TopologicalSpace.SPATIAL, members=members),
+            )
+        for family_name, members in validated.topology.temporal.items():
+            builder.add(
+                family_name,
+                DatabaseTopologicalFamilyConstructionVisitor(
+                    space=TopologicalSpace.TEMPORAL, members=members
+                ),
+            )
         return builder
+
+
+@final
+class _SkyPixSystemConfig(pydantic.BaseModel, DimensionConstructionVisitor):
+    """Description of a hierarchical sky pixelization system in dimension
+    universe configuration.
+    """
+
+    class_: str = pydantic.Field(
+        alias="class",
+        description="Fully-qualified name of an `lsst.sphgeom.PixelizationABC implementation.",
+    )
+
+    min_level: int = 1
+    """Minimum level for this pixelization."""
+
+    max_level: int | None
+    """Maximum level for this pixelization."""
+
+    def has_dependencies_in(self, others: Set[str]) -> bool:
+        # Docstring inherited from DimensionConstructionVisitor.
+        return False
+
+    def visit(self, name: str, builder: DimensionConstructionBuilder) -> None:
+        # Docstring inherited from DimensionConstructionVisitor.
+        PixelizationClass = doImportType(self.class_)
+        assert issubclass(PixelizationClass, PixelizationABC)
+        if self.max_level is None:
+            max_level: int | None = getattr(PixelizationClass, "MAX_LEVEL", None)
+            if max_level is None:
+                raise TypeError(
+                    f"Skypix pixelization class {self.class_} does"
+                    " not have MAX_LEVEL but no max level has been set explicitly."
+                )
+            self.max_level = max_level
+
+        from ._skypix import SkyPixSystem
+
+        system = SkyPixSystem(
+            name,
+            maxLevel=self.max_level,
+            PixelizationClass=PixelizationClass,
+        )
+        builder.topology[TopologicalSpace.SPATIAL].add(system)
+        for level in range(self.min_level, self.max_level + 1):
+            dimension = system[level]
+            builder.dimensions.add(dimension)
+            builder.elements.add(dimension)
+
+
+@final
+class _SkyPixSectionConfig(pydantic.BaseModel):
+    """Section of the dimension universe configuration that describes sky
+    pixelizations.
+    """
+
+    common: str = pydantic.Field(
+        description="Name of the dimension used to relate all other spatial dimensions."
+    )
+
+    systems: dict[str, _SkyPixSystemConfig] = pydantic.Field(
+        default_factory=dict, description="Descriptions of the supported sky pixelization systems."
+    )
+
+    model_config = pydantic.ConfigDict(extra="allow")
+
+    @pydantic.model_validator(mode="after")
+    def _move_extra_to_systems(self) -> _SkyPixSectionConfig:
+        """Reinterpret extra fields in this model as members of the `systems`
+        dictionary.
+        """
+        if self.__pydantic_extra__ is None:
+            self.__pydantic_extra__ = {}
+        for name, data in self.__pydantic_extra__.items():
+            self.systems[name] = _SkyPixSystemConfig.model_validate(data)
+        self.__pydantic_extra__.clear()
+        return self
+
+
+@final
+class _TopologySectionConfig(pydantic.BaseModel):
+    """Section of the dimension universe configuration that describes spatial
+    and temporal relationships.
+    """
+
+    spatial: dict[str, list[str]] = pydantic.Field(
+        default_factory=dict,
+        description=textwrap.dedent(
+            """\
+            Dictionary of spatial dimension elements, grouped by the "family"
+            they belong to.
+
+            Elements in a family are ordered from fine-grained to coarse-grained.
+            """
+        ),
+    )
+
+    temporal: dict[str, list[str]] = pydantic.Field(
+        default_factory=dict,
+        description=textwrap.dedent(
+            """\
+            Dictionary of temporal dimension elements, grouped by the "family"
+            they belong to.
+
+            Elements in a family are ordered from fine-grained to coarse-grained.
+            """
+        ),
+    )
+
+
+@final
+class _LegacyGovernorDimensionStorage(pydantic.BaseModel):
+    """Legacy storage configuration for governor dimensions."""
+
+    cls: Literal[
+        "lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage"
+    ] = "lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage"
+
+    has_own_table: ClassVar[Literal[True]] = True
+    """Whether this dimension needs a database table to be defined."""
+
+    is_cached: ClassVar[Literal[True]] = True
+    """Whether this dimension's records should be cached in clients."""
+
+    implied_union_target: ClassVar[Literal[None]] = None
+    """Name of another dimension that implies this one, whose values for this
+    dimension define the set of allowed values for this dimension.
+    """
+
+
+@final
+class _LegacyTableDimensionStorage(pydantic.BaseModel):
+    """Legacy storage configuration for regular dimension tables stored in the
+    database.
+    """
+
+    cls: Literal[
+        "lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage"
+    ] = "lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage"
+
+    has_own_table: ClassVar[Literal[True]] = True
+    """Whether this dimension element needs a database table to be defined."""
+
+    is_cached: ClassVar[Literal[False]] = False
+    """Whether this dimension element's records should be cached in clients."""
+
+    implied_union_target: ClassVar[Literal[None]] = None
+    """Name of another dimension that implies this one, whose values for this
+    dimension define the set of allowed values for this dimension.
+    """
+
+
+@final
+class _LegacyImpliedUnionDimensionStorage(pydantic.BaseModel):
+    """Legacy storage configuration for dimensions whose allowable values are
+    computed from the union of the values in another dimension that implies
+    this one.
+    """
+
+    cls: Literal[
+        "lsst.daf.butler.registry.dimensions.query.QueryDimensionRecordStorage"
+    ] = "lsst.daf.butler.registry.dimensions.query.QueryDimensionRecordStorage"
+
+    view_of: str
+    """The dimension that implies this one and defines its values."""
+
+    has_own_table: ClassVar[Literal[False]] = False
+    """Whether this dimension needs a database table to be defined."""
+
+    is_cached: ClassVar[Literal[False]] = False
+    """Whether this dimension element's records should be cached in clients."""
+
+    @property
+    def implied_union_target(self) -> str:
+        """Name of another dimension that implies this one, whose values for
+        this dimension define the set of allowed values for this dimension.
+        """
+        return self.view_of
+
+
+@final
+class _LegacyCachingDimensionStorage(pydantic.BaseModel):
+    """Legacy storage configuration that wraps another to indicate that its
+    records should be cached.
+    """
+
+    cls: Literal[
+        "lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage"
+    ] = "lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage"
+
+    nested: _LegacyTableDimensionStorage | _LegacyImpliedUnionDimensionStorage
+    """Dimension storage configuration wrapped by this one."""
+
+    @property
+    def has_own_table(self) -> bool:
+        """Whether this dimension needs a database table to be defined."""
+        return self.nested.has_own_table
+
+    is_cached: ClassVar[Literal[True]] = True
+    """Whether this dimension element's records should be cached in clients."""
+
+    @property
+    def implied_union_target(self) -> str | None:
+        """Name of another dimension that implies this one, whose values for
+        this dimension define the set of allowed values for this dimension.
+        """
+        return self.nested.implied_union_target
+
+
+@final
+class _ElementConfig(pydantic.BaseModel, DimensionConstructionVisitor):
+    """Description of a single dimension or dimension join relation in
+    dimension universe configuration.
+    """
+
+    doc: str = pydantic.Field(default="", description="Documentation for the dimension or relationship.")
+
+    keys: list[KeyColumnSpec] = pydantic.Field(
+        default_factory=list,
+        description=textwrap.dedent(
+            """\
+            Key columns that (along with required dependency values) uniquely
+            identify the dimension's records.
+
+            The first columns in this list is the primary key and is used in
+            data coordinate values.  Other columns are alternative keys and
+            are defined with SQL ``UNIQUE`` constraints.
+            """
+        ),
+    )
+
+    requires: set[str] = pydantic.Field(
+        default_factory=set,
+        description=(
+            "Other dimensions whose primary keys are part of this dimension element's (compound) primary key."
+        ),
+    )
+
+    implies: set[str] = pydantic.Field(
+        default_factory=set,
+        description="Other dimensions whose primary keys appear as foreign keys in this dimension element.",
+    )
+
+    metadata: list[MetadataColumnSpec] = pydantic.Field(
+        default_factory=list,
+        description="Non-key columns that provide extra information about a dimension element.",
+    )
+
+    is_cached: bool = pydantic.Field(
+        default=False,
+        description="Whether this element's records should be cached in the client.",
+    )
+
+    implied_union_target: str | None = pydantic.Field(
+        default=None,
+        description=textwrap.dedent(
+            """\
+            Another dimension whose stored values for this dimension form the
+            set of all allowed values.
+
+            The target dimension must have this dimension in its "implies"
+            list.  This means the current dimension will have no table of its
+            own in the database.
+            """
+        ),
+    )
+
+    governor: bool = pydantic.Field(
+        default=False,
+        description=textwrap.dedent(
+            """\
+            Whether this is a governor dimension.
+
+            Governor dimensions are expected to have a tiny number of rows and
+            must be explicitly provided in any dimension expression in which
+            dependent dimensions appear.
+
+            Implies is_cached=True.
+            """
+        ),
+    )
+
+    always_join: bool = pydantic.Field(
+        default=False,
+        description=textwrap.dedent(
+            """\
+            Whether this dimension join relation should always be included in
+            any query where its required dependencies appear.
+            """
+        ),
+    )
+
+    populated_by: str | None = pydantic.Field(
+        default=None,
+        description=textwrap.dedent(
+            """\
+            The name of a required dimension that this dimension join
+            relation's rows should transferred alongside.
+            """
+        ),
+    )
+
+    storage: Union[
+        _LegacyGovernorDimensionStorage,
+        _LegacyTableDimensionStorage,
+        _LegacyImpliedUnionDimensionStorage,
+        _LegacyCachingDimensionStorage,
+        None,
+    ] = pydantic.Field(
+        description="How this dimension element's rows should be stored in the database and client.",
+        discriminator="cls",
+        default=None,
+    )
+
+    def has_dependencies_in(self, others: Set[str]) -> bool:
+        # Docstring inherited from DimensionConstructionVisitor.
+        return not (self.requires.isdisjoint(others) and self.implies.isdisjoint(others))
+
+    def visit(self, name: str, builder: DimensionConstructionBuilder) -> None:
+        # Docstring inherited from DimensionConstructionVisitor.
+        if self.governor:
+            from ._governor import GovernorDimension
+
+            governor = GovernorDimension(
+                name,
+                metadata_columns=NamedValueSet(self.metadata).freeze(),
+                unique_keys=NamedValueSet(self.keys).freeze(),
+                doc=self.doc,
+            )
+            builder.dimensions.add(governor)
+            builder.elements.add(governor)
+            return
+        # Expand required dependencies.
+        for dependency_name in tuple(self.requires):  # iterate over copy
+            self.requires.update(builder.dimensions[dependency_name].required.names)
+        # Transform required and implied Dimension names into instances,
+        # and reorder to match builder's order.
+        required: NamedValueSet[Dimension] = NamedValueSet()
+        implied: NamedValueSet[Dimension] = NamedValueSet()
+        for dimension in builder.dimensions:
+            if dimension.name in self.requires:
+                required.add(dimension)
+            if dimension.name in self.implies:
+                implied.add(dimension)
+        # Elements with keys are Dimensions; the rest are
+        # DimensionCombinations.
+        if self.keys:
+            from ._database import DatabaseDimension
+
+            dimension = DatabaseDimension(
+                name,
+                required=required,
+                implied=implied.freeze(),
+                metadata_columns=NamedValueSet(self.metadata).freeze(),
+                unique_keys=NamedValueSet(self.keys).freeze(),
+                is_cached=self.is_cached,
+                implied_union_target=self.implied_union_target,
+                doc=self.doc,
+            )
+            builder.dimensions.add(dimension)
+            builder.elements.add(dimension)
+        else:
+            from ._database import DatabaseDimensionCombination
+
+            combination = DatabaseDimensionCombination(
+                name,
+                required=required,
+                implied=implied.freeze(),
+                doc=self.doc,
+                metadata_columns=NamedValueSet(self.metadata).freeze(),
+                is_cached=self.is_cached,
+                always_join=self.always_join,
+                populated_by=(
+                    builder.dimensions[self.populated_by] if self.populated_by is not None else None
+                ),
+            )
+            builder.elements.add(combination)
+
+    @pydantic.model_validator(mode="after")
+    def _primary_key_types(self) -> _ElementConfig:
+        if self.keys and self.keys[0].type not in ("int", "string"):
+            raise ValueError(
+                "The dimension primary key type (the first entry in the keys list) must be 'int' "
+                f"or 'string'; got '{self.keys[0].type}'."
+            )
+        return self
+
+    @pydantic.model_validator(mode="after")
+    def _not_nullable_keys(self) -> _ElementConfig:
+        for key in self.keys:
+            key.nullable = False
+        return self
+
+    @pydantic.model_validator(mode="after")
+    def _invalid_dimension_fields(self) -> _ElementConfig:
+        if self.keys:
+            if self.always_join:
+                raise ValueError("Dimensions (elements with key columns) may not have always_join=True.")
+            if self.populated_by:
+                raise ValueError("Dimensions (elements with key columns) may not have populated_by.")
+        return self
+
+    @pydantic.model_validator(mode="after")
+    def _storage(self) -> _ElementConfig:
+        if self.storage is not None:
+            # 'storage' is legacy; pull its implications into the regular
+            # attributes and set it to None for consistency.
+            self.is_cached = self.storage.is_cached
+            self.implied_union_target = self.storage.implied_union_target
+            self.storage = None
+        if self.governor:
+            self.is_cached = True
+        if self.implied_union_target is not None:
+            if self.requires:
+                raise ValueError("Implied-union dimension may not have required dependencies.")
+            if self.implies:
+                raise ValueError("Implied-union dimension may not have implied dependencies.")
+            if len(self.keys) > 1:
+                raise ValueError("Implied-union dimension may not have alternate keys.")
+            if self.metadata:
+                raise ValueError("Implied-union dimension may not have metadata columns.")
+        return self
+
+    @pydantic.model_validator(mode="after")
+    def _relationship_dependencies(self) -> _ElementConfig:
+        if not self.keys and not self.requires:
+            raise ValueError(
+                "Dimension relationships (elements with no key columns) must have at least one "
+                "required dependency."
+            )
+        return self
+
+
+@final
+class _UniverseConfig(pydantic.BaseModel):
+    """Configuration that describes a complete dimension data model."""
+
+    version: int = pydantic.Field(
+        default=0,
+        description=textwrap.dedent(
+            """\
+            Integer version number for this universe.
+
+            This and 'namespace' are expected to uniquely identify a
+            dimension universe.
+            """
+        ),
+    )
+
+    namespace: str = pydantic.Field(
+        default=_DEFAULT_NAMESPACE,
+        description=textwrap.dedent(
+            """\
+            String namespace for this universe.
+
+            This and 'version' are expected to uniquely identify a
+            dimension universe.
+            """
+        ),
+    )
+
+    skypix: _SkyPixSectionConfig = pydantic.Field(
+        description="Hierarchical sky pixelization systems recognized by this dimension universe."
+    )
+
+    elements: dict[str, _ElementConfig] = pydantic.Field(
+        default_factory=dict, description="Non-skypix dimensions and dimension join relations."
+    )
+
+    topology: _TopologySectionConfig = pydantic.Field(
+        description="Spatial and temporal relationships between dimensions.",
+        default_factory=_TopologySectionConfig,
+    )

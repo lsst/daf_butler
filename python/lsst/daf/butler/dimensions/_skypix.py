@@ -39,12 +39,10 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from lsst.sphgeom import PixelizationABC
-from lsst.utils import doImportType
 
 from .._named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
 from ._elements import Dimension, KeyColumnSpec, MetadataColumnSpec
-from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
     from ._universe import DimensionUniverse
@@ -187,64 +185,3 @@ class SkyPixDimension(Dimension):
     """Pixelization instance that can compute regions from IDs and IDs from
     points (`sphgeom.PixelizationABC`).
     """
-
-
-class SkyPixConstructionVisitor(DimensionConstructionVisitor):
-    """Builder visitor for a single `SkyPixSystem` and its dimensions.
-
-    Parameters
-    ----------
-    name : `str`
-        Name of the `SkyPixSystem` to be constructed.
-    pixelizationClassName : `str`
-        Fully-qualified name of the class whose instances represent a
-        particular level of this pixelization.
-    maxLevel : `int`, optional
-        Maximum level (inclusive) of the hierarchy.  If not provided, an
-        attempt will be made to obtain it from a ``MAX_LEVEL`` attribute of the
-        pixelization class.
-
-    Notes
-    -----
-    At present, this class adds both a new `SkyPixSystem` instance all possible
-    `SkyPixDimension` to the builder that invokes it.  In the future, it may
-    add only the `SkyPixSystem`, with dimension instances created on-the-fly by
-    the `DimensionUniverse`; this depends on eliminating assumptions about the
-    set of dimensions in a universe being static.
-    """
-
-    def __init__(self, name: str, pixelizationClassName: str, maxLevel: int | None = None):
-        super().__init__(name)
-        self._pixelizationClassName = pixelizationClassName
-        self._maxLevel = maxLevel
-
-    def hasDependenciesIn(self, others: Set[str]) -> bool:
-        # Docstring inherited from DimensionConstructionVisitor.
-        return False
-
-    def visit(self, builder: DimensionConstructionBuilder) -> None:
-        # Docstring inherited from DimensionConstructionVisitor.
-        PixelizationClass = doImportType(self._pixelizationClassName)
-        assert issubclass(PixelizationClass, PixelizationABC)
-        if self._maxLevel is not None:
-            maxLevel = self._maxLevel
-        else:
-            # MyPy does not know the return type of getattr.
-            max_level = getattr(PixelizationClass, "MAX_LEVEL", None)
-            if max_level is None:
-                raise TypeError(
-                    f"Skypix pixelization class {self._pixelizationClassName} does"
-                    " not have MAX_LEVEL but no max level has been set explicitly."
-                )
-            assert isinstance(max_level, int)
-            maxLevel = max_level
-        system = SkyPixSystem(
-            self.name,
-            maxLevel=maxLevel,
-            PixelizationClass=PixelizationClass,
-        )
-        builder.topology[TopologicalSpace.SPATIAL].add(system)
-        for level in range(maxLevel + 1):
-            dimension = system[level]
-            builder.dimensions.add(dimension)
-            builder.elements.add(dimension)

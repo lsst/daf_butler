@@ -122,7 +122,6 @@ class DimensionRecordStorageManager(VersionedExtension):
         self,
         element: DimensionElement,
         *records: DimensionRecord,
-        cache: DimensionRecordCache,
         replace: bool = False,
         skip_existing: bool = False,
     ) -> None:
@@ -135,8 +134,6 @@ class DimensionRecordStorageManager(VersionedExtension):
         *records : `DimensionRecord`
             One or more instances of the `DimensionRecord` subclass for the
             element this storage is associated with.
-        cache : `DimensionRecordCache`
-            Cache of dimension records to update along with the database.
         replace : `bool`, optional
             If `True` (`False` is default), replace existing records in the
             database if there is a conflict.
@@ -155,9 +152,7 @@ class DimensionRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def sync(
-        self, record: DimensionRecord, cache: DimensionRecordCache, update: bool = False
-    ) -> bool | dict[str, Any]:
+    def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         """Synchronize a record with the database, inserting it only if it does
         not exist and comparing values if it does.
 
@@ -166,8 +161,6 @@ class DimensionRecordStorageManager(VersionedExtension):
         record : `DimensionRecord`
             An instance of the `DimensionRecord` subclass for the
             element this storage is associated with.
-        cache : `DimensionRecordCache`
-            Cache of dimension records to update along with the database.
         update : `bool`, optional
             If `True` (`False` is default), update the existing record in the
             database if there is a conflict.
