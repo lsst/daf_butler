@@ -276,7 +276,8 @@ class SqlRegistry:
 
     def copy(self, defaults: RegistryDefaults | None = None) -> SqlRegistry:
         """Create a new `SqlRegistry` backed by the same data repository
-        as this one, but independent defaults and database connection.
+        as this one and sharing a database connection pool with it, but with
+        independent defaults and database sessions.
 
         Parameters
         ----------
