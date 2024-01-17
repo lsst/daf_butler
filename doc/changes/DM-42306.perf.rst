@@ -1,0 +1,6 @@
+* Now declares to ``ResourcePath`` when a resource is known to be a file.
+* Speed up file template validation.
+* Only request dimension metadata for template formatting if that metadata is needed.
+* Speed up cloning of ``Location`` instances.
+* Do not merge formatter kwargs unless there is something to merge.
+* Declare when a file location is trusted to be within the datastore.
