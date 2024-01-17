@@ -40,7 +40,18 @@ except ImportError:
     np = None
 
 import astropy.time
-from lsst.daf.butler import Butler, ButlerConfig, CollectionType, DatasetId, DatasetRef, DatasetType, Timespan
+from lsst.daf.butler import (
+    Butler,
+    ButlerConfig,
+    CollectionType,
+    DataCoordinate,
+    DatasetId,
+    DatasetRef,
+    DatasetType,
+    StorageClass,
+    Timespan,
+)
+from lsst.daf.butler.datastore.file_templates import FileTemplate
 from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, _RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
@@ -673,6 +684,27 @@ class SimpleButlerTestCase(unittest.TestCase):
         for expression, expected in expressions:
             result = butler.registry.queryCollections(expression)
             self.assertEqual(set(result), expected)
+
+    def test_skypix_templates(self):
+        """Test that skypix templates can work."""
+        # Dimension Records
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
+
+        sc = StorageClass("null")
+        dataset_type = DatasetType("warp", ("visit", "htm7"), sc, universe=butler.dimensions)
+        dataId = butler.registry.expandDataId(
+            DataCoordinate.standardize(
+                dict(visit=27136, htm7=12345, instrument="HSC"), universe=butler.dimensions
+            )
+        )
+        ref = DatasetRef(dataset_type, dataId, run="test")
+        self.assertTrue(ref.dataId.hasRecords())
+
+        tmplstr = "{run}/{datasetType}/{visit.name}_{skypix}_{htm7}_{skypix.id}_{htm7.id}"
+        file_template = FileTemplate(tmplstr)
+        path = file_template.format(ref)
+        self.assertEqual(path, "test/warp/HSCA02713600_12345_12345_12345_12345")
 
 
 if __name__ == "__main__":

@@ -47,7 +47,7 @@ from ..dimensions import DataCoordinate
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType
-    from ..dimensions import DimensionUniverse
+    from ..dimensions import DimensionRecord, DimensionUniverse
 
 log = logging.getLogger(__name__)
 
@@ -503,7 +503,8 @@ class FileTemplate:
             k: v for k in ref.datasetType.dimensions.names if (v := ref.dataId.get(k)) is not None
         }
         # Extra information that can be included using . syntax
-        extras = {}
+        extras: dict[str, DimensionRecord | None] = {}
+        skypix_alias: str | None = None
         can_use_extra_records = False
         if isinstance(ref.dataId, DataCoordinate):
             if ref.dataId.hasRecords():
@@ -511,8 +512,6 @@ class FileTemplate:
             skypix_alias = self._determine_skypix_alias(ref)
             if skypix_alias is not None:
                 fields["skypix"] = fields[skypix_alias]
-                if extras:
-                    extras["skypix"] = extras[skypix_alias]
 
         datasetType = ref.datasetType
         fields["datasetType"], component = datasetType.nameAndComponent()
@@ -551,7 +550,13 @@ class FileTemplate:
             if "." in field_name:
                 primary, secondary = field_name.split(".")
                 if can_use_extra_records and primary not in extras and primary in fields:
-                    extras[primary] = ref.dataId.records[primary]
+                    record_key = primary
+                    if primary == "skypix" and skypix_alias is not None:
+                        record_key = skypix_alias
+                    extras[record_key] = ref.dataId.records[record_key]
+                    if record_key != primary:
+                        # Make sure that htm7 and skypix both work.
+                        extras[primary] = extras[record_key]
 
                 if primary in extras:
                     record = extras[primary]
