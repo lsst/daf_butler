@@ -40,7 +40,7 @@ __all__ = (
 import dataclasses
 import uuid
 from abc import abstractmethod
-from collections.abc import Iterable, Set
+from collections.abc import Iterable
 from contextlib import AbstractContextManager
 from typing import Annotated, Any, TypeAlias, Union, overload
 
@@ -65,7 +65,7 @@ from .result_specs import (
     GeneralResultSpec,
     ResultSpec,
 )
-from .tree import DataCoordinateUploadKey, MaterializationKey, QueryTree
+from .tree import ColumnSet, DataCoordinateUploadKey, MaterializationKey, QueryTree
 
 PageKey: TypeAlias = uuid.UUID
 
@@ -79,6 +79,7 @@ class DataCoordinateResultPage(pydantic.BaseModel):
     # TODO: On DM-41114 this will become a custom container that normalizes out
     # attached DimensionRecords and is Pydantic-friendly.  Right now this model
     # isn't actually serializable.
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
     rows: list[DataCoordinate]
 
 
@@ -112,6 +113,7 @@ class DatasetRefResultPage(pydantic.BaseModel):
     # TODO: On DM-41115 this will become a custom container that normalizes out
     # attached DimensionRecords and is Pydantic-friendly.  Right now this model
     # isn't actually serializable.
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
     rows: list[DatasetRef]
 
 
@@ -314,9 +316,8 @@ class QueryDriver(AbstractContextManager[None]):
     def count(
         self,
         tree: QueryTree,
+        columns: ColumnSet,
         *,
-        dimensions: DimensionGroup,
-        datasets: Set[str],
         exact: bool,
         discard: bool,
     ) -> int:
@@ -326,12 +327,9 @@ class QueryDriver(AbstractContextManager[None]):
         ----------
         tree : `QueryTree`
             Query tree to evaluate.
-        dimensions : `DimensionGroup`
-            Dimension keys whose distinct rows should be counted.  Must be a
-            subset of ``tree.dimensions``.
-        datasets : `~collections.abc.Set` [ `str` ]
-            Datasets whose IDs might also count towards row distinctness, if
-            they are unresolved.
+        columns : `ColumnSet`
+            Columns over which rows should have unique values before they are
+            counted.
         exact : `bool`, optional
             If `True`, run the full query and perform post-query filtering if
             needed to account for that filtering in the count.  If `False`, the

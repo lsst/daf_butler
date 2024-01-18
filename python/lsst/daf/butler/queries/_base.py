@@ -27,32 +27,17 @@
 
 from __future__ import annotations
 
-__all__ = ("ResultSpecBase", "QueryBase", "HomogeneousQueryBase", "CountableQueryBase", "QueryResultsBase")
+__all__ = ("QueryBase", "HomogeneousQueryBase", "CountableQueryBase", "QueryResultsBase")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Set
 from typing import Any, Self
 
-import pydantic
-
 from ..dimensions import DimensionGroup
 from .convert_args import convert_order_by_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionProxy
-from .tree import OrderExpression, QueryTree
-
-
-class ResultSpecBase(pydantic.BaseModel):
-    """Base class for all query-result specification objects."""
-
-    order_by: tuple[OrderExpression, ...] = ()
-    """Expressions to sort the rows by."""
-
-    offset: int = 0
-    """Index of the first row to return."""
-
-    limit: int | None = None
-    """Maximum number of rows to return, or `None` for no bound."""
+from .tree import ColumnSet, OrderExpression, QueryTree
 
 
 class QueryBase(ABC):
@@ -153,8 +138,7 @@ class QueryResultsBase(HomogeneousQueryBase, CountableQueryBase):
         # Docstring inherited.
         return self._driver.count(
             self._tree,
-            dimensions=self.dimensions,
-            datasets=self._get_datasets(),
+            self._get_result_columns(),
             exact=exact,
             discard=discard,
         )
@@ -205,6 +189,10 @@ class QueryResultsBase(HomogeneousQueryBase, CountableQueryBase):
         `limit` is called before `order_by`.
         """
         return self._copy(self._tree, limit=limit, offset=offset)
+
+    @abstractmethod
+    def _get_result_columns(self) -> ColumnSet:
+        raise NotImplementedError()
 
     @abstractmethod
     def _get_datasets(self) -> Set[str]:

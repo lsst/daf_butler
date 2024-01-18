@@ -34,20 +34,12 @@ __all__ = (
     "DatasetRefResultSpec",
 )
 
-from functools import cached_property
-from typing import Annotated, Literal, TypeAlias, Union
+from typing import Annotated, Literal, TypeAlias, Union, cast
 
 import pydantic
 
-from .._dataset_type import DatasetType
 from ..dimensions import DimensionElement, DimensionGroup
-from .tree import (
-    ColumnReference,
-    DatasetFieldReference,
-    DimensionFieldReference,
-    DimensionKeyReference,
-    OrderExpression,
-)
+from .tree import ColumnReference, ColumnSet, InvalidQueryTreeError, OrderExpression, QueryTree
 
 
 class ResultSpecBase(pydantic.BaseModel):
@@ -62,6 +54,48 @@ class ResultSpecBase(pydantic.BaseModel):
     limit: int | None = None
     """Maximum number of rows to return, or `None` for no bound."""
 
+    def validate_tree(self, tree: QueryTree) -> None:
+        """Check that this result object is consistent with a query tree.
+
+        Parameters
+        ----------
+        tree : `QueryTree`
+            Query tree that defines the joins and row-filtering that these
+            results will come from.
+        """
+        spec = cast(ResultSpec, self)
+        if not spec.dimensions <= tree.dimensions:
+            raise InvalidQueryTreeError(
+                f"Query result specification has dimensions {spec.dimensions} that are not a subset of the "
+                f"query's dimensions {tree.dimensions}."
+            )
+        order_by_columns = ColumnSet(spec.dimensions)
+        for term in spec.order_by:
+            term.gather_required_columns(order_by_columns)
+        if not (order_by_columns.dimensions <= spec.dimensions):
+            raise InvalidQueryTreeError(
+                "Order-by expression may not reference columns that are not in the result dimensions."
+            )
+        for dataset_type in order_by_columns.dataset_fields.keys():
+            if dataset_type not in tree.available_result_datasets:
+                raise InvalidQueryTreeError(
+                    f"Dataset type {dataset_type!r} in order-by expression is not part of the query."
+                )
+            if not (tree.datasets[dataset_type].dimensions <= spec.dimensions):
+                raise InvalidQueryTreeError(
+                    f"Dataset type {dataset_type!r} in order-by expression has dimensions "
+                    f"{tree.datasets[dataset_type].dimensions} that are not a subset of the query "
+                    f"dimensions {tree.dimensions}."
+                )
+        result_columns = spec.get_result_columns()
+        assert result_columns.dimensions == spec.dimensions, "enforced by ResultSpec implementations"
+        if result_columns.dataset_fields.keys() <= tree.available_result_datasets:
+            raise InvalidQueryTreeError(
+                "Dataset or datasets "
+                f"{result_columns.dataset_fields.keys() - tree.available_result_datasets} "
+                "are not available from this query."
+            )
+
 
 class DataCoordinateResultSpec(ResultSpecBase):
     """Specification for a query that yields `DataCoordinate` objects."""
@@ -70,15 +104,19 @@ class DataCoordinateResultSpec(ResultSpecBase):
     dimensions: DimensionGroup
     include_dimension_records: bool
 
-    @cached_property
-    def columns(self) -> tuple[ColumnReference, ...]:
-        result = [
-            DimensionKeyReference.model_construct(dimension=self.dimensions.universe.dimensions[name])
-            for name in self.dimensions.data_coordinate_keys
-        ]
+    def get_result_columns(self) -> ColumnSet:
+        """Return the columns included in the actual result rows.
+
+        This does not necessarily include all columns required by the
+        `order_by` terms that are also a part of this spec.
+        """
+        result = ColumnSet(self.dimensions)
         if self.include_dimension_records:
-            raise NotImplementedError("TODO")
-        return tuple(result)
+            for element_name in self.dimensions.elements:
+                element = self.dimensions.universe[element_name]
+                if not element.is_cached:
+                    result.dimension_fields[element_name].update(element.schema.remainder.names)
+        return result
 
 
 class DimensionRecordResultSpec(ResultSpecBase):
@@ -91,48 +129,43 @@ class DimensionRecordResultSpec(ResultSpecBase):
     def dimensions(self) -> DimensionGroup:
         return self.element.minimal_group
 
-    @cached_property
-    def columns(self) -> tuple[ColumnReference, ...]:
-        result: list[ColumnReference] = [
-            DimensionKeyReference.model_construct(dimension=dimension) for dimension in self.element.required
-        ]
-        result.extend(
-            DimensionKeyReference.model_construct(dimension=dimension) for dimension in self.element.implied
-        )
-        result.extend(
-            DimensionFieldReference.model_construct(element=self.element, field=field)
-            for field in self.element.schema.remainder.names
-        )
-        return tuple(result)
+    def get_result_columns(self) -> ColumnSet:
+        """Return the columns included in the actual result rows.
+
+        This does not necessarily include all columns required by the
+        `order_by` terms that are also a part of this spec.
+        """
+        result = ColumnSet(self.element.minimal_group)
+        result.dimension_fields[self.element.name].update(self.element.schema.remainder.names)
+        return result
 
 
 class DatasetRefResultSpec(ResultSpecBase):
     """Specification for a query that yields `DatasetRef` objects."""
 
     result_type: Literal["dataset_ref"] = "dataset_ref"
-    dataset_type: DatasetType
+    dataset_type_name: str
+    dimensions: DimensionGroup
+    storage_class_name: str
     include_dimension_records: bool
 
-    @property
-    def dimensions(self) -> DimensionGroup:
-        return self.dataset_type.dimensions.as_group()
+    def get_result_columns(self) -> ColumnSet:
+        """Return the columns included in the actual result rows.
 
-    @cached_property
-    def columns(self) -> tuple[ColumnReference, ...]:
-        result: list[ColumnReference] = [
-            DimensionKeyReference.model_construct(dimension=self.dimensions.universe.dimensions[name])
-            for name in self.dimensions.data_coordinate_keys
-        ]
+        This does not necessarily include all columns required by the
+        `order_by` terms that are also a part of this spec.
+        """
+        result = ColumnSet(self.dimensions)
+        result.dataset_fields[self.dataset_type_name].update({"dataset_id", "run"})
         if self.include_dimension_records:
-            raise NotImplementedError("TODO")
-        result.append(
-            DatasetFieldReference.model_construct(dataset_type=self.dataset_type.name, field="dataset_id")
-        )
-        result.append(DatasetFieldReference.model_construct(dataset_type=self.dataset_type.name, field="run"))
-        return tuple(result)
+            for element_name in self.dimensions.elements:
+                element = self.dimensions.universe[element_name]
+                if not element.is_cached:
+                    result.dimension_fields[element_name].update(element.schema.remainder.names)
+        return result
 
 
-class GeneralResultSpec(pydantic.BaseModel):
+class GeneralResultSpec(ResultSpecBase):
     """Specification for a query that yields a table with
     an explicit list of columns.
     """
@@ -143,6 +176,17 @@ class GeneralResultSpec(pydantic.BaseModel):
     @property
     def dimensions(self) -> DimensionGroup:
         raise NotImplementedError()
+
+    def get_result_columns(self) -> ColumnSet:
+        """Return the columns included in the actual result rows.
+
+        This does not necessarily include all columns required by the
+        `order_by` terms that are also a part of this spec.
+        """
+        result = ColumnSet(self.dimensions)
+        for column in self.columns:
+            column.gather_required_columns(result)
+        return result
 
 
 ResultSpec: TypeAlias = Annotated[

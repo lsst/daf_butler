@@ -39,7 +39,7 @@ __all__ = (
 )
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from functools import cached_property
 from typing import TypeAlias, final
 
@@ -48,7 +48,7 @@ import pydantic
 from ...dimensions import DimensionGroup, DimensionUniverse
 from ...pydantic_utils import DeferredValidation
 from ._base import InvalidQueryTreeError, QueryTreeBase
-from ._column_reference import DatasetFieldReference, DimensionFieldReference, DimensionKeyReference
+from ._column_set import ColumnSet
 from ._predicate import LiteralTrue, Predicate
 
 DataCoordinateUploadKey: TypeAlias = uuid.UUID
@@ -187,6 +187,17 @@ class QueryTree(QueryTreeBase):
         for materialization_spec in self.materializations.values():
             result.add(materialization_spec.dimensions)
         return frozenset(result)
+
+    @property
+    def available_result_datasets(self) -> Set[str]:
+        """Dataset types that are available to query results.
+
+        This is `find_first_dataset` if that is not `None`, and the keys of
+        `datasets` otherwise.
+        """
+        return (
+            self.datasets.keys() if self.find_first_dataset is None else frozenset({self.find_first_dataset})
+        )
 
     def join(self, other: QueryTree) -> QueryTree:
         """Return a new tree that represents a join between ``self`` and
@@ -342,21 +353,17 @@ class QueryTree(QueryTreeBase):
         datasets must already be joined into a query tree in order to reference
         their fields in expressions.
         """
-        full_dimension_names: set[str] = set(self.dimensions.names)
         where_predicate = self.predicate
+        columns = ColumnSet(self.dimensions)
         for where_term in terms:
-            for column in where_term.gather_required_columns():
-                match column:
-                    case DimensionKeyReference(dimension=dimension):
-                        full_dimension_names.add(dimension.name)
-                    case DimensionFieldReference(element=element):
-                        full_dimension_names.update(element.minimal_group.names)
-                    case DatasetFieldReference(dataset_type=dataset_type):
-                        if dataset_type not in self.datasets:
-                            raise InvalidQueryTreeError(f"Dataset search for column {column} is not present.")
+            where_term.gather_required_columns(columns)
             where_predicate = where_predicate.logical_and(where_term)
-        full_dimensions = self.dimensions.universe.conform(full_dimension_names)
-        return self.model_copy(update=dict(dimensions=full_dimensions, where_predicate=where_predicate))
+        if not (columns.dataset_fields.keys() <= self.datasets.keys()):
+            raise InvalidQueryTreeError(
+                f"Cannot reference dataset type(s) {columns.dataset_fields.keys() - self.datasets.keys()} "
+                "that have not been joined."
+            )
+        return self.model_copy(update=dict(dimensions=columns.dimensions, where_predicate=where_predicate))
 
     def find_first(self, dataset_type: str) -> QueryTree:
         """Return a new tree that searches a dataset's collections in
@@ -396,21 +403,12 @@ class QueryTree(QueryTreeBase):
 
     @pydantic.model_validator(mode="after")
     def _validate_required_columns(self) -> QueryTree:
-        for column in self.predicate.gather_required_columns():
-            match column:
-                case DimensionKeyReference(dimension=dimension):
-                    if dimension.name not in self.dimensions:
-                        raise InvalidQueryTreeError(
-                            f"Column {column} is not in dimensions {self.dimensions}."
-                        )
-                case DimensionFieldReference(element=element):
-                    if element not in self.dimensions.elements:
-                        raise InvalidQueryTreeError(
-                            f"Column {column} is not in dimensions {self.dimensions}."
-                        )
-                case DatasetFieldReference(dataset_type=dataset_type):
-                    if dataset_type not in self.datasets:
-                        raise InvalidQueryTreeError(f"Dataset search for column {column} is not present.")
+        columns = ColumnSet(self.dimensions)
+        self.predicate.gather_required_columns(columns)
+        if not columns.dimensions.issubset(self.dimensions):
+            raise InvalidQueryTreeError("Predicate requires dimensions beyond those in the query tree.")
+        if not columns.dataset_fields.keys() <= self.datasets.keys():
+            raise InvalidQueryTreeError("Predicate requires dataset columns that are not in the query tree.")
         return self
 
 

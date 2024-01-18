@@ -43,7 +43,7 @@ from .._dataset_type import DatasetType
 from ._base import CountableQueryBase, QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import DatasetRefResultSpec
-from .tree import QueryTree
+from .tree import ColumnSet, QueryTree
 
 if TYPE_CHECKING:
     from ._data_coordinate_query_results import DataCoordinateQueryResults
@@ -104,6 +104,7 @@ class SingleTypeDatasetQueryResults(DatasetQueryResults, QueryResultsBase):
     """
 
     def __init__(self, driver: QueryDriver, tree: QueryTree, spec: DatasetRefResultSpec):
+        spec.validate_tree(tree)
         super().__init__(driver, tree)
         self._spec = spec
 
@@ -117,7 +118,7 @@ class SingleTypeDatasetQueryResults(DatasetQueryResults, QueryResultsBase):
     @property
     def dataset_type(self) -> DatasetType:
         # Docstring inherited.
-        return self._spec.dataset_type
+        return DatasetType(self._spec.dataset_type_name, self._spec.dimensions, self._spec.storage_class_name)
 
     @property
     def data_ids(self) -> DataCoordinateQueryResults:
@@ -150,6 +151,9 @@ class SingleTypeDatasetQueryResults(DatasetQueryResults, QueryResultsBase):
 
     def _copy(self, tree: QueryTree, **kwargs: Any) -> SingleTypeDatasetQueryResults:
         return SingleTypeDatasetQueryResults(self._driver, self._tree, self._spec.model_copy(update=kwargs))
+
+    def _get_result_columns(self) -> ColumnSet:
+        return self._spec.get_result_columns()
 
     def _get_datasets(self) -> frozenset[str]:
         return frozenset({self.dataset_type.name})

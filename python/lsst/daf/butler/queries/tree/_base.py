@@ -42,7 +42,7 @@ import pydantic
 
 if TYPE_CHECKING:
     from ...column_spec import ColumnType
-    from ._column_reference import ColumnReference
+    from ._column_set import ColumnSet
     from ._predicate import Predicate
 
 
@@ -93,10 +93,8 @@ class ColumnExpressionBase(QueryTreeBase, ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def gather_required_columns(self) -> set[ColumnReference]:
-        """Return a `set` containing all `ColumnReference` objects embedded
-        recursively in this expression.
-        """
+    def gather_required_columns(self, columns: ColumnSet) -> None:
+        # TODO: docs
         raise NotImplementedError()
 
 
@@ -117,9 +115,9 @@ class ColumnLiteralBase(ColumnExpressionBase):
         # Docstring inherited.
         return 0
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return set()
+        pass
 
     @property
     def column_type(self) -> ColumnType:
@@ -159,11 +157,9 @@ class PredicateBase(QueryTreeBase, ABC):
         """
         return "bool"
 
-    def gather_required_columns(self) -> set[ColumnReference]:
-        """Return a `set` containing all `ColumnReference` objects embedded
-        recursively in this expression.
-        """
-        return set()
+    @abstractmethod
+    def gather_required_columns(self, columns: ColumnSet) -> None:
+        pass
 
     # The 'other' arguments of the methods below are annotated as Any because
     # MyPy doesn't correctly recognize subclass implementations that use

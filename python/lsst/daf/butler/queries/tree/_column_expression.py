@@ -42,7 +42,8 @@ import pydantic
 from ...column_spec import ColumnType
 from ._base import ColumnExpressionBase, InvalidQueryTreeError
 from ._column_literal import ColumnLiteral
-from ._column_reference import ColumnReference, _ColumnReference
+from ._column_reference import _ColumnReference
+from ._column_set import ColumnSet
 
 
 @final
@@ -57,9 +58,9 @@ class UnaryExpression(ColumnExpressionBase):
     operator: Literal["-", "begin_of", "end_of"]
     """Operator this expression applies."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return self.operand.gather_required_columns()
+        self.operand.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -121,11 +122,10 @@ class BinaryExpression(ColumnExpressionBase):
     definitions are the same for positive arguments).
     """
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        result = self.a.gather_required_columns()
-        result.update(self.b.gather_required_columns())
-        return result
+        self.a.gather_required_columns(columns)
+        self.b.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -202,9 +202,9 @@ class Reversed(ColumnExpressionBase):
     operand: ColumnExpression
     """Expression to sort on in reverse."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return self.operand.gather_required_columns()
+        self.operand.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:

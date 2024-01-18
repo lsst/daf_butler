@@ -30,17 +30,13 @@ from __future__ import annotations
 __all__ = ("Postprocessing",)
 
 import dataclasses
-import itertools
-from collections.abc import Set
-from typing import TYPE_CHECKING
+from collections.abc import Iterable, Iterator
 
+import sqlalchemy
 from lsst.sphgeom import Region
 
 from ..dimensions import DimensionElement
 from ..queries import tree as qt
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclasses.dataclass
@@ -50,13 +46,37 @@ class Postprocessing:
     )
     spatial_where_filtering: list[tuple[DimensionElement, Region]] = dataclasses.field(default_factory=list)
 
-    def gather_columns_required(self) -> Set[qt.ColumnReference]:
-        result: set[qt.ColumnReference] = set()
-        for element in itertools.chain.from_iterable(self.spatial_join_filtering):
-            result.add(qt.DimensionFieldReference.model_construct(element=element, field="region"))
-        for element, _ in self.spatial_join_filtering:
-            result.add(qt.DimensionFieldReference.model_construct(element=element, field="region"))
-        return result
+    # TODO: make sure offset and limit are only set if there is spatial
+    # filtering.
+
+    offset: int = 0
+
+    limit: int | None = None
 
     def __bool__(self) -> bool:
-        return bool(self.spatial_join_filtering) or bool(self.spatial_where_filtering)
+        return bool(self.spatial_join_filtering or self.spatial_where_filtering)
+
+    def gather_columns_required(self, columns: qt.ColumnSet) -> None:
+        for element in self.iter_region_dimension_elements():
+            columns.update_dimensions(element.minimal_group)
+            columns.dimension_fields[element.name].add("region")
+
+    def iter_region_dimension_elements(self) -> Iterator[DimensionElement]:
+        for a, b in self.spatial_join_filtering:
+            yield a
+            yield b
+        for element, _ in self.spatial_where_filtering:
+            yield element
+
+    def iter_missing(self, columns: qt.ColumnSet) -> Iterator[DimensionElement]:
+        done: set[DimensionElement] = set()
+        for element in self.iter_region_dimension_elements():
+            if element not in done:
+                if "region" not in columns.dimension_fields.get(element.name, frozenset()):
+                    yield element
+                done.add(element)
+
+    def apply(self, rows: Iterable[sqlalchemy.RowMapping]) -> Iterable[sqlalchemy.RowMapping]:
+        if not self:
+            return rows
+        raise NotImplementedError("TODO")

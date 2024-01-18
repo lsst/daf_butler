@@ -51,11 +51,10 @@ import pydantic
 from ...dimensions import DataCoordinate, DataIdValue, DimensionGroup
 from ._base import InvalidQueryTreeError, PredicateBase
 from ._column_expression import ColumnExpression
-from ._column_reference import ColumnReference
 
 if TYPE_CHECKING:
+    from ._column_set import ColumnSet
     from ._query_tree import QueryTree
-
 
 ComparisonOperator: TypeAlias = Literal["==", "!=", "<", ">", ">=", "<=", "overlaps"]
 
@@ -69,9 +68,9 @@ class LiteralTrue(PredicateBase):
 
     predicate_type: Literal["literal_true"] = "literal_true"
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return set()
+        pass
 
     @property
     def precedence(self) -> int:
@@ -97,9 +96,9 @@ class LiteralFalse(PredicateBase):
 
     predicate_type: Literal["literal_false"] = "literal_false"
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return set()
+        pass
 
     @property
     def precedence(self) -> int:
@@ -152,12 +151,10 @@ class LogicalAnd(PredicateBase):
             result = result.logical_and(arg)
         return result
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        result: set[ColumnReference] = set()
         for operand in self.operands:
-            result.update(operand.gather_required_columns())
-        return result
+            operand.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -258,12 +255,10 @@ class LogicalOr(PredicateBase):
             result = result.logical_or(arg)
         return result
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        result: set[ColumnReference] = set()
         for operand in self.operands:
-            result.update(operand.gather_required_columns())
-        return result
+            operand.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -330,9 +325,9 @@ class LogicalNot(PredicateBase):
     operand: LogicalNotOperand
     """Upstream boolean expression to invert."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return self.operand.gather_required_columns()
+        self.operand.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -387,9 +382,9 @@ class IsNull(PredicateBase):
     operand: ColumnExpression
     """Upstream expression to test."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return self.operand.gather_required_columns()
+        self.operand.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -452,11 +447,10 @@ class Comparison(PredicateBase):
     operator: ComparisonOperator
     """Comparison operator."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        result = self.a.gather_required_columns()
-        result.update(self.b.gather_required_columns())
-        return result
+        self.a.gather_required_columns(columns)
+        self.b.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -535,12 +529,10 @@ class InContainer(PredicateBase):
     container: tuple[ColumnExpression, ...]
     """Expressions representing the elements of the container."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
-        # Docstring inherited.
-        result = self.member.gather_required_columns()
-        for operand in self.container:
-            result.update(operand.gather_required_columns())
-        return result
+    def gather_required_columns(self, columns: ColumnSet) -> None:
+        self.member.gather_required_columns(columns)
+        for item in self.container:
+            item.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -604,9 +596,8 @@ class InRange(PredicateBase):
     step: int = 1
     """Difference between values in the range."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
-        # Docstring inherited.
-        return self.member.gather_required_columns()
+    def gather_required_columns(self, columns: ColumnSet) -> None:
+        self.member.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -673,11 +664,11 @@ class InRelation(PredicateBase):
     relation: QueryTree
     """Relation whose rows from `column` represent the container."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         # We're only gathering columns from the relation this predicate is
         # attached to, not `self.column`, which belongs to `self.relation`.
-        return self.member.gather_required_columns()
+        self.member.gather_required_columns(columns)
 
     @property
     def precedence(self) -> int:
@@ -735,6 +726,10 @@ class DataCoordinateConstraint(PredicateBase):
 
     values: tuple[DataIdValue, ...]
     """The required values of the data ID."""
+
+    def gather_required_columns(self, columns: ColumnSet) -> None:
+        # Docstring inherited.
+        columns.update_dimensions(self.dimensions)
 
     @property
     def precedence(self) -> int:

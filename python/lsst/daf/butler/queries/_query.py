@@ -37,17 +37,17 @@ from .._dataset_type import DatasetType
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from ..registry import DatasetTypeError, MissingDatasetTypeError
 from ._base import HomogeneousQueryBase
-from ._data_coordinate_query_results import DataCoordinateQueryResults, DataCoordinateResultSpec
+from ._data_coordinate_query_results import DataCoordinateQueryResults
 from ._dataset_query_results import (
     ChainedDatasetQueryResults,
     DatasetQueryResults,
-    DatasetRefResultSpec,
     SingleTypeDatasetQueryResults,
 )
-from ._dimension_record_query_results import DimensionRecordQueryResults, DimensionRecordResultSpec
+from ._dimension_record_query_results import DimensionRecordQueryResults
 from .convert_args import convert_dataset_search_args, convert_where_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory
+from .result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
 from .tree import (
     DatasetSearch,
     InvalidQueryTreeError,
@@ -82,9 +82,20 @@ class Query(HomogeneousQueryBase):
         super().__init__(driver, tree)
 
     @property
-    def dataset_types(self) -> Set[str]:
-        """The names of dataset types joined into the query."""
+    def all_dataset_types(self) -> Set[str]:
+        """The names of all dataset types joined into the query.
+
+        These dataset types are usable in 'where' expressions, but may or may
+        not be available to result rows.
+        """
         return self._tree.datasets.keys()
+
+    @property
+    def result_dataset_types(self) -> Set[str]:
+        """The names of all dataset types available for result rows and
+        order-by expressions.
+        """
+        return self._tree.available_result_datasets
 
     @property
     def expression_factory(self) -> ExpressionFactory:
@@ -251,6 +262,12 @@ class Query(HomogeneousQueryBase):
         single_type_results: list[SingleTypeDatasetQueryResults] = []
         for resolved_dataset_type, resolved_collections in resolved_dataset_searches:
             tree = self._tree
+            if tree.find_first_dataset is not None and resolved_dataset_type.name != tree.find_first_dataset:
+                raise InvalidQueryTreeError(
+                    f"Query is already a find-first search for {tree.find_first_dataset!r}; cannot "
+                    f"return results for {resolved_dataset_type.name!r} as well. "
+                    "To avoid this error call Query.datasets before Query.find_first."
+                )
             if resolved_dataset_type.name not in tree.datasets:
                 tree = tree.join_dataset(
                     resolved_dataset_type.name,
@@ -267,7 +284,10 @@ class Query(HomogeneousQueryBase):
             if find_first:
                 tree = tree.find_first(resolved_dataset_type.name)
             spec = DatasetRefResultSpec.model_construct(
-                dataset_type=resolved_dataset_type, include_dimension_records=False
+                dataset_type_name=resolved_dataset_type.name,
+                dimensions=resolved_dataset_type.dimensions.as_group(),
+                storage_class_name=resolved_dataset_type.storageClass_name,
+                include_dimension_records=False,
             )
             single_type_results.append(SingleTypeDatasetQueryResults(self._driver, tree=tree, spec=spec))
         if len(single_type_results) == 1:
@@ -314,10 +334,10 @@ class Query(HomogeneousQueryBase):
             include all dimensions in the query.
         datasets : `~collections.abc.Iterable` [ `str` ], optional
             Names of dataset types that should be included in the new query;
-            default is to include all datasets types currently available to the
-            query.  Only resolved datasets UUIDs will actually be materialized;
-            datasets whose UUIDs cannot be resolved be continue to be
-            represented in the query via a join on their dimensions.
+            default is to include `result_dataset_types`.  Only resolved
+            dataset UUIDs will actually be materialized; datasets whose UUIDs
+            cannot be resolved will continue to be represented in the query via
+            a join on their dimensions.
 
         Returns
         -------
@@ -325,9 +345,13 @@ class Query(HomogeneousQueryBase):
             A new query object whose that represents the materialized rows.
         """
         if datasets is None:
-            datasets = frozenset(self._tree.datasets)
+            datasets = frozenset(self.result_dataset_types)
         else:
             datasets = frozenset(datasets)
+            if not (datasets <= self.result_dataset_types):
+                raise InvalidQueryTreeError(
+                    f"Dataset(s) {datasets - self.result_dataset_types} are not available as query results."
+                )
         if dimensions is None:
             dimensions = self._tree.dimensions
         else:
@@ -502,7 +526,7 @@ class Query(HomogeneousQueryBase):
         """
         return Query(
             tree=self._tree.where(
-                *convert_where_args(self.dimensions, self.dataset_types, *args, bind=bind, **kwargs)
+                *convert_where_args(self.dimensions, self.all_dataset_types, *args, bind=bind, **kwargs)
             ),
             driver=self._driver,
         )
@@ -531,6 +555,9 @@ class Query(HomogeneousQueryBase):
         directly by this method, such as prior to a `materialization` or when
         the query is being used as the container in a `query_tree.InRange`
         expression.
+
+        Calling this method on a query that is already a find-first search
+        will replace the current find-first search with the new one.
         """
         if not self._tree.datasets:
             raise InvalidQueryTreeError("Query does not have any dataset searches joined in.")

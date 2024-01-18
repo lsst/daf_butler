@@ -51,10 +51,7 @@ if TYPE_CHECKING:
         Postprocessing,
         SqlBuilder,
     )
-    from ...queries.tree import (  # Future query system (direct,client,server).
-        DimensionFieldReference,
-        Predicate,
-    )
+    from ...queries.tree import Predicate  # Future query system (direct,client,server).
     from .. import queries  # Old Registry.query* system.
     from ._database import Database, StaticTablesContext
 
@@ -367,7 +364,7 @@ class DimensionRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def make_sql_builder(self, element: DimensionElement, fields: Set[DimensionFieldReference]) -> SqlBuilder:
+    def make_sql_builder(self, element: DimensionElement, fields: Set[str]) -> SqlBuilder:
         raise NotImplementedError()
 
     @abstractmethod

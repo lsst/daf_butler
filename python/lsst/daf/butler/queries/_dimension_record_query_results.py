@@ -36,7 +36,7 @@ from ..dimensions import DimensionElement, DimensionRecord, DimensionRecordSet, 
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import DimensionRecordResultSpec
-from .tree import QueryTree
+from .tree import ColumnSet, QueryTree
 
 
 class DimensionRecordQueryResults(QueryResultsBase):
@@ -62,6 +62,7 @@ class DimensionRecordQueryResults(QueryResultsBase):
     """
 
     def __init__(self, driver: QueryDriver, tree: QueryTree, spec: DimensionRecordResultSpec):
+        spec.validate_tree(tree)
         super().__init__(driver, tree)
         self._spec = spec
 
@@ -96,3 +97,6 @@ class DimensionRecordQueryResults(QueryResultsBase):
 
     def _get_datasets(self) -> frozenset[str]:
         return frozenset()
+
+    def _get_result_columns(self) -> ColumnSet:
+        return self._spec.get_result_columns()

@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from lsst.daf.butler.queries.tree._column_set import ColumnSet
+
 __all__ = ("ColumnReference", "DimensionKeyReference", "DimensionFieldReference", "DatasetFieldReference")
 
 from typing import Annotated, Literal, TypeAlias, Union, final
@@ -47,19 +49,14 @@ class DimensionKeyReference(ColumnExpressionBase):
     dimension: Dimension
     """Definition of this dimension."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return {self}
+        columns.update_dimensions(self.dimension.minimal_group)
 
     @property
     def precedence(self) -> int:
         # Docstring inherited.
         return 0
-
-    @property
-    def qualified_name(self) -> str:
-        # Docstring inherited.
-        return self.dimension.name
 
     @property
     def column_type(self) -> ColumnType:
@@ -84,19 +81,15 @@ class DimensionFieldReference(ColumnExpressionBase):
     field: str
     """Name of the field (i.e. column) in the element's logical table."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return {self}
+        columns.update_dimensions(self.element.minimal_group)
+        columns.dimension_fields[self.element.name].add(self.field)
 
     @property
     def precedence(self) -> int:
         # Docstring inherited.
         return 0
-
-    @property
-    def qualified_name(self) -> str:
-        # Docstring inherited.
-        return f"{self.element}:{self.field}"
 
     @property
     def column_type(self) -> ColumnType:
@@ -127,19 +120,14 @@ class DatasetFieldReference(ColumnExpressionBase):
     field: DatasetFieldName
     """Name of the field (i.e. column) in the dataset's logical table."""
 
-    def gather_required_columns(self) -> set[ColumnReference]:
+    def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        return {self}
+        columns.dataset_fields[self.dataset_type].add(self.field)
 
     @property
     def precedence(self) -> int:
         # Docstring inherited.
         return 0
-
-    @property
-    def qualified_name(self) -> str:
-        # Docstring inherited.
-        return f"{self.dataset_type}:{self.field}"
 
     @property
     def column_type(self) -> ColumnType:
