@@ -604,7 +604,8 @@ class ButlerTests(ButlerPutGetTests):
         butler2 = Butler.from_config(butler=butler, collections=["other"])
         self.assertEqual(butler2.collections, ("other",))
         self.assertIsNone(butler2.run)
-        self.assertIs(butler._datastore, butler2._datastore)
+        self.assertEqual(type(butler._datastore), type(butler2._datastore))
+        self.assertEqual(butler._datastore.config, butler2._datastore.config)
 
         # Test that we can use an environment variable to find this
         # repository.
@@ -1823,6 +1824,17 @@ class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.Te
         raise unittest.SkipTest("Postgres config is not compatible with this test.")
 
 
+@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
+class ClonedPostgresPosixDatastoreButlerTestCase(PostgresPosixDatastoreButlerTestCase, unittest.TestCase):
+    """Test that Butler with a Postgres registry still works after cloning."""
+
+    def create_butler(
+        self, run: str, storageClass: StorageClass | str, datasetTypeName: str
+    ) -> tuple[DirectButler, DatasetType]:
+        butler, datasetType = super().create_butler(run, storageClass, datasetTypeName)
+        return butler._clone(run=run), datasetType
+
+
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """InMemoryDatastore specialization of a butler"""
 
@@ -1836,6 +1848,16 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
     def testIngest(self) -> None:
         pass
+
+
+class ClonedSqliteButlerTestCase(InMemoryDatastoreButlerTestCase, unittest.TestCase):
+    """Test that a Butler with a Sqlite registry still works after cloning."""
+
+    def create_butler(
+        self, run: str, storageClass: StorageClass | str, datasetTypeName: str
+    ) -> tuple[DirectButler, DatasetType]:
+        butler, datasetType = super().create_butler(run, storageClass, datasetTypeName)
+        return butler._clone(run=run), datasetType
 
 
 class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):

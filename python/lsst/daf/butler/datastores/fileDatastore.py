@@ -129,8 +129,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         Configuration as either a `Config` object or URI to file.
     bridgeManager : `DatastoreRegistryBridgeManager`
         Object that manages the interface between `Registry` and datastores.
-    butlerRoot : `str`, optional
-        New datastore root to use to override the configuration value.
+    root : `ResourcePath`
+        Root directory URI of this `Datastore`.
+    formatterFactory : `FormatterFactory`
+        Factory for creating instances of formatters.
+    templates : `FileTemplates`
+        File templates that can be used by this `Datastore`.
+    composites : `CompositesMap`
+        Determines whether a dataset should be disassembled on put.
+    trustGetRequest : `bool`
+        Determine whether we can fall back to configuration if a requested
+        dataset is not known to registry.
 
     Raises
     ------
@@ -229,13 +238,20 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
     def __init__(
         self,
-        config: DatastoreConfig | ResourcePathExpression,
+        config: DatastoreConfig,
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: str | None = None,
+        root: ResourcePath,
+        formatterFactory: FormatterFactory,
+        templates: FileTemplates,
+        composites: CompositesMap,
+        trustGetRequest: bool,
     ):
         super().__init__(config, bridgeManager)
-        if "root" not in self.config:
-            raise ValueError("No root directory specified in configuration")
+        self.root = ResourcePath(root)
+        self.formatterFactory = formatterFactory
+        self.templates = templates
+        self.composites = composites
+        self.trustGetRequest = trustGetRequest
 
         # Name ourselves either using an explicit name or a name
         # derived from the (unexpanded) root
@@ -246,23 +262,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # datastore can be moved without having to update registry.
             self.name = "{}@{}".format(type(self).__name__, self.config["root"])
 
-        # Support repository relocation in config
-        # Existence of self.root is checked in subclass
-        self.root = ResourcePath(
-            replaceRoot(self.config["root"], butlerRoot), forceDirectory=True, forceAbsolute=True
-        )
-
         self.locationFactory = LocationFactory(self.root)
-        self.formatterFactory = FormatterFactory()
-
-        # Now associate formatters with storage classes
-        self.formatterFactory.registerFormatters(self.config["formatters"], universe=bridgeManager.universe)
-
-        # Read the file naming templates
-        self.templates = FileTemplates(self.config["templates"], universe=bridgeManager.universe)
-
-        # See if composites should be disassembled
-        self.composites = CompositesMap(self.config["composites"], universe=bridgeManager.universe)
 
         self._opaque_table_name = self.config["records", "table"]
         try:
@@ -284,16 +284,44 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # Determine whether checksums should be used - default to False
         self.useChecksum = self.config.get("checksum", False)
 
-        # Determine whether we can fall back to configuration if a
-        # requested dataset is not known to registry
-        self.trustGetRequest = self.config.get("trust_get_request", False)
-
         # Create a cache manager
         self.cacheManager: AbstractDatastoreCacheManager
         if "cached" in self.config:
             self.cacheManager = DatastoreCacheManager(self.config["cached"], universe=bridgeManager.universe)
         else:
             self.cacheManager = DatastoreDisabledCacheManager("", universe=bridgeManager.universe)
+
+    @classmethod
+    def _create_from_config(
+        cls,
+        config: DatastoreConfig,
+        bridgeManager: DatastoreRegistryBridgeManager,
+        butlerRoot: ResourcePathExpression | None,
+    ) -> FileDatastore:
+        if "root" not in config:
+            raise ValueError("No root directory specified in configuration")
+
+        # Support repository relocation in config
+        # Existence of self.root is checked in subclass
+        root = ResourcePath(replaceRoot(config["root"], butlerRoot), forceDirectory=True, forceAbsolute=True)
+
+        # Now associate formatters with storage classes
+        formatterFactory = FormatterFactory()
+        formatterFactory.registerFormatters(config["formatters"], universe=bridgeManager.universe)
+
+        # Read the file naming templates
+        templates = FileTemplates(config["templates"], universe=bridgeManager.universe)
+
+        # See if composites should be disassembled
+        composites = CompositesMap(config["composites"], universe=bridgeManager.universe)
+
+        # Determine whether we can fall back to configuration if a
+        # requested dataset is not known to registry
+        trustGetRequest = config.get("trust_get_request", False)
+
+        self = FileDatastore(
+            config, bridgeManager, root, formatterFactory, templates, composites, trustGetRequest
+        )
 
         # Check existence and create directory structure if necessary
         if not self.root.exists():
@@ -305,6 +333,19 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 raise ValueError(
                     f"Can not create datastore root '{self.root}', check permissions. Got error: {e}"
                 ) from e
+
+        return self
+
+    def clone(self, bridgeManager: DatastoreRegistryBridgeManager) -> Datastore:
+        return FileDatastore(
+            self.config,
+            bridgeManager,
+            self.root,
+            self.formatterFactory,
+            self.templates,
+            self.composites,
+            self.trustGetRequest,
+        )
 
     def __str__(self) -> str:
         return str(self.root)

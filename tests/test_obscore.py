@@ -519,6 +519,17 @@ class SQLiteObsCoreTest(ObsCoreTests, unittest.TestCase):
         return config
 
 
+class ClonedSqliteObscoreTest(SQLiteObsCoreTest, unittest.TestCase):
+    """Unit test for obscore manager created via clone()"""
+
+    def make_registry(
+        self, collections: list[str] | None = None, collection_type: str | None = None
+    ) -> SqlRegistry:
+        """Create new empty Registry."""
+        original = super().make_registry(collections, collection_type)
+        return original.copy()
+
+
 @unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresObsCoreTest(ObsCoreTests, unittest.TestCase):
     """Unit test for obscore with PostgreSQL backend."""

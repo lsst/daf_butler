@@ -276,7 +276,8 @@ class SqlRegistry:
 
     def copy(self, defaults: RegistryDefaults | None = None) -> SqlRegistry:
         """Create a new `SqlRegistry` backed by the same data repository
-        and connection as this one, but independent defaults.
+        as this one and sharing a database connection pool with it, but with
+        independent defaults and database sessions.
 
         Parameters
         ----------
@@ -289,19 +290,14 @@ class SqlRegistry:
         -------
         copy : `SqlRegistry`
             A new `SqlRegistry` instance with its own defaults.
-
-        Notes
-        -----
-        Because the new registry shares a connection with the original, they
-        also share transaction state (despite the fact that their `transaction`
-        context manager methods do not reflect this), and must be used with
-        care.
         """
         if defaults is None:
             # No need to copy, because `RegistryDefaults` is immutable; we
             # effectively copy on write.
             defaults = self.defaults
-        result = SqlRegistry(self._db, defaults, self._managers)
+        db = self._db.clone()
+        result = SqlRegistry(db, defaults, self._managers.clone(db))
+        result._datastore_record_classes = dict(self._datastore_record_classes)
         result.dimension_record_cache.load_from(self.dimension_record_cache)
         return result
 
@@ -2588,6 +2584,10 @@ class SqlRegistry:
                 # just validating configuration.
                 pass
         self._datastore_record_classes = datastore_record_classes
+
+    def preload_cache(self) -> None:
+        """Immediately load caches that are used for common operations."""
+        self.dimension_record_cache.preload_cache()
 
     @property
     def obsCoreTableManager(self) -> ObsCoreTableManager | None:

@@ -261,3 +261,21 @@ class OpaqueTableStorageManager(VersionedExtension):
         This operation may not be invoked within a transaction context block.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def clone(self, db: Database) -> OpaqueTableStorageManager:
+        """Make an independent copy of this manager instance bound to a new
+        `Database` instance.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating the manager.
+
+        Returns
+        -------
+        instance : `OpaqueTableStorageManager`
+            New manager instance with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        raise NotImplementedError()

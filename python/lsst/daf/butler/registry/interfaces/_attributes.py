@@ -187,3 +187,21 @@ class ButlerAttributeManager(VersionedExtension):
             True if there are no any attributes defined.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def clone(self, db: Database) -> ButlerAttributeManager:
+        """Make an independent copy of this manager instance bound to a new
+        `Database` instance.
+
+        Parameters
+        ----------
+        db : `Database`
+            New `Database` object to use when instantiating the manager.
+
+        Returns
+        -------
+        instance : `ButlerAttributeManager`
+            New manager instance with the same configuration as this instance,
+            but bound to a new Database object.
+        """
+        raise NotImplementedError()

@@ -120,6 +120,11 @@ class RegistryDefaults:
             Raised if a non-governor dimension was included in ``**kwargs``
             at construction.
         """
+        # Skip re-initialization if it's already been completed.
+        # Can't just say 'self._finished' because this class is immutable.
+        if hasattr(self, "_finished"):
+            return
+
         allGovernorDimensions = registry.dimensions.governor_dimensions
         if not self._kwargs.keys() <= allGovernorDimensions.names:
             raise TypeError(
@@ -142,6 +147,8 @@ class RegistryDefaults:
                         (value,) = values
                         self._kwargs[dimensionName] = value
         self.dataId = registry.expandDataId(self._kwargs, withDefaults=False)
+
+        self._finished = True
 
     collections: Sequence[str]
     """The collections to search by default, in order

@@ -232,11 +232,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     ) -> DirectButler:
         # Docstring inherited
         defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
+        registry = self._registry.copy(defaults)
 
         return DirectButler(
-            registry=self._registry.copy(defaults),
+            registry=registry,
             config=self._config,
-            datastore=self._datastore,
+            datastore=self._datastore.clone(registry.getDatastoreBridgeManager()),
             storageClasses=self.storageClasses,
         )
 
@@ -2194,6 +2195,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         if explain and not data_ids:
             raise EmptyQueryResultError(list(result.explain_no_results()))
         return data_ids
+
+    def _preload_cache(self) -> None:
+        """Immediately load caches that are used for common operations."""
+        self._registry.preload_cache()
 
     _config: ButlerConfig
     """Configuration for this Butler instance."""

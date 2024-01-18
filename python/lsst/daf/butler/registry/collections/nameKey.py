@@ -47,7 +47,7 @@ from ._base import (
 
 if TYPE_CHECKING:
     from .._caching_context import CachingContext
-    from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext
+    from ..interfaces import Database, StaticTablesContext
 
 
 _KEY_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True)
@@ -90,7 +90,6 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
         db: Database,
         context: StaticTablesContext,
         *,
-        dimensions: DimensionRecordStorageManager,
         caching_context: CachingContext,
         registry_schema_version: VersionTuple | None = None,
     ) -> NameKeyCollectionManager:
@@ -99,9 +98,17 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
             db,
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
             collectionIdName="name",
-            dimensions=dimensions,
             caching_context=caching_context,
             registry_schema_version=registry_schema_version,
+        )
+
+    def clone(self, db: Database, caching_context: CachingContext) -> NameKeyCollectionManager:
+        return NameKeyCollectionManager(
+            db,
+            tables=self._tables,
+            collectionIdName=self._collectionIdName,
+            caching_context=caching_context,
+            registry_schema_version=self._registry_schema_version,
         )
 
     @classmethod

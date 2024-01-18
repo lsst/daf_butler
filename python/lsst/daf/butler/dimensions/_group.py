@@ -171,12 +171,11 @@ class DimensionGroup:  # numpydoc ignore=PR02
             names = frozenset(names)
         # Look in the cache of existing groups, with the expanded set of names.
         cache_key = frozenset(names)
-        self = universe._cached_groups.get(cache_key, None)
+        self = universe._cached_groups.get(cache_key)
         if self is not None:
             return self
         # This is apparently a new group.  Create it, and add it to the cache.
         self = super().__new__(cls)
-        universe._cached_groups[cache_key] = self
         self.universe = universe
         # Reorder dimensions by iterating over the universe (which is
         # ordered already) and extracting the ones in the set.
@@ -224,7 +223,7 @@ class DimensionGroup:  # numpydoc ignore=PR02
         self._data_coordinate_indices = {
             name: i for i, name in enumerate(itertools.chain(self.required, self.implied))
         }
-        return self
+        return universe._cached_groups.set_or_get(cache_key, self)
 
     def __getnewargs__(self) -> tuple:
         return (self.universe, self.names._seq, False)

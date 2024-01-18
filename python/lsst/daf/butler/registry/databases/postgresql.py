@@ -84,7 +84,6 @@ class PostgresqlDatabase(Database):
         namespace: str | None = None,
         writeable: bool = True,
     ):
-        super().__init__(origin=origin, engine=engine, namespace=namespace)
         with engine.connect() as connection:
             # `Any` to make mypy ignore the line below, can't use type: ignore
             dbapi: Any = connection.connection
@@ -103,10 +102,42 @@ class PostgresqlDatabase(Database):
                     "`CREATE EXTENSION btree_gist;` in a database before a butler client for it is "
                     " initialized."
                 )
-        self.namespace = namespace
-        self.dbname = dsn.get("dbname")
+        self._init(
+            engine=engine,
+            origin=origin,
+            namespace=namespace,
+            writeable=writeable,
+            dbname=dsn.get("dbname"),
+            metadata=None,
+        )
+
+    def _init(
+        self,
+        *,
+        engine: sqlalchemy.engine.Engine,
+        origin: int,
+        namespace: str | None = None,
+        writeable: bool = True,
+        dbname: str,
+        metadata: sqlalchemy.schema.MetaData | None,
+    ) -> None:
+        # Initialization logic shared between ``__init__`` and ``clone``.
+        super().__init__(origin=origin, engine=engine, namespace=namespace, metadata=metadata)
         self._writeable = writeable
+        self.dbname = dbname
         self._shrinker = NameShrinker(self.dialect.max_identifier_length)
+
+    def clone(self) -> PostgresqlDatabase:
+        clone = self.__new__(type(self))
+        clone._init(
+            origin=self.origin,
+            engine=self._engine,
+            namespace=self.namespace,
+            writeable=self._writeable,
+            dbname=self.dbname,
+            metadata=self._metadata,
+        )
+        return clone
 
     @classmethod
     def makeEngine(

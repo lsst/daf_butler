@@ -232,6 +232,10 @@ class Database(ABC):
         `sqlalchemy.schema.MetaData` instance.  We use ``namespace`` instead to
         avoid confusion between "schema means namespace" and "schema means
         table definitions".
+    metadata : `sqlalchemy.schema.MetaData`, optional
+        Object representing the tables and other schema entities.  If not
+        provided, will be generated during the next call to
+        ``declareStaticTables``.
 
     Notes
     -----
@@ -259,12 +263,19 @@ class Database(ABC):
     ``_connection``.
     """
 
-    def __init__(self, *, origin: int, engine: sqlalchemy.engine.Engine, namespace: str | None = None):
+    def __init__(
+        self,
+        *,
+        origin: int,
+        engine: sqlalchemy.engine.Engine,
+        namespace: str | None = None,
+        metadata: sqlalchemy.schema.MetaData | None = None,
+    ):
         self.origin = origin
         self.namespace = namespace
         self._engine = engine
         self._session_connection: sqlalchemy.engine.Connection | None = None
-        self._metadata: sqlalchemy.schema.MetaData | None = None
+        self._metadata = metadata
         self._temp_tables: set[str] = set()
 
     def __repr__(self) -> str:
@@ -331,6 +342,18 @@ class Database(ABC):
         return cls.fromEngine(
             cls.makeEngine(uri, writeable=writeable), origin=origin, namespace=namespace, writeable=writeable
         )
+
+    @abstractmethod
+    def clone(self) -> Database:
+        """Make an independent copy of this `Database` object.
+
+        Returns
+        -------
+        db : `Database`
+            A new `Database` instance with the same configuration as this
+            instance.
+        """
+        raise NotImplementedError()
 
     @classmethod
     @abstractmethod
