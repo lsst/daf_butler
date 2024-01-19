@@ -30,21 +30,29 @@ from __future__ import annotations
 __all__ = ("convert_dimension_record_results",)
 
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import sqlalchemy
 
 from ..dimensions import DimensionRecordSet
-from ..queries.driver import DimensionRecordResultPage, PageKey
-from ..queries.result_specs import DimensionRecordResultSpec
+
+if TYPE_CHECKING:
+    from ..queries.driver import DimensionRecordResultPage, PageKey
+    from ..queries.result_specs import DimensionRecordResultSpec
+    from ..registry.nameShrinker import NameShrinker
 
 
 def convert_dimension_record_results(
-    raw_rows: Iterable[sqlalchemy.Row], spec: DimensionRecordResultSpec, next_key: PageKey | None
+    raw_rows: Iterable[sqlalchemy.Row],
+    spec: DimensionRecordResultSpec,
+    next_key: PageKey | None,
+    name_shrinker: NameShrinker,
 ) -> DimensionRecordResultPage:
     record_set = DimensionRecordSet(spec.element)
     columns = spec.get_result_columns()
     column_mapping = [
-        (field, columns.get_qualified_name(spec.element.name, field)) for field in spec.element.schema.names
+        (field, name_shrinker.shrink(columns.get_qualified_name(spec.element.name, field)))
+        for field in spec.element.schema.names
     ]
     record_cls = spec.element.RecordClass
     if not spec.element.temporal:

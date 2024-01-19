@@ -42,6 +42,7 @@ from ._postprocessing import Postprocessing
 
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
+    from ..registry.nameShrinker import NameShrinker
     from ..timespan_database_representation import TimespanDatabaseRepresentation
 
 
@@ -97,6 +98,7 @@ class _BaseSqlBuilder:
     def select(
         self,
         columns: qt.ColumnSet,
+        name_shrinker: NameShrinker,
         postprocessing: Postprocessing | None = None,
         *,
         sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
@@ -107,6 +109,7 @@ class _BaseSqlBuilder:
     def make_table_spec(
         self,
         columns: qt.ColumnSet,
+        name_shrinker: NameShrinker,
         postprocessing: Postprocessing | None = None,
     ) -> ddl.TableSpec:
         results = ddl.TableSpec(
@@ -115,7 +118,9 @@ class _BaseSqlBuilder:
         if postprocessing:
             for element in postprocessing.iter_missing(columns):
                 results.fields.add(
-                    ddl.FieldSpec.for_region(columns.get_qualified_name(element.name, "region"))
+                    ddl.FieldSpec.for_region(
+                        name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
+                    )
                 )
         return results
 
@@ -128,6 +133,7 @@ class EmptySqlBuilder(_BaseSqlBuilder):
     def select(
         self,
         columns: qt.ColumnSet,
+        name_shrinker: NameShrinker,
         postprocessing: Postprocessing | None = None,
         *,
         sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
@@ -154,9 +160,9 @@ class SqlBuilder(_BaseSqlBuilder):
             self.dimensions_provided[v] = [self.sql_from_clause.columns[k]]
         return self
 
-    def extract_columns(self, columns: qt.ColumnSet) -> SqlBuilder:
+    def extract_columns(self, columns: qt.ColumnSet, name_shrinker: NameShrinker) -> SqlBuilder:
         for logical_table, field in columns:
-            name = columns.get_qualified_name(logical_table, field)
+            name = name_shrinker.shrink(columns.get_qualified_name(logical_table, field))
             if field is None:
                 self.dimensions_provided[logical_table].append(self.sql_from_clause.columns[name])
             elif columns.is_timespan(logical_table, field):
@@ -183,6 +189,7 @@ class SqlBuilder(_BaseSqlBuilder):
     def select(
         self,
         columns: qt.ColumnSet,
+        name_shrinker: NameShrinker,
         postprocessing: Postprocessing | None = None,
         *,
         sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
@@ -203,7 +210,7 @@ class SqlBuilder(_BaseSqlBuilder):
             ] = []
             uniqueness_category: Literal["key", "natural", "aggregate"]
             for logical_table, field in columns:
-                name = columns.get_qualified_name(logical_table, field)
+                name = name_shrinker.shrink(columns.get_qualified_name(logical_table, field))
                 uniqueness_category = columns.get_uniqueness_category(logical_table, field)
                 if field is None:
                     column_triples.append(
@@ -223,7 +230,7 @@ class SqlBuilder(_BaseSqlBuilder):
                     )
             if postprocessing is not None:
                 for element in postprocessing.iter_missing(columns):
-                    name = columns.get_qualified_name(element.name, "region")
+                    name = name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
                     sql_region_column = self.fields_provided[element.name]["region"]
                     if element.name not in columns.dimensions.elements:
                         sql_region_column = ddl.Base64Region.union_agg(sql_region_column)
@@ -236,7 +243,7 @@ class SqlBuilder(_BaseSqlBuilder):
             # Easy case with no DISTINCT [ON] or GROUP BY.
             sql_columns = list(sql_columns)
             for logical_table, field in columns:
-                name = columns.get_qualified_name(logical_table, field)
+                name = name_shrinker.shrink(columns.get_qualified_name(logical_table, field))
                 if field is None:
                     sql_columns.append(self.dimensions_provided[logical_table][0].label(name))
                 elif columns.is_timespan(logical_table, field):
@@ -247,7 +254,7 @@ class SqlBuilder(_BaseSqlBuilder):
                 for element in postprocessing.iter_missing(columns):
                     sql_columns.append(
                         self.fields_provided[element.name]["region"].label(
-                            columns.get_qualified_name(element.name, "region")
+                            name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
                         )
                     )
             self.handle_empty_columns(sql_columns)

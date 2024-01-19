@@ -31,12 +31,16 @@ __all__ = ("Postprocessing",)
 
 import dataclasses
 from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING
 
 import sqlalchemy
 from lsst.sphgeom import DISJOINT, Region
 
-from ..dimensions import DimensionElement
 from ..queries import tree as qt
+
+if TYPE_CHECKING:
+    from ..dimensions import DimensionElement
+    from ..registry.nameShrinker import NameShrinker
 
 
 @dataclasses.dataclass
@@ -76,18 +80,18 @@ class Postprocessing:
                     yield element
                 done.add(element)
 
-    def apply(self, rows: Iterable[sqlalchemy.Row]) -> Iterable[sqlalchemy.Row]:
+    def apply(self, rows: Iterable[sqlalchemy.Row], name_shrinker: NameShrinker) -> Iterable[sqlalchemy.Row]:
         if not self:
             yield from rows
         joins = [
             (
-                qt.ColumnSet.get_qualified_name(a.name, "region"),
-                qt.ColumnSet.get_qualified_name(b.name, "region"),
+                name_shrinker.shrink(qt.ColumnSet.get_qualified_name(a.name, "region")),
+                name_shrinker.shrink(qt.ColumnSet.get_qualified_name(b.name, "region")),
             )
             for a, b in self.spatial_join_filtering
         ]
         where = [
-            (qt.ColumnSet.get_qualified_name(element.name, "region"), region)
+            (name_shrinker.shrink(qt.ColumnSet.get_qualified_name(element.name, "region")), region)
             for element, region in self.spatial_where_filtering
         ]
         for row in rows:

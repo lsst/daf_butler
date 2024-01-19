@@ -60,6 +60,7 @@ from ..queries.result_specs import (
 from ..registry import CollectionSummary, CollectionType, RegistryDefaults
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
+from ..registry.nameShrinker import NameShrinker
 from ._convert_results import convert_dimension_record_results
 
 if TYPE_CHECKING:
@@ -114,6 +115,7 @@ class DirectQueryDriver(QueryDriver):
         self._raw_page_size = raw_page_size
         self._postprocessing_filter_factor = postprocessing_filter_factor
         self._active_pages: dict[PageKey, tuple[Iterator[Sequence[sqlalchemy.Row]], Postprocessing]] = {}
+        self._name_shrinker = NameShrinker(self._db.dialect.max_identifier_length)
 
     def __enter__(self) -> None:
         self._exit_stack = ExitStack()
@@ -160,7 +162,9 @@ class DirectQueryDriver(QueryDriver):
         # Build the FROM and WHERE clauses and identify any post-query
         # processing we need to run.
         sql_builder, postprocessing, needs_distinct = self._make_sql_builder(tree, required_columns)
-        sql_select = sql_builder.select(result_columns, postprocessing, distinct=needs_distinct)
+        sql_select = sql_builder.select(
+            result_columns, self._name_shrinker, postprocessing, distinct=needs_distinct
+        )
         if result_spec.order_by:
             sql_select = sql_select.order_by(
                 *[self._build_sql_order_by_expression(sql_builder, term) for term in result_spec.order_by]
@@ -228,9 +232,11 @@ class DirectQueryDriver(QueryDriver):
                 columns.dataset_fields[dataset_type].add("dataset_id")
                 resolved_datasets.add(dataset_type)
         sql_builder, postprocessing, needs_distinct = self._make_sql_builder(tree, columns)
-        sql_select = sql_builder.select(columns, postprocessing, distinct=needs_distinct)
+        sql_select = sql_builder.select(columns, self._name_shrinker, postprocessing, distinct=needs_distinct)
         table = self._exit_stack.enter_context(
-            self._db.temporary_table(sql_builder.make_table_spec(columns, postprocessing))
+            self._db.temporary_table(
+                sql_builder.make_table_spec(columns, self._name_shrinker, postprocessing)
+            )
         )
         self._db.insert(table, select=sql_select)
         key = uuid.uuid4()
@@ -276,23 +282,29 @@ class DirectQueryDriver(QueryDriver):
         if postprocessing and exact:
             if not discard:
                 raise RuntimeError("Cannot count query rows exactly without discarding them.")
-            sql_select = sql_builder.select(columns, postprocessing, distinct=needs_distinct)
+            sql_select = sql_builder.select(
+                columns, self._name_shrinker, postprocessing, distinct=needs_distinct
+            )
             n = 0
             with self._db.query(sql_select.execution_options(yield_per=self._raw_page_size)) as results:
-                for _ in postprocessing.apply(results):
+                for _ in postprocessing.apply(results, self._name_shrinker):
                     n + 1
             return n
         # If we have postprocessing but exact=False, it means we pretend
         # there was no postprocessing.
         if needs_distinct:
             # Make a subquery with DISTINCT [ON] or GROUP BY as needed.
-            sql_select = sql_builder.select(columns, postprocessing, distinct=needs_distinct)
+            sql_select = sql_builder.select(
+                columns, self._name_shrinker, postprocessing, distinct=needs_distinct
+            )
             # Do COUNT(*) on that subquery.
             sql_select = sqlalchemy.select(sqlalchemy.count()).select_from(sql_select.subquery())
         else:
             # Do COUNT(*) on the original query's FROM clause.
             sql_select = sql_builder.select(
-                qt.ColumnSet(self._universe.empty.as_group()), sql_columns=sqlalchemy.func.count()
+                qt.ColumnSet(self._universe.empty.as_group()),
+                self._name_shrinker,
+                sql_columns=sqlalchemy.func.count(),
             )
         with self._db.query(sql_select) as result:
             return cast(int, result.scalar())
@@ -308,14 +320,14 @@ class DirectQueryDriver(QueryDriver):
         columns = qt.ColumnSet(tree.dimensions)
         sql_builder, postprocessing, _ = self._make_sql_builder(tree, columns)
         if postprocessing and exact:
-            sql_select = sql_builder.select(columns, postprocessing)
+            sql_select = sql_builder.select(columns, self._name_shrinker, postprocessing)
             with self._db.query(
                 sql_select.execution_options(yield_per=self._postprocessing_filter_factor)
             ) as result:
-                for _ in postprocessing.apply(result):
+                for _ in postprocessing.apply(result, self._name_shrinker):
                     return True
                 return False
-        sql_select = sql_builder.select(columns).limit(1)
+        sql_select = sql_builder.select(columns, self._name_shrinker).limit(1)
         with self._db.query(sql_select) as result:
             return result.first() is not None
 
@@ -499,14 +511,18 @@ class DirectQueryDriver(QueryDriver):
         # we mostly get from _make_vanilla_sql_builder.
         columns.dataset_fields[dataset_type].add("rank")
         base_sql_builder, postprocessing = self._make_vanilla_sql_builder(tree, columns.copy())
-        base_select = base_sql_builder.select(columns, postprocessing, distinct=needs_distinct)
+        base_select = base_sql_builder.select(
+            columns, self._name_shrinker, postprocessing, distinct=needs_distinct
+        )
         base_cte = base_select.cte(f"{dataset_type}_base")
         # Now we fill out the "window" subquery. Once again the SELECT clause
         # is populated by 'internal_columns', but onter dropping the 'rank'
         # column from it.
         partition_by = [base_cte.columns[d] for d in columns.dimensions.required]
         rownum_sql_column: sqlalchemy.ColumnElement[int] = sqlalchemy.sql.func.row_number()
-        rank_sql_column = base_cte.columns[columns.get_qualified_name(dataset_type, "rank")]
+        rank_sql_column = base_cte.columns[
+            self._name_shrinker.shrink(columns.get_qualified_name(dataset_type, "rank"))
+        ]
         if partition_by:
             rownum_sql_column = rownum_sql_column.over(partition_by=partition_by, order_by=rank_sql_column)
         else:
@@ -514,14 +530,14 @@ class DirectQueryDriver(QueryDriver):
         columns.dataset_fields[dataset_type].remove("rank")
         window_select = (
             SqlBuilder(self._db, base_cte)
-            .extract_columns(columns)
-            .select(columns, postprocessing, sql_columns=partition_by)
+            .extract_columns(columns, self._name_shrinker)
+            .select(columns, self._name_shrinker, postprocessing, sql_columns=partition_by)
         )
         window_subquery = window_select.subquery(f"{dataset_type}_window")
         # For the outermost SELECT we again propagate the `internal_columns`
         sql_builder = (
             SqlBuilder(self._db, window_subquery)
-            .extract_columns(columns)
+            .extract_columns(columns, self._name_shrinker)
             .where_sql(window_subquery.columns.rownum == 1)
         )
         return sql_builder, postprocessing, False
@@ -671,6 +687,11 @@ class DirectQueryDriver(QueryDriver):
             next_key = None
         match result_spec:
             case DimensionRecordResultSpec():
-                return convert_dimension_record_results(postprocessing.apply(raw_page), result_spec, next_key)
+                return convert_dimension_record_results(
+                    postprocessing.apply(raw_page, self._name_shrinker),
+                    result_spec,
+                    next_key,
+                    self._name_shrinker,
+                )
             case _:
                 raise NotImplementedError("TODO")
