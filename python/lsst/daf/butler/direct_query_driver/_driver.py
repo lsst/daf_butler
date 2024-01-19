@@ -31,7 +31,7 @@ import uuid
 
 __all__ = ("DirectQueryDriver",)
 
-from collections.abc import Iterable, Set
+from collections.abc import Iterable, Iterator, Sequence, Set
 from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast, overload
 
@@ -60,6 +60,7 @@ from ..queries.result_specs import (
 from ..registry import CollectionSummary, CollectionType, RegistryDefaults
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
+from ._convert_results import convert_dimension_record_results
 
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
@@ -82,6 +83,15 @@ class DirectQueryDriver(QueryDriver):
     defaults : `RegistryDefaults`
         Struct holding the default collection search path and governor
         dimensions.
+    raw_page_size : `int`, optional
+        Number of database rows to fetch for each result page.  The actual
+        number of rows in a page may be smaller due to postprocessing.
+    postprocessing_filter_factor : `int`, optional
+        The number of database rows we expect to have to fetch to yield a
+        single output row for queries that involve postprocessing.  This is
+        purely a performance tuning parameter that attempts to balance between
+        fetching too much and requiring multiple fetches; the true value is
+        highly dependent on the actual query.
     """
 
     def __init__(
@@ -90,6 +100,8 @@ class DirectQueryDriver(QueryDriver):
         universe: DimensionUniverse,
         managers: RegistryManagerInstances,
         defaults: RegistryDefaults,
+        raw_page_size: int = 10000,
+        postprocessing_filter_factor: int = 10,
     ):
         self._db = db
         self._universe = universe
@@ -99,6 +111,9 @@ class DirectQueryDriver(QueryDriver):
         self._materialization_tables: dict[qt.MaterializationKey, sqlalchemy.Table] = {}
         self._upload_tables: dict[qt.DataCoordinateUploadKey, sqlalchemy.Table] = {}
         self._exit_stack: ExitStack | None = None
+        self._raw_page_size = raw_page_size
+        self._postprocessing_filter_factor = postprocessing_filter_factor
+        self._active_pages: dict[PageKey, tuple[Iterator[Sequence[sqlalchemy.Row]], Postprocessing]] = {}
 
     def __enter__(self) -> None:
         self._exit_stack = ExitStack()
@@ -132,7 +147,8 @@ class DirectQueryDriver(QueryDriver):
 
     def execute(self, result_spec: ResultSpec, tree: qt.QueryTree) -> ResultPage:
         # Docstring inherited.
-
+        if self._exit_stack is None:
+            raise RuntimeError("QueryDriver context must be entered before 'materialize' is called.")
         # Make a set of the columns the query needs to make available to the
         # SELECT clause and any ORDER BY or GROUP BY clauses.  This does not
         # include columns needed only by the WHERE or JOIN ON clauses (those
@@ -159,7 +175,18 @@ class DirectQueryDriver(QueryDriver):
                 sql_select = sql_select.offset(result_spec.offset)
             else:
                 postprocessing.offset = result_spec.offset
-        raise NotImplementedError("TODO: use server-side cursors, process first page, store the cursor.")
+        if postprocessing.limit is not None:
+            # We might want to fetch many fewer rows that the default page
+            # size if we have to implement offset and limit in postprocessing.
+            raw_page_size = min(
+                self._postprocessing_filter_factor * (postprocessing.offset + postprocessing.limit),
+                self._raw_page_size,
+            )
+        cursor = self._exit_stack.enter_context(
+            self._db.query(sql_select.execution_options(yield_per=raw_page_size))
+        )
+        raw_page_iter = cursor.partitions()
+        return self._process_page(raw_page_iter, result_spec, postprocessing)
 
     @overload
     def fetch_next_page(
@@ -182,7 +209,8 @@ class DirectQueryDriver(QueryDriver):
         ...
 
     def fetch_next_page(self, result_spec: ResultSpec, key: PageKey) -> ResultPage:
-        raise NotImplementedError("TODO")
+        raw_page_iter, postprocessing = self._active_pages.pop(key)
+        return self._process_page(raw_page_iter, result_spec, postprocessing)
 
     def materialize(
         self,
@@ -250,8 +278,8 @@ class DirectQueryDriver(QueryDriver):
                 raise RuntimeError("Cannot count query rows exactly without discarding them.")
             sql_select = sql_builder.select(columns, postprocessing, distinct=needs_distinct)
             n = 0
-            with self._db.query(sql_select) as results:
-                for _ in postprocessing.apply(results.mappings()):
+            with self._db.query(sql_select.execution_options(yield_per=self._raw_page_size)) as results:
+                for _ in postprocessing.apply(results):
                     n + 1
             return n
         # If we have postprocessing but exact=False, it means we pretend
@@ -281,8 +309,10 @@ class DirectQueryDriver(QueryDriver):
         sql_builder, postprocessing, _ = self._make_sql_builder(tree, columns)
         if postprocessing and exact:
             sql_select = sql_builder.select(columns, postprocessing)
-            with self._db.query(sql_select) as result:  # TODO: use server-side cursor here.
-                for _ in postprocessing.apply(result.mappings()):
+            with self._db.query(
+                sql_select.execution_options(yield_per=self._postprocessing_filter_factor)
+            ) as result:
+                for _ in postprocessing.apply(result):
                     return True
                 return False
         sql_select = sql_builder.select(columns).limit(1)
@@ -619,3 +649,28 @@ class DirectQueryDriver(QueryDriver):
             case _:
                 raise NotImplementedError("TODO")
         raise AssertionError(f"Unexpected column predicate {predicate}.")
+
+    def _process_page(
+        self,
+        raw_page_iter: Iterator[Sequence[sqlalchemy.Row]],
+        result_spec: ResultSpec,
+        postprocessing: Postprocessing,
+    ) -> ResultPage:
+        try:
+            raw_page = next(raw_page_iter)
+        except StopIteration:
+            raw_page = tuple()
+        if len(raw_page) == self._raw_page_size:
+            # There's some chance we got unlucky and this page exactly finishes
+            # off the query, and we won't know the next page does not exist
+            # until we try to fetch it.  But that's better than always fetching
+            # the next page up front.
+            next_key = uuid.uuid4()
+            self._active_pages[next_key] = (raw_page_iter, postprocessing)
+        else:
+            next_key = None
+        match result_spec:
+            case DimensionRecordResultSpec():
+                return convert_dimension_record_results(postprocessing.apply(raw_page), result_spec, next_key)
+            case _:
+                raise NotImplementedError("TODO")

@@ -76,7 +76,7 @@ class Postprocessing:
                     yield element
                 done.add(element)
 
-    def apply(self, rows: Iterable[sqlalchemy.RowMapping]) -> Iterable[sqlalchemy.RowMapping]:
+    def apply(self, rows: Iterable[sqlalchemy.Row]) -> Iterable[sqlalchemy.Row]:
         if not self:
             return rows
         raise NotImplementedError("TODO")
