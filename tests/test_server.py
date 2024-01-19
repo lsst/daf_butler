@@ -36,13 +36,13 @@ try:
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
-    from lsst.daf.butler.remote_butler.server import app
+    from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
     from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
     from moto import mock_s3
 except ImportError:
     TestClient = None
-    app = None
+    create_app = None
 
 from unittest.mock import patch
 
@@ -86,7 +86,7 @@ def _make_remote_butler(http_client, *, collections: str | None = None):
     return factory.create_butler_for_access_token("fake-access-token", butler_options=options)
 
 
-@unittest.skipIf(TestClient is None or app is None, "FastAPI not installed.")
+@unittest.skipIf(TestClient is None or create_app is None, "FastAPI not installed.")
 class ButlerClientServerTestCase(unittest.TestCase):
     """Test for Butler client/server."""
 
@@ -119,6 +119,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Override the server's Butler initialization to point at our test repo
         server_butler_factory = LabeledButlerFactory({TEST_REPOSITORY_NAME: cls.root})
 
+        app = create_app()
         app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
 
         # Set up the RemoteButler that will connect to the server
@@ -145,7 +146,6 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        del app.dependency_overrides[butler_factory_dependency]
         removeTestTempDir(cls.root)
 
     def test_health_check(self):

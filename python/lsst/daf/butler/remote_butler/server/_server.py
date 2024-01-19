@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("app",)
+__all__ = ("create_app",)
 
 import logging
 
@@ -35,50 +35,36 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from lsst.daf.butler import MissingDatasetTypeError
-from safir.metadata import Metadata, get_metadata
 
 from .handlers._external import external_router
-
-_DEFAULT_API_PATH = "/api/butler"
+from .handlers._internal import internal_router
 
 log = logging.getLogger(__name__)
 
-app = FastAPI()
-app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# A single instance of the server can serve data from multiple Butler
-# repositories.  This 'repository' path placeholder is consumed by
-# factory_dependency().
-repository_placeholder = "{repository}"
-app.include_router(external_router, prefix=f"{_DEFAULT_API_PATH}/repo/{repository_placeholder}")
+def create_app() -> FastAPI:
+    """Create a Butler server FastAPI application."""
+    app = FastAPI()
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+    # A single instance of the server can serve data from multiple Butler
+    # repositories.  This 'repository' path placeholder is consumed by
+    # factory_dependency().
+    repository_placeholder = "{repository}"
+    default_api_path = "/api/butler"
+    app.include_router(external_router, prefix=f"{default_api_path}/repo/{repository_placeholder}")
+    app.include_router(internal_router)
 
-@app.exception_handler(MissingDatasetTypeError)
-def missing_dataset_type_exception_handler(request: Request, exc: MissingDatasetTypeError) -> JSONResponse:
-    # Remove the double quotes around the string form. These confuse
-    # the JSON serialization when single quotes are in the message.
-    message = str(exc).strip('"')
-    return JSONResponse(
-        status_code=404,
-        content={"detail": message, "exception": "MissingDatasetTypeError"},
-    )
+    @app.exception_handler(MissingDatasetTypeError)
+    def missing_dataset_type_exception_handler(
+        request: Request, exc: MissingDatasetTypeError
+    ) -> JSONResponse:
+        # Remove the double quotes around the string form. These confuse
+        # the JSON serialization when single quotes are in the message.
+        message = str(exc).strip('"')
+        return JSONResponse(
+            status_code=404,
+            content={"detail": message, "exception": "MissingDatasetTypeError"},
+        )
 
-
-@app.get(
-    "/",
-    description=(
-        "Return metadata about the running application. Can also be used as"
-        " a health check. This route is not exposed outside the cluster and"
-        " therefore cannot be used by external clients."
-    ),
-    include_in_schema=False,
-    response_model=Metadata,
-    response_model_exclude_none=True,
-    summary="Application metadata",
-)
-async def get_index() -> Metadata:
-    """GET ``/`` (the app's internal root).
-
-    By convention, this endpoint returns only the application's metadata.
-    """
-    return get_metadata(package_name="lsst.daf.butler", application_name="butler")
+    return app
