@@ -158,7 +158,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             if cache.dimensions is not None:
                 return cache.dimensions
 
-        response = self._client.get(self._get_url("universe"))
+        response = self._get("universe")
         response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
@@ -334,7 +334,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # In future implementation this should directly access the cache
         # and only go to the server if the dataset type is not known.
         path = f"dataset_type/{name}"
-        response = self._client.get(self._get_url(path))
+        response = self._get(path)
         if response.status_code != httpx.codes.OK:
             content = response.json()
             if content["exception"] == "MissingDatasetTypeError":
@@ -357,7 +357,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         }
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
-        response = self._client.get(self._get_url(path), params=params)
+        response = self._get(path, params=params)
         response.raise_for_status()
         if response.json() is None:
             return None
@@ -608,10 +608,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             url, content=json, headers=self._headers | {"content-type": "application/json"}
         )
 
-    def _get(self, path: str) -> httpx.Response:
+    def _get(self, path: str, params: Mapping[str, str | bool] | None = None) -> httpx.Response:
         """Send a GET request to the Butler server."""
         url = self._get_url(path)
-        return self._client.get(url, headers=self._headers)
+        return self._client.get(url, headers=self._headers, params=params)
 
     def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
         """Deserialize a Pydantic model from the body of an HTTP response."""

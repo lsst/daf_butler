@@ -33,11 +33,13 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 
 try:
     # Failing to import any of these should disable the tests.
+    from fastapi import HTTPException
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
+    from lsst.daf.butler.tests.server_utils import add_auth_header_check_middleware
     from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
     from moto import mock_s3
 except ImportError:
@@ -121,6 +123,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         app = create_app()
         app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
+        add_auth_header_check_middleware(app)
 
         # Set up the RemoteButler that will connect to the server
         cls.client = _make_test_client(app)
@@ -383,6 +386,15 @@ class ButlerClientServerTestCase(unittest.TestCase):
         componentRef = ref.makeComponentRef("summary")
         componentUris = self.butler.getURIs(componentRef)
         check_uris(componentUris)
+
+    def test_auth_check(self):
+        # This is checking that the unit-test middleware for validating the
+        # authentication headers is working.  It doesn't test actual server
+        # functionality -- in a real deployment, the authentication headers are
+        # handled by GafaelfawrIngress, not our app.
+        with self.assertRaises(HTTPException) as cm:
+            self.client.get("/v1/dataset_type/int")
+        self.assertEqual(cm.exception.status_code, 401)
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
