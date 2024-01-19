@@ -137,7 +137,8 @@ class ColumnSet:
     def is_timespan(self, logical_table: str, field: str | None) -> bool:
         return field == "timespan"
 
-    def get_qualified_name(self, logical_table: str, field: str | None) -> str:
+    @staticmethod
+    def get_qualified_name(logical_table: str, field: str | None) -> str:
         return logical_table if field is None else f"{logical_table}:{field}"
 
     def get_uniqueness_category(self, logical_table: str, field: str | None) -> Literal["key", "natural"]:

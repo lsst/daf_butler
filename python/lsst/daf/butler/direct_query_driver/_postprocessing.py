@@ -33,7 +33,7 @@ import dataclasses
 from collections.abc import Iterable, Iterator
 
 import sqlalchemy
-from lsst.sphgeom import Region
+from lsst.sphgeom import DISJOINT, Region
 
 from ..dimensions import DimensionElement
 from ..queries import tree as qt
@@ -78,5 +78,29 @@ class Postprocessing:
 
     def apply(self, rows: Iterable[sqlalchemy.Row]) -> Iterable[sqlalchemy.Row]:
         if not self:
-            return rows
-        raise NotImplementedError("TODO")
+            yield from rows
+        joins = [
+            (
+                qt.ColumnSet.get_qualified_name(a.name, "region"),
+                qt.ColumnSet.get_qualified_name(b.name, "region"),
+            )
+            for a, b in self.spatial_join_filtering
+        ]
+        where = [
+            (qt.ColumnSet.get_qualified_name(element.name, "region"), region)
+            for element, region in self.spatial_where_filtering
+        ]
+        for row in rows:
+            m = row._mapping
+            if any(m[a].relate(m[b]) & DISJOINT for a, b in joins) or any(
+                m[field].relate(region) & DISJOINT for field, region in where
+            ):
+                continue
+            if self.offset:
+                self.offset -= 1
+                continue
+            if self.limit == 0:
+                break
+            yield row
+            if self.limit is not None:
+                self.limit -= 1
