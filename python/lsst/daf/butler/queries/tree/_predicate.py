@@ -39,7 +39,6 @@ __all__ = (
     "InContainer",
     "InRange",
     "InRelation",
-    "DataCoordinateConstraint",
     "ComparisonOperator",
 )
 
@@ -48,7 +47,6 @@ from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union,
 
 import pydantic
 
-from ...dimensions import DataCoordinate, DataIdValue, DimensionGroup
 from ._base import InvalidQueryTreeError, PredicateBase
 from ._column_expression import ColumnExpression
 
@@ -713,65 +711,6 @@ class InRelation(PredicateBase):
         return f"{m} IN [{{{self.relation}}}.{c}]"
 
 
-@final
-class DataCoordinateConstraint(PredicateBase):
-    """A boolean column expression defined by interpreting data ID's key-value
-    pairs as a logical AND of equality constraints.
-    """
-
-    predicate_type: Literal["data_coordinate_constraint"] = "data_coordinate_constraint"
-
-    dimensions: DimensionGroup
-    """The dimensions of the data ID."""
-
-    values: tuple[DataIdValue, ...]
-    """The required values of the data ID."""
-
-    def gather_required_columns(self, columns: ColumnSet) -> None:
-        # Docstring inherited.
-        columns.update_dimensions(self.dimensions)
-
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 5
-
-    @overload
-    def logical_and(self, other: LiteralFalse) -> LiteralFalse:
-        ...
-
-    @overload
-    def logical_and(self, other: LogicalAnd | LogicalAndOperand | LiteralTrue) -> LogicalAnd:
-        ...
-
-    def logical_and(self, other: Predicate) -> Predicate:
-        # Docstring inherited.
-        return _base_logical_and(self, other)
-
-    @overload
-    def logical_or(self, other: LiteralTrue) -> LiteralTrue:
-        ...
-
-    @overload
-    def logical_or(self, other: LogicalAnd) -> LogicalAnd:
-        ...
-
-    @overload
-    def logical_or(self, other: LogicalAndOperand | LiteralFalse) -> LogicalAndOperand:
-        ...
-
-    def logical_or(self, other: Predicate) -> Predicate:
-        # Docstring inherited.
-        return _base_logical_or(self, other)
-
-    def logical_not(self) -> LogicalOrOperand:
-        # Docstring inherited.
-        return LogicalNot.model_construct(operand=self)
-
-    def __str__(self) -> str:
-        return str(DataCoordinate.from_required_values(self.dimensions, self.values))
-
-
 @overload
 def _base_logical_and(a: LogicalAndOperand, b: LiteralTrue) -> LogicalAndOperand:
     ...
@@ -830,14 +769,7 @@ def _base_logical_or(a: LogicalOrOperand, b: Predicate) -> Predicate:
             return LogicalOr.model_construct(operands=(a, b))
 
 
-_LogicalNotOperand = Union[
-    IsNull,
-    Comparison,
-    InContainer,
-    InRange,
-    InRelation,
-    DataCoordinateConstraint,
-]
+_LogicalNotOperand = Union[IsNull, Comparison, InContainer, InRange, InRelation]
 _LogicalOrOperand = Union[_LogicalNotOperand, LogicalNot]
 _LogicalAndOperand = Union[_LogicalOrOperand, LogicalOr]
 
