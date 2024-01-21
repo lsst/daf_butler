@@ -31,7 +31,7 @@ import itertools
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, AbstractSet, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
@@ -1008,20 +1008,19 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
 
     def visit_spatial_constraint(
         self,
-        comparison: qt.Comparison,
         element: DimensionElement,
         region: Region,
-        parents: AbstractSet[Literal["and", "or", "not"]],
-    ) -> qt.Predicate:
+        flags: qt.PredicateVisitFlags,
+    ) -> qt.Predicate | None:
         # Reject spatial constraints that are nested inside OR or NOT, because
         # the postprocessing needed for those would be a lot harder.
-        if "or" in parents or "not" in parents:
+        if flags & qt.PredicateVisitFlags.INVERTED or flags & qt.PredicateVisitFlags.HAS_OR_SIBLINGS:
             raise NotImplementedError(
                 "Spatial overlap constraints nested inside OR or NOT are not supported."
             )
         # Delegate to super just because that's good practice with
         # OverlapVisitor.
-        super().visit_spatial_constraint(comparison, element, region, parents)
+        super().visit_spatial_constraint(element, region, flags)
         match element:
             case DatabaseDimensionElement():
                 # If this is a database dimension element like tract, patch, or
@@ -1057,7 +1056,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     )
                     # Short circuit here since the SQL WHERE clause has already
                     # been embedded in the subquery.
-                    return qt.LiteralTrue()
+                    return qt.Predicate.from_bool(True)
             case SkyPixDimension():
                 # If this is a skypix dimension, we can do a index-in-ranges
                 # test directly on that dimension.  Note that this doesn't on
@@ -1076,27 +1075,23 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 )
         # Convert the region-overlap constraint into a skypix
         # index range-membership constraint in SQL...
-        result = qt.LiteralTrue()
+        result = qt.Predicate.from_bool(False)
         skypix_col_ref = qt.DimensionKeyReference.model_construct(dimension=skypix)
         for begin, end in skypix.pixelization.envelope(region):
-            result = result.logical_or(qt.InRange(member=skypix_col_ref, start=begin, stop=end))
+            result = result.logical_or(qt.Predicate.in_range(skypix_col_ref, start=begin, stop=end))
         return result
 
     def visit_spatial_join(
-        self,
-        comparison: qt.Comparison,
-        a: DimensionElement,
-        b: DimensionElement,
-        parents: AbstractSet[Literal["and", "or", "not"]],
-    ) -> qt.Predicate:
+        self, a: DimensionElement, b: DimensionElement, flags: qt.PredicateVisitFlags
+    ) -> qt.Predicate | None:
         # Reject spatial joins that are nested inside OR or NOT, because the
         # postprocessing needed for those would be a lot harder.
-        if "or" in parents or "not" in parents:
+        if flags & qt.PredicateVisitFlags.INVERTED or flags & qt.PredicateVisitFlags.HAS_OR_SIBLINGS:
             raise NotImplementedError("Spatial overlap joins nested inside OR or NOT are not supported.")
         # Delegate to super to check for invalid joins and record this
         # "connection" for use when seeing whether to add an automatic join
         # later.
-        super().visit_spatial_join(comparison, a, b, parents)
+        super().visit_spatial_join(a, b, flags)
         match (a, b):
             case (self.common_skypix, DatabaseDimensionElement() as b):
                 self._join_common_skypix_overlap(b)
@@ -1125,7 +1120,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 self.postprocessing.spatial_join_filtering.append((a, b))
             case _:
                 raise NotImplementedError(f"Unsupported combination for spatial join: {a, b}.")
-        return qt.LiteralTrue()
+        return qt.Predicate.from_bool(True)
 
     def _join_common_skypix_overlap(self, element: DatabaseDimensionElement) -> None:
         if element not in self.common_skypix_overlaps_done:

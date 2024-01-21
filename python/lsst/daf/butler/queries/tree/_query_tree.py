@@ -49,7 +49,7 @@ from ...dimensions import DimensionGroup, DimensionUniverse
 from ...pydantic_utils import DeferredValidation
 from ._base import InvalidQueryTreeError, QueryTreeBase
 from ._column_set import ColumnSet
-from ._predicate import LiteralTrue, Predicate
+from ._predicate import Predicate
 
 DataCoordinateUploadKey: TypeAlias = uuid.UUID
 
@@ -173,7 +173,7 @@ class QueryTree(QueryTreeBase):
     temporarily on the server.
     """
 
-    predicate: Predicate = LiteralTrue()
+    predicate: Predicate = Predicate.from_bool(True)
     """Boolean expression trees whose logical AND defines a row filter."""
 
     find_first_dataset: str | None = None

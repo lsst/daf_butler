@@ -127,7 +127,7 @@ class _NaiveDisjointSet(Generic[_T]):
         return len(self._subsets)
 
 
-class OverlapsVisitor:
+class OverlapsVisitor(qt.SimplePredicateVisitor):
     """A helper class for dealing with spatial and temporal overlaps in a
     query.
 
@@ -150,89 +150,64 @@ class OverlapsVisitor:
         self._temporal_connections = _NaiveDisjointSet(self.dimensions.temporal)
 
     def run(self, predicate: qt.Predicate, join_operands: Iterable[DimensionGroup]) -> qt.Predicate:
-        result = self.process_predicate(predicate, frozenset())
-        for join_operand_dimensions in join_operands:
-            self.add_join_operand_connections(join_operand_dimensions)
-        for a, b in self.compute_automatic_spatial_joins():
-            result = result.logical_and(
-                self.visit_spatial_join(
-                    qt.Comparison(
-                        a=qt.DimensionFieldReference(element=a, field="region"),
-                        b=qt.DimensionFieldReference(element=b, field="region"),
-                        operator="overlaps",
-                    ),
-                    a=a,
-                    b=b,
-                    parents=frozenset(),
-                )
-            )
-        for a, b in self.compute_automatic_temporal_joins():
-            result = result.logical_and(
-                self.visit_temporal_dimension_join(
-                    qt.Comparison(
-                        a=qt.DimensionFieldReference(element=a, field="timespan"),
-                        b=qt.DimensionFieldReference(element=b, field="timespan"),
-                        operator="overlaps",
-                    ),
-                    a=a,
-                    b=b,
-                    parents=frozenset(),
-                )
-            )
-        return result
-
-    def process_predicate(
-        self, predicate: qt.Predicate, parents: Set[Literal["and", "or", "not"]]
-    ) -> qt.Predicate:
-        """Process a WHERE-clause predicate.
-
-        This method traverses a `relation_tree.Predicate` tree and calls the
-        various ``visit_*`` methods when it encounters a spatial or temporal
-        overlap expression.
+        """Process the given predicate to extract spatial and temporal
+        overlaps.
 
         Parameters
         ----------
-        predicate : `relation_tree.Predicate`
-            Tree to process.
-        parents : `~collections.abc.Set` of "and", "or", and "not" literals
-            What kinds of logical operators are used to connect this predicate
-            to others, to be modified and forwarded to ``visit_*`` methods.
+        predicate : `tree.Predicate`
+            Predicate to process.
+        join_operands : `~collections.abc.Iterable` [ `DimensionGroup` ]
+            The dimensions of logical tables being joined into this query;
+            these can included embedded spatial and temporal joins that can
+            make it unnecessary to add new ones.
 
         Returns
         -------
-        predicate : `relation_tree.Predicate`
-            Processed predicate, with overlap comparisons replaced according to
-            the return values of the ``visit_*`` methods.
+        predicate : `tree.Predicate`
+            A possibly-modified predicate that should replace the original.
         """
-        match predicate:
-            case qt.LogicalAnd() | qt.LogicalOr():
-                processed: list[qt.Predicate] = []
-                any_changed = False
-                parents |= {predicate.predicate_type}
-                for operand in predicate.operands:
-                    if (new_operand := self.process_predicate(operand, parents)) is not operand:
-                        any_changed = True
-                    processed.append(new_operand)
-                if any_changed:
-                    return type(predicate).fold(*processed)
-                else:
-                    return predicate
-            case qt.LogicalNot():
-                if (
-                    new_operand := self.process_predicate(predicate.operand, parents | {"not"})
-                ) is not predicate.operand:
-                    return new_operand.logical_not()
-                else:
-                    return predicate
-            case qt.Comparison(operator="overlaps"):
-                if predicate.a.column_type == "region":
-                    return self.visit_spatial_overlap(predicate, parents)
-                elif predicate.b.column_type == "timespan":
-                    return self.visit_temporal_overlap(predicate, parents)
-                else:
-                    raise AssertionError(f"Unexpected column type {predicate.a.column_type} for overlap.")
-            case _:
-                return predicate
+        result = predicate.visit(self)
+        if result is None:
+            result = predicate
+        for join_operand_dimensions in join_operands:
+            self.add_join_operand_connections(join_operand_dimensions)
+        for a, b in self.compute_automatic_spatial_joins():
+            join_predicate = self.visit_spatial_join(a, b, qt.PredicateVisitFlags.HAS_AND_SIBLINGS)
+            if join_predicate is None:
+                join_predicate = qt.Predicate.compare(
+                    qt.DimensionFieldReference.model_construct(element=a, field="region"),
+                    "overlaps",
+                    qt.DimensionFieldReference.model_construct(element=b, field="region"),
+                )
+            result = result.logical_and(join_predicate)
+        for a, b in self.compute_automatic_temporal_joins():
+            join_predicate = self.visit_temporal_dimension_join(a, b, qt.PredicateVisitFlags.HAS_AND_SIBLINGS)
+            if join_predicate is None:
+                join_predicate = qt.Predicate.compare(
+                    qt.DimensionFieldReference.model_construct(element=a, field="timespan"),
+                    "overlaps",
+                    qt.DimensionFieldReference.model_construct(element=b, field="timespan"),
+                )
+            result = result.logical_and(join_predicate)
+        return result
+
+    def visit_comparison(
+        self,
+        a: qt.ColumnExpression,
+        operator: qt.ComparisonOperator,
+        b: qt.ColumnExpression,
+        flags: qt.PredicateVisitFlags,
+    ) -> qt.Predicate | None:
+        # Docstring inherited.
+        if operator == "overlaps":
+            if a.column_type == "region":
+                return self.visit_spatial_overlap(a, b, flags)
+            elif b.column_type == "timespan":
+                return self.visit_temporal_overlap(a, b, flags)
+            else:
+                raise AssertionError(f"Unexpected column type {a.column_type} for overlap.")
+        return None
 
     def add_join_operand_connections(self, operand_dimensions: DimensionGroup) -> None:
         """Add overlap connections implied by a table or subquery.
@@ -244,7 +219,7 @@ class OverlapsVisitor:
 
         Notes
         -----
-        We assume each join operand to a `relation_tree.Select` has its own
+        We assume each join operand to a `tree.Select` has its own
         complete set of spatial and temporal joins that went into generating
         its rows.  That will naturally be true for relations originating from
         the butler database, like dataset searches and materializations, and if
@@ -324,175 +299,159 @@ class OverlapsVisitor:
         ]
 
     def visit_spatial_overlap(
-        self,
-        comparison: qt.Comparison,
-        parents: Set[Literal["and", "or", "not"]],
-    ) -> qt.Predicate:
+        self, a: qt.ColumnExpression, b: qt.ColumnExpression, flags: qt.PredicateVisitFlags
+    ) -> qt.Predicate | None:
         """Dispatch a spatial overlap comparison predicate to handlers.
 
         This method should rarely (if ever) need to be overridden.
 
         Parameters
         ----------
-        comparison : `relation_tree.Comparison`
-            Predicate object to handle.
-        parents : `~collections.abc.Set` of "and", "or", and "not" literals
-            What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``visit_*`` methods.
+        a : `tree.ColumnExpression`
+            First operand.
+        b : `tree.ColumnExpression`
+            Second operand.
+        flags : `tree.PredicateLeafFlags`
+            Information about where this overlap comparison appears in the
+            larger predicate tree.
 
         Returns
         -------
-        replaced : `relation_tree.Predicate`
-            The predicate to be inserted instead of ``comparison`` in the
-            processed tree.
+        replaced : `tree.Predicate` or `None`
+            The predicate to be inserted instead in the processed tree, or
+            `None` if no substitution is needed.
         """
-        match comparison.a, comparison.b:
-            case qt.DimensionFieldReference(element=a), qt.DimensionFieldReference(element=b):
-                return self.visit_spatial_join(comparison, a, b, parents)
+        match a, b:
+            case qt.DimensionFieldReference(element=a_element), qt.DimensionFieldReference(element=b_element):
+                return self.visit_spatial_join(a_element, b_element, flags)
             case qt.DimensionFieldReference(element=element), qt.RegionColumnLiteral(value=region):
-                return self.visit_spatial_constraint(comparison, element, region, parents)
+                return self.visit_spatial_constraint(element, region, flags)
             case qt.RegionColumnLiteral(value=region), qt.DimensionFieldReference(element=element):
-                return self.visit_spatial_constraint(comparison, element, region, parents)
-        raise AssertionError(f"Unexpected arguments for spatial overlap: {comparison.a}, {comparison.b}.")
+                return self.visit_spatial_constraint(element, region, flags)
+        raise AssertionError(f"Unexpected arguments for spatial overlap: {a}, {b}.")
 
     def visit_temporal_overlap(
-        self,
-        comparison: qt.Comparison,
-        parents: Set[Literal["and", "or", "not"]],
-    ) -> qt.Predicate:
+        self, a: qt.ColumnExpression, b: qt.ColumnExpression, flags: qt.PredicateVisitFlags
+    ) -> qt.Predicate | None:
         """Dispatch a temporal overlap comparison predicate to handlers.
 
         This method should rarely (if ever) need to be overridden.
 
         Parameters
         ----------
-        comparison : `relation_tree.Comparison`
-            Predicate object to handle.
-        parents : `~collections.abc.Set` of "and", "or", and "not" literals
-            What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``visit_*`` methods.
+        a : `tree.ColumnExpression`-
+            First operand.
+        b : `tree.ColumnExpression`
+            Second operand.
+        flags : `tree.PredicateLeafFlags`
+            Information about where this overlap comparison appears in the
+            larger predicate tree.
 
         Returns
         -------
-        replaced : `relation_tree.Predicate`
-            The predicate to be inserted instead of ``comparison`` in the
-            processed tree.
+        replaced : `tree.Predicate` or `None`
+            The predicate to be inserted instead in the processed tree, or
+            `None` if no substitution is needed.
         """
-        match comparison.a, comparison.b:
-            case qt.DimensionFieldReference(element=a), qt.DimensionFieldReference(element=b):
-                return self.visit_temporal_dimension_join(comparison, a, b, parents)
+        match a, b:
+            case qt.DimensionFieldReference(element=a_element), qt.DimensionFieldReference(element=b_element):
+                return self.visit_temporal_dimension_join(a_element, b_element, flags)
             case _:
                 # We don't bother differentiating any other kind of temporal
                 # comparison, because in all foreseeable database schemas we
                 # wouldn't have to do anything special with them, since they
                 # don't participate in automatic join calculations and they
                 # should be straightforwardly convertible to SQL.
-                return comparison
+                return None
 
     def visit_spatial_join(
-        self,
-        comparison: qt.Comparison,
-        a: DimensionElement,
-        b: DimensionElement,
-        parents: Set[Literal["and", "or", "not"]],
-    ) -> qt.Predicate:
+        self, a: DimensionElement, b: DimensionElement, flags: qt.PredicateVisitFlags
+    ) -> qt.Predicate | None:
         """Handle a spatial overlap comparison between two dimension elements.
 
         The default implementation updates the set of known spatial connections
-        (for use by `compute_automatic_spatial_joins`) and returns
-        ``comparison``.
+        (for use by `compute_automatic_spatial_joins`) and returns `None`.
 
         Parameters
         ----------
-        comparison : `relation_tree.Comparison`
-            Predicate object to handle.
         a : `DimensionElement`
             One element in the join.
         b : `DimensionElement`
             The other element in the join.
-        parents : `~collections.abc.Set` of "and", "or", and "not" literals
-            What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``visit_*`` methods.
+        flags : `tree.PredicateLeafFlags`
+            Information about where this overlap comparison appears in the
+            larger predicate tree.
 
         Returns
         -------
-        replaced : `relation_tree.Predicate`
-            The predicate to be inserted instead of ``comparison`` in the
-            processed tree.
+        replaced : `tree.Predicate` or `None`
+            The predicate to be inserted instead in the processed tree, or
+            `None` if no substitution is needed.
         """
         if a.spatial == b.spatial:
             raise qt.InvalidQueryTreeError(f"Spatial join between {a} and {b} is not necessary.")
         self._spatial_connections.merge(
             cast(TopologicalFamily, a.spatial), cast(TopologicalFamily, b.spatial)
         )
-        return comparison
+        return None
 
     def visit_spatial_constraint(
         self,
-        comparison: qt.Comparison,
         element: DimensionElement,
         region: Region,
-        parents: Set[Literal["and", "or", "not"]],
-    ) -> qt.Predicate:
+        flags: qt.PredicateVisitFlags,
+    ) -> qt.Predicate | None:
         """Handle a spatial overlap comparison between a dimension element and
         a literal region.
 
-        The default implementation just returns ``comparison``.
+        The default implementation just returns `None`.
 
         Parameters
         ----------
-        comparison : `relation_tree.Comparison`
-            Predicate object to handle.
         element : `DimensionElement`
             The dimension element in the comparison.
         region : `lsst.sphgeom.Region`
             The literal region in the comparison.
-        parents : `~collections.abc.Set` of "and", "or", and "not" literals
-            What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``visit_*`` methods.
+        flags : `tree.PredicateLeafFlags`
+            Information about where this overlap comparison appears in the
+            larger predicate tree.
 
         Returns
         -------
-        replaced : `relation_tree.Predicate`
-            The predicate to be inserted instead of ``comparison`` in the
-            processed tree.
+        replaced : `tree.Predicate` or `None`
+            The predicate to be inserted instead in the processed tree, or
+            `None` if no substitution is needed.
         """
-        return comparison
+        return None
 
     def visit_temporal_dimension_join(
-        self,
-        comparison: qt.Comparison,
-        a: DimensionElement,
-        b: DimensionElement,
-        parents: Set[Literal["and", "or", "not"]],
-    ) -> qt.Comparison:
+        self, a: DimensionElement, b: DimensionElement, flags: qt.PredicateVisitFlags
+    ) -> qt.Predicate | None:
         """Handle a temporal overlap comparison between two dimension elements.
 
         The default implementation updates the set of known temporal
         connections (for use by `compute_automatic_temporal_joins`) and returns
-        ``comparison``.
+        `None`.
 
         Parameters
         ----------
-        comparison : `relation_tree.Comparison`
-            Predicate object to handle.
         a : `DimensionElement`
             One element in the join.
         b : `DimensionElement`
             The other element in the join.
-        parents : `~collections.abc.Set` of "and", "or", and "not" literals
-            What kinds of logical operators are used to connect this predicate
-            to others, to be forwarded to other ``visit_*`` methods.
+        flags : `tree.PredicateLeafFlags`
+            Information about where this overlap comparison appears in the
+            larger predicate tree.
 
         Returns
         -------
-        replaced : `relation_tree.Predicate`
-            The predicate to be inserted instead of ``comparison`` in the
-            processed tree.
+        replaced : `tree.Predicate` or `None`
+            The predicate to be inserted instead in the processed tree, or
+            `None` if no substitution is needed.
         """
         if a.temporal == b.temporal:
             raise qt.InvalidQueryTreeError(f"Temporal join between {a} and {b} is not necessary.")
         self._temporal_connections.merge(
             cast(TopologicalFamily, a.temporal), cast(TopologicalFamily, b.temporal)
         )
-        return comparison
+        return None

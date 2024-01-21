@@ -48,7 +48,7 @@ def convert_where_args(
     datasets: Set[str],
     *args: str | Predicate | DataId,
     bind: Mapping[str, Any] | None = None,
-) -> tuple[Predicate, ...]:
+) -> Predicate:
     """Convert ``where`` arguments to a sequence of column expressions.
 
     Parameters
@@ -67,8 +67,8 @@ def convert_where_args(
 
     Returns
     -------
-    predicates : `tuple` [ `Predicate`, ... ]
-        Standardized predicates, to be combined via logical AND.
+    predicate : `Predicate`
+        Standardized predicate object.
     """
     raise NotImplementedError("TODO: Parse string expression.")
 

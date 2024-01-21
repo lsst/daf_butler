@@ -65,7 +65,7 @@ class ExpressionProxy:
     @property
     def is_null(self) -> qt.Predicate:
         """A boolean expression that tests whether this expression is NULL."""
-        return qt.IsNull.model_construct(operand=self._expression)
+        return qt.Predicate.is_null(self._expression)
 
     @staticmethod
     def _make_expression(other: object) -> qt.ColumnExpression:
@@ -75,9 +75,7 @@ class ExpressionProxy:
             return qt.make_column_literal(other)
 
     def _make_comparison(self, other: object, operator: qt.ComparisonOperator) -> qt.Predicate:
-        return qt.Comparison.model_construct(
-            a=self._expression, b=self._make_expression(other), operator=operator
-        )
+        return qt.Predicate.compare(a=self._expression, b=self._make_expression(other), operator=operator)
 
 
 class ScalarExpressionProxy(ExpressionProxy):
@@ -126,7 +124,7 @@ class ScalarExpressionProxy(ExpressionProxy):
         predicate : `tree.Predicate`
             Boolean expression object.
         """
-        return qt.InRange.model_construct(member=self._expression, start=start, stop=stop, step=step)
+        return qt.Predicate.in_range(self._expression, start=start, stop=stop, step=step)
 
     def in_iterable(self, others: Iterable) -> qt.Predicate:
         """Return a boolean expression that tests whether this expression
@@ -143,9 +141,7 @@ class ScalarExpressionProxy(ExpressionProxy):
         predicate : `tree.Predicate`
             Boolean expression object.
         """
-        return qt.InContainer.model_construct(
-            member=self._expression, container=tuple([self._make_expression(item) for item in others])
-        )
+        return qt.Predicate.in_container(self._expression, [self._make_expression(item) for item in others])
 
     def in_query(self, column: ExpressionProxy, query: Query) -> qt.Predicate:
         """Return a boolean expression that test whether this expression
@@ -164,9 +160,7 @@ class ScalarExpressionProxy(ExpressionProxy):
         predicate : `tree.Predicate`
             Boolean expression object.
         """
-        return qt.InRelation.model_construct(
-            member=self._expression, column=column._expression, relation=query._tree
-        )
+        return qt.Predicate.in_query_tree(self._expression, column._expression, query._tree)
 
 
 class TimespanProxy(ExpressionProxy):
@@ -384,7 +378,7 @@ class ExpressionFactory:
             A boolean expression that evaluates to `True` only if all operands
             evaluate to `True.
         """
-        return qt.LogicalAnd.fold(first, *args)
+        return first.logical_and(*args)
 
     def any(self, first: qt.Predicate, /, *args: qt.Predicate) -> qt.Predicate:
         """Combine a sequence of boolean expressions with logical OR.
@@ -402,7 +396,7 @@ class ExpressionFactory:
             A boolean expression that evaluates to `True` if any operand
             evaluates to `True.
         """
-        return qt.LogicalOr.fold(first, *args)
+        return first.logical_or(*args)
 
     @staticmethod
     def literal(value: object) -> ExpressionProxy:
@@ -428,5 +422,7 @@ class ExpressionFactory:
                 return TimespanProxy(expression)
             case "region":
                 return RegionProxy(expression)
+            case "bool":
+                raise NotImplementedError("Boolean literals are not supported.")
             case _:
                 return ScalarExpressionProxy(expression)
