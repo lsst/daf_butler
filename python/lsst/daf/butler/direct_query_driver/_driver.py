@@ -36,7 +36,6 @@ from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast, overload
 
 import sqlalchemy
-from lsst.utils.iteration import ensure_iterable
 
 from .. import ddl
 from ..dimensions import DataIdValue, DimensionElement, DimensionGroup, DimensionUniverse
@@ -57,7 +56,7 @@ from ..queries.result_specs import (
     GeneralResultSpec,
     ResultSpec,
 )
-from ..registry import CollectionSummary, CollectionType, RegistryDefaults
+from ..registry import CollectionSummary, CollectionType, NoDefaultCollectionError, RegistryDefaults
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
 from ..registry.nameShrinker import NameShrinker
@@ -228,7 +227,10 @@ class DirectQueryDriver(QueryDriver):
         columns = qt.ColumnSet(dimensions)
         resolved_datasets: set[str] = set()
         for dataset_type in datasets:
-            if dataset_type == tree.find_first_dataset or len(tree.datasets[dataset_type].collections) < 2:
+            if (
+                dataset_type == tree.find_first_dataset
+                or len(tree.datasets[dataset_type].resolved_collections) < 2
+            ):
                 columns.dataset_fields[dataset_type].add("dataset_id")
                 resolved_datasets.add(dataset_type)
         sql_builder, postprocessing, needs_distinct = self._make_sql_builder(tree, columns)
@@ -311,7 +313,7 @@ class DirectQueryDriver(QueryDriver):
 
     def any(self, tree: qt.QueryTree, *, execute: bool, exact: bool) -> bool:
         # Docstring inherited.
-        if not all(dataset_search.collections for dataset_search in tree.datasets.values()):
+        if not all(dataset_search.resolved_collections for dataset_search in tree.datasets.values()):
             return False
         if not execute:
             if exact:
@@ -335,8 +337,11 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited.
         messages: list[str] = []
         for dataset_type, dataset_search in tree.datasets.items():
-            if not dataset_search.collections:
-                messages.append(f"No datasets of type {dataset_type!r} in the given collections.")
+            if not dataset_search.resolved_collections:
+                messages.append(
+                    f"No datasets of type {dataset_type!r} in collections "
+                    f"{list(dataset_search.original_collections)}."
+                )
         if execute:
             raise NotImplementedError("TODO")
         return messages
@@ -345,12 +350,15 @@ class DirectQueryDriver(QueryDriver):
         # Docstring inherited
         return self._managers.datasets[name].datasetType.dimensions.as_group()
 
+    def get_default_collections(self) -> tuple[str, ...]:
+        # Docstring inherited.
+        if not self._defaults.collections:
+            raise NoDefaultCollectionError("No collections provided and no default collections.")
+        return tuple(self._defaults.collections)
+
     def resolve_collection_path(
-        self, collections: Iterable[str] | str | None
+        self, collections: Iterable[str]
     ) -> list[tuple[CollectionRecord, CollectionSummary]]:
-        if collections is None:
-            collections = self._defaults.collections
-        collections = ensure_iterable(collections)
         result: list[tuple[CollectionRecord, CollectionSummary]] = []
         done: set[str] = set()
 
@@ -364,6 +372,8 @@ class DirectQueryDriver(QueryDriver):
                         recurse(cast(ChainedCollectionRecord, record).children)
                     else:
                         result.append((record, self._managers.datasets.getCollectionSummary(record)))
+
+        recurse(collections)
 
         return result
 
@@ -484,7 +494,7 @@ class DirectQueryDriver(QueryDriver):
         # Shortcut: if the dataset could only be in one collection (or we know
         # it's not going to be found at all), we can just build a vanilla
         # query.
-        if len(tree.datasets[dataset_type].collections) < 2:
+        if len(tree.datasets[dataset_type].resolved_collections) < 2:
             return *self._make_vanilla_sql_builder(tree, columns), needs_distinct
         # General case.  The query we're building looks like this:
         #

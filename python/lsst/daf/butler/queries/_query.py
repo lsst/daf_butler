@@ -33,6 +33,8 @@ from collections.abc import Iterable, Mapping, Set
 from types import EllipsisType
 from typing import Any, overload
 
+from lsst.utils.iteration import ensure_iterable
+
 from .._dataset_type import DatasetType
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from ..registry import DatasetTypeError, MissingDatasetTypeError
@@ -256,6 +258,9 @@ class Query(HomogeneousQueryBase):
         type separately in turn, and no information about the relationships
         between datasets of different types is included.
         """
+        if collections is None:
+            collections = self._driver.get_default_collections()
+        collections = tuple(ensure_iterable(collections))
         resolved_dataset_searches = convert_dataset_search_args(
             dataset_type, self._driver.resolve_collection_path(collections)
         )
@@ -273,7 +278,8 @@ class Query(HomogeneousQueryBase):
                     resolved_dataset_type.name,
                     DatasetSearch.model_construct(
                         dimensions=resolved_dataset_type.dimensions.as_group(),
-                        collections=resolved_collections,
+                        original_collections=collections,
+                        resolved_collections=resolved_collections,
                     ),
                 )
             elif collections is not None:
@@ -406,6 +412,9 @@ class Query(HomogeneousQueryBase):
             Raised if the dimensions were not provided and the dataset type was
             not registered.
         """
+        if collections is None:
+            collections = self._driver.get_default_collections()
+        collections = tuple(ensure_iterable(collections))
         resolved_dataset_search = convert_dataset_search_args(
             dataset_type, self._driver.resolve_collection_path(collections)
         )
@@ -432,7 +441,9 @@ class Query(HomogeneousQueryBase):
             tree=self._tree.join_dataset(
                 dataset_type,
                 DatasetSearch.model_construct(
-                    collections=resolved_collections, dimensions=resolved_dimensions
+                    original_collections=collections,
+                    resolved_collections=resolved_collections,
+                    dimensions=resolved_dimensions,
                 ),
             ),
             driver=self._driver,

@@ -393,18 +393,32 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
+    def get_default_collections(self) -> tuple[str, ...]:
+        """Return the default collection search path.
+
+        Returns
+        -------
+        collections : `tuple` [ `str`, ... ]
+            The default collection search path as a tuple of `str`.
+
+        Raises
+        ------
+        NoDefaultCollectionError
+            Raised if there are no default collections.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def resolve_collection_path(
-        self, collections: Iterable[str] | str | None
+        self, collections: Iterable[str]
     ) -> list[tuple[CollectionRecord, CollectionSummary]]:
         """Process a collection search path argument into a `list` of
         collection records and summaries.
 
         Parameters
         ----------
-        collections : `~collections.abc.Iterable` [ `str` ], `str`, or `None`
-            The collection or collections to search.  If `None`, the default
-            collections should be used, and `NoDefaultCollectionError` should
-            be raised if there are no default collections.
+        collections : `~collections.abc.Iterable` [ `str` ]
+            The collection or collections to search.
 
         Returns
         -------
@@ -417,9 +431,6 @@ class QueryDriver(AbstractContextManager[None]):
 
         Raises
         ------
-        NoDefaultCollectionError
-            Raised if ``collections is None`` and there are no default
-            collections.
         MissingCollectionError
             Raised if any collection in ``collections`` does not exist.
 
