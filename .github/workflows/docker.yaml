@@ -53,6 +53,17 @@ jobs:
           image: ${{ github.repository }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Run unit tests inside Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          # In addition to the main output image, the Dockerfile contains a second
+          # "unit-test" image that runs the test suite.
+          target: unit-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:

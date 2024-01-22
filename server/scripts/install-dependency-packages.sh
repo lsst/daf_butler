@@ -61,7 +61,3 @@ apt-get update
 # directly at Git repos
 # Libpq-dev is needed to build psycopg2, the postgres bindings for python
 apt-get -y install --no-install-recommends build-essential libffi-dev git libpq-dev
-
-# Delete cached files we don't need anymore:
-apt-get clean
-rm -rf /var/lib/apt/lists/*
