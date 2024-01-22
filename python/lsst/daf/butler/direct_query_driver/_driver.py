@@ -61,10 +61,10 @@ from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
 from ..registry.nameShrinker import NameShrinker
 from ._convert_results import convert_dimension_record_results
+from ._sql_column_visitor import SqlColumnVisitor
 
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
-    from ..timespan_database_representation import TimespanDatabaseRepresentation
     from ._postprocessing import Postprocessing
     from ._sql_builder import EmptySqlBuilder, SqlBuilder
 
@@ -165,9 +165,8 @@ class DirectQueryDriver(QueryDriver):
             result_columns, self._name_shrinker, postprocessing, distinct=needs_distinct
         )
         if result_spec.order_by:
-            sql_select = sql_select.order_by(
-                *[self._build_sql_order_by_expression(sql_builder, term) for term in result_spec.order_by]
-            )
+            visitor = SqlColumnVisitor(sql_builder, self)
+            sql_select = sql_select.order_by(*[visitor.expect_scalar(term) for term in result_spec.order_by])
         if result_spec.limit is not None:
             if postprocessing:
                 postprocessing.limit = result_spec.limit
@@ -485,7 +484,7 @@ class DirectQueryDriver(QueryDriver):
             ]
             sql_builder = sql_builder.join(self._managers.dimensions.make_sql_builder(best, frozenset()))
         # Add the WHERE clause to the builder.
-        sql_builder = sql_builder.where_sql(self._build_sql_predicate(sql_builder, where_predicate))
+        sql_builder = sql_builder.where_sql(where_predicate.visit(SqlColumnVisitor(sql_builder, self)))
         return sql_builder, postprocessing
 
     def _make_find_first_sql_builder(
@@ -551,21 +550,6 @@ class DirectQueryDriver(QueryDriver):
             .where_sql(window_subquery.columns.rownum == 1)
         )
         return sql_builder, postprocessing, False
-
-    def _build_sql_order_by_expression(
-        self, sql_builder: SqlBuilder | EmptySqlBuilder, expression: qt.OrderExpression
-    ) -> sqlalchemy.ColumnElement[Any]:
-        raise NotImplementedError()
-
-    def _build_sql_column_expression(
-        self, sql_builder: SqlBuilder | EmptySqlBuilder, expression: qt.ColumnExpression
-    ) -> sqlalchemy.ColumnElement[Any] | TimespanDatabaseRepresentation:
-        raise NotImplementedError()
-
-    def _build_sql_predicate(
-        self, sql_builder: SqlBuilder | EmptySqlBuilder, predicate: qt.Predicate
-    ) -> sqlalchemy.ColumnElement[bool]:
-        raise NotImplementedError()
 
     def _process_page(
         self,
