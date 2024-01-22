@@ -2498,14 +2498,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             log.verbose("Completed scan for missing data files")
 
         # See if we already have these records
-        if not dry_run:
-            target_records = self._get_stored_records_associated_with_refs(
-                refs, ignore_datastore_records=True
-            )
-        else:
-            # In dry-run mode we assume there is nothing in target repo.
-            # (otherwise everything would report that no work is needed.)
-            target_records = []
+        target_records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
 
         # The artifacts to register
         artifacts = []
