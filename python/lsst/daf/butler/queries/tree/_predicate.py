@@ -538,6 +538,16 @@ class InContainer(PredicateLeafBase):
         # Docstring inherited.
         return visitor.visit_in_container(self.member, self.container, flags)
 
+    @pydantic.model_validator(mode="after")
+    def _validate(self) -> InContainer:
+        if self.member.column_type == "timespan" or self.member.column_type == "region":
+            raise InvalidQueryTreeError(
+                f"Timespan or region column {self.member} may not be used in IN expressions."
+            )
+        if not all(item.column_type == self.member.column_type for item in self.container):
+            raise InvalidQueryTreeError(f"Column types for membership test {self} do not agree.")
+        return self
+
 
 @final
 class InRange(PredicateLeafBase):
@@ -578,6 +588,12 @@ class InRange(PredicateLeafBase):
     def visit(self, visitor: PredicateVisitor[_A, _O, _L], flags: PredicateVisitFlags) -> _L:
         return visitor.visit_in_range(self.member, self.start, self.stop, self.step, flags)
 
+    @pydantic.model_validator(mode="after")
+    def _validate(self) -> InRange:
+        if self.member.column_type != "int":
+            raise InvalidQueryTreeError(f"Column {self.member} is not an integer.")
+        return self
+
 
 @final
 class InQueryTree(PredicateLeafBase):
@@ -594,14 +610,14 @@ class InQueryTree(PredicateLeafBase):
     """Expression to test for membership."""
 
     column: ColumnExpression
-    """Expression to extract from `relation`."""
+    """Expression to extract from `query_tree`."""
 
     query_tree: QueryTree
     """Relation whose rows from `column` represent the container."""
 
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
-        # We're only gathering columns from the relation this predicate is
+        # We're only gathering columns from the query_tree this predicate is
         # attached to, not `self.column`, which belongs to `self.query_tree`.
         self.member.gather_required_columns(columns)
 
@@ -618,6 +634,34 @@ class InQueryTree(PredicateLeafBase):
     def visit(self, visitor: PredicateVisitor[_A, _O, _L], flags: PredicateVisitFlags) -> _L:
         # Docstring inherited.
         return visitor.visit_in_query_tree(self.member, self.column, self.query_tree, flags)
+
+    @pydantic.model_validator(mode="after")
+    def _validate_column_types(self) -> InQueryTree:
+        if self.member.column_type == "timespan" or self.member.column_type == "region":
+            raise InvalidQueryTreeError(
+                f"Timespan or region column {self.member} may not be used in IN expressions."
+            )
+        if self.member.column_type != self.column.column_type:
+            raise InvalidQueryTreeError(
+                f"Column types for membership test {self} do not agree "
+                f"({self.member.column_type}, {self.column.column_type})."
+            )
+
+        from ._column_set import ColumnSet
+
+        columns_required_in_tree = ColumnSet(self.query_tree.dimensions)
+        self.column.gather_required_columns(columns_required_in_tree)
+        if columns_required_in_tree.dimensions != self.query_tree.dimensions:
+            raise InvalidQueryTreeError(
+                f"Column {self.column} requires dimensions {columns_required_in_tree.dimensions}, "
+                f"but query tree only has {self.query_tree.dimensions}."
+            )
+        if not columns_required_in_tree.dataset_fields.keys() <= self.query_tree.datasets.keys():
+            raise InvalidQueryTreeError(
+                f"Column {self.column} requires dataset types "
+                f"{set(columns_required_in_tree.dataset_fields.keys())} that are not present in query tree."
+            )
+        return self
 
 
 LogicalNotOperand: TypeAlias = Union[
