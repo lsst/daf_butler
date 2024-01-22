@@ -31,7 +31,6 @@ from __future__ import annotations
 
 __all__ = ("FileDatastore",)
 
-import concurrent.futures
 import contextlib
 import hashlib
 import logging
@@ -1627,35 +1626,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # guessed names.
             records = {}
             id_to_ref = {}
-            if True:
-
-                def _populate_missing_records(
-                    refs: list[DatasetRef],
-                ) -> tuple[dict[DatasetId, list], dict[DatasetId, DatasetRef]]:
-                    _id_to_ref = {}
-                    _records = {}
-                    for missing_ref in refs:
-                        expected = self._get_expected_dataset_locations_info(missing_ref)
-                        dataset_id = missing_ref.id
-                        _records[dataset_id] = [info for _, info in expected]
-                        _id_to_ref[dataset_id] = missing_ref
-                    return _records, _id_to_ref
-
-                executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
-                future_chunks = [
-                    executor.submit(_populate_missing_records, chunk) for chunk in chunk_iterable(refs, 1_000)
-                ]
-                for future in concurrent.futures.as_completed(future_chunks):
-                    # Let it fail if any chunk fails.
-                    _r, _id = future.result()
-                    records.update(_r)
-                    id_to_ref.update(_id)
-            else:
-                for missing_ref in refs:
-                    expected = self._get_expected_dataset_locations_info(missing_ref)
-                    dataset_id = missing_ref.id
-                    records[dataset_id] = [info for _, info in expected]
-                    id_to_ref[dataset_id] = missing_ref
+            for missing_ref in refs:
+                expected = self._get_expected_dataset_locations_info(missing_ref)
+                dataset_id = missing_ref.id
+                records[dataset_id] = [info for _, info in expected]
+                id_to_ref[dataset_id] = missing_ref
 
             dataset_existence.update(
                 self._process_mexists_records(
@@ -2477,13 +2452,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # This should be chunked in case we end up having to check
             # the file store since we need some log output to show
             # progress.
-            def _check_missing_files(
-                source_datastore: Datastore,
-                id_to_ref: dict[DatasetId, DatasetRef],
-                artifact_existence: dict[ResourcePath, bool],
-                missing_ids_chunk: list[DatasetId],
-            ) -> dict[DatasetId, list]:
-                source_records = defaultdict(list)
+            for missing_ids_chunk in chunk_iterable(missing_ids, chunk_size=10_000):
                 records = {}
                 for missing in missing_ids_chunk:
                     # Ask the source datastore where the missing artifacts
@@ -2526,27 +2495,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
                     # Rely on source_records being a defaultdict.
                     source_records[missing].extend(dataset_records)
-                return source_records
-
-            if True:
-                executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
-                future_chunks = [
-                    executor.submit(
-                        _check_missing_files, source_datastore, id_to_ref, artifact_existence, chunk
-                    )
-                    for chunk in chunk_iterable(missing_ids, chunk_size=5_000)
-                ]
-                for future in concurrent.futures.as_completed(future_chunks):
-                    # Let it fail if any chunk fails.
-                    new_records = future.result()
-                    for k, v in new_records.items():
-                        source_records[k].extend(v)
-            else:
-                for missing_ids_chunk in chunk_iterable(missing_ids, chunk_size=5_000):
-                    new_records = _check_missing_files(source_datastore, missing_ids_chunk)
-                    for k, v in new_records.items():
-                        source_records[k].extend(v)
-
             log.verbose("Completed scan for missing data files")
 
         # See if we already have these records
