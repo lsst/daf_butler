@@ -1012,7 +1012,7 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
 
     def setUp(self) -> None:
         # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = self.enterContext(tempfile.TemporaryDirectory())
         super().setUp()
 
     def testAtomicWrite(self) -> None:
