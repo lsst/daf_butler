@@ -140,10 +140,10 @@ class Loader(yamlLoader):
         super().__init__(stream)
         # if this is a string and not a stream we may well lack a name
         if hasattr(stream, "name"):
-            self._root = ResourcePath(stream.name)
+            self._root = ResourcePath(stream.name, forceDirectory=False)
         else:
             # No choice but to assume a local filesystem
-            self._root = ResourcePath("no-file.yaml")
+            self._root = ResourcePath("no-file.yaml", forceDirectory=False)
         self.add_constructor("!include", Loader.include)
 
     def include(self, node: yaml.Node) -> list[Any] | dict[str, Any]:
@@ -174,7 +174,7 @@ class Loader(yamlLoader):
         # instead of a relative URI, therefore we first see if it is
         # scheme-less or not. If it has a scheme we use it directly
         # if it is scheme-less we use it relative to the file root.
-        requesteduri = ResourcePath(filename, forceAbsolute=False)
+        requesteduri = ResourcePath(filename, forceAbsolute=False, forceDirectory=False)
 
         if requesteduri.scheme:
             fileuri = requesteduri
@@ -950,7 +950,10 @@ class Config(MutableMapping):
         uri = ResourcePath(uri)
 
         if updateFile and not uri.getExtension():
-            uri = uri.updatedFile(defaultFileName)
+            if uri.isdir():
+                uri = uri.join(defaultFileName, forceDirectory=False)
+            else:
+                uri = uri.updatedFile(defaultFileName)
 
         # Try to work out the format from the extension
         ext = uri.getExtension()
