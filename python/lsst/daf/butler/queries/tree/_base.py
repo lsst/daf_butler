@@ -35,16 +35,24 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, TypeVar, cast
 
 import pydantic
 
 if TYPE_CHECKING:
     from ...column_spec import ColumnType
+    from ..visitors import ColumnExpressionVisitor, PredicateVisitFlags, PredicateVisitor
+    from ._column_literal import ColumnLiteral
     from ._column_set import ColumnSet
+    from ._predicate import PredicateLeaf
 
 
 DatasetFieldName: TypeAlias = Literal["dataset_id", "ingest_date", "run", "collection", "rank", "timespan"]
+
+_T = TypeVar("_T")
+_L = TypeVar("_L")
+_A = TypeVar("_A")
+_O = TypeVar("_O")
 
 
 class InvalidQueryTreeError(RuntimeError):
@@ -61,6 +69,8 @@ class ColumnExpressionBase(QueryTreeBase, ABC):
     """Base class for objects that represent non-boolean column expressions in
     a query tree.
 
+    Notes
+    -----
     This is a closed hierarchy whose concrete, `~typing.final` derived classes
     are members of the `ColumnExpression` union.  That union should generally
     be used in type annotations rather than the technically-open base class.
@@ -90,9 +100,38 @@ class ColumnExpressionBase(QueryTreeBase, ABC):
         """
         raise NotImplementedError()
 
+    def get_literal_value(self) -> Any | None:
+        """Return the literal value wrapped by this expression, or `None` if
+        it is not a literal.
+        """
+        return None
+
     @abstractmethod
     def gather_required_columns(self, columns: ColumnSet) -> None:
-        # TODO: docs
+        """Add any columns required to evaluate this expression to the
+        given column set.
+
+        Parameters
+        ----------
+        columns : `ColumnSet`
+            Set of columns to modify in place.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
+        """Invoke the visitor interface.
+
+        Parameters
+        ----------
+        visitor : `ColumnExpressionVisitor`
+            Visitor to invoke a method on.
+
+        Returns
+        -------
+        result : `object`
+            Forwarded result from the visitor.
+        """
         raise NotImplementedError()
 
 
@@ -100,9 +139,17 @@ class ColumnLiteralBase(ColumnExpressionBase):
     """Base class for objects that represent literal values as column
     expressions in a query tree.
 
+    Notes
+    -----
     This is a closed hierarchy whose concrete, `~typing.final` derived classes
     are members of the `ColumnLiteral` union.  That union should generally be
-    used in type annotations rather than the technically-open base class.
+    used in type annotations rather than the technically-open base class. The
+    concrete members of that union are only semi-public; they appear in the
+    serialized form of a column expression tree, but should only be constructed
+    via the `make_column_literal` factory function.  All concrete members of
+    the union are also guaranteed to have a read-only ``value`` attribute
+    holding the wrapped literal, but it is unspecified whether that is a
+    regular attribute or a `property`.
     """
 
     is_literal: ClassVar[bool] = True
@@ -113,6 +160,10 @@ class ColumnLiteralBase(ColumnExpressionBase):
         # Docstring inherited.
         return 0
 
+    def get_literal_value(self) -> Any:
+        # Docstring inherited.
+        return cast("ColumnLiteral", self).value
+
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         pass
@@ -121,3 +172,78 @@ class ColumnLiteralBase(ColumnExpressionBase):
     def column_type(self) -> ColumnType:
         # Docstring inherited.
         return cast(ColumnType, self.expression_type)
+
+    def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
+        # Docstring inherited
+        return visitor.visit_literal(cast("ColumnLiteral", self))
+
+
+class PredicateLeafBase(QueryTreeBase, ABC):
+    """Base class for leaf nodes of the `Predicate` tree.
+
+    Notes
+    -----
+    This is a closed hierarchy whose concrete, `~typing.final` derived classes
+    are members of the `PredicateLeaf` union.  That union should generally be
+    used in type annotations rather than the technically-open base class. The
+    concrete members of that union are only semi-public; they appear in the
+    serialized form of a `Predicate`, but should only be constructed
+    via various `Predicate` factory methods.
+    """
+
+    @property
+    @abstractmethod
+    def precedence(self) -> int:
+        """Operator precedence for this operation.
+
+        Lower values bind more tightly, so parentheses are needed when printing
+        an expression where an operand has a higher value than the expression
+        itself.
+        """
+        raise NotImplementedError()
+
+    @property
+    def column_type(self) -> Literal["bool"]:
+        """A string enumeration value representing the type of the column
+        expression.
+        """
+        return "bool"
+
+    @abstractmethod
+    def gather_required_columns(self, columns: ColumnSet) -> None:
+        """Add any columns required to evaluate this predicate leaf to the
+        given column set.
+
+        Parameters
+        ----------
+        columns : `ColumnSet`
+            Set of columns to modify in place.
+        """
+        raise NotImplementedError()
+
+    def invert(self) -> PredicateLeaf:
+        """Return a new leaf that is the logical not of this one."""
+        from ._predicate import LogicalNot, LogicalNotOperand
+
+        # This implementation works for every subclass other than LogicalNot
+        # itself, which overrides this method.
+        return LogicalNot.model_construct(operand=cast(LogicalNotOperand, self))
+
+    @abstractmethod
+    def visit(self, visitor: PredicateVisitor[_A, _O, _L], flags: PredicateVisitFlags) -> _L:
+        """Invoke the visitor interface.
+
+        Parameters
+        ----------
+        visitor : `PredicateVisitor`
+            Visitor to invoke a method on.
+        flags : `PredicateVisitFlags`
+            Flags that provide information about where this leaf appears in the
+            larger predicate tree.
+
+        Returns
+        -------
+        result : `object`
+            Forwarded result from the visitor.
+        """
+        raise NotImplementedError()

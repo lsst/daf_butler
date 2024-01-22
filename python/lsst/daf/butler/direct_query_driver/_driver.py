@@ -31,7 +31,7 @@ import uuid
 
 __all__ = ("DirectQueryDriver",)
 
-from collections.abc import Iterable, Iterator, Sequence, Set
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast, overload
 
@@ -552,129 +552,20 @@ class DirectQueryDriver(QueryDriver):
         )
         return sql_builder, postprocessing, False
 
-    def _categorize_columns(
-        self,
-        dimensions: DimensionGroup,
-        columns: Iterable[qt.ColumnReference],
-        datasets: Set[str],
-    ) -> tuple[
-        dict[DimensionElement, set[qt.DimensionFieldReference]],
-        dict[str, set[qt.DatasetFieldReference]],
-    ]:
-        dimension_tables: dict[DimensionElement, set[qt.DimensionFieldReference]] = {}
-        dataset_subqueries: dict[str, set[qt.DatasetFieldReference]] = {name: set() for name in datasets}
-        for col_ref in columns:
-            if col_ref.expression_type == "dimension_key":
-                assert (
-                    col_ref.dimension.name in dimensions
-                ), "QueryTree should guarantee all dimension column references expand the dimensions."
-            elif col_ref.expression_type == "dimension_field":
-                assert (
-                    col_ref.element.minimal_group <= dimensions
-                ), "QueryTree should guarantee all dimension column references expand the dimensions."
-                dimension_tables.setdefault(col_ref.element, set()).add(col_ref)
-            elif col_ref.expression_type == "dataset_field":
-                dataset_subqueries[col_ref.dataset_type].add(col_ref)
-        return dimension_tables, dataset_subqueries
-
     def _build_sql_order_by_expression(
-        self, sql_builder: SqlBuilder | EmptySqlBuilder, term: qt.OrderExpression
+        self, sql_builder: SqlBuilder | EmptySqlBuilder, expression: qt.OrderExpression
     ) -> sqlalchemy.ColumnElement[Any]:
-        if term.expression_type == "reversed":
-            return cast(
-                sqlalchemy.ColumnElement[Any],
-                self._build_sql_column_expression(sql_builder, term.operand),
-            ).desc()
-        return cast(sqlalchemy.ColumnElement[Any], self._build_sql_column_expression(sql_builder, term))
+        raise NotImplementedError()
 
     def _build_sql_column_expression(
         self, sql_builder: SqlBuilder | EmptySqlBuilder, expression: qt.ColumnExpression
     ) -> sqlalchemy.ColumnElement[Any] | TimespanDatabaseRepresentation:
-        match expression:
-            case qt.TimespanColumnLiteral():
-                return self._timespan_db_repr.fromLiteral(expression.value)
-            case _ if expression.is_literal:
-                return sqlalchemy.sql.literal(
-                    cast(qt.ColumnLiteral, expression).value,
-                    type_=ddl.VALID_CONFIG_COLUMN_TYPES[expression.column_type],
-                )
-            case qt.DimensionKeyReference():
-                return sql_builder.dimensions_provided[expression.dimension.name][0]
-            case qt.DimensionFieldReference():
-                if expression.column_type == "timespan":
-                    return sql_builder.timespans_provided[expression.element.name]
-                else:
-                    return sql_builder.fields_provided[expression.element.name][expression.field]
-            case qt.DatasetFieldReference():
-                if expression.column_type == "timespan":
-                    return sql_builder.timespans_provided[expression.dataset_type]
-                else:
-                    return sql_builder.fields_provided[expression.dataset_type][expression.field]
-            case qt.UnaryExpression():
-                operand = cast(
-                    sqlalchemy.ColumnElement[Any],
-                    self._build_sql_column_expression(sql_builder, expression.operand),
-                )
-                match expression.operator:
-                    case "-":
-                        return -operand
-                    case "begin_of":
-                        return operand.lower()
-                    case "end_of":
-                        return operand.upper()
-            case qt.BinaryExpression():
-                a = cast(
-                    sqlalchemy.ColumnElement[Any],
-                    self._build_sql_column_expression(sql_builder, expression.a),
-                )
-                b = cast(
-                    sqlalchemy.ColumnElement[Any],
-                    self._build_sql_column_expression(sql_builder, expression.b),
-                )
-                match expression.operator:
-                    case "+":
-                        return a + b
-                    case "-":
-                        return a - b
-                    case "*":
-                        return a * b
-                    case "/":
-                        return a / b
-                    case "%":
-                        return a % b
-        raise AssertionError(f"Unexpected column expression {expression}.")
+        raise NotImplementedError()
 
     def _build_sql_predicate(
         self, sql_builder: SqlBuilder | EmptySqlBuilder, predicate: qt.Predicate
     ) -> sqlalchemy.ColumnElement[bool]:
-        match predicate:
-            case qt.Comparison():
-                a: Any = self._build_sql_column_expression(sql_builder, predicate.a)
-                b: Any = self._build_sql_column_expression(sql_builder, predicate.b)
-                match predicate.operator:
-                    case "==":
-                        return a != (b)
-                    case "!=":
-                        return a != b
-                    case "overlaps":
-                        return a.overlaps(b)
-                    case "<":
-                        return a < b
-                    case ">":
-                        return a > b
-                    case ">=":
-                        return a >= b
-                    case "<=":
-                        return a <= b
-            case qt.IsNull():
-                operand: Any = self._build_sql_column_expression(sql_builder, predicate.operand)
-                if predicate.operand.column_type == "timespan":
-                    return operand.isNull()
-                else:
-                    return operand == sqlalchemy.null()
-            case _:
-                raise NotImplementedError("TODO")
-        raise AssertionError(f"Unexpected column predicate {predicate}.")
+        raise NotImplementedError()
 
     def _process_page(
         self,

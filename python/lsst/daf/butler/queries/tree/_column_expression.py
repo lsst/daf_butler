@@ -33,9 +33,11 @@ __all__ = (
     "UnaryExpression",
     "BinaryExpression",
     "Reversed",
+    "UnaryOperator",
+    "BinaryOperator",
 )
 
-from typing import Annotated, Literal, TypeAlias, Union, final
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union, final
 
 import pydantic
 
@@ -44,6 +46,16 @@ from ._base import ColumnExpressionBase, InvalidQueryTreeError
 from ._column_literal import ColumnLiteral
 from ._column_reference import _ColumnReference
 from ._column_set import ColumnSet
+
+if TYPE_CHECKING:
+    from ..visitors import ColumnExpressionVisitor
+
+
+_T = TypeVar("_T")
+
+
+UnaryOperator: TypeAlias = Literal["-", "begin_of", "end_of"]
+BinaryOperator: TypeAlias = Literal["+", "-", "*", "/", "%"]
 
 
 @final
@@ -55,7 +67,7 @@ class UnaryExpression(ColumnExpressionBase):
     operand: ColumnExpression
     """Expression this one operates on."""
 
-    operator: Literal["-", "begin_of", "end_of"]
+    operator: UnaryOperator
     """Operator this expression applies."""
 
     def gather_required_columns(self, columns: ColumnSet) -> None:
@@ -102,6 +114,10 @@ class UnaryExpression(ColumnExpressionBase):
                 )
         return self
 
+    def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
+        # Docstring inherited.
+        return visitor.visit_unary_expression(self)
+
 
 @final
 class BinaryExpression(ColumnExpressionBase):
@@ -115,7 +131,7 @@ class BinaryExpression(ColumnExpressionBase):
     b: ColumnExpression
     """Right-hand side expression this one operates on."""
 
-    operator: Literal["+", "-", "*", "/", "%"]
+    operator: BinaryOperator
     """Operator this expression applies.
 
     Integer '/' and '%' are defined as in SQL, not Python (though the
@@ -175,6 +191,10 @@ class BinaryExpression(ColumnExpressionBase):
                 )
         return self
 
+    def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
+        # Docstring inherited.
+        return visitor.visit_binary_expression(self)
+
 
 # Union without Pydantic annotation for the discriminator, for use in nesting
 # in other unions that will add that annotation.  It's not clear whether it
@@ -218,6 +238,10 @@ class Reversed(ColumnExpressionBase):
 
     def __str__(self) -> str:
         return f"{self.operand} DESC"
+
+    def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
+        # Docstring inherited.
+        return visitor.visit_reversed(self)
 
 
 def _validate_order_expression(expression: _ColumnExpression | Reversed) -> _ColumnExpression | Reversed:

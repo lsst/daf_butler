@@ -63,6 +63,7 @@ from ...direct_query_driver import (  # Future query system (direct,server).
 )
 from ...queries import tree as qt  # Future query system (direct,client,server)
 from ...queries.overlaps import OverlapsVisitor
+from ...queries.visitors import PredicateVisitFlags
 from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext, VersionTuple
 
@@ -1010,11 +1011,11 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         self,
         element: DimensionElement,
         region: Region,
-        flags: qt.PredicateVisitFlags,
+        flags: PredicateVisitFlags,
     ) -> qt.Predicate | None:
         # Reject spatial constraints that are nested inside OR or NOT, because
         # the postprocessing needed for those would be a lot harder.
-        if flags & qt.PredicateVisitFlags.INVERTED or flags & qt.PredicateVisitFlags.HAS_OR_SIBLINGS:
+        if flags & PredicateVisitFlags.INVERTED or flags & PredicateVisitFlags.HAS_OR_SIBLINGS:
             raise NotImplementedError(
                 "Spatial overlap constraints nested inside OR or NOT are not supported."
             )
@@ -1082,11 +1083,11 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         return result
 
     def visit_spatial_join(
-        self, a: DimensionElement, b: DimensionElement, flags: qt.PredicateVisitFlags
+        self, a: DimensionElement, b: DimensionElement, flags: PredicateVisitFlags
     ) -> qt.Predicate | None:
         # Reject spatial joins that are nested inside OR or NOT, because the
         # postprocessing needed for those would be a lot harder.
-        if flags & qt.PredicateVisitFlags.INVERTED or flags & qt.PredicateVisitFlags.HAS_OR_SIBLINGS:
+        if flags & PredicateVisitFlags.INVERTED or flags & PredicateVisitFlags.HAS_OR_SIBLINGS:
             raise NotImplementedError("Spatial overlap joins nested inside OR or NOT are not supported.")
         # Delegate to super to check for invalid joins and record this
         # "connection" for use when seeing whether to add an automatic join

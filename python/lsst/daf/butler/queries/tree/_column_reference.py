@@ -27,17 +27,22 @@
 
 from __future__ import annotations
 
-from lsst.daf.butler.queries.tree._column_set import ColumnSet
-
 __all__ = ("ColumnReference", "DimensionKeyReference", "DimensionFieldReference", "DatasetFieldReference")
 
-from typing import Annotated, Literal, TypeAlias, Union, final
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union, final
 
 import pydantic
 
 from ...column_spec import ColumnType
 from ...dimensions import Dimension, DimensionElement
 from ._base import ColumnExpressionBase, DatasetFieldName, InvalidQueryTreeError
+
+if TYPE_CHECKING:
+    from ..visitors import ColumnExpressionVisitor
+    from ._column_set import ColumnSet
+
+
+_T = TypeVar("_T")
 
 
 @final
@@ -65,6 +70,10 @@ class DimensionKeyReference(ColumnExpressionBase):
 
     def __str__(self) -> str:
         return self.dimension.name
+
+    def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
+        # Docstring inherited.
+        return visitor.visit_dimension_key_reference(self)
 
 
 @final
@@ -98,6 +107,10 @@ class DimensionFieldReference(ColumnExpressionBase):
 
     def __str__(self) -> str:
         return f"{self.element}.{self.field}"
+
+    def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
+        # Docstring inherited.
+        return visitor.visit_dimension_field_reference(self)
 
     @pydantic.model_validator(mode="after")
     def _validate_field(self) -> DimensionFieldReference:
@@ -149,6 +162,10 @@ class DatasetFieldReference(ColumnExpressionBase):
 
     def __str__(self) -> str:
         return f"{self.dataset_type}.{self.field}"
+
+    def visit(self, visitor: ColumnExpressionVisitor[_T]) -> _T:
+        # Docstring inherited.
+        return visitor.visit_dataset_field_reference(self)
 
 
 # Union without Pydantic annotation for the discriminator, for use in nesting
