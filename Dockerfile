@@ -65,9 +65,8 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --upgrade --no-cache-dir pip setuptools wheel
 
 # Install the app's Python runtime dependencies
-COPY requirements.txt .
-COPY server/requirements.txt server_requirements.txt
-RUN pip install --quiet --no-cache-dir -r requirements.txt -r server_requirements.txt
+COPY requirements/docker.txt ./docker-requirements.txt
+RUN pip install --no-cache-dir -r docker-requirements.txt
 
 FROM dependencies-image AS install-image
 

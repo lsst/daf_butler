@@ -1,0 +1,20 @@
+# Common dependencies
+pyyaml >= 5.1
+astropy >= 5.2
+sqlalchemy >= 1.4
+pydantic >=2,<3.0
+deprecated >=1.2
+pyarrow >= 0.16
+pandas >= 1.0
+numpy >= 1.17
+psycopg2
+
+# Butler CLI dependencies
+click >7.0
+
+# RemoteButler dependencies
+httpx
+
+# Butler server dependencies sufficient for unit tests
+fastapi
+safir >= 3.4.0

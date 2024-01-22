@@ -55,7 +55,6 @@ jobs:
         shell: bash -l {0}
         run: |
           mamba install -y -q psycopg2
-          pip install testing.postgresql
 
       - name: Install cryptography package for moto
         shell: bash -l {0}

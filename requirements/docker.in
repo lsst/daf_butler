@@ -1,0 +1,12 @@
+-r main.in
+
+# Required LSST packages (different from those in the Github Actions
+# requirements.txt because that uses Git URLs.  pip-compile is unable to pin a
+# Git repository as a dependency)
+lsst-sphgeom
+lsst-utils
+lsst-resources[https,s3]
+lsst-daf-relation
+
+# Server-only dependencies
+uvicorn
