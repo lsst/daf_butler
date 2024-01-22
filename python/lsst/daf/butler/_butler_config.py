@@ -102,7 +102,7 @@ class ButlerConfig(Config):
                 # Force back to a string because the resolved URI
                 # might not refer explicitly to a directory and we have
                 # check below to guess that.
-                other = str(ButlerRepoIndex.get_repo_uri(other, True))
+                other = str(ButlerRepoIndex.get_repo_uri(other, False))
             if other != original_other:
                 resolved_alias = True
 
