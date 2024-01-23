@@ -1195,7 +1195,7 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
 
     def setUp(self) -> None:
         # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = tempfile.mkdtemp()
         super().setUp()
 
     def testCleanup(self) -> None:
@@ -1333,7 +1333,7 @@ class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.Test
 
     def setUp(self) -> None:
         # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = tempfile.mkdtemp()
         super().setUp()
 
 
@@ -1374,7 +1374,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
     def setUp(self) -> None:
         # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = tempfile.mkdtemp()
         super().setUp()
 
     def testConstraints(self) -> None:
@@ -1467,7 +1467,7 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         self.id = 0
 
         # Create a root that we can use for caching tests.
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = tempfile.mkdtemp()
 
         # Create some test dataset refs and associated test files
         sc = self.storageClassFactory.getStorageClass("StructuredDataDict")
