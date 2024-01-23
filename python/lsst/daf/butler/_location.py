@@ -47,7 +47,7 @@ class Location:
         path separator if a ``file`` scheme is being used for the URI,
         else a POSIX separator. Can be a full URI if the root URI is `None`.
         Can also be a schemeless URI if it refers to a relative path.
-    _trusted_path : `bool`, optional
+    trusted_path : `bool`, optional
         If `True`, the path is not checked to see if it is really inside
         the datastore.
     """
@@ -59,7 +59,7 @@ class Location:
         datastoreRootUri: None | ResourcePathExpression,
         path: ResourcePathExpression,
         *,
-        _trusted_path: bool = False,
+        trusted_path: bool = False,
     ):
         # Be careful not to force a relative local path to absolute path
         path_uri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
@@ -89,7 +89,7 @@ class Location:
 
         # Check that the resulting URI is inside the datastore
         # This can go wrong if we were given ../dir as path
-        if self._datastoreRootUri is not None and not _trusted_path:
+        if self._datastoreRootUri is not None and not trusted_path:
             pathInStore = self.uri.relative_to(self._datastoreRootUri)
             if pathInStore is None:
                 raise ValueError(f"Unexpectedly {path} jumps out of {self._datastoreRootUri}")
@@ -245,7 +245,7 @@ class LocationFactory:
         """Return the network location of root location of the `Datastore`."""
         return self._datastoreRootUri.netloc
 
-    def fromPath(self, path: ResourcePathExpression, *, _trusted_path: bool = False) -> Location:
+    def fromPath(self, path: ResourcePathExpression, *, trusted_path: bool = False) -> Location:
         """Create a `Location` from a POSIX path.
 
         Parameters
@@ -254,7 +254,7 @@ class LocationFactory:
             A standard POSIX path, relative to the `Datastore` root.
             If it is a `lsst.resources.ResourcePath` it must not be absolute.
             Is assumed to refer to a file and not a directory in the datastore.
-        _trusted_path : `bool`, optional
+        trusted_path : `bool`, optional
             If `True`, the path is not checked to see if it is really inside
             the datastore.
 
@@ -264,9 +264,9 @@ class LocationFactory:
             The equivalent `Location`.
         """
         path = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
-        return self.from_uri(path, _trusted_path=_trusted_path)
+        return self.from_uri(path, trusted_path=trusted_path)
 
-    def from_uri(self, uri: ResourcePath, *, _trusted_path: bool = False) -> Location:
+    def from_uri(self, uri: ResourcePath, *, trusted_path: bool = False) -> Location:
         if uri.isabs():
             raise ValueError("LocationFactory path must be relative to datastore, not absolute.")
-        return Location(self._datastoreRootUri, uri, _trusted_path=_trusted_path)
+        return Location(self._datastoreRootUri, uri, trusted_path=trusted_path)

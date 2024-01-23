@@ -317,7 +317,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         if uriInStore.isabs():
             location = Location(None, uriInStore)
         else:
-            location = factory.from_uri(uriInStore, _trusted_path=True)
+            location = factory.from_uri(uriInStore, trusted_path=True)
         return location
 
     @classmethod
