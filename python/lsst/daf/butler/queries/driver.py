@@ -265,7 +265,7 @@ class QueryDriver(AbstractContextManager[None]):
         tree: QueryTree,
         dimensions: DimensionGroup,
         datasets: frozenset[str],
-    ) -> tuple[MaterializationKey, frozenset[str]]:
+    ) -> MaterializationKey:
         """Execute a query tree, saving results to temporary storage for use
         in later queries.
 
@@ -276,17 +276,14 @@ class QueryDriver(AbstractContextManager[None]):
         dimensions : `DimensionGroup`
             Dimensions whose key columns should be preserved.
         datasets : `frozenset` [ `str` ]
-            Names of dataset types whose ID columns should be materialized
-            if they are fully resolved.
+            Names of dataset types whose ID columns may be materialized.  It
+            is implementation-defined whether they actually are.
 
         Returns
         -------
-        key
+        key : `MaterializationKey`
             Unique identifier for the result rows that allows them to be
             referenced in a `QueryTree`.
-        resolved_datasets : `frozenset` [  `str` ]
-            Names of dataset types that were resolved and had their UUIDs
-            materialized.
         """
         raise NotImplementedError()
 

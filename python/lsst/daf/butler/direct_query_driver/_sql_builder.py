@@ -37,12 +37,13 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 import sqlalchemy
 
 from .. import ddl
+from .._utilities.nonempty_mapping import NonemptyMapping
 from ..queries import tree as qt
+from ..registry.nameShrinker import NameShrinker
 from ._postprocessing import Postprocessing
 
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
-    from ..registry.nameShrinker import NameShrinker
     from ..timespan_database_representation import TimespanDatabaseRepresentation
 
 
@@ -50,12 +51,12 @@ if TYPE_CHECKING:
 class _BaseSqlBuilder:
     db: Database
 
-    dimensions_provided: dict[str, list[sqlalchemy.ColumnElement]] = dataclasses.field(
-        default_factory=dict, kw_only=True
+    dimensions_provided: NonemptyMapping[str, list[sqlalchemy.ColumnElement]] = dataclasses.field(
+        default_factory=lambda: NonemptyMapping(list), kw_only=True
     )
 
-    fields_provided: dict[str, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
-        default_factory=dict, kw_only=True
+    fields_provided: NonemptyMapping[str, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
+        default_factory=lambda: NonemptyMapping(dict), kw_only=True
     )
 
     timespans_provided: dict[str, TimespanDatabaseRepresentation] = dataclasses.field(
@@ -98,29 +99,28 @@ class _BaseSqlBuilder:
     def select(
         self,
         columns: qt.ColumnSet,
-        name_shrinker: NameShrinker,
         postprocessing: Postprocessing | None = None,
         *,
         sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
         distinct: bool = False,
+        required_dimensions_only: bool = False,
     ) -> sqlalchemy.Select:
         raise NotImplementedError()
 
     def make_table_spec(
         self,
         columns: qt.ColumnSet,
-        name_shrinker: NameShrinker,
         postprocessing: Postprocessing | None = None,
     ) -> ddl.TableSpec:
+        # Note that we don't need to use a NameShrinker here because that will
+        # happen inside the Database object when it's given a TableSpec.
         results = ddl.TableSpec(
             [columns.get_column_spec(logical_table, field).to_sql_spec() for logical_table, field in columns]
         )
         if postprocessing:
             for element in postprocessing.iter_missing(columns):
                 results.fields.add(
-                    ddl.FieldSpec.for_region(
-                        name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
-                    )
+                    ddl.FieldSpec.for_region(columns.get_qualified_name(element.name, "region"))
                 )
         return results
 
@@ -133,11 +133,11 @@ class EmptySqlBuilder(_BaseSqlBuilder):
     def select(
         self,
         columns: qt.ColumnSet,
-        name_shrinker: NameShrinker,
         postprocessing: Postprocessing | None = None,
         *,
         sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
         distinct: bool = False,
+        required_dimensions_only: bool = False,
     ) -> sqlalchemy.Select:
         assert not columns
         assert not postprocessing
@@ -155,22 +155,24 @@ class SqlBuilder(_BaseSqlBuilder):
 
     def extract_dimensions(self, dimensions: Iterable[str], **kwargs: str) -> SqlBuilder:
         for dimension_name in dimensions:
-            self.dimensions_provided[dimension_name] = [self.sql_from_clause.columns[dimension_name]]
+            self.dimensions_provided[dimension_name].append(self.sql_from_clause.columns[dimension_name])
         for k, v in kwargs.items():
-            self.dimensions_provided[v] = [self.sql_from_clause.columns[k]]
+            self.dimensions_provided[v].append(self.sql_from_clause.columns[k])
         return self
 
-    def extract_columns(self, columns: qt.ColumnSet, name_shrinker: NameShrinker) -> SqlBuilder:
+    def extract_columns(self, columns: qt.ColumnSet, required_dimensions_only: bool = False) -> SqlBuilder:
+        name_shrinker = NameShrinker(self.db.dialect.max_identifier_length)
         for logical_table, field in columns:
             name = name_shrinker.shrink(columns.get_qualified_name(logical_table, field))
             if field is None:
-                self.dimensions_provided[logical_table].append(self.sql_from_clause.columns[name])
+                if logical_table in columns.dimensions.required or not required_dimensions_only:
+                    self.dimensions_provided[logical_table].append(self.sql_from_clause.columns[name])
             elif columns.is_timespan(logical_table, field):
                 self.timespans_provided[logical_table] = self.db.getTimespanRepresentation().from_columns(
                     self.sql_from_clause.columns, name
                 )
             else:
-                self.fields_provided.setdefault(logical_table, {})[field] = self.sql_from_clause.columns[name]
+                self.fields_provided[logical_table][field] = self.sql_from_clause.columns[name]
         return self
 
     def join(self, other: SqlBuilder) -> SqlBuilder:
@@ -184,17 +186,19 @@ class SqlBuilder(_BaseSqlBuilder):
         self.sql_from_clause = self.sql_from_clause.join(
             other.sql_from_clause, onclause=sqlalchemy.and_(*join_on)
         )
+        self.sql_where_terms += other.sql_where_terms
         return self
 
     def select(
         self,
         columns: qt.ColumnSet,
-        name_shrinker: NameShrinker,
         postprocessing: Postprocessing | None = None,
         *,
         sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
         distinct: bool = False,
+        required_dimensions_only: bool = False,
     ) -> sqlalchemy.Select:
+        name_shrinker = NameShrinker(self.db.dialect.max_identifier_length)
         if distinct and columns:
             # Hard case: caller wants unique rows, and we have to tell the
             # database to do that because they aren't naturally unique.
@@ -213,9 +217,10 @@ class SqlBuilder(_BaseSqlBuilder):
                 name = name_shrinker.shrink(columns.get_qualified_name(logical_table, field))
                 uniqueness_category = columns.get_uniqueness_category(logical_table, field)
                 if field is None:
-                    column_triples.append(
-                        (name, self.dimensions_provided[logical_table][0], uniqueness_category)
-                    )
+                    if logical_table in columns.dimensions.required or not required_dimensions_only:
+                        column_triples.append(
+                            (name, self.dimensions_provided[logical_table][0], uniqueness_category)
+                        )
                 elif columns.is_timespan(logical_table, field):
                     column_triples.extend(
                         zip(
@@ -269,9 +274,29 @@ class SqlBuilder(_BaseSqlBuilder):
         self.sql_where_terms.extend(arg)
         return self
 
-    def project_subquery(self, dimensions: Iterable[str]) -> SqlBuilder:
-        sql_columns = [self.dimensions_provided[name][0].label(name) for name in dimensions]
-        sql_select = sqlalchemy.select(*sql_columns).select_from(self.sql_from_clause).distinct()
-        if self.sql_where_terms:
-            sql_select = sql_select.where(*self.sql_where_terms)
-        return SqlBuilder(self.db, sql_select.subquery()).extract_dimensions(dimensions)
+    def subquery(
+        self,
+        columns: qt.ColumnSet,
+        distinct: bool = False,
+        required_dimensions_only: bool = False,
+        chain: Iterable[SqlBuilder] = (),
+    ) -> SqlBuilder:
+        other_selects = [
+            other_sql_builder.select(
+                columns, distinct=False, required_dimensions_only=required_dimensions_only
+            )
+            for other_sql_builder in chain
+        ]
+        select = self.select(
+            columns,
+            distinct=distinct and not other_selects,
+            required_dimensions_only=required_dimensions_only,
+        )
+        if other_selects:
+            if distinct:
+                subquery = select.union(*other_selects).subquery()
+            else:
+                subquery = select.union_all(*other_selects).subquery()
+        else:
+            subquery = select.subquery()
+        return SqlBuilder(self.db, subquery).extract_columns(columns)

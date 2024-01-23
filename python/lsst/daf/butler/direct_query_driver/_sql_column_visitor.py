@@ -207,9 +207,7 @@ class SqlColumnVisitor(
         subquery_visitor = SqlColumnVisitor(subquery_sql_builder, self._driver)
         subquery_column = subquery_visitor.expect_scalar(column)
         subquery_select = subquery_sql_builder.select(
-            qt.ColumnSet(self._driver.universe.empty.as_group()),
-            self._driver._name_shrinker,
-            sql_columns=[subquery_column],
+            qt.ColumnSet(self._driver.universe.empty.as_group()), sql_columns=[subquery_column]
         )
         sql_member = self.expect_scalar(member)
         return sql_member.in_(subquery_select)

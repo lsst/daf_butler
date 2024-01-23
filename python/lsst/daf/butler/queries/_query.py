@@ -53,7 +53,6 @@ from .result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, Dimens
 from .tree import (
     DatasetSearch,
     InvalidQueryTreeError,
-    MaterializationSpec,
     Predicate,
     QueryTree,
     make_dimension_query_tree,
@@ -362,11 +361,8 @@ class Query(HomogeneousQueryBase):
             dimensions = self._tree.dimensions
         else:
             dimensions = self._driver.universe.conform(dimensions)
-        key, resolved_datasets = self._driver.materialize(self._tree, dimensions, datasets)
-        tree = make_unit_query_tree(self._driver.universe).join_materialization(
-            key,
-            MaterializationSpec.model_construct(dimensions=dimensions, resolved_datasets=resolved_datasets),
-        )
+        key = self._driver.materialize(self._tree, dimensions, datasets)
+        tree = make_unit_query_tree(self._driver.universe).join_materialization(key, dimensions=dimensions)
         for dataset_type_name in datasets:
             tree = tree.join_dataset(dataset_type_name, self._tree.datasets[dataset_type_name])
         return Query(self._driver, tree)

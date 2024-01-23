@@ -33,7 +33,6 @@ __all__ = (
     "make_dimension_query_tree",
     "DataCoordinateUploadKey",
     "MaterializationKey",
-    "MaterializationSpec",
     "DatasetSearch",
     "DeferredValidationQueryTree",
 )
@@ -95,25 +94,6 @@ def make_dimension_query_tree(dimensions: DimensionGroup) -> QueryTree:
 
 
 @final
-class MaterializationSpec(QueryTreeBase):
-    """Information about a materialized query tree (e.g. one executed into a
-    temporary table) that has been joined into another query tree.
-    """
-
-    dimensions: DimensionGroup
-    """Dimensions whose keys were stored in the materialization."""
-
-    resolved_datasets: frozenset[str]
-    """Datasets that were fully resolved in the materialization (only one
-    dataset for each data ID).
-
-    The UUIDs of these datasets are stored in the materialization, while those
-    for unresolved datasets are not, in order to allow materializations to
-    always be unique over dimensions alone.
-    """
-
-
-@final
 class DatasetSearch(QueryTreeBase):
     """Information about a dataset search joined into a query tree.
 
@@ -168,7 +148,7 @@ class QueryTree(QueryTreeBase):
     """Uploaded tables of data ID values that have been joined into the query.
     """
 
-    materializations: Mapping[MaterializationKey, MaterializationSpec] = pydantic.Field(default_factory=dict)
+    materializations: Mapping[MaterializationKey, DimensionGroup] = pydantic.Field(default_factory=dict)
     """Tables of result rows from other queries that have been stored
     temporarily on the server.
     """
@@ -187,10 +167,9 @@ class QueryTree(QueryTreeBase):
         dataset searches, and materializations.
         """
         result: set[DimensionGroup] = set(self.data_coordinate_uploads.values())
+        result.update(self.materializations.values())
         for dataset_spec in self.datasets.values():
             result.add(dataset_spec.dimensions)
-        for materialization_spec in self.materializations.values():
-            result.add(materialization_spec.dimensions)
         return frozenset(result)
 
     @property
@@ -271,7 +250,7 @@ class QueryTree(QueryTreeBase):
             )
         )
 
-    def join_materialization(self, key: MaterializationKey, spec: MaterializationSpec) -> QueryTree:
+    def join_materialization(self, key: MaterializationKey, dimensions: DimensionGroup) -> QueryTree:
         """Return a new tree that joins in temporarily stored results from
         another query.
 
@@ -280,9 +259,8 @@ class QueryTree(QueryTreeBase):
         key : `MaterializationKey`
             Unique identifier for this materialization, as assigned by a
             `QueryDriver`.
-        spec : `MaterializationSpec`
-            Struct containing the dimensions and resolved dataset types stored
-            in the materialization.
+        dimensions : `DimensionGroup`
+            The dimensions stored in the materialization.
 
         Returns
         -------
@@ -290,12 +268,14 @@ class QueryTree(QueryTreeBase):
             A new tree that joins in the materialization.
         """
         if key in self.materializations:
-            assert spec == self.materializations[key], f"Different specs for the same materialization {key}!"
+            assert (
+                dimensions == self.materializations[key]
+            ), f"Different dimensions for the same materialization {key}!"
             return self
         materializations = dict(self.materializations)
-        materializations[key] = spec
+        materializations[key] = dimensions
         return self.model_copy(
-            update=dict(dimensions=self.dimensions | spec.dimensions, materializations=materializations)
+            update=dict(dimensions=self.dimensions | dimensions, materializations=materializations)
         )
 
     def join_dataset(self, dataset_type: str, spec: DatasetSearch) -> QueryTree:

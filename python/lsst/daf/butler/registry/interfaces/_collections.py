@@ -39,6 +39,8 @@ from abc import abstractmethod
 from collections.abc import Iterable, Set
 from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
+import sqlalchemy
+
 from ..._timespan import Timespan
 from .._collection_type import CollectionType
 from ..wildcards import CollectionWildcard
@@ -619,5 +621,29 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         flatten : `bool`, optional
             If `True`, recursively flatten out any nested
             `~CollectionType.CHAINED` collections in ``children`` first.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def lookup_name_sql(
+        self, sql_key: sqlalchemy.ColumnElement[_Key], sql_from_clause: sqlalchemy.FromClause
+    ) -> tuple[sqlalchemy.ColumnElement[str], sqlalchemy.FromClause]:
+        """Return a SQLAlchemy column and FROM clause that enable a query
+        to look up a collection name from the key.
+
+        Parameters
+        ----------
+        sql_key : `sqlalchemy.ColumnElement`
+            SQL column expression that evaluates to the collection key.
+        sql_from_clause : `sqlalchemy.FromClause`
+            SQL FROM clause from which ``sql_key`` was obtained.
+
+        Returns
+        -------
+        sql_name : `sqlalchemy.ColumnElement` [ `str` ]
+            SQL column expression that evalutes to the collection name.
+        sql_from_clause : `sqlalchemy.FromClause`
+            SQL FROM clause that includes the given ``sql_from_clause`` and
+            any table needed to provided ``sql_name``.
         """
         raise NotImplementedError()

@@ -32,7 +32,7 @@ from ... import ddl
 __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Iterator, Mapping, Set
+from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Relation
@@ -45,9 +45,11 @@ from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
+    from ...direct_query_driver import SqlBuilder  # new query system, server+direct only
+    from ...queries import tree as qt  # new query system, both clients + server
     from .._caching_context import CachingContext
     from .._collection_summary import CollectionSummary
-    from ..queries import SqlQueryContext
+    from ..queries import SqlQueryContext  # old registry query system
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
@@ -309,6 +311,14 @@ class DatasetRecordStorage(ABC):
         relation : `~lsst.daf.relation.Relation`
             Representation of the query.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_sql_builder(
+        self,
+        collections: Sequence[CollectionRecord],
+        fields: Set[qt.DatasetFieldName],
+    ) -> SqlBuilder:
         raise NotImplementedError()
 
     datasetType: DatasetType

@@ -27,15 +27,14 @@
 
 from __future__ import annotations
 
-import itertools
-
 __all__ = ("ColumnSet",)
 
-from collections import defaultdict
+import itertools
 from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Literal, get_args
 
 from ... import column_spec
+from ..._utilities.nonempty_mapping import NonemptyMapping
 from ...dimensions import DimensionGroup
 from ._base import DatasetFieldName
 
@@ -47,7 +46,7 @@ class ColumnSet:
     def __init__(self, dimensions: DimensionGroup) -> None:
         self._dimensions = dimensions
         self._dimension_fields: dict[str, set[str]] = {name: set() for name in dimensions.elements}
-        self._dataset_fields: defaultdict[str, set[DatasetFieldName]] = defaultdict(lambda: {"dataset_id"})
+        self._dataset_fields = NonemptyMapping[str, set[DatasetFieldName]](set)
 
     @property
     def dimensions(self) -> DimensionGroup:
@@ -153,6 +152,11 @@ class ColumnSet:
                 field in self._dimensions.universe[logical_table].schema.remainder.names
             ), "long forms (e.g. visit.id) of dimension key columns should not appear here"
             return "natural"
+        if "dataset_id" not in self._dataset_fields[logical_table]:
+            raise RuntimeError(
+                f"Uniqueness for dataset field {logical_table}.{field} is undefined if "
+                "dataset_id is not included."
+            )
         return (
             "key"
             if (

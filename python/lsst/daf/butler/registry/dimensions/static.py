@@ -440,15 +440,15 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     def make_sql_builder(self, element: DimensionElement, fields: Set[str]) -> SqlBuilder:
         if element.implied_union_target is not None:
             assert not fields, "Dimensions with implied-union storage never have fields."
-            return self.make_sql_builder(element.implied_union_target, fields).project_subquery(
-                element.required.names
+            return self.make_sql_builder(element.implied_union_target, fields).subquery(
+                qt.ColumnSet(element.minimal_group), distinct=True
             )
         if not element.has_own_table:
             raise NotImplementedError(f"Cannot join dimension element {element} with no table.")
         table = self._tables[element.name]
         result = SqlBuilder(self._db, table)
         for dimension_name, column_name in zip(element.required.names, element.schema.required.names):
-            result.dimensions_provided[dimension_name] = [table.columns[column_name]]
+            result.dimensions_provided[dimension_name].append(table.columns[column_name])
         result.extract_dimensions(element.implied.names)
         for field in fields:
             if field == "timespan":
@@ -1052,8 +1052,11 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     sql_skypix_col = overlap_sql_builder.dimensions_provided[self.common_skypix.name][0]
                     for begin, end in self.common_skypix.pixelization.envelope(region):
                         sql_where_or.append(sqlalchemy.and_(sql_skypix_col >= begin, sql_skypix_col < end))
+                    overlap_sql_builder.where_sql(sqlalchemy.or_(*sql_where_or))
                     self.sql_builder = self.sql_builder.join(
-                        overlap_sql_builder.project_subquery(element.required.names)
+                        overlap_sql_builder.subquery(
+                            qt.ColumnSet(element.minimal_group), distinct=True, required_dimensions_only=True
+                        )
                     )
                     # Short circuit here since the SQL WHERE clause has already
                     # been embedded in the subquery.
@@ -1113,7 +1116,11 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     self.sql_builder = self.sql_builder.join(
                         self._make_common_skypix_overlap_sql_builder(a)
                         .join(self._make_common_skypix_overlap_sql_builder(b))
-                        .project_subquery(list(a.required.names) + list(b.required.names))
+                        .subquery(
+                            qt.ColumnSet(a.minimal_group | b.minimal_group),
+                            distinct=True,
+                            required_dimensions_only=True,
+                        )
                     )
                 # In both cases we add postprocessing to check that the regions
                 # really do overlap, since overlapping the same common skypix

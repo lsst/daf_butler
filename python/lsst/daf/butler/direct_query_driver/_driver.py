@@ -108,7 +108,7 @@ class DirectQueryDriver(QueryDriver):
         self._timespan_db_repr = db.getTimespanRepresentation()
         self._managers = managers
         self._defaults = defaults
-        self._materialization_tables: dict[qt.MaterializationKey, sqlalchemy.Table] = {}
+        self._materialization: dict[qt.MaterializationKey, tuple[sqlalchemy.Table, frozenset[str]]] = {}
         self._upload_tables: dict[qt.DataCoordinateUploadKey, sqlalchemy.Table] = {}
         self._exit_stack: ExitStack | None = None
         self._raw_page_size = raw_page_size
@@ -161,9 +161,7 @@ class DirectQueryDriver(QueryDriver):
         # Build the FROM and WHERE clauses and identify any post-query
         # processing we need to run.
         sql_builder, postprocessing, needs_distinct = self._make_sql_builder(tree, required_columns)
-        sql_select = sql_builder.select(
-            result_columns, self._name_shrinker, postprocessing, distinct=needs_distinct
-        )
+        sql_select = sql_builder.select(result_columns, postprocessing, distinct=needs_distinct)
         if result_spec.order_by:
             visitor = SqlColumnVisitor(sql_builder, self)
             sql_select = sql_select.order_by(*[visitor.expect_scalar(term) for term in result_spec.order_by])
@@ -219,7 +217,7 @@ class DirectQueryDriver(QueryDriver):
         tree: qt.QueryTree,
         dimensions: DimensionGroup,
         datasets: frozenset[str],
-    ) -> tuple[qt.MaterializationKey, frozenset[str]]:
+    ) -> qt.MaterializationKey:
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before 'materialize' is called.")
@@ -233,16 +231,14 @@ class DirectQueryDriver(QueryDriver):
                 columns.dataset_fields[dataset_type].add("dataset_id")
                 resolved_datasets.add(dataset_type)
         sql_builder, postprocessing, needs_distinct = self._make_sql_builder(tree, columns)
-        sql_select = sql_builder.select(columns, self._name_shrinker, postprocessing, distinct=needs_distinct)
+        sql_select = sql_builder.select(columns, postprocessing, distinct=needs_distinct)
         table = self._exit_stack.enter_context(
-            self._db.temporary_table(
-                sql_builder.make_table_spec(columns, self._name_shrinker, postprocessing)
-            )
+            self._db.temporary_table(sql_builder.make_table_spec(columns, postprocessing))
         )
         self._db.insert(table, select=sql_select)
         key = uuid.uuid4()
-        self._materialization_tables[key] = table
-        return key, frozenset(resolved_datasets)
+        self._materialization[key] = (table, frozenset(resolved_datasets))
+        return key
 
     def upload_data_coordinates(
         self, dimensions: DimensionGroup, rows: Iterable[tuple[DataIdValue, ...]]
@@ -283,9 +279,7 @@ class DirectQueryDriver(QueryDriver):
         if postprocessing and exact:
             if not discard:
                 raise RuntimeError("Cannot count query rows exactly without discarding them.")
-            sql_select = sql_builder.select(
-                columns, self._name_shrinker, postprocessing, distinct=needs_distinct
-            )
+            sql_select = sql_builder.select(columns, postprocessing, distinct=needs_distinct)
             n = 0
             with self._db.query(sql_select.execution_options(yield_per=self._raw_page_size)) as results:
                 for _ in postprocessing.apply(results, self._name_shrinker):
@@ -295,16 +289,13 @@ class DirectQueryDriver(QueryDriver):
         # there was no postprocessing.
         if needs_distinct:
             # Make a subquery with DISTINCT [ON] or GROUP BY as needed.
-            sql_select = sql_builder.select(
-                columns, self._name_shrinker, postprocessing, distinct=needs_distinct
-            )
+            sql_select = sql_builder.select(columns, postprocessing, distinct=needs_distinct)
             # Do COUNT(*) on that subquery.
             sql_select = sqlalchemy.select(sqlalchemy.count()).select_from(sql_select.subquery())
         else:
             # Do COUNT(*) on the original query's FROM clause.
             sql_select = sql_builder.select(
                 qt.ColumnSet(self._universe.empty.as_group()),
-                self._name_shrinker,
                 sql_columns=sqlalchemy.func.count(),
             )
         with self._db.query(sql_select) as result:
@@ -321,14 +312,14 @@ class DirectQueryDriver(QueryDriver):
         columns = qt.ColumnSet(tree.dimensions)
         sql_builder, postprocessing, _ = self._make_sql_builder(tree, columns)
         if postprocessing and exact:
-            sql_select = sql_builder.select(columns, self._name_shrinker, postprocessing)
+            sql_select = sql_builder.select(columns, postprocessing)
             with self._db.query(
                 sql_select.execution_options(yield_per=self._postprocessing_filter_factor)
             ) as result:
                 for _ in postprocessing.apply(result, self._name_shrinker):
                     return True
                 return False
-        sql_select = sql_builder.select(columns, self._name_shrinker).limit(1)
+        sql_select = sql_builder.select(columns).limit(1)
         with self._db.query(sql_select) as result:
             return result.first() is not None
 
@@ -341,8 +332,10 @@ class DirectQueryDriver(QueryDriver):
                     f"No datasets of type {dataset_type!r} in collections "
                     f"{list(dataset_search.original_collections)}."
                 )
-        if execute:
-            raise NotImplementedError("TODO")
+        if messages or not execute:
+            return messages
+        # TODO: guess at ways to split up query that might fail or succeed if
+        # run separately, execute them with LIMIT 1 and report the results.
         return messages
 
     def get_dataset_dimensions(self, name: str) -> DimensionGroup:
@@ -422,16 +415,10 @@ class DirectQueryDriver(QueryDriver):
             )
         # Process materialization joins.
         for materialization_key, materialization_spec in tree.materializations.items():
-            sql_builder = sql_builder.join(
-                SqlBuilder(self._db, self._upload_tables[materialization_key]).extract_dimensions(
-                    materialization_spec.dimensions.names
-                )
-            )
-            if materialization_spec.resolved_datasets:
-                raise NotImplementedError("TODO")
+            sql_builder = self._join_materialization(sql_builder, materialization_key, materialization_spec)
         # Process dataset joins.
-        for dataset_type, dataset_spec in tree.datasets.items():
-            raise NotImplementedError("TODO")
+        for dataset_type, dataset_search in tree.datasets.items():
+            sql_builder = self._join_dataset_search(sql_builder, dataset_type, dataset_search, columns)
         # Make a list of dimension tables we have to join into the query.
         dimension_tables_to_join: list[DimensionElement] = []
         for element_name in tree.dimensions.elements:
@@ -459,8 +446,8 @@ class DirectQueryDriver(QueryDriver):
                     continue
                 # Materializations have all key columns for their dimensions.
                 if any(
-                    element in materialization_spec.dimensions.names
-                    for materialization_spec in tree.materializations.values()
+                    element in materialization_dimensions.names
+                    for materialization_dimensions in tree.materializations.values()
                 ):
                     continue
                 dimension_tables_to_join.append(element)
@@ -520,9 +507,7 @@ class DirectQueryDriver(QueryDriver):
         # we mostly get from _make_vanilla_sql_builder.
         columns.dataset_fields[dataset_type].add("rank")
         base_sql_builder, postprocessing = self._make_vanilla_sql_builder(tree, columns.copy())
-        base_select = base_sql_builder.select(
-            columns, self._name_shrinker, postprocessing, distinct=needs_distinct
-        )
+        base_select = base_sql_builder.select(columns, postprocessing, distinct=needs_distinct)
         base_cte = base_select.cte(f"{dataset_type}_base")
         # Now we fill out the "window" subquery. Once again the SELECT clause
         # is populated by 'internal_columns', but onter dropping the 'rank'
@@ -539,17 +524,77 @@ class DirectQueryDriver(QueryDriver):
         columns.dataset_fields[dataset_type].remove("rank")
         window_select = (
             SqlBuilder(self._db, base_cte)
-            .extract_columns(columns, self._name_shrinker)
-            .select(columns, self._name_shrinker, postprocessing, sql_columns=partition_by)
+            .extract_columns(columns)
+            .select(columns, postprocessing, sql_columns=partition_by)
         )
         window_subquery = window_select.subquery(f"{dataset_type}_window")
         # For the outermost SELECT we again propagate the `internal_columns`
         sql_builder = (
             SqlBuilder(self._db, window_subquery)
-            .extract_columns(columns, self._name_shrinker)
+            .extract_columns(columns)
             .where_sql(window_subquery.columns.rownum == 1)
         )
         return sql_builder, postprocessing, False
+
+    def _join_materialization(
+        self,
+        sql_builder: SqlBuilder | EmptySqlBuilder,
+        materialization_key: qt.MaterializationKey,
+        dimensions: DimensionGroup,
+    ) -> SqlBuilder:
+        columns = qt.ColumnSet(dimensions)
+        table, resolved_datasets = self._materialization[materialization_key]
+        for dataset_type in resolved_datasets:
+            columns.dataset_fields[dataset_type].add("dataset_id")
+        return sql_builder.join(SqlBuilder(self._db, table).extract_columns(columns))
+
+    def _join_dataset_search(
+        self,
+        sql_builder: SqlBuilder | EmptySqlBuilder,
+        dataset_type: str,
+        dataset_search: qt.DatasetSearch,
+        columns: qt.ColumnSet,
+    ) -> SqlBuilder:
+        storage = self._managers.datasets[dataset_type]
+        assert (
+            storage.datasetType.dimensions.as_group() == dataset_search.dimensions
+        ), "wrong dimensions for dataset type"
+        fields = columns.dataset_fields[dataset_type]
+        # If there are preexisting fields, they must come from a
+        # materialization.  That means the only field that might already be
+        # present is the dataset_id, but it's still simplest to just treat it
+        # as a set.
+        preexisting = sql_builder.fields_provided.get(dataset_type, {}).keys()
+        assert preexisting <= {"dataset_id"}, "only dataset_id should (possibly) preexist"
+        if fields <= preexisting:
+            # All needed fields were already included by a materialization.
+            return cast(SqlBuilder, sql_builder)
+        if preexisting:
+            # If this dataset was already included by a materialization, always
+            # include the UUID so we can join to it.
+            fields.add("dataset_id")
+        collection_records = [
+            collection_record
+            for collection_record, collection_summary in self.resolve_collection_path(
+                dataset_search.resolved_collections
+            )
+            # This check should already have occurred when the dataset search
+            # was added to the query, but it's cheap and defensive to do it
+            # again here, since we need to get the collection records again
+            # anyway.
+            if dataset_type in collection_summary.dataset_types
+        ]
+        dataset_sql_builder = storage.make_sql_builder(collection_records, fields)
+        # If there was a preexisting (dataset_id) field from a materialization,
+        # join the new subquery to the main query on that.  It's easier to add
+        # a WHERE term than a JOIN ON term, and they should be treated
+        # equivalently by the database.
+        if preexisting:
+            dataset_sql_builder = dataset_sql_builder.where_sql(
+                sql_builder.fields_provided[dataset_type]["dataset_id"]
+                == dataset_sql_builder.fields_provided[dataset_type]["dataset_id"]
+            )
+        return sql_builder.join(dataset_sql_builder)
 
     def _process_page(
         self,
