@@ -70,9 +70,7 @@ def get_authentication_token_from_environment(server_url: str) -> str | None:
         return explicit_butler_token
 
     hostname = urlparse(server_url.lower()).hostname
-    hostname_in_whitelist = any(
-        (hostname and fnmatchcase(hostname, pattern) for pattern in _SERVER_WHITELIST)
-    )
+    hostname_in_whitelist = any(hostname and fnmatchcase(hostname, pattern) for pattern in _SERVER_WHITELIST)
     notebook_token = os.getenv(_RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY)
     if hostname_in_whitelist and notebook_token:
         return notebook_token

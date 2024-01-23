@@ -159,6 +159,9 @@ class TestFileTemplates(unittest.TestCase):
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("{id}/fixed")
 
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("{run}/../{datasetType}_{visit}")
+
     def testRunOrCollectionNeeded(self):
         tmplstr = "{datasetType}/{visit:05d}/{physical_filter}"
         with self.assertRaises(FileTemplateValidationError):
@@ -176,15 +179,15 @@ class TestFileTemplates(unittest.TestCase):
     def testOptional(self):
         """Optional units in templates."""
         ref = self.makeDatasetRef("calexp")
-        tmplstr = "{run}/{datasetType}/v{visit:05d}_f{physical_filter:?}"
+        tmplstr = "{run}/{datasetType}/v{visit:05d}_f{physical_filter:?}_{skypix:?}"
         self.assertTemplate(
             tmplstr,
             "run2/calexp/v00052_fMost_Amazing_U_Filter_Ever",
             self.makeDatasetRef("calexp"),
         )
 
-        du = {"visit": 48, "tract": 265, "skymap": "big", "instrument": "dummy"}
-        self.assertTemplate(tmplstr, "run2/calexpT/v00048", self.makeDatasetRef("calexpT", du))
+        du = {"visit": 48, "tract": 265, "skymap": "big", "instrument": "dummy", "htm7": 12345}
+        self.assertTemplate(tmplstr, "run2/calexpT/v00048_12345", self.makeDatasetRef("calexpT", du))
 
         # Ensure that this returns a relative path even if the first field
         # is optional

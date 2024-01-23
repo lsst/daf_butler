@@ -36,18 +36,18 @@ import os.path
 import string
 from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .._config import Config
 from .._config_support import LookupKey, processLookupConfigs
-from .._dataset_ref import DatasetRef
+from .._dataset_ref import DatasetId, DatasetRef
 from .._exceptions import ValidationError
 from .._storage_class import StorageClass
 from ..dimensions import DataCoordinate
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType
-    from ..dimensions import DimensionUniverse
+    from ..dimensions import DimensionRecord, DimensionUniverse
 
 log = logging.getLogger(__name__)
 
@@ -377,6 +377,57 @@ class FileTemplate:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{self.template}")'
 
+    def grouped_fields(self) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+        """Return all the fields, grouped by their type.
+
+        Returns
+        -------
+        grouped : `dict` [ `set` [ `str` ]]
+            The fields grouped by their type. The keys for this dict are
+            ``standard``, ``special``, ``subfield``, and
+            ``parent``. If  field ``a.b`` is present, ``a`` will not be
+            included in ``standard`` but will be included in ``parent``.
+        grouped_optional : `dict` [ `set` [ `str` ]]
+            As for ``grouped`` but the optional fields.
+        """
+        fmt = string.Formatter()
+        parts = fmt.parse(self.template)
+
+        grouped: dict[str, set[str]] = {
+            "standard": set(),
+            "special": set(),
+            "subfield": set(),
+            "parent": set(),
+        }
+        grouped_optional: dict[str, set[str]] = {
+            "standard": set(),
+            "special": set(),
+            "subfield": set(),
+            "parent": set(),
+        }
+
+        for _, field_name, format_spec, _ in parts:
+            if field_name is not None and format_spec is not None:
+                subfield = None
+                key = "standard"
+                if field_name in self.specialFields:
+                    key = "special"
+                elif "." in field_name:
+                    # This needs to be added twice.
+                    subfield = field_name
+                    key = "parent"
+                    field_name, _ = field_name.split(".")
+
+                if "?" in format_spec:
+                    target = grouped_optional
+                else:
+                    target = grouped
+                target[key].add(field_name)
+                if subfield is not None:
+                    target["subfield"].add(subfield)
+
+        return grouped, grouped_optional
+
     def fields(self, optionals: bool = False, specials: bool = False, subfields: bool = False) -> set[str]:
         """Return the field names used in this template.
 
@@ -406,13 +457,13 @@ class FileTemplate:
         names = set()
         for _, field_name, format_spec, _ in parts:
             if field_name is not None and format_spec is not None:
-                if "?" in format_spec and not optionals:
+                if not optionals and "?" in format_spec:
                     continue
 
                 if not specials and field_name in self.specialFields:
                     continue
 
-                if "." in field_name and not subfields:
+                if not subfields and "." in field_name:
                     field_name, _ = field_name.split(".")
 
                 names.add(field_name)
@@ -442,25 +493,19 @@ class FileTemplate:
             Raised if a template uses dimension record metadata but no
             records are attached to the `DatasetRef`.
         """
-        # Extract defined non-None dimensions from the dataId.
-        # This guards against Nones being explicitly present in the data ID
-        # (which can happen if, say, an exposure has no filter), as well as
-        # the case where only required dimensions are present (which in this
-        # context should only happen in unit tests; in general we need all
-        # dimensions to fill out templates).
-        fields: dict[str, object] = {
-            k: ref.dataId.get(k) for k in ref.datasetType.dimensions.names if ref.dataId.get(k) is not None
-        }
+        # Get the dimension values. Should all be non None.
+        # Will want to store a DatasetId in it later.
+        fields = cast(dict[str, int | str | DatasetId], dict(ref.dataId.mapping))
         # Extra information that can be included using . syntax
-        extras = {}
+        extras: dict[str, DimensionRecord | None] = {}
+        skypix_alias: str | None = None
+        can_use_extra_records = False
         if isinstance(ref.dataId, DataCoordinate):
             if ref.dataId.hasRecords():
-                extras = {k: ref.dataId.records[k] for k in ref.dataId.dimensions.elements}
+                can_use_extra_records = True
             skypix_alias = self._determine_skypix_alias(ref)
             if skypix_alias is not None:
                 fields["skypix"] = fields[skypix_alias]
-                if extras:
-                    extras["skypix"] = extras[skypix_alias]
 
         datasetType = ref.datasetType
         fields["datasetType"], component = datasetType.nameAndComponent()
@@ -498,6 +543,15 @@ class FileTemplate:
             # Check for request for additional information from the dataId
             if "." in field_name:
                 primary, secondary = field_name.split(".")
+                if can_use_extra_records and primary not in extras and primary in fields:
+                    record_key = primary
+                    if primary == "skypix" and skypix_alias is not None:
+                        record_key = skypix_alias
+                    extras[record_key] = ref.dataId.records[record_key]
+                    if record_key != primary:
+                        # Make sure that htm7 and skypix both work.
+                        extras[primary] = extras[record_key]
+
                 if primary in extras:
                     record = extras[primary]
                     # Only fill in the fields if we have a value, the
@@ -603,8 +657,17 @@ class FileTemplate:
         used to compare the available dimensions with those specified in the
         template.
         """
+        grouped_fields, grouped_optionals = self.grouped_fields()
+
         # Check that the template has run
-        withSpecials = self.fields(specials=True, optionals=True)
+        withSpecials = (
+            grouped_fields["standard"]
+            | grouped_fields["parent"]
+            | grouped_fields["special"]
+            | grouped_optionals["standard"]
+            | grouped_optionals["parent"]
+            | grouped_optionals["special"]
+        )
 
         if "collection" in withSpecials:
             raise FileTemplateValidationError(
@@ -619,11 +682,21 @@ class FileTemplate:
         # Check that there are some dimension fields in the template
         # The id is allowed instead if present since that also uniquely
         # identifies the file in the datastore.
-        allfields = self.fields(optionals=True)
+        allfields = (
+            grouped_fields["standard"]
+            | grouped_fields["parent"]
+            | grouped_optionals["standard"]
+            | grouped_optionals["parent"]
+        )
         if not allfields and "id" not in withSpecials:
             raise FileTemplateValidationError(
                 f"Template '{self}' does not seem to have any fields corresponding to dimensions."
             )
+
+        # Do not allow ../ in the template to confuse where the file might
+        # end up.
+        if "../" in self.template:
+            raise FileTemplateValidationError("A file template should not include jump to parent directory.")
 
         # Require that if "id" is in the template then it must exist in the
         # file part -- this avoids templates like "{id}/fixed" where the file
@@ -655,7 +728,9 @@ class FileTemplate:
                         f"Template '{self}' has no component but {entity} refers to a component."
                     )
             else:
-                mandatorySpecials = self.fields(specials=True)
+                mandatorySpecials = (
+                    grouped_fields["standard"] | grouped_fields["parent"] | grouped_fields["special"]
+                )
                 if "component" in mandatorySpecials:
                     raise FileTemplateValidationError(
                         f"Template '{self}' has mandatory component but "
@@ -690,7 +765,7 @@ class FileTemplate:
             minimal.remove(skypix_alias)
             maximal.remove(skypix_alias)
 
-        required = self.fields(optionals=False)
+        required = grouped_fields["standard"] | grouped_fields["parent"]
 
         # Calculate any field usage that does not match a dimension
         if not required.issubset(maximal):

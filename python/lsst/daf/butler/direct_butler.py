@@ -1789,6 +1789,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         skip_missing: bool = True,
         register_dataset_types: bool = False,
         transfer_dimensions: bool = False,
+        dry_run: bool = False,
     ) -> collections.abc.Collection[DatasetRef]:
         # Docstring inherited.
         if not self.isWriteable():
@@ -1878,7 +1879,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         # Do all the importing in a single transaction.
         with self.transaction():
-            if dimension_records:
+            if dimension_records and not dry_run:
                 _LOG.verbose("Ensuring that dimension records exist for transferred datasets.")
                 # Order matters.
                 for element in self.dimensions.sorted(dimension_records.keys()):
@@ -1898,7 +1899,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     run_doc = None
                     if registry := getattr(source_butler, "registry", None):
                         run_doc = registry.getCollectionDocumentation(run)
-                    registered = self._registry.registerRun(run, doc=run_doc)
+                    if not dry_run:
+                        registered = self._registry.registerRun(run, doc=run_doc)
+                    else:
+                        registered = True
                     handled_collections.add(run)
                     if registered:
                         _LOG.verbose("Creating output run %s", run)
@@ -1914,7 +1918,10 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
                 # Assume we are using UUIDs and the source refs will match
                 # those imported.
-                imported_refs = self._registry._importDatasets(refs_to_import)
+                if not dry_run:
+                    imported_refs = self._registry._importDatasets(refs_to_import)
+                else:
+                    imported_refs = refs_to_import
                 assert set(imported_refs) == set(refs_to_import)
                 n_imported += len(imported_refs)
 
@@ -1928,6 +1935,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 source_refs,
                 transfer=transfer,
                 artifact_existence=artifact_existence,
+                dry_run=dry_run,
             )
             if rejected:
                 # For now, accept the registry entries but not the files.

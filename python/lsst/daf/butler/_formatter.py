@@ -347,7 +347,7 @@ class Formatter(metaclass=ABCMeta):
         not be updated. Not all formatters write files so this is not
         defined in the base class.
         """
-        location = copy.deepcopy(location)
+        location = location.clone()
         try:
             # We are deliberately allowing extension to be undefined by
             # default in the base class and mypy complains.

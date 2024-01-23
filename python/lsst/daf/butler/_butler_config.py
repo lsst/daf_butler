@@ -127,7 +127,7 @@ class ButlerConfig(Config):
                 # server) but checking for existence will slow things
                 # down given that this might involve two checks and then
                 # the config read below would still do the read.
-                other = uri.join("butler.yaml")
+                other = uri.join("butler.yaml", forceDirectory=False)
 
         # Create an empty config for us to populate
         super().__init__()

@@ -25,9 +25,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from threading import Lock
-from typing import Generic, Iterator, TypeVar
+from typing import Generic, TypeVar
 
 _T = TypeVar("_T")
 

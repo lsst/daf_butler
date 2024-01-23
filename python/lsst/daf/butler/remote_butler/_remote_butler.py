@@ -32,7 +32,7 @@ __all__ = ("RemoteButler",)
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TextIO, Type, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TextIO, TypeVar, cast
 
 import httpx
 from lsst.daf.butler import __version__
@@ -489,6 +489,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         skip_missing: bool = True,
         register_dataset_types: bool = False,
         transfer_dimensions: bool = False,
+        dry_run: bool = False,
     ) -> Collection[DatasetRef]:
         # Docstring inherited.
         raise NotImplementedError()
@@ -613,7 +614,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         url = self._get_url(path)
         return self._client.get(url, headers=self._headers, params=params)
 
-    def _parse_model(self, response: httpx.Response, model: Type[_AnyPydanticModel]) -> _AnyPydanticModel:
+    def _parse_model(self, response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:
         """Deserialize a Pydantic model from the body of an HTTP response."""
         return model.model_validate_json(response.content)
 

@@ -838,6 +838,7 @@ class Datastore(metaclass=ABCMeta):
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
+        dry_run: bool = False,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         """Transfer dataset artifacts from another datastore to this one.
 
@@ -864,6 +865,9 @@ class Datastore(metaclass=ABCMeta):
             Optional mapping of datastore artifact to existence. Updated by
             this method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
+        dry_run : `bool`, optional
+            Process the supplied source refs without updating the target
+            datastore.
 
         Returns
         -------
@@ -1414,6 +1418,7 @@ class NullDatastore(Datastore):
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
+        dry_run: bool = False,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         raise NotImplementedError("This is a no-op datastore that can not access a real datastore")
 

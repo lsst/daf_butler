@@ -585,7 +585,9 @@ class ChainedDatastore(Datastore):
                 # to find the paths now rather than try to infer how
                 # each datastore has stored them in the internal prep class.
                 paths = (
-                    {ResourcePath(dataset.path) for dataset in okForChild} if transfer == "move" else set()
+                    {ResourcePath(dataset.path, forceDirectory=False) for dataset in okForChild}
+                    if transfer == "move"
+                    else set()
                 )
                 children.append((datastore, prepDataForChild, paths))
         if allFailuresAreNotImplementedError:
@@ -1102,6 +1104,7 @@ class ChainedDatastore(Datastore):
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
+        dry_run: bool = False,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Docstring inherited
         # mypy does not understand "type(self) is not type(source)"
@@ -1170,7 +1173,11 @@ class ChainedDatastore(Datastore):
                     filtered_refs = list(these_refs)
                 try:
                     accepted, _ = datastore.transfer_from(
-                        source_child, filtered_refs, transfer, artifact_existence
+                        source_child,
+                        filtered_refs,
+                        transfer,
+                        artifact_existence,
+                        dry_run=dry_run,
                     )
                 except (TypeError, NotImplementedError):
                     # The datastores were incompatible.

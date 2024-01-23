@@ -1309,6 +1309,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         skip_missing: bool = True,
         register_dataset_types: bool = False,
         transfer_dimensions: bool = False,
+        dry_run: bool = False,
     ) -> Collection[DatasetRef]:
         """Transfer datasets to this Butler from a run in another Butler.
 
@@ -1335,6 +1336,10 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         transfer_dimensions : `bool`, optional
             If `True`, dimension record data associated with the new datasets
             will be transferred.
+        dry_run : `bool`, optional
+            If `True` the transfer will be processed without any modifications
+            made to the target butler and as if the target butler did not
+            have any of the datasets.
 
         Returns
         -------

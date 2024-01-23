@@ -36,10 +36,10 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
+from ._config import Config
 from .dimensions import DimensionGroup
 
 if TYPE_CHECKING:
-    from ._config import Config
     from .dimensions import DimensionUniverse
 
 log = logging.getLogger(__name__)
@@ -310,7 +310,12 @@ def processLookupConfigs(
                     lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue}, universe=universe)
                     contents[lookup] = subStr
             elif allow_hierarchy:
-                contents[lookup] = value
+                if isinstance(value, Config):
+                    # Converting to a dict makes subsequent lookups much
+                    # faster.
+                    contents[lookup] = value.toDict()
+                else:
+                    contents[lookup] = value
             else:
                 raise RuntimeError(f"Hierarchical key '{name}' not in form 'key<value>'")
         else:

@@ -137,7 +137,7 @@ class ConfigTestCase(unittest.TestCase):
             "b/c/d/",  # Directory that does not exist
             "file.yaml",  # Good extension for missing file
         ):
-            with self.assertRaises(FileNotFoundError):
+            with self.assertRaises((FileNotFoundError, ValueError)):
                 Config(badArg)
 
     def testBasics(self):

@@ -191,9 +191,15 @@ class MappingFactory:
         # We want this overwriting to happen recursively since we expect
         # some of these keyword arguments to be dicts.
         # Simplest to use Config for this
-        config_kwargs = Config(registry_kwargs)
-        config_kwargs.update(kwargs)
-        merged_kwargs = config_kwargs.toDict()
+        merged_kwargs: dict[str, Any] = {}
+        if kwargs and registry_kwargs:
+            config_kwargs = Config(registry_kwargs)
+            config_kwargs.update(kwargs)
+            merged_kwargs = config_kwargs.toDict()
+        elif registry_kwargs:
+            merged_kwargs = registry_kwargs
+        elif kwargs:
+            merged_kwargs = kwargs
 
         return key, cls(*args, **merged_kwargs)
 

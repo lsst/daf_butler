@@ -30,8 +30,8 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Mapping
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ._query_results import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults

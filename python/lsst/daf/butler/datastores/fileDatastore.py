@@ -832,7 +832,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # dataIds returning the same and causing overwrite confusion.
         template.validateTemplate(ref)
 
-        location = self.locationFactory.fromPath(template.format(ref))
+        location = self.locationFactory.fromPath(template.format(ref), trusted_path=True)
 
         # Get the formatter based on the storage class
         storageClass = ref.datasetType.storageClass
@@ -896,7 +896,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             outside the root.
         """
         # Relative path will always be relative to datastore
-        pathUri = ResourcePath(path, forceAbsolute=False)
+        pathUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
         return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(
@@ -941,7 +941,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             raise NotImplementedError(f"Transfer mode {transfer} not supported.")
 
         # A relative URI indicates relative to datastore root
-        srcUri = ResourcePath(path, forceAbsolute=False)
+        srcUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
         if not srcUri.isabs():
             srcUri = self.root.join(path)
 
@@ -1016,7 +1016,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         # Create URI of the source path, do not need to force a relative
         # path to absolute.
-        srcUri = ResourcePath(path, forceAbsolute=False)
+        srcUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
 
         # Track whether we have read the size of the source yet
         have_sized = False
@@ -1026,7 +1026,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             # A relative path is assumed to be relative to the datastore
             # in this context
             if not srcUri.isabs():
-                tgtLocation = self.locationFactory.fromPath(srcUri.ospath)
+                tgtLocation = self.locationFactory.fromPath(srcUri.ospath, trusted_path=False)
             else:
                 # Work out the path in the datastore from an absolute URI
                 # This is required to be within the datastore.
@@ -1036,7 +1036,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                         f"Unexpectedly learned that {srcUri} is not within datastore {self.root}"
                     )
                 if pathInStore:
-                    tgtLocation = self.locationFactory.fromPath(pathInStore)
+                    tgtLocation = self.locationFactory.fromPath(pathInStore, trusted_path=True)
                 elif transfer == "split":
                     # Outside the datastore but treat that as a direct ingest
                     # instead.
@@ -1194,7 +1194,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # Ingesting a file from outside the datastore.
         # This involves a new name.
         template = self.templates.getTemplate(ref)
-        location = self.locationFactory.fromPath(template.format(ref))
+        location = self.locationFactory.fromPath(template.format(ref), trusted_path=True)
 
         # Get the extension
         ext = srcUri.getExtension()
@@ -1794,13 +1794,17 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
                 # Add the "#predicted" URI fragment to indicate this is a
                 # guess
-                uris.componentURIs[component] = ResourcePath(comp_location.uri.geturl() + "#predicted")
+                uris.componentURIs[component] = ResourcePath(
+                    comp_location.uri.geturl() + "#predicted", forceDirectory=comp_location.uri.dirLike
+                )
 
         else:
             location, _ = self._determine_put_formatter_location(ref)
 
             # Add the "#predicted" URI fragment to indicate this is a guess
-            uris.primaryURI = ResourcePath(location.uri.geturl() + "#predicted")
+            uris.primaryURI = ResourcePath(
+                location.uri.geturl() + "#predicted", forceDirectory=location.uri.dirLike
+            )
 
         return uris
 
@@ -2366,6 +2370,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         refs: Iterable[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
+        dry_run: bool = False,
     ) -> tuple[set[DatasetRef], set[DatasetRef]]:
         # Docstring inherited
         if type(self) is not type(source_datastore):
@@ -2490,6 +2495,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
                     # Rely on source_records being a defaultdict.
                     source_records[missing].extend(dataset_records)
+            log.verbose("Completed scan for missing data files")
 
         # See if we already have these records
         target_records = self._get_stored_records_associated_with_refs(refs, ignore_datastore_records=True)
@@ -2560,10 +2566,14 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                     # is there this might indicate that a previous transfer
                     # was interrupted but was not able to be rolled back
                     # completely (eg pre-emption) so follow Datastore default
-                    # and overwrite.
-                    target_location.uri.transfer_from(
-                        source_location.uri, transfer=transfer, overwrite=True, transaction=self._transaction
-                    )
+                    # and overwrite. Do not copy if we are in dry-run mode.
+                    if not dry_run:
+                        target_location.uri.transfer_from(
+                            source_location.uri,
+                            transfer=transfer,
+                            overwrite=True,
+                            transaction=self._transaction,
+                        )
 
                 artifacts.append((ref, info))
 
@@ -2579,7 +2589,8 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # datastore records to agree. Note that this can potentially lead
         # to difficulties if the dataset has previously been ingested
         # disassembled and is somehow now assembled, or vice versa.
-        self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.REPLACE)
+        if not dry_run:
+            self._register_datasets(artifacts, insert_mode=DatabaseInsertMode.REPLACE)
 
         if already_present:
             n_skipped = len(already_present)
@@ -2720,7 +2731,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             else:
                 # mypy needs help
                 assert directoryUri is not None, "directoryUri must be defined to get here"
-                storeUri = ResourcePath(location.uri)
+                storeUri = ResourcePath(location.uri, forceDirectory=False)
 
                 # if the datastore has an absolute URI to a resource, we
                 # have two options:
@@ -2730,7 +2741,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 # For now go with option 2
                 if location.pathInStore.isabs():
                     template = self.templates.getTemplate(ref)
-                    newURI = ResourcePath(template.format(ref), forceAbsolute=False)
+                    newURI = ResourcePath(template.format(ref), forceAbsolute=False, forceDirectory=False)
                     pathInStore = str(newURI.updatedExtension(location.pathInStore.getExtension()))
 
                 exportUri = directoryUri.join(pathInStore)

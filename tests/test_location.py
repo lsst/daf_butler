@@ -25,6 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import copy
 import os.path
 import posixpath
 import unittest
@@ -69,6 +70,22 @@ class LocationTestCase(unittest.TestCase):
         loc2 = factory.fromPath(pathInStore)
         loc3 = factory.fromPath(pathInStore)
         self.assertEqual(loc2, loc3)
+
+    def test_clone(self):
+        """Test that cloning works."""
+        factory = LocationFactory(ResourcePath("."))
+        loc = factory.fromPath("test.txt")
+        loc2 = loc.clone()
+        self.assertIs(loc2._path, loc._path)
+
+        # Check that modifying one does not change the first.
+        loc2.updateExtension(".json")
+        self.assertTrue(loc.uri.path.endswith("test.txt"))
+        self.assertTrue(loc2.uri.path.endswith("test.json"))
+
+        # Test copying.
+        self.assertIs(copy.copy(loc)._path, loc._path)
+        self.assertIs(copy.deepcopy(loc)._path, loc._path)
 
     def testAbsoluteLocations(self):
         """Using a pathInStore that refers to absolute URI."""
