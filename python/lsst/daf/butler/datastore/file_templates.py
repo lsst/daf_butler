@@ -36,11 +36,11 @@ import os.path
 import string
 from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .._config import Config
 from .._config_support import LookupKey, processLookupConfigs
-from .._dataset_ref import DatasetRef
+from .._dataset_ref import DatasetId, DatasetRef
 from .._exceptions import ValidationError
 from .._storage_class import StorageClass
 from ..dimensions import DataCoordinate
@@ -493,15 +493,9 @@ class FileTemplate:
             Raised if a template uses dimension record metadata but no
             records are attached to the `DatasetRef`.
         """
-        # Extract defined non-None dimensions from the dataId.
-        # This guards against Nones being explicitly present in the data ID
-        # (which can happen if, say, an exposure has no filter), as well as
-        # the case where only required dimensions are present (which in this
-        # context should only happen in unit tests; in general we need all
-        # dimensions to fill out templates).
-        fields: dict[str, object] = {
-            k: v for k in ref.datasetType.dimensions.names if (v := ref.dataId.get(k)) is not None
-        }
+        # Get the dimension values. Should all be non None.
+        # Will want to store a DatasetId in it later.
+        fields = cast(dict[str, int | str | DatasetId], dict(ref.dataId.mapping))
         # Extra information that can be included using . syntax
         extras: dict[str, DimensionRecord | None] = {}
         skypix_alias: str | None = None
