@@ -213,6 +213,10 @@ General utilities
    :no-main-docstr:
    :headings: ^"
 
+.. automodapi:: lsst.daf.butler.nonempty_mapping
+   :no-main-docstr:
+   :headings: ^"
+
 .. automodapi:: lsst.daf.butler.persistence_context
    :no-main-docstr:
    :headings: ^"
