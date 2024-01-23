@@ -29,7 +29,6 @@ from __future__ import annotations
 
 __all__ = ("Postprocessing",)
 
-import dataclasses
 from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING
 
@@ -43,19 +42,36 @@ if TYPE_CHECKING:
     from ..registry.nameShrinker import NameShrinker
 
 
-@dataclasses.dataclass
 class Postprocessing:
-    spatial_join_filtering: list[tuple[DimensionElement, DimensionElement]] = dataclasses.field(
-        default_factory=list
-    )
-    spatial_where_filtering: list[tuple[DimensionElement, Region]] = dataclasses.field(default_factory=list)
+    def __init__(self) -> None:
+        self.spatial_join_filtering: list[tuple[DimensionElement, DimensionElement]] = []
+        self.spatial_where_filtering: list[tuple[DimensionElement, Region]] = []
+        self._offset: int = 0
+        self._limit: int | None = None
 
-    # TODO: make sure offset and limit are only set if there is spatial
-    # filtering.
+    @property
+    def offset(self) -> int:
+        return self._offset
 
-    offset: int = 0
+    @offset.setter
+    def offset(self, value: int) -> None:
+        if value and not self:
+            raise RuntimeError(
+                "Postprocessing should only implement 'offset' if it needs to do spatial filtering."
+            )
+        self._offset = value
 
-    limit: int | None = None
+    @property
+    def limit(self) -> int | None:
+        return self._limit
+
+    @limit.setter
+    def limit(self, value: int | None) -> None:
+        if value and not self:
+            raise RuntimeError(
+                "Postprocessing should only implement 'limit' if it needs to do spatial filtering."
+            )
+        self._limit = value
 
     def __bool__(self) -> bool:
         return bool(self.spatial_join_filtering or self.spatial_where_filtering)
@@ -100,11 +116,11 @@ class Postprocessing:
                 m[field].relate(region) & DISJOINT for field, region in where
             ):
                 continue
-            if self.offset:
-                self.offset -= 1
+            if self._offset:
+                self._offset -= 1
                 continue
-            if self.limit == 0:
+            if self._limit == 0:
                 break
             yield row
-            if self.limit is not None:
-                self.limit -= 1
+            if self._limit is not None:
+                self._limit -= 1
