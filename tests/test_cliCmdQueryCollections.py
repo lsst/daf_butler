@@ -225,9 +225,9 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                 array(
                     (
                         ("calibration1", "CALIBRATION", ""),
-                        ("chain1", "CHAINED", "chain2"),
+                        ("chain1", "CHAINED", "tag1"),
                         ("", "", "run1"),
-                        ("", "", "tag1"),
+                        ("", "", "chain2"),
                         ("chain2", "CHAINED", "calibration1"),
                         ("", "", "run1"),
                         ("imported_g", "RUN", ""),
