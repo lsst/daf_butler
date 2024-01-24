@@ -96,7 +96,7 @@ def _getTable(
                 children = butler.registry.getCollectionChain(name)
                 if children:
                     first = True
-                    for child in sorted(children):
+                    for child in children:
                         table.add_row((name if first else "", type.name if first else "", child))
                         first = False
                 else:
