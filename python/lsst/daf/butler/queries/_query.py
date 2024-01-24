@@ -530,6 +530,10 @@ class Query(HomogeneousQueryBase):
         not already present in the query, it will be joined in, but dataset
         searches must already be joined into a query in order to reference
         their fields in expressions.
+
+        Data ID values are not checked for consistency; they are extracted from
+        ``args`` and then ``kwargs`` and combined, with later values overriding
+        earlier ones.
         """
         return Query(
             tree=self._tree.where(
