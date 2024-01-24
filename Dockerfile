@@ -44,7 +44,7 @@
 #   - Runs a non-root user.
 #   - Sets up the entrypoint and port.
 
-FROM python:3.11.6-slim-bullseye as base-image
+FROM python:3.12.1-slim-bookworm as base-image
 
 # Update system packages
 COPY server/scripts/install-base-packages.sh .
@@ -65,9 +65,27 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --upgrade --no-cache-dir pip setuptools wheel
 
 # Install the app's Python runtime dependencies
-COPY requirements.txt .
-COPY server/requirements.txt server_requirements.txt
-RUN pip install --quiet --no-cache-dir -r requirements.txt -r server_requirements.txt
+COPY requirements/docker.txt ./docker-requirements.txt
+RUN pip install --no-cache-dir -r docker-requirements.txt
+
+# Install dependencies only required by unit tests in a separate image for better caching
+FROM dependencies-image AS test-dependencies-image
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends postgresql postgresql-pgsphere
+COPY requirements/docker-test.txt ./docker-test-requirements.txt
+RUN pip install --no-cache-dir -r docker-test-requirements.txt
+
+# Run unit tests
+FROM test-dependencies-image AS unit-test
+RUN useradd --create-home testuser
+COPY . /workdir
+WORKDIR /workdir
+RUN pip install --no-cache-dir --no-deps .
+# The postgres tests refuse to run as root
+USER testuser
+# For some reason Butler unit tests create temporary files in the source code tree
+# unless you explicitly specify otherwise.
+RUN TMPDIR=/tmp DAF_BUTLER_TEST_TMP=/tmp pytest -x
 
 FROM dependencies-image AS install-image
 

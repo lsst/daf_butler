@@ -31,6 +31,7 @@
 import glob
 import os
 import os.path
+import shutil
 import tempfile
 import unittest
 
@@ -51,8 +52,10 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
 
     def setUp(self):
         self.resetDbAuthPathValue = ConnectionStringModule.DB_AUTH_PATH
-        ConnectionStringModule.DB_AUTH_PATH = self.credentialsFile
-        os.chmod(self.credentialsFile, 0o600)
+        temporaryCredentialsFile = self.enterContext(tempfile.NamedTemporaryFile()).name
+        shutil.copyfile(self.credentialsFile, temporaryCredentialsFile)
+        os.chmod(temporaryCredentialsFile, 0o600)
+        ConnectionStringModule.DB_AUTH_PATH = temporaryCredentialsFile
 
     def tearDown(self):
         ConnectionStringModule.DB_AUTH_PATH = self.resetDbAuthPathValue

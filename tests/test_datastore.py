@@ -27,6 +27,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pickle
 import shutil
@@ -36,7 +37,7 @@ import unittest
 import unittest.mock
 import uuid
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any, Iterator, cast
 
 import lsst.utils.tests
 import yaml
@@ -675,18 +676,14 @@ class DatastoreTests(DatastoreTestsBase):
         ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
         return metrics, ref
 
-    def runIngestTest(
-        self, func: Callable[[MetricsExample, str, DatasetRef], None], expectOutput: bool = True
-    ) -> None:
+    def runIngestTest(self, func: Callable[[MetricsExample, str, DatasetRef], None]) -> None:
         metrics, ref = self._prepareIngestTest()
         # The file will be deleted after the test.
         # For symlink tests this leads to a situation where the datastore
         # points to a file that does not exist. This will make os.path.exist
         # return False but then the new symlink will fail with
         # FileExistsError later in the code so the test still passes.
-        with lsst.utils.tests.getTempFilePath(".yaml", expectOutput=expectOutput) as path:
-            with open(path, "w") as fd:
-                yaml.dump(metrics._asdict(), stream=fd)
+        with _temp_yaml_file(metrics._asdict()) as path:
             func(metrics, path, ref)
 
     def testIngestNoTransfer(self) -> None:
@@ -781,6 +778,11 @@ class DatastoreTests(DatastoreTestsBase):
                     """
                     datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
+                    file_exists = os.path.exists(path)
+                    if mode == "move":
+                        self.assertFalse(file_exists)
+                    else:
+                        self.assertTrue(file_exists)
 
                 def failInputDoesNotExist(
                     obj: MetricsExample,
@@ -810,7 +812,7 @@ class DatastoreTests(DatastoreTestsBase):
 
                 if mode in self.ingestTransferModes:
                     self.runIngestTest(failInputDoesNotExist)
-                    self.runIngestTest(succeed, expectOutput=(mode != "move"))
+                    self.runIngestTest(succeed)
                 else:
                     self.runIngestTest(failNotImplemented)
 
@@ -825,11 +827,10 @@ class DatastoreTests(DatastoreTestsBase):
                 continue
 
             print(f"Trying mode {mode}")
-            with lsst.utils.tests.getTempFilePath(".yaml") as realpath:
-                with open(realpath, "w") as fd:
-                    yaml.dump(metrics._asdict(), stream=fd)
-                with lsst.utils.tests.getTempFilePath(".yaml") as sympath:
-                    os.symlink(os.path.abspath(realpath), sympath)
+            with _temp_yaml_file(metrics._asdict()) as realpath:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    sympath = os.path.join(tmpdir, "symlink.yaml")
+                    os.symlink(os.path.realpath(realpath), sympath)
 
                     datastore = self.makeDatastore()
                     datastore.ingest(FileDataset(path=os.path.abspath(sympath), refs=ref), transfer=mode)
@@ -842,7 +843,7 @@ class DatastoreTests(DatastoreTestsBase):
                     if mode == "relsymlink":
                         self.assertFalse(os.path.isabs(linkTarget))
                     else:
-                        self.assertEqual(linkTarget, os.path.abspath(realpath))
+                        self.assertTrue(os.path.samefile(linkTarget, realpath))
 
                     # Check that we can get the dataset back regardless of mode
                     metric2 = datastore.get(ref)
@@ -1011,8 +1012,15 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     validationCanFail = True
 
     def setUp(self) -> None:
-        # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        # The call to os.path.realpath is necessary because Mac temporary files
+        # can end up in either /private/var/folders or /var/folders, which
+        # refer to the same location but don't appear to.
+        # This matters for "relsymlink" transfer mode, because it needs to be
+        # able to read the file through a relative symlink, but some of the
+        # intermediate directories are not traversable if you try to get from a
+        # tempfile in /var/folders to one in /private/var/folders via a
+        # relative path.
+        self.root = os.path.realpath(self.enterContext(tempfile.TemporaryDirectory()))
         super().setUp()
 
     def testAtomicWrite(self) -> None:
@@ -1120,10 +1128,7 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
             v4ref.datasetType, v4ref.dataId, v4ref.run, id_generation_mode=DatasetIdGenEnum.DATAID_TYPE_RUN
         )
 
-        with lsst.utils.tests.getTempFilePath(".yaml", expectOutput=True) as path:
-            with open(path, "w") as fd:
-                yaml.dump(metrics._asdict(), stream=fd)
-
+        with _temp_yaml_file(metrics._asdict()) as path:
             datastore.ingest(FileDataset(path=path, refs=v4ref), transfer="direct")
 
             # This will fail because the ref is using UUIDv4.
@@ -1190,7 +1195,7 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
 
     def setUp(self) -> None:
         # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = tempfile.mkdtemp()
         super().setUp()
 
     def testCleanup(self) -> None:
@@ -1328,7 +1333,7 @@ class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.Test
 
     def setUp(self) -> None:
         # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = tempfile.mkdtemp()
         super().setUp()
 
 
@@ -1369,7 +1374,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
     def setUp(self) -> None:
         # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = tempfile.mkdtemp()
         super().setUp()
 
     def testConstraints(self) -> None:
@@ -1462,7 +1467,7 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         self.id = 0
 
         # Create a root that we can use for caching tests.
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = tempfile.mkdtemp()
 
         # Create some test dataset refs and associated test files
         sc = self.storageClassFactory.getStorageClass("StructuredDataDict")
@@ -1949,6 +1954,19 @@ class StoredFileInfoTestCase(DatasetTestHelper, unittest.TestCase):
         pickled_info = pickle.dumps(info)
         unpickled_info = pickle.loads(pickled_info)
         self.assertEqual(unpickled_info, info)
+
+
+@contextlib.contextmanager
+def _temp_yaml_file(data: Any) -> Iterator[str]:
+    fh = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml")
+    try:
+        yaml.dump(data, stream=fh)
+        fh.flush()
+        yield fh.name
+    finally:
+        # Some tests delete the file
+        with contextlib.suppress(FileNotFoundError):
+            fh.close()
 
 
 if __name__ == "__main__":

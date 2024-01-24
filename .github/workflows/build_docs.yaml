@@ -35,9 +35,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install postgresql
 
-      - name: Install postgresql Python packages
-        run: pip install psycopg2 testing.postgresql
-
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
