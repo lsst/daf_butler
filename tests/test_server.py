@@ -33,6 +33,7 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 
 try:
     # Failing to import any of these should disable the tests.
+    import safir.dependencies.logger
     from fastapi import HTTPException
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
@@ -46,7 +47,7 @@ except ImportError:
     TestClient = None
     create_app = None
 
-from unittest.mock import patch
+from unittest.mock import NonCallableMock, patch
 
 from lsst.daf.butler import (
     Butler,
@@ -395,6 +396,39 @@ class ButlerClientServerTestCase(unittest.TestCase):
         with self.assertRaises(HTTPException) as cm:
             self.client.get("/v1/dataset_type/int")
         self.assertEqual(cm.exception.status_code, 401)
+
+    def test_exception_logging(self):
+        app = create_app()
+
+        def raise_error():
+            raise RuntimeError("An unhandled error")
+
+        app.dependency_overrides[butler_factory_dependency] = raise_error
+        client = _make_test_client(app, raise_server_exceptions=False)
+
+        with patch.object(safir.dependencies.logger, "logger_dependency") as mock_logger_dep:
+            mock_logger = NonCallableMock(["aerror"])
+
+            async def noop():
+                pass
+
+            mock_logger.aerror.return_value = noop()
+
+            async def get_logger():
+                return mock_logger
+
+            mock_logger_dep.return_value = get_logger()
+            client.get(
+                "/api/butler/repo/something/v1/dataset_type/int",
+                headers={"X-Auth-Request-User": "user-name", "X-Butler-Client-Request-Id": "request-id"},
+            )
+            mock_logger_dep.assert_called_once()
+
+            mock_logger.aerror.assert_called_once()
+            args, kwargs = mock_logger.aerror.call_args
+            self.assertIsInstance(kwargs["exc_info"], RuntimeError)
+            self.assertEqual(kwargs["clientRequestId"], "request-id")
+            self.assertEqual(kwargs["user"], "user-name")
 
 
 def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
