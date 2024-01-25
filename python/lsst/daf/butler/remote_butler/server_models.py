@@ -27,13 +27,21 @@
 
 """Models used for client/server communication."""
 
-__all__ = ["FindDatasetModel", "GetFileResponseModel"]
+__all__ = [
+    "CLIENT_REQUEST_ID_HEADER_NAME",
+    "CollectionList",
+    "DatasetTypeName",
+    "FindDatasetModel",
+    "GetFileResponseModel",
+]
 
 from typing import NewType
 
 import pydantic
 from lsst.daf.butler import SerializedDataId
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
+
+CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
 
 CollectionList = NewType("CollectionList", list[str])
 DatasetTypeName = NewType("DatasetTypeName", str)

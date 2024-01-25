@@ -27,18 +27,21 @@
 
 from __future__ import annotations
 
-__all__ = ("RemoteButler",)
+__all__ = (
+    "ButlerServerError",
+    "RemoteButler",
+)
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TextIO, TypeVar, cast
+from uuid import uuid4
 
 import httpx
 from lsst.daf.butler import __version__
 from lsst.daf.butler.datastores.fileDatastoreClient import get_dataset_as_python_object
 from lsst.resources import ResourcePath, ResourcePathExpression
-from lsst.utils.introspection import get_full_type_name
 from pydantic import BaseModel, TypeAdapter
 
 from .._butler import Butler
@@ -53,6 +56,7 @@ from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Regist
 from ..registry.wildcards import CollectionWildcard
 from ._authentication import get_authentication_headers
 from .server_models import (
+    CLIENT_REQUEST_ID_HEADER_NAME,
     CollectionList,
     DatasetTypeName,
     FindDatasetModel,
@@ -141,7 +145,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         )
 
         auth_headers = get_authentication_headers(access_token)
-        headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
+        headers = {"user-agent": f"RemoteButler/{__version__}"}
 
         self._headers = auth_headers | headers
 
@@ -159,7 +163,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 return cache.dimensions
 
         response = self._get("universe")
-        response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
         universe = DimensionUniverse(config)
@@ -280,7 +283,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         """
         if isinstance(datasetRefOrType, DatasetRef):
             dataset_id = datasetRefOrType.id
-            response = self._get(f"get_file/{dataset_id}")
+            response = self._get(f"get_file/{dataset_id}", expected_errors=(404,))
             if response.status_code == 404:
                 raise LookupError(f"Dataset not found: {datasetRefOrType}")
         else:
@@ -289,14 +292,13 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 collections=self._normalize_collections(collections),
                 data_id=self._simplify_dataId(dataId, kwargs),
             )
-            response = self._post("get_file_by_data_id", request)
+            response = self._post("get_file_by_data_id", request, expected_errors=(404,))
             if response.status_code == 404:
                 raise LookupError(
                     f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
                     f" collections: {collections}"
                 )
 
-        response.raise_for_status()
         return self._parse_model(response, GetFileResponseModel)
 
     def getURIs(
@@ -334,12 +336,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # In future implementation this should directly access the cache
         # and only go to the server if the dataset type is not known.
         path = f"dataset_type/{name}"
-        response = self._get(path)
+        response = self._get(path, expected_errors=(404,))
         if response.status_code != httpx.codes.OK:
             content = response.json()
             if content["exception"] == "MissingDatasetTypeError":
                 raise MissingDatasetTypeError(content["detail"])
-        response.raise_for_status()
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def get_dataset(
@@ -358,7 +359,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
         response = self._get(path, params=params)
-        response.raise_for_status()
         if response.json() is None:
             return None
         ref = DatasetRef.from_simple(
@@ -396,7 +396,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
         path = f"find_dataset/{dataset_type}"
         response = self._post(path, query)
-        response.raise_for_status()
 
         ref = DatasetRef.from_simple(
             self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
@@ -601,18 +600,50 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         slash = "" if self._server_url.endswith("/") else "/"
         return f"{self._server_url}{slash}{version}/{path}"
 
-    def _post(self, path: str, model: BaseModel) -> httpx.Response:
+    def _post(self, path: str, model: BaseModel, expected_errors: Iterable[int] = ()) -> httpx.Response:
         """Send a POST request to the Butler server."""
         json = model.model_dump_json(exclude_unset=True).encode("utf-8")
-        url = self._get_url(path)
-        return self._client.post(
-            url, content=json, headers=self._headers | {"content-type": "application/json"}
+        return self._send_request(
+            "POST",
+            path,
+            content=json,
+            headers={"content-type": "application/json"},
+            expected_errors=expected_errors,
         )
 
-    def _get(self, path: str, params: Mapping[str, str | bool] | None = None) -> httpx.Response:
+    def _get(
+        self, path: str, params: Mapping[str, str | bool] | None = None, expected_errors: Iterable[int] = ()
+    ) -> httpx.Response:
         """Send a GET request to the Butler server."""
+        return self._send_request("GET", path, params=params, expected_errors=expected_errors)
+
+    def _send_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        content: bytes | None = None,
+        params: Mapping[str, str | bool] | None = None,
+        headers: Mapping[str, str] | None = None,
+        expected_errors: Iterable[int],
+    ) -> httpx.Response:
         url = self._get_url(path)
-        return self._client.get(url, headers=self._headers, params=params)
+
+        request_id = str(uuid4())
+        request_headers = {CLIENT_REQUEST_ID_HEADER_NAME: request_id}
+        request_headers.update(self._headers)
+        if headers is not None:
+            request_headers.update(headers)
+
+        try:
+            response = self._client.request(
+                method, url, content=content, params=params, headers=request_headers
+            )
+            if response.status_code not in expected_errors:
+                response.raise_for_status()
+            return response
+        except httpx.HTTPError as e:
+            raise ButlerServerError(request_id) from e
 
     def _parse_model(self, response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:
         """Deserialize a Pydantic model from the body of an HTTP response."""
@@ -674,3 +705,17 @@ class _RemoteButlerCacheData:
 class RemoteButlerCache(LockedObject[_RemoteButlerCacheData]):
     def __init__(self) -> None:
         super().__init__(_RemoteButlerCacheData())
+
+
+class ButlerServerError(RuntimeError):
+    """Exception returned when there is an error communicating with the Butler
+    server.
+
+    Parameters
+    ----------
+    client_request_id : `str`
+        Request ID to include in the exception message.
+    """
+
+    def __init__(self, client_request_id: str):
+        super().__init__(f"Error while communicating with Butler server.  Request ID: {client_request_id}")

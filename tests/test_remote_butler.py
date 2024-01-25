@@ -26,12 +26,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
+from unittest.mock import patch
 
 from lsst.daf.butler import Butler
 from pydantic import ValidationError
 
 try:
-    from lsst.daf.butler.remote_butler import RemoteButler
+    import httpx
+    from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler, RemoteButlerFactory
 except ImportError:
     # httpx is not available in rubin-env yet, so skip these tests if it's not
     # available
@@ -45,6 +47,20 @@ class RemoteButlerConfigTests(unittest.TestCase):
     def test_bad_config(self):
         with self.assertRaises(ValidationError):
             Butler({"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "!"}})
+
+
+@unittest.skipIf(RemoteButler is None, "httpx is not installed")
+class RemoteButlerErrorHandlingTests(unittest.TestCase):
+    """Test RemoteButler error handling."""
+
+    def test_internal_server_error(self):
+        butler = RemoteButlerFactory.create_factory_for_url(
+            "https://doesntmatter"
+        ).create_butler_for_access_token("dontcare")
+        with patch.object(butler._client, "request") as mock:
+            mock.side_effect = httpx.HTTPError("unhandled error")
+            with self.assertRaises(ButlerServerError):
+                butler.get_dataset_type("int")
 
 
 if __name__ == "__main__":
