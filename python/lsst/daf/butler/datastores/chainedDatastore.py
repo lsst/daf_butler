@@ -1116,6 +1116,11 @@ class ChainedDatastore(Datastore):
             # child datastores.
             source_datastores = (source_datastore,)
 
+        refs = list(refs)
+        if len(refs) == 0:
+            # Nothing to transfer.
+            return set(), set()
+
         # Need to know the set of all possible refs that could be transferred.
         remaining_refs = set(refs)
 
