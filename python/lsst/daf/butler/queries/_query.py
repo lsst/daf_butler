@@ -46,7 +46,7 @@ from ._dataset_query_results import (
     SingleTypeDatasetQueryResults,
 )
 from ._dimension_record_query_results import DimensionRecordQueryResults
-from .convert_args import convert_dataset_search_args, convert_where_args
+from .convert_args import convert_where_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory
 from .result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
@@ -253,19 +253,16 @@ class Query(HomogeneousQueryBase):
         if collections is None:
             collections = self._driver.get_default_collections()
         collections = tuple(ensure_iterable(collections))
-        resolved_dataset_searches = convert_dataset_search_args(
-            dataset_type, self._driver.resolve_collection_path(collections)
-        )
+        resolved_dataset_searches = self._driver.convert_dataset_search_args(dataset_type, collections)
         single_type_results: list[SingleTypeDatasetQueryResults] = []
-        for resolved_dataset_type, resolved_collections in resolved_dataset_searches:
+        for resolved_dataset_type in resolved_dataset_searches:
             tree = self._tree
             if resolved_dataset_type.name not in tree.datasets:
                 tree = tree.join_dataset(
                     resolved_dataset_type.name,
                     DatasetSearch.model_construct(
                         dimensions=resolved_dataset_type.dimensions.as_group(),
-                        original_collections=collections,
-                        resolved_collections=resolved_collections,
+                        collections=collections,
                     ),
                 )
             elif collections is not None:
@@ -397,36 +394,23 @@ class Query(HomogeneousQueryBase):
         if collections is None:
             collections = self._driver.get_default_collections()
         collections = tuple(ensure_iterable(collections))
-        resolved_dataset_search = convert_dataset_search_args(
-            dataset_type, self._driver.resolve_collection_path(collections)
-        )
-        if not resolved_dataset_search:
-            resolved_collections: tuple[str, ...] = ()
-            try:
-                resolved_dimensions = self._driver.get_dataset_dimensions(dataset_type)
-            except MissingDatasetTypeError:
-                if dimensions is None:
-                    raise
-                else:
-                    resolved_dimensions = dimensions
-        elif len(resolved_dataset_search) > 1:
-            raise TypeError(f"join_dataset_search expects a single dataset type, not {dataset_type!r}.")
+        assert isinstance(dataset_type, str), "DatasetType instances not supported here for simplicity."
+        try:
+            resolved_dimensions = self._driver.get_dataset_type(dataset_type).dimensions.as_group()
+        except MissingDatasetTypeError:
+            if dimensions is None:
+                raise
+            resolved_dimensions = dimensions
         else:
-            resolved_dataset_type, resolved_collections = resolved_dataset_search[0]
-            resolved_dimensions = resolved_dataset_type.dimensions.as_group()
-        if dimensions is not None and dimensions != resolved_dimensions:
-            raise DatasetTypeError(
-                f"Given dimensions {dimensions} for dataset type {dataset_type!r} do not match the "
-                f"registered dimensions {resolved_dimensions}."
-            )
+            if dimensions is not None and dimensions != resolved_dimensions:
+                raise DatasetTypeError(
+                    f"Given dimensions {dimensions} for dataset type {dataset_type!r} do not match the "
+                    f"registered dimensions {resolved_dimensions}."
+                )
         return Query(
             tree=self._tree.join_dataset(
                 dataset_type,
-                DatasetSearch.model_construct(
-                    original_collections=collections,
-                    resolved_collections=resolved_collections,
-                    dimensions=resolved_dimensions,
-                ),
+                DatasetSearch.model_construct(collections=collections, dimensions=resolved_dimensions),
             ),
             driver=self._driver,
         )

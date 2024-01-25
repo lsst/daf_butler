@@ -40,13 +40,16 @@ __all__ = (
 import dataclasses
 import uuid
 from abc import abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from contextlib import AbstractContextManager
+from types import EllipsisType
 from typing import Annotated, Any, TypeAlias, Union, overload
 
 import pydantic
+from lsst.utils.iteration import ensure_iterable
 
 from .._dataset_ref import DatasetRef
+from .._dataset_type import DatasetType
 from ..dimensions import (
     DataCoordinate,
     DataIdValue,
@@ -56,7 +59,7 @@ from ..dimensions import (
     DimensionRecordTable,
     DimensionUniverse,
 )
-from ..registry import CollectionSummary
+from ..registry import CollectionSummary, DatasetTypeError, DatasetTypeExpressionError
 from ..registry.interfaces import CollectionRecord
 from .result_specs import (
     DataCoordinateResultSpec,
@@ -412,14 +415,14 @@ class QueryDriver(AbstractContextManager[None]):
 
     @abstractmethod
     def resolve_collection_path(
-        self, collections: Iterable[str]
+        self, collections: Sequence[str]
     ) -> list[tuple[CollectionRecord, CollectionSummary]]:
         """Process a collection search path argument into a `list` of
         collection records and summaries.
 
         Parameters
         ----------
-        collections : `~collections.abc.Iterable` [ `str` ]
+        collections : `~collections.abc.Sequence` [ `str` ]
             The collection or collections to search.
 
         Returns
@@ -446,7 +449,7 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_dataset_dimensions(self, name: str) -> DimensionGroup:
+    def get_dataset_type(self, name: str) -> DatasetType:
         """Return the dimensions for a dataset type.
 
         Parameters
@@ -456,7 +459,7 @@ class QueryDriver(AbstractContextManager[None]):
 
         Returns
         -------
-        dimensions : `DimensionGroup`
+        dataset_type : `DatasetType`
             Dimensions of the dataset type.
 
         Raises
@@ -465,3 +468,51 @@ class QueryDriver(AbstractContextManager[None]):
             Raised if the dataset type is not registered.
         """
         raise NotImplementedError()
+
+    def convert_dataset_search_args(
+        self,
+        dataset_type: str | DatasetType | Iterable[str | DatasetType] | EllipsisType,
+        collections: Sequence[str],
+    ) -> list[DatasetType]:
+        """Resolve dataset type and collections argument.
+
+        Parameters
+        ----------
+        dataset_type : `str`, `DatasetType`, \
+                `~collections.abc.Iterable` [ `str` or `DatasetType` ], \
+                or ``...``
+            The dataset type or types to search for.  Passing ``...`` searches
+            for all datasets in the given collections.
+        collections : `~collections.abc.Sequence` [ `str` ]
+            The collection or collections to search.
+
+        Returns
+        -------
+        resolved : `list` [ `DatasetType` ]
+            Matching dataset types.
+        """
+        if dataset_type is ...:
+            dataset_type = set()
+            for _, summary in self.resolve_collection_path(collections):
+                dataset_type.update(summary.dataset_types.names)
+        result: list[DatasetType] = []
+        for arg in ensure_iterable(dataset_type):
+            given_dataset_type: DatasetType | None
+            if isinstance(arg, str):
+                dataset_type_name = arg
+                given_dataset_type = None
+            elif isinstance(arg, DatasetType):
+                dataset_type_name = arg.name
+                given_dataset_type = arg
+            else:
+                raise DatasetTypeExpressionError(f"Unsupported object {arg} in dataset type expression.")
+            resolved_dataset_type: DatasetType = self.get_dataset_type(dataset_type_name)
+            if given_dataset_type is not None and not given_dataset_type.is_compatible_with(
+                resolved_dataset_type
+            ):
+                raise DatasetTypeError(
+                    f"Given dataset type {given_dataset_type} is not compatible with the "
+                    f"registered version {resolved_dataset_type}."
+                )
+            result.append(resolved_dataset_type)
+        return result

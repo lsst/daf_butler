@@ -101,17 +101,12 @@ class DatasetSearch(QueryTreeBase):
     this type is used as a value.
     """
 
-    original_collections: tuple[str, ...]
-    """The collections to search as originally provided.
+    collections: tuple[str, ...]
+    """The collections to search.
 
     Order matters if this dataset type is later referenced by a `FindFirst`
     operation.  Collection wildcards are always resolved before being included
     in a dataset search.
-    """
-
-    resolved_collections: tuple[str, ...]
-    """The collections to search, possibly filtered by summaries of dataset
-    type and/or governor dimension.
     """
 
     dimensions: DimensionGroup

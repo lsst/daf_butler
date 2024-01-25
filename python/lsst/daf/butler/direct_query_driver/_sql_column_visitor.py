@@ -36,6 +36,7 @@ import sqlalchemy
 from .. import ddl
 from ..queries.visitors import ColumnExpressionVisitor, PredicateVisitFlags, PredicateVisitor
 from ..timespan_database_representation import TimespanDatabaseRepresentation
+from ._processed_query_tree import ProcessedQueryTree
 
 if TYPE_CHECKING:
     from ..queries import tree as qt
@@ -199,8 +200,9 @@ class SqlColumnVisitor(
         # Docstring inherited.
         columns = qt.ColumnSet(self._driver.universe.empty.as_group())
         column.gather_required_columns(columns)
+        processed_query_tree = ProcessedQueryTree.process(query_tree, self._driver)
         subquery_sql_builder, postprocessing, _ = self._driver._make_sql_builder(
-            query_tree, columns, find_first_dataset=None
+            processed_query_tree, columns, find_first_dataset=None
         )
         if postprocessing:
             raise NotImplementedError(
