@@ -38,7 +38,7 @@ __all__ = (
 )
 
 import uuid
-from collections.abc import Mapping, Set
+from collections.abc import Mapping
 from functools import cached_property
 from typing import TypeAlias, final
 
@@ -156,11 +156,6 @@ class QueryTree(QueryTreeBase):
     predicate: Predicate = Predicate.from_bool(True)
     """Boolean expression trees whose logical AND defines a row filter."""
 
-    find_first_dataset: str | None = None
-    """A single result dataset type to search collections for in order,
-    yielding one dataset for data ID with ``result_dimensions``.
-    """
-
     @cached_property
     def join_operand_dimensions(self) -> frozenset[DimensionGroup]:
         """A set of sets of the dimensions of all data coordinate uploads,
@@ -171,17 +166,6 @@ class QueryTree(QueryTreeBase):
         for dataset_spec in self.datasets.values():
             result.add(dataset_spec.dimensions)
         return frozenset(result)
-
-    @property
-    def available_result_datasets(self) -> Set[str]:
-        """Dataset types that are available to query results.
-
-        This is `find_first_dataset` if that is not `None`, and the keys of
-        `datasets` otherwise.
-        """
-        return (
-            self.datasets.keys() if self.find_first_dataset is None else frozenset({self.find_first_dataset})
-        )
 
     def join(self, other: QueryTree) -> QueryTree:
         """Return a new tree that represents a join between ``self`` and
@@ -202,11 +186,6 @@ class QueryTree(QueryTreeBase):
         InvalidQueryTreeError
             Raised if the join is ambiguous or otherwise invalid.
         """
-        if self.find_first_dataset is not None or other.find_first_dataset is not None:
-            raise InvalidQueryTreeError(
-                "Cannot join queries after a dataset find-first operation has been added. "
-                "To avoid this error perform all joins before requesting dataset results."
-            )
         if not self.datasets.keys().isdisjoint(other.datasets.keys()):
             raise InvalidQueryTreeError(
                 "Cannot join when both sides include the same dataset type: "
@@ -349,32 +328,6 @@ class QueryTree(QueryTreeBase):
                 "that have not been joined."
             )
         return self.model_copy(update=dict(dimensions=columns.dimensions, where_predicate=where_predicate))
-
-    def find_first(self, dataset_type: str) -> QueryTree:
-        """Return a new tree that searches a dataset's collections in
-        order for the first match for each dataset type and data ID.
-
-        Parameters
-        ----------
-        dataset_type : `str`
-            Name of the dataset type.  Must be available in the query tree
-            already.
-
-        Returns
-        -------
-        result : `QueryTree`
-            A new tree that includes the find-first search.
-        """
-        if self.find_first_dataset is not None:
-            raise InvalidQueryTreeError(
-                f"Cannot add a find-first search for {dataset_type!r} to a query that already has a "
-                f"find-first search for {self.find_first_dataset!r}."
-            )
-        if dataset_type not in self.datasets:
-            raise InvalidQueryTreeError(
-                f"Dataset {dataset_type!r} must be joined in before it can be used in a find-first search."
-            )
-        return self.model_copy(update=dict(find_first_dataset=dataset_type))
 
     @pydantic.model_validator(mode="after")
     def _validate_join_operands(self) -> QueryTree:

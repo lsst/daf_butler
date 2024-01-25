@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 from ..dimensions import DataCoordinate, DimensionGroup
 from ._base import QueryResultsBase
 from .driver import QueryDriver
-from .tree import ColumnSet, InvalidQueryTreeError, QueryTree
+from .tree import InvalidQueryTreeError, QueryTree
 
 if TYPE_CHECKING:
     from .result_specs import DataCoordinateResultSpec
@@ -125,11 +125,18 @@ class DataCoordinateQueryResults(QueryResultsBase):
                 )
         return self._copy(tree=self._tree, dimensions=dimensions)
 
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
+        # Docstring inherited.
+        return self._driver.count(
+            self._tree,
+            self._spec.get_result_columns(),
+            find_first_dataset=None,
+            exact=exact,
+            discard=discard,
+        )
+
     def _copy(self, tree: QueryTree, **kwargs: Any) -> DataCoordinateQueryResults:
         return DataCoordinateQueryResults(self._driver, tree, spec=self._spec.model_copy(update=kwargs))
-
-    def _get_result_columns(self) -> ColumnSet:
-        return self._spec.get_result_columns()
 
     def _get_datasets(self) -> frozenset[str]:
         return frozenset()

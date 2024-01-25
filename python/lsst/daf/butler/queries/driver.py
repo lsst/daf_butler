@@ -314,6 +314,7 @@ class QueryDriver(AbstractContextManager[None]):
         self,
         tree: QueryTree,
         columns: ColumnSet,
+        find_first_dataset: str | None,
         *,
         exact: bool,
         discard: bool,
@@ -327,6 +328,10 @@ class QueryDriver(AbstractContextManager[None]):
         columns : `ColumnSet`
             Columns over which rows should have unique values before they are
             counted.
+        find_first_dataset : `str` or `None`
+            Perform a search for this dataset type to reject all but the first
+            result in the collection search path for each data ID, before
+            counting the result rows.
         exact : `bool`, optional
             If `True`, run the full query and perform post-query filtering if
             needed to account for that filtering in the count.  If `False`, the

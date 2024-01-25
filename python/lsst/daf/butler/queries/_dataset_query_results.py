@@ -43,7 +43,7 @@ from .._dataset_type import DatasetType
 from ._base import CountableQueryBase, QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import DatasetRefResultSpec
-from .tree import ColumnSet, QueryTree
+from .tree import QueryTree
 
 if TYPE_CHECKING:
     from ._data_coordinate_query_results import DataCoordinateQueryResults
@@ -149,11 +149,22 @@ class SingleTypeDatasetQueryResults(DatasetQueryResults, QueryResultsBase):
         # Docstring inherited.
         return iter((self,))
 
-    def _copy(self, tree: QueryTree, **kwargs: Any) -> SingleTypeDatasetQueryResults:
-        return SingleTypeDatasetQueryResults(self._driver, self._tree, self._spec.model_copy(update=kwargs))
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
+        # Docstring inherited.
+        return self._driver.count(
+            self._tree,
+            self._spec.get_result_columns(),
+            find_first_dataset=self._spec.find_first_dataset,
+            exact=exact,
+            discard=discard,
+        )
 
-    def _get_result_columns(self) -> ColumnSet:
-        return self._spec.get_result_columns()
+    def _copy(self, tree: QueryTree, **kwargs: Any) -> SingleTypeDatasetQueryResults:
+        return SingleTypeDatasetQueryResults(
+            self._driver,
+            self._tree,
+            self._spec.model_copy(update=kwargs),
+        )
 
     def _get_datasets(self) -> frozenset[str]:
         return frozenset({self.dataset_type.name})

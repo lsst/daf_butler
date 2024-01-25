@@ -160,7 +160,9 @@ class DirectQueryDriver(QueryDriver):
             order_term.gather_required_columns(required_columns)
         # Build the FROM and WHERE clauses and identify any post-query
         # processing we need to run.
-        sql_builder, postprocessing, needs_distinct = self._make_sql_builder(tree, required_columns)
+        sql_builder, postprocessing, needs_distinct = self._make_sql_builder(
+            tree, required_columns, result_spec.find_first_dataset
+        )
         sql_select = sql_builder.select(result_columns, postprocessing, distinct=needs_distinct)
         if result_spec.order_by:
             visitor = SqlColumnVisitor(sql_builder, self)
@@ -224,13 +226,12 @@ class DirectQueryDriver(QueryDriver):
         columns = qt.ColumnSet(dimensions)
         resolved_datasets: set[str] = set()
         for dataset_type in datasets:
-            if (
-                dataset_type == tree.find_first_dataset
-                or len(tree.datasets[dataset_type].resolved_collections) < 2
-            ):
+            if len(tree.datasets[dataset_type].resolved_collections) < 2:
                 columns.dataset_fields[dataset_type].add("dataset_id")
                 resolved_datasets.add(dataset_type)
-        sql_builder, postprocessing, needs_distinct = self._make_sql_builder(tree, columns)
+        sql_builder, postprocessing, needs_distinct = self._make_sql_builder(
+            tree, columns, find_first_dataset=None
+        )
         sql_select = sql_builder.select(columns, postprocessing, distinct=needs_distinct)
         table = self._exit_stack.enter_context(
             self._db.temporary_table(sql_builder.make_table_spec(columns, postprocessing))
@@ -270,12 +271,15 @@ class DirectQueryDriver(QueryDriver):
         self,
         tree: qt.QueryTree,
         columns: qt.ColumnSet,
+        find_first_dataset: str | None,
         *,
         exact: bool,
         discard: bool,
     ) -> int:
         # Docstring inherited.
-        sql_builder, postprocessing, needs_distinct = self._make_sql_builder(tree, columns)
+        sql_builder, postprocessing, needs_distinct = self._make_sql_builder(
+            tree, columns, find_first_dataset
+        )
         if postprocessing and exact:
             if not discard:
                 raise RuntimeError("Cannot count query rows exactly without discarding them.")
@@ -310,7 +314,7 @@ class DirectQueryDriver(QueryDriver):
                 raise RuntimeError("Cannot obtain exact result for 'any' without executing.")
             return True
         columns = qt.ColumnSet(tree.dimensions)
-        sql_builder, postprocessing, _ = self._make_sql_builder(tree, columns)
+        sql_builder, postprocessing, _ = self._make_sql_builder(tree, columns, None)
         if postprocessing and exact:
             sql_select = sql_builder.select(columns, postprocessing)
             with self._db.query(
@@ -370,7 +374,7 @@ class DirectQueryDriver(QueryDriver):
         return result
 
     def _make_sql_builder(
-        self, tree: qt.QueryTree, columns: qt.ColumnSet
+        self, tree: qt.QueryTree, columns: qt.ColumnSet, find_first_dataset: str | None
     ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing, bool]:
         # Figure out whether this query needs some combination of DISTINCT [ON]
         # or GROUP BY to get unique rows.
@@ -378,10 +382,10 @@ class DirectQueryDriver(QueryDriver):
             columns.dimensions <= tree.dimensions
         ), "Guaranteed by Query construction and ResultSpec.validate_tree."
         needs_distinct = columns.dimensions != tree.dimensions
-        if tree.find_first_dataset:
+        if find_first_dataset:
             sql_builder, postprocessing, needs_distinct = self._make_find_first_sql_builder(
                 tree,
-                tree.find_first_dataset,
+                find_first_dataset,
                 columns,
                 needs_distinct=needs_distinct,
             )

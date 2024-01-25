@@ -83,20 +83,13 @@ class Query(HomogeneousQueryBase):
         super().__init__(driver, tree)
 
     @property
-    def all_dataset_types(self) -> Set[str]:
+    def dataset_types(self) -> Set[str]:
         """The names of all dataset types joined into the query.
 
         These dataset types are usable in 'where' expressions, but may or may
         not be available to result rows.
         """
         return self._tree.datasets.keys()
-
-    @property
-    def result_dataset_types(self) -> Set[str]:
-        """The names of all dataset types available for result rows and
-        order-by expressions.
-        """
-        return self._tree.available_result_datasets
 
     @property
     def expression_factory(self) -> ExpressionFactory:
@@ -266,12 +259,6 @@ class Query(HomogeneousQueryBase):
         single_type_results: list[SingleTypeDatasetQueryResults] = []
         for resolved_dataset_type, resolved_collections in resolved_dataset_searches:
             tree = self._tree
-            if tree.find_first_dataset is not None and resolved_dataset_type.name != tree.find_first_dataset:
-                raise InvalidQueryTreeError(
-                    f"Query is already a find-first search for {tree.find_first_dataset!r}; cannot "
-                    f"return results for {resolved_dataset_type.name!r} as well. "
-                    "To avoid this error call Query.datasets before Query.find_first."
-                )
             if resolved_dataset_type.name not in tree.datasets:
                 tree = tree.join_dataset(
                     resolved_dataset_type.name,
@@ -286,13 +273,12 @@ class Query(HomogeneousQueryBase):
                     f"Dataset type {resolved_dataset_type.name!r} was already joined into this query "
                     f"but new collections {collections!r} were still provided."
                 )
-            if find_first:
-                tree = tree.find_first(resolved_dataset_type.name)
             spec = DatasetRefResultSpec.model_construct(
                 dataset_type_name=resolved_dataset_type.name,
                 dimensions=resolved_dataset_type.dimensions.as_group(),
                 storage_class_name=resolved_dataset_type.storageClass_name,
                 include_dimension_records=False,
+                find_first=find_first,
             )
             single_type_results.append(SingleTypeDatasetQueryResults(self._driver, tree=tree, spec=spec))
         if len(single_type_results) == 1:
@@ -350,12 +336,12 @@ class Query(HomogeneousQueryBase):
             A new query object whose that represents the materialized rows.
         """
         if datasets is None:
-            datasets = frozenset(self.result_dataset_types)
+            datasets = frozenset(self.dataset_types)
         else:
             datasets = frozenset(datasets)
-            if not (datasets <= self.result_dataset_types):
+            if not (datasets <= self.dataset_types):
                 raise InvalidQueryTreeError(
-                    f"Dataset(s) {datasets - self.result_dataset_types} are not available as query results."
+                    f"Dataset(s) {datasets - self.dataset_types} are present in the query."
                 )
         if dimensions is None:
             dimensions = self._tree.dimensions
@@ -537,46 +523,7 @@ class Query(HomogeneousQueryBase):
         """
         return Query(
             tree=self._tree.where(
-                *convert_where_args(self.dimensions, self.all_dataset_types, *args, bind=bind, **kwargs)
+                *convert_where_args(self.dimensions, self.dataset_types, *args, bind=bind, **kwargs)
             ),
             driver=self._driver,
         )
-
-    def find_first(self, dataset_type: str | None = None) -> Query:
-        """Return a query that resolves the datasets by searching collections
-        in order after grouping by data ID.
-
-        Parameters
-        ----------
-        dataset_type : `str`, optional
-            Dataset type name of the datasets to resolve.  May be omitted if
-            the query has exactly one dataset type joined in.
-
-        Returns
-        -------
-        query : `Query`
-            A new query object that includes the dataset resolution operation.
-            Dataset columns other than the target dataset type's are dropped,
-            as are dimensions outside ``dimensions``.
-
-        Notes
-        -----
-        This operation is typically applied automatically when obtain a results
-        object from the query, but in rare cases it may need to be added
-        directly by this method, such as prior to a `materialization` or when
-        the query is being used as the container in a `query_tree.InRange`
-        expression.
-
-        Calling this method on a query that is already a find-first search
-        will replace the current find-first search with the new one.
-        """
-        if not self._tree.datasets:
-            raise InvalidQueryTreeError("Query does not have any dataset searches joined in.")
-        if dataset_type is None:
-            try:
-                (dataset_type,) = self._tree.datasets
-            except ValueError:
-                raise InvalidQueryTreeError(
-                    "Find-first dataset type must be provided if the query has more than one."
-                ) from None
-        return Query(tree=self._tree.find_first(dataset_type), driver=self._driver)

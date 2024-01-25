@@ -36,7 +36,7 @@ from ..dimensions import DimensionElement, DimensionRecord, DimensionRecordSet, 
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import DimensionRecordResultSpec
-from .tree import ColumnSet, QueryTree
+from .tree import QueryTree
 
 
 class DimensionRecordQueryResults(QueryResultsBase):
@@ -92,11 +92,18 @@ class DimensionRecordQueryResults(QueryResultsBase):
         # Docstring inherited.
         return self._spec.element
 
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
+        # Docstring inherited.
+        return self._driver.count(
+            self._tree,
+            self._spec.get_result_columns(),
+            find_first_dataset=None,
+            exact=exact,
+            discard=discard,
+        )
+
     def _copy(self, tree: QueryTree, **kwargs: Any) -> DimensionRecordQueryResults:
         return DimensionRecordQueryResults(self._driver, tree, self._spec.model_copy(update=kwargs))
 
     def _get_datasets(self) -> frozenset[str]:
         return frozenset()
-
-    def _get_result_columns(self) -> ColumnSet:
-        return self._spec.get_result_columns()

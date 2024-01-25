@@ -199,7 +199,9 @@ class SqlColumnVisitor(
         # Docstring inherited.
         columns = qt.ColumnSet(self._driver.universe.empty.as_group())
         column.gather_required_columns(columns)
-        subquery_sql_builder, postprocessing, _ = self._driver._make_sql_builder(query_tree, columns)
+        subquery_sql_builder, postprocessing, _ = self._driver._make_sql_builder(
+            query_tree, columns, find_first_dataset=None
+        )
         if postprocessing:
             raise NotImplementedError(
                 "Right-hand side subquery in IN expression would require postprocessing."

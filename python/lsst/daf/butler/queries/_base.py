@@ -37,7 +37,7 @@ from ..dimensions import DimensionGroup
 from .convert_args import convert_order_by_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionProxy
-from .tree import ColumnSet, OrderExpression, QueryTree
+from .tree import OrderExpression, QueryTree
 
 
 class QueryBase(ABC):
@@ -134,15 +134,6 @@ class CountableQueryBase(QueryBase):
 
 
 class QueryResultsBase(HomogeneousQueryBase, CountableQueryBase):
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        # Docstring inherited.
-        return self._driver.count(
-            self._tree,
-            self._get_result_columns(),
-            exact=exact,
-            discard=discard,
-        )
-
     def order_by(self, *args: str | OrderExpression | ExpressionProxy) -> Self:
         """Return a new query that yields ordered results.
 
@@ -191,15 +182,14 @@ class QueryResultsBase(HomogeneousQueryBase, CountableQueryBase):
         return self._copy(self._tree, limit=limit, offset=offset)
 
     @abstractmethod
-    def _get_result_columns(self) -> ColumnSet:
-        raise NotImplementedError()
-
-    @abstractmethod
     def _get_datasets(self) -> Set[str]:
         """Return all dataset types included in the query's result rows."""
         raise NotImplementedError()
 
     @abstractmethod
     def _copy(self, tree: QueryTree, **kwargs: Any) -> Self:
-        """Return a modified copy of ``self``."""
+        """Return a modified copy of ``self``.
+
+        Modifications should be validated, not assumed to be correct.
+        """
         raise NotImplementedError()
