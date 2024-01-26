@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("SqlBuilder", "EmptySqlBuilder")
+__all__ = ("SqlBuilder",)
 
 import dataclasses
 import itertools
@@ -39,7 +39,6 @@ import sqlalchemy
 from .. import ddl
 from .._utilities.nonempty_mapping import NonemptyMapping
 from ..queries import tree as qt
-from ..registry.nameShrinker import NameShrinker
 from ._postprocessing import Postprocessing
 
 if TYPE_CHECKING:
@@ -48,8 +47,10 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass
-class _BaseSqlBuilder:
+class SqlBuilder:
     db: Database
+    sql_from_clause: sqlalchemy.FromClause | None = None
+    sql_where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
 
     dimensions_provided: NonemptyMapping[str, list[sqlalchemy.ColumnElement]] = dataclasses.field(
         default_factory=lambda: NonemptyMapping(list), kw_only=True
@@ -105,100 +106,10 @@ class _BaseSqlBuilder:
         distinct: bool = False,
         required_dimensions_only: bool = False,
     ) -> sqlalchemy.Select:
-        raise NotImplementedError()
-
-    def make_table_spec(
-        self,
-        columns: qt.ColumnSet,
-        postprocessing: Postprocessing | None = None,
-    ) -> ddl.TableSpec:
-        # Note that we don't need to use a NameShrinker here because that will
-        # happen inside the Database object when it's given a TableSpec.
-        results = ddl.TableSpec(
-            [columns.get_column_spec(logical_table, field).to_sql_spec() for logical_table, field in columns]
-        )
-        if postprocessing:
-            for element in postprocessing.iter_missing(columns):
-                results.fields.add(
-                    ddl.FieldSpec.for_region(columns.get_qualified_name(element.name, "region"))
-                )
-        return results
-
-
-@dataclasses.dataclass
-class EmptySqlBuilder(_BaseSqlBuilder):
-    def join(self, other: SqlBuilder) -> SqlBuilder:
-        return other
-
-    def select(
-        self,
-        columns: qt.ColumnSet,
-        postprocessing: Postprocessing | None = None,
-        *,
-        sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
-        distinct: bool = False,
-        required_dimensions_only: bool = False,
-    ) -> sqlalchemy.Select:
-        assert not columns
-        assert not postprocessing
-        return sqlalchemy.select(*self.handle_empty_columns([]), *sql_columns)
-
-    def where_sql(self, *args: sqlalchemy.ColumnElement[bool]) -> EmptySqlBuilder:
-        assert not args, "Empty FROM clause implies empty WHERE clause."
-        return self
-
-
-@dataclasses.dataclass
-class SqlBuilder(_BaseSqlBuilder):
-    sql_from_clause: sqlalchemy.FromClause
-    sql_where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
-
-    def extract_dimensions(self, dimensions: Iterable[str], **kwargs: str) -> SqlBuilder:
-        for dimension_name in dimensions:
-            self.dimensions_provided[dimension_name].append(self.sql_from_clause.columns[dimension_name])
-        for k, v in kwargs.items():
-            self.dimensions_provided[v].append(self.sql_from_clause.columns[k])
-        return self
-
-    def extract_columns(self, columns: qt.ColumnSet, required_dimensions_only: bool = False) -> SqlBuilder:
-        name_shrinker = NameShrinker(self.db.dialect.max_identifier_length)
-        for logical_table, field in columns:
-            name = name_shrinker.shrink(columns.get_qualified_name(logical_table, field))
-            if field is None:
-                if logical_table in columns.dimensions.required or not required_dimensions_only:
-                    self.dimensions_provided[logical_table].append(self.sql_from_clause.columns[name])
-            elif columns.is_timespan(logical_table, field):
-                self.timespans_provided[logical_table] = self.db.getTimespanRepresentation().from_columns(
-                    self.sql_from_clause.columns, name
-                )
-            else:
-                self.fields_provided[logical_table][field] = self.sql_from_clause.columns[name]
-        return self
-
-    def join(self, other: SqlBuilder) -> SqlBuilder:
-        join_on: list[sqlalchemy.ColumnElement] = []
-        for dimension_name in self.dimensions_provided.keys() & other.dimensions_provided.keys():
-            for column1, column2 in itertools.product(
-                self.dimensions_provided[dimension_name], other.dimensions_provided[dimension_name]
-            ):
-                join_on.append(column1 == column2)
-            self.dimensions_provided[dimension_name].extend(other.dimensions_provided[dimension_name])
-        self.sql_from_clause = self.sql_from_clause.join(
-            other.sql_from_clause, onclause=sqlalchemy.and_(*join_on)
-        )
-        self.sql_where_terms += other.sql_where_terms
-        return self
-
-    def select(
-        self,
-        columns: qt.ColumnSet,
-        postprocessing: Postprocessing | None = None,
-        *,
-        sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
-        distinct: bool = False,
-        required_dimensions_only: bool = False,
-    ) -> sqlalchemy.Select:
-        name_shrinker = NameShrinker(self.db.dialect.max_identifier_length)
+        if self.sql_from_clause is None:
+            assert not columns
+            assert not postprocessing
+            return sqlalchemy.select(*self.handle_empty_columns([]), *sql_columns)
         if distinct and columns:
             # Hard case: caller wants unique rows, and we have to tell the
             # database to do that because they aren't naturally unique.
@@ -214,7 +125,7 @@ class SqlBuilder(_BaseSqlBuilder):
             ] = []
             uniqueness_category: Literal["key", "natural", "aggregate"]
             for logical_table, field in columns:
-                name = name_shrinker.shrink(columns.get_qualified_name(logical_table, field))
+                name = columns.get_qualified_name(logical_table, field)
                 uniqueness_category = columns.get_uniqueness_category(logical_table, field)
                 if field is None:
                     if logical_table in columns.dimensions.required or not required_dimensions_only:
@@ -235,7 +146,7 @@ class SqlBuilder(_BaseSqlBuilder):
                     )
             if postprocessing is not None:
                 for element in postprocessing.iter_missing(columns):
-                    name = name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
+                    name = columns.get_qualified_name(element.name, "region")
                     sql_region_column = self.fields_provided[element.name]["region"]
                     if element.name not in columns.dimensions.elements:
                         sql_region_column = ddl.Base64Region.union_agg(sql_region_column)
@@ -248,7 +159,7 @@ class SqlBuilder(_BaseSqlBuilder):
             # Easy case with no DISTINCT [ON] or GROUP BY.
             sql_columns = list(sql_columns)
             for logical_table, field in columns:
-                name = name_shrinker.shrink(columns.get_qualified_name(logical_table, field))
+                name = columns.get_qualified_name(logical_table, field)
                 if field is None:
                     sql_columns.append(self.dimensions_provided[logical_table][0].label(name))
                 elif columns.is_timespan(logical_table, field):
@@ -259,7 +170,7 @@ class SqlBuilder(_BaseSqlBuilder):
                 for element in postprocessing.iter_missing(columns):
                     sql_columns.append(
                         self.fields_provided[element.name]["region"].label(
-                            name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
+                            columns.get_qualified_name(element.name, "region")
                         )
                     )
             self.handle_empty_columns(sql_columns)
@@ -269,6 +180,61 @@ class SqlBuilder(_BaseSqlBuilder):
         if self.sql_where_terms:
             result = result.where(*self.sql_where_terms)
         return result
+
+    def make_table_spec(
+        self,
+        columns: qt.ColumnSet,
+        postprocessing: Postprocessing | None = None,
+    ) -> ddl.TableSpec:
+        results = ddl.TableSpec(
+            [columns.get_column_spec(logical_table, field).to_sql_spec() for logical_table, field in columns]
+        )
+        if postprocessing:
+            for element in postprocessing.iter_missing(columns):
+                results.fields.add(
+                    ddl.FieldSpec.for_region(columns.get_qualified_name(element.name, "region"))
+                )
+        return results
+
+    def extract_dimensions(self, dimensions: Iterable[str], **kwargs: str) -> SqlBuilder:
+        assert self.sql_from_clause is not None, "Cannot extract columns with no FROM clause."
+        for dimension_name in dimensions:
+            self.dimensions_provided[dimension_name].append(self.sql_from_clause.columns[dimension_name])
+        for k, v in kwargs.items():
+            self.dimensions_provided[v].append(self.sql_from_clause.columns[k])
+        return self
+
+    def extract_columns(self, columns: qt.ColumnSet, required_dimensions_only: bool = False) -> SqlBuilder:
+        assert self.sql_from_clause is not None, "Cannot extract columns with no FROM clause."
+        for logical_table, field in columns:
+            name = columns.get_qualified_name(logical_table, field)
+            if field is None:
+                if logical_table in columns.dimensions.required or not required_dimensions_only:
+                    self.dimensions_provided[logical_table].append(self.sql_from_clause.columns[name])
+            elif columns.is_timespan(logical_table, field):
+                self.timespans_provided[logical_table] = self.db.getTimespanRepresentation().from_columns(
+                    self.sql_from_clause.columns, name
+                )
+            else:
+                self.fields_provided[logical_table][field] = self.sql_from_clause.columns[name]
+        return self
+
+    def join(self, other: SqlBuilder) -> SqlBuilder:
+        join_on: list[sqlalchemy.ColumnElement] = []
+        for dimension_name in self.dimensions_provided.keys() & other.dimensions_provided.keys():
+            for column1, column2 in itertools.product(
+                self.dimensions_provided[dimension_name], other.dimensions_provided[dimension_name]
+            ):
+                join_on.append(column1 == column2)
+            self.dimensions_provided[dimension_name].extend(other.dimensions_provided[dimension_name])
+        if self.sql_from_clause is None:
+            self.sql_from_clause = other.sql_from_clause
+        elif other.sql_from_clause is not None:
+            self.sql_from_clause = self.sql_from_clause.join(
+                other.sql_from_clause, onclause=sqlalchemy.and_(*join_on)
+            )
+        self.sql_where_terms += other.sql_where_terms
+        return self
 
     def where_sql(self, *arg: sqlalchemy.ColumnElement[bool]) -> SqlBuilder:
         self.sql_where_terms.extend(arg)

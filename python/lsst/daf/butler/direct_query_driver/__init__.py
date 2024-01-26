@@ -26,4 +26,4 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ._postprocessing import Postprocessing
-from ._sql_builder import EmptySqlBuilder, SqlBuilder
+from ._sql_builder import SqlBuilder

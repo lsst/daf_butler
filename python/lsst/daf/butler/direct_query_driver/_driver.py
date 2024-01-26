@@ -67,7 +67,7 @@ from ._sql_column_visitor import SqlColumnVisitor
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
     from ._postprocessing import Postprocessing
-    from ._sql_builder import EmptySqlBuilder, SqlBuilder
+    from ._sql_builder import SqlBuilder
 
 
 class DirectQueryDriver(QueryDriver):
@@ -257,9 +257,7 @@ class DirectQueryDriver(QueryDriver):
         if not dimensions:
             table_spec.fields.add(
                 ddl.FieldSpec(
-                    EmptySqlBuilder.EMPTY_COLUMNS_NAME,
-                    dtype=EmptySqlBuilder.EMPTY_COLUMNS_TYPE,
-                    nullable=True,
+                    SqlBuilder.EMPTY_COLUMNS_NAME, dtype=SqlBuilder.EMPTY_COLUMNS_TYPE, nullable=True
                 )
             )
         table = self._exit_stack.enter_context(self._db.temporary_table(table_spec))
@@ -372,7 +370,7 @@ class DirectQueryDriver(QueryDriver):
 
     def _make_sql_builder(
         self, processed_tree: ProcessedQueryTree, columns: qt.ColumnSet, find_first_dataset: str | None
-    ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing, bool]:
+    ) -> tuple[SqlBuilder, Postprocessing, bool]:
         # Figure out whether this query needs some combination of DISTINCT [ON]
         # or GROUP BY to get unique rows.
         assert (
@@ -392,7 +390,7 @@ class DirectQueryDriver(QueryDriver):
 
     def _make_vanilla_sql_builder(
         self, processed_tree: ProcessedQueryTree, columns: qt.ColumnSet
-    ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing]:
+    ) -> tuple[SqlBuilder, Postprocessing]:
         # Process spatial and temporal constraints and joins, creating a
         # SqlBuilder that we'll use to make the SQL query we'll run, a
         # Postprocessing object that describes any processing we have to do on
@@ -491,7 +489,7 @@ class DirectQueryDriver(QueryDriver):
         dataset_type: str,
         columns: qt.ColumnSet,
         needs_distinct: bool,
-    ) -> tuple[EmptySqlBuilder | SqlBuilder, Postprocessing, bool]:
+    ) -> tuple[SqlBuilder, Postprocessing, bool]:
         # Shortcut: if the dataset could only be in one collection (or we know
         # it's not going to be found at all), we can just build a vanilla
         # query.
@@ -553,7 +551,7 @@ class DirectQueryDriver(QueryDriver):
 
     def _join_materialization(
         self,
-        sql_builder: SqlBuilder | EmptySqlBuilder,
+        sql_builder: SqlBuilder,
         materialization_key: qt.MaterializationKey,
         dimensions: DimensionGroup,
     ) -> SqlBuilder:
@@ -565,7 +563,7 @@ class DirectQueryDriver(QueryDriver):
 
     def _join_dataset_search(
         self,
-        sql_builder: SqlBuilder | EmptySqlBuilder,
+        sql_builder: SqlBuilder,
         dataset_type: str,
         dataset_search: qt.DatasetSearch,
         collection_records: Sequence[CollectionRecord],

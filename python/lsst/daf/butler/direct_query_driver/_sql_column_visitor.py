@@ -41,7 +41,7 @@ from ._processed_query_tree import ProcessedQueryTree
 if TYPE_CHECKING:
     from ..queries import tree as qt
     from ._driver import DirectQueryDriver
-    from ._sql_builder import EmptySqlBuilder, SqlBuilder
+    from ._sql_builder import SqlBuilder
 
 
 class SqlColumnVisitor(
@@ -50,7 +50,7 @@ class SqlColumnVisitor(
         sqlalchemy.ColumnElement[bool], sqlalchemy.ColumnElement[bool], sqlalchemy.ColumnElement[bool]
     ],
 ):
-    def __init__(self, sql_builder: SqlBuilder | EmptySqlBuilder, driver: DirectQueryDriver):
+    def __init__(self, sql_builder: SqlBuilder, driver: DirectQueryDriver):
         self._driver = driver
         self._sql_builder = sql_builder
 
