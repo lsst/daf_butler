@@ -29,22 +29,19 @@ from __future__ import annotations
 
 __all__ = ("ColumnSet",)
 
-import itertools
-from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Literal
+from collections.abc import Iterable, Iterator, Mapping
+from typing import Literal
 
 from ... import column_spec
 from ..._utilities.nonempty_mapping import NonemptyMapping
 from ...dimensions import DimensionGroup
 from ._base import DATASET_FIELD_NAMES, DatasetFieldName
 
-if TYPE_CHECKING:
-    from ._column_reference import DatasetFieldReference, DimensionFieldReference
-
 
 class ColumnSet:
     def __init__(self, dimensions: DimensionGroup) -> None:
         self._dimensions = dimensions
+        self._removed_dimension_keys: set[str] = set()
         self._dimension_fields: dict[str, set[str]] = {name: set() for name in dimensions.elements}
         self._dataset_fields = NonemptyMapping[str, set[DatasetFieldName]](set)
 
@@ -107,15 +104,16 @@ class ColumnSet:
                 name: self._dimension_fields.get(name, set()) for name in self._dimensions.elements
             }
 
-    def remove(self, column: DimensionFieldReference | DatasetFieldReference) -> None:
-        match column:
-            case DimensionFieldReference(element=element, field=field):
-                self._dimension_fields[element.name].remove(field)
-            case DatasetFieldReference(dataset_type=dataset_type, field=field):
-                self._dataset_fields[dataset_type].remove(field)
+    def drop_dimension_keys(self, names: Iterable[str]) -> None:
+        self._removed_dimension_keys.update(names)
+
+    def drop_implied_dimension_keys(self) -> None:
+        self._removed_dimension_keys.update(self._dimensions.implied)
 
     def __iter__(self) -> Iterator[tuple[str, str | None]]:
-        yield from zip(self._dimensions.data_coordinate_keys, itertools.repeat(None))
+        for dimension_name in self._dimensions.data_coordinate_keys:
+            if dimension_name not in self._removed_dimension_keys:
+                yield dimension_name, None
         # We iterate over DimensionElements and their DimensionRecord columns
         # in order to make sure that's predictable.  We might want to extract
         # these query results positionally in some contexts.
