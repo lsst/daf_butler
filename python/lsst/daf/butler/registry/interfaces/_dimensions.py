@@ -46,11 +46,7 @@ from ...dimensions.record_cache import DimensionRecordCache
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from ...direct_query_driver import (  # Future query system (direct,server).
-        EmptySqlBuilder,
-        Postprocessing,
-        SqlBuilder,
-    )
+    from ...direct_query_driver import Postprocessing, SqlBuilder  # Future query system (direct,server).
     from ...queries.tree import Predicate  # Future query system (direct,client,server).
     from .. import queries  # Old Registry.query* system.
     from ._database import Database, StaticTablesContext
@@ -373,7 +369,7 @@ class DimensionRecordStorageManager(VersionedExtension):
         dimensions: DimensionGroup,
         predicate: Predicate,
         join_operands: Iterable[DimensionGroup],
-    ) -> tuple[Predicate, EmptySqlBuilder | SqlBuilder, Postprocessing]:
+    ) -> tuple[Predicate, SqlBuilder, Postprocessing]:
         raise NotImplementedError()
 
     universe: DimensionUniverse

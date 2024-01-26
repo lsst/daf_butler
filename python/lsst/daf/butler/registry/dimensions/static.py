@@ -56,11 +56,7 @@ from ...dimensions import (
     addDimensionForeignKey,
 )
 from ...dimensions.record_cache import DimensionRecordCache
-from ...direct_query_driver import (  # Future query system (direct,server).
-    EmptySqlBuilder,
-    Postprocessing,
-    SqlBuilder,
-)
+from ...direct_query_driver import Postprocessing, SqlBuilder  # Future query system (direct,server).
 from ...queries import tree as qt  # Future query system (direct,client,server)
 from ...queries.overlaps import OverlapsVisitor
 from ...queries.visitors import PredicateVisitFlags
@@ -464,7 +460,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         dimensions: DimensionGroup,
         predicate: qt.Predicate,
         join_operands: Iterable[DimensionGroup],
-    ) -> tuple[qt.Predicate, SqlBuilder | EmptySqlBuilder, Postprocessing]:
+    ) -> tuple[qt.Predicate, SqlBuilder, Postprocessing]:
         overlaps_visitor = _CommonSkyPixMediatedOverlapsVisitor(self._db, dimensions, self._overlap_tables)
         new_predicate = overlaps_visitor.run(predicate, join_operands)
         return new_predicate, overlaps_visitor.sql_builder, overlaps_visitor.postprocessing
@@ -1001,7 +997,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]],
     ):
         super().__init__(dimensions)
-        self.sql_builder: SqlBuilder | EmptySqlBuilder = EmptySqlBuilder(db)
+        self.sql_builder: SqlBuilder = SqlBuilder(db)
         self.postprocessing = Postprocessing()
         self.common_skypix = dimensions.universe.commonSkyPix
         self.overlap_tables: Mapping[str, tuple[sqlalchemy.Table, sqlalchemy.Table]] = overlap_tables

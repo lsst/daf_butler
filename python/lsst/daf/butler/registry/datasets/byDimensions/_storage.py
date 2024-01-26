@@ -688,6 +688,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # make_sql_builder, just as _finish_single_relation is called exactly
         # one or two times by make_relation.  See make_sql_builder comments for
         # what's different.
+        assert sql_builder.sql_from_clause is not None
         sql_builder.where_sql(sql_builder.sql_from_clause.c.dataset_type_id == self._dataset_type_id)
         dataset_id_col = sql_builder.sql_from_clause.c.dataset_id
         collection_col = sql_builder.sql_from_clause.c[self._collections.getCollectionForeignKeyName()]
