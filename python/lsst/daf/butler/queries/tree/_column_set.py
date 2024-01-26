@@ -31,12 +31,12 @@ __all__ = ("ColumnSet",)
 
 import itertools
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 from ... import column_spec
 from ..._utilities.nonempty_mapping import NonemptyMapping
 from ...dimensions import DimensionGroup
-from ._base import DatasetFieldName
+from ._base import DATASET_FIELD_NAMES, DatasetFieldName
 
 if TYPE_CHECKING:
     from ._column_reference import DatasetFieldReference, DimensionFieldReference
@@ -129,7 +129,7 @@ class ColumnSet:
         # from having any dependence on set-iteration order.
         for dataset_type in sorted(self._dataset_fields):
             fields_for_dataset_type = self._dataset_fields[dataset_type]
-            for field in get_args(DatasetFieldName):
+            for field in DATASET_FIELD_NAMES:
                 if field in fields_for_dataset_type:
                     yield dataset_type, field
 

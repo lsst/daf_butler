@@ -34,11 +34,12 @@ __all__ = (
 
 import itertools
 from collections.abc import Mapping, Set
-from typing import Any, cast, get_args
+from typing import Any, cast
 
 from ..dimensions import DataCoordinate, DataId, Dimension, DimensionGroup
 from .expression_factory import ExpressionProxy
 from .tree import (
+    DATASET_FIELD_NAMES,
     ColumnExpression,
     DatasetFieldName,
     DatasetFieldReference,
@@ -194,7 +195,7 @@ def interpret_identifier(
                 element = dimensions.universe[element_name]
                 if first in element.schema.names:
                     element_matches.add(element_name)
-            if first in get_args(DatasetFieldName):
+            if first in DATASET_FIELD_NAMES:
                 dataset_matches = set(datasets)
             else:
                 dataset_matches = set()
@@ -229,7 +230,7 @@ def interpret_identifier(
                 return DimensionFieldReference.model_construct(element=element, field=second)
             else:
                 raise InvalidQueryTreeError(f"Unrecognized field {second!r} for {first}.")
-        elif second in get_args(DatasetFieldName):
+        elif second in DATASET_FIELD_NAMES:
             # We just assume the dataset type is okay; it's the job of
             # higher-level code to complain othewise.
             return DatasetFieldReference.model_construct(

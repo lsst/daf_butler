@@ -32,10 +32,11 @@ __all__ = (
     "ColumnExpressionBase",
     "DatasetFieldName",
     "InvalidQueryTreeError",
+    "DATASET_FIELD_NAMES",
 )
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, TypeVar, cast, get_args
 
 import pydantic
 
@@ -48,6 +49,8 @@ if TYPE_CHECKING:
 
 
 DatasetFieldName: TypeAlias = Literal["dataset_id", "ingest_date", "run", "collection", "rank", "timespan"]
+
+DATASET_FIELD_NAMES: tuple[DatasetFieldName, ...] = tuple(get_args(DatasetFieldName))
 
 _T = TypeVar("_T")
 _L = TypeVar("_L")

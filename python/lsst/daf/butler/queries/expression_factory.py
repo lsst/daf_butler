@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = ("ExpressionFactory", "ExpressionProxy", "ScalarExpressionProxy", "TimespanProxy", "RegionProxy")
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING
 
 from lsst.sphgeom import Region
 
@@ -308,7 +308,7 @@ class DatasetTypeProxy:
     # to include Datastore record fields.
 
     def __getattr__(self, field: str) -> ExpressionProxy:
-        if field not in get_args(tree.DatasetFieldName):
+        if field not in tree.DATASET_FIELD_NAMES:
             raise AttributeError(field)
         expression = tree.DatasetFieldReference(dataset_type=self._dataset_type, field=field)
         if field == "timespan":
@@ -317,7 +317,7 @@ class DatasetTypeProxy:
 
     def __dir__(self) -> list[str]:
         result = list(super().__dir__())
-        result.extend(get_args(tree.DatasetFieldName))
+        result.extend(tree.DATASET_FIELD_NAMES)
         return result
 
 
