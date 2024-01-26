@@ -44,14 +44,12 @@ class SupportsSimple(Protocol):
 
     _serializedType: Type
 
-    def to_simple(self, minimal: bool) -> Any:
-        ...
+    def to_simple(self, minimal: bool) -> Any: ...
 
     @classmethod
     def from_simple(
         cls, simple: Any, universe: DimensionUniverse | None = None, registry: Registry | None = None
-    ) -> SupportsSimple:
-        ...
+    ) -> SupportsSimple: ...
 
 
 def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:

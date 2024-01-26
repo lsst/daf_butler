@@ -472,9 +472,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         assert element.has_own_table, "Only called for dimension elements with their own tables."
         _, table = self._overlap_tables[element.name]
         payload = sql.Payload[LogicalColumn](table)
-        payload.columns_available[
-            DimensionKeyColumnTag(self.universe.commonSkyPix.name)
-        ] = payload.from_clause.columns.skypix_index
+        payload.columns_available[DimensionKeyColumnTag(self.universe.commonSkyPix.name)] = (
+            payload.from_clause.columns.skypix_index
+        )
         for dimension_name in element.graph.required.names:
             payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
                 dimension_name

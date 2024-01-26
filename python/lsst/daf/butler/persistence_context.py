@@ -87,9 +87,9 @@ class PersistenceContextVars:
     the `SerializedDatasetRef`\ s was worth the memory savings.
     """
 
-    serializedDatasetTypeMapping: ContextVar[
-        dict[tuple[str, str], SerializedDatasetType] | None
-    ] = ContextVar("serializedDatasetTypeMapping", default=None)
+    serializedDatasetTypeMapping: ContextVar[dict[tuple[str, str], SerializedDatasetType] | None] = (
+        ContextVar("serializedDatasetTypeMapping", default=None)
+    )
     r"""A cache of `SerializedDatasetType`\ s.
     """
 

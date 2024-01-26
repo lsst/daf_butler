@@ -306,9 +306,9 @@ class _TopologySectionConfig(pydantic.BaseModel):
 class _LegacyGovernorDimensionStorage(pydantic.BaseModel):
     """Legacy storage configuration for governor dimensions."""
 
-    cls: Literal[
+    cls: Literal["lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage"] = (
         "lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage"
-    ] = "lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage"
+    )
 
     has_own_table: ClassVar[Literal[True]] = True
     """Whether this dimension needs a database table to be defined."""
@@ -328,9 +328,9 @@ class _LegacyTableDimensionStorage(pydantic.BaseModel):
     database.
     """
 
-    cls: Literal[
+    cls: Literal["lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage"] = (
         "lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage"
-    ] = "lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage"
+    )
 
     has_own_table: ClassVar[Literal[True]] = True
     """Whether this dimension element needs a database table to be defined."""
@@ -351,9 +351,9 @@ class _LegacyImpliedUnionDimensionStorage(pydantic.BaseModel):
     this one.
     """
 
-    cls: Literal[
+    cls: Literal["lsst.daf.butler.registry.dimensions.query.QueryDimensionRecordStorage"] = (
         "lsst.daf.butler.registry.dimensions.query.QueryDimensionRecordStorage"
-    ] = "lsst.daf.butler.registry.dimensions.query.QueryDimensionRecordStorage"
+    )
 
     view_of: str
     """The dimension that implies this one and defines its values."""
@@ -378,9 +378,9 @@ class _LegacyCachingDimensionStorage(pydantic.BaseModel):
     records should be cached.
     """
 
-    cls: Literal[
+    cls: Literal["lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage"] = (
         "lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage"
-    ] = "lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage"
+    )
 
     nested: _LegacyTableDimensionStorage | _LegacyImpliedUnionDimensionStorage
     """Dimension storage configuration wrapped by this one."""

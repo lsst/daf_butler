@@ -121,12 +121,10 @@ class NamedKeyMapping(Mapping[K, V_co]):
         raise NotImplementedError()
 
     @overload
-    def get(self, key: object) -> V_co | None:
-        ...
+    def get(self, key: object) -> V_co | None: ...
 
     @overload
-    def get(self, key: object, default: V) -> V_co | V:
-        ...
+    def get(self, key: object, default: V) -> V_co | V: ...
 
     def get(self, key: Any, default: Any = None) -> Any:
         return super().get(key, default)
@@ -312,12 +310,10 @@ class NamedValueAbstractSet(Set[K_co]):
         raise NotImplementedError()
 
     @overload
-    def get(self, key: object) -> K_co | None:
-        ...
+    def get(self, key: object) -> K_co | None: ...
 
     @overload
-    def get(self, key: object, default: V) -> K_co | V:
-        ...
+    def get(self, key: object, default: V) -> K_co | V: ...
 
     def get(self, key: Any, default: Any = None) -> Any:
         """Return the element with the given name.
