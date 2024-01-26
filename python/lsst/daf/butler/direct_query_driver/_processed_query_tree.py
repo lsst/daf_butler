@@ -30,24 +30,85 @@ from __future__ import annotations
 __all__ = ("ProcessedQueryTree",)
 
 import dataclasses
+from collections.abc import Mapping
 from typing import Any
 
-from ..dimensions import DataIdValue
+import sqlalchemy
+
+from ..dimensions import DataIdValue, DimensionGroup
 from ..queries import tree as qt
-from ..queries.driver import QueryDriver
 from ..queries.visitors import ColumnExpressionVisitor, PredicateVisitFlags, SimplePredicateVisitor
 from ..registry.interfaces import CollectionRecord
+from ..registry.nameShrinker import NameShrinker
+from ._driver import DirectQueryDriver
+
+
+def make_dataset_name_shrinker(dialect: sqlalchemy.Dialect) -> NameShrinker:
+    max_dataset_field_length = max(len(field) for field in qt.DATASET_FIELD_NAMES)
+    return NameShrinker(dialect.max_identifier_length - max_dataset_field_length - 1, 6)
+
+
+@dataclasses.dataclass
+class ProcessedDatasetSearch:
+    shrunk: str
+    dimensions: DimensionGroup
+    collection_records: list[CollectionRecord] = dataclasses.field(default_factory=list)
+    messages: list[str] = dataclasses.field(default_factory=list)
+
+    @classmethod
+    def process(
+        cls,
+        dataset_type_name: str,
+        dataset_search: qt.DatasetSearch,
+        driver: DirectQueryDriver,
+        data_id: Mapping[str, DataIdValue],
+        name_shrinker: NameShrinker,
+    ) -> ProcessedDatasetSearch:
+        resolved_dataset_type = driver.get_dataset_type(dataset_type_name)
+        # Check dataset type dimensions: this is also done when the dataset
+        # is joined into a Query, but we might have deserialized a Query
+        # we don't trust on a server.
+        if resolved_dataset_type.dimensions.as_group() != dataset_search.dimensions:
+            raise qt.InvalidQueryTreeError(
+                f"Dataset type {dataset_type_name!r} has dimensions {dataset_search.dimensions} "
+                f"in query tree, but {resolved_dataset_type.dimensions} in the repository."
+            )
+        messages: list[str] = []
+        collection_records: list[CollectionRecord] = []
+        for collection_record, collection_summary in driver.resolve_collection_path(
+            dataset_search.collections
+        ):
+            rejected: bool = False
+            if dataset_type_name not in collection_summary.dataset_types.names:
+                messages.append(
+                    f"No datasets of type {dataset_type_name!r} in collection {collection_record.name}."
+                )
+                rejected = True
+            for governor in data_id.keys() & collection_summary.governors.keys():
+                if data_id[governor] not in collection_summary.governors[governor]:
+                    messages.append(
+                        f"No datasets with {governor}={data_id[governor]!r} in collection "
+                        f"{collection_record.name}."
+                    )
+                    rejected = True
+            if not rejected:
+                collection_records.append(collection_record)
+        return cls(
+            shrunk=name_shrinker.shrink(dataset_type_name),
+            dimensions=dataset_search.dimensions,
+            messages=messages,
+        )
 
 
 @dataclasses.dataclass
 class ProcessedQueryTree:
     tree: qt.QueryTree
     data_id: dict[str, DataIdValue] = dataclasses.field(default_factory=dict)
-    resolved_collections: dict[str, list[CollectionRecord]] = dataclasses.field(default_factory=dict)
+    datasets: dict[str, ProcessedDatasetSearch] = dataclasses.field(default_factory=dict)
     messages: list[str] = dataclasses.field(default_factory=list)
 
     @classmethod
-    def process(cls, tree: qt.QueryTree, driver: QueryDriver) -> ProcessedQueryTree:
+    def process(cls, tree: qt.QueryTree, driver: DirectQueryDriver) -> ProcessedQueryTree:
         result = cls(tree)
         tree.predicate.visit(_DataIdExtractionVisitor(result.data_id, result.messages))
         where_columns = qt.ColumnSet(driver.universe.empty.as_group())
@@ -58,40 +119,15 @@ class ProcessedQueryTree:
                     f"Query 'where' expression references a dimension dependent on {governor} without "
                     "constraining it directly."
                 )
+        name_shrinker = make_dataset_name_shrinker(driver._db.dialect)
         for dataset_type_name, dataset_search in result.tree.datasets.items():
-            resolved_dataset_type = driver.get_dataset_type(dataset_type_name)
-            # Check dataset type dimensions: this is also done when the dataset
-            # is joined into a Query, but we might have deserialized a Query
-            # we don't trust on a server.
-            if resolved_dataset_type.dimensions.as_group() != dataset_search.dimensions:
-                raise qt.InvalidQueryTreeError(
-                    f"Dataset type {dataset_type_name!r} has dimensions {dataset_search.dimensions} "
-                    f"in query tree, but {resolved_dataset_type.dimensions} in the repository."
-                )
-            dataset_messages: list[str] = []
-            resolved_collections: list[CollectionRecord] = []
-            for collection_record, collection_summary in driver.resolve_collection_path(
-                dataset_search.collections
-            ):
-                rejected: bool = False
-                if dataset_type_name not in collection_summary.dataset_types.names:
-                    dataset_messages.append(
-                        f"No datasets of type {dataset_type_name!r} in collection {collection_record.name}."
-                    )
-                    rejected = True
-                for governor in result.data_id.keys() & collection_summary.governors.keys():
-                    if result.data_id[governor] not in collection_summary.governors[governor]:
-                        dataset_messages.append(
-                            f"No datasets with {governor}={result.data_id[governor]!r} in collection "
-                            f"{collection_record.name}."
-                        )
-                        rejected = True
-                if not rejected:
-                    resolved_collections.append(collection_record)
-            result.resolved_collections[dataset_type_name] = resolved_collections
-            if not resolved_collections:
+            processed_dataset_search = ProcessedDatasetSearch.process(
+                dataset_type_name, dataset_search, driver, result.data_id, name_shrinker
+            )
+            result.datasets[dataset_type_name] = processed_dataset_search
+            if not processed_dataset_search.collection_records:
                 result.messages.append(f"Search for dataset type {dataset_type_name!r} is doomed to fail.")
-                result.messages.extend(dataset_messages)
+                result.messages.extend(processed_dataset_search.messages)
         return result
 
 

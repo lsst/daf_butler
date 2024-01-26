@@ -61,7 +61,7 @@ from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
 from ..registry.nameShrinker import NameShrinker
 from ._convert_results import convert_dimension_record_results
-from ._processed_query_tree import ProcessedQueryTree
+from ._processed_query_tree import ProcessedDatasetSearch, ProcessedQueryTree
 from ._sql_column_visitor import SqlColumnVisitor
 
 if TYPE_CHECKING:
@@ -308,7 +308,7 @@ class DirectQueryDriver(QueryDriver):
     def any(self, tree: qt.QueryTree, *, execute: bool, exact: bool) -> bool:
         # Docstring inherited.
         processed_tree = ProcessedQueryTree.process(tree, self)
-        if not all(processed_tree.resolved_collections.values()):
+        if not all(d.collection_records for d in processed_tree.datasets.values()):
             return False
         if not execute:
             if exact:
@@ -422,8 +422,7 @@ class DirectQueryDriver(QueryDriver):
             sql_builder = self._join_dataset_search(
                 sql_builder,
                 dataset_type,
-                dataset_search,
-                processed_tree.resolved_collections[dataset_type],
+                processed_tree.datasets[dataset_type],
                 columns,
             )
         # Make a list of dimension tables we have to join into the query.
@@ -493,7 +492,7 @@ class DirectQueryDriver(QueryDriver):
         # Shortcut: if the dataset could only be in one collection (or we know
         # it's not going to be found at all), we can just build a vanilla
         # query.
-        if len(processed_tree.resolved_collections[dataset_type]) < 2:
+        if len(processed_tree.datasets[dataset_type].collection_records) < 2:
             return *self._make_vanilla_sql_builder(processed_tree, columns), needs_distinct
         # General case.  The query we're building looks like this:
         #
@@ -565,14 +564,10 @@ class DirectQueryDriver(QueryDriver):
         self,
         sql_builder: SqlBuilder,
         dataset_type: str,
-        dataset_search: qt.DatasetSearch,
-        collection_records: Sequence[CollectionRecord],
+        processed_dataset_search: ProcessedDatasetSearch,
         columns: qt.ColumnSet,
     ) -> SqlBuilder:
         storage = self._managers.datasets[dataset_type]
-        assert (
-            storage.datasetType.dimensions.as_group() == dataset_search.dimensions
-        ), "wrong dimensions for dataset type"
         # The next two asserts will need to be dropped (and the implications
         # dealt with instead) if materializations start having dataset fields.
         assert (
@@ -582,7 +577,9 @@ class DirectQueryDriver(QueryDriver):
             dataset_type not in sql_builder.timespans_provided
         ), "Dataset timespan has unexpected already been joined in."
         return sql_builder.join(
-            storage.make_sql_builder(collection_records, columns.dataset_fields[dataset_type])
+            storage.make_sql_builder(
+                processed_dataset_search.collection_records, columns.dataset_fields[dataset_type]
+            )
         )
 
     def _process_page(
