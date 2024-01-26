@@ -107,7 +107,7 @@ from lsst.utils.introspection import get_full_type_name
 if TYPE_CHECKING:
     import types
 
-    from lsst.daf.butler import Datastore, DimensionGroup, Registry, StorageClass
+    from lsst.daf.butler import DimensionGroup, Registry, StorageClass
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -2114,12 +2114,6 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.create_butlers()
         self.assertButlerTransfers()
 
-    def _enable_trust(self, datastore: Datastore) -> None:
-        datastores = getattr(datastore, "datastores", [datastore])
-        for this_datastore in datastores:
-            if hasattr(this_datastore, "trustGetRequest"):
-                this_datastore.trustGetRequest = True
-
     def testTransferMissing(self) -> None:
         """Test transfers where datastore records are missing.
 
@@ -2128,7 +2122,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.create_butlers()
 
         # Configure the source butler to allow trust.
-        self._enable_trust(self.source_butler._datastore)
+        self.source_butler._datastore._set_trust_mode(True)
 
         self.assertButlerTransfers(purge=True)
 
@@ -2140,7 +2134,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.create_butlers()
 
         # Configure the source butler to allow trust.
-        self._enable_trust(self.source_butler._datastore)
+        self.source_butler._datastore._set_trust_mode(True)
 
         # Test disassembly.
         self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")

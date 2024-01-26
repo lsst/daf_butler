@@ -357,9 +357,7 @@ class QuantumBackedButler(LimitedButler):
         # TODO: We need to inform `Datastore` here that it needs to support
         # predictive reads; This only really works for file datastore but
         # we need to try everything in case there is a chained datastore.
-        for this_datastore in getattr(datastore, "datastores", [datastore]):
-            if hasattr(this_datastore, "trustGetRequest"):
-                this_datastore.trustGetRequest = True
+        datastore._set_trust_mode(True)
 
         if datastore_records is not None:
             datastore.import_records(datastore_records)

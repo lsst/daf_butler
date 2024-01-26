@@ -359,6 +359,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # Docstring inherited.
         return {self.name: self.root}
 
+    def _set_trust_mode(self, mode: bool) -> None:
+        self.trustGetRequest = mode
+
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
         location.

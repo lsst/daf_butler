@@ -264,6 +264,10 @@ class ChainedDatastore(Datastore):
         chainName = ", ".join(str(ds) for ds in self.datastores)
         return chainName
 
+    def _set_trust_mode(self, mode: bool) -> None:
+        for datastore in self.datastores:
+            datastore._set_trust_mode(mode)
+
     def knows(self, ref: DatasetRef) -> bool:
         """Check if the dataset is known to any of the datastores.
 
