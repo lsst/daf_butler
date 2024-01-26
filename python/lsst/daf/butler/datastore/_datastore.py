@@ -45,7 +45,7 @@ import logging
 import time
 from abc import ABCMeta, abstractmethod
 from collections import abc, defaultdict
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils import doImportType
@@ -853,7 +853,7 @@ class Datastore(metaclass=ABCMeta):
     def transfer_from(
         self,
         source_datastore: Datastore,
-        refs: Iterable[DatasetRef],
+        refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
         dry_run: bool = False,
@@ -865,7 +865,7 @@ class Datastore(metaclass=ABCMeta):
         source_datastore : `Datastore`
             The datastore from which to transfer artifacts. That datastore
             must be compatible with this datastore receiving the artifacts.
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Collection` of `DatasetRef`
             The datasets to transfer from the source datastore.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.

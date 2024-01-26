@@ -35,7 +35,7 @@ import itertools
 import logging
 import time
 import warnings
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, FileDataset
@@ -1105,7 +1105,7 @@ class ChainedDatastore(Datastore):
     def transfer_from(
         self,
         source_datastore: Datastore,
-        refs: Iterable[DatasetRef],
+        refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
         dry_run: bool = False,
@@ -1120,8 +1120,7 @@ class ChainedDatastore(Datastore):
             # child datastores.
             source_datastores = (source_datastore,)
 
-        refs = list(refs)
-        if len(refs) == 0:
+        if not refs:
             # Nothing to transfer.
             return set(), set()
 
