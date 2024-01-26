@@ -352,12 +352,15 @@ class QuantumBackedButler(LimitedButler):
                 datasets=_DatasetRecordStorageManagerDatastoreConstructionMimic,  # type: ignore
                 universe=dimensions,
             )
-        # TODO: We need to inform `Datastore` here that it needs to support
-        # predictive reads; right now that's a configuration option, but after
-        # execution butler is retired it could just be a kwarg we pass here.
-        # For now just force this option as we cannot work without it.
-        butler_config["datastore", "trust_get_request"] = True
         datastore = Datastore.fromConfig(butler_config, bridge_manager, butler_root)
+
+        # TODO: We need to inform `Datastore` here that it needs to support
+        # predictive reads; This only really works for file datastore but
+        # we need to try everything in case there is a chained datastore.
+        for this_datastore in getattr(datastore, "datastores", [datastore]):
+            if hasattr(this_datastore, "trustGetRequest"):
+                this_datastore.trustGetRequest = True
+
         if datastore_records is not None:
             datastore.import_records(datastore_records)
         storageClasses = StorageClassFactory()
