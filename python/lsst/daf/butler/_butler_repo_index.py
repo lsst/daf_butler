@@ -30,9 +30,11 @@ from __future__ import annotations
 __all__ = ("ButlerRepoIndex",)
 
 import os
-from typing import ClassVar
+from typing import Any, ClassVar
 
+import yaml
 from lsst.resources import ResourcePath
+from pydantic import TypeAdapter, ValidationError
 
 from ._config import Config
 from ._utilities.thread_safe_cache import ThreadSafeCache
@@ -41,10 +43,15 @@ from ._utilities.thread_safe_cache import ThreadSafeCache
 class ButlerRepoIndex:
     """Index of all known butler repositories.
 
-    The index of butler repositories is found by looking for a
-    configuration file at the URI pointed at by the environment
-    variable ``$DAF_BUTLER_REPOSITORY_INDEX``. The configuration file
-    is a simple dictionary lookup of the form:
+    The index of butler repositories can be configured in two ways:
+
+    1. By setting the environment variable ``DAF_BUTLER_REPOSITORY_INDEX`` to
+    the URI of a configuration file.
+    2. By setting the environment variable ``DAF_BUTLER_REPOSITORIES`` to the
+    contents of the configuration file as a string.
+
+    In either case, the configuration is a simple dictionary lookup of the
+    form:
 
     .. code-block:: yaml
 
@@ -56,9 +63,15 @@ class ButlerRepoIndex:
     """
 
     index_env_var: ClassVar[str] = "DAF_BUTLER_REPOSITORY_INDEX"
-    """The name of the environment variable to read to locate the index."""
+    """The name of the environment variable containing the URI of the index
+    configuration file.
+    """
+    repositories_env_var: ClassVar[str] = "DAF_BUTLER_REPOSITORIES"
+    """The name of the environment variable containing the configuration
+    directly as a string.
+    """
 
-    _cache: ClassVar[ThreadSafeCache[ResourcePath, Config]] = ThreadSafeCache()
+    _cache: ClassVar[ThreadSafeCache[str, dict[str, str]]] = ThreadSafeCache()
     """Cache of indexes. In most scenarios only one index will be found
     and the environment will not change. In tests this may not be true."""
 
@@ -67,17 +80,17 @@ class ButlerRepoIndex:
     every read."""
 
     @classmethod
-    def _read_repository_index(cls, index_uri: ResourcePath) -> Config:
+    def _read_repository_index(cls, index_uri: str) -> dict[str, str]:
         """Read the repository index from the supplied URI.
 
         Parameters
         ----------
-        index_uri : `lsst.resources.ResourcePath`
+        index_uri : `str`
             URI of the repository index.
 
         Returns
         -------
-        repo_index : `Config`
+        repo_index : `dict` [ `str` , `str` ]
             The index found at this URI.
 
         Raises
@@ -94,7 +107,7 @@ class ButlerRepoIndex:
             return config
 
         try:
-            repo_index = Config(index_uri)
+            repo_index = cls._validate_configuration(Config(index_uri))
         except FileNotFoundError as e:
             # More explicit error message.
             raise FileNotFoundError(f"Butler repository index file not found at {index_uri}.") from e
@@ -107,45 +120,38 @@ class ButlerRepoIndex:
         return repo_index
 
     @classmethod
-    def _get_index_uri(cls) -> ResourcePath:
-        """Find the URI to the repository index.
-
-        Returns
-        -------
-        index_uri : `lsst.resources.ResourcePath`
-            URI to the repository index.
-
-        Raises
-        ------
-        KeyError
-            Raised if the location of the index could not be determined.
-        """
-        index_uri = os.environ.get(cls.index_env_var)
-        if index_uri is None:
-            raise KeyError(f"No repository index defined in environment variable {cls.index_env_var}")
-        return ResourcePath(index_uri)
-
-    @classmethod
-    def _read_repository_index_from_environment(cls) -> Config:
+    def _read_repository_index_from_environment(cls) -> dict[str, str]:
         """Look in environment for index location and read it.
 
         Returns
         -------
-        repo_index : `Config`
+        repo_index : `dict` [ `str` , `str` ]
             The index found in the environment.
         """
         cls._most_recent_failure = ""
         try:
-            index_uri = cls._get_index_uri()
-        except KeyError as e:
-            cls._most_recent_failure = str(e)
-            raise
-        try:
-            repo_index = cls._read_repository_index(index_uri)
+            index_uri = os.getenv(cls.index_env_var)
+            direct_configuration = os.getenv(cls.repositories_env_var)
+
+            if index_uri and direct_configuration:
+                raise RuntimeError(
+                    f"Only one of the environment variables {cls.repositories_env_var} and"
+                    f" {cls.index_env_var} should be set."
+                )
+
+            if direct_configuration:
+                return cls._validate_configuration(yaml.safe_load(direct_configuration))
+
+            if index_uri:
+                return cls._read_repository_index(index_uri)
+
+            raise RuntimeError(
+                "No repository index defined.  Neither of the environment variables"
+                f" {cls.repositories_env_var} or {cls.index_env_var} was set."
+            )
         except Exception as e:
             cls._most_recent_failure = str(e)
             raise
-        return repo_index
 
     @classmethod
     def get_known_repos(cls) -> set[str]:
@@ -222,10 +228,12 @@ class ButlerRepoIndex:
         if repo_uri is None:
             if return_label:
                 return ResourcePath(label, forceAbsolute=False)
-            # This should not raise since it worked earlier.
-            try:
-                index_uri = str(cls._get_index_uri())
-            except KeyError:
-                index_uri = "<environment variable not defined>"
-            raise KeyError(f"Label '{label}' not known to repository index at {index_uri}")
+            raise KeyError(f"Label '{label}' not known to repository index")
         return ResourcePath(repo_uri)
+
+    @classmethod
+    def _validate_configuration(cls, obj: Any) -> dict[str, str]:
+        try:
+            return TypeAdapter(dict[str, str]).validate_python(obj)
+        except ValidationError as e:
+            raise ValueError("Repository index not in expected format") from e

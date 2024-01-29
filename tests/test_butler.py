@@ -667,7 +667,7 @@ class ButlerTests(ButlerPutGetTests):
             # Check that we can create Butler when the alias file is not found.
             butler = Butler.from_config(self.tmpConfigFile, writeable=False)
             self.assertIsInstance(butler, Butler)
-        with self.assertRaises(KeyError) as cm:
+        with self.assertRaises(RuntimeError) as cm:
             # No environment variable set.
             Butler.get_repo_uri("label")
         self.assertEqual(Butler.get_repo_uri("label", True), ResourcePath("label", forceAbsolute=False))
@@ -676,6 +676,30 @@ class ButlerTests(ButlerPutGetTests):
             # No aliases registered.
             Butler.from_config("not_there")
         self.assertEqual(Butler.get_known_repos(), set())
+
+    def testDafButlerRepositories(self):
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"DAF_BUTLER_REPOSITORIES": "label: 'https://someuri.com'\notherLabel: 'https://otheruri.com'\n"},
+        ):
+            self.assertEqual(str(Butler.get_repo_uri("label")), "https://someuri.com")
+
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "DAF_BUTLER_REPOSITORIES": "label: https://someuri.com",
+                "DAF_BUTLER_REPOSITORY_INDEX": "https://someuri.com",
+            },
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Only one of the environment variables"):
+                Butler.get_repo_uri("label")
+
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"DAF_BUTLER_REPOSITORIES": "invalid"},
+        ):
+            with self.assertRaisesRegex(ValueError, "Repository index not in expected format"):
+                Butler.get_repo_uri("label")
 
     def testBasicPutGet(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
