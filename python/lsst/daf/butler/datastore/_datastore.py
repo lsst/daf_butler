@@ -45,7 +45,7 @@ import logging
 import time
 from abc import ABCMeta, abstractmethod
 from collections import abc, defaultdict
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from lsst.utils import doImportType
@@ -476,6 +476,24 @@ class Datastore(metaclass=ABCMeta):
             self._transaction.commit()
         self._transaction = self._transaction.parent
 
+    def _set_trust_mode(self, mode: bool) -> None:
+        """Set the trust mode for this datastore.
+
+        Parameters
+        ----------
+        mode : `bool`
+            If `True`, get requests will be attempted even if the datastore
+            does not know about the dataset.
+
+        Notes
+        -----
+        This is a private method to indicate that trust mode might be a
+        transitory property that we do not want to make fully public. For now
+        only a `~lsst.daf.butler.datastores.FileDatastore` understands this
+        concept. By default this method does nothing.
+        """
+        return
+
     @abstractmethod
     def knows(self, ref: DatasetRef) -> bool:
         """Check if the dataset is known to the datastore.
@@ -835,7 +853,7 @@ class Datastore(metaclass=ABCMeta):
     def transfer_from(
         self,
         source_datastore: Datastore,
-        refs: Iterable[DatasetRef],
+        refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
         dry_run: bool = False,
@@ -847,7 +865,7 @@ class Datastore(metaclass=ABCMeta):
         source_datastore : `Datastore`
             The datastore from which to transfer artifacts. That datastore
             must be compatible with this datastore receiving the artifacts.
-        refs : iterable of `DatasetRef`
+        refs : `~collections.abc.Collection` of `DatasetRef`
             The datasets to transfer from the source datastore.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.

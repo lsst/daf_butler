@@ -255,9 +255,11 @@ class QueryBuilder:
         if self.summary.limit is not None:
             query = query.sliced(
                 start=self.summary.limit[0],
-                stop=self.summary.limit[0] + self.summary.limit[1]
-                if self.summary.limit[1] is not None
-                else None,
+                stop=(
+                    self.summary.limit[0] + self.summary.limit[1]
+                    if self.summary.limit[1] is not None
+                    else None
+                ),
             )
         projected_columns: set[ColumnTag] = set()
         projected_columns.update(DimensionKeyColumnTag.generate(self.summary.requested.names))

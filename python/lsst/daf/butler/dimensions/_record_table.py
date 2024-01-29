@@ -151,12 +151,10 @@ class DimensionRecordTable:
             yield self._get_record_at(self._table, i)
 
     @overload
-    def __getitem__(self, index: int) -> DimensionRecord:
-        ...
+    def __getitem__(self, index: int) -> DimensionRecord: ...
 
     @overload
-    def __getitem__(self, index: slice) -> DimensionRecordTable:
-        ...
+    def __getitem__(self, index: slice) -> DimensionRecordTable: ...
 
     def __getitem__(self, index: int | slice) -> DimensionRecord | DimensionRecordTable:
         if isinstance(index, slice):

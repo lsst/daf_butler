@@ -1471,9 +1471,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
 
         # Track DataIDs that are being ingested so we can spot issues early
         # with duplication. Retain previous FileDataset so we can report it.
-        groupedDataIds: MutableMapping[
-            tuple[DatasetType, str], dict[DataCoordinate, FileDataset]
-        ] = defaultdict(dict)
+        groupedDataIds: MutableMapping[tuple[DatasetType, str], dict[DataCoordinate, FileDataset]] = (
+            defaultdict(dict)
+        )
 
         # And the nested loop that populates it:
         for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):

@@ -388,9 +388,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # in the same query, for different dataset types.
             tags_parts = sql.Payload[LogicalColumn](self._tags.alias(f"{self.datasetType.name}_tags"))
             if "timespan" in columns:
-                tags_parts.columns_available[
-                    DatasetColumnTag(self.datasetType.name, "timespan")
-                ] = TimespanReprClass.fromLiteral(Timespan(None, None))
+                tags_parts.columns_available[DatasetColumnTag(self.datasetType.name, "timespan")] = (
+                    TimespanReprClass.fromLiteral(Timespan(None, None))
+                )
             tag_relation = self._finish_single_relation(
                 tags_parts,
                 columns,
@@ -411,17 +411,17 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             ), "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
             calibs_parts = sql.Payload[LogicalColumn](self._calibs.alias(f"{self.datasetType.name}_calibs"))
             if "timespan" in columns:
-                calibs_parts.columns_available[
-                    DatasetColumnTag(self.datasetType.name, "timespan")
-                ] = TimespanReprClass.from_columns(calibs_parts.from_clause.columns)
+                calibs_parts.columns_available[DatasetColumnTag(self.datasetType.name, "timespan")] = (
+                    TimespanReprClass.from_columns(calibs_parts.from_clause.columns)
+                )
             if "calib_pkey" in columns:
                 # This is a private extension not included in the base class
                 # interface, for internal use only in _buildCalibOverlapQuery,
                 # which needs access to the autoincrement primary key for the
                 # calib association table.
-                calibs_parts.columns_available[
-                    DatasetColumnTag(self.datasetType.name, "calib_pkey")
-                ] = calibs_parts.from_clause.columns.id
+                calibs_parts.columns_available[DatasetColumnTag(self.datasetType.name, "calib_pkey")] = (
+                    calibs_parts.from_clause.columns.id
+                )
             calib_relation = self._finish_single_relation(
                 calibs_parts,
                 columns,
@@ -483,16 +483,16 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if len(collections) == 1:
             payload.where.append(collection_col == collections[0][0].key)
             if "collection" in requested_columns:
-                payload.columns_available[
-                    DatasetColumnTag(self.datasetType.name, "collection")
-                ] = sqlalchemy.sql.literal(collections[0][0].key)
+                payload.columns_available[DatasetColumnTag(self.datasetType.name, "collection")] = (
+                    sqlalchemy.sql.literal(collections[0][0].key)
+                )
         else:
             assert collections, "The no-collections case should be in calling code for better diagnostics."
             payload.where.append(collection_col.in_([collection.key for collection, _ in collections]))
             if "collection" in requested_columns:
-                payload.columns_available[
-                    DatasetColumnTag(self.datasetType.name, "collection")
-                ] = collection_col
+                payload.columns_available[DatasetColumnTag(self.datasetType.name, "collection")] = (
+                    collection_col
+                )
         # Add rank if requested as a CASE-based calculation the collection
         # column.
         if "rank" in requested_columns:
@@ -518,20 +518,20 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 # know that if we find the dataset in that collection,
                 # then that's the datasets's run; we don't need to
                 # query for it.
-                payload.columns_available[
-                    DatasetColumnTag(self.datasetType.name, "run")
-                ] = sqlalchemy.sql.literal(collections[0][0].key)
+                payload.columns_available[DatasetColumnTag(self.datasetType.name, "run")] = (
+                    sqlalchemy.sql.literal(collections[0][0].key)
+                )
             else:
-                payload.columns_available[
-                    DatasetColumnTag(self.datasetType.name, "run")
-                ] = self._static.dataset.columns[self._runKeyColumn]
+                payload.columns_available[DatasetColumnTag(self.datasetType.name, "run")] = (
+                    self._static.dataset.columns[self._runKeyColumn]
+                )
                 need_static_table = True
         # Ingest date can only come from the static table.
         if "ingest_date" in requested_columns:
             need_static_table = True
-            payload.columns_available[
-                DatasetColumnTag(self.datasetType.name, "ingest_date")
-            ] = self._static.dataset.columns.ingest_date
+            payload.columns_available[DatasetColumnTag(self.datasetType.name, "ingest_date")] = (
+                self._static.dataset.columns.ingest_date
+            )
         # If we need the static table, join it in via dataset_id and
         # dataset_type_id
         if need_static_table:

@@ -520,14 +520,12 @@ class DimensionUniverse:  # numpydoc ignore=PR02
                 return DimensionGroup(self, names)
 
     @overload
-    def sorted(self, elements: Iterable[Dimension], *, reverse: bool = False) -> Sequence[Dimension]:
-        ...
+    def sorted(self, elements: Iterable[Dimension], *, reverse: bool = False) -> Sequence[Dimension]: ...
 
     @overload
     def sorted(
         self, elements: Iterable[DimensionElement | str], *, reverse: bool = False
-    ) -> Sequence[DimensionElement]:
-        ...
+    ) -> Sequence[DimensionElement]: ...
 
     def sorted(self, elements: Iterable[Any], *, reverse: bool = False) -> list[Any]:
         """Return a sorted version of the given iterable of dimension elements.

@@ -35,7 +35,7 @@ import itertools
 import logging
 import time
 import warnings
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, FileDataset
@@ -263,6 +263,10 @@ class ChainedDatastore(Datastore):
     def __str__(self) -> str:
         chainName = ", ".join(str(ds) for ds in self.datastores)
         return chainName
+
+    def _set_trust_mode(self, mode: bool) -> None:
+        for datastore in self.datastores:
+            datastore._set_trust_mode(mode)
 
     def knows(self, ref: DatasetRef) -> bool:
         """Check if the dataset is known to any of the datastores.
@@ -1101,7 +1105,7 @@ class ChainedDatastore(Datastore):
     def transfer_from(
         self,
         source_datastore: Datastore,
-        refs: Iterable[DatasetRef],
+        refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
         dry_run: bool = False,
@@ -1115,6 +1119,10 @@ class ChainedDatastore(Datastore):
             # The source datastore is different, forward everything to the
             # child datastores.
             source_datastores = (source_datastore,)
+
+        if not refs:
+            # Nothing to transfer.
+            return set(), set()
 
         # Need to know the set of all possible refs that could be transferred.
         remaining_refs = set(refs)

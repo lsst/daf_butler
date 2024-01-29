@@ -35,7 +35,7 @@ import contextlib
 import hashlib
 import logging
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from lsst.daf.butler import (
@@ -358,6 +358,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     def roots(self) -> dict[str, ResourcePath | None]:
         # Docstring inherited.
         return {self.name: self.root}
+
+    def _set_trust_mode(self, mode: bool) -> None:
+        self.trustGetRequest = mode
 
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
@@ -2367,7 +2370,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     def transfer_from(
         self,
         source_datastore: Datastore,
-        refs: Iterable[DatasetRef],
+        refs: Collection[DatasetRef],
         transfer: str = "auto",
         artifact_existence: dict[ResourcePath, bool] | None = None,
         dry_run: bool = False,
@@ -2399,10 +2402,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # Empty existence lookup if none given.
         if artifact_existence is None:
             artifact_existence = {}
-
-        # We will go through the list multiple times so must convert
-        # generators to lists.
-        refs = list(refs)
 
         # In order to handle disassembled composites the code works
         # at the records level since it can assume that internal APIs

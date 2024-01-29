@@ -486,12 +486,10 @@ class ButlerLogRecords(_ButlerLogRecords):
         self.root[index] = self._validate_record(value)
 
     @overload
-    def __getitem__(self, index: int) -> ButlerLogRecord:
-        ...
+    def __getitem__(self, index: int) -> ButlerLogRecord: ...
 
     @overload
-    def __getitem__(self, index: slice) -> "ButlerLogRecords":
-        ...
+    def __getitem__(self, index: slice) -> "ButlerLogRecords": ...
 
     def __getitem__(self, index: slice | int) -> "Union[ButlerLogRecords, ButlerLogRecord]":
         # Handles slices and returns a new collection in that
