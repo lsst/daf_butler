@@ -318,6 +318,17 @@ class YamlRepoImportBackend(RepoImportBackend):
                 rec.name: rec.day_obs_offset for rec in self.registry.queryDimensionRecords("instrument")
             }
 
+        # If this data exported before group was a first-class dimension,
+        # we'll need to modify some exposure columns and add group records.
+        migrate_group = False
+        if (
+            universe_version < 7
+            and universe_namespace == "daf_butler"
+            and "exposure" in self.registry.dimensions
+            and "group" in self.registry.dimensions["exposure"].implied
+        ):
+            migrate_group = True
+
         datasetData = []
         RecordClass: type[DimensionRecord]
         for data in wrapper["data"]:
@@ -388,6 +399,20 @@ class YamlRepoImportBackend(RepoImportBackend):
                     if migrate_visit_seeing:
                         for record in data["records"]:
                             record.pop("seeing", None)
+
+                if data["element"] == "exposure":
+                    if migrate_group:
+                        element = self.registry.dimensions["group"]
+                        RecordClass = element.RecordClass
+                        group_records = self.dimensions[element]
+                        for exposure_record in data["records"]:
+                            exposure_record["group"] = exposure_record.pop("group_name")
+                            del exposure_record["group_id"]
+                            group_records.append(
+                                RecordClass(
+                                    instrument=exposure_record["instrument"], name=exposure_record["group"]
+                                )
+                            )
 
                 element = self.registry.dimensions[data["element"]]
                 RecordClass = element.RecordClass

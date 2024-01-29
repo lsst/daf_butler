@@ -243,6 +243,7 @@ class DimensionTestCase(unittest.TestCase):
                 "visit_system",
                 "exposure",
                 "detector",
+                "group",
                 "physical_filter",
                 "band",
                 "subfilter",
@@ -263,10 +264,10 @@ class DimensionTestCase(unittest.TestCase):
         group = self.universe.conform(["exposure", "detector", "visit"])
         self.assertCountEqual(
             group.names,
-            ("instrument", "exposure", "detector", "visit", "physical_filter", "band"),
+            ("instrument", "exposure", "detector", "visit", "physical_filter", "band", "group"),
         )
         self.assertCountEqual(group.required, ("instrument", "exposure", "detector", "visit"))
-        self.assertCountEqual(group.implied, ("physical_filter", "band"))
+        self.assertCountEqual(group.implied, ("physical_filter", "band", "group"))
         self.assertCountEqual(group.elements - group.names, ("visit_detector_region", "visit_definition"))
         self.assertCountEqual(group.governors, {"instrument"})
         for element in group.elements:
@@ -295,10 +296,10 @@ class DimensionTestCase(unittest.TestCase):
         group = self.universe.conform(["exposure", "detector", "visit"])
         self.assertCountEqual(
             group.names,
-            ("instrument", "detector", "visit", "exposure", "physical_filter", "band"),
+            ("instrument", "detector", "visit", "exposure", "physical_filter", "band", "group"),
         )
         self.assertCountEqual(group.required, ("instrument", "detector", "exposure", "visit"))
-        self.assertCountEqual(group.implied, ("physical_filter", "band"))
+        self.assertCountEqual(group.implied, ("physical_filter", "band", "group"))
         self.assertCountEqual(group.elements - group.names, ("visit_detector_region", "visit_definition"))
         self.assertCountEqual(group.spatial.names, ("observation_regions",))
         self.assertCountEqual(group.temporal.names, ("observation_timespans",))

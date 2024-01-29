@@ -1,4 +1,4 @@
-version: 6
+version: 7
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
@@ -141,6 +141,18 @@ elements:
       nested:
         cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
+  group:
+    doc: >
+      A group of observations defined at the time they were observed by the
+      acquisition system.
+    keys:
+      - name: name
+        type: string
+        length: 64
+    requires: [instrument]
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
   visit:
     doc: >
       A sequence of observations processed together, comprised of one or
@@ -226,7 +238,7 @@ elements:
         type: string
         length: 64
     requires: [instrument]
-    implies: [physical_filter]
+    implies: [physical_filter, group]
     metadata:
       - name: exposure_time
         type: float
@@ -262,17 +274,6 @@ elements:
         type: int
         doc: >
           Oldest sequence number that might be related to this exposure.
-      - name: group_name
-        type: string
-        length: 64
-        doc: >
-          String group identifier associated with this exposure by the
-          acquisition system.
-      - name: group_id
-        type: int
-        doc: >
-          Integer group identifier associated with this exposure by the
-          acquisition system.
       - name: target_name
         type: string
         length: 64

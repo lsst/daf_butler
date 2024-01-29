@@ -381,6 +381,11 @@ class SimpleButlerTestCase(unittest.TestCase):
         registry.certify("calibs", [bias3b], Timespan(t2, t3))
         # Insert some exposure dimension data.
         registry.insertDimensionData(
+            "group",
+            {"instrument": "Cam1", "group": "three"},
+            {"instrument": "Cam1", "group": "four"},
+        )
+        registry.insertDimensionData(
             "exposure",
             {
                 "instrument": "Cam1",
@@ -388,6 +393,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "obs_id": "three",
                 "timespan": Timespan(t1, t2),
                 "physical_filter": "Cam1-G",
+                "group": "three",
                 "day_obs": 20201114,
                 "seq_num": 55,
             },
@@ -397,6 +403,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "obs_id": "four",
                 "timespan": Timespan(t2, t3),
                 "physical_filter": "Cam1-G",
+                "group": "four",
                 "day_obs": 20211114,
                 "seq_num": 42,
             },

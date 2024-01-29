@@ -373,12 +373,20 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         # Insert a few more dimension records for the next test.
         registry.insertDimensionData(
-            "exposure",
-            {"instrument": "Cam1", "id": 1, "obs_id": "one", "physical_filter": "Cam1-G"},
+            "group",
+            {"instrument": "Cam1", "name": "group1"},
         )
         registry.insertDimensionData(
             "exposure",
-            {"instrument": "Cam1", "id": 2, "obs_id": "two", "physical_filter": "Cam1-G"},
+            {"instrument": "Cam1", "id": 1, "obs_id": "one", "physical_filter": "Cam1-G", "group": "group1"},
+        )
+        registry.insertDimensionData(
+            "group",
+            {"instrument": "Cam1", "name": "group2"},
+        )
+        registry.insertDimensionData(
+            "exposure",
+            {"instrument": "Cam1", "id": 2, "obs_id": "two", "physical_filter": "Cam1-G", "group": "group2"},
         )
         registry.insertDimensionData(
             "visit_system",
@@ -871,6 +879,12 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r"),
             dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r"),
         )
+        registry.insertDimensionData(
+            "group",
+            dict(instrument="DummyCam", name="ten"),
+            dict(instrument="DummyCam", name="eleven"),
+            dict(instrument="DummyCam", name="twelve"),
+        )
         for i in range(1, 6):
             registry.insertDimensionData(
                 "visit_detector_region",
@@ -880,12 +894,12 @@ class RegistryTests(ABC):
             )
         registry.insertDimensionData(
             "exposure",
-            dict(instrument="DummyCam", id=100, obs_id="100", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=101, obs_id="101", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=110, obs_id="110", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=111, obs_id="111", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=200, obs_id="200", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=201, obs_id="201", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=100, obs_id="100", physical_filter="dummy_i", group="ten"),
+            dict(instrument="DummyCam", id=101, obs_id="101", physical_filter="dummy_i", group="ten"),
+            dict(instrument="DummyCam", id=110, obs_id="110", physical_filter="dummy_r", group="eleven"),
+            dict(instrument="DummyCam", id=111, obs_id="111", physical_filter="dummy_r", group="eleven"),
+            dict(instrument="DummyCam", id=200, obs_id="200", physical_filter="dummy_r", group="twelve"),
+            dict(instrument="DummyCam", id=201, obs_id="201", physical_filter="dummy_r", group="twelve"),
         )
         registry.insertDimensionData(
             "visit_definition",
@@ -1935,10 +1949,18 @@ class RegistryTests(ABC):
         # Insert some exposure records with timespans between each sequential
         # pair of those.
         registry.insertDimensionData(
+            "group",
+            {"instrument": "Cam1", "name": "group0"},
+            {"instrument": "Cam1", "name": "group1"},
+            {"instrument": "Cam1", "name": "group2"},
+            {"instrument": "Cam1", "name": "group3"},
+        )
+        registry.insertDimensionData(
             "exposure",
             {
                 "instrument": "Cam1",
                 "id": 0,
+                "group": "group0",
                 "obs_id": "zero",
                 "physical_filter": "Cam1-G",
                 "timespan": Timespan(t1, t2),
@@ -1946,6 +1968,7 @@ class RegistryTests(ABC):
             {
                 "instrument": "Cam1",
                 "id": 1,
+                "group": "group1",
                 "obs_id": "one",
                 "physical_filter": "Cam1-G",
                 "timespan": Timespan(t2, t3),
@@ -1953,6 +1976,7 @@ class RegistryTests(ABC):
             {
                 "instrument": "Cam1",
                 "id": 2,
+                "group": "group2",
                 "obs_id": "two",
                 "physical_filter": "Cam1-G",
                 "timespan": Timespan(t3, t4),
@@ -1960,6 +1984,7 @@ class RegistryTests(ABC):
             {
                 "instrument": "Cam1",
                 "id": 3,
+                "group": "group3",
                 "obs_id": "three",
                 "physical_filter": "Cam1-G",
                 "timespan": Timespan(t4, t5),

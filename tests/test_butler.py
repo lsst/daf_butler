@@ -1275,6 +1275,7 @@ class ButlerTests(ButlerPutGetTests):
         dayobs = 20210530
 
         for i in range(n_exposures):
+            butler.registry.insertDimensionData("group", {"instrument": "DummyCamComp", "name": f"group{i}"})
             butler.registry.insertDimensionData(
                 "exposure",
                 {
@@ -1284,6 +1285,7 @@ class ButlerTests(ButlerPutGetTests):
                     "seq_num": i,
                     "day_obs": dayobs,
                     "physical_filter": "d-r",
+                    "group": f"group{i}",
                 },
             )
 
@@ -2298,8 +2300,17 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         for i in range(n_exposures):
             self.source_butler.registry.insertDimensionData(
+                "group", {"instrument": "DummyCamComp", "name": f"group{i}"}
+            )
+            self.source_butler.registry.insertDimensionData(
                 "exposure",
-                {"instrument": "DummyCamComp", "id": i, "obs_id": f"exp{i}", "physical_filter": "d-r"},
+                {
+                    "instrument": "DummyCamComp",
+                    "id": i,
+                    "obs_id": f"exp{i}",
+                    "physical_filter": "d-r",
+                    "group": f"group{i}",
+                },
             )
 
         # Create dataset types in the source butler.

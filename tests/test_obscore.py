@@ -96,6 +96,7 @@ class ObsCoreTests(TestCaseMixin):
             )
 
         for exposure in (1, 2, 3, 4):
+            registry.insertDimensionData("group", {"instrument": "DummyCam", "name": f"group{exposure}"})
             registry.insertDimensionData(
                 "exposure",
                 {
@@ -103,6 +104,7 @@ class ObsCoreTests(TestCaseMixin):
                     "id": exposure,
                     "obs_id": f"exposure{exposure}",
                     "physical_filter": "d-r",
+                    "group": f"group{exposure}",
                 },
             )
 
