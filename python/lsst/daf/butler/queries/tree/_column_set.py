@@ -43,7 +43,7 @@ class ColumnSet:
         self._dimensions = dimensions
         self._removed_dimension_keys: set[str] = set()
         self._dimension_fields: dict[str, set[str]] = {name: set() for name in dimensions.elements}
-        self._dataset_fields = NonemptyMapping[str, set[DatasetFieldName]](set)
+        self._dataset_fields = NonemptyMapping[str, set[DatasetFieldName | Literal["collection_key"]]](set)
 
     @property
     def dimensions(self) -> DimensionGroup:
@@ -54,7 +54,7 @@ class ColumnSet:
         return self._dimension_fields
 
     @property
-    def dataset_fields(self) -> Mapping[str, set[DatasetFieldName]]:
+    def dataset_fields(self) -> Mapping[str, set[DatasetFieldName | Literal["collection_key"]]]:
         return self._dataset_fields
 
     def __bool__(self) -> bool:
@@ -104,11 +104,24 @@ class ColumnSet:
                 name: self._dimension_fields.get(name, set()) for name in self._dimensions.elements
             }
 
-    def drop_dimension_keys(self, names: Iterable[str]) -> None:
-        self._removed_dimension_keys.update(names)
+    def update(self, other: ColumnSet) -> None:
+        self.update_dimensions(other.dimensions)
+        self._removed_dimension_keys.intersection_update(other._removed_dimension_keys)
+        for element_name, element_fields in other._dimension_fields.items():
+            self._dimension_fields[element_name].update(element_fields)
+        for dataset_type, dataset_fields in other._dataset_fields.items():
+            self._dataset_fields[dataset_type].update(dataset_fields)
 
-    def drop_implied_dimension_keys(self) -> None:
+    def drop_dimension_keys(self, names: Iterable[str]) -> ColumnSet:
+        self._removed_dimension_keys.update(names)
+        return self
+
+    def drop_implied_dimension_keys(self) -> ColumnSet:
         self._removed_dimension_keys.update(self._dimensions.implied)
+        return self
+
+    def restore_dimension_keys(self) -> None:
+        self._removed_dimension_keys.clear()
 
     def __iter__(self) -> Iterator[tuple[str, str | None]]:
         for dimension_name in self._dimensions.data_coordinate_keys:
@@ -137,43 +150,6 @@ class ColumnSet:
     @staticmethod
     def get_qualified_name(logical_table: str, field: str | None) -> str:
         return logical_table if field is None else f"{logical_table}:{field}"
-
-    def get_uniqueness_category(self, logical_table: str, field: str | None) -> Literal["key", "natural"]:
-        if field is None:
-            # Dimensions in the required subset are always unique keys, while
-            # those in the implied subset are then naturally unique.
-            return "key" if logical_table in self._dimensions.required else "natural"
-        if logical_table in self._dimension_fields:
-            # Other dimension element fields are always naturally unique if
-            # their dimensions are.
-            assert (
-                field in self._dimensions.universe[logical_table].schema.remainder.names
-            ), "long forms (e.g. visit.id) of dimension key columns should not appear here"
-            return "natural"
-        if "dataset_id" not in self._dataset_fields[logical_table]:
-            raise RuntimeError(
-                f"Uniqueness for dataset field {logical_table}.{field} is undefined if "
-                "dataset_id is not included."
-            )
-        return (
-            "key"
-            if (
-                # The dataset ID is always a unique key if it is present.
-                field == "dataset_id"
-                # Rank is a unique key if it's present, because the same
-                # dataset ID can appear in multiple collections and that means
-                # different ranks.
-                or field == "rank"
-                # Timespan is a unique key because the same dataset ID can be
-                # associated with multiple validity ranges in a single
-                # CALIBRATION collection.
-                or field == "timespan"
-                # Collection is a unique key if rank is not already present;
-                # otherwise it's naturally unique given rank.
-                or (field == "collection" and "rank" not in self._dataset_fields[logical_table])
-            )
-            else "natural"
-        )
 
     def get_column_spec(self, logical_table: str, field: str | None) -> column_spec.ColumnSpec:
         qualified_name = self.get_qualified_name(logical_table, field)

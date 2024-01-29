@@ -33,7 +33,7 @@ __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from lsst.daf.relation import Relation
 
@@ -317,7 +317,7 @@ class DatasetRecordStorage(ABC):
     def make_sql_builder(
         self,
         collections: Sequence[CollectionRecord],
-        fields: Set[qt.DatasetFieldName],
+        fields: Set[qt.DatasetFieldName | Literal["collection_key"]],
     ) -> SqlBuilder:
         raise NotImplementedError()
 

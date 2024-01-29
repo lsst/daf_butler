@@ -437,22 +437,22 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         if element.implied_union_target is not None:
             assert not fields, "Dimensions with implied-union storage never have fields."
             return self.make_sql_builder(element.implied_union_target, fields).subquery(
-                qt.ColumnSet(element.minimal_group), distinct=True
+                qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(), distinct=True
             )
         if not element.has_own_table:
             raise NotImplementedError(f"Cannot join dimension element {element} with no table.")
         table = self._tables[element.name]
         result = SqlBuilder(self._db, table)
         for dimension_name, column_name in zip(element.required.names, element.schema.required.names):
-            result.dimensions_provided[dimension_name].append(table.columns[column_name])
+            result.dimension_keys[dimension_name].append(table.columns[column_name])
         result.extract_dimensions(element.implied.names)
         for field in fields:
             if field == "timespan":
-                result.timespans_provided[element.name] = self._db.getTimespanRepresentation().from_columns(
+                result.timespans[element.name] = self._db.getTimespanRepresentation().from_columns(
                     table.columns
                 )
             else:
-                result.fields_provided[element.name][field] = table.columns[field]
+                result.fields[element.name][field] = table.columns[field]
         return result
 
     def process_query_overlaps(
@@ -1045,13 +1045,13 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     # avoid introducing duplicate rows into the larger query).
                     overlap_sql_builder = self._make_common_skypix_overlap_sql_builder(element)
                     sql_where_or: list[sqlalchemy.ColumnElement[bool]] = []
-                    sql_skypix_col = overlap_sql_builder.dimensions_provided[self.common_skypix.name][0]
+                    sql_skypix_col = overlap_sql_builder.dimension_keys[self.common_skypix.name][0]
                     for begin, end in self.common_skypix.pixelization.envelope(region):
                         sql_where_or.append(sqlalchemy.and_(sql_skypix_col >= begin, sql_skypix_col < end))
                     overlap_sql_builder.where_sql(sqlalchemy.or_(*sql_where_or))
                     self.sql_builder = self.sql_builder.join(
                         overlap_sql_builder.subquery(
-                            qt.ColumnSet(element.minimal_group), distinct=True, required_dimensions_only=True
+                            qt.ColumnSet(element.minimal_group).drop_implied_dimension_keys(), distinct=True
                         )
                     )
                     # Short circuit here since the SQL WHERE clause has already
@@ -1109,13 +1109,13 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                     # query or cause duplicate rows, so we join the two overlap
                     # tables in a subquery that projects out the common skypix
                     # index column with SELECT DISTINCT.
+
                     self.sql_builder = self.sql_builder.join(
                         self._make_common_skypix_overlap_sql_builder(a)
                         .join(self._make_common_skypix_overlap_sql_builder(b))
                         .subquery(
-                            qt.ColumnSet(a.minimal_group | b.minimal_group),
+                            qt.ColumnSet(a.minimal_group | b.minimal_group).drop_implied_dimension_keys(),
                             distinct=True,
-                            required_dimensions_only=True,
                         )
                     )
                 # In both cases we add postprocessing to check that the regions

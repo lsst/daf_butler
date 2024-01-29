@@ -36,7 +36,6 @@ import sqlalchemy
 from .. import ddl
 from ..queries.visitors import ColumnExpressionVisitor, PredicateVisitFlags, PredicateVisitor
 from ..timespan_database_representation import TimespanDatabaseRepresentation
-from ._processed_query_tree import ProcessedQueryTree
 
 if TYPE_CHECKING:
     from ..queries import tree as qt
@@ -59,7 +58,7 @@ class SqlColumnVisitor(
     ) -> sqlalchemy.ColumnElement[Any] | TimespanDatabaseRepresentation:
         # Docstring inherited.
         if expression.column_type == "timespan":
-            return self._driver._db.getTimespanRepresentation().fromLiteral(expression.get_literal_value())
+            return self._driver.db.getTimespanRepresentation().fromLiteral(expression.get_literal_value())
         return sqlalchemy.literal(
             expression.get_literal_value(), type_=ddl.VALID_CONFIG_COLUMN_TYPES[expression.column_type]
         )
@@ -68,23 +67,23 @@ class SqlColumnVisitor(
         self, expression: qt.DimensionKeyReference
     ) -> sqlalchemy.ColumnElement[int | str]:
         # Docstring inherited.
-        return self._sql_builder.dimensions_provided[expression.dimension.name][0]
+        return self._sql_builder.dimension_keys[expression.dimension.name][0]
 
     def visit_dimension_field_reference(
         self, expression: qt.DimensionFieldReference
     ) -> sqlalchemy.ColumnElement[Any] | TimespanDatabaseRepresentation:
         # Docstring inherited.
         if expression.column_type == "timespan":
-            return self._sql_builder.timespans_provided[expression.element.name]
-        return self._sql_builder.fields_provided[expression.element.name][expression.field]
+            return self._sql_builder.timespans[expression.element.name]
+        return self._sql_builder.fields[expression.element.name][expression.field]
 
     def visit_dataset_field_reference(
         self, expression: qt.DatasetFieldReference
     ) -> sqlalchemy.ColumnElement[Any] | TimespanDatabaseRepresentation:
         # Docstring inherited.
         if expression.column_type == "timespan":
-            return self._sql_builder.timespans_provided[expression.dataset_type]
-        return self._sql_builder.fields_provided[expression.dataset_type][expression.field]
+            return self._sql_builder.timespans[expression.dataset_type]
+        return self._sql_builder.fields[expression.dataset_type][expression.field]
 
     def visit_unary_expression(self, expression: qt.UnaryExpression) -> sqlalchemy.ColumnElement[Any]:
         # Docstring inherited.
@@ -200,19 +199,15 @@ class SqlColumnVisitor(
         # Docstring inherited.
         columns = qt.ColumnSet(self._driver.universe.empty.as_group())
         column.gather_required_columns(columns)
-        processed_query_tree = ProcessedQueryTree.process(query_tree, self._driver)
-        subquery_sql_builder, postprocessing, _ = self._driver._make_sql_builder(
-            processed_query_tree, columns, find_first_dataset=None
-        )
-        if postprocessing:
+        query, sql_builder = self._driver.analyze_query(query_tree, columns)
+        self._driver.build_query(query, sql_builder)
+        if query.postprocessing:
             raise NotImplementedError(
                 "Right-hand side subquery in IN expression would require postprocessing."
             )
-        subquery_visitor = SqlColumnVisitor(subquery_sql_builder, self._driver)
-        subquery_column = subquery_visitor.expect_scalar(column)
-        subquery_select = subquery_sql_builder.select(
-            qt.ColumnSet(self._driver.universe.empty.as_group()), sql_columns=[subquery_column]
-        )
+        subquery_visitor = SqlColumnVisitor(sql_builder, self._driver)
+        sql_builder.special["_MEMBER"] = subquery_visitor.expect_scalar(column)
+        subquery_select = sql_builder.select(qt.ColumnSet(self._driver.universe.empty.as_group()))
         sql_member = self.expect_scalar(member)
         return sql_member.in_(subquery_select)
 

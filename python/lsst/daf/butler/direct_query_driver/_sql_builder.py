@@ -31,8 +31,8 @@ __all__ = ("SqlBuilder",)
 
 import dataclasses
 import itertools
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy
 
@@ -51,18 +51,19 @@ class SqlBuilder:
     db: Database
     sql_from_clause: sqlalchemy.FromClause | None = None
     sql_where_terms: list[sqlalchemy.ColumnElement[bool]] = dataclasses.field(default_factory=list)
+    needs_distinct: bool = False
 
-    dimensions_provided: NonemptyMapping[str, list[sqlalchemy.ColumnElement]] = dataclasses.field(
-        default_factory=lambda: NonemptyMapping(list), kw_only=True
+    dimension_keys: NonemptyMapping[str, list[sqlalchemy.ColumnElement]] = dataclasses.field(
+        default_factory=lambda: NonemptyMapping(list)
     )
 
-    fields_provided: NonemptyMapping[str, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
-        default_factory=lambda: NonemptyMapping(dict), kw_only=True
+    fields: NonemptyMapping[str, dict[str, sqlalchemy.ColumnElement[Any]]] = dataclasses.field(
+        default_factory=lambda: NonemptyMapping(dict)
     )
 
-    timespans_provided: dict[str, TimespanDatabaseRepresentation] = dataclasses.field(
-        default_factory=dict, kw_only=True
-    )
+    timespans: dict[str, TimespanDatabaseRepresentation] = dataclasses.field(default_factory=dict)
+
+    special: dict[str, sqlalchemy.ColumnElement[Any]] = dataclasses.field(default_factory=dict)
 
     EMPTY_COLUMNS_NAME: ClassVar[str] = "IGNORED"
     """Name of the column added to a SQL ``SELECT`` query in order to represent
@@ -73,6 +74,11 @@ class SqlBuilder:
     """Type of the column added to a SQL ``SELECT`` query in order to represent
     relations that have no real columns.
     """
+
+    @property
+    def sql_columns(self) -> sqlalchemy.ColumnCollection:
+        assert self.sql_from_clause is not None
+        return self.sql_from_clause.columns
 
     @classmethod
     def handle_empty_columns(
@@ -102,81 +108,41 @@ class SqlBuilder:
         columns: qt.ColumnSet,
         postprocessing: Postprocessing | None = None,
         *,
-        sql_columns: Iterable[sqlalchemy.ColumnElement] = (),
-        distinct: bool = False,
-        required_dimensions_only: bool = False,
+        distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = False,
+        group_by: Sequence[sqlalchemy.ColumnElement] = (),
     ) -> sqlalchemy.Select:
-        if self.sql_from_clause is None:
-            assert not columns
-            assert not postprocessing
-            return sqlalchemy.select(*self.handle_empty_columns([]), *sql_columns)
-        if distinct and columns:
-            # Hard case: caller wants unique rows, and we have to tell the
-            # database to do that because they aren't naturally unique.
-            # That means delegating to Database.select_unique (since the
-            # implementation is driver-dependent due differences in DISTINCT ON
-            # and GROUP BY support).
-            if sql_columns:
-                # Just because it's a pain to implement and we don't have a
-                # need for it right now.
-                raise NotImplementedError("'distinct' and 'sql_columns' are mutually exclusive")
-            column_triples: list[
-                tuple[str, sqlalchemy.ColumnElement[Any], Literal["key", "natural", "aggregate"]]
-            ] = []
-            uniqueness_category: Literal["key", "natural", "aggregate"]
-            for logical_table, field in columns:
-                name = columns.get_qualified_name(logical_table, field)
-                uniqueness_category = columns.get_uniqueness_category(logical_table, field)
-                if field is None:
-                    if logical_table in columns.dimensions.required or not required_dimensions_only:
-                        column_triples.append(
-                            (name, self.dimensions_provided[logical_table][0], uniqueness_category)
-                        )
-                elif columns.is_timespan(logical_table, field):
-                    column_triples.extend(
-                        zip(
-                            self.timespans_provided[logical_table].getFieldNames(name),
-                            self.timespans_provided[logical_table].flatten(),
-                            itertools.repeat(uniqueness_category),
-                        )
+        sql_columns: list[sqlalchemy.ColumnElement[Any]] = []
+        for logical_table, field in columns:
+            name = columns.get_qualified_name(logical_table, field)
+            if field is None:
+                sql_columns.append(self.dimension_keys[logical_table][0].label(name))
+            elif columns.is_timespan(logical_table, field):
+                sql_columns.extend(self.timespans[logical_table].flatten(name))
+            else:
+                sql_columns.append(self.fields[logical_table][field].label(name))
+        if postprocessing is not None:
+            for element in postprocessing.iter_missing(columns):
+                assert (
+                    element.name in columns.dimensions.elements
+                ), "Region aggregates not handled by this method."
+                sql_columns.append(
+                    self.fields[element.name]["region"].label(
+                        columns.get_qualified_name(element.name, "region")
                     )
-                else:
-                    column_triples.append(
-                        (name, self.fields_provided[logical_table][field], uniqueness_category)
-                    )
-            if postprocessing is not None:
-                for element in postprocessing.iter_missing(columns):
-                    name = columns.get_qualified_name(element.name, "region")
-                    sql_region_column = self.fields_provided[element.name]["region"]
-                    if element.name not in columns.dimensions.elements:
-                        sql_region_column = ddl.Base64Region.union_agg(sql_region_column)
-                        uniqueness_category = "aggregate"
-                    else:
-                        uniqueness_category = "natural"
-                    column_triples.append((name, sql_region_column, uniqueness_category))
-            result = self.db.select_unique(self.sql_from_clause, column_triples)
-        else:
-            # Easy case with no DISTINCT [ON] or GROUP BY.
-            sql_columns = list(sql_columns)
-            for logical_table, field in columns:
-                name = columns.get_qualified_name(logical_table, field)
-                if field is None:
-                    sql_columns.append(self.dimensions_provided[logical_table][0].label(name))
-                elif columns.is_timespan(logical_table, field):
-                    sql_columns.extend(self.timespans_provided[logical_table].flatten(name))
-                else:
-                    sql_columns.append(self.fields_provided[logical_table][field].label(name))
-            if postprocessing is not None:
-                for element in postprocessing.iter_missing(columns):
-                    sql_columns.append(
-                        self.fields_provided[element.name]["region"].label(
-                            columns.get_qualified_name(element.name, "region")
-                        )
-                    )
-            self.handle_empty_columns(sql_columns)
-            result = sqlalchemy.select(*sql_columns).select_from(self.sql_from_clause)
-            if distinct:
+                )
+        for label, sql_column in self.special.items():
+            sql_columns.append(sql_column.label(label))
+        self.handle_empty_columns(sql_columns)
+        result = sqlalchemy.select(*sql_columns)
+        if self.sql_from_clause is not None:
+            result = result.select_from(self.sql_from_clause)
+        if self.needs_distinct or distinct:
+            if distinct is True or distinct is False:
                 result = result.distinct()
+            else:
+                result = result.distinct(*distinct)
+        if group_by:
+            result = result.group_by(*group_by)
         if self.sql_where_terms:
             result = result.where(*self.sql_where_terms)
         return result
@@ -186,6 +152,7 @@ class SqlBuilder:
         columns: qt.ColumnSet,
         postprocessing: Postprocessing | None = None,
     ) -> ddl.TableSpec:
+        assert not self.special, "special columns not supported in make_table_spec"
         results = ddl.TableSpec(
             [columns.get_column_spec(logical_table, field).to_sql_spec() for logical_table, field in columns]
         )
@@ -199,34 +166,42 @@ class SqlBuilder:
     def extract_dimensions(self, dimensions: Iterable[str], **kwargs: str) -> SqlBuilder:
         assert self.sql_from_clause is not None, "Cannot extract columns with no FROM clause."
         for dimension_name in dimensions:
-            self.dimensions_provided[dimension_name].append(self.sql_from_clause.columns[dimension_name])
+            self.dimension_keys[dimension_name].append(self.sql_from_clause.columns[dimension_name])
         for k, v in kwargs.items():
-            self.dimensions_provided[v].append(self.sql_from_clause.columns[k])
+            self.dimension_keys[v].append(self.sql_from_clause.columns[k])
         return self
 
-    def extract_columns(self, columns: qt.ColumnSet, required_dimensions_only: bool = False) -> SqlBuilder:
+    def extract_columns(
+        self, columns: qt.ColumnSet, postprocessing: Postprocessing | None = None
+    ) -> SqlBuilder:
         assert self.sql_from_clause is not None, "Cannot extract columns with no FROM clause."
         for logical_table, field in columns:
             name = columns.get_qualified_name(logical_table, field)
             if field is None:
-                if logical_table in columns.dimensions.required or not required_dimensions_only:
-                    self.dimensions_provided[logical_table].append(self.sql_from_clause.columns[name])
+                self.dimension_keys[logical_table].append(self.sql_from_clause.columns[name])
             elif columns.is_timespan(logical_table, field):
-                self.timespans_provided[logical_table] = self.db.getTimespanRepresentation().from_columns(
+                self.timespans[logical_table] = self.db.getTimespanRepresentation().from_columns(
                     self.sql_from_clause.columns, name
                 )
             else:
-                self.fields_provided[logical_table][field] = self.sql_from_clause.columns[name]
+                self.fields[logical_table][field] = self.sql_from_clause.columns[name]
+        if postprocessing is not None:
+            for element in postprocessing.iter_missing(columns):
+                self.fields[element.name]["region"] = self.sql_from_clause.columns[name]
+            if postprocessing.check_validity_match_count:
+                self.special[postprocessing.VALIDITY_MATCH_COUNT] = self.sql_from_clause.columns[
+                    postprocessing.VALIDITY_MATCH_COUNT
+                ]
         return self
 
     def join(self, other: SqlBuilder) -> SqlBuilder:
         join_on: list[sqlalchemy.ColumnElement] = []
-        for dimension_name in self.dimensions_provided.keys() & other.dimensions_provided.keys():
+        for dimension_name in self.dimension_keys.keys() & other.dimension_keys.keys():
             for column1, column2 in itertools.product(
-                self.dimensions_provided[dimension_name], other.dimensions_provided[dimension_name]
+                self.dimension_keys[dimension_name], other.dimension_keys[dimension_name]
             ):
                 join_on.append(column1 == column2)
-            self.dimensions_provided[dimension_name].extend(other.dimensions_provided[dimension_name])
+            self.dimension_keys[dimension_name].extend(other.dimension_keys[dimension_name])
         if self.sql_from_clause is None:
             self.sql_from_clause = other.sql_from_clause
         elif other.sql_from_clause is not None:
@@ -234,35 +209,49 @@ class SqlBuilder:
                 other.sql_from_clause, onclause=sqlalchemy.and_(*join_on)
             )
         self.sql_where_terms += other.sql_where_terms
+        self.needs_distinct = self.needs_distinct or other.needs_distinct
+        self.special.update(other.special)
         return self
 
     def where_sql(self, *arg: sqlalchemy.ColumnElement[bool]) -> SqlBuilder:
         self.sql_where_terms.extend(arg)
         return self
 
+    def cte(
+        self,
+        columns: qt.ColumnSet,
+        postprocessing: Postprocessing | None = None,
+        *,
+        distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = False,
+        group_by: Sequence[sqlalchemy.ColumnElement] = (),
+    ) -> SqlBuilder:
+        return SqlBuilder(
+            self.db,
+            self.select(columns, postprocessing, distinct=distinct, group_by=group_by).cte(),
+        ).extract_columns(columns, postprocessing)
+
     def subquery(
         self,
         columns: qt.ColumnSet,
-        distinct: bool = False,
-        required_dimensions_only: bool = False,
-        chain: Iterable[SqlBuilder] = (),
+        postprocessing: Postprocessing | None = None,
+        *,
+        distinct: bool | Sequence[sqlalchemy.ColumnElement[Any]] = False,
+        group_by: Sequence[sqlalchemy.ColumnElement] = (),
     ) -> SqlBuilder:
-        other_selects = [
-            other_sql_builder.select(
-                columns, distinct=False, required_dimensions_only=required_dimensions_only
-            )
-            for other_sql_builder in chain
-        ]
-        select = self.select(
-            columns,
-            distinct=distinct and not other_selects,
-            required_dimensions_only=required_dimensions_only,
-        )
-        if other_selects:
-            if distinct:
-                subquery = select.union(*other_selects).subquery()
-            else:
-                subquery = select.union_all(*other_selects).subquery()
-        else:
-            subquery = select.subquery()
-        return SqlBuilder(self.db, subquery).extract_columns(columns)
+        return SqlBuilder(
+            self.db,
+            self.select(columns, postprocessing, distinct=distinct, group_by=group_by).subquery(),
+        ).extract_columns(columns, postprocessing)
+
+    def union_subquery(
+        self,
+        others: Iterable[SqlBuilder],
+        columns: qt.ColumnSet,
+        postprocessing: Postprocessing | None = None,
+    ) -> SqlBuilder:
+        select0 = self.select(columns, postprocessing)
+        other_selects = [other.select(columns, postprocessing) for other in others]
+        return SqlBuilder(
+            self.db,
+            select0.union(*other_selects).subquery(),
+        ).extract_columns(columns, postprocessing)

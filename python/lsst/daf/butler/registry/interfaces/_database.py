@@ -1924,6 +1924,20 @@ class Database(ABC):
         """
         return 100
 
+    @property
+    @abstractmethod
+    def has_distinct_on(self) -> bool:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def has_any_aggregate(self) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:
+        raise NotImplementedError()
+
     def select_unique(
         self,
         from_clause: sqlalchemy.FromClause,

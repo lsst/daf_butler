@@ -26,12 +26,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from sqlalchemy.sql.expression import ColumnElement as ColumnElement
+
 from ... import ddl, time_utils
 
 __all__ = ["PostgresqlDatabase"]
 
 import re
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
 from typing import Any, Literal
 
@@ -333,6 +335,20 @@ class PostgresqlDatabase(Database):
         # Docstring inherited.
         return super().constant_rows(fields, *rows, name=name)
 
+    @property
+    def has_distinct_on(self) -> bool:
+        # Docstring inherited.
+        return True
+
+    @property
+    def has_any_aggregate(self) -> bool:
+        # Docstring inherited.
+        return self._pg_version >= (16, 0)
+
+    def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:
+        # Docstring inherited.x
+        return sqlalchemy.func.any_value(column)
+
     def select_unique(
         self,
         from_clause: sqlalchemy.FromClause,
@@ -575,3 +591,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             return (self.column,)
         else:
             return (self.column.label(name),)
+
+    def apply_any_aggregate(
+        self, func: Callable[[ColumnElement[Any]], ColumnElement[Any]]
+    ) -> TimespanDatabaseRepresentation:
+        # Docstring inherited.
+        return _RangeTimespanRepresentation(func(self.column), self.name)

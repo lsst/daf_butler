@@ -27,10 +27,10 @@
 
 from __future__ import annotations
 
-__all__ = ("Postprocessing",)
+__all__ = ("Postprocessing", "ValidityRangeMatchError")
 
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import sqlalchemy
 from lsst.sphgeom import DISJOINT, Region
@@ -39,15 +39,21 @@ from ..queries import tree as qt
 
 if TYPE_CHECKING:
     from ..dimensions import DimensionElement
-    from ..registry.nameShrinker import NameShrinker
+
+
+class ValidityRangeMatchError(RuntimeError):
+    pass
 
 
 class Postprocessing:
     def __init__(self) -> None:
         self.spatial_join_filtering: list[tuple[DimensionElement, DimensionElement]] = []
         self.spatial_where_filtering: list[tuple[DimensionElement, Region]] = []
+        self.check_validity_match_count: bool = False
         self._offset: int = 0
         self._limit: int | None = None
+
+    VALIDITY_MATCH_COUNT: ClassVar[str] = "_VALIDITY_MATCH_COUNT"
 
     @property
     def offset(self) -> int:
@@ -96,18 +102,18 @@ class Postprocessing:
                     yield element
                 done.add(element)
 
-    def apply(self, rows: Iterable[sqlalchemy.Row], name_shrinker: NameShrinker) -> Iterable[sqlalchemy.Row]:
+    def apply(self, rows: Iterable[sqlalchemy.Row]) -> Iterable[sqlalchemy.Row]:
         if not self:
             yield from rows
         joins = [
             (
-                name_shrinker.shrink(qt.ColumnSet.get_qualified_name(a.name, "region")),
-                name_shrinker.shrink(qt.ColumnSet.get_qualified_name(b.name, "region")),
+                qt.ColumnSet.get_qualified_name(a.name, "region"),
+                qt.ColumnSet.get_qualified_name(b.name, "region"),
             )
             for a, b in self.spatial_join_filtering
         ]
         where = [
-            (name_shrinker.shrink(qt.ColumnSet.get_qualified_name(element.name, "region")), region)
+            (qt.ColumnSet.get_qualified_name(element.name, "region"), region)
             for element, region in self.spatial_where_filtering
         ]
         for row in rows:
@@ -116,6 +122,12 @@ class Postprocessing:
                 m[field].relate(region) & DISJOINT for field, region in where
             ):
                 continue
+            if self.check_validity_match_count and m[self.VALIDITY_MATCH_COUNT] > 1:
+                raise ValidityRangeMatchError(
+                    "Ambiguous calibration validity range match. This usually means a temporal join or "
+                    "'where' needs to be added, but it could also mean that multiple validity ranges "
+                    "overlap a single output data ID."
+                )
             if self._offset:
                 self._offset -= 1
                 continue

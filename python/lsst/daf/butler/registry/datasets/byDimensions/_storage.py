@@ -34,7 +34,7 @@ __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 import datetime
 from collections.abc import Callable, Iterable, Iterator, Sequence, Set
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import astropy.time
 import sqlalchemy
@@ -557,7 +557,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     def make_sql_builder(
         self,
         collections: Sequence[CollectionRecord],
-        fields: Set[qt.DatasetFieldName],
+        fields: Set[qt.DatasetFieldName | Literal["collection_key"]],
     ) -> SqlBuilder:
         # This method largely mimics `make_relation`, but it uses the new query
         # system primitives instead of the old one.  In terms of the SQL
@@ -604,7 +604,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # in the same query, for different dataset types.
             tag_sql_builder = SqlBuilder(self._db, self._tags.alias(f"{self.datasetType.name}_tags"))
             if "timespan" in fields:
-                tag_sql_builder.timespans_provided[
+                tag_sql_builder.timespans[
                     self.datasetType.name
                 ] = self._db.getTimespanRepresentation().fromLiteral(Timespan(None, None))
             tag_sql_builder = self._finish_sql_builder(
@@ -626,7 +626,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             ), "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
             calib_sql_builder = SqlBuilder(self._db, self._calibs.alias(f"{self.datasetType.name}_calibs"))
             if "timespan" in fields:
-                calib_sql_builder.timespans_provided[
+                calib_sql_builder.timespans[
                     self.datasetType.name
                 ] = self._db.getTimespanRepresentation().from_columns(self._calibs.columns)
             calib_sql_builder = self._finish_sql_builder(
@@ -638,41 +638,25 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 ],
                 fields,
             )
-        needs_distinct: bool = (
-            # If there are multiple collections and we're searching any non-RUN
-            # collection, we could find the same dataset twice, which would
-            # yield duplicate rows unless "collection" or "rank" is there to
-            # make those rows unique.
-            len(collections) > 1
-            and any(record.type is not CollectionType.RUN for record in collections)
-            and ("collection" not in fields and "rank" not in fields)
-        ) or (
-            # If we've included any calibration collections, we could find the
-            # same dataset in a single collection, which would yield duplicates
-            # unless "timespan" is there to make those rows unique.
-            calib_sql_builder is not None
-            and "timespan" not in fields
-        )
+            # In calibration collections, we need timespan as well as data ID
+            # to ensure unique rows.
+            calib_sql_builder.needs_distinct = calib_sql_builder.needs_distinct and "timespan" not in fields
         columns = qt.ColumnSet(self.datasetType.dimensions.as_group())
         columns.dataset_fields[self.datasetType.name].update(fields)
+        columns.drop_implied_dimension_keys()
         if tag_sql_builder is not None:
             if calib_sql_builder is not None:
-                # Need a UNION or UNION ALL subquery.
-                return tag_sql_builder.subquery(
-                    columns, distinct=needs_distinct, required_dimensions_only=True, chain=[calib_sql_builder]
-                )
-            elif needs_distinct:
+                # Need a UNION subquery.
+                return tag_sql_builder.union_subquery([calib_sql_builder], columns)
+            elif tag_sql_builder.needs_distinct:
                 # Need a SELECT DISTINCT subquery.
-                return tag_sql_builder.subquery(columns, distinct=True, required_dimensions_only=True)
+                return tag_sql_builder.subquery(columns)
             else:
-                # No subquery needed.
                 return tag_sql_builder
         elif calib_sql_builder is not None:
-            if needs_distinct:
-                # Need a SELECT DISTINCT subquery.
-                return calib_sql_builder.subquery(columns, distinct=True, required_dimensions_only=True)
+            if calib_sql_builder.needs_distinct:
+                return calib_sql_builder.subquery(columns)
             else:
-                # No subquery needed.
                 return calib_sql_builder
         else:
             raise AssertionError("Branch should be unreachable.")
@@ -681,7 +665,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self,
         sql_builder: SqlBuilder,
         collections: Sequence[tuple[CollectionRecord, int]],
-        fields: Set[qt.DatasetFieldName],
+        fields: Set[qt.DatasetFieldName | Literal["collection_key"]],
     ) -> SqlBuilder:
         # This method plays the same role as _finish_single_relation in the new
         # query system. It is called exactly one or two times by
@@ -689,12 +673,15 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # one or two times by make_relation.  See make_sql_builder comments for
         # what's different.
         assert sql_builder.sql_from_clause is not None
+        run_collections_only = all(record.type is CollectionType.RUN for record, _ in collections)
         sql_builder.where_sql(sql_builder.sql_from_clause.c.dataset_type_id == self._dataset_type_id)
         dataset_id_col = sql_builder.sql_from_clause.c.dataset_id
         collection_col = sql_builder.sql_from_clause.c[self._collections.getCollectionForeignKeyName()]
-        fields_provided = sql_builder.fields_provided[self.datasetType.name]
+        fields_provided = sql_builder.fields[self.datasetType.name]
         # We always constrain and optionally retrieve the collection(s) via the
         # tags/calibs table.
+        if "collection_key" in fields:
+            sql_builder.fields[self.datasetType.name]["collection_key"] = collection_col
         if len(collections) == 1:
             only_collection_record, _ = collections[0]
             sql_builder.where_sql(collection_col == only_collection_record.key)
@@ -713,31 +700,25 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 fields_provided["collection"] = sqlalchemy.case(
                     {record.key: record.name for record, _ in collections}, value=collection_col
                 )
-        # Add rank if requested as a CASE-based calculation the collection
-        # column.
-        if "rank" in fields:
-            fields_provided["rank"] = sqlalchemy.case(
-                {record.key: rank for record, rank in collections},
-                value=collection_col,
-            )
         # Add more column definitions, starting with the data ID.
         sql_builder.extract_dimensions(self.datasetType.dimensions.required.names)
         # We can always get the dataset_id from the tags/calibs table, even if
         # could also get it from the 'static' dataset table.
         if "dataset_id" in fields:
             fields_provided["dataset_id"] = dataset_id_col
+
         # It's possible we now have everything we need, from just the
         # tags/calibs table.  The things we might need to get from the static
         # dataset table are the run key and the ingest date.
         need_static_table = False
         if "run" in fields:
-            if len(collections) == 1 and only_collection_record.type is CollectionType.RUN:
+            if len(collections) == 1 and run_collections_only:
                 # If we are searching exactly one RUN collection, we
                 # know that if we find the dataset in that collection,
                 # then that's the datasets's run; we don't need to
                 # query for it.
                 fields_provided["run"] = sqlalchemy.literal(only_collection_record.name)
-            elif all(record.type is CollectionType.RUN for record, _ in collections):
+            elif run_collections_only:
                 # Once again we can avoid joining to the collection table by
                 # adding a CASE statement.
                 fields_provided["run"] = sqlalchemy.case(
@@ -758,9 +739,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if "ingest_date" in fields:
             fields_provided["ingest_date"] = self._static.dataset.c.ingest_date
             need_static_table = True
-        # If we need the static table, join it in via dataset_id and
-        # dataset_type_id
         if need_static_table:
+            # If we need the static table, join it in via dataset_id.
             sql_builder.sql_from_clause = sql_builder.sql_from_clause.join(
                 self._static.dataset, onclause=(dataset_id_col == self._static.dataset.c.id)
             )
@@ -769,6 +749,15 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # clause, but my guess is that that's a good idea IFF it's in the
             # foreign key, and right now it isn't.
             sql_builder.where_sql(self._static.dataset.c.dataset_type_id == self._dataset_type_id)
+        sql_builder.needs_distinct = (
+            # If there are multiple collections and we're searching any non-RUN
+            # collection, we could find the same dataset twice, which would
+            # yield duplicate rows unless "collection" or "rank" is there to
+            # make those rows unique.
+            len(collections) > 1
+            and not run_collections_only
+            and ("collection_key" not in fields)
+        )
         return sql_builder
 
     def getDataId(self, id: DatasetId) -> DataCoordinate:
