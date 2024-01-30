@@ -138,8 +138,20 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertCountEqual(
             [data_id.mapping for data_id in result],
             [
-                {"instrument": "Cam1", "visit": 1, "band": "g", "physical_filter": "Cam1-G"},
-                {"instrument": "Cam1", "visit": 2, "band": "r", "physical_filter": "Cam1-R1"},
+                {
+                    "instrument": "Cam1",
+                    "visit": 1,
+                    "band": "g",
+                    "physical_filter": "Cam1-G",
+                    "day_obs": 20210909,
+                },
+                {
+                    "instrument": "Cam1",
+                    "visit": 2,
+                    "band": "r",
+                    "physical_filter": "Cam1-R1",
+                    "day_obs": 20210909,
+                },
             ],
         )
 
@@ -152,7 +164,15 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         result = _do_query("visit", where=where, bind=bind)
         self.assertEqual(
             [data_id.mapping for data_id in result],
-            [{"instrument": "Cam1", "visit": 1, "band": "g", "physical_filter": "Cam1-G"}],
+            [
+                {
+                    "instrument": "Cam1",
+                    "visit": 1,
+                    "band": "g",
+                    "physical_filter": "Cam1-G",
+                    "day_obs": 20210909,
+                }
+            ],
         )
 
         # Test chained methods, some modify original result in place, so build
@@ -193,8 +213,20 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertCountEqual(
             [data_id.mapping for data_id in result],
             [
-                {"instrument": "Cam1", "visit": 1, "band": "g", "physical_filter": "Cam1-G"},
-                {"instrument": "Cam1", "visit": 2, "band": "r", "physical_filter": "Cam1-R1"},
+                {
+                    "instrument": "Cam1",
+                    "visit": 1,
+                    "band": "g",
+                    "physical_filter": "Cam1-G",
+                    "day_obs": 20210909,
+                },
+                {
+                    "instrument": "Cam1",
+                    "visit": 2,
+                    "band": "r",
+                    "physical_filter": "Cam1-R1",
+                    "day_obs": 20210909,
+                },
             ],
         )
 
@@ -212,7 +244,15 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         result = _do_query("visit", where=where, bind=bind)
         self.assertEqual(
             [data_id.mapping for data_id in result],
-            [{"instrument": "Cam1", "visit": 1, "band": "g", "physical_filter": "Cam1-G"}],
+            [
+                {
+                    "instrument": "Cam1",
+                    "visit": 1,
+                    "band": "g",
+                    "physical_filter": "Cam1-G",
+                    "day_obs": 20210909,
+                }
+            ],
         )
 
         # Test chained methods, some modify original result in place, so build
@@ -929,7 +969,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             Test("tract,-exposure_time", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
             Test("tract,visit.name", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
             Test(
-                "tract,-timespan.begin,timespan.end",
+                "tract,-visit.timespan.begin,visit.timespan.end",
                 "tract,visit",
                 ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2)),
             ),
@@ -993,7 +1033,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
         with self.assertRaisesRegex(
             ValueError,
-            r"Timespan exists in more than one dimension element \(exposure, visit\); "
+            r"Timespan exists in more than one dimension element \(day_obs, exposure, visit\); "
             r"qualify timespan with specific dimension name\.",
         ):
             list(do_query(("exposure", "visit")).order_by("timespan.begin"))
@@ -1356,7 +1396,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(
             [
                 data_id["visit"]
-                for data_id in _query_data_ids(["visit"], instrument="HSC").order_by("id").limit(5)
+                for data_id in _query_data_ids(["visit"], instrument="HSC").order_by("visit").limit(5)
             ],
             [318, 322, 326, 330, 332],
         )

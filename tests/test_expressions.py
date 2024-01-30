@@ -258,14 +258,16 @@ class InspectionVisitorTestCase(unittest.TestCase):
 
         tree = parser.parse("instrument = 'LSST' AND visit = 1")
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "day_obs"})
         self.assertFalse(summary.columns)
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("instrument = 'LSST' AND visit = 1 AND skymap = 'x'")
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "skymap"})
+        self.assertEqual(
+            summary.dimensions, {"instrument", "visit", "band", "physical_filter", "skymap", "day_obs"}
+        )
         self.assertFalse(summary.columns)
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
@@ -292,14 +294,16 @@ class InspectionVisitorTestCase(unittest.TestCase):
         tree = parser.parse("instrument = instr AND visit = visit_id")
         bind = {"instr": "LSST", "visit_id": 1}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "day_obs"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("instrument = 'LSST' AND visit = 1 AND skymap = skymap_name")
         bind = {"instr": "LSST", "visit_id": 1, "skymap_name": "x"}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "skymap"})
+        self.assertEqual(
+            summary.dimensions, {"instrument", "visit", "band", "physical_filter", "skymap", "day_obs"}
+        )
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
@@ -327,21 +331,21 @@ class InspectionVisitorTestCase(unittest.TestCase):
         tree = parser.parse("visit IN (1,2,3)")
         bind = {}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "day_obs"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("visit IN (visit1, visit2, visit3)")
         bind = {"visit1": 1, "visit2": 2, "visit3": 3}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "day_obs"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 
         tree = parser.parse("visit IN (visits)")
         bind = {"visits": (1, 2, 3)}
         summary = tree.visit(InspectionVisitor(universe, bind))
-        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter"})
+        self.assertEqual(summary.dimensions, {"instrument", "visit", "band", "physical_filter", "day_obs"})
         self.assertIsNone(summary.dataIdKey)
         self.assertIsNone(summary.dataIdValue)
 

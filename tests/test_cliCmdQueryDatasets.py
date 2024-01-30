@@ -231,7 +231,13 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         testRepo.butler.registry.insertDimensionData(
             "visit",
-            {"instrument": "DummyCamComp", "id": 425, "name": "fourtwentyfive", "physical_filter": "d-r"},
+            {
+                "instrument": "DummyCamComp",
+                "id": 425,
+                "name": "fourtwentyfive",
+                "physical_filter": "d-r",
+                "day_obs": 20200101,
+            },
         )
 
         datasetType = addDatasetType(

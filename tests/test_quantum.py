@@ -72,6 +72,9 @@ class QuantumTestCase(unittest.TestCase):
         physical_filter = universe["physical_filter"]
         physical_filter_record = physical_filter.RecordClass(name="r", instrument="test", band="r")
 
+        day_obs = universe["day_obs"]
+        day_obs_record = day_obs.RecordClass(instrument="test", id=20250101)
+
         visit_system = universe["visit_system"]
         visit_system_record = visit_system.RecordClass(id=9, instrument="test", name="test_visit_system")
 
@@ -84,6 +87,7 @@ class QuantumTestCase(unittest.TestCase):
             name="test_visit",
             physical_filter="r",
             region=region,
+            day_obs=20250101,
         )
         visit_record_43 = visit.RecordClass(
             id=43,
@@ -91,6 +95,7 @@ class QuantumTestCase(unittest.TestCase):
             name="test_visit",
             physical_filter="r",
             region=region,
+            day_obs=20250101,
         )
 
         records42 = {
@@ -99,6 +104,7 @@ class QuantumTestCase(unittest.TestCase):
             physical_filter: physical_filter_record,
             visit_system: visit_system_record,
             visit: visit_record_42,
+            day_obs: day_obs_record,
         }
 
         records43 = {
@@ -107,13 +113,16 @@ class QuantumTestCase(unittest.TestCase):
             physical_filter: physical_filter_record,
             visit_system: visit_system_record,
             visit: visit_record_43,
+            day_obs: day_obs_record,
         }
 
         dataId42 = DataCoordinate.standardize(
-            dict(instrument="test", visit=42), universe=universe  # type: ignore
+            dict(instrument="test", visit=42),
+            universe=universe,  # type: ignore
         )
         dataId43 = DataCoordinate.standardize(
-            dict(instrument="test", visit=43), universe=universe  # type: ignore
+            dict(instrument="test", visit=43),
+            universe=universe,  # type: ignore
         )
 
         if addRecords:

@@ -246,6 +246,7 @@ class ButlerPutGetTests(TestCaseMixin):
         butler.registry.insertDimensionData(
             "visit_system", {"instrument": "DummyCamComp", "id": 1, "name": "default"}
         )
+        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20200101})
         visit_start = astropy.time.Time("2020-01-01 08:00:00.123456789", scale="tai")
         visit_end = astropy.time.Time("2020-01-01 08:00:36.66", scale="tai")
         butler.registry.insertDimensionData(
@@ -257,6 +258,7 @@ class ButlerPutGetTests(TestCaseMixin):
                 "physical_filter": "d-r",
                 "datetime_begin": visit_start,
                 "datetime_end": visit_end,
+                "day_obs": 20200101,
             },
         )
 
@@ -269,6 +271,7 @@ class ButlerPutGetTests(TestCaseMixin):
                     "id": visit_id,
                     "name": f"fourtwentyfour_{visit_id}",
                     "physical_filter": "d-r",
+                    "day_obs": 20200101,
                 },
             )
         return butler, datasetType
@@ -558,9 +561,16 @@ class ButlerPutGetTests(TestCaseMixin):
         butler.registry.insertDimensionData(
             "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
         )
+        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20250101})
         butler.registry.insertDimensionData(
             "visit",
-            {"instrument": "DummyCamComp", "id": 423, "name": "fourtwentythree", "physical_filter": "d-r"},
+            {
+                "instrument": "DummyCamComp",
+                "id": 423,
+                "name": "fourtwentythree",
+                "physical_filter": "d-r",
+                "day_obs": 20250101,
+            },
         )
         dataId = {"instrument": "DummyCamComp", "visit": 423}
         # Create dataset.
@@ -929,6 +939,7 @@ class ButlerTests(ButlerPutGetTests):
         butler.registry.insertDimensionData(
             "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
         )
+        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20250101})
         for detector in (1, 2):
             butler.registry.insertDimensionData(
                 "detector", {"instrument": "DummyCamComp", "id": detector, "full_name": f"detector{detector}"}
@@ -936,8 +947,20 @@ class ButlerTests(ButlerPutGetTests):
 
         butler.registry.insertDimensionData(
             "visit",
-            {"instrument": "DummyCamComp", "id": 423, "name": "fourtwentythree", "physical_filter": "d-r"},
-            {"instrument": "DummyCamComp", "id": 424, "name": "fourtwentyfour", "physical_filter": "d-r"},
+            {
+                "instrument": "DummyCamComp",
+                "id": 423,
+                "name": "fourtwentythree",
+                "physical_filter": "d-r",
+                "day_obs": 20250101,
+            },
+            {
+                "instrument": "DummyCamComp",
+                "id": 424,
+                "name": "fourtwentyfour",
+                "physical_filter": "d-r",
+                "day_obs": 20250101,
+            },
         )
 
         formatter = doImportType("lsst.daf.butler.formatters.yaml.YamlFormatter")
@@ -1087,7 +1110,19 @@ class ButlerTests(ButlerPutGetTests):
                 ],
             ),
             ("physical_filter", [{"instrument": "DummyCam", "name": "d-r", "band": "R"}]),
-            ("visit", [{"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"}]),
+            ("day_obs", [{"instrument": "DummyCam", "id": 20250101}]),
+            (
+                "visit",
+                [
+                    {
+                        "instrument": "DummyCam",
+                        "id": 42,
+                        "name": "fortytwo",
+                        "physical_filter": "d-r",
+                        "day_obs": 20250101,
+                    }
+                ],
+            ),
         ]
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         # Add needed Dimensions
@@ -1155,7 +1190,17 @@ class ButlerTests(ButlerPutGetTests):
         dimensionEntries: tuple[tuple[str, Mapping[str, Any]], ...] = (
             ("instrument", {"instrument": "DummyCam"}),
             ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
-            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"}),
+            ("day_obs", {"instrument": "DummyCam", "id": 20250101}),
+            (
+                "visit",
+                {
+                    "instrument": "DummyCam",
+                    "id": 42,
+                    "name": "fortytwo",
+                    "physical_filter": "d-r",
+                    "day_obs": 20250101,
+                },
+            ),
         )
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         metric = makeExampleMetrics()
@@ -1274,6 +1319,8 @@ class ButlerTests(ButlerPutGetTests):
         n_exposures = 5
         dayobs = 20210530
 
+        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": dayobs})
+
         for i in range(n_exposures):
             butler.registry.insertDimensionData("group", {"instrument": "DummyCamComp", "name": f"group{i}"})
             butler.registry.insertDimensionData(
@@ -1341,11 +1388,26 @@ class FileDatastoreButlerTests(ButlerTests):
         butler.registry.insertDimensionData(
             "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
         )
+        butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20250101})
         butler.registry.insertDimensionData(
-            "visit", {"instrument": "DummyCamComp", "id": 423, "name": "v423", "physical_filter": "d-r"}
+            "visit",
+            {
+                "instrument": "DummyCamComp",
+                "id": 423,
+                "name": "v423",
+                "physical_filter": "d-r",
+                "day_obs": 20250101,
+            },
         )
         butler.registry.insertDimensionData(
-            "visit", {"instrument": "DummyCamComp", "id": 425, "name": "v425", "physical_filter": "d-r"}
+            "visit",
+            {
+                "instrument": "DummyCamComp",
+                "id": 425,
+                "name": "v425",
+                "physical_filter": "d-r",
+                "day_obs": 20250101,
+            },
         )
 
         # Create and store a dataset
@@ -2297,6 +2359,13 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.source_butler.registry.insertDimensionData(
             "detector", {"instrument": "DummyCamComp", "id": 1, "full_name": "det1"}
         )
+        self.source_butler.registry.insertDimensionData(
+            "day_obs",
+            {
+                "instrument": "DummyCamComp",
+                "id": 20250101,
+            },
+        )
 
         for i in range(n_exposures):
             self.source_butler.registry.insertDimensionData(
@@ -2310,6 +2379,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
                     "obs_id": f"exp{i}",
                     "physical_filter": "d-r",
                     "group": f"group{i}",
+                    "day_obs": 20250101,
                 },
             )
 

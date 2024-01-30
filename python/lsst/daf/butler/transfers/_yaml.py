@@ -309,15 +309,6 @@ class YamlRepoImportBackend(RepoImportBackend):
         ):
             migrate_day_obs_offset = True
 
-        # Some conversions may need the day_obs offset from the instrument
-        # records later on. Not all imports will be populating from scratch so
-        # read them from the registry if they already exist.
-        instrument_offsets: dict[str, int] = {}
-        if migrate_day_obs_offset:
-            instrument_offsets = {
-                rec.name: rec.day_obs_offset for rec in self.registry.queryDimensionRecords("instrument")
-            }
-
         # If this data exported before group was a first-class dimension,
         # we'll need to modify some exposure columns and add group records.
         migrate_group = False
@@ -328,6 +319,31 @@ class YamlRepoImportBackend(RepoImportBackend):
             and "group" in self.registry.dimensions["exposure"].implied
         ):
             migrate_group = True
+
+        # If this data exported before day_obs was a first-class dimension,
+        # we'll need to modify some exposure and visit columns and add day_obs
+        # records.  This is especially tricky because some files even predate
+        # the existence of data ID values.
+        migrate_exposure_day_obs = False
+        migrate_visit_day_obs = False
+        day_obs_ids: set[tuple[str, int]] = set()
+        if universe_version < 7 and universe_namespace == "daf_butler":
+            if (
+                "exposure" in self.registry.dimensions
+                and "day_obs" in self.registry.dimensions["exposure"].implied
+            ):
+                migrate_exposure_day_obs = True
+            if "visit" in self.registry.dimensions and "day_obs" in self.registry.dimensions["visit"].implied:
+                migrate_visit_day_obs = True
+
+        # Some conversions may need the day_obs offset from the instrument
+        # records later on. Not all imports will be populating from scratch so
+        # read them from the registry if they already exist.
+        instrument_offsets: dict[str, int] = {}
+        if migrate_day_obs_offset or migrate_exposure_day_obs or migrate_visit_day_obs:
+            instrument_offsets = {
+                rec.name: rec.day_obs_offset for rec in self.registry.queryDimensionRecords("instrument")
+            }
 
         datasetData = []
         RecordClass: type[DimensionRecord]
@@ -399,6 +415,13 @@ class YamlRepoImportBackend(RepoImportBackend):
                     if migrate_visit_seeing:
                         for record in data["records"]:
                             record.pop("seeing", None)
+                    if migrate_visit_day_obs:
+                        # Poke the entry for this dimension to make sure it
+                        # appears in the right order, even though we'll
+                        # populate it later.
+                        self.dimensions[self.registry.dimensions["day_obs"]]
+                        for record in data["records"]:
+                            day_obs_ids.add((record["instrument"], record["day_obs"]))
 
                 if data["element"] == "exposure":
                     if migrate_group:
@@ -413,6 +436,12 @@ class YamlRepoImportBackend(RepoImportBackend):
                                     instrument=exposure_record["instrument"], name=exposure_record["group"]
                                 )
                             )
+                    if migrate_exposure_day_obs:
+                        # Poke the entry for this dimension to make sure it
+                        # appears in the right order, even though we'll
+                        # populate it later.
+                        for record in data["records"]:
+                            day_obs_ids.add((record["instrument"], record["day_obs"]))
 
                 element = self.registry.dimensions[data["element"]]
                 RecordClass = element.RecordClass
@@ -487,6 +516,18 @@ class YamlRepoImportBackend(RepoImportBackend):
                     raise ValueError(f"Unexpected calibration type for association: {collectionType.name}.")
             else:
                 raise ValueError(f"Unexpected dictionary type: {data['type']}.")
+
+        if day_obs_ids:
+            warnings.warn(
+                f"Constructing {len(day_obs_ids)} day_obs records with no timespans from "
+                "visit/exposure records that were exported before day_obs was a dimension."
+            )
+            element = self.registry.dimensions["day_obs"]
+            RecordClass = element.RecordClass
+            self.dimensions[element].extend(
+                [RecordClass(instrument=instrument, id=id) for instrument, id in day_obs_ids]
+            )
+
         # key is (dataset type name, run)
         self.datasets: Mapping[tuple[str, str], list[FileDataset]] = defaultdict(list)
         for data in datasetData:

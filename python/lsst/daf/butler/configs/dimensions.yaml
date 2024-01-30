@@ -153,6 +153,18 @@ elements:
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
+  day_obs:
+    doc: >
+      A day and night of observations that rolls over during daylight hours.
+      The identifier is an decimal integer-concatenated date, i.e. YYYYMMDD,
+      with the exact rollover time observatory-dependent.
+    keys:
+      - name: id
+        type: int
+    requires: [instrument]
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
   visit:
     doc: >
       A sequence of observations processed together, comprised of one or
@@ -167,14 +179,8 @@ elements:
         type: string
         length: 64
     requires: [instrument]
-    implies: [physical_filter]
+    implies: [physical_filter, day_obs]
     metadata:
-      - name: day_obs
-        type: int
-        doc: >
-          Day of observation as defined by the observatory (YYYYMMDD format).
-          If a visit crosses multiple days this entry will be the earliest
-          day of any of the exposures that make up the visit.
       - name: seq_num
         type: int
         doc: >
@@ -238,7 +244,7 @@ elements:
         type: string
         length: 64
     requires: [instrument]
-    implies: [physical_filter, group]
+    implies: [physical_filter, group, day_obs]
     metadata:
       - name: exposure_time
         type: float
@@ -256,10 +262,6 @@ elements:
         doc: >
           The reason this observation was taken. (e.g. science,
           filter scan, unknown).
-      - name: day_obs
-        type: int
-        doc: >
-          Day of observation as defined by the observatory (YYYYMMDD format).
       - name: seq_num
         type: int
         doc: >
@@ -439,7 +441,7 @@ topology:
     skymap_regions: [patch, tract]
 
   temporal:
-    observation_timespans: [exposure, visit]
+    observation_timespans: [exposure, visit, day_obs]
 
 packers:
   visit_detector:

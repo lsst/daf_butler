@@ -58,9 +58,9 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
     expectedColumnNames = (
         "instrument",
         "id",
+        "day_obs",
         "physical_filter",
         "name",
-        "day_obs",
         "seq_num",
         "exposure_time",
         "target_name",
@@ -90,9 +90,9 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                 (
                     "DummyCamComp",
                     "423",
+                    "20200101",
                     "d-r",
                     "fourtwentythree",
-                    "None",
                     "None",
                     "None",
                     "None",
@@ -106,9 +106,9 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                 (
                     "DummyCamComp",
                     "424",
+                    "20200101",
                     "d-r",
                     "fourtwentyfour",
-                    "None",
                     "None",
                     "None",
                     "None",
@@ -142,9 +142,9 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                 (
                     "DummyCamComp",
                     "423",
+                    "20200101",
                     "d-r",
                     "fourtwentythree",
-                    "None",
                     "None",
                     "None",
                     "None",
@@ -173,6 +173,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                 "id": 425,
                 "name": "fourtwentyfive",
                 "physical_filter": "d-r",
+                "day_obs": 20200101,
             },
         )
         self.testRepo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, run="foo")
@@ -196,9 +197,9 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                 (
                     "DummyCamComp",
                     "423",
+                    "20200101",
                     "d-r",
                     "fourtwentythree",
-                    "None",
                     "None",
                     "None",
                     "None",
@@ -212,9 +213,9 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                 (
                     "DummyCamComp",
                     "424",
+                    "20200101",
                     "d-r",
                     "fourtwentyfour",
-                    "None",
                     "None",
                     "None",
                     "None",
@@ -249,9 +250,9 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                 (
                     "DummyCamComp",
                     "425",
+                    "20200101",
                     "d-r",
                     "fourtwentyfive",
-                    "None",
                     "None",
                     "None",
                     "None",

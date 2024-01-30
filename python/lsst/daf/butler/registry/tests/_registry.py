@@ -350,9 +350,19 @@ class RegistryTests(ABC):
         dimensionEntries = [
             ("instrument", {"instrument": "DummyCam"}),
             ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
+            ("day_obs", {"instrument": "DummyCam", "id": 20250101}),
             # Using an np.int64 here fails unless Records.fromDict is also
             # patched to look for numbers.Integral
-            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"}),
+            (
+                "visit",
+                {
+                    "instrument": "DummyCam",
+                    "id": 42,
+                    "name": "fortytwo",
+                    "physical_filter": "d-r",
+                    "day_obs": 20250101,
+                },
+            ),
         ]
         for args in dimensionEntries:
             registry.insertDimensionData(*args)
@@ -373,12 +383,23 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         # Insert a few more dimension records for the next test.
         registry.insertDimensionData(
+            "day_obs",
+            {"instrument": "Cam1", "id": 20250101},
+        )
+        registry.insertDimensionData(
             "group",
             {"instrument": "Cam1", "name": "group1"},
         )
         registry.insertDimensionData(
             "exposure",
-            {"instrument": "Cam1", "id": 1, "obs_id": "one", "physical_filter": "Cam1-G", "group": "group1"},
+            {
+                "instrument": "Cam1",
+                "id": 1,
+                "obs_id": "one",
+                "physical_filter": "Cam1-G",
+                "group": "group1",
+                "day_obs": 20250101,
+            },
         )
         registry.insertDimensionData(
             "group",
@@ -386,7 +407,14 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "exposure",
-            {"instrument": "Cam1", "id": 2, "obs_id": "two", "physical_filter": "Cam1-G", "group": "group2"},
+            {
+                "instrument": "Cam1",
+                "id": 2,
+                "obs_id": "two",
+                "physical_filter": "Cam1-G",
+                "group": "group2",
+                "day_obs": 20250101,
+            },
         )
         registry.insertDimensionData(
             "visit_system",
@@ -394,7 +422,7 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "visit",
-            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G"},
+            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G", "day_obs": 20250101},
         )
         registry.insertDimensionData(
             "visit_definition",
@@ -865,6 +893,7 @@ class RegistryTests(ABC):
         registry.insertDimensionData(
             "instrument", dict(name="DummyCam", visit_max=25, exposure_max=300, detector_max=6)
         )
+        registry.insertDimensionData("day_obs", dict(instrument="DummyCam", id=20250101))
         registry.insertDimensionData(
             "physical_filter",
             dict(instrument="DummyCam", name="dummy_r", band="r"),
@@ -875,9 +904,9 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "visit",
-            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i", day_obs=20250101),
+            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r", day_obs=20250101),
+            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r", day_obs=20250101),
         )
         registry.insertDimensionData(
             "group",
@@ -894,12 +923,54 @@ class RegistryTests(ABC):
             )
         registry.insertDimensionData(
             "exposure",
-            dict(instrument="DummyCam", id=100, obs_id="100", physical_filter="dummy_i", group="ten"),
-            dict(instrument="DummyCam", id=101, obs_id="101", physical_filter="dummy_i", group="ten"),
-            dict(instrument="DummyCam", id=110, obs_id="110", physical_filter="dummy_r", group="eleven"),
-            dict(instrument="DummyCam", id=111, obs_id="111", physical_filter="dummy_r", group="eleven"),
-            dict(instrument="DummyCam", id=200, obs_id="200", physical_filter="dummy_r", group="twelve"),
-            dict(instrument="DummyCam", id=201, obs_id="201", physical_filter="dummy_r", group="twelve"),
+            dict(
+                instrument="DummyCam",
+                id=100,
+                obs_id="100",
+                physical_filter="dummy_i",
+                group="ten",
+                day_obs=20250101,
+            ),
+            dict(
+                instrument="DummyCam",
+                id=101,
+                obs_id="101",
+                physical_filter="dummy_i",
+                group="ten",
+                day_obs=20250101,
+            ),
+            dict(
+                instrument="DummyCam",
+                id=110,
+                obs_id="110",
+                physical_filter="dummy_r",
+                group="eleven",
+                day_obs=20250101,
+            ),
+            dict(
+                instrument="DummyCam",
+                id=111,
+                obs_id="111",
+                physical_filter="dummy_r",
+                group="eleven",
+                day_obs=20250101,
+            ),
+            dict(
+                instrument="DummyCam",
+                id=200,
+                obs_id="200",
+                physical_filter="dummy_r",
+                group="twelve",
+                day_obs=20250101,
+            ),
+            dict(
+                instrument="DummyCam",
+                id=201,
+                obs_id="201",
+                physical_filter="dummy_r",
+                group="twelve",
+                day_obs=20250101,
+            ),
         )
         registry.insertDimensionData(
             "visit_definition",
@@ -1949,6 +2020,9 @@ class RegistryTests(ABC):
         # Insert some exposure records with timespans between each sequential
         # pair of those.
         registry.insertDimensionData(
+            "day_obs", {"instrument": "Cam1", "id": 20200101, "timespan": Timespan(t1, t5)}
+        )
+        registry.insertDimensionData(
             "group",
             {"instrument": "Cam1", "name": "group0"},
             {"instrument": "Cam1", "name": "group1"},
@@ -1963,6 +2037,7 @@ class RegistryTests(ABC):
                 "group": "group0",
                 "obs_id": "zero",
                 "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
                 "timespan": Timespan(t1, t2),
             },
             {
@@ -1971,6 +2046,7 @@ class RegistryTests(ABC):
                 "group": "group1",
                 "obs_id": "one",
                 "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
                 "timespan": Timespan(t2, t3),
             },
             {
@@ -1979,6 +2055,7 @@ class RegistryTests(ABC):
                 "group": "group2",
                 "obs_id": "two",
                 "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
                 "timespan": Timespan(t3, t4),
             },
             {
@@ -1987,6 +2064,7 @@ class RegistryTests(ABC):
                 "group": "group3",
                 "obs_id": "three",
                 "physical_filter": "Cam1-G",
+                "day_obs": 20200101,
                 "timespan": Timespan(t4, t5),
             },
         )
@@ -2834,7 +2912,7 @@ class RegistryTests(ABC):
             Test("tract,-exposure_time", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
             Test("tract,visit.name", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
             Test(
-                "tract,-timespan.begin,timespan.end",
+                "tract,-visit.timespan.begin,visit.timespan.end",
                 "tract,visit",
                 ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2)),
             ),
@@ -2898,7 +2976,7 @@ class RegistryTests(ABC):
 
         with self.assertRaisesRegex(
             ValueError,
-            r"Timespan exists in more than one dimension element \(exposure, visit\); "
+            r"Timespan exists in more than one dimension element \(day_obs, exposure, visit\); "
             r"qualify timespan with specific dimension name\.",
         ):
             list(do_query(("exposure", "visit")).order_by("timespan.begin"))
@@ -3186,7 +3264,7 @@ class RegistryTests(ABC):
         self.assertEqual(
             [
                 data_id["visit"]
-                for data_id in registry.queryDataIds(["visit"], instrument="HSC").order_by("id").limit(5)
+                for data_id in registry.queryDataIds(["visit"], instrument="HSC").order_by("visit").limit(5)
             ],
             [318, 322, 326, 330, 332],
         )

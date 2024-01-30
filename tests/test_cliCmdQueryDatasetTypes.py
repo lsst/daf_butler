@@ -137,7 +137,7 @@ class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
                 array(
                     (
                         "test",
-                        "['band', 'instrument', 'physical_filter', 'visit']",
+                        "['band', 'instrument', 'day_obs', 'physical_filter', 'visit']",
                         storageClassName,
                     )
                 ),

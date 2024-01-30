@@ -386,6 +386,10 @@ class SimpleButlerTestCase(unittest.TestCase):
             {"instrument": "Cam1", "group": "four"},
         )
         registry.insertDimensionData(
+            "day_obs",
+            {"instrument": "Cam1", "id": 20211114},
+        )
+        registry.insertDimensionData(
             "exposure",
             {
                 "instrument": "Cam1",
@@ -394,7 +398,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "timespan": Timespan(t1, t2),
                 "physical_filter": "Cam1-G",
                 "group": "three",
-                "day_obs": 20201114,
+                "day_obs": 20211114,
                 "seq_num": 55,
             },
             {

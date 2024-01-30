@@ -90,6 +90,7 @@ class ObsCoreTests(TestCaseMixin):
         registry.insertDimensionData(
             "physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "r"}
         )
+        registry.insertDimensionData("day_obs", {"instrument": "DummyCam", "id": 20200101})
         for detector in (1, 2, 3, 4):
             registry.insertDimensionData(
                 "detector", {"instrument": "DummyCam", "id": detector, "full_name": f"detector{detector}"}
@@ -105,6 +106,7 @@ class ObsCoreTests(TestCaseMixin):
                     "obs_id": f"exposure{exposure}",
                     "physical_filter": "d-r",
                     "group": f"group{exposure}",
+                    "day_obs": 20200101,
                 },
             )
 
@@ -122,6 +124,7 @@ class ObsCoreTests(TestCaseMixin):
                     "physical_filter": "d-r",
                     "datetime_begin": visit_start,
                     "datetime_end": visit_end,
+                    "day_obs": 20200101,
                 },
             )
             registry.insertDimensionData(
