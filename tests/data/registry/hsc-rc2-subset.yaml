@@ -23,6 +23,37 @@ data:
     patch_nx_max: 9
     patch_ny_max: 9
 - type: dimension
+  element: day_obs
+  records:
+  - instrument: HSC
+    id: 20140324
+  - instrument: HSC
+    id: 20140327
+  - instrument: HSC
+    id: 20140402
+  - instrument: HSC
+    id: 20141117
+  - instrument: HSC
+    id: 20150115
+  - instrument: HSC
+    id: 20150120
+  - instrument: HSC
+    id: 20150126
+  - instrument: HSC
+    id: 20150315
+  - instrument: HSC
+    id: 20150317
+  - instrument: HSC
+    id: 20150319
+  - instrument: HSC
+    id: 20150324
+  - instrument: HSC
+    id: 20150328
+  - instrument: HSC
+    id: 20150516
+  - instrument: HSC
+    id: 20150520
+- type: dimension
   element: detector
   records:
   - instrument: HSC
@@ -775,9 +806,9 @@ data:
   records:
   - instrument: HSC
     id: 318
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00031800
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -791,9 +822,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 09:38:21.595000000'
   - instrument: HSC
     id: 322
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00032200
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -807,9 +838,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 09:47:47.198000000'
   - instrument: HSC
     id: 326
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00032600
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -823,9 +854,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 09:57:48.843000000'
   - instrument: HSC
     id: 330
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00033000
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -839,9 +870,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 10:07:49.604000000'
   - instrument: HSC
     id: 332
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00033200
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -855,9 +886,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 10:13:14.566000000'
   - instrument: HSC
     id: 344
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00034400
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -871,9 +902,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 10:39:23.841000000'
   - instrument: HSC
     id: 346
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00034600
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -887,9 +918,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 10:44:46.349000000'
   - instrument: HSC
     id: 348
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00034800
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -903,9 +934,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 10:50:10.439000000'
   - instrument: HSC
     id: 356
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00035600
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -919,9 +950,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 11:10:29.009000000'
   - instrument: HSC
     id: 362
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00036200
-    day_obs: 20140324
     seq_num: null
     exposure_time: 240.0
     target_name: null
@@ -935,9 +966,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 11:25:28.867000000'
   - instrument: HSC
     id: 384
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00038400
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -951,9 +982,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 12:11:18.528000000'
   - instrument: HSC
     id: 404
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00040400
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -967,9 +998,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 12:42:46.618000000'
   - instrument: HSC
     id: 408
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00040800
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -983,9 +1014,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 12:49:15.824000000'
   - instrument: HSC
     id: 424
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00042400
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -999,9 +1030,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 13:18:35.143000000'
   - instrument: HSC
     id: 426
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00042600
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1015,9 +1046,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 13:24:16.646000000'
   - instrument: HSC
     id: 442
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00044200
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1031,9 +1062,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 14:02:35.293000000'
   - instrument: HSC
     id: 452
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00045200
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1047,9 +1078,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 14:27:00.403000000'
   - instrument: HSC
     id: 458
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00045800
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1063,9 +1094,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 14:40:29.320000000'
   - instrument: HSC
     id: 462
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00046200
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1079,9 +1110,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 14:49:44.559000000'
   - instrument: HSC
     id: 464
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00046400
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1095,9 +1126,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 14:54:36.576000000'
   - instrument: HSC
     id: 468
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00046800
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1111,9 +1142,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 15:03:15.726000000'
   - instrument: HSC
     id: 472
+    day_obs: 20140324
     physical_filter: HSC-Y
     name: HSCA00047200
-    day_obs: 20140324
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1127,9 +1158,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-25 15:12:18.396000000'
   - instrument: HSC
     id: 1166
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00116600
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1143,9 +1174,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 06:25:16.850000000'
   - instrument: HSC
     id: 1170
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00117000
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1159,9 +1190,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 06:35:38.977000000'
   - instrument: HSC
     id: 1172
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00117200
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1175,9 +1206,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 06:40:53.509000000'
   - instrument: HSC
     id: 1176
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00117600
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1191,9 +1222,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 06:51:26.669000000'
   - instrument: HSC
     id: 1178
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00117800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1207,9 +1238,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 06:56:36.763000000'
   - instrument: HSC
     id: 1180
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00118000
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1223,9 +1254,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 07:01:50.117000000'
   - instrument: HSC
     id: 1182
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00118200
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1239,9 +1270,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 07:07:00.139000000'
   - instrument: HSC
     id: 1186
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00118600
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1255,9 +1286,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 07:17:28.816000000'
   - instrument: HSC
     id: 1190
+    day_obs: 20140327
     physical_filter: HSC-Z
     name: HSCA00119000
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1271,9 +1302,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 07:27:51.747000000'
   - instrument: HSC
     id: 1202
+    day_obs: 20140327
     physical_filter: HSC-R
     name: HSCA00120200
-    day_obs: 20140327
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1287,9 +1318,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 08:22:46.028000000'
   - instrument: HSC
     id: 1206
+    day_obs: 20140327
     physical_filter: HSC-R
     name: HSCA00120600
-    day_obs: 20140327
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1303,9 +1334,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 08:36:21.974000000'
   - instrument: HSC
     id: 1208
+    day_obs: 20140327
     physical_filter: HSC-R
     name: HSCA00120800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1319,9 +1350,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 08:43:13.280000000'
   - instrument: HSC
     id: 1212
+    day_obs: 20140327
     physical_filter: HSC-R
     name: HSCA00121200
-    day_obs: 20140327
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1335,9 +1366,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 08:57:33.374000000'
   - instrument: HSC
     id: 1214
+    day_obs: 20140327
     physical_filter: HSC-R
     name: HSCA00121400
-    day_obs: 20140327
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1351,9 +1382,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 09:04:23.487000000'
   - instrument: HSC
     id: 1216
+    day_obs: 20140327
     physical_filter: HSC-R
     name: HSCA00121600
-    day_obs: 20140327
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1367,9 +1398,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 09:11:01.904000000'
   - instrument: HSC
     id: 1218
+    day_obs: 20140327
     physical_filter: HSC-R
     name: HSCA00121800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1383,9 +1414,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 09:17:52.231000000'
   - instrument: HSC
     id: 1228
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00122800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1399,9 +1430,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 11:19:58.495000000'
   - instrument: HSC
     id: 1232
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00123200
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1415,9 +1446,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 11:30:28.115000000'
   - instrument: HSC
     id: 1238
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00123800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1431,9 +1462,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 11:46:58.144000000'
   - instrument: HSC
     id: 1240
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00124000
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1447,9 +1478,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 11:52:17.430000000'
   - instrument: HSC
     id: 1242
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00124200
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1463,9 +1494,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 11:57:57.054000000'
   - instrument: HSC
     id: 1244
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00124400
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1479,9 +1510,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 12:03:18.014000000'
   - instrument: HSC
     id: 1248
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00124800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 270.0
     target_name: null
@@ -1495,9 +1526,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 12:13:54.625000000'
   - instrument: HSC
     id: 1262
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00126200
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1511,9 +1542,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 12:37:09.877000000'
   - instrument: HSC
     id: 1270
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00127000
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1527,9 +1558,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 12:48:20.630000000'
   - instrument: HSC
     id: 1274
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00127400
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1543,9 +1574,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 12:53:50.156000000'
   - instrument: HSC
     id: 1278
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00127800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1559,9 +1590,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 13:02:28.703000000'
   - instrument: HSC
     id: 1280
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00128000
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1575,9 +1606,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 13:06:44.676000000'
   - instrument: HSC
     id: 1288
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00128800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1591,9 +1622,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 13:25:00.376000000'
   - instrument: HSC
     id: 1300
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00130000
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1607,9 +1638,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 13:50:49.721000000'
   - instrument: HSC
     id: 1302
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00130200
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1623,9 +1654,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 13:55:03.998000000'
   - instrument: HSC
     id: 1308
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00130800
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1639,9 +1670,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 14:07:56.558000000'
   - instrument: HSC
     id: 1314
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00131400
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1655,9 +1686,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 14:20:50.779000000'
   - instrument: HSC
     id: 1316
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00131600
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1671,9 +1702,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 14:25:09.783000000'
   - instrument: HSC
     id: 1324
+    day_obs: 20140327
     physical_filter: HSC-I
     name: HSCA00132400
-    day_obs: 20140327
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -1687,9 +1718,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-03-28 14:42:55.176000000'
   - instrument: HSC
     id: 1868
+    day_obs: 20140402
     physical_filter: HSC-Y
     name: HSCA00186800
-    day_obs: 20140402
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1703,9 +1734,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-04-03 06:12:26.426000000'
   - instrument: HSC
     id: 1872
+    day_obs: 20140402
     physical_filter: HSC-Y
     name: HSCA00187200
-    day_obs: 20140402
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1719,9 +1750,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-04-03 06:26:15.022000000'
   - instrument: HSC
     id: 1874
+    day_obs: 20140402
     physical_filter: HSC-Y
     name: HSCA00187400
-    day_obs: 20140402
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1735,9 +1766,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-04-03 06:33:03.736000000'
   - instrument: HSC
     id: 1876
+    day_obs: 20140402
     physical_filter: HSC-Y
     name: HSCA00187600
-    day_obs: 20140402
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1751,9 +1782,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-04-03 06:39:57.322000000'
   - instrument: HSC
     id: 1882
+    day_obs: 20140402
     physical_filter: HSC-Y
     name: HSCA00188200
-    day_obs: 20140402
     seq_num: null
     exposure_time: 360.0
     target_name: null
@@ -1767,9 +1798,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-04-03 07:00:34.101000000'
   - instrument: HSC
     id: 11690
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01169000
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1783,9 +1814,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 13:02:24.092000000'
   - instrument: HSC
     id: 11692
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01169200
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1799,9 +1830,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 13:08:17.413000000'
   - instrument: HSC
     id: 11694
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01169400
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1815,9 +1846,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 13:13:59.170000000'
   - instrument: HSC
     id: 11696
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01169600
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1831,9 +1862,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 13:19:58.136000000'
   - instrument: HSC
     id: 11700
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01170000
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1847,9 +1878,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 13:31:28.112000000'
   - instrument: HSC
     id: 11702
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01170200
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1863,9 +1894,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 13:37:18.259000000'
   - instrument: HSC
     id: 11704
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01170400
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1879,9 +1910,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 13:42:51.077000000'
   - instrument: HSC
     id: 11706
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01170600
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1895,9 +1926,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 13:48:39.168000000'
   - instrument: HSC
     id: 11710
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01171000
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1911,9 +1942,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 14:00:10.418000000'
   - instrument: HSC
     id: 11712
+    day_obs: 20141117
     physical_filter: HSC-G
     name: HSCA01171200
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1927,9 +1958,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 14:05:49.106000000'
   - instrument: HSC
     id: 11718
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01171800
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1943,9 +1974,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 14:43:50.092000000'
   - instrument: HSC
     id: 11720
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01172000
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1959,9 +1990,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 14:49:29.186000000'
   - instrument: HSC
     id: 11722
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01172200
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1975,9 +2006,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 14:55:08.473000000'
   - instrument: HSC
     id: 11724
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01172400
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -1991,9 +2022,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 15:00:46.620000000'
   - instrument: HSC
     id: 11728
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01172800
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2007,9 +2038,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 15:12:03.606000000'
   - instrument: HSC
     id: 11730
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01173000
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2023,9 +2054,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 15:18:03.593000000'
   - instrument: HSC
     id: 11732
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01173200
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2039,9 +2070,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 15:23:39.071000000'
   - instrument: HSC
     id: 11734
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01173400
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2055,9 +2086,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 15:29:14.891000000'
   - instrument: HSC
     id: 11738
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01173800
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2071,9 +2102,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 15:40:48.094000000'
   - instrument: HSC
     id: 11740
+    day_obs: 20141117
     physical_filter: HSC-Y
     name: HSCA01174000
-    day_obs: 20141117
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2087,9 +2118,9 @@ data:
     datetime_end: !butler_time/tai/iso '2014-11-18 15:46:30.131000000'
   - instrument: HSC
     id: 17900
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01790000
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2103,9 +2134,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 12:48:21.571000000'
   - instrument: HSC
     id: 17902
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01790200
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2119,9 +2150,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 12:53:58.686000000'
   - instrument: HSC
     id: 17904
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01790400
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2135,9 +2166,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 12:59:36.140000000'
   - instrument: HSC
     id: 17906
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01790600
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2151,9 +2182,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 13:05:14.300000000'
   - instrument: HSC
     id: 17926
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01792600
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2167,9 +2198,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 13:41:43.525000000'
   - instrument: HSC
     id: 17928
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01792800
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2183,9 +2214,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 13:47:19.150000000'
   - instrument: HSC
     id: 17930
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01793000
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2199,9 +2230,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 13:52:59.962000000'
   - instrument: HSC
     id: 17932
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01793200
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2215,9 +2246,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 13:58:38.605000000'
   - instrument: HSC
     id: 17944
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01794400
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2231,9 +2262,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 14:30:57.375000000'
   - instrument: HSC
     id: 17946
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01794600
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2247,9 +2278,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 14:36:37.317000000'
   - instrument: HSC
     id: 17948
+    day_obs: 20150115
     physical_filter: HSC-Z
     name: HSCA01794800
-    day_obs: 20150115
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2263,9 +2294,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-16 14:42:17.819000000'
   - instrument: HSC
     id: 19658
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01965800
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2279,9 +2310,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 13:27:47.335000000'
   - instrument: HSC
     id: 19660
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01966000
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2295,9 +2326,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 13:33:20.232000000'
   - instrument: HSC
     id: 19662
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01966200
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2311,9 +2342,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 13:38:54.487000000'
   - instrument: HSC
     id: 19680
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01968000
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2327,9 +2358,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 14:09:18.343000000'
   - instrument: HSC
     id: 19684
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01968400
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2343,9 +2374,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 14:20:28.496000000'
   - instrument: HSC
     id: 19694
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01969400
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2359,9 +2390,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 14:46:36.099000000'
   - instrument: HSC
     id: 19696
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01969600
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2375,9 +2406,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 14:52:11.006000000'
   - instrument: HSC
     id: 19698
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01969800
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2391,9 +2422,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 14:57:42.850000000'
   - instrument: HSC
     id: 19710
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01971000
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2407,9 +2438,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 15:29:24.758000000'
   - instrument: HSC
     id: 19712
+    day_obs: 20150120
     physical_filter: HSC-I
     name: HSCA01971200
-    day_obs: 20150120
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2423,9 +2454,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-21 15:35:06.791000000'
   - instrument: HSC
     id: 22632
+    day_obs: 20150126
     physical_filter: HSC-Y
     name: HSCA02263200
-    day_obs: 20150126
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2439,9 +2470,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-27 14:15:38.447000000'
   - instrument: HSC
     id: 22642
+    day_obs: 20150126
     physical_filter: HSC-Y
     name: HSCA02264200
-    day_obs: 20150126
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2455,9 +2486,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-27 14:42:10.630000000'
   - instrument: HSC
     id: 22644
+    day_obs: 20150126
     physical_filter: HSC-Y
     name: HSCA02264400
-    day_obs: 20150126
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2471,9 +2502,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-27 14:47:55.148000000'
   - instrument: HSC
     id: 22646
+    day_obs: 20150126
     physical_filter: HSC-Y
     name: HSCA02264600
-    day_obs: 20150126
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2487,9 +2518,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-27 14:53:30.659000000'
   - instrument: HSC
     id: 22648
+    day_obs: 20150126
     physical_filter: HSC-Y
     name: HSCA02264800
-    day_obs: 20150126
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2503,9 +2534,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-01-27 14:59:04.270000000'
   - instrument: HSC
     id: 23216
+    day_obs: 20150315
     physical_filter: HSC-Z
     name: HSCA02321600
-    day_obs: 20150315
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2519,9 +2550,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-16 13:54:00.019000000'
   - instrument: HSC
     id: 23224
+    day_obs: 20150315
     physical_filter: HSC-Z
     name: HSCA02322400
-    day_obs: 20150315
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2535,9 +2566,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-16 14:07:04.980000000'
   - instrument: HSC
     id: 23226
+    day_obs: 20150315
     physical_filter: HSC-Z
     name: HSCA02322600
-    day_obs: 20150315
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2551,9 +2582,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-16 14:11:01.409000000'
   - instrument: HSC
     id: 23250
+    day_obs: 20150315
     physical_filter: HSC-Z
     name: HSCA02325000
-    day_obs: 20150315
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2567,9 +2598,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-16 14:58:33.628000000'
   - instrument: HSC
     id: 23256
+    day_obs: 20150315
     physical_filter: HSC-Z
     name: HSCA02325600
-    day_obs: 20150315
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2583,9 +2614,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-16 15:10:27.348000000'
   - instrument: HSC
     id: 23258
+    day_obs: 20150315
     physical_filter: HSC-Z
     name: HSCA02325800
-    day_obs: 20150315
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2599,9 +2630,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-16 15:14:27.301000000'
   - instrument: HSC
     id: 23692
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02369200
-    day_obs: 20150317
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2615,9 +2646,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 09:45:36.644000000'
   - instrument: HSC
     id: 23694
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02369400
-    day_obs: 20150317
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2631,9 +2662,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 09:51:09.690000000'
   - instrument: HSC
     id: 23704
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02370400
-    day_obs: 20150317
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2647,9 +2678,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 10:11:33.149000000'
   - instrument: HSC
     id: 23706
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02370600
-    day_obs: 20150317
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2663,9 +2694,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 10:17:14.837000000'
   - instrument: HSC
     id: 23718
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02371800
-    day_obs: 20150317
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -2679,9 +2710,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 10:43:22.182000000'
   - instrument: HSC
     id: 23868
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02386800
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2695,9 +2726,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 14:09:56.443000000'
   - instrument: HSC
     id: 23872
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02387200
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2711,9 +2742,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 14:14:11.038000000'
   - instrument: HSC
     id: 23876
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02387600
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2727,9 +2758,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 14:18:26.408000000'
   - instrument: HSC
     id: 23884
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02388400
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2743,9 +2774,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 14:29:02.170000000'
   - instrument: HSC
     id: 23886
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02388600
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2759,9 +2790,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 14:32:09.896000000'
   - instrument: HSC
     id: 23898
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02389800
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2775,9 +2806,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 14:50:45.852000000'
   - instrument: HSC
     id: 23900
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02390000
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2791,9 +2822,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 14:53:53.135000000'
   - instrument: HSC
     id: 23910
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02391000
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2807,9 +2838,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 15:10:33.227000000'
   - instrument: HSC
     id: 23914
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02391400
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2823,9 +2854,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 15:16:45.276000000'
   - instrument: HSC
     id: 23924
+    day_obs: 20150317
     physical_filter: HSC-R
     name: HSCA02392400
-    day_obs: 20150317
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2839,9 +2870,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-18 15:30:16.579000000'
   - instrument: HSC
     id: 24494
+    day_obs: 20150319
     physical_filter: HSC-I
     name: HSCA02449400
-    day_obs: 20150319
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2855,9 +2886,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-20 13:30:17.808000000'
   - instrument: HSC
     id: 24536
+    day_obs: 20150319
     physical_filter: HSC-I
     name: HSCA02453600
-    day_obs: 20150319
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2871,9 +2902,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-20 14:54:06.133000000'
   - instrument: HSC
     id: 24538
+    day_obs: 20150319
     physical_filter: HSC-I
     name: HSCA02453800
-    day_obs: 20150319
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -2887,9 +2918,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-20 14:58:07.070000000'
   - instrument: HSC
     id: 26028
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02602800
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2903,9 +2934,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 13:40:33.396000000'
   - instrument: HSC
     id: 26032
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02603200
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2919,9 +2950,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 13:44:39.729000000'
   - instrument: HSC
     id: 26036
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02603600
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2935,9 +2966,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 13:48:48.027000000'
   - instrument: HSC
     id: 26044
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02604400
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2951,9 +2982,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 13:59:10.480000000'
   - instrument: HSC
     id: 26046
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02604600
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2967,9 +2998,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 14:02:16.380000000'
   - instrument: HSC
     id: 26058
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02605800
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2983,9 +3014,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 14:20:54.449000000'
   - instrument: HSC
     id: 26060
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02606000
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -2999,9 +3030,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 14:23:58.822000000'
   - instrument: HSC
     id: 26070
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02607000
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -3015,9 +3046,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 14:39:25.165000000'
   - instrument: HSC
     id: 26074
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02607400
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -3031,9 +3062,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 14:45:34.046000000'
   - instrument: HSC
     id: 26084
+    day_obs: 20150324
     physical_filter: HSC-G
     name: HSCA02608400
-    day_obs: 20150324
     seq_num: null
     exposure_time: 150.0
     target_name: null
@@ -3047,9 +3078,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-25 14:58:59.787000000'
   - instrument: HSC
     id: 27032
+    day_obs: 20150328
     physical_filter: HSC-Y
     name: HSCA02703200
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3063,9 +3094,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 10:18:30.078000000'
   - instrument: HSC
     id: 27066
+    day_obs: 20150328
     physical_filter: HSC-Y
     name: HSCA02706600
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3079,9 +3110,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 11:25:34.527000000'
   - instrument: HSC
     id: 27068
+    day_obs: 20150328
     physical_filter: HSC-Y
     name: HSCA02706800
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3095,9 +3126,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 11:29:29.227000000'
   - instrument: HSC
     id: 27090
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02709000
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3111,9 +3142,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 13:02:33.329000000'
   - instrument: HSC
     id: 27106
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02710600
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3127,9 +3158,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 13:22:38.125000000'
   - instrument: HSC
     id: 27108
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02710800
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3143,9 +3174,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 13:26:33.726000000'
   - instrument: HSC
     id: 27118
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02711800
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3159,9 +3190,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 13:46:09.899000000'
   - instrument: HSC
     id: 27128
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02712800
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3175,9 +3206,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 14:08:23.364000000'
   - instrument: HSC
     id: 27130
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02713000
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3191,9 +3222,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 14:12:15.809000000'
   - instrument: HSC
     id: 27136
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02713600
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3207,9 +3238,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 14:24:02.638000000'
   - instrument: HSC
     id: 27146
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02714600
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3223,9 +3254,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 14:43:46.412000000'
   - instrument: HSC
     id: 27148
+    day_obs: 20150328
     physical_filter: HSC-Z
     name: HSCA02714800
-    day_obs: 20150328
     seq_num: null
     exposure_time: 200.0
     target_name: null
@@ -3239,9 +3270,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-03-29 14:47:40.561000000'
   - instrument: HSC
     id: 29324
+    day_obs: 20150516
     physical_filter: HSC-G
     name: HSCA02932400
-    day_obs: 20150516
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -3255,9 +3286,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-05-17 06:16:08.657000000'
   - instrument: HSC
     id: 30482
+    day_obs: 20150520
     physical_filter: HSC-I
     name: HSCA03048200
-    day_obs: 20150520
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -3271,9 +3302,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-05-21 06:08:08.479000000'
   - instrument: HSC
     id: 30498
+    day_obs: 20150520
     physical_filter: HSC-I
     name: HSCA03049800
-    day_obs: 20150520
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -3287,9 +3318,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-05-21 06:52:32.124000000'
   - instrument: HSC
     id: 30500
+    day_obs: 20150520
     physical_filter: HSC-I
     name: HSCA03050000
-    day_obs: 20150520
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -3303,9 +3334,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-05-21 06:58:05.662000000'
   - instrument: HSC
     id: 30502
+    day_obs: 20150520
     physical_filter: HSC-I
     name: HSCA03050200
-    day_obs: 20150520
     seq_num: null
     exposure_time: 300.0
     target_name: null
@@ -3319,9 +3350,9 @@ data:
     datetime_end: !butler_time/tai/iso '2015-05-21 07:03:38.633000000'
   - instrument: HSC
     id: 30504
+    day_obs: 20150520
     physical_filter: HSC-I
     name: HSCA03050400
-    day_obs: 20150520
     seq_num: null
     exposure_time: 300.0
     target_name: null
