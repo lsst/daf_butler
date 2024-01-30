@@ -33,7 +33,7 @@ from ... import ddl, time_utils
 __all__ = ["PostgresqlDatabase"]
 
 import re
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
 from typing import Any
 
@@ -548,3 +548,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             return (self.column,)
         else:
             return (self.column.label(name),)
+
+    def apply_any_aggregate(
+        self, func: Callable[[ColumnElement[Any]], ColumnElement[Any]]
+    ) -> TimespanDatabaseRepresentation:
+        # Docstring inherited.
+        return _RangeTimespanRepresentation(func(self.column), self.name)
