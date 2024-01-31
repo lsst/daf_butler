@@ -196,6 +196,14 @@ Database backends
 General utilities
 -----------------
 
+.. automodapi:: lsst.daf.butler.arrow_utils
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.column_spec
+   :no-main-docstr:
+   :headings: ^"
+
 .. automodapi:: lsst.daf.butler.ddl
    :no-main-docstr:
    :headings: ^"
