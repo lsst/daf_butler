@@ -101,7 +101,6 @@ Python API reference
 
 .. automodapi:: lsst.daf.butler
    :no-main-docstr:
-   :skip: CollectionSearch
    :skip: RegistryConfig
 
 Example datastores
