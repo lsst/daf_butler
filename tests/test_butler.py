@@ -49,12 +49,16 @@ try:
     import boto3
     import botocore
     from lsst.resources.s3utils import clean_test_environment_for_s3
-    from moto import mock_s3  # type: ignore[import]
+
+    try:
+        from moto import mock_aws  # v5
+    except ImportError:
+        from moto import mock_s3 as mock_aws
 except ImportError:
     boto3 = None
 
-    def mock_s3(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-untyped-def]
-        """No-op decorator in case moto mock_s3 can not be imported."""
+    def mock_aws(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-untyped-def]
+        """No-op decorator in case moto mock_aws can not be imported."""
         return None
 
 
@@ -2025,7 +2029,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     registryStr = "/gen3.sqlite3"
     """Expected format of the Registry string."""
 
-    mock_s3 = mock_s3()
+    mock_aws = mock_aws()
     """The mocked s3 interface from moto."""
 
     def genRoot(self) -> str:
@@ -2045,7 +2049,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Enable S3 mocking of tests.
         self.enterContext(clean_test_environment_for_s3())
-        self.mock_s3.start()
+        self.mock_aws.start()
 
         if self.useTempRoot:
             self.root = self.genRoot()
@@ -2082,7 +2086,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         bucket.delete()
 
         # Stop the S3 mock.
-        self.mock_s3.stop()
+        self.mock_aws.stop()
 
         if self.reg_dir is not None and os.path.exists(self.reg_dir):
             shutil.rmtree(self.reg_dir, ignore_errors=True)

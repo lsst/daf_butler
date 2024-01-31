@@ -42,7 +42,11 @@ try:
     from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
     from lsst.daf.butler.tests.server_utils import add_auth_header_check_middleware
     from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
-    from moto import mock_s3
+
+    try:
+        from moto import mock_aws  # v5
+    except ImportError:
+        from moto import mock_s3 as mock_aws
 except ImportError:
     TestClient = None
     create_app = None
@@ -100,7 +104,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # redirected to the mocked S3.
         # Note that all files are stored in memory.
         cls.enterClassContext(clean_test_environment_for_s3())
-        cls.enterClassContext(mock_s3())
+        cls.enterClassContext(mock_aws())
         bucket_name = "anybucketname"  # matches s3Datastore.yaml
         getS3Client().create_bucket(Bucket=bucket_name)
 
