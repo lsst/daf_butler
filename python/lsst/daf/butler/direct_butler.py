@@ -43,12 +43,11 @@ import numbers
 import os
 import warnings
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
+from collections.abc import Iterable, Iterator, MutableMapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
-from lsst.utils.iteration import ensure_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from sqlalchemy.exc import IntegrityError
 
@@ -59,15 +58,15 @@ from ._dataset_existence import DatasetExistence
 from ._dataset_ref import DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from ._exceptions import EmptyQueryResultError, ValidationError
+from ._exceptions import ValidationError
 from ._limited_butler import LimitedButler
 from ._registry_shim import RegistryShim
 from ._storage_class import StorageClass, StorageClassFactory
 from ._timespan import Timespan
 from .datastore import Datastore, NullDatastore
 from .dimensions import DataCoordinate, Dimension
-from .direct_query import DirectQuery
 from .progress import Progress
+from .queries import Query
 from .registry import (
     CollectionType,
     ConflictingDefinitionError,
@@ -85,17 +84,9 @@ if TYPE_CHECKING:
 
     from ._dataset_ref import DatasetId
     from ._file_dataset import FileDataset
-    from ._query import Query
     from .datastore import DatasetRefURIs
-    from .dimensions import (
-        DataId,
-        DataIdValue,
-        DimensionElement,
-        DimensionGroup,
-        DimensionRecord,
-        DimensionUniverse,
-    )
-    from .registry import CollectionArgType, Registry
+    from .dimensions import DataId, DataIdValue, DimensionElement, DimensionRecord, DimensionUniverse
+    from .registry import Registry
     from .transfers import RepoImportBackend
 
 _LOG = getLogger(__name__)
@@ -1728,7 +1719,8 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                         )
 
                     records = source_butler.registry.queryDimensionRecords(  # type: ignore
-                        element.name, **data_id.mapping  # type: ignore
+                        element.name,
+                        **data_id.mapping,  # type: ignore
                     )
                     for record in records:
                         additional_records[record.definition].setdefault(record.dataId, record)
@@ -2110,98 +2102,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     @contextlib.contextmanager
     def _query(self) -> Iterator[Query]:
         # Docstring inherited.
-        with self._caching_context():
-            yield DirectQuery(self._registry)
-
-    def _query_data_ids(
-        self,
-        dimensions: DimensionGroup | Iterable[str] | str,
-        *,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        expanded: bool = False,
-        order_by: Iterable[str] | str | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DataCoordinate]:
-        # Docstring inherited.
-        query = DirectQuery(self._registry)
-        result = query.data_ids(dimensions, data_id=data_id, where=where, bind=bind, **kwargs)
-        if expanded:
-            result = result.expanded()
-        if order_by:
-            result = result.order_by(*ensure_iterable(order_by))
-        if limit is not None:
-            result = result.limit(limit, offset)
-        else:
-            if offset:
-                raise TypeError("offset is specified without limit")
-        data_ids = list(result)
-        if explain and not data_ids:
-            raise EmptyQueryResultError(list(result.explain_no_results()))
-        return data_ids
-
-    def _query_datasets(
-        self,
-        dataset_type: Any,
-        collections: CollectionArgType | None = None,
-        *,
-        find_first: bool = True,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        expanded: bool = False,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DatasetRef]:
-        # Docstring inherited.
-        query = DirectQuery(self._registry)
-        result = query.datasets(
-            dataset_type,
-            collections,
-            find_first=find_first,
-            data_id=data_id,
-            where=where,
-            bind=bind,
-            **kwargs,
-        )
-        if expanded:
-            result = result.expanded()
-        refs = list(result)
-        if explain and not refs:
-            raise EmptyQueryResultError(list(result.explain_no_results()))
-        return refs
-
-    def _query_dimension_records(
-        self,
-        element: str,
-        *,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        order_by: Iterable[str] | str | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DimensionRecord]:
-        # Docstring inherited.
-        query = DirectQuery(self._registry)
-        result = query.dimension_records(element, data_id=data_id, where=where, bind=bind, **kwargs)
-        if order_by:
-            result = result.order_by(*ensure_iterable(order_by))
-        if limit is not None:
-            result = result.limit(limit, offset)
-        else:
-            if offset:
-                raise TypeError("offset is specified without limit")
-        data_ids = list(result)
-        if explain and not data_ids:
-            raise EmptyQueryResultError(list(result.explain_no_results()))
-        return data_ids
+        raise NotImplementedError("TODO DM-41159")
 
     def _preload_cache(self) -> None:
         """Immediately load caches that are used for common operations."""

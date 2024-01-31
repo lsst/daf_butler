@@ -40,13 +40,13 @@ from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._file_dataset import FileDataset
 from .._limited_butler import LimitedButler
-from .._query import Query
 from .._storage_class import StorageClass
 from .._timespan import Timespan
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataId, DimensionGroup, DimensionRecord, DimensionUniverse
 from ..direct_butler import DirectButler
-from ..registry import CollectionArgType, Registry
+from ..queries import Query
+from ..registry import Registry
 from ..remote_butler import RemoteButler
 from ..transfers import RepoExportContext
 from .hybrid_butler_registry import HybridButlerRegistry
@@ -356,7 +356,7 @@ class HybridButler(Butler):
     def _query_datasets(
         self,
         dataset_type: Any,
-        collections: CollectionArgType | None = None,
+        collections: str | Iterable[str] | None = None,
         *,
         find_first: bool = True,
         data_id: DataId | None = None,

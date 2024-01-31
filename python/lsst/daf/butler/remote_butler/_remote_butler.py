@@ -82,9 +82,9 @@ from .server_models import (
 if TYPE_CHECKING:
     from .._file_dataset import FileDataset
     from .._limited_butler import LimitedButler
-    from .._query import Query
     from .._timespan import Timespan
-    from ..dimensions import DataId, DimensionGroup, DimensionRecord
+    from ..dimensions import DataId
+    from ..queries import Query
     from ..transfers import RepoExportContext
 
 
@@ -575,55 +575,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         return self._registry
 
     def _query(self) -> AbstractContextManager[Query]:
-        # Docstring inherited.
-        raise NotImplementedError()
-
-    def _query_data_ids(
-        self,
-        dimensions: DimensionGroup | Iterable[str] | str,
-        *,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        expanded: bool = False,
-        order_by: Iterable[str] | str | None = None,
-        limit: int | None = None,
-        offset: int | None = None,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DataCoordinate]:
-        # Docstring inherited.
-        raise NotImplementedError()
-
-    def _query_datasets(
-        self,
-        dataset_type: Any,
-        collections: CollectionArgType | None = None,
-        *,
-        find_first: bool = True,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        expanded: bool = False,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DatasetRef]:
-        # Docstring inherited.
-        raise NotImplementedError()
-
-    def _query_dimension_records(
-        self,
-        element: str,
-        *,
-        data_id: DataId | None = None,
-        where: str = "",
-        bind: Mapping[str, Any] | None = None,
-        order_by: Iterable[str] | str | None = None,
-        limit: int | None = None,
-        offset: int | None = None,
-        explain: bool = True,
-        **kwargs: Any,
-    ) -> list[DimensionRecord]:
         # Docstring inherited.
         raise NotImplementedError()
 
