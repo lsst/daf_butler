@@ -184,6 +184,12 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
             parent_names = set(sql_result.scalars().all())
         return parent_names
 
+    def lookup_name_sql(
+        self, sql_key: sqlalchemy.ColumnElement[str], sql_from_clause: sqlalchemy.FromClause
+    ) -> tuple[sqlalchemy.ColumnElement[str], sqlalchemy.FromClause]:
+        # Docstring inherited.
+        return sql_key, sql_from_clause
+
     def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[str]]:
         # Docstring inherited from base class.
         return self._fetch_by_key(names)

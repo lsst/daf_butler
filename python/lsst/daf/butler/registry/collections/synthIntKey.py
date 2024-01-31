@@ -185,6 +185,17 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
             parent_names = set(sql_result.scalars().all())
         return parent_names
 
+    def lookup_name_sql(
+        self, sql_key: sqlalchemy.ColumnElement[int], sql_from_clause: sqlalchemy.FromClause
+    ) -> tuple[sqlalchemy.ColumnElement[str], sqlalchemy.FromClause]:
+        # Docstring inherited.
+        return (
+            self._tables.collection.c.name,
+            sql_from_clause.join(
+                self._tables.collection, onclause=self._tables.collection.c[_KEY_FIELD_SPEC.name] == sql_key
+            ),
+        )
+
     def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[int]]:
         # Docstring inherited from base class.
         _LOG.debug("Fetching collection records using names %s.", names)

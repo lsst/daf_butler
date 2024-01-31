@@ -32,7 +32,7 @@ from ... import ddl
 __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Iterator, Mapping, Set
+from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Relation
@@ -45,9 +45,10 @@ from ...dimensions import DataCoordinate
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
+    from ...direct_query_driver import QueryJoiner  # new query system, server+direct only
     from .._caching_context import CachingContext
     from .._collection_summary import CollectionSummary
-    from ..queries import SqlQueryContext
+    from ..queries import SqlQueryContext  # old registry query system
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
@@ -308,6 +309,38 @@ class DatasetRecordStorage(ABC):
         -------
         relation : `~lsst.daf.relation.Relation`
             Representation of the query.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_query_joiner(self, collections: Sequence[CollectionRecord], fields: Set[str]) -> QueryJoiner:
+        """Make a `..direct_query_driver.QueryJoiner` that represents a search
+        for datasets of this type.
+
+        Parameters
+        ----------
+        collections : `~collections.abc.Sequence` [ `CollectionRecord` ]
+            Collections to search, in order, after filtering out collections
+            with no datasets of this type via collection summaries.
+        fields : `~collections.abc.Set` [ `str` ]
+            Names of fields to make available in the joiner.  Options include:
+
+            - ``dataset_id`` (UUID)
+            - ``run` (collection name, `str`)
+            - ``collection`` (collection name, `str`)
+            - ``collection_key`` (collection primary key, manager-dependent)
+            - ``timespan`` (validity range, or unbounded for non-calibrations)
+            - ``ingest_date`` (time dataset was ingested into repository)
+
+            Dimension keys for the dataset type's required dimensions are
+            always included.
+
+        Returns
+        -------
+        joiner : `..direct_query_driver.QueryJoiner`
+            A query-construction object representing a table or subquery.  If
+            ``fields`` is empty or ``len(collections) <= 1``, this is
+            guaranteed to have rows that are unique over dimension keys.
         """
         raise NotImplementedError()
 
