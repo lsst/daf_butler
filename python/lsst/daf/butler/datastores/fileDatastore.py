@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from lsst.daf.butler import (
     Config,
+    DatasetDatastoreRecords,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -457,12 +458,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         """
         # Try to get them from the ref first.
         if ref._datastore_records is not None and not ignore_datastore_records:
-            if (ref_records := ref._datastore_records.get(self._table.name)) is not None:
-                # Need to make sure they have correct type.
-                for record in ref_records:
-                    if not isinstance(record, StoredFileInfo):
-                        raise TypeError(f"Datastore record has unexpected type {record.__class__.__name__}")
-                return cast(list[StoredFileInfo], ref_records)
+            ref_records = ref._datastore_records.get(self._table.name, [])
+            # Need to make sure they have correct type.
+            for record in ref_records:
+                if not isinstance(record, StoredFileInfo):
+                    raise TypeError(f"Datastore record has unexpected type {record.__class__.__name__}")
+            return cast(list[StoredFileInfo], ref_records)
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
@@ -1333,9 +1334,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         exists : `bool`
             `True` if the dataset is known to the datastore.
         """
-        # We cannot trust datastore records from ref, as many unit tests delete
-        # datasets and check their existence.
-        fileLocations = self._get_dataset_locations_info(ref, ignore_datastore_records=True)
+        fileLocations = self._get_dataset_locations_info(ref)
         if fileLocations:
             return True
         return False
@@ -2157,7 +2156,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             storedInfo = self._write_in_memory_to_artifact(in_memory_dataset, ref)
             artifacts.append((ref, storedInfo))
 
-        ref_records = {self._opaque_table_name: [info for _, info in artifacts]}
+        ref_records: DatasetDatastoreRecords = {self._opaque_table_name: [info for _, info in artifacts]}
         ref = ref.replace(datastore_records=ref_records)
         return {self.name: ref}
 
