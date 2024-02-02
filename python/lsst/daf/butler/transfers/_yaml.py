@@ -579,7 +579,9 @@ class YamlRepoImportBackend(RepoImportBackend):
         skip_dimensions: set | None = None,
     ) -> None:
         # Docstring inherited from RepoImportBackend.load.
-        for element, dimensionRecords in self.dimensions.items():
+        # Must ensure we insert in order supported by the universe.
+        for element in self.registry.dimensions.sorted(self.dimensions.keys()):
+            dimensionRecords = self.dimensions[element]
             if skip_dimensions and element in skip_dimensions:
                 continue
             # Using skip_existing=True here assumes that the records in the
