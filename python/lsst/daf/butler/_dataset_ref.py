@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 
 # Per-dataset records grouped by opaque table name, usually there is just one
 # opaque table.
-DatasetDatastoreRecords: TypeAlias = Mapping[str, Iterable[StoredDatastoreItemInfo]]
+DatasetDatastoreRecords: TypeAlias = Mapping[str, list[StoredDatastoreItemInfo]]
 
 
 class AmbiguousDatasetError(Exception):

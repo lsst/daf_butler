@@ -1,0 +1,1 @@
+``FileDatastore.knows()`` no longer requires database I/O if its input ``DatasetRef`` has datastore records attached.

@@ -1086,6 +1086,17 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
             if root is not None:
                 self.assertTrue(root.exists())
 
+    def test_prepare_get_for_external_client(self):
+        datastore = self.makeDatastore()
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        dimensions = self.universe.conform(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"}
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
+        with self.assertRaises(FileNotFoundError):
+            # Most of the coverage for this function is in test_server.py,
+            # because it requires a file backend that supports URL signing.
+            datastore.prepare_get_for_external_client(ref)
+
 
 class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
     """Posix datastore tests but with checksums disabled."""
