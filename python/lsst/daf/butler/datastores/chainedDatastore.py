@@ -400,11 +400,13 @@ class ChainedDatastore(Datastore):
         raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
 
     def prepare_get_for_external_client(self, ref: DatasetRef) -> object:
+        return self._get_matching_datastore(ref).prepare_get_for_external_client(ref)
+
+    def _get_matching_datastore(self, ref: DatasetRef) -> Datastore:
+        """Return the child datastore that owns the specified dataset."""
         for datastore in self.datastores:
-            try:
-                return datastore.prepare_get_for_external_client(ref)
-            except FileNotFoundError:
-                pass
+            if datastore.knows(ref):
+                return datastore
 
         raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
 
