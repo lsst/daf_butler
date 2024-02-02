@@ -1,0 +1,26 @@
+# This is a rough approximation of the configuration on the idfprod environment
+datastore:
+  cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
+  datastore_constraints:
+    # One entry per datastore in datastores section
+    # Use empty `-` if no constraint override required
+    - constraints:
+        reject:
+          - all
+    - constraints:
+        accept:
+          - all
+  datastores:
+    - datastore:
+        name: FileDatastore@s3://immutable-bucket/dc2
+        cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+        root: s3://immutable-bucket/dc2
+    - datastore:
+        name: FileDatastore@s3://mutable-bucket
+        cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
+        root: s3://mutable-bucket/
+        records:
+          table: user_datastore_records
+        formatters: !include formatters.yaml
+        composites: !include composites.yaml
+storageClasses: !include storageClasses.yaml

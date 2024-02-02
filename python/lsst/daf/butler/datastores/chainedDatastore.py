@@ -399,6 +399,15 @@ class ChainedDatastore(Datastore):
 
         raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
 
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> object:
+        for datastore in self.datastores:
+            try:
+                return datastore.prepare_get_for_external_client(ref)
+            except FileNotFoundError:
+                pass
+
+        raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
+
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to each
         datastore.

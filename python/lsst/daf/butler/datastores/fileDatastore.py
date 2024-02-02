@@ -2065,10 +2065,14 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 datastoreRecords=file_info.to_simple(),
             )
 
+        locations = self._get_dataset_locations_info(ref)
+        if len(locations) == 0:
+            raise FileNotFoundError(f"No artifacts found for DatasetId '{ref.id}'")
+
         return FileDatastoreGetPayload(
             datastore_type="file",
             dataset_ref=ref.to_simple(),
-            file_info=[to_file_info_payload(info) for info in self._get_dataset_locations_info(ref)],
+            file_info=[to_file_info_payload(info) for info in locations],
         )
 
     @transactional

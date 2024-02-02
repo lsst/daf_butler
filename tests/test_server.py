@@ -105,8 +105,10 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Note that all files are stored in memory.
         cls.enterClassContext(clean_test_environment_for_s3())
         cls.enterClassContext(mock_aws())
-        bucket_name = "anybucketname"  # matches s3Datastore.yaml
-        getS3Client().create_bucket(Bucket=bucket_name)
+
+        # matches server.yaml
+        for bucket in ["mutable-bucket", "immutable-bucket"]:
+            getS3Client().create_bucket(Bucket=bucket)
 
         cls.storageClassFactory = StorageClassFactory()
 
@@ -114,7 +116,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         cls.root = makeTestTempDir(TESTDIR)
         cls.repo = MetricTestRepo(
             root=cls.root,
-            configFile=os.path.join(TESTDIR, "config/basic/butler-s3store.yaml"),
+            configFile=os.path.join(TESTDIR, "config/basic/server.yaml"),
             forceConfigRoot=False,
         )
         # Add a file with corrupted data for testing error conditions
