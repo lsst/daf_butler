@@ -403,7 +403,7 @@ class ChainedDatastore(Datastore):
         return self._get_matching_datastore(ref).prepare_get_for_external_client(ref)
 
     def _get_matching_datastore(self, ref: DatasetRef) -> Datastore:
-        """Return the child datastore that owns the specified dataset."""
+        """Return the first child datastore that owns the specified dataset."""
         for datastore in self.datastores:
             if datastore.knows(ref):
                 return datastore
