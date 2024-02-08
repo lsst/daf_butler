@@ -30,7 +30,7 @@ __all__ = ("TimespanDatabaseRepresentation",)
 
 import enum
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, Union
 
 import astropy.time
@@ -444,6 +444,28 @@ class TimespanDatabaseRepresentation(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def apply_any_aggregate(
+        self, func: Callable[[sqlalchemy.ColumnElement[Any]], sqlalchemy.ColumnElement[Any]]
+    ) -> TimespanDatabaseRepresentation:
+        """Apply the given ANY_VALUE aggregate function (or equivalent) to
+        the timespan column(s).
+
+        Parameters
+        ----------
+        func : `~collections.abc.Callable`
+            Callable that takes a `sqlalchemy.ColumnElement` and returns a
+            `sqlalchemy.ColumnElement`.
+
+        Returns
+        -------
+        timespan : `TimespanDatabaseRepresentation`
+            A timespan database representation usable in the SELECT clause of
+            a query with GROUP BY where it does not matter which of the grouped
+            values is selected.
+        """
+        raise NotImplementedError()
+
 
 class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
     """Representation of a time span as two separate fields.
@@ -640,6 +662,15 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
                 self._nsec[0].label(f"{name}_begin"),
                 self._nsec[1].label(f"{name}_end"),
             )
+
+    def apply_any_aggregate(
+        self,
+        func: Callable[[sqlalchemy.ColumnElement[Any]], sqlalchemy.ColumnElement[Any]],
+    ) -> TimespanDatabaseRepresentation:
+        # Docstring inherited.
+        return _CompoundTimespanDatabaseRepresentation(
+            nsec=(func(self._nsec[0]), func(self._nsec[1])), name=self._name
+        )
 
 
 TimespanDatabaseRepresentation.Compound = _CompoundTimespanDatabaseRepresentation

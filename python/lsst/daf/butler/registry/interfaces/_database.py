@@ -1924,6 +1924,44 @@ class Database(ABC):
         """
         return 100
 
+    @property
+    @abstractmethod
+    def has_distinct_on(self) -> bool:
+        """Whether this database supports the ``DISTINCT ON`` SQL construct."""
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def has_any_aggregate(self) -> bool:
+        """Whether this database supports the ``ANY_VALUE`` aggregate function
+        or something equivalent.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:
+        """Wrap the given SQLAlchemy column in the ``ANY_VALUE`` aggregate
+        function or its equivalent.
+
+        Parameters
+        ----------
+        column : `sqlalchemy.ColumnElement`
+            Original column to wrap.
+
+        Returns
+        -------
+        wrapped : `sqlalchemy.ColumnElement`
+            A column element of the same SQL type that can appear in the
+            ``SELECT`` clause even when this column does not appear in the
+            ``GROUP BY`` clause.
+
+        Notes
+        -----
+        This method's behavior is unspecified when `has_any_aggregate` is
+        `False`; the caller is responsible for checking that property first.
+        """
+        raise NotImplementedError()
+
     origin: int
     """An integer ID that should be used as the default for any datasets,
     quanta, or other entities that use a (autoincrement, origin) compound

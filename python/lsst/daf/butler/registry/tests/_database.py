@@ -42,7 +42,7 @@ from typing import Any
 
 import astropy.time
 import sqlalchemy
-from lsst.sphgeom import Circle, ConvexPolygon, UnitVector3d
+from lsst.sphgeom import Circle, ConvexPolygon, Mq3cPixelization, UnionRegion, UnitVector3d
 
 from ..._timespan import Timespan
 from ..interfaces import Database, DatabaseConflictError, ReadOnlyDatabaseError, SchemaAlreadyDefinedError
@@ -1236,3 +1236,105 @@ class DatabaseTests(ABC):
             [row._mapping for row in self.query_list(new_db, select_values_joined)],
             [{"value": 11, "name": "b1"}, {"value": 13, "name": "b3"}],
         )
+
+    def test_aggregate(self) -> None:
+        """Test Database.apply_any_aggregate, ddl.Base64Region.union_aggregate,
+        and TimespanDatabaseRepresetnation.apply_any_aggregate.
+        """
+        db = self.makeEmptyDatabase()
+        with db.declareStaticTables(create=True) as context:
+            t = context.addTable(
+                "t",
+                ddl.TableSpec(
+                    [
+                        ddl.FieldSpec("id", sqlalchemy.BigInteger(), nullable=False),
+                        ddl.FieldSpec("name", sqlalchemy.String(16), nullable=False),
+                        ddl.FieldSpec.for_region(),
+                    ]
+                    + list(db.getTimespanRepresentation().makeFieldSpecs(nullable=True)),
+                ),
+            )
+        pixelization = Mq3cPixelization(10)
+        start = astropy.time.Time("2020-01-01T00:00:00", format="isot", scale="tai")
+        offset = astropy.time.TimeDelta(60, format="sec")
+        timespans = [Timespan(begin=start + offset * n, end=start + offset * n + 1) for n in range(3)]
+        ts_cls = db.getTimespanRepresentation()
+        ts_col = ts_cls.from_columns(t.columns)
+        db.insert(
+            t,
+            ts_cls.update(timespans[0], result={"id": 1, "name": "a", "region": pixelization.quad(12058870)}),
+            ts_cls.update(timespans[1], result={"id": 2, "name": "a", "region": pixelization.quad(12058871)}),
+            ts_cls.update(timespans[2], result={"id": 3, "name": "b", "region": pixelization.quad(12058872)}),
+            ts_cls.update(timespans[2], result={"id": 3, "name": "b", "region": pixelization.quad(12058873)}),
+        )
+        # This should use DISTINCT ON in PostgreSQL and GROUP BY in SQLite.
+        if db.has_distinct_on:
+            sql = (
+                sqlalchemy.select(
+                    t.c.id.label("i"),
+                    t.c.name.label("n"),
+                    *ts_col.flatten("t"),
+                )
+                .select_from(t)
+                .distinct(t.c.id)
+            )
+        elif db.has_any_aggregate:
+            sql = (
+                sqlalchemy.select(
+                    t.c.id.label("i"),
+                    db.apply_any_aggregate(t.c.name).label("n"),
+                    *ts_col.apply_any_aggregate(db.apply_any_aggregate).flatten("t"),
+                )
+                .select_from(t)
+                .group_by(t.c.id)
+            )
+        else:
+            raise AssertionError(
+                "PostgreSQL should support DISTINCT ON and SQLite should support no-op any aggregates."
+            )
+        self.assertCountEqual(
+            [(row.i, row.n, ts_cls.extract(row._mapping, "t")) for row in self.query_list(db, sql)],
+            [(1, "a", timespans[0]), (2, "a", timespans[1]), (3, "b", timespans[2])],
+        )
+        # Test union_aggregate in all versions of both database, with a GROUP
+        # BY that does not need apply_any_aggregate.
+        self.assertCountEqual(
+            [
+                (row.i, row.r.encode())
+                for row in self.query_list(
+                    db,
+                    sqlalchemy.select(
+                        t.c.id.label("i"), ddl.Base64Region.union_aggregate(t.c.region).label("r")
+                    )
+                    .select_from(t)
+                    .group_by(t.c.id),
+                )
+            ],
+            [
+                (1, pixelization.quad(12058870).encode()),
+                (2, pixelization.quad(12058871).encode()),
+                (3, UnionRegion(pixelization.quad(12058872), pixelization.quad(12058873)).encode()),
+            ],
+        )
+        if db.has_any_aggregate:
+            # This should use run in SQLite and PostgreSQL 16+.
+            self.assertCountEqual(
+                [
+                    (row.i, row.n, row.r.encode())
+                    for row in self.query_list(
+                        db,
+                        sqlalchemy.select(
+                            t.c.id.label("i"),
+                            db.apply_any_aggregate(t.c.name).label("n"),
+                            ddl.Base64Region.union_aggregate(t.c.region).label("r"),
+                        )
+                        .select_from(t)
+                        .group_by(t.c.id),
+                    )
+                ],
+                [
+                    (1, "a", pixelization.quad(12058870).encode()),
+                    (2, "a", pixelization.quad(12058871).encode()),
+                    (3, "b", UnionRegion(pixelization.quad(12058872), pixelization.quad(12058873)).encode()),
+                ],
+            )

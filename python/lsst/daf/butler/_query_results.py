@@ -389,17 +389,17 @@ class DataCoordinateQueryResults(Iterable[DataCoordinate]):
         raise NotImplementedError()
 
     @abstractmethod
-    def limit(self, limit: int, offset: int | None = 0) -> DataCoordinateQueryResults:
+    def limit(self, limit: int | None = None, offset: int = 0) -> DataCoordinateQueryResults:
         """Make the iterator return limited number of records.
 
         Parameters
         ----------
-        limit : `int`
-            Upper limit on the number of returned records.
-        offset : `int` or `None`, optional
+        limit : `int` or `None`, optional
+            Upper limit on the number of returned records.  `None` (default) is
+            no limit.
+        offset : `int`, optional
             The number of records to skip before returning at most ``limit``
-            records.  `None` is interpreted the same as zero for backwards
-            compatibility.
+            records.
 
         Returns
         -------
@@ -683,17 +683,16 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
         raise NotImplementedError()
 
     @abstractmethod
-    def limit(self, limit: int, offset: int | None = 0) -> DimensionRecordQueryResults:
+    def limit(self, limit: int | None = None, offset: int = 0) -> DimensionRecordQueryResults:
         """Make the iterator return limited number of records.
 
         Parameters
         ----------
-        limit : `int`
+        limit : `int` or `None`, optional
             Upper limit on the number of returned records.
-        offset : `int` or `None`
+        offset : `int`, optional
             The number of records to skip before returning at most ``limit``
-            records.  `None` is interpreted the same as zero for backwards
-            compatibility.
+            records.
 
         Returns
         -------

@@ -101,7 +101,6 @@ Python API reference
 
 .. automodapi:: lsst.daf.butler
    :no-main-docstr:
-   :skip: CollectionSearch
    :skip: RegistryConfig
 
 Example datastores
@@ -197,6 +196,14 @@ Database backends
 General utilities
 -----------------
 
+.. automodapi:: lsst.daf.butler.arrow_utils
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.column_spec
+   :no-main-docstr:
+   :headings: ^"
+
 .. automodapi:: lsst.daf.butler.ddl
    :no-main-docstr:
    :headings: ^"
@@ -213,11 +220,19 @@ General utilities
    :no-main-docstr:
    :headings: ^"
 
+.. automodapi:: lsst.daf.butler.nonempty_mapping
+   :no-main-docstr:
+   :headings: ^"
+
 .. automodapi:: lsst.daf.butler.persistence_context
    :no-main-docstr:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.progress
+   :no-main-docstr:
+   :headings: ^"
+
+.. automodapi:: lsst.daf.butler.pydantic_utils
    :no-main-docstr:
    :headings: ^"
 

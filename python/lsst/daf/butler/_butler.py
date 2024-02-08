@@ -1439,7 +1439,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         expanded: bool = False,
         order_by: Iterable[str] | str | None = None,
         limit: int | None = None,
-        offset: int | None = None,
+        offset: int = 0,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DataCoordinate]:
@@ -1626,7 +1626,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         bind: Mapping[str, Any] | None = None,
         order_by: Iterable[str] | str | None = None,
         limit: int | None = None,
-        offset: int | None = None,
+        offset: int = 0,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DimensionRecord]:

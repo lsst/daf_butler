@@ -34,20 +34,28 @@ __all__ = (
     "HashColumnSpec",
     "FloatColumnSpec",
     "BoolColumnSpec",
+    "UUIDColumnSpec",
     "RegionColumnSpec",
     "TimespanColumnSpec",
+    "ColumnType",
 )
 
 import textwrap
+import uuid
 from abc import ABC, abstractmethod
-from typing import Annotated, Any, ClassVar, Literal, Union, final
+from typing import Annotated, Any, ClassVar, Literal, TypeAlias, Union, final
 
+import astropy.time
 import pyarrow as pa
 import pydantic
 from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
 from ._timespan import Timespan
+
+ColumnType: TypeAlias = Literal[
+    "int", "string", "hash", "float", "datetime", "bool", "uuid", "timespan", "region"
+]
 
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
@@ -57,7 +65,7 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
 
     doc: str = pydantic.Field(default="", description="Documentation for the column.")
 
-    type: str
+    type: ColumnType
 
     nullable: bool = pydantic.Field(
         default=True,
@@ -210,6 +218,20 @@ class BoolColumnSpec(_BaseColumnSpec):
 
 
 @final
+class UUIDColumnSpec(_BaseColumnSpec):
+    """Description of a UUID column."""
+
+    pytype: ClassVar[type] = uuid.UUID
+
+    type: Literal["uuid"] = "uuid"
+
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
+        return arrow_utils.ToArrow.for_uuid(self.name, nullable=self.nullable)
+
+
+@final
 class RegionColumnSpec(_BaseColumnSpec):
     """Description of a region column."""
 
@@ -243,6 +265,22 @@ class TimespanColumnSpec(_BaseColumnSpec):
         return arrow_utils.ToArrow.for_timespan(self.name, nullable=self.nullable)
 
 
+@final
+class DateTimeColumnSpec(_BaseColumnSpec):
+    """Description of a time column, stored as integer TAI nanoseconds since
+    1970-01-01 and represented in Python via `astropy.time.Time`.
+    """
+
+    pytype: ClassVar[type] = astropy.time.Time
+
+    type: Literal["datetime"] = "datetime"
+
+    def to_arrow(self) -> arrow_utils.ToArrow:
+        # Docstring inherited.
+        assert self.nullable is not None, "nullable=None should be resolved by validators"
+        return arrow_utils.ToArrow.for_datetime(self.name, nullable=self.nullable)
+
+
 ColumnSpec = Annotated[
     Union[
         IntColumnSpec,
@@ -250,8 +288,10 @@ ColumnSpec = Annotated[
         HashColumnSpec,
         FloatColumnSpec,
         BoolColumnSpec,
+        UUIDColumnSpec,
         RegionColumnSpec,
         TimespanColumnSpec,
+        DateTimeColumnSpec,
     ],
     pydantic.Field(discriminator="type"),
 ]

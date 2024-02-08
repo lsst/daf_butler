@@ -26,11 +26,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from sqlalchemy.sql.expression import ColumnElement as ColumnElement
+
 from ... import ddl, time_utils
 
 __all__ = ["PostgresqlDatabase"]
 
-from collections.abc import Iterable, Iterator, Mapping
+import re
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import closing, contextmanager
 from typing import Any
 
@@ -44,6 +47,8 @@ from ..._timespan import Timespan
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ..interfaces import Database
 from ..nameShrinker import NameShrinker
+
+_SERVER_VERSION_REGEX = re.compile(r"(?P<major>\d+)\.(?P<minor>\d+)")
 
 
 class PostgresqlDatabase(Database):
@@ -102,6 +107,11 @@ class PostgresqlDatabase(Database):
                     "`CREATE EXTENSION btree_gist;` in a database before a butler client for it is "
                     " initialized."
                 )
+            raw_pg_version = connection.execute(sqlalchemy.text("SHOW server_version")).scalar()
+            if raw_pg_version is not None and (m := _SERVER_VERSION_REGEX.search(raw_pg_version)):
+                pg_version = (int(m.group("major")), int(m.group("minor")))
+            else:
+                raise RuntimeError("Failed to get PostgreSQL server version.")
         self._init(
             engine=engine,
             origin=origin,
@@ -109,6 +119,7 @@ class PostgresqlDatabase(Database):
             writeable=writeable,
             dbname=dsn.get("dbname"),
             metadata=None,
+            pg_version=pg_version,
         )
 
     def _init(
@@ -120,11 +131,13 @@ class PostgresqlDatabase(Database):
         writeable: bool = True,
         dbname: str,
         metadata: sqlalchemy.schema.MetaData | None,
+        pg_version: tuple[int, int],
     ) -> None:
         # Initialization logic shared between ``__init__`` and ``clone``.
         super().__init__(origin=origin, engine=engine, namespace=namespace, metadata=metadata)
         self._writeable = writeable
         self.dbname = dbname
+        self._pg_version = pg_version
         self._shrinker = NameShrinker(self.dialect.max_identifier_length)
 
     def clone(self) -> PostgresqlDatabase:
@@ -136,6 +149,7 @@ class PostgresqlDatabase(Database):
             writeable=self._writeable,
             dbname=self.dbname,
             metadata=self._metadata,
+            pg_version=self._pg_version,
         )
         return clone
 
@@ -320,6 +334,20 @@ class PostgresqlDatabase(Database):
     ) -> sqlalchemy.sql.FromClause:
         # Docstring inherited.
         return super().constant_rows(fields, *rows, name=name)
+
+    @property
+    def has_distinct_on(self) -> bool:
+        # Docstring inherited.
+        return True
+
+    @property
+    def has_any_aggregate(self) -> bool:
+        # Docstring inherited.
+        return self._pg_version >= (16, 0)
+
+    def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:
+        # Docstring inherited.x
+        return sqlalchemy.func.any_value(column)
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
@@ -520,3 +548,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             return (self.column,)
         else:
             return (self.column.label(name),)
+
+    def apply_any_aggregate(
+        self, func: Callable[[ColumnElement[Any]], ColumnElement[Any]]
+    ) -> TimespanDatabaseRepresentation:
+        # Docstring inherited.
+        return _RangeTimespanRepresentation(func(self.column), self.name)
