@@ -636,7 +636,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
 
-        for dimension in ("detector", "visit"):
+        for dimension in ("detector", "visit", "exposure"):
             records = butler.registry.queryDimensionRecords(dimension, instrument="HSC")
             for r in records:
                 for minimal in (True, False):
