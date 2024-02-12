@@ -23,8 +23,15 @@ data:
     patch_nx_max: 9
     patch_ny_max: 9
 - type: dimension
+  element: group
+  records:
+  - name: '903342'
+    instrument: HSC
+- type: dimension
   element: day_obs
   records:
+  - instrument: HSC
+    id: 20130617
   - instrument: HSC
     id: 20140324
   - instrument: HSC
@@ -789,8 +796,7 @@ data:
     seq_num: 903342
     seq_start: 903342
     seq_end: 903342
-    group_name: '903342'
-    group_id: 903342
+    group: '903342'
     target_name: STRIPE82L
     science_program: o13015
     tracking_ra: 320.2499291666666
