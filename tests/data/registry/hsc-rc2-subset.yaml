@@ -763,6 +763,33 @@ data:
         region: !<lsst.sphgeom.ConvexPolygon>
           encoded: 70cc2b4a68b7ecebbf32d931ecb816df3fffe573df5ab9a93f6d2ac3c7faf9ebbf39dad585e2e6de3fa88934c311b9a93f55833497bef8ebbf15b3fe207ce5de3fae43c0300f6eab3f3e8709597bebebbf77d66efa5115df3f05874a255d6eab3f
   - type: dimension
+    element: exposure
+    records:
+      - instrument: HSC
+        id: 903342
+        physical_filter: HSC-R
+        obs_id: HSCA90334200
+        exposure_time: 30.0
+        dark_time: 30.0
+        observation_type: science
+        observation_reason: science
+        day_obs: 20130617
+        seq_num: 903342
+        seq_start: 903342
+        seq_end: 903342
+        group_name: '903342'
+        group_id: 903342
+        target_name: STRIPE82L
+        science_program: o13015
+        tracking_ra: 320.2499291666666
+        tracking_dec: 0.25001944444444446
+        sky_angle: 270.0
+        azimuth: 161.44628715
+        zenith_angle: 20.499787830000002
+        has_simulated: false
+        datetime_begin: !butler_time/tai/iso '2013-06-17 13:34:45.775000000'
+        datetime_end: !butler_time/tai/iso '2013-06-17 13:35:17.947000000'
+  - type: dimension
     element: visit
     records:
       - instrument: HSC
