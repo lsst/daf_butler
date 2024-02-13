@@ -31,6 +31,7 @@ data:
         visit_max: 21474800
         exposure_max: 21474800
         detector_max: 200
+        day_obs_offset: 0
         class_name: lsst.obs.subaru.HyperSuprimeCam
   - type: dimension
     element: skymap

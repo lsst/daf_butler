@@ -1,4 +1,4 @@
-version: 5
+version: 6
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
@@ -43,6 +43,13 @@ elements:
         doc: >
           Maximum value for the 'detector' field for detectors associated with
           this instrument (exclusive).
+      - name: day_obs_offset
+        type: int
+        doc: >
+          Offset, in seconds, to be applied to a day_obs YYYYMMDD record to
+          calculate the actual timespan of that record. 0 means that the timespan
+          corresponds to 24 hours starting from TAI midnight of the corresponding
+          day.
       - name: class_name
         type: string
         length: 64
