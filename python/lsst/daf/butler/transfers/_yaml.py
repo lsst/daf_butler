@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ["YamlRepoExportBackend", "YamlRepoImportBackend"]
 
+import logging
 import uuid
 import warnings
 from collections import UserDict, defaultdict
@@ -59,6 +60,8 @@ from ._interfaces import RepoExportBackend, RepoImportBackend
 
 if TYPE_CHECKING:
     from lsst.resources import ResourcePathExpression
+
+_LOG = logging.getLogger(__name__)
 
 EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 2)
 """Export format version.
@@ -296,6 +299,25 @@ class YamlRepoImportBackend(RepoImportBackend):
         ):
             migrate_visit_seeing = True
 
+        # If this has instrument records that do not have the corresponding
+        # day_obs_offset in them the field needs to be added.
+        migrate_day_obs_offset = False
+        if (
+            universe_version < 6
+            and universe_namespace == "daf_butler"
+            and "day_obs_offset" in self.registry.dimensions["instrument"].metadata
+        ):
+            migrate_day_obs_offset = True
+
+        # Some conversions may need the day_obs offset from the instrument
+        # records later on. Not all imports will be populating from scratch so
+        # read them from the registry if they already exist.
+        instrument_offsets: dict[str, int] = {}
+        if migrate_day_obs_offset:
+            instrument_offsets = {
+                rec.name: rec.day_obs_offset for rec in self.registry.queryDimensionRecords("instrument")
+            }
+
         datasetData = []
         RecordClass: type[DimensionRecord]
         for data in wrapper["data"]:
@@ -309,6 +331,44 @@ class YamlRepoImportBackend(RepoImportBackend):
                         # class with special YAML tag.
                         if isinstance(record[key], datetime):
                             record[key] = astropy.time.Time(record[key], scale="utc")
+
+                if data["element"] == "instrument":
+                    if migrate_day_obs_offset:
+                        element = self.registry.dimensions["instrument"]
+                        RecordClass = element.RecordClass
+                        for record in data["records"]:
+                            name = record["name"]
+                            if name in instrument_offsets:
+                                # The instrument is already present so use
+                                # the day_obs_offset from that record.
+                                record["day_obs_offset"] = instrument_offsets[name]
+                                continue
+
+                            # Try to ask the registered instrument class.
+                            try:
+                                instrument_class = doImportType(record["class_name"])
+                            except ImportError:
+                                record["day_obs_offset"] = 0
+                                _LOG.warning(
+                                    "Unable to determine day_obs_offset for instrument %s. "
+                                    "Failed to load instrument class %s to calculate it. "
+                                    "Using 0 sec offset.",
+                                    name,
+                                    record["class_name"],
+                                )
+                            else:
+                                if hasattr(instrument_class, "day_obs_offset"):
+                                    record["day_obs_offset"] = getattr(instrument_class, "day_obs_offset")
+                                else:
+                                    _LOG.warning(
+                                        "Unable to determine day_obs_offset for instrument %s. "
+                                        "Instrument class %s does not have day_obs_offset class property. "
+                                        "Using 0 sec offset.",
+                                        name,
+                                        record["class_name"],
+                                    )
+                                    record["day_obs_offset"] = 0
+                            instrument_offsets[name] = record["day_obs_offset"]
 
                 if data["element"] == "visit":
                     if migrate_visit_system:
