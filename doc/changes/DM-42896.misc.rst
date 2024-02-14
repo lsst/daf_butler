@@ -1,0 +1,1 @@
+Created Dimension Universe 5 which increases the size of the instrument name field in the ``instrument`` dimension from 16 to 32 characters.
