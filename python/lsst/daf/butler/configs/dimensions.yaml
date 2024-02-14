@@ -1,4 +1,4 @@
-version: 4
+version: 5
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
@@ -22,7 +22,7 @@ elements:
     keys:
       - name: name
         type: string
-        length: 16
+        length: 32
     metadata:
       - name: visit_max
         type: int
