@@ -262,6 +262,24 @@ class TimespanTestCase(unittest.TestCase):
         ts_json = Timespan.from_json(json_str)
         self.assertEqual(ts_json, ts1)
 
+    def test_day_obs(self):
+        data = (
+            ((20240201, 0), ("2024-02-01T00:00:00.0", "2024-02-02T00:00:00.0")),
+            ((19801011, 3600), ("1980-10-11T01:00:00.0", "1980-10-12T01:00:00.0")),
+            ((20481231, -7200), ("2048-12-30T22:00:00.0", "2048-12-31T22:00:00.0")),
+            ((20481231, 7200), ("2048-12-31T02:00:00.0", "2049-01-01T02:00:00.0")),
+        )
+        for input, output in data:
+            ts1 = Timespan.from_day_obs(input[0], input[1])
+            ts2 = Timespan(
+                begin=astropy.time.Time(output[0], scale="tai", format="isot"),
+                end=astropy.time.Time(output[1], scale="tai", format="isot"),
+            )
+            self.assertEqual(ts1, ts2)
+
+            with self.assertRaises(ValueError):
+                Timespan.from_day_obs(19690101)
+
 
 if __name__ == "__main__":
     unittest.main()
