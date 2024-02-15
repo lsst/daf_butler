@@ -230,7 +230,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         self.assertEqual(metric, kwarg_data_coordinate_metric)
         # Test get() of a non-existent DataId.
         invalid_data_id = {"instrument": "NotAValidlInstrument", "visit": 423}
-        with self.assertRaises(LookupError):
+        with self.assertRaises(FileNotFoundError):
             self.butler_without_error_propagation.get(
                 dataset_type, dataId=invalid_data_id, collections=collections
             )
@@ -246,7 +246,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
         # Test looking up a non-existent ref
         invalid_ref = ref.replace(id=uuid.uuid4())
-        with self.assertRaises(LookupError):
+        with self.assertRaises(FileNotFoundError):
             self.butler_without_error_propagation.get(invalid_ref)
 
         with self.assertRaises(RuntimeError):
