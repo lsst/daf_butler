@@ -135,7 +135,6 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # Set up the RemoteButler that will connect to the server
         cls.client = _make_test_client(app)
         cls.butler = _make_remote_butler(cls.client)
-        cls.butler_with_default_collection = _make_remote_butler(cls.client, collections="ingest/run")
         # By default, the TestClient instance raises any unhandled exceptions
         # from the server as if they had originated in the client to ease
         # debugging.  However, this can make it appear that error propagation
@@ -300,7 +299,8 @@ class ButlerClientServerTestCase(unittest.TestCase):
             )
 
         # Test get() by DataId with default collections.
-        default_collection_metric = self.butler_with_default_collection.get(dataset_type, dataId=data_id)
+        butler_with_default_collection = self.butler._clone(collections="ingest/run")
+        default_collection_metric = butler_with_default_collection.get(dataset_type, dataId=data_id)
         self.assertEqual(metric, default_collection_metric)
 
         # Test get() by DataId with no collections specified.

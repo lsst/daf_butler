@@ -112,6 +112,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     _registry_defaults: RegistryDefaults
     _client: httpx.Client
     _server_url: str
+    _access_token: str
     _headers: dict[str, str]
     _cache: RemoteButlerCache
 
@@ -137,6 +138,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._client = http_client
         self._server_url = server_url
         self._cache = cache
+        self._access_token = access_token
 
         # TODO: RegistryDefaults should have finish() called on it, but this
         # requires getCollectionSummary() which is not yet implemented
@@ -682,7 +684,19 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         inferDefaults: bool = True,
         **kwargs: Any,
     ) -> RemoteButler:
-        raise NotImplementedError()
+        return RemoteButler(
+            server_url=self._server_url,
+            http_client=self._client,
+            access_token=self._access_token,
+            cache=self._cache,
+            options=ButlerInstanceOptions(
+                collections=collections,
+                run=run,
+                writeable=self.isWriteable(),
+                inferDefaults=inferDefaults,
+                kwargs=kwargs,
+            ),
+        )
 
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
