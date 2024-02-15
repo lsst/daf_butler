@@ -284,6 +284,8 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         associated with a dataset.
         """
         if isinstance(datasetRefOrType, DatasetRef):
+            if dataId is not None:
+                raise ValueError("DatasetRef given, cannot use dataId as well")
             dataset_id = datasetRefOrType.id
             response = self._get(f"get_file/{dataset_id}", expected_errors=(404,))
             if response.status_code == 404:
