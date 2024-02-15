@@ -5,6 +5,8 @@
 # files.
 description: Butler Data Repository Export
 version: 0
+universe_version: 6
+universe_namespace: daf_butler
 data:
   -
     type: dimension
@@ -17,7 +19,7 @@ data:
         exposure_max: 512
         detector_max: 4
         day_obs_offset: 0
-        class_name: lsst.obs.base.Instrument
+        class_name: lsst.pipe.base.Instrument
   -
     type: dimension
     element: physical_filter
