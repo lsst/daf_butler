@@ -36,20 +36,13 @@ try:
     import safir.dependencies.logger
     from fastapi import HTTPException
     from fastapi.testclient import TestClient
-    from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
+    from lsst.daf.butler.remote_butler import RemoteButler
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
-    from lsst.daf.butler.tests.server_utils import add_auth_header_check_middleware
-    from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
-
-    try:
-        from moto import mock_aws  # v5
-    except ImportError:
-        from moto import mock_s3 as mock_aws
+    from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, create_test_server
 except ImportError:
-    TestClient = None
-    create_app = None
+    create_test_server = None
 
 from unittest.mock import NonCallableMock, patch
 
@@ -62,100 +55,44 @@ from lsst.daf.butler import (
     NoDefaultCollectionError,
     StorageClassFactory,
 )
-from lsst.daf.butler._butler_instance_options import ButlerInstanceOptions
 from lsst.daf.butler.datastore import DatasetRefURIs
 from lsst.daf.butler.tests import DatastoreMock, addDatasetType
-from lsst.daf.butler.tests.utils import (
-    MetricsExample,
-    MetricTestRepo,
-    makeTestTempDir,
-    mock_env,
-    removeTestTempDir,
-)
+from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, mock_env
 from lsst.resources import ResourcePath
 from lsst.resources.http import HttpResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
-TEST_REPOSITORY_NAME = "testrepo"
 
-
-def _make_test_client(app, raise_server_exceptions=True):
-    client = TestClient(app, raise_server_exceptions=raise_server_exceptions)
-    return client
-
-
-def _make_remote_butler(http_client, *, collections: str | None = None):
-    options = None
-    if collections is not None:
-        options = ButlerInstanceOptions(collections=collections)
-    factory = RemoteButlerFactory(f"https://test.example/api/butler/repo/{TEST_REPOSITORY_NAME}", http_client)
-    return factory.create_butler_for_access_token("fake-access-token", butler_options=options)
-
-
-@unittest.skipIf(TestClient is None or create_app is None, "FastAPI not installed.")
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
 class ButlerClientServerTestCase(unittest.TestCase):
     """Test for Butler client/server."""
 
     @classmethod
     def setUpClass(cls):
-        # Set up a mock S3 environment using Moto.  Moto also monkeypatches the
-        # `requests` library so that any HTTP requests to presigned S3 URLs get
-        # redirected to the mocked S3.
-        # Note that all files are stored in memory.
-        cls.enterClassContext(clean_test_environment_for_s3())
-        cls.enterClassContext(mock_aws())
-
-        # matches server.yaml
-        for bucket in ["mutable-bucket", "immutable-bucket"]:
-            getS3Client().create_bucket(Bucket=bucket)
+        server_instance = cls.enterClassContext(create_test_server())
+        cls.client = server_instance.client
+        cls.butler = server_instance.remote_butler
+        cls.butler_without_error_propagation = server_instance.remote_butler_without_error_propagation
 
         cls.storageClassFactory = StorageClassFactory()
 
-        # First create a butler and populate it.
-        cls.root = makeTestTempDir(TESTDIR)
-        cls.repo = MetricTestRepo(
-            root=cls.root,
-            configFile=os.path.join(TESTDIR, "config/basic/server.yaml"),
-            forceConfigRoot=False,
+        cls.repo = MetricTestRepo.create_from_butler(
+            server_instance.direct_butler, server_instance.config_file_path
         )
         # Add a file with corrupted data for testing error conditions
         cls.dataset_with_corrupted_data = _create_corrupted_dataset(cls.repo)
         # All of the datasets that come with MetricTestRepo are disassembled
         # composites.  Add a simple dataset for testing the common case.
-        cls.simple_dataset_ref = _create_simple_dataset(cls.repo.butler)
-
-        # Override the server's Butler initialization to point at our test repo
-        server_butler_factory = LabeledButlerFactory({TEST_REPOSITORY_NAME: cls.root})
-
-        app = create_app()
-        app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
-        add_auth_header_check_middleware(app)
-
-        # Set up the RemoteButler that will connect to the server
-        cls.client = _make_test_client(app)
-        cls.butler = _make_remote_butler(cls.client)
-        # By default, the TestClient instance raises any unhandled exceptions
-        # from the server as if they had originated in the client to ease
-        # debugging.  However, this can make it appear that error propagation
-        # is working correctly when in a real deployment the server exception
-        # would cause a 500 Internal Server Error.  This instance of the butler
-        # is set up so that any unhandled server exceptions do return a 500
-        # status code.
-        cls.butler_without_error_propagation = _make_remote_butler(
-            _make_test_client(app, raise_server_exceptions=False)
-        )
+        cls.simple_dataset_ref = _create_simple_dataset(server_instance.direct_butler)
 
         # Populate the test server.
         # The DatastoreMock is required because the datasets referenced in
         # these imports do not point at real files.
-        DatastoreMock.apply(cls.repo.butler)
-        cls.repo.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        cls.repo.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
-
-    @classmethod
-    def tearDownClass(cls):
-        removeTestTempDir(cls.root)
+        direct_butler = server_instance.direct_butler
+        DatastoreMock.apply(direct_butler)
+        direct_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        direct_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
 
     def test_health_check(self):
         response = self.client.get("/")
@@ -410,7 +347,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
             raise RuntimeError("An unhandled error")
 
         app.dependency_overrides[butler_factory_dependency] = raise_error
-        client = _make_test_client(app, raise_server_exceptions=False)
+        client = TestClient(app, raise_server_exceptions=False)
 
         with patch.object(safir.dependencies.logger, "logger_dependency") as mock_logger_dep:
             mock_logger = NonCallableMock(["aerror"])
@@ -448,7 +385,7 @@ def _create_corrupted_dataset(repo: MetricTestRepo) -> DatasetRef:
 
 def _create_simple_dataset(butler: Butler) -> DatasetRef:
     dataset_type = addDatasetType(butler, "test_int", {"instrument", "visit"}, "int")
-    ref = butler.put(123, dataset_type, dataId={"instrument": "DummyCamComp", "visit": 423})
+    ref = butler.put(123, dataset_type, dataId={"instrument": "DummyCamComp", "visit": 423}, run="ingest/run")
     return ref
 
 
