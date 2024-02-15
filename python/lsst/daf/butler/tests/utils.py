@@ -233,6 +233,9 @@ class MetricTestRepo:
     test repo
     """
 
+    _DEFAULT_RUN = "ingest/run"
+    _DEFAULT_TAG = "ingest"
+
     @staticmethod
     def _makeExampleMetrics() -> MetricsExample:
         """Make an object to put into the repository."""
@@ -246,15 +249,39 @@ class MetricTestRepo:
         self.root = root
         Butler.makeRepo(self.root, config=Config(configFile), forceConfigRoot=forceConfigRoot)
         butlerConfigFile = os.path.join(self.root, "butler.yaml")
+        butler = Butler.from_config(butlerConfigFile, run=self._DEFAULT_RUN, collections=[self._DEFAULT_TAG])
+        self._do_init(butler, butlerConfigFile)
+
+    @classmethod
+    def create_from_butler(cls, butler: Butler, butler_config_file: str) -> MetricTestRepo:
+        """Create a MetricTestRepo from an existing Butler instance.
+
+        Parameters
+        ----------
+        butler : `Butler`
+            `Butler` instance used for setting up the repository.
+        butler_config_file : `str`
+            Path to the config file used to set up that Butler instance.
+
+        Returns
+        -------
+        repo : `MetricTestRepo`
+            New instance of `MetricTestRepo` using the provided `Butler`
+            instance.
+        """
+        self = cls.__new__(cls)
+        butler = butler._clone(run=self._DEFAULT_RUN, collections=[self._DEFAULT_TAG])
+        self._do_init(butler, butler_config_file)
+        return self
+
+    def _do_init(self, butler: Butler, butlerConfigFile: str) -> None:
+        self.butler = butler
         self.storageClassFactory = StorageClassFactory()
         self.storageClassFactory.addFromConfig(butlerConfigFile)
 
         # New datasets will be added to run and tag, but we will only look in
         # tag when looking up datasets.
-        run = "ingest/run"
-        tag = "ingest"
-        self.butler = Butler.from_config(butlerConfigFile, run=run, collections=[tag])
-        self.butler.registry.registerCollection(tag, CollectionType.TAGGED)
+        self.butler.registry.registerCollection(self._DEFAULT_TAG, CollectionType.TAGGED)
 
         # Create and register a DatasetType
         self.datasetType = addDatasetType(
@@ -322,6 +349,8 @@ class MetricTestRepo:
         """
         if run:
             self.butler.registry.registerCollection(run, type=CollectionType.RUN)
+        else:
+            run = self._DEFAULT_RUN
         metric = self._makeExampleMetrics()
         return self.butler.put(
             metric, self.datasetType if datasetType is None else datasetType, dataId, run=run
