@@ -287,7 +287,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             dataset_id = datasetRefOrType.id
             response = self._get(f"get_file/{dataset_id}", expected_errors=(404,))
             if response.status_code == 404:
-                raise LookupError(f"Dataset not found: {datasetRefOrType}")
+                raise FileNotFoundError(f"Dataset not found: {datasetRefOrType}")
         else:
             request = GetFileByDataIdRequestModel(
                 dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
@@ -296,7 +296,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             )
             response = self._post("get_file_by_data_id", request, expected_errors=(404,))
             if response.status_code == 404:
-                raise LookupError(
+                raise FileNotFoundError(
                     f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
                     f" collections: {collections}"
                 )
