@@ -336,6 +336,19 @@ class YamlRepoImportBackend(RepoImportBackend):
             if "visit" in self.registry.dimensions and "day_obs" in self.registry.dimensions["visit"].implied:
                 migrate_visit_day_obs = True
 
+        # If this is pre-v1 universe we may need to fill in a missing
+        # visit.day_obs field.
+        migrate_add_visit_day_obs = False
+        if (
+            universe_version < 1
+            and universe_namespace == "daf_butler"
+            and (
+                "day_obs" in self.registry.dimensions["visit"].implied
+                or "day_obs" in self.registry.dimensions["visit"].metadata
+            )
+        ):
+            migrate_add_visit_day_obs = True
+
         # Some conversions may need the day_obs offset from the instrument
         # records later on. Not all imports will be populating from scratch so
         # read them from the registry if they already exist.
@@ -415,6 +428,15 @@ class YamlRepoImportBackend(RepoImportBackend):
                     if migrate_visit_seeing:
                         for record in data["records"]:
                             record.pop("seeing", None)
+                    if migrate_add_visit_day_obs:
+                        # The day_obs field is missing. It can be derived from
+                        # the datetime_begin field.
+                        for record in data["records"]:
+                            offset = astropy.time.TimeDelta(
+                                instrument_offsets[record["instrument"]], scale="tai", format="sec"
+                            )
+                            date = record["datetime_begin"].tai - offset
+                            record["day_obs"] = int(date.strftime("%Y%m%d"))
                     if migrate_visit_day_obs:
                         # Poke the entry for this dimension to make sure it
                         # appears in the right order, even though we'll

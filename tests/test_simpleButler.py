@@ -666,6 +666,24 @@ class SimpleButlerTestCase(unittest.TestCase):
                     self.assertTrue(isinstance(r_html, str))
                     self.assertIn(dimension, r_html)
 
+    def test_dimension_records_import(self):
+        # Dimension Records
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset-v0.yaml"))
+
+        # Count records and assume this means it worked.
+        dimensions = (
+            ("day_obs", 15),
+            ("group", 1),
+            ("exposure", 1),
+            ("visit", 160),
+            ("detector", 111),
+            ("visit_system_membership", 160),
+        )
+        for dimension, count in dimensions:
+            records = list(butler.registry.queryDimensionRecords(dimension, instrument="HSC"))
+            self.assertEqual(len(records), count)
+
     def testWildcardQueries(self):
         """Test that different collection type queries work."""
         # Import data to play with.
