@@ -518,15 +518,29 @@ class YamlRepoImportBackend(RepoImportBackend):
                 raise ValueError(f"Unexpected dictionary type: {data['type']}.")
 
         if day_obs_ids:
-            warnings.warn(
-                f"Constructing {len(day_obs_ids)} day_obs records with no timespans from "
-                "visit/exposure records that were exported before day_obs was a dimension."
-            )
             element = self.registry.dimensions["day_obs"]
             RecordClass = element.RecordClass
-            self.dimensions[element].extend(
-                [RecordClass(instrument=instrument, id=id) for instrument, id in day_obs_ids]
-            )
+            missing_offsets = set()
+            for instrument, day_obs in day_obs_ids:
+                # This should always return an offset but as a fallback
+                # allow None here in case something has gone wrong above.
+                offset = instrument_offsets.get(instrument, None)
+                if offset is not None:
+                    timespan = Timespan.from_day_obs(day_obs, offset=offset)
+                else:
+                    timespan = None
+                    missing_offsets.add(instrument)
+                self.dimensions[element].append(
+                    RecordClass(instrument=instrument, id=day_obs, timespan=timespan)
+                )
+
+            if missing_offsets:
+                plural = "" if len(missing_offsets) == 1 else "s"
+                warnings.warn(
+                    "Constructing day_obs records with no timespans for "
+                    "visit/exposure records that were exported before day_obs was a dimension. "
+                    f"(instrument{plural}: {missing_offsets})"
+                )
 
         # key is (dataset type name, run)
         self.datasets: Mapping[tuple[str, str], list[FileDataset]] = defaultdict(list)
