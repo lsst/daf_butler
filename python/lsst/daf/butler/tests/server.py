@@ -9,8 +9,10 @@ from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
 from lsst.daf.butler.remote_butler.server import create_app
 from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
-from lsst.daf.butler.tests.server_utils import add_auth_header_check_middleware
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
+
+from .hybrid_butler import HybridButler
+from .server_utils import add_auth_header_check_middleware
 
 try:
     # moto v5
@@ -50,6 +52,8 @@ class TestServerInstance:
     """`DirectButler` instance connected to the same repository as the
     temporary server.
     """
+    hybrid_butler: HybridButler
+    """`HybridButler` instance connected to the temporary server."""
 
 
 @contextmanager
@@ -90,16 +94,20 @@ def create_test_server() -> Iterator[TestServerInstance]:
                 client_without_error_propagation = TestClient(app, raise_server_exceptions=False)
 
                 remote_butler = _make_remote_butler(client)
+                remote_butler_without_error_propagation = _make_remote_butler(
+                    client_without_error_propagation
+                )
+
                 direct_butler = Butler.from_config(config_file_path, writeable=True)
+                hybrid_butler = HybridButler(remote_butler, direct_butler)
 
                 yield TestServerInstance(
                     config_file_path=config_file_path,
                     client=client,
                     direct_butler=direct_butler,
                     remote_butler=remote_butler,
-                    remote_butler_without_error_propagation=_make_remote_butler(
-                        client_without_error_propagation
-                    ),
+                    remote_butler_without_error_propagation=remote_butler_without_error_propagation,
+                    hybrid_butler=hybrid_butler,
                 )
 
 
