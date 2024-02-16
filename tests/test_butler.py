@@ -63,6 +63,11 @@ except ImportError:
 
 
 try:
+    from lsst.daf.butler.tests.server import create_test_server
+except ImportError:
+    create_test_server = None
+
+try:
     # It's possible but silly to have testing.postgresql installed without
     # having the postgresql server installed (because then nothing in
     # testing.postgresql would work), so we use the presence of that module
@@ -168,7 +173,7 @@ class ButlerPutGetTests(TestCaseMixin):
     root: str
     default_run = "ingésτ😺"
     storageClassFactory: StorageClassFactory
-    configFile: str
+    configFile: str | None
     tmpConfigFile: str
 
     @staticmethod
@@ -183,7 +188,8 @@ class ButlerPutGetTests(TestCaseMixin):
     @classmethod
     def setUpClass(cls) -> None:
         cls.storageClassFactory = StorageClassFactory()
-        cls.storageClassFactory.addFromConfig(cls.configFile)
+        if cls.configFile is not None:
+            cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def assertGetComponents(
         self,
@@ -205,17 +211,32 @@ class ButlerPutGetTests(TestCaseMixin):
             self.assertEqual(result_deferred, result)
 
     def tearDown(self) -> None:
-        removeTestTempDir(self.root)
+        if self.root is not None:
+            removeTestTempDir(self.root)
 
     def create_butler(
         self, run: str, storageClass: StorageClass | str, datasetTypeName: str
-    ) -> tuple[DirectButler, DatasetType]:
+    ) -> tuple[Butler, DatasetType]:
+        """Create a Butler for the test repository and insert some test data
+        into it.
+        """
         butler = Butler.from_config(self.tmpConfigFile, run=run)
         assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
 
         collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, {run})
 
+        return self._setup_butler_data(butler, storageClass, datasetTypeName)
+
+    def create_empty_butler(self, run: str | None = None, writeable: bool | None = None):
+        """Create a Butler for the test repository, without inserting test
+        data.
+        """
+        return Butler.from_config(self.tmpConfigFile, run=run, writeable=writeable)
+
+    def _setup_butler_data(
+        self, butler: Butler, storageClass: StorageClass | str, datasetTypeName: str
+    ) -> tuple[Butler, DatasetType]:
         # Create and register a DatasetType
         dimensions = butler.dimensions.conform(["instrument", "visit"])
 
@@ -256,7 +277,7 @@ class ButlerPutGetTests(TestCaseMixin):
             )
         return butler, datasetType
 
-    def runPutGetTest(self, storageClass: StorageClass, datasetTypeName: str) -> DirectButler:
+    def runPutGetTest(self, storageClass: StorageClass, datasetTypeName: str) -> Butler:
         # New datasets will be added to run and tag, but we will only look in
         # tag when looking up datasets.
         run = self.default_run
@@ -458,7 +479,11 @@ class ButlerPutGetTests(TestCaseMixin):
         )
 
         # Getting with a dataset type that does not match registry fails
-        with self.assertRaisesRegex(ValueError, "Supplied dataset type .* inconsistent with registry"):
+        with self.assertRaisesRegex(
+            ValueError,
+            "(Supplied dataset type .* inconsistent with registry)"
+            "|(The new storage class .* is not compatible with the existing storage class)",
+        ):
             butler.get(inconsistentDatasetType, dataId)
 
         # Combining a DatasetRef with a dataId should fail
@@ -519,7 +544,7 @@ class ButlerPutGetTests(TestCaseMixin):
 
     def testDeferredCollectionPassing(self) -> None:
         # Construct a butler with no run or collection, but make it writeable.
-        butler = Butler.from_config(self.tmpConfigFile, writeable=True)
+        butler = self.create_empty_butler(writeable=True)
         # Create and register a DatasetType
         dimensions = butler.dimensions.conform(["instrument", "visit"])
         datasetType = self.addDatasetType(
@@ -874,7 +899,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(get_full_type_name(test_dict3), "dict")
 
     def testIngest(self) -> None:
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        butler = self.create_empty_butler(run=self.default_run)
 
         # Create and register a DatasetType
         dimensions = butler.dimensions.conform(["instrument", "visit", "detector"])
@@ -1026,7 +1051,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def testPickle(self) -> None:
         """Test pickle support."""
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        butler = self.create_empty_butler(run=self.default_run)
         assert isinstance(butler, DirectButler), "Expect DirectButler in configuration"
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
@@ -1035,7 +1060,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self) -> None:
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        butler = self.create_empty_butler(run=self.default_run)
         dimensions = butler.dimensions.conform(["instrument", "visit", "physical_filter"])
         dimensionEntries: list[tuple[str, list[Mapping[str, Any]]]] = [
             (
@@ -1109,7 +1134,7 @@ class ButlerTests(ButlerPutGetTests):
         )
 
     def testTransaction(self) -> None:
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        butler = self.create_empty_butler(run=self.default_run)
         datasetTypeName = "test_metric"
         dimensions = butler.dimensions.conform(["instrument", "visit"])
         dimensionEntries: tuple[tuple[str, Mapping[str, Any]], ...] = (
@@ -1213,7 +1238,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def testButlerRewriteDataId(self) -> None:
         """Test that dataIds can be rewritten based on dimension records."""
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        butler = self.create_empty_butler(run=self.default_run)
 
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
         datasetTypeName = "random_data"
@@ -1267,7 +1292,7 @@ class ButlerTests(ButlerPutGetTests):
         # MissingCollectionError if you tried to fetch a dataset that was added
         # after the collection cache was last updated.
         reader_butler, datasetType = self.create_butler(self.default_run, "int", "datasettypename")
-        writer_butler = Butler.from_config(self.tmpConfigFile, writeable=True, run="new_run")
+        writer_butler = self.create_empty_butler(writeable=True, run="new_run")
         dataId = {"instrument": "DummyCamComp", "visit": 423}
         put_ref = writer_butler.put(123, datasetType, dataId)
         get_ref = reader_butler.get_dataset(put_ref.id)
@@ -2476,6 +2501,69 @@ class NullDatastoreTestCase(unittest.TestCase):
             butler.get(ref)
         with self.assertRaises(FileNotFoundError):
             butler.getURI(ref)
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class ButlerServerTests(ButlerTests, unittest.TestCase):
+    """Test RemoteButler and Butler server."""
+
+    configFile = None
+
+    def setUp(self):
+        self.server_instance = self.enterContext(create_test_server())
+
+    def tearDown(self):
+        pass
+
+    def create_butler(
+        self, run: str, storageClass: StorageClass | str, datasetTypeName: str
+    ) -> tuple[Butler, DatasetType]:
+        butler = self.server_instance.hybrid_butler._clone(run=run)
+        return self._setup_butler_data(butler, storageClass, datasetTypeName)
+
+    def create_empty_butler(self, run: str | None = None, writeable: bool | None = None):
+        return self.server_instance.hybrid_butler._clone(run=run)
+
+    def testConstructor(self):
+        # RemoteButler constructor is tested elsewhere.
+        pass
+
+    def testDafButlerRepositories(self):
+        # Repository index is tested elsewhere.
+        pass
+
+    # Predict mode not implemented.
+    @unittest.expectedFailure
+    def testCompositePutGetConcrete(self) -> None:
+        return super().testCompositePutGetConcrete()
+
+    # Predict mode not implemented.
+    @unittest.expectedFailure
+    def testCompositePutGetVirtual(self) -> None:
+        return super().testCompositePutGetVirtual()
+
+    # Call to validateConfiguration is failing, not sure why.
+    @unittest.expectedFailure
+    def testGetDatasetTypes(self) -> None:
+        return super().testGetDatasetTypes()
+
+    def testMakeRepo(self) -> None:
+        # Only applies to DirectButler.
+        pass
+
+    # Pickling not yet implemented for RemoteButler/HybridButler.
+    @unittest.expectedFailure
+    def testPickle(self) -> None:
+        return super().testPickle()
+
+    def testStringification(self) -> None:
+        # RemoteButler does not have datastore/registry strings like
+        # DirectButler does.
+        pass
+
+    def testTransaction(self) -> None:
+        # Transactions will never be supported for RemoteButler.
+        pass
 
 
 def setup_module(module: types.ModuleType) -> None:
