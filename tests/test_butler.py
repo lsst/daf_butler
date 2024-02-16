@@ -594,6 +594,8 @@ class ButlerTests(ButlerPutGetTests):
     registryStr: str | None
     datastoreName: list[str] | None
     datastoreStr: list[str]
+    predictionSupported = True
+    """Does getURIs support 'prediction mode'?"""
 
     def setUp(self) -> None:
         """Create a new butler root for each test."""
@@ -743,12 +745,13 @@ class ButlerTests(ButlerPutGetTests):
         self.assertIn("423", str(uri), f"Checking visit is in URI {uri}")
 
         # Predicted dataset
-        dataId = {"instrument": "DummyCamComp", "visit": 424}
-        uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
-        self.assertFalse(components)
-        self.assertIsInstance(uri, ResourcePath)
-        self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
-        self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
+        if self.predictionSupported:
+            dataId = {"instrument": "DummyCamComp", "visit": 424}
+            uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
+            self.assertFalse(components)
+            self.assertIsInstance(uri, ResourcePath)
+            self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
+            self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
 
     def testCompositePutGetVirtual(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredCompositeReadComp")
@@ -773,23 +776,24 @@ class ButlerTests(ButlerPutGetTests):
                 self.assertIn("423", str(compuri), f"Checking visit is in URI {compuri}")
                 self.assertEqual(compuri.fragment, "", f"Checking absence of fragment in {compuri}")
 
-        # Predicted dataset
-        dataId = {"instrument": "DummyCamComp", "visit": 424}
-        uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
+        if self.predictionSupported:
+            # Predicted dataset
+            dataId = {"instrument": "DummyCamComp", "visit": 424}
+            uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
 
-        if butler._datastore.isEphemeral:
-            # Never disassembled
-            self.assertIsInstance(uri, ResourcePath)
-            self.assertFalse(components)
-            self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
-            self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
-        else:
-            self.assertIsNone(uri)
-            self.assertEqual(set(components), set(storageClass.components))
-            for compuri in components.values():
-                self.assertIsInstance(compuri, ResourcePath)
-                self.assertIn("424", str(compuri), f"Checking visit is in URI {compuri}")
-                self.assertEqual(compuri.fragment, "predicted", f"Checking for fragment in {compuri}")
+            if butler._datastore.isEphemeral:
+                # Never disassembled
+                self.assertIsInstance(uri, ResourcePath)
+                self.assertFalse(components)
+                self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
+                self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
+            else:
+                self.assertIsNone(uri)
+                self.assertEqual(set(components), set(storageClass.components))
+                for compuri in components.values():
+                    self.assertIsInstance(compuri, ResourcePath)
+                    self.assertIn("424", str(compuri), f"Checking visit is in URI {compuri}")
+                    self.assertEqual(compuri.fragment, "predicted", f"Checking for fragment in {compuri}")
 
     def testStorageClassOverrideGet(self) -> None:
         """Test storage class conversion on get with override."""
@@ -2503,6 +2507,7 @@ class ButlerServerTests(ButlerTests, unittest.TestCase):
     """Test RemoteButler and Butler server."""
 
     configFile = None
+    predictionSupported = False
 
     def setUp(self):
         self.server_instance = self.enterContext(create_test_server(TESTDIR))
@@ -2514,27 +2519,20 @@ class ButlerServerTests(ButlerTests, unittest.TestCase):
         return self.server_instance.hybrid_butler._clone(run=run)
 
     def testConstructor(self):
-        # RemoteButler constructor is tested elsewhere.
+        # RemoteButler constructor is tested in test_server.py and
+        # test_remote_butler.py.
         pass
 
     def testDafButlerRepositories(self):
-        # Repository index is tested elsewhere.
+        # Loading of RemoteButler via repository index is tested in
+        # test_server.py.
         pass
 
-    # Predict mode not implemented.
-    @unittest.expectedFailure
-    def testCompositePutGetConcrete(self) -> None:
-        return super().testCompositePutGetConcrete()
-
-    # Predict mode not implemented.
-    @unittest.expectedFailure
-    def testCompositePutGetVirtual(self) -> None:
-        return super().testCompositePutGetVirtual()
-
-    # Call to validateConfiguration is failing, not sure why.
-    @unittest.expectedFailure
     def testGetDatasetTypes(self) -> None:
-        return super().testGetDatasetTypes()
+        # This is mostly a test of validateConfiguration, which is for
+        # validating Datastore configuration and thus isn't relevant to
+        # RemoteButler.
+        pass
 
     def testMakeRepo(self) -> None:
         # Only applies to DirectButler.
