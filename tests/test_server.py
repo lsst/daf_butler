@@ -70,7 +70,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        server_instance = cls.enterClassContext(create_test_server())
+        server_instance = cls.enterClassContext(create_test_server(TESTDIR))
         cls.client = server_instance.client
         cls.butler = server_instance.remote_butler
         cls.butler_without_error_propagation = server_instance.remote_butler_without_error_propagation

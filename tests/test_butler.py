@@ -2505,7 +2505,7 @@ class ButlerServerTests(ButlerTests, unittest.TestCase):
     configFile = None
 
     def setUp(self):
-        self.server_instance = self.enterContext(create_test_server())
+        self.server_instance = self.enterContext(create_test_server(TESTDIR))
 
     def tearDown(self):
         pass

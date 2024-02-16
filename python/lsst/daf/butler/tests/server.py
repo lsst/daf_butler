@@ -57,8 +57,14 @@ class TestServerInstance:
 
 
 @contextmanager
-def create_test_server() -> Iterator[TestServerInstance]:
+def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
     """Create a temporary Butler server instance for testing.
+
+    Parameters
+    ----------
+    test_directory : `str`
+        Path to the ``tests/`` directory at the root of the repository,
+        containing Butler test configuration files.
 
     Returns
     -------
@@ -72,9 +78,7 @@ def create_test_server() -> Iterator[TestServerInstance]:
     # Note that all files are stored in memory.
     with clean_test_environment_for_s3():
         with mock_aws():
-            # The tests/ directory at the top of the repository
-            test_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../tests"))
-            base_config_path = os.path.join(test_dir, "config/basic/server.yaml")
+            base_config_path = os.path.join(test_directory, "config/basic/server.yaml")
             # Create S3 buckets used for the datastore in server.yaml.
             for bucket in ["mutable-bucket", "immutable-bucket"]:
                 getS3Client().create_bucket(Bucket=bucket)
