@@ -112,6 +112,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     _registry_defaults: RegistryDefaults
     _client: httpx.Client
     _server_url: str
+    _access_token: str
     _headers: dict[str, str]
     _cache: RemoteButlerCache
 
@@ -137,6 +138,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._client = http_client
         self._server_url = server_url
         self._cache = cache
+        self._access_token = access_token
 
         # TODO: RegistryDefaults should have finish() called on it, but this
         # requires getCollectionSummary() which is not yet implemented
@@ -282,10 +284,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         associated with a dataset.
         """
         if isinstance(datasetRefOrType, DatasetRef):
+            if dataId is not None:
+                raise ValueError("DatasetRef given, cannot use dataId as well")
             dataset_id = datasetRefOrType.id
             response = self._get(f"get_file/{dataset_id}", expected_errors=(404,))
             if response.status_code == 404:
-                raise LookupError(f"Dataset not found: {datasetRefOrType}")
+                raise FileNotFoundError(f"Dataset not found: {datasetRefOrType}")
         else:
             request = GetFileByDataIdRequestModel(
                 dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
@@ -294,7 +298,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             )
             response = self._post("get_file_by_data_id", request, expected_errors=(404,))
             if response.status_code == 404:
-                raise LookupError(
+                raise FileNotFoundError(
                     f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
                     f" collections: {collections}"
                 )
@@ -682,7 +686,22 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         inferDefaults: bool = True,
         **kwargs: Any,
     ) -> RemoteButler:
-        raise NotImplementedError()
+        return RemoteButler(
+            server_url=self._server_url,
+            http_client=self._client,
+            access_token=self._access_token,
+            cache=self._cache,
+            options=ButlerInstanceOptions(
+                collections=collections,
+                run=run,
+                writeable=self.isWriteable(),
+                inferDefaults=inferDefaults,
+                kwargs=kwargs,
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"RemoteButler({self._server_url})"
 
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
