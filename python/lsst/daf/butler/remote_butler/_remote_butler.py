@@ -700,6 +700,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             ),
         )
 
+    def __str__(self) -> str:
+        return f"RemoteButler({self._server_url})"
+
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
     """Return the DatasetType associated with the argument, or None if the

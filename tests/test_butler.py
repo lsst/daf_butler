@@ -2544,9 +2544,10 @@ class ButlerServerTests(ButlerTests, unittest.TestCase):
         return super().testPickle()
 
     def testStringification(self) -> None:
-        # RemoteButler does not have datastore/registry strings like
-        # DirectButler does.
-        pass
+        self.assertEqual(
+            str(self.server_instance.remote_butler),
+            "RemoteButler(https://test.example/api/butler/repo/testrepo)",
+        )
 
     def testTransaction(self) -> None:
         # Transactions will never be supported for RemoteButler.
