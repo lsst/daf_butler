@@ -46,6 +46,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from .._butler import Butler
 from .._butler_instance_options import ButlerInstanceOptions
+from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._storage_class import StorageClass
@@ -65,7 +66,6 @@ from .server_models import (
 )
 
 if TYPE_CHECKING:
-    from .._dataset_existence import DatasetExistence
     from .._deferredDatasetHandle import DeferredDatasetHandle
     from .._file_dataset import FileDataset
     from .._limited_butler import LimitedButler
@@ -429,8 +429,24 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         collections: Any = None,
         **kwargs: Any,
     ) -> DatasetExistence:
-        # Docstring inherited.
-        raise NotImplementedError()
+        try:
+            response = self._get_file_info(
+                dataset_ref_or_type, dataId=data_id, collections=collections, kwargs=kwargs
+            )
+            if full_check:
+                for file in response.file_info:
+                    if not ResourcePath(str(file.url)).exists():
+                        return DatasetExistence.RECORDED | DatasetExistence.DATASTORE
+                return DatasetExistence.VERIFIED
+            else:
+                return DatasetExistence.KNOWN
+        except FileNotFoundError:
+            return DatasetExistence.UNRECOGNIZED
+        except NoDefaultCollectionError:
+            # Although it seems like this exception is caused by user error and
+            # raising it would be helpful, DirectButler explicitly swallows it
+            # and the unit tests confirm this is the expected behavior.
+            return DatasetExistence.UNRECOGNIZED
 
     def _exists_many(
         self,
