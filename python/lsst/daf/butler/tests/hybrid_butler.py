@@ -99,7 +99,7 @@ class HybridButler(Butler):
         storageClass: str | StorageClass | None = None,
         **kwargs: Any,
     ) -> DeferredDatasetHandle:
-        return self._direct_butler.getDeferred(
+        return self._remote_butler.getDeferred(
             datasetRefOrType,
             dataId,
             parameters=parameters,

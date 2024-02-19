@@ -52,6 +52,7 @@ from .._butler_instance_options import ButlerInstanceOptions
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
+from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._storage_class import StorageClass
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
@@ -69,7 +70,6 @@ from .server_models import (
 )
 
 if TYPE_CHECKING:
-    from .._deferredDatasetHandle import DeferredDatasetHandle
     from .._file_dataset import FileDataset
     from .._limited_butler import LimitedButler
     from .._query import Query
@@ -236,8 +236,16 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         storageClass: str | StorageClass | None = None,
         **kwargs: Any,
     ) -> DeferredDatasetHandle:
-        # Docstring inherited.
-        raise NotImplementedError()
+        try:
+            response = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
+            # Check that artifact information is available.
+            _to_file_payload(response)
+        except FileNotFoundError as e:
+            # Inconsistent with the behavior of get(), DirectButler returns
+            # LookupError if a dataset cannot be found here.
+            raise LookupError(str(e)) from e
+        ref = DatasetRef.from_simple(response.dataset_ref, universe=self.dimensions)
+        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def get(
         self,
