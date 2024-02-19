@@ -1510,68 +1510,21 @@ class FileDatastoreButlerTests(ButlerTests):
             butler.registry.removeDatasetType(("test*", "test*"))
         self.assertIn("not defined", "\n".join(cm.output))
 
+    def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
+        """Simulate an external actor removing a file outside of Butler's
+        knowledge.
 
-class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
-    """PosixDatastore specialization of a butler"""
-
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    fullConfigKey: str | None = ".datastore.formatters"
-    validationCanFail = True
-    datastoreStr = ["/tmp"]
-    datastoreName = [f"FileDatastore@{BUTLER_ROOT_TAG}"]
-    registryStr = "/gen3.sqlite3"
-
-    def testPathConstructor(self) -> None:
-        """Independent test of constructor using PathLike."""
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
-        self.assertIsInstance(butler, Butler)
-
-        # And again with a Path object with the butler yaml
-        path = pathlib.Path(self.tmpConfigFile)
-        butler = Butler.from_config(path, writeable=False)
-        self.assertIsInstance(butler, Butler)
-
-        # And again with a Path object without the butler yaml
-        # (making sure we skip it if the tmp config doesn't end
-        # in butler.yaml -- which is the case for a subclass)
-        if self.tmpConfigFile.endswith("butler.yaml"):
-            path = pathlib.Path(os.path.dirname(self.tmpConfigFile))
-            butler = Butler.from_config(path, writeable=False)
-            self.assertIsInstance(butler, Butler)
-
-    def testExportTransferCopy(self) -> None:
-        """Test local export using all transfer modes"""
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        exportButler = self.runPutGetTest(storageClass, "test_metric")
-        # Test that the repo actually has at least one dataset.
-        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
-        self.assertGreater(len(datasets), 0)
-        uris = [exportButler.getURI(d) for d in datasets]
-        assert isinstance(exportButler._datastore, FileDatastore)
-        datastoreRoot = exportButler.get_datastore_roots()[exportButler.get_datastore_names()[0]]
-
-        pathsInStore = [uri.relative_to(datastoreRoot) for uri in uris]
-
-        for path in pathsInStore:
-            # Assume local file system
-            assert path is not None
-            self.assertTrue(self.checkFileExists(datastoreRoot, path), f"Checking path {path}")
-
-        for transfer in ("copy", "link", "symlink", "relsymlink"):
-            with safeTestTempDir(TESTDIR) as exportDir:
-                with exportButler.export(directory=exportDir, format="yaml", transfer=transfer) as export:
-                    export.saveDatasets(datasets)
-                    for path in pathsInStore:
-                        assert path is not None
-                        self.assertTrue(
-                            self.checkFileExists(exportDir, path),
-                            f"Check that mode {transfer} exported files",
-                        )
+        Subclasses may override to handle more complicated datastore
+        configurations.
+        """
+        uri = butler.getURI(ref)
+        uri.remove()
+        datastore = cast(FileDatastore, butler._datastore)
+        datastore.cacheManager.remove_from_cache(ref)
 
     def testPruneDatasets(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler.from_config(self.tmpConfigFile, writeable=True)
-        assert isinstance(butler._datastore, FileDatastore)
+        butler = self.create_empty_butler(writeable=True)
         # Load registry data with dimensions to hang datasets off of.
         registryDataDir = os.path.normpath(os.path.join(TESTDIR, "data", "registry"))
         butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
@@ -1659,8 +1612,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         butler.pruneDatasets([ref1], purge=False, unstore=True, disassociate=False)
 
         # File has been removed.
-        uri2 = butler.getURI(ref2)
-        uri2.remove()
+        self.remove_dataset_out_of_band(butler, ref2)
 
         # Datastore has lost track.
         butler._datastore.forget([ref3])
@@ -1761,6 +1713,64 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Clear out the datasets from registry.
         butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
+
+
+class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
+    """PosixDatastore specialization of a butler"""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    fullConfigKey: str | None = ".datastore.formatters"
+    validationCanFail = True
+    datastoreStr = ["/tmp"]
+    datastoreName = [f"FileDatastore@{BUTLER_ROOT_TAG}"]
+    registryStr = "/gen3.sqlite3"
+
+    def testPathConstructor(self) -> None:
+        """Independent test of constructor using PathLike."""
+        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        self.assertIsInstance(butler, Butler)
+
+        # And again with a Path object with the butler yaml
+        path = pathlib.Path(self.tmpConfigFile)
+        butler = Butler.from_config(path, writeable=False)
+        self.assertIsInstance(butler, Butler)
+
+        # And again with a Path object without the butler yaml
+        # (making sure we skip it if the tmp config doesn't end
+        # in butler.yaml -- which is the case for a subclass)
+        if self.tmpConfigFile.endswith("butler.yaml"):
+            path = pathlib.Path(os.path.dirname(self.tmpConfigFile))
+            butler = Butler.from_config(path, writeable=False)
+            self.assertIsInstance(butler, Butler)
+
+    def testExportTransferCopy(self) -> None:
+        """Test local export using all transfer modes"""
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        exportButler = self.runPutGetTest(storageClass, "test_metric")
+        # Test that the repo actually has at least one dataset.
+        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
+        self.assertGreater(len(datasets), 0)
+        uris = [exportButler.getURI(d) for d in datasets]
+        assert isinstance(exportButler._datastore, FileDatastore)
+        datastoreRoot = exportButler.get_datastore_roots()[exportButler.get_datastore_names()[0]]
+
+        pathsInStore = [uri.relative_to(datastoreRoot) for uri in uris]
+
+        for path in pathsInStore:
+            # Assume local file system
+            assert path is not None
+            self.assertTrue(self.checkFileExists(datastoreRoot, path), f"Checking path {path}")
+
+        for transfer in ("copy", "link", "symlink", "relsymlink"):
+            with safeTestTempDir(TESTDIR) as exportDir:
+                with exportButler.export(directory=exportDir, format="yaml", transfer=transfer) as export:
+                    export.saveDatasets(datasets)
+                    for path in pathsInStore:
+                        assert path is not None
+                        self.assertTrue(
+                            self.checkFileExists(exportDir, path),
+                            f"Check that mode {transfer} exported files",
+                        )
 
     def testPytypeCoercion(self) -> None:
         """Test python type coercion on Butler.get and put."""
@@ -1925,6 +1935,12 @@ class ChainedDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase
         "SecondDatastore",
     ]
     registryStr = "/gen3.sqlite3"
+
+    def testPruneDatasets(self) -> None:
+        # This test relies on manipulating files out-of-band, which is
+        # impossible for this configuration because of the InMemoryDatastore in
+        # the ChainedDatastore.
+        pass
 
 
 class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
@@ -2518,6 +2534,12 @@ class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
     def create_empty_butler(self, run: str | None = None, writeable: bool | None = None) -> Butler:
         return self.server_instance.hybrid_butler._clone(run=run)
 
+    def remove_dataset_out_of_band(self, butler: Butler, ref: DatasetRef) -> None:
+        # Can't delete a file via S3 signed URLs, so we need to reach in
+        # through DirectButler to delete the dataset.
+        uri = self.server_instance.direct_butler.getURI(ref)
+        uri.remove()
+
     def testConstructor(self):
         # RemoteButler constructor is tested in test_server.py and
         # test_remote_butler.py.
@@ -2556,6 +2578,11 @@ class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
     def testPutTemplates(self) -> None:
         # The Butler server instance is configured with different file naming
         # templates than this test is expecting.
+        pass
+
+    def testPruneDatasets(self) -> None:
+        # RemoteButler behavior of _exists_many is currently inconsistent with
+        # DirectButler.
         pass
 
 
