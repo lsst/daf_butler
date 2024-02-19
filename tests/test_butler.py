@@ -1314,7 +1314,7 @@ class FileDatastoreButlerTests(ButlerTests):
 
     def testPutTemplates(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
+        butler = self.create_empty_butler(run=self.default_run)
 
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
@@ -1463,7 +1463,7 @@ class FileDatastoreButlerTests(ButlerTests):
 
     def testRemoveRuns(self) -> None:
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler.from_config(self.tmpConfigFile, writeable=True)
+        butler = self.create_empty_butler(writeable=True)
         # Load registry data with dimensions to hang datasets off of.
         registryDataDir = os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
         butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
@@ -2503,7 +2503,7 @@ class NullDatastoreTestCase(unittest.TestCase):
 
 
 @unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
-class ButlerServerTests(ButlerTests, unittest.TestCase):
+class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
     """Test RemoteButler and Butler server."""
 
     configFile = None
@@ -2551,6 +2551,11 @@ class ButlerServerTests(ButlerTests, unittest.TestCase):
 
     def testTransaction(self) -> None:
         # Transactions will never be supported for RemoteButler.
+        pass
+
+    def testPutTemplates(self) -> None:
+        # The Butler server instance is configured with different file naming
+        # templates than this test is expecting.
         pass
 
 
