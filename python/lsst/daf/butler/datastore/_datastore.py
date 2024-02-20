@@ -602,7 +602,7 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def prepare_get_for_external_client(self, ref: DatasetRef) -> object:
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> object | None:
         """Retrieve serializable data that can be used to execute a ``get()``.
 
         Parameters
@@ -612,10 +612,11 @@ class Datastore(metaclass=ABCMeta):
 
         Returns
         -------
-        payload : `object`
+        payload : `object` | `None`
             Serializable payload containing the information needed to perform a
             get() operation.  This payload may be sent over the wire to another
-            system to perform the get().
+            system to perform the get().  Returns `None` if the dataset is not
+            known to this datastore.
         """
         raise NotImplementedError()
 

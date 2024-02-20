@@ -399,16 +399,20 @@ class ChainedDatastore(Datastore):
 
         raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
 
-    def prepare_get_for_external_client(self, ref: DatasetRef) -> object:
-        return self._get_matching_datastore(ref).prepare_get_for_external_client(ref)
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> object | None:
+        datastore = self._get_matching_datastore(ref)
+        if datastore is None:
+            return None
 
-    def _get_matching_datastore(self, ref: DatasetRef) -> Datastore:
+        return datastore.prepare_get_for_external_client(ref)
+
+    def _get_matching_datastore(self, ref: DatasetRef) -> Datastore | None:
         """Return the first child datastore that owns the specified dataset."""
         for datastore in self.datastores:
             if datastore.knows(ref):
                 return datastore
 
-        raise FileNotFoundError(f"Dataset {ref} could not be found in any of the datastores")
+        return None
 
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to each

@@ -40,7 +40,10 @@ from uuid import uuid4
 
 import httpx
 from lsst.daf.butler import __version__
-from lsst.daf.butler.datastores.fileDatastoreClient import get_dataset_as_python_object
+from lsst.daf.butler.datastores.fileDatastoreClient import (
+    FileDatastoreGetPayload,
+    get_dataset_as_python_object,
+)
 from lsst.resources import ResourcePath, ResourcePathExpression
 from pydantic import BaseModel, TypeAdapter
 
@@ -265,11 +268,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         if isinstance(datasetRefOrType, DatasetRef):
             componentOverride = datasetRefOrType.datasetType.component()
 
+        ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         return get_dataset_as_python_object(
-            model,
+            ref,
+            _to_file_payload(model),
             parameters=parameters,
             storageClass=storageClass,
-            universe=self.dimensions,
             component=componentOverride,
         )
 
@@ -321,7 +325,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             raise NotImplementedError("Predict mode is not supported by RemoteButler")
 
         response = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
-        file_info = response.file_info
+        file_info = _to_file_payload(response).file_info
         if len(file_info) == 1:
             return DatasetRefURIs(primaryURI=ResourcePath(str(file_info[0].url)))
         else:
@@ -433,8 +437,14 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             response = self._get_file_info(
                 dataset_ref_or_type, dataId=data_id, collections=collections, kwargs=kwargs
             )
+            if response.artifact is None:
+                if full_check:
+                    return DatasetExistence.RECORDED
+                else:
+                    return DatasetExistence.RECORDED | DatasetExistence._ASSUMED
+
             if full_check:
-                for file in response.file_info:
+                for file in response.artifact.file_info:
                     if not ResourcePath(str(file.url)).exists():
                         return DatasetExistence.RECORDED | DatasetExistence.DATASTORE
                 return DatasetExistence.VERIFIED
@@ -455,8 +465,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         *,
         full_check: bool = True,
     ) -> dict[DatasetRef, DatasetExistence]:
-        # Docstring inherited.
-        raise NotImplementedError()
+        return {ref: self.exists(ref, full_check=full_check) for ref in refs}
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
         # Docstring inherited.
@@ -730,6 +739,14 @@ def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> D
         return datasetRefOrType.datasetType
     else:
         return None
+
+
+def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:
+    if get_file_response.artifact is None:
+        ref = get_file_response.dataset_ref
+        raise FileNotFoundError(f"Dataset is known, but artifact is not available. (datasetId='{ref.id}')")
+
+    return get_file_response.artifact
 
 
 @dataclass

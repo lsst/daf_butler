@@ -1303,6 +1303,8 @@ class FileDatastoreButlerTests(ButlerTests):
     by datastores that inherit from FileDatastore.
     """
 
+    trustModeSupported = True
+
     def checkFileExists(self, root: str | ResourcePath, relpath: str | ResourcePath) -> bool:
         """Check if file exists at a given path (relative to root).
 
@@ -1644,75 +1646,80 @@ class FileDatastoreButlerTests(ButlerTests):
             dref2.get()
 
         # Test again with a trusting butler.
-        butler._datastore.trustGetRequest = True
-        exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
-        self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
-        self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
-        self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
-        self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED | DatasetExistence._ARTIFACT)
+        if self.trustModeSupported:
+            butler._datastore.trustGetRequest = True
+            exists_many = butler._exists_many([ref0, ref1, ref2, ref3], full_check=True)
+            self.assertEqual(exists_many[ref0], DatasetExistence.UNRECOGNIZED)
+            self.assertEqual(exists_many[ref1], DatasetExistence.RECORDED)
+            self.assertEqual(exists_many[ref2], DatasetExistence.RECORDED | DatasetExistence.DATASTORE)
+            self.assertEqual(exists_many[ref3], DatasetExistence.RECORDED | DatasetExistence._ARTIFACT)
 
-        # When trusting we can get a deferred dataset handle that is not
-        # known but does exist.
-        dref3 = butler.getDeferred(ref3)
-        metric3 = dref3.get()
-        self.assertEqual(metric3, metric)
+            # When trusting we can get a deferred dataset handle that is not
+            # known but does exist.
+            dref3 = butler.getDeferred(ref3)
+            metric3 = dref3.get()
+            self.assertEqual(metric3, metric)
 
-        # Check that per-ref query gives the same answer as many query.
-        for ref, exists in exists_many.items():
-            self.assertEqual(butler.exists(ref, full_check=True), exists)
+            # Check that per-ref query gives the same answer as many query.
+            for ref, exists in exists_many.items():
+                self.assertEqual(butler.exists(ref, full_check=True), exists)
 
-        # Create a ref that surprisingly has the UUID of an existing ref
-        # but is not the same.
-        ref_bad = DatasetRef(datasetType, dataId=ref3.dataId, run=ref3.run, id=ref2.id)
-        with self.assertRaises(ValueError):
-            butler.exists(ref_bad)
+            # Create a ref that surprisingly has the UUID of an existing ref
+            # but is not the same.
+            ref_bad = DatasetRef(datasetType, dataId=ref3.dataId, run=ref3.run, id=ref2.id)
+            with self.assertRaises(ValueError):
+                butler.exists(ref_bad)
 
-        # Create a ref that has a compatible storage class.
-        ref_compat = ref2.overrideStorageClass("StructuredDataDict")
-        exists = butler.exists(ref_compat)
-        self.assertEqual(exists, exists_many[ref2])
+            # Create a ref that has a compatible storage class.
+            ref_compat = ref2.overrideStorageClass("StructuredDataDict")
+            exists = butler.exists(ref_compat)
+            self.assertEqual(exists, exists_many[ref2])
 
-        # Remove everything and start from scratch.
-        butler._datastore.trustGetRequest = False
-        butler.pruneDatasets(refs, purge=True, unstore=True)
-        for ref in refs:
-            butler.put(metric, ref)
+            # Remove everything and start from scratch.
+            butler._datastore.trustGetRequest = False
+            butler.pruneDatasets(refs, purge=True, unstore=True)
+            for ref in refs:
+                butler.put(metric, ref)
 
-        # These tests mess directly with the trash table and can leave the
-        # datastore in an odd state. Do them at the end.
-        # Check that in normal mode, deleting the record will lead to
-        # trash not touching the file.
-        uri1 = butler.getURI(ref1)
-        butler._datastore.bridge.moveToTrash([ref1], transaction=None)  # Update the dataset_location table
-        butler._datastore.forget([ref1])
-        butler._datastore.trash(ref1)
-        butler._datastore.emptyTrash()
-        self.assertTrue(uri1.exists())
-        uri1.remove()  # Clean it up.
+            # These tests mess directly with the trash table and can leave the
+            # datastore in an odd state. Do them at the end.
+            # Check that in normal mode, deleting the record will lead to
+            # trash not touching the file.
+            uri1 = butler.getURI(ref1)
+            butler._datastore.bridge.moveToTrash(
+                [ref1], transaction=None
+            )  # Update the dataset_location table
+            butler._datastore.forget([ref1])
+            butler._datastore.trash(ref1)
+            butler._datastore.emptyTrash()
+            self.assertTrue(uri1.exists())
+            uri1.remove()  # Clean it up.
 
-        # Simulate execution butler setup by deleting the datastore
-        # record but keeping the file around and trusting.
-        butler._datastore.trustGetRequest = True
-        uris = butler.get_many_uris([ref2, ref3])
-        uri2 = uris[ref2].primaryURI
-        uri3 = uris[ref3].primaryURI
-        self.assertTrue(uri2.exists())
-        self.assertTrue(uri3.exists())
+            # Simulate execution butler setup by deleting the datastore
+            # record but keeping the file around and trusting.
+            butler._datastore.trustGetRequest = True
+            uris = butler.get_many_uris([ref2, ref3])
+            uri2 = uris[ref2].primaryURI
+            uri3 = uris[ref3].primaryURI
+            self.assertTrue(uri2.exists())
+            self.assertTrue(uri3.exists())
 
-        # Remove the datastore record.
-        butler._datastore.bridge.moveToTrash([ref2], transaction=None)  # Update the dataset_location table
-        butler._datastore.forget([ref2])
-        self.assertTrue(uri2.exists())
-        butler._datastore.trash([ref2, ref3])
-        # Immediate removal for ref2 file
-        self.assertFalse(uri2.exists())
-        # But ref3 has to wait for the empty.
-        self.assertTrue(uri3.exists())
-        butler._datastore.emptyTrash()
-        self.assertFalse(uri3.exists())
+            # Remove the datastore record.
+            butler._datastore.bridge.moveToTrash(
+                [ref2], transaction=None
+            )  # Update the dataset_location table
+            butler._datastore.forget([ref2])
+            self.assertTrue(uri2.exists())
+            butler._datastore.trash([ref2, ref3])
+            # Immediate removal for ref2 file
+            self.assertFalse(uri2.exists())
+            # But ref3 has to wait for the empty.
+            self.assertTrue(uri3.exists())
+            butler._datastore.emptyTrash()
+            self.assertFalse(uri3.exists())
 
-        # Clear out the datasets from registry.
-        butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
+            # Clear out the datasets from registry.
+            butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
 
 
 class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
@@ -2524,6 +2531,7 @@ class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
 
     configFile = None
     predictionSupported = False
+    trustModeSupported = False
 
     def setUp(self):
         self.server_instance = self.enterContext(create_test_server(TESTDIR))
@@ -2578,11 +2586,6 @@ class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
     def testPutTemplates(self) -> None:
         # The Butler server instance is configured with different file naming
         # templates than this test is expecting.
-        pass
-
-    def testPruneDatasets(self) -> None:
-        # RemoteButler behavior of _exists_many is currently inconsistent with
-        # DirectButler.
         pass
 
 
