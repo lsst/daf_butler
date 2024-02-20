@@ -437,26 +437,22 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             response = self._get_file_info(
                 dataset_ref_or_type, dataId=data_id, collections=collections, kwargs=kwargs
             )
-            if response.artifact is None:
-                if full_check:
-                    return DatasetExistence.RECORDED
-                else:
-                    return DatasetExistence.RECORDED | DatasetExistence._ASSUMED
-
-            if full_check:
-                for file in response.artifact.file_info:
-                    if not ResourcePath(str(file.url)).exists():
-                        return DatasetExistence.RECORDED | DatasetExistence.DATASTORE
-                return DatasetExistence.VERIFIED
-            else:
-                return DatasetExistence.KNOWN
         except FileNotFoundError:
             return DatasetExistence.UNRECOGNIZED
-        except NoDefaultCollectionError:
-            # Although it seems like this exception is caused by user error and
-            # raising it would be helpful, DirectButler explicitly swallows it
-            # and the unit tests confirm this is the expected behavior.
-            return DatasetExistence.UNRECOGNIZED
+
+        if response.artifact is None:
+            if full_check:
+                return DatasetExistence.RECORDED
+            else:
+                return DatasetExistence.RECORDED | DatasetExistence._ASSUMED
+
+        if full_check:
+            for file in response.artifact.file_info:
+                if not ResourcePath(str(file.url)).exists():
+                    return DatasetExistence.RECORDED | DatasetExistence.DATASTORE
+            return DatasetExistence.VERIFIED
+        else:
+            return DatasetExistence.KNOWN
 
     def _exists_many(
         self,

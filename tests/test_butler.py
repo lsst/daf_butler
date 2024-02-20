@@ -89,6 +89,7 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     FileDataset,
+    NoDefaultCollectionError,
     StorageClassFactory,
     ValidationError,
     script,
@@ -572,8 +573,9 @@ class ButlerPutGetTests(TestCaseMixin):
         # a deferred dataset handle.
         self.assertEqual(metric, butler.get(datasetType, dataId, collections=[run]))
         self.assertEqual(metric, butler.getDeferred(datasetType, dataId, collections=[run]).get())
-        # Trying to find the dataset without any collection is a TypeError.
-        self.assertFalse(butler.exists(datasetType, dataId))
+        # Trying to find the dataset without any collection is an error.
+        with self.assertRaises(NoDefaultCollectionError):
+            butler.exists(datasetType, dataId)
         with self.assertRaises(CollectionError):
             butler.get(datasetType, dataId)
         # Associate the dataset with a different collection.
