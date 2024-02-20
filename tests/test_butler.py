@@ -387,6 +387,13 @@ class ButlerPutGetTests(TestCaseMixin):
                                 with self.assertRaises(ValueError):
                                     butler.retrieveArtifacts([ref], destination, transfer="move")
 
+                                with self.assertRaisesRegex(
+                                    ValueError, "^Destination location must refer to a directory"
+                                ):
+                                    butler.retrieveArtifacts(
+                                        [ref], ResourcePath("/some/file.txt", forceDirectory=False)
+                                    )
+
                                 with self.assertRaises(FileExistsError):
                                     butler.retrieveArtifacts([ref], destination)
 

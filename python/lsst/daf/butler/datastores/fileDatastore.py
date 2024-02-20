@@ -78,6 +78,9 @@ from lsst.daf.butler.datastores.file_datastore.get import (
     generate_datastore_get_information,
     get_dataset_as_python_object_from_get_info,
 )
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
+    determine_destination_for_retrieved_artifact,
+)
 from lsst.daf.butler.datastores.fileDatastoreClient import (
     FileDatastoreGetPayload,
     FileDatastoreGetPayloadFileInfo,
@@ -1976,16 +1979,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             locations = self._get_dataset_locations_info(ref)
             for location, _ in locations:
                 source_uri = location.uri
-                target_path: ResourcePathExpression
-                if preserve_path:
-                    target_path = location.pathInStore
-                    if target_path.isabs():
-                        # This is an absolute path to an external file.
-                        # Use the full path.
-                        target_path = target_path.relativeToPathRoot
-                else:
-                    target_path = source_uri.basename()
-                target_uri = destination.join(target_path)
+                target_uri = determine_destination_for_retrieved_artifact(
+                    destination, location.pathInStore, preserve_path
+                )
                 to_transfer[source_uri] = target_uri
 
         # In theory can now parallelize the transfer
@@ -2055,22 +2051,13 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # URLs for people without access rights to download.
         url_expiration_time_seconds = 1 * 60 * 60
 
-        def to_file_info_payload(info: DatasetLocationInformation) -> FileDatastoreGetPayloadFileInfo:
-            location, file_info = info
-            return FileDatastoreGetPayloadFileInfo(
-                url=location.uri.generate_presigned_get_url(
-                    expiration_time_seconds=url_expiration_time_seconds
-                ),
-                datastoreRecords=file_info.to_simple(),
-            )
-
         locations = self._get_dataset_locations_info(ref)
         if len(locations) == 0:
             return None
 
         return FileDatastoreGetPayload(
             datastore_type="file",
-            file_info=[to_file_info_payload(info) for info in locations],
+            file_info=[_to_file_info_payload(info, url_expiration_time_seconds) for info in locations],
         )
 
     @transactional
@@ -2849,3 +2836,25 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     def get_opaque_table_definitions(self) -> Mapping[str, DatastoreOpaqueTable]:
         # Docstring inherited from the base class.
         return {self._opaque_table_name: DatastoreOpaqueTable(self.makeTableSpec(ddl.GUID), StoredFileInfo)}
+
+
+def _to_file_info_payload(
+    info: DatasetLocationInformation, url_expiration_time_seconds: int
+) -> FileDatastoreGetPayloadFileInfo:
+    location, file_info = info
+
+    # Make sure that we send only relative paths, to avoid leaking
+    # details of our configuration to the client.
+    path = location.pathInStore
+    if path.isabs():
+        relative_path = path.relativeToPathRoot
+    else:
+        relative_path = str(path)
+
+    datastoreRecords = file_info.to_simple()
+    datastoreRecords.path = relative_path
+
+    return FileDatastoreGetPayloadFileInfo(
+        url=location.uri.generate_presigned_get_url(expiration_time_seconds=url_expiration_time_seconds),
+        datastoreRecords=datastoreRecords,
+    )

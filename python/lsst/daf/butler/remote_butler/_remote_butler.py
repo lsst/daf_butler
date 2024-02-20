@@ -40,6 +40,9 @@ from uuid import uuid4
 
 import httpx
 from lsst.daf.butler import __version__
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
+    determine_destination_for_retrieved_artifact,
+)
 from lsst.daf.butler.datastores.fileDatastoreClient import (
     FileDatastoreGetPayload,
     get_dataset_as_python_object,
@@ -298,10 +301,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         if isinstance(datasetRefOrType, DatasetRef):
             if dataId is not None:
                 raise ValueError("DatasetRef given, cannot use dataId as well")
-            dataset_id = datasetRefOrType.id
-            response = self._get(f"get_file/{dataset_id}", expected_errors=(404,))
-            if response.status_code == 404:
-                raise FileNotFoundError(f"Dataset not found: {datasetRefOrType}")
+            return self._get_file_info_for_ref(datasetRefOrType)
         else:
             request = GetFileByDataIdRequestModel(
                 dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
@@ -314,7 +314,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                     f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
                     f" collections: {collections}"
                 )
+            return self._parse_model(response, GetFileResponseModel)
 
+    def _get_file_info_for_ref(self, ref: DatasetRef) -> GetFileResponseModel:
+        response = self._get(f"get_file/{ref.id}", expected_errors=(404,))
+        if response.status_code == 404:
+            raise FileNotFoundError(f"Dataset not found: {ref.id}")
         return self._parse_model(response, GetFileResponseModel)
 
     def getURIs(
@@ -428,8 +433,28 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         preserve_path: bool = True,
         overwrite: bool = False,
     ) -> list[ResourcePath]:
-        # Docstring inherited.
-        raise NotImplementedError()
+        destination = ResourcePath(destination).abspath()
+        if not destination.isdir():
+            raise ValueError(f"Destination location must refer to a directory. Given {destination}.")
+
+        if transfer not in ("auto", "copy"):
+            raise ValueError("Only 'copy' and 'auto' transfer modes are supported.")
+
+        output_uris: list[ResourcePath] = []
+        for ref in refs:
+            file_info = _to_file_payload(self._get_file_info_for_ref(ref)).file_info
+            for file in file_info:
+                source_uri = ResourcePath(str(file.url))
+                relative_path = ResourcePath(file.datastoreRecords.path, forceAbsolute=False)
+                target_uri = determine_destination_for_retrieved_artifact(
+                    destination, relative_path, preserve_path
+                )
+                # Because signed URLs expire, we want to do the transfer soon
+                # after retrieving the URL.
+                target_uri.transfer_from(source_uri, transfer="copy", overwrite=overwrite)
+                output_uris.append(target_uri)
+
+        return output_uris
 
     def exists(
         self,
