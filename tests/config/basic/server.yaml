@@ -15,6 +15,12 @@ datastore:
         name: FileDatastore@s3://immutable-bucket/dc2
         cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
         root: s3://immutable-bucket/dc2
+        cached:
+          # Server does not do anything that would use the file cache, but some
+          # unit tests reach in the back via DirectButler.  The presence of the
+          # cache alters some unit test results related to deleting files
+          # outside the Butler's knowledge.
+          default: false
     - datastore:
         name: FileDatastore@s3://mutable-bucket
         cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
@@ -23,4 +29,6 @@ datastore:
           table: user_datastore_records
         formatters: !include formatters.yaml
         composites: !include composites.yaml
+        cached:
+          default: false
 storageClasses: !include storageClasses.yaml

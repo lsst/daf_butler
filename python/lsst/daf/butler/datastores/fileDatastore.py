@@ -2042,7 +2042,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             allGetInfo, ref=ref, parameters=parameters, cache_manager=self.cacheManager
         )
 
-    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload:
+    def prepare_get_for_external_client(self, ref: DatasetRef) -> FileDatastoreGetPayload | None:
         # Docstring inherited
 
         # 1 hour.  Chosen somewhat arbitrarily -- this is long enough that the
@@ -2066,11 +2066,10 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         locations = self._get_dataset_locations_info(ref)
         if len(locations) == 0:
-            raise FileNotFoundError(f"No artifacts found for DatasetId '{ref.id}'")
+            return None
 
         return FileDatastoreGetPayload(
             datastore_type="file",
-            dataset_ref=ref.to_simple(),
             file_info=[to_file_info_payload(info) for info in locations],
         )
 

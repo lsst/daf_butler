@@ -191,4 +191,4 @@ def get_file_by_data_id(
 def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     """Return file information associated with ``ref``."""
     payload = butler._datastore.prepare_get_for_external_client(ref)
-    return GetFileResponseModel.model_validate(payload)
+    return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)

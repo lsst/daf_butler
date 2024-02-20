@@ -1092,10 +1092,9 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
         dimensions = self.universe.conform(("visit", "physical_filter"))
         dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V", "band": "v"}
         ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
-        with self.assertRaises(FileNotFoundError):
-            # Most of the coverage for this function is in test_server.py,
-            # because it requires a file backend that supports URL signing.
-            datastore.prepare_get_for_external_client(ref)
+        # Most of the coverage for this function is in test_server.py,
+        # because it requires a file backend that supports URL signing.
+        self.assertIsNone(datastore.prepare_get_for_external_client(ref))
 
 
 class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):

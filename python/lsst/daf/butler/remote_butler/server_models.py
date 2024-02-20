@@ -38,7 +38,7 @@ __all__ = [
 from typing import NewType
 
 import pydantic
-from lsst.daf.butler import SerializedDataId
+from lsst.daf.butler import SerializedDataId, SerializedDatasetRef
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
@@ -64,4 +64,17 @@ class GetFileByDataIdRequestModel(pydantic.BaseModel):
     collections: CollectionList
 
 
-GetFileResponseModel = FileDatastoreGetPayload
+class GetFileResponseModel(pydantic.BaseModel):
+    """Response model for get_file and get_file_by_data_id."""
+
+    dataset_ref: SerializedDatasetRef
+    artifact: FileDatastoreGetPayload | None
+    """The data needed to retrieve and use an artifact. If this is `None`, that
+    means this dataset is known to the Butler but the associated files are no
+    longer available ("known to registry but not known to datastore".)
+
+    An example of a situation where this would be `None` is a per-visit image
+    that is an intermediate file in the processing pipelines.  It is deleted to
+    save space, but the fact that it was once available must be recorded for
+    provenance tracking.
+    """

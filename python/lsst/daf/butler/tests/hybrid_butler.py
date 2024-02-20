@@ -219,7 +219,7 @@ class HybridButler(Butler):
         collections: Any = None,
         **kwargs: Any,
     ) -> DatasetExistence:
-        return self._direct_butler.exists(
+        return self._remote_butler.exists(
             dataset_ref_or_type, data_id, full_check=full_check, collections=collections, **kwargs
         )
 
@@ -230,7 +230,7 @@ class HybridButler(Butler):
         *,
         full_check: bool = True,
     ) -> dict[DatasetRef, DatasetExistence]:
-        return self._direct_butler._exists_many(refs, full_check=full_check)
+        return self._remote_butler._exists_many(refs, full_check=full_check)
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
         return self._direct_butler.removeRuns(names, unstore)

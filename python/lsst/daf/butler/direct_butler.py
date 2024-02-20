@@ -73,7 +73,6 @@ from .registry import (
     ConflictingDefinitionError,
     DataIdError,
     MissingDatasetTypeError,
-    NoDefaultCollectionError,
     RegistryDefaults,
     _RegistryFactory,
 )
@@ -1300,7 +1299,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         else:
             try:
                 ref = self._findDatasetRef(dataset_ref_or_type, data_id, collections=collections, **kwargs)
-            except (LookupError, TypeError, NoDefaultCollectionError):
+            except (LookupError, TypeError):
                 return existence
             existence |= DatasetExistence.RECORDED
 
