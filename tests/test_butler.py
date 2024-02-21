@@ -605,6 +605,13 @@ class ButlerTests(ButlerPutGetTests):
         Butler.makeRepo(self.root, config=Config(self.configFile))
         self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
 
+    def are_uris_equivalent(self, uri1: ResourcePath, uri2: ResourcePath) -> bool:
+        """Return True if two URIs refer to the same resource.
+
+        Subclasses may override to handle unique requirements.
+        """
+        return uri1 == uri2
+
     def testConstructor(self) -> None:
         """Independent test of constructor."""
         butler = Butler.from_config(self.tmpConfigFile, run=self.default_run)
@@ -952,7 +959,7 @@ class ButlerTests(ButlerPutGetTests):
         # Compare URIs
         uri1 = butler.getURI(datasetTypeName, dataId1)
         uri2 = butler.getURI(datasetTypeName, dataId2)
-        self.assertNotEqual(uri1, uri2)
+        self.assertFalse(self.are_uris_equivalent(uri1, uri2), f"Cf. {uri1} with {uri2}")
 
         # Now do a multi-dataset but single file ingest
         metricFile = os.path.join(dataRoot, "detectors.yaml")
@@ -1034,7 +1041,7 @@ class ButlerTests(ButlerPutGetTests):
         # Compare URIs
         uri1 = butler.getURI(datasetTypeName, dataId1)
         uri2 = butler.getURI(datasetTypeName, dataId2)
-        self.assertEqual(uri1, uri2, f"Cf. {uri1} with {uri2}")
+        self.assertTrue(self.are_uris_equivalent(uri1, uri2), f"Cf. {uri1} with {uri2}")
 
         # Test that removing one does not break the second
         # This line will issue a warning log message for a ChainedDatastore
@@ -2540,6 +2547,11 @@ class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
 
     def tearDown(self):
         pass
+
+    def are_uris_equivalent(self, uri1: ResourcePath, uri2: ResourcePath) -> bool:
+        # S3 pre-signed URLs may end up with differing expiration times in the
+        # query parameters, so ignore query parameters when comparing.
+        return uri1.scheme == uri2.scheme and uri1.netloc == uri2.netloc and uri1.path == uri2.path
 
     def create_empty_butler(self, run: str | None = None, writeable: bool | None = None) -> Butler:
         return self.server_instance.hybrid_butler._clone(run=run)
