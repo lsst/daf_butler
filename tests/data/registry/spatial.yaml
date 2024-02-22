@@ -1,7 +1,7 @@
 # Spatial test data; see spatial.py for more information.
 description: Butler Data Repository Export
 version: 1.0.2
-universe_version: 7
+universe_version: 6
 universe_namespace: daf_butler
 data:
 - type: dimension

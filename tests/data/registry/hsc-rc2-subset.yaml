@@ -1,6 +1,6 @@
 description: Butler Data Repository Export
 version: 1.0.2
-universe_version: 7
+universe_version: 6
 universe_namespace: daf_butler
 data:
 - type: dimension
@@ -11,7 +11,6 @@ data:
     visit_system: null
     exposure_max: 21474800
     detector_max: 200
-    day_obs_offset: 0
     class_name: lsst.obs.subaru.HyperSuprimeCam
 - type: dimension
   element: skymap

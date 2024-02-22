@@ -108,7 +108,6 @@ The default namespace has had the following version changes:
 3. Updated the length of the ``observation_reason`` field from 32 to 68 in ``exposure`` and ``visit``.
 4. Added "populated_by" information to visit fields to allow related dimensions to be discovered automatically.
 5. Changed the length of the ``instrument.name`` field from 16 to 32 characters.
-6. Added ``instrument.day_obs_offset`` metadata field to store the offset to be used when converting an observing day to a timespan.
-7. Made ``day_obs`` and ``group`` full dimensions.
+6. Made ``day_obs`` and ``group`` full dimensions.
 
 Prior to October 2020 there were no version numbers for the dimension universe.

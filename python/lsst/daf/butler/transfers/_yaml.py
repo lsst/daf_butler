@@ -227,6 +227,72 @@ class YamlRepoExportBackend(RepoExportBackend):
         )
 
 
+class _DayObsOffsetCalculator:
+    """Interface to allow the day_obs offset to be calculated from an
+    instrument class name and cached.
+    """
+
+    name_to_class_name: dict[str, str]
+    name_to_offset: dict[str, int | None]
+
+    def __init__(self) -> None:
+        self.name_to_class_name = {}
+        self.name_to_offset = {}
+
+    def __setitem__(self, name: str, class_name: str) -> None:
+        """Store the instrument class name.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the instrument.
+        class_name : `str`
+            Full name of the instrument class.
+        """
+        self.name_to_class_name[name] = class_name
+
+    def get_offset(self, name: str, date: astropy.time.Time) -> int | None:
+        """Return the offset to use when calculating day_obs.
+
+        Parameters
+        ----------
+        name : `str`
+            The instrument name.
+        date : `astropy.time.Time`
+            Time for which the offset is required.
+
+        Returns
+        -------
+        offset : `int`
+            The offset in seconds.
+        """
+        if name in self.name_to_offset:
+            return self.name_to_offset[name]
+
+        try:
+            instrument_class = doImportType(self.name_to_class_name[name])
+        except Exception:
+            # Any error at all, store None and do not try again.
+            self.name_to_offset[name] = None
+            return None
+
+        # Assume this is a `lsst.pipe.base.Instrument` and that it has
+        # a translatorClass property pointing to an
+        # astro_metadata_translator.MetadataTranslator class. If this is not
+        # true give up and store None.
+        try:
+            offset_delta = instrument_class.translatorClass.observing_date_to_offset(date)  # type: ignore
+        except Exception:
+            offset_delta = None
+
+        if offset_delta is None:
+            self.name_to_offset[name] = None
+            return None
+
+        self.name_to_offset[name] = round(offset_delta.to_value("s"))
+        return self.name_to_offset[name]
+
+
 class YamlRepoImportBackend(RepoImportBackend):
     """A repository import implementation that reads from a YAML file.
 
@@ -299,21 +365,11 @@ class YamlRepoImportBackend(RepoImportBackend):
         ):
             migrate_visit_seeing = True
 
-        # If this has instrument records that do not have the corresponding
-        # day_obs_offset in them the field needs to be added.
-        migrate_day_obs_offset = False
-        if (
-            universe_version < 6
-            and universe_namespace == "daf_butler"
-            and "day_obs_offset" in self.registry.dimensions["instrument"].metadata
-        ):
-            migrate_day_obs_offset = True
-
         # If this data exported before group was a first-class dimension,
         # we'll need to modify some exposure columns and add group records.
         migrate_group = False
         if (
-            universe_version < 7
+            universe_version < 6
             and universe_namespace == "daf_butler"
             and "exposure" in self.registry.dimensions
             and "group" in self.registry.dimensions["exposure"].implied
@@ -327,7 +383,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         migrate_exposure_day_obs = False
         migrate_visit_day_obs = False
         day_obs_ids: set[tuple[str, int]] = set()
-        if universe_version < 7 and universe_namespace == "daf_butler":
+        if universe_version < 6 and universe_namespace == "daf_butler":
             if (
                 "exposure" in self.registry.dimensions
                 and "day_obs" in self.registry.dimensions["exposure"].implied
@@ -349,14 +405,14 @@ class YamlRepoImportBackend(RepoImportBackend):
         ):
             migrate_add_visit_day_obs = True
 
-        # Some conversions may need the day_obs offset from the instrument
-        # records later on. Not all imports will be populating from scratch so
-        # read them from the registry if they already exist.
-        instrument_offsets: dict[str, int] = {}
-        if migrate_day_obs_offset or migrate_exposure_day_obs or migrate_visit_day_obs:
-            instrument_offsets = {
-                rec.name: rec.day_obs_offset for rec in self.registry.queryDimensionRecords("instrument")
-            }
+        # Some conversions may need to work out a day_obs timespan.
+        # The only way this offset can be found is by querying the instrument
+        # class. Read all the existing instrument classes indexed by name.
+        instrument_classes: dict[str, int] = {}
+        if migrate_exposure_day_obs or migrate_visit_day_obs or migrate_add_visit_day_obs:
+            day_obs_offset_calculator = _DayObsOffsetCalculator()
+            for rec in self.registry.queryDimensionRecords("instrument"):
+                day_obs_offset_calculator[rec.name] = rec.class_name
 
         datasetData = []
         RecordClass: type[DimensionRecord]
@@ -373,42 +429,11 @@ class YamlRepoImportBackend(RepoImportBackend):
                             record[key] = astropy.time.Time(record[key], scale="utc")
 
                 if data["element"] == "instrument":
-                    if migrate_day_obs_offset:
-                        element = self.registry.dimensions["instrument"]
-                        RecordClass = element.RecordClass
+                    if migrate_exposure_day_obs or migrate_visit_day_obs:
+                        # Might want the instrument class name for later.
                         for record in data["records"]:
-                            name = record["name"]
-                            if name in instrument_offsets:
-                                # The instrument is already present so use
-                                # the day_obs_offset from that record.
-                                record["day_obs_offset"] = instrument_offsets[name]
-                                continue
-
-                            # Try to ask the registered instrument class.
-                            try:
-                                instrument_class = doImportType(record["class_name"])
-                            except ImportError:
-                                record["day_obs_offset"] = 0
-                                _LOG.warning(
-                                    "Unable to determine day_obs_offset for instrument %s. "
-                                    "Failed to load instrument class %s to calculate it. "
-                                    "Using 0 sec offset.",
-                                    name,
-                                    record["class_name"],
-                                )
-                            else:
-                                if hasattr(instrument_class, "day_obs_offset"):
-                                    record["day_obs_offset"] = getattr(instrument_class, "day_obs_offset")
-                                else:
-                                    _LOG.warning(
-                                        "Unable to determine day_obs_offset for instrument %s. "
-                                        "Instrument class %s does not have day_obs_offset class property. "
-                                        "Using 0 sec offset.",
-                                        name,
-                                        record["class_name"],
-                                    )
-                                    record["day_obs_offset"] = 0
-                            instrument_offsets[name] = record["day_obs_offset"]
+                            if record["name"] not in instrument_classes:
+                                instrument_classes[record["name"]] = record["class_name"]
 
                 if data["element"] == "visit":
                     if migrate_visit_system:
@@ -432,10 +457,12 @@ class YamlRepoImportBackend(RepoImportBackend):
                         # The day_obs field is missing. It can be derived from
                         # the datetime_begin field.
                         for record in data["records"]:
-                            offset = astropy.time.TimeDelta(
-                                instrument_offsets[record["instrument"]], scale="tai", format="sec"
-                            )
-                            date = record["datetime_begin"].tai - offset
+                            date = record["datetime_begin"].tai
+                            offset = day_obs_offset_calculator.get_offset(record["instrument"], date)
+                            # This field is required so we have to calculate
+                            # it even if the offset is not defined.
+                            if offset:
+                                date = date - astropy.time.TimeDelta(offset, format="sec", scale="tai")
                             record["day_obs"] = int(date.strftime("%Y%m%d"))
                     if migrate_visit_day_obs:
                         # Poke the entry for this dimension to make sure it
@@ -544,9 +571,18 @@ class YamlRepoImportBackend(RepoImportBackend):
             RecordClass = element.RecordClass
             missing_offsets = set()
             for instrument, day_obs in day_obs_ids:
+                # To get the offset we need the astropy time. Since we are
+                # going from a day_obs to a time, it's possible that in some
+                # scenario the offset will be wrong.
+                ymd = str(day_obs)
+                t = astropy.time.Time(
+                    f"{ymd[0:4]}-{ymd[4:6]}-{ymd[6:8]}T00:00:00", format="isot", scale="tai"
+                )
+                offset = day_obs_offset_calculator.get_offset(instrument, t)
+
                 # This should always return an offset but as a fallback
                 # allow None here in case something has gone wrong above.
-                offset = instrument_offsets.get(instrument, None)
+                # In particular, not being able to load an instrument class.
                 if offset is not None:
                     timespan = Timespan.from_day_obs(day_obs, offset=offset)
                 else:
