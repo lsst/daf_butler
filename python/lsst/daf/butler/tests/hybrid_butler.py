@@ -207,7 +207,7 @@ class HybridButler(Butler):
         preserve_path: bool = True,
         overwrite: bool = False,
     ) -> list[ResourcePath]:
-        return self._direct_butler.retrieveArtifacts(refs, destination, transfer, preserve_path, overwrite)
+        return self._remote_butler.retrieveArtifacts(refs, destination, transfer, preserve_path, overwrite)
 
     def exists(
         self,

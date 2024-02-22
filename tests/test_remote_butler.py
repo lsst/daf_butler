@@ -29,6 +29,10 @@ import unittest
 from unittest.mock import patch
 
 from lsst.daf.butler import Butler
+from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
+    determine_destination_for_retrieved_artifact,
+)
+from lsst.resources import ResourcePath
 from pydantic import ValidationError
 
 try:
@@ -61,6 +65,32 @@ class RemoteButlerErrorHandlingTests(unittest.TestCase):
             mock.side_effect = httpx.HTTPError("unhandled error")
             with self.assertRaises(ButlerServerError):
                 butler.get_dataset_type("int")
+
+
+class RemoteButlerMiscTests(unittest.TestCase):
+    """Test miscellaneous RemoteButler functionality."""
+
+    def test_retrieve_artifacts_security(self):
+        # Make sure that the function used to determine output file paths for
+        # retrieveArtifacts throws if a malicious server tries to escape its
+        # destination directory.
+        with self.assertRaisesRegex(ValueError, "^File path attempts to escape destination directory"):
+            determine_destination_for_retrieved_artifact(
+                ResourcePath("output_directory/"),
+                ResourcePath("../something.txt", forceAbsolute=False),
+                preserve_path=True,
+            )
+
+        # Make sure all paths are forced to relative paths, even if the server
+        # sends an absolute path.
+        self.assertEqual(
+            determine_destination_for_retrieved_artifact(
+                ResourcePath("/tmp/output_directory/"),
+                ResourcePath("file:///not/relative.txt"),
+                preserve_path=True,
+            ),
+            ResourcePath("/tmp/output_directory/not/relative.txt"),
+        )
 
 
 if __name__ == "__main__":
