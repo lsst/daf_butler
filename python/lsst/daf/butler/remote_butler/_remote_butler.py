@@ -56,11 +56,11 @@ from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
-from .._storage_class import StorageClass
+from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
-from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, RegistryDefaults
+from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Registry, RegistryDefaults
 from ..registry.wildcards import CollectionWildcard
 from ._authentication import get_authentication_headers
 from .server_models import (
@@ -78,7 +78,7 @@ if TYPE_CHECKING:
     from .._query import Query
     from .._timespan import Timespan
     from ..dimensions import DataId, DimensionGroup, DimensionRecord
-    from ..registry import CollectionArgType, Registry
+    from ..registry import CollectionArgType
     from ..transfers import RepoExportContext
 
 
@@ -121,6 +121,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     _access_token: str
     _headers: dict[str, str]
     _cache: RemoteButlerCache
+    _registry: Registry
 
     # This is __new__ instead of __init__ because we have to support
     # instantiation via the legacy constructor Butler.__new__(), which
@@ -140,6 +141,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         cache: RemoteButlerCache,
     ) -> RemoteButler:
         self = cast(RemoteButler, super().__new__(cls))
+        self.storageClasses = StorageClassFactory()
 
         self._client = http_client
         self._server_url = server_url
@@ -156,6 +158,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         headers = {"user-agent": f"RemoteButler/{__version__}"}
 
         self._headers = auth_headers | headers
+
+        # Avoid a circular import by deferring this import.
+        from ._registry import RemoteButlerRegistry
+
+        self._registry = RemoteButlerRegistry(self)
 
         return self
 
@@ -572,8 +579,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     @property
     def registry(self) -> Registry:
-        # Docstring inherited.
-        raise NotImplementedError()
+        return self._registry
 
     def _query(self) -> AbstractContextManager[Query]:
         # Docstring inherited.

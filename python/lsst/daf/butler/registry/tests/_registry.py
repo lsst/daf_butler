@@ -76,6 +76,7 @@ from .._exceptions import (
     NoDefaultCollectionError,
     OrphanedRecordError,
 )
+from .._registry import Registry
 from ..interfaces import ButlerAttributeExistsError
 
 if TYPE_CHECKING:
@@ -122,19 +123,19 @@ class RegistryTests(ABC):
         return config
 
     @abstractmethod
-    def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry | None:
-        """Return the SqlRegistry instance to be tested.
+    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry | None:
+        """Return the Registry instance to be tested.
 
         Parameters
         ----------
-        share_repo_with : `SqlRegistry`, optional
+        share_repo_with : `Registry`, optional
             If provided, the new registry should point to the same data
             repository as this existing registry.
 
         Returns
         -------
-        registry : `SqlRegistry`
-            New `SqlRegistry` instance, or `None` *only* if `share_repo_with`
+        registry : `Registry`
+            New `Registry` instance, or `None` *only* if `share_repo_with`
             is not `None` and this test case does not support that argument
             (e.g. it is impossible with in-memory SQLite DBs).
         """
