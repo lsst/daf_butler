@@ -303,9 +303,9 @@ class _ToArrowUUID(ToArrow):
         # Docstring inherited.
         return UUIDArrowType()
 
-    def append(self, value: uuid.UUID, column: list[bytes]) -> None:
+    def append(self, value: uuid.UUID | None, column: list[bytes | None]) -> None:
         # Docstring inherited.
-        column.append(value.bytes)
+        column.append(value.bytes if value is not None else None)
 
     def finish(self, column: list[Any]) -> pa.Array:
         # Docstring inherited.
@@ -340,9 +340,9 @@ class _ToArrowRegion(ToArrow):
         # Docstring inherited.
         return RegionArrowType()
 
-    def append(self, value: Region, column: list[bytes]) -> None:
+    def append(self, value: Region | None, column: list[bytes | None]) -> None:
         # Docstring inherited.
-        column.append(value.encode())
+        column.append(value.encode() if value is not None else None)
 
     def finish(self, column: list[Any]) -> pa.Array:
         # Docstring inherited.
@@ -382,9 +382,11 @@ class _ToArrowTimespan(ToArrow):
         # Docstring inherited.
         return TimespanArrowType()
 
-    def append(self, value: Timespan, column: list[pa.StructScalar]) -> None:
+    def append(self, value: Timespan | None, column: list[pa.StructScalar | None]) -> None:
         # Docstring inherited.
-        column.append({"begin_nsec": value._nsec[0], "end_nsec": value._nsec[1]})
+        column.append(
+            {"begin_nsec": value._nsec[0], "end_nsec": value._nsec[1]} if value is not None else None
+        )
 
     def finish(self, column: list[Any]) -> pa.Array:
         # Docstring inherited.
@@ -419,9 +421,9 @@ class _ToArrowDateTime(ToArrow):
         # Docstring inherited.
         return DateTimeArrowType()
 
-    def append(self, value: astropy.time.Time, column: list[int]) -> None:
+    def append(self, value: astropy.time.Time | None, column: list[int | None]) -> None:
         # Docstring inherited.
-        column.append(TimeConverter().astropy_to_nsec(value))
+        column.append(TimeConverter().astropy_to_nsec(value) if value is not None else None)
 
     def finish(self, column: list[Any]) -> pa.Array:
         # Docstring inherited.
