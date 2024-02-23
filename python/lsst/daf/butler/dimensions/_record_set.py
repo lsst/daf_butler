@@ -177,6 +177,13 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             and self._by_required_values.keys() == other._by_required_values.keys()
         )
 
+    def __repr__(self) -> str:
+        lines = [f"DimensionRecordSet({self.element.name}, {{"]
+        for record in self:
+            lines.append(f"    {record!r},")
+        lines.append("})")
+        return "\n".join(lines)
+
     def issubset(self, other: DimensionRecordSet) -> bool:
         """Test whether all elements in ``self`` are in ``other``.
 
