@@ -44,6 +44,8 @@ from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPaylo
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
 
 CollectionList = NewType("CollectionList", list[str])
+"""A list of search patterns for collection names.  May use glob
+syntax to specify wildcards."""
 DatasetTypeName = NewType("DatasetTypeName", str)
 
 
