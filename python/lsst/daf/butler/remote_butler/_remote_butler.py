@@ -405,12 +405,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     ) -> DatasetRef | None:
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
-        if timespan:
-            raise ValueError("Timespan can not yet be used in butler client/server.")
 
         query = FindDatasetRequestModel(
             data_id=self._simplify_dataId(data_id, kwargs),
             collections=self._normalize_collections(collections),
+            timespan=timespan.to_simple() if timespan is not None else None,
             dimension_records=dimension_records,
             datastore_records=datastore_records,
         )

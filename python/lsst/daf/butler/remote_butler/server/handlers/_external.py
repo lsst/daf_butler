@@ -31,7 +31,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, SerializedDatasetType
+from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, SerializedDatasetType, Timespan
 from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetRequestModel,
     FindDatasetResponseModel,
@@ -133,11 +133,12 @@ def find_dataset(
     factory: Factory = Depends(factory_dependency),
 ) -> FindDatasetResponseModel:
     butler = factory.create_butler()
+    timespan = Timespan.from_simple(query.timespan) if query.timespan is not None else None
     ref = butler.find_dataset(
         dataset_type,
         query.data_id,
         collections=query.collections,
-        timespan=None,
+        timespan=timespan,
         dimension_records=query.dimension_records,
         datastore_records=query.datastore_records,
     )

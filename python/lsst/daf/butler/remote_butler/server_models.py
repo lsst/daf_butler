@@ -39,7 +39,7 @@ __all__ = [
 from typing import NewType
 
 import pydantic
-from lsst.daf.butler import SerializedDataId, SerializedDatasetRef
+from lsst.daf.butler import SerializedDataId, SerializedDatasetRef, SerializedTimespan
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
@@ -55,6 +55,7 @@ class FindDatasetRequestModel(pydantic.BaseModel):
 
     data_id: SerializedDataId
     collections: CollectionList
+    timespan: SerializedTimespan | None
     dimension_records: bool = False
     datastore_records: bool = False
 
