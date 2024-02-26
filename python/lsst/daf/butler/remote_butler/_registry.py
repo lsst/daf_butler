@@ -47,9 +47,17 @@ from ..dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from ..registry import CollectionArgType, CollectionSummary, CollectionType, Registry, RegistryDefaults
+from ..registry import (
+    CollectionArgType,
+    CollectionSummary,
+    CollectionType,
+    DatasetTypeError,
+    Registry,
+    RegistryDefaults,
+)
 from ..registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from ..remote_butler import RemoteButler
+from ._collection_args import convert_collection_arg_to_glob_string_list
 
 
 class RemoteButlerRegistry(Registry):
@@ -146,10 +154,29 @@ class RemoteButlerRegistry(Registry):
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
-        # There is an implementation of find_dataset on RemoteButler, but the
-        # definition of the collections parameter is incompatible and timespans
-        # aren't supported yet.
-        raise NotImplementedError()
+        # Components are supported by Butler.find_dataset, but are required to
+        # raise an exception in registry.findDataset (see
+        # RegistryTests.testComponentLookups).  Apparently the registry version
+        # used to support components, but at some point a decision was made to
+        # draw a hard architectural boundary between registry and datastore so
+        # that registry is no longer allowed to know about components.
+        if _is_component_dataset_type(datasetType):
+            raise DatasetTypeError(
+                "Component dataset types are not supported;"
+                " use DatasetRef or DatasetType methods to obtain components from parents instead."
+            )
+
+        if collections is not None:
+            collections = convert_collection_arg_to_glob_string_list(collections)
+
+        return self._butler.find_dataset(
+            datasetType,
+            dataId,
+            collections=collections,
+            timespan=timespan,
+            datastore_records=datastore_records,
+            **kwargs,
+        )
 
     def insertDatasets(
         self,
@@ -310,3 +337,14 @@ class RemoteButlerRegistry(Registry):
     @storageClasses.setter
     def storageClasses(self, value: StorageClassFactory) -> None:
         raise NotImplementedError()
+
+
+def _is_component_dataset_type(dataset_type: DatasetType | str) -> bool:
+    """Return true if the given dataset type refers to a component."""
+    if isinstance(dataset_type, DatasetType):
+        return dataset_type.component() is not None
+    elif isinstance(dataset_type, str):
+        parent, component = DatasetType.splitDatasetTypeName(dataset_type)
+        return component is not None
+    else:
+        raise TypeError(f"Expected DatasetType or str, got {dataset_type!r}")

@@ -36,6 +36,25 @@ from .server_models import CollectionList
 
 
 def convert_collection_arg_to_glob_string_list(arg: CollectionArgType) -> CollectionList:
+    """Convert the collections argument used by many Butler/registry methods to
+    a format suitable for sending to Butler server.
+
+    Parameters
+    ----------
+    arg : `CollectionArgType`
+        Collection search pattern in many possible formats.
+
+    Returns
+    -------
+    glob_list : `CollectionList`
+        Collection search patterns normalized to a list of globs string.
+
+    Raises
+    ------
+    TypeError
+        If the search pattern provided by the user cannot be converted to a
+        glob string.
+    """
     if arg is ...:
         return CollectionList(["*"])
     elif isinstance(arg, str):
