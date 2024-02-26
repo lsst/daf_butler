@@ -152,6 +152,19 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             if element.spatial is not None:
                 spatial.setdefault(element.spatial, []).append(element)
                 overlap_tables[element.name] = cls._make_skypix_overlap_tables(context, element)
+            for field_name in spec.fields.names:
+                if (
+                    len(qt.ColumnSet.get_qualified_name(element.name, field_name))
+                    >= db.dialect.max_identifier_length
+                ):
+                    # Being able to assume that all dimension fields fit inside
+                    # the DB's identifier limit is really convenient and very
+                    # unlikely to cause trouble in practice.  We'll just make
+                    # sure we catch any such trouble as early as possible.
+                    raise RuntimeError(
+                        f"Dimension filed '{element.name}.{field_name}' is too long for this database. "
+                        "Please file a ticket for long-field support if this was not a mistake."
+                    )
         # Add some tables for materialized overlaps between database
         # dimensions.  We've never used these and no longer plan to, but we
         # have to keep creating them to keep schema versioning consistent.
