@@ -31,7 +31,8 @@ __all__ = [
     "CLIENT_REQUEST_ID_HEADER_NAME",
     "CollectionList",
     "DatasetTypeName",
-    "FindDatasetModel",
+    "FindDatasetRequestModel",
+    "FindDatasetResponseModel",
     "GetFileResponseModel",
 ]
 
@@ -49,13 +50,19 @@ syntax to specify wildcards."""
 DatasetTypeName = NewType("DatasetTypeName", str)
 
 
-class FindDatasetModel(pydantic.BaseModel):
+class FindDatasetRequestModel(pydantic.BaseModel):
     """Request model for find_dataset."""
 
     data_id: SerializedDataId
     collections: CollectionList
     dimension_records: bool = False
     datastore_records: bool = False
+
+
+class FindDatasetResponseModel(pydantic.BaseModel):
+    """Response model for find_dataset."""
+
+    dataset_ref: SerializedDatasetRef | None
 
 
 class GetFileByDataIdRequestModel(pydantic.BaseModel):

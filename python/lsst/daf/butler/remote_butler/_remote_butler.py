@@ -73,7 +73,8 @@ from .server_models import (
     CLIENT_REQUEST_ID_HEADER_NAME,
     CollectionList,
     DatasetTypeName,
-    FindDatasetModel,
+    FindDatasetRequestModel,
+    FindDatasetResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
@@ -417,7 +418,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
         dataset_type = self._normalize_dataset_type_name(dataset_type)
 
-        query = FindDatasetModel(
+        query = FindDatasetRequestModel(
             data_id=self._simplify_dataId(data_id, kwargs),
             collections=self._normalize_collections(collections),
             dimension_records=dimension_records,
@@ -427,9 +428,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         path = f"find_dataset/{dataset_type}"
         response = self._post(path, query)
 
-        ref = DatasetRef.from_simple(
-            self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
-        )
+        model = self._parse_model(response, FindDatasetResponseModel)
+        if model.dataset_ref is None:
+            return None
+
+        ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         if storage_class is not None:
             ref = ref.overrideStorageClass(storage_class)
         return ref
