@@ -26,16 +26,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("Timespan",)
+__all__ = (
+    "SerializedTimespan",
+    "Timespan",
+)
 
 import enum
 import warnings
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Any, ClassVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Union
 
 import astropy.time
 import astropy.utils.exceptions
 import yaml
+from pydantic import Field
 
 # As of astropy 4.2, the erfa interface is shipped independently and
 # ErfaWarning is no longer an AstropyWarning
@@ -68,6 +72,11 @@ class _SpecialTimespanBound(enum.Enum):
 
 
 TimespanBound = Union[astropy.time.Time, _SpecialTimespanBound, None]
+
+SerializedTimespan = Annotated[list[int], Field(min_length=2, max_length=2)]
+"""JSON-serializable representation of the Timespan class, as a list of two
+integers ``[begin, end]`` in nanoseconds since the epoch.
+"""
 
 
 class Timespan:
@@ -483,7 +492,7 @@ class Timespan:
             if intersection._nsec[1] < self._nsec[1]:
                 yield Timespan(None, None, _nsec=(intersection._nsec[1], self._nsec[1]))
 
-    def to_simple(self, minimal: bool = False) -> list[int]:
+    def to_simple(self, minimal: bool = False) -> SerializedTimespan:
         """Return simple python type form suitable for serialization.
 
         Parameters
@@ -502,7 +511,7 @@ class Timespan:
     @classmethod
     def from_simple(
         cls,
-        simple: list[int] | None,
+        simple: SerializedTimespan | None,
         universe: DimensionUniverse | None = None,
         registry: Registry | None = None,
     ) -> Timespan | None:
