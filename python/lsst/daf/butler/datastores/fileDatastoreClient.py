@@ -3,7 +3,7 @@ __all__ = ("get_dataset_as_python_object", "FileDatastoreGetPayload")
 from typing import Any, Literal
 
 import pydantic
-from lsst.daf.butler import DatasetRef, Location, StorageClass
+from lsst.daf.butler import DatasetRef, Location
 from lsst.daf.butler.datastore.cache_manager import DatastoreDisabledCacheManager
 from lsst.daf.butler.datastore.stored_file_info import SerializedStoredFileInfo, StoredFileInfo
 from lsst.daf.butler.datastores.file_datastore.get import (
@@ -47,8 +47,6 @@ def get_dataset_as_python_object(
     payload: FileDatastoreGetPayload,
     *,
     parameters: Mapping[str, Any] | None,
-    storageClass: StorageClass | str | None,
-    component: str | None,
 ) -> Any:
     """Retrieve an artifact from storage and return it as a Python object.
 
@@ -62,12 +60,6 @@ def get_dataset_as_python_object(
     parameters : `Mapping`[`str`, `typing.Any`]
         `StorageClass` and `Formatter` parameters to be used when converting
         the artifact to a Python object.
-    storageClass : `StorageClass` | `str` | `None`
-        Overrides the `StorageClass` to be used when converting the artifact to
-        a Python object.  If `None`, uses the `StorageClass` specified by
-        ``payload``.
-    component : `str` | `None`
-        Selects which component of the artifact to retrieve.
 
     Returns
     -------
@@ -78,14 +70,6 @@ def get_dataset_as_python_object(
         (Location(None, str(file_info.url)), StoredFileInfo.from_simple(file_info.datastoreRecords))
         for file_info in payload.file_info
     ]
-
-    # If we have both a component override and a storage class override, the
-    # component override has to be applied first.  DatasetRef cares because it
-    # is checking compatibility of the storage class with its DatasetType.
-    if component is not None:
-        ref = ref.makeComponentRef(component)
-    if storageClass is not None:
-        ref = ref.overrideStorageClass(storageClass)
 
     datastore_file_info = generate_datastore_get_information(
         fileLocations,
