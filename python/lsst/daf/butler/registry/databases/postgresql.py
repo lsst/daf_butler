@@ -44,9 +44,9 @@ from sqlalchemy import sql
 
 from ..._named import NamedValueAbstractSet
 from ..._timespan import Timespan
+from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ..interfaces import Database
-from ..nameShrinker import NameShrinker
 
 _SERVER_VERSION_REGEX = re.compile(r"(?P<major>\d+)\.(?P<minor>\d+)")
 
