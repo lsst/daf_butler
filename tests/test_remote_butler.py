@@ -25,13 +25,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import unittest
 from unittest.mock import patch
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, Registry
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
 )
+from lsst.daf.butler.registry.tests import RegistryTests
 from lsst.resources import ResourcePath
 from pydantic import ValidationError
 
@@ -42,6 +44,13 @@ except ImportError:
     # httpx is not available in rubin-env yet, so skip these tests if it's not
     # available
     RemoteButler = None
+
+try:
+    from lsst.daf.butler.tests.server import create_test_server
+except ImportError:
+    create_test_server = None
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 @unittest.skipIf(RemoteButler is None, "httpx is not installed")
@@ -91,6 +100,41 @@ class RemoteButlerMiscTests(unittest.TestCase):
             ),
             ResourcePath("/tmp/output_directory/not/relative.txt"),
         )
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
+    """Tests for RemoteButler's `Registry` shim."""
+
+    def setUp(self):
+        self.server_instance = self.enterContext(create_test_server(TESTDIR))
+
+    @classmethod
+    def getDataDir(cls) -> str:
+        return os.path.join(TESTDIR, "data", "registry")
+
+    def makeRegistry(self, share_repo_with: Registry | None = None) -> Registry:
+        if share_repo_with is None:
+            return self.server_instance.hybrid_butler.registry
+        else:
+            return self.server_instance.hybrid_butler._clone().registry
+
+    def testBasicTransaction(self):
+        # RemoteButler will never support transactions.
+        pass
+
+    def testNestedTransaction(self):
+        # RemoteButler will never support transactions.
+        pass
+
+    def testOpaque(self):
+        # This tests an internal implementation detail that isn't exposed to
+        # the client side.
+        pass
+
+    def testAttributeManager(self):
+        # Tests a non-public API that isn't relevant on the client side.
+        pass
 
 
 if __name__ == "__main__":

@@ -45,9 +45,11 @@ from .._storage_class import StorageClass
 from .._timespan import Timespan
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataId, DimensionGroup, DimensionRecord, DimensionUniverse
+from ..direct_butler import DirectButler
 from ..registry import CollectionArgType, Registry
 from ..remote_butler import RemoteButler
 from ..transfers import RepoExportContext
+from .hybrid_butler_registry import HybridButlerRegistry
 
 
 class HybridButler(Butler):
@@ -58,13 +60,15 @@ class HybridButler(Butler):
     """
 
     _remote_butler: RemoteButler
-    _direct_butler: Butler
+    _direct_butler: DirectButler
+    _registry: Registry
 
-    def __new__(cls, remote_butler: RemoteButler, direct_butler: Butler) -> HybridButler:
+    def __new__(cls, remote_butler: RemoteButler, direct_butler: DirectButler) -> HybridButler:
         self = cast(HybridButler, super().__new__(cls))
         self._remote_butler = remote_butler
         self._direct_butler = direct_butler
         self._datastore = direct_butler._datastore
+        self._registry = HybridButlerRegistry(direct_butler._registry, remote_butler.registry)
         return self
 
     def isWriteable(self) -> bool:
@@ -317,7 +321,7 @@ class HybridButler(Butler):
 
     @property
     def registry(self) -> Registry:
-        return self._direct_butler.registry
+        return self._registry
 
     def _query(self) -> AbstractContextManager[Query]:
         return self._direct_butler._query()

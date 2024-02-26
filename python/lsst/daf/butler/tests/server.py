@@ -11,6 +11,7 @@ from lsst.daf.butler.remote_butler.server import create_app
 from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
 from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
 
+from ..direct_butler import DirectButler
 from .hybrid_butler import HybridButler
 from .server_utils import add_auth_header_check_middleware
 
@@ -103,6 +104,7 @@ def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
                 )
 
                 direct_butler = Butler.from_config(config_file_path, writeable=True)
+                assert isinstance(direct_butler, DirectButler)
                 hybrid_butler = HybridButler(remote_butler, direct_butler)
 
                 yield TestServerInstance(
