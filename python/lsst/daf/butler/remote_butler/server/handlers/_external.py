@@ -122,7 +122,6 @@ def get_dataset(
     return ref
 
 
-# Not yet supported: TimeSpan is not yet a pydantic model.
 @external_router.post(
     "/v1/find_dataset/{dataset_type}",
     summary="Retrieve this dataset definition from collection, dataset type, and dataId",
