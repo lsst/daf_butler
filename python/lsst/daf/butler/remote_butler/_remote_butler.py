@@ -60,9 +60,15 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
-from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Registry, RegistryDefaults
-from ..registry.wildcards import CollectionWildcard
+from ..registry import (
+    CollectionArgType,
+    MissingDatasetTypeError,
+    NoDefaultCollectionError,
+    Registry,
+    RegistryDefaults,
+)
 from ._authentication import get_authentication_headers
+from ._collection_args import convert_collection_arg_to_glob_string_list
 from .server_models import (
     CLIENT_REQUEST_ID_HEADER_NAME,
     CollectionList,
@@ -78,15 +84,11 @@ if TYPE_CHECKING:
     from .._query import Query
     from .._timespan import Timespan
     from ..dimensions import DataId, DimensionGroup, DimensionRecord
-    from ..registry import CollectionArgType
     from ..transfers import RepoExportContext
 
 
 _AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=BaseModel)
 """Generic type variable that accepts any Pydantic model class."""
-_InputCollectionList = str | Sequence[str] | None
-"""The possible types of the ``collections`` parameter of most Butler methods.
-"""
 
 _SERIALIZED_DATA_ID_TYPE_ADAPTER = TypeAdapter(SerializedDataId)
 
@@ -299,7 +301,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self,
         datasetRefOrType: DatasetRef | DatasetType | str,
         dataId: DataId | None,
-        collections: _InputCollectionList,
+        collections: CollectionArgType,
         kwargs: dict[str, DataIdValue],
     ) -> GetFileResponseModel:
         """Send a request to the server for the file URLs and metadata
@@ -713,7 +715,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         """Deserialize a Pydantic model from the body of an HTTP response."""
         return model.model_validate_json(response.content)
 
-    def _normalize_collections(self, collections: _InputCollectionList) -> CollectionList:
+    def _normalize_collections(self, collections: CollectionArgType | None) -> CollectionList:
         """Convert the ``collections`` parameter in the format used by Butler
         methods to a standardized format for the REST API.
         """
@@ -723,11 +725,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                     "No collections provided, and no defaults from butler construction."
                 )
             collections = self.collections
-        # Temporary hack. Assume strings for collections. In future
-        # want to construct CollectionWildcard and filter it through collection
-        # cache to generate list of collection names.
-        wildcards = CollectionWildcard.from_expression(collections)
-        return CollectionList(list(wildcards.strings))
+        return convert_collection_arg_to_glob_string_list(collections)
 
     def _normalize_dataset_type_name(self, datasetTypeOrName: DatasetType | str) -> DatasetTypeName:
         """Convert DatasetType parameters in the format used by Butler methods
