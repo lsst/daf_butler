@@ -31,9 +31,10 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, SerializedDatasetType
+from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, SerializedDatasetType, Timespan
 from lsst.daf.butler.remote_butler.server_models import (
-    FindDatasetModel,
+    FindDatasetRequestModel,
+    FindDatasetResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
@@ -121,33 +122,27 @@ def get_dataset(
     return ref
 
 
-# Not yet supported: TimeSpan is not yet a pydantic model.
-# collections parameter assumes client-side has resolved regexes.
 @external_router.post(
     "/v1/find_dataset/{dataset_type}",
     summary="Retrieve this dataset definition from collection, dataset type, and dataId",
-    response_model=SerializedDatasetRef,
-    response_model_exclude_unset=True,
-    response_model_exclude_defaults=True,
-    response_model_exclude_none=True,
 )
 def find_dataset(
     dataset_type: str,
-    query: FindDatasetModel,
+    query: FindDatasetRequestModel,
     factory: Factory = Depends(factory_dependency),
-) -> SerializedDatasetRef | None:
-    collection_query = query.collections if query.collections else None
-
+) -> FindDatasetResponseModel:
     butler = factory.create_butler()
+    timespan = Timespan.from_simple(query.timespan) if query.timespan is not None else None
     ref = butler.find_dataset(
         dataset_type,
         query.data_id,
-        collections=collection_query,
-        timespan=None,
+        collections=query.collections,
+        timespan=timespan,
         dimension_records=query.dimension_records,
         datastore_records=query.datastore_records,
     )
-    return ref.to_simple() if ref else None
+    serialized_ref = ref.to_simple() if ref else None
+    return FindDatasetResponseModel(dataset_ref=serialized_ref)
 
 
 @external_router.get(

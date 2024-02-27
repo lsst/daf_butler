@@ -31,29 +31,39 @@ __all__ = [
     "CLIENT_REQUEST_ID_HEADER_NAME",
     "CollectionList",
     "DatasetTypeName",
-    "FindDatasetModel",
+    "FindDatasetRequestModel",
+    "FindDatasetResponseModel",
     "GetFileResponseModel",
 ]
 
 from typing import NewType
 
 import pydantic
-from lsst.daf.butler import SerializedDataId, SerializedDatasetRef
+from lsst.daf.butler import SerializedDataId, SerializedDatasetRef, SerializedTimespan
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
 
 CollectionList = NewType("CollectionList", list[str])
+"""A list of search patterns for collection names.  May use glob
+syntax to specify wildcards."""
 DatasetTypeName = NewType("DatasetTypeName", str)
 
 
-class FindDatasetModel(pydantic.BaseModel):
+class FindDatasetRequestModel(pydantic.BaseModel):
     """Request model for find_dataset."""
 
     data_id: SerializedDataId
     collections: CollectionList
+    timespan: SerializedTimespan | None
     dimension_records: bool = False
     datastore_records: bool = False
+
+
+class FindDatasetResponseModel(pydantic.BaseModel):
+    """Response model for find_dataset."""
+
+    dataset_ref: SerializedDatasetRef | None
 
 
 class GetFileByDataIdRequestModel(pydantic.BaseModel):

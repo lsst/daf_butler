@@ -153,7 +153,7 @@ class HybridButlerRegistry(Registry):
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
-        return self._direct.findDataset(
+        return self._remote.findDataset(
             datasetType,
             dataId,
             collections=collections,

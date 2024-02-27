@@ -60,14 +60,21 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
-from ..registry import MissingDatasetTypeError, NoDefaultCollectionError, Registry, RegistryDefaults
-from ..registry.wildcards import CollectionWildcard
+from ..registry import (
+    CollectionArgType,
+    MissingDatasetTypeError,
+    NoDefaultCollectionError,
+    Registry,
+    RegistryDefaults,
+)
 from ._authentication import get_authentication_headers
+from ._collection_args import convert_collection_arg_to_glob_string_list
 from .server_models import (
     CLIENT_REQUEST_ID_HEADER_NAME,
     CollectionList,
     DatasetTypeName,
-    FindDatasetModel,
+    FindDatasetRequestModel,
+    FindDatasetResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
@@ -78,15 +85,11 @@ if TYPE_CHECKING:
     from .._query import Query
     from .._timespan import Timespan
     from ..dimensions import DataId, DimensionGroup, DimensionRecord
-    from ..registry import CollectionArgType
     from ..transfers import RepoExportContext
 
 
 _AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=BaseModel)
 """Generic type variable that accepts any Pydantic model class."""
-_InputCollectionList = str | Sequence[str] | None
-"""The possible types of the ``collections`` parameter of most Butler methods.
-"""
 
 _SERIALIZED_DATA_ID_TYPE_ADAPTER = TypeAdapter(SerializedDataId)
 
@@ -271,35 +274,27 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         model = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
 
-        # If the caller provided a DatasetRef or DatasetType, they may have
-        # overridden the storage class on it.  We need to respect this, if they
-        # haven't asked to re-override it.
-        explicitDatasetType = _extract_dataset_type(datasetRefOrType)
-        if explicitDatasetType is not None:
-            if storageClass is None:
-                storageClass = explicitDatasetType.storageClass
-
+        ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         # If the caller provided a DatasetRef, they may have overridden the
         # component on it.  We need to explicitly handle this because we did
         # not send the DatasetType to the server in this case.
-        componentOverride = None
         if isinstance(datasetRefOrType, DatasetRef):
             componentOverride = datasetRefOrType.datasetType.component()
+            if componentOverride:
+                ref = ref.makeComponentRef(componentOverride)
+        ref = _apply_storage_class_override(ref, datasetRefOrType, storageClass)
 
-        ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         return get_dataset_as_python_object(
             ref,
             _to_file_payload(model),
             parameters=parameters,
-            storageClass=storageClass,
-            component=componentOverride,
         )
 
     def _get_file_info(
         self,
         datasetRefOrType: DatasetRef | DatasetType | str,
         dataId: DataId | None,
-        collections: _InputCollectionList,
+        collections: CollectionArgType,
         kwargs: dict[str, DataIdValue],
     ) -> GetFileResponseModel:
         """Send a request to the server for the file URLs and metadata
@@ -410,27 +405,25 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     ) -> DatasetRef | None:
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
-        if timespan:
-            raise ValueError("Timespan can not yet be used in butler client/server.")
 
-        dataset_type = self._normalize_dataset_type_name(dataset_type)
-
-        query = FindDatasetModel(
+        query = FindDatasetRequestModel(
             data_id=self._simplify_dataId(data_id, kwargs),
             collections=self._normalize_collections(collections),
+            timespan=timespan.to_simple() if timespan is not None else None,
             dimension_records=dimension_records,
             datastore_records=datastore_records,
         )
 
-        path = f"find_dataset/{dataset_type}"
+        dataset_type_name = self._normalize_dataset_type_name(dataset_type)
+        path = f"find_dataset/{dataset_type_name}"
         response = self._post(path, query)
 
-        ref = DatasetRef.from_simple(
-            self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
-        )
-        if storage_class is not None:
-            ref = ref.overrideStorageClass(storage_class)
-        return ref
+        model = self._parse_model(response, FindDatasetResponseModel)
+        if model.dataset_ref is None:
+            return None
+
+        ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
+        return _apply_storage_class_override(ref, dataset_type, storage_class)
 
     def retrieveArtifacts(
         self,
@@ -713,7 +706,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         """Deserialize a Pydantic model from the body of an HTTP response."""
         return model.model_validate_json(response.content)
 
-    def _normalize_collections(self, collections: _InputCollectionList) -> CollectionList:
+    def _normalize_collections(self, collections: CollectionArgType | None) -> CollectionList:
         """Convert the ``collections`` parameter in the format used by Butler
         methods to a standardized format for the REST API.
         """
@@ -723,11 +716,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                     "No collections provided, and no defaults from butler construction."
                 )
             collections = self.collections
-        # Temporary hack. Assume strings for collections. In future
-        # want to construct CollectionWildcard and filter it through collection
-        # cache to generate list of collection names.
-        wildcards = CollectionWildcard.from_expression(collections)
-        return CollectionList(list(wildcards.strings))
+        return convert_collection_arg_to_glob_string_list(collections)
 
     def _normalize_dataset_type_name(self, datasetTypeOrName: DatasetType | str) -> DatasetTypeName:
         """Convert DatasetType parameters in the format used by Butler methods
@@ -774,6 +763,37 @@ def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> D
         return datasetRefOrType.datasetType
     else:
         return None
+
+
+def _apply_storage_class_override(
+    ref: DatasetRef,
+    original_dataset_ref_or_type: DatasetRef | DatasetType | str,
+    explicit_storage_class: StorageClass | str | None,
+) -> DatasetRef:
+    """Return a DatasetRef with its storage class overridden to match the
+    StorageClass supplied by the user as input to one of the search functions.
+
+    Parameters
+    ----------
+    ref : `DatasetRef`
+        The ref to which we will apply the StorageClass override.
+    original_dataset_ref_or_type : `DatasetRef` | `DatasetType` | `str`
+        The ref or type that was input to the search, which may contain a
+        storage class override.
+    explicit_storage_class : `StorageClass` | `str` | `None`
+        A storage class that the user explicitly requested as an override.
+    """
+    if explicit_storage_class is not None:
+        return ref.overrideStorageClass(explicit_storage_class)
+
+    # If the caller provided a DatasetRef or DatasetType, they may have
+    # overridden the storage class on it, and we need to propagate that to the
+    # output.
+    dataset_type = _extract_dataset_type(original_dataset_ref_or_type)
+    if dataset_type is not None:
+        return ref.overrideStorageClass(dataset_type.storageClass)
+
+    return ref
 
 
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:
