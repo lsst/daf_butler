@@ -81,3 +81,33 @@ The same is not true of regions (especially regions on the sphere), at least not
 Instead, spatial regions for dimensions are stored as opaque, ``base64``-encoded strings in the database, but we also create an overlap table for each spatial dimension element that relates it to a special "common" skypix dimension (see `DimensionUniverse.commonSkyPix`).
 We can then use a regular index on the common skypix ID to make spatial joins efficient, to the extent that proximity in skypix ID corresponds to proximity on sky.
 In practice, these IDs correspond to some space-filling curve, which yields good typical-case performance with a reasonable choice of pixelization level, but no guarantees on worst-case performance.
+
+.. _lsst.daf.butler-dimensions_universe_history:
+
+Dimension Universe Change History
+---------------------------------
+
+Each project can have their own universe definition.
+The dimension universe data model evolves over time.
+A universe is uniquely identified by its vesion number and its namespace.
+The default universe had a namespace of ``daf_butler``.
+
+The default namespace has had the following version changes:
+
+1. Added ``healpix`` dimension.
+   Removed ``visit.seeing``.
+   Updated storage classes for many dimensions.
+   Defined governor dimensions (``instrument`` and ``skymap``).
+   Added ``day_obs`` and ``seq_num`` to ``visit`` and ``exposure``.
+   Renamed ``exposure.name`` to ``exposure.obs_id``.
+2. Modified how visits are defined
+   (Added the default ``visit_system`` to ``instrument``,
+   added ``visit_system_membership`` dimension, removed ``visit_system`` from ``visit`` dimension).
+   Added ``has_simulated``, ``azimuth``, ``seq_start``, and ``seq_end`` to ``exposure``.
+   Added ``seq_num``, ``azimuth`` to ``visit``.
+3. Updated the length of the ``observation_reason`` field from 32 to 68 in ``exposure`` and ``visit``.
+4. Added "populated_by" information to visit fields to allow related dimensions to be discovered automatically.
+5. Changed the length of the ``instrument.name`` field from 16 to 32 characters.
+6. Made ``day_obs`` and ``group`` full dimensions.
+
+Prior to October 2020 there were no version numbers for the dimension universe.

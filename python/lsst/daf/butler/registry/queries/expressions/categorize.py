@@ -241,6 +241,10 @@ def categorizeOrderByName(dimensions: DimensionGroup, name: str) -> tuple[Dimens
         elif isinstance(element, Dimension) and field_name == element.primaryKey.name:
             # Primary key is optional
             field_name = None
+        elif field_name in element.dimensions.names:
+            # Something like visit.physical_filter, which which want to remap
+            # to just "physical_filter".
+            return dimensions.universe[field_name], None
         else:
             if not (
                 field_name in element.metadata.names
@@ -251,7 +255,7 @@ def categorizeOrderByName(dimensions: DimensionGroup, name: str) -> tuple[Dimens
     return element, field_name
 
 
-def categorizeElementOrderByName(element: DimensionElement, name: str) -> str | None:
+def categorizeElementOrderByName(element: DimensionElement, name: str) -> tuple[DimensionElement, str | None]:
     """Categorize an identifier in an ORDER BY clause for a single element.
 
     Parameters
@@ -263,6 +267,8 @@ def categorizeElementOrderByName(element: DimensionElement, name: str) -> str | 
 
     Returns
     -------
+    element : `DimensionElement`
+        The `DimensionElement` the identifier refers to.
     column : `str` or `None`
         The name of a column in the table for ``element``, or `None` if
         ``element`` is a `Dimension` and the requested column is its primary
@@ -300,17 +306,21 @@ def categorizeElementOrderByName(element: DimensionElement, name: str) -> str | 
             # Must be a dimension element
             if not isinstance(element, Dimension):
                 raise ValueError(f"Element '{element}' is not a dimension.")
+        elif name in element.dimensions.names and name != element.name:
+            # Something like visit.physical_filter, which which want to remap
+            # to just "physical_filter".
+            return element.universe[name], None
         else:
             # Can be a metadata name or any of the keys, but primary key needs
             # to be treated the same as a reference to the dimension name
             # itself.
             if isinstance(element, Dimension):
                 if name == element.primaryKey.name:
-                    return None
+                    return element, None
                 elif name in element.uniqueKeys.names:
-                    return name
+                    return element, name
             if name in element.metadata.names:
-                return name
+                return element, name
             raise ValueError(f"Field '{name}' does not exist in '{element}'.")
     else:
         # qualified name, must be a dimension element and a field
@@ -334,4 +344,4 @@ def categorizeElementOrderByName(element: DimensionElement, name: str) -> str | 
             ):
                 raise ValueError(f"Field '{field_name}' does not exist in '{element}'.")
 
-    return field_name
+    return element, field_name

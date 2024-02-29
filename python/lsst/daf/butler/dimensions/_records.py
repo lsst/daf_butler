@@ -112,9 +112,12 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSe
     if definition.spatial:
         members["region"] = (str, ...)
 
-    # mypy does not seem to like create_model
+    # For the new derived class name need to convert to camel case.
+    # so "day_obs" -> "DayObs".
+    derived_name = "".join([part.capitalize() for part in definition.name.split("_")])
+
     model = create_model(
-        f"SpecificSerializedDimensionRecord{definition.name.capitalize()}",
+        f"SpecificSerializedDimensionRecord{derived_name}",
         __base__=SpecificSerializedDimensionRecord,
         **members,  # type: ignore
     )

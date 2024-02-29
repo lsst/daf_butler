@@ -1,4 +1,4 @@
-version: 5
+version: 6
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
@@ -134,6 +134,30 @@ elements:
       nested:
         cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
+  group:
+    doc: >
+      A group of observations defined at the time they were observed by the
+      acquisition system.
+    keys:
+      - name: name
+        type: string
+        length: 64
+    requires: [instrument]
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  day_obs:
+    doc: >
+      A day and night of observations that rolls over during daylight hours.
+      The identifier is an decimal integer-concatenated date, i.e. YYYYMMDD,
+      with the exact rollover time observatory-dependent.
+    keys:
+      - name: id
+        type: int
+    requires: [instrument]
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
   visit:
     doc: >
       A sequence of observations processed together, comprised of one or
@@ -148,14 +172,8 @@ elements:
         type: string
         length: 64
     requires: [instrument]
-    implies: [physical_filter]
+    implies: [physical_filter, day_obs]
     metadata:
-      - name: day_obs
-        type: int
-        doc: >
-          Day of observation as defined by the observatory (YYYYMMDD format).
-          If a visit crosses multiple days this entry will be the earliest
-          day of any of the exposures that make up the visit.
       - name: seq_num
         type: int
         doc: >
@@ -219,7 +237,7 @@ elements:
         type: string
         length: 64
     requires: [instrument]
-    implies: [physical_filter]
+    implies: [physical_filter, group, day_obs]
     metadata:
       - name: exposure_time
         type: float
@@ -237,10 +255,6 @@ elements:
         doc: >
           The reason this observation was taken. (e.g. science,
           filter scan, unknown).
-      - name: day_obs
-        type: int
-        doc: >
-          Day of observation as defined by the observatory (YYYYMMDD format).
       - name: seq_num
         type: int
         doc: >
@@ -255,17 +269,6 @@ elements:
         type: int
         doc: >
           Oldest sequence number that might be related to this exposure.
-      - name: group_name
-        type: string
-        length: 64
-        doc: >
-          String group identifier associated with this exposure by the
-          acquisition system.
-      - name: group_id
-        type: int
-        doc: >
-          Integer group identifier associated with this exposure by the
-          acquisition system.
       - name: target_name
         type: string
         length: 64
@@ -431,7 +434,7 @@ topology:
     skymap_regions: [patch, tract]
 
   temporal:
-    observation_timespans: [exposure, visit]
+    observation_timespans: [exposure, visit, day_obs]
 
 packers:
   visit_detector:

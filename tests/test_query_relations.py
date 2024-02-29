@@ -96,6 +96,7 @@ class TestQueryRelationsTests(unittest.TestCase):
             detector=cls.detector,
             patch=cls.patch,
         )
+        cls.day_obs = cls.data_id["day_obs"]
         cls.band = cls.data_id["band"]
         cls.physical_filter = cls.data_id["physical_filter"]
 
@@ -155,6 +156,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                                     and detector={self.detector!r}
                                     and visit={self.visit!r}
                                     and band={self.band!r}
+                                    and day_obs={self.day_obs!r}
                                     and physical_filter={self.physical_filter!r}
                                 ](
                                     patch_htm7_overlap
@@ -180,6 +182,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                     f"and detector={self.detector!r} "
                     f"and visit={self.visit!r}"
                     f"and band={self.band!r} "
+                    f"and day_obs={self.day_obs!r}"
                     f"and physical_filter={self.physical_filter!r} "
                 ),
             ),
@@ -201,6 +204,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                         and detector={self.detector!r}
                         and visit={self.visit!r}
                         and band={self.band!r}
+                        and day_obs={self.day_obs!r}
                         and physical_filter={self.physical_filter!r}
                     ](
                         visit_detector_region_htm7_overlap
@@ -224,6 +228,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                     f"and detector={self.detector!r} "
                     f"and visit={self.visit!r}"
                     f"and band={self.band!r} "
+                    f"and day_obs={self.day_obs!r}"
                     f"and physical_filter={self.physical_filter!r} "
                 ),
             ),
@@ -305,6 +310,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                                     instrument={self.instrument!r}
                                     and visit={self.visit!r}
                                     and band={self.band!r}
+                                    and day_obs={self.day_obs!r}
                                     and physical_filter={self.physical_filter!r}
                                     and htm7={self.htm7!r}
                                 ](
@@ -337,6 +343,7 @@ class TestQueryRelationsTests(unittest.TestCase):
                         and instrument={self.instrument!r}
                         and visit={self.visit!r}
                         and band={self.band!r}
+                        and day_obs={self.day_obs!r}
                         and physical_filter={self.physical_filter!r}
                     ](
                         visit_detector_region_htm7_overlap

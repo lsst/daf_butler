@@ -1257,7 +1257,7 @@ class DatabaseTests(ABC):
         pixelization = Mq3cPixelization(10)
         start = astropy.time.Time("2020-01-01T00:00:00", format="isot", scale="tai")
         offset = astropy.time.TimeDelta(60, format="sec")
-        timespans = [Timespan(begin=start + offset * n, end=start + offset * n + 1) for n in range(3)]
+        timespans = [Timespan(begin=start + offset * n, end=start + offset * (n + 1)) for n in range(3)]
         ts_cls = db.getTimespanRepresentation()
         ts_col = ts_cls.from_columns(t.columns)
         db.insert(

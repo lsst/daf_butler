@@ -58,6 +58,9 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .registry import Registry
 
 
+_ONE_DAY = astropy.time.TimeDelta("1d", scale="tai")
+
+
 class _SpecialTimespanBound(enum.Enum):
     """Enumeration to provide a singleton value for empty timespan bounds.
 
@@ -242,6 +245,43 @@ class Timespan:
                 f"Cannot construct near-instantaneous timespan at {time}; within one ns of maximum time."
             )
         return Timespan(None, None, _nsec=(nsec, nsec + 1))
+
+    @classmethod
+    def from_day_obs(cls, day_obs: int, offset: int = 0) -> Timespan:
+        """Construct a timespan for a 24-hour period based on the day of
+        observation.
+
+        Parameters
+        ----------
+        day_obs : `int`
+            The day of observation as an integer of the form YYYYMMDD.
+            The year must be at least 1970 since these are converted to TAI.
+        offset : `int`, optional
+            Offset in seconds from TAI midnight to be applied.
+
+        Returns
+        -------
+        day_span : `Timespan`
+            A timespan corresponding to a full day of observing.
+
+        Notes
+        -----
+        If the observing day is 20240229 and the offset is 12 hours the
+        resulting time span will be 2024-02-29T12:00 to 2024-03-01T12:00.
+        """
+        if day_obs < 1970_00_00 or day_obs > 1_0000_00_00:
+            raise ValueError(f"day_obs must be in form yyyyMMDD and be newer than 1970, not {day_obs}.")
+
+        ymd = str(day_obs)
+        t1 = astropy.time.Time(f"{ymd[0:4]}-{ymd[4:6]}-{ymd[6:8]}T00:00:00", format="isot", scale="tai")
+
+        if offset != 0:
+            t_delta = astropy.time.TimeDelta(offset, format="sec", scale="tai")
+            t1 += t_delta
+
+        t2 = t1 + _ONE_DAY
+
+        return Timespan(t1, t2)
 
     @property
     @cached_getter

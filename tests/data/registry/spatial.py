@@ -330,13 +330,7 @@ def write_yaml(filename: str):
     - patch
 
     """
-    visit_system_records = [
-        {
-            "id": 0,
-            "name": "one-to-one",
-            "instrument": INSTRUMENT_NAME,
-        }
-    ]
+    day_obs_records = [{"instrument": INSTRUMENT_NAME, "id": 20210909}]
     visit_records = []
     visit_detector_records = []
     for visit_id, visit_data in VISIT_DATA.items():
@@ -360,7 +354,6 @@ def write_yaml(filename: str):
         visit_record["instrument"] = INSTRUMENT_NAME
         visit_record["id"] = visit_id
         visit_record["name"] = str(visit_id)
-        visit_record["visit_system"] = 0
         visit_record["region"] = ConvexPolygon(visit_vertices)
         visit_records.append(visit_record)
     skymap_records = [
@@ -393,12 +386,14 @@ def write_yaml(filename: str):
         tract_records.append(tract_record)
     document = {
         "description": "Butler Data Repository Export",
-        "version": 0,
+        "version": "1.0.2",
+        "universe_version": 7,
+        "universe_namespace": "daf_butler",
         "data": [
             {
                 "type": "dimension",
-                "element": "visit_system",
-                "records": visit_system_records,
+                "element": "day_obs",
+                "records": day_obs_records,
             },
             {
                 "type": "dimension",

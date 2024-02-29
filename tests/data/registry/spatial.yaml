@@ -1,13 +1,14 @@
 # Spatial test data; see spatial.py for more information.
 description: Butler Data Repository Export
-version: 0
+version: 1.0.2
+universe_version: 6
+universe_namespace: daf_butler
 data:
 - type: dimension
-  element: visit_system
+  element: day_obs
   records:
-  - id: 0
-    name: one-to-one
-    instrument: Cam1
+  - instrument: Cam1
+    id: 20210909
 - type: dimension
   element: visit
   records:
@@ -23,7 +24,6 @@ data:
     instrument: Cam1
     id: 1
     name: '1'
-    visit_system: 0
     region: !<lsst.sphgeom.ConvexPolygon>
       encoded: 704d451894e4feef3f2df2f2f7ac03683f53bc30b89490903f6080025d14ffef3fb4655dd5d003683fc5d8707f771b8e3fd47dc347f9feef3f53de11724108783fad0e8b035e1b8e3faf1050449cfeef3f5d5a7de96209823f03f849486f90903ff5511f7111feef3ff70a8ad0940c853f3493bccecf96933fb93758d2d3fdef3f4fb2aa456c0c853ff51de0686a1a953f6b79a49191fdef3f26af86ae400c853ff98e1a27469e963f669174e2c7fdef3f6b9e40a8070c7e3f04af3a8e6c9e963ffe5aba04ecfdef3f12465249e703723f0607741a869e963ffe5aba04ecfdef3f133f5249e703723f0607741a869e963f9f43984af7fdef3faa1168dffa02683fea4cd9128e9e963f5410c48d39feef3f89dd1d9b2c03683f0ed46784ad1a953f5410c48d39feef3f89dd1d9b2c03683f4ed26784ad1a953f
   - physical_filter: Cam1-R1
@@ -38,7 +38,6 @@ data:
     instrument: Cam1
     id: 2
     name: '2'
-    visit_system: 0
     region: !<lsst.sphgeom.ConvexPolygon>
       encoded: 70550548f08effef3f21b35a98eb01583f92c821d18f0d853f40573b4bc5ffef3f4b4d64601402583f39592a1be60d7e3f0173bfa4d9ffef3f24f2f5a42302583f3b7618f7e908783f1da70f9ac7ffef3f1ed1b918f304723f09cafd69dc08783f135961188fffef3f923a9633b30d7e3f92339633b30d7e3f65dc7ed93fffef3fa06d6421bf09823f4637f1c75b0d853f9fdf24d41dffef3faef091f3ab09823f2ffe2d127111883f9fdf24d41dffef3faef091f3ab09823fae012e127111883f76e61a3bf7feef3fb41738319609823f3bb6789f0e168b3f9ec0741f10ffef3f707a37f23b0d7e3f643efbb123168b3f9ec0741f10ffef3f707337f23b0d7e3f643efbb123168b3f5fec4b8d3fffef3f2489a93ff103683fb631a6d84b168b3f2392c94f46ffef3f819edf1ab501583fbf5b989151168b3f
 - type: dimension

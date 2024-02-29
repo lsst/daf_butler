@@ -381,6 +381,15 @@ class SimpleButlerTestCase(unittest.TestCase):
         registry.certify("calibs", [bias3b], Timespan(t2, t3))
         # Insert some exposure dimension data.
         registry.insertDimensionData(
+            "group",
+            {"instrument": "Cam1", "group": "three"},
+            {"instrument": "Cam1", "group": "four"},
+        )
+        registry.insertDimensionData(
+            "day_obs",
+            {"instrument": "Cam1", "id": 20211114},
+        )
+        registry.insertDimensionData(
             "exposure",
             {
                 "instrument": "Cam1",
@@ -388,7 +397,8 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "obs_id": "three",
                 "timespan": Timespan(t1, t2),
                 "physical_filter": "Cam1-G",
-                "day_obs": 20201114,
+                "group": "three",
+                "day_obs": 20211114,
                 "seq_num": 55,
             },
             {
@@ -397,6 +407,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "obs_id": "four",
                 "timespan": Timespan(t2, t3),
                 "physical_filter": "Cam1-G",
+                "group": "four",
                 "day_obs": 20211114,
                 "seq_num": 42,
             },
@@ -636,7 +647,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
 
-        for dimension in ("detector", "visit", "exposure"):
+        for dimension in ("detector", "visit", "exposure", "day_obs", "group"):
             records = butler.registry.queryDimensionRecords(dimension, instrument="HSC")
             for r in records:
                 for minimal in (True, False):
@@ -654,6 +665,24 @@ class SimpleButlerTestCase(unittest.TestCase):
                     r_html = r._repr_html_()
                     self.assertTrue(isinstance(r_html, str))
                     self.assertIn(dimension, r_html)
+
+    def test_dimension_records_import(self):
+        # Dimension Records
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset-v0.yaml"))
+
+        # Count records and assume this means it worked.
+        dimensions = (
+            ("day_obs", 15),
+            ("group", 1),
+            ("exposure", 1),
+            ("visit", 160),
+            ("detector", 111),
+            ("visit_system_membership", 160),
+        )
+        for dimension, count in dimensions:
+            records = list(butler.registry.queryDimensionRecords(dimension, instrument="HSC"))
+            self.assertEqual(len(records), count)
 
     def testWildcardQueries(self):
         """Test that different collection type queries work."""

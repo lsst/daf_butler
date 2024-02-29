@@ -225,8 +225,8 @@ class OrderByClause:
             if name[0] == "-":
                 ascending = False
                 name = name[1:]
-            column = categorizeElementOrderByName(element, name)
-            term = cls._make_term(element, column, ascending)
+            found_element, column = categorizeElementOrderByName(element, name)
+            term = cls._make_term(found_element, column, ascending)
             terms.append(term)
         return cls(terms)
 
@@ -303,9 +303,9 @@ class ElementOrderByClause:
             if name[0] == "-":
                 ascending = False
                 name = name[1:]
-            column = categorizeElementOrderByName(element, name)
+            found_element, column = categorizeElementOrderByName(element, name)
             self.order_by_columns.append(
-                OrderByClauseColumn(element=element, column=column, ordering=ascending)
+                OrderByClauseColumn(element=found_element, column=column, ordering=ascending)
             )
 
     order_by_columns: Iterable[OrderByClauseColumn]

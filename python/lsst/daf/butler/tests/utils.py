@@ -293,6 +293,7 @@ class MetricTestRepo:
         self.butler.registry.insertDimensionData(
             "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
         )
+        self.butler.registry.insertDimensionData("day_obs", {"instrument": "DummyCamComp", "id": 20200101})
         self.butler.registry.insertDimensionData(
             "visit_system", {"instrument": "DummyCamComp", "id": 1, "name": "default"}
         )
@@ -306,6 +307,7 @@ class MetricTestRepo:
                 name="fourtwentythree",
                 physical_filter="d-r",
                 timespan=Timespan(visitStart, visitEnd),
+                day_obs=20200101,
             ),
         )
         self.butler.registry.insertDimensionData(
@@ -315,6 +317,7 @@ class MetricTestRepo:
                 id=424,
                 name="fourtwentyfour",
                 physical_filter="d-r",
+                day_obs=20200101,
             ),
         )
 

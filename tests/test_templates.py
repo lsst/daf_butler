@@ -81,7 +81,12 @@ class TestFileTemplates(unittest.TestCase):
 
     def setUp(self):
         self.universe = DimensionUniverse()
-        self.dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "Most Amazing U Filter Ever"}
+        self.dataId = {
+            "instrument": "dummy",
+            "visit": 52,
+            "physical_filter": "Most Amazing U Filter Ever",
+            "day_obs": 20200101,
+        }
 
     def assertTemplate(self, template, answer, ref):
         fileTmpl = FileTemplate(template)
@@ -140,7 +145,7 @@ class TestFileTemplates(unittest.TestCase):
         )
 
         # Check that "." are replaced in the file basename, but not directory.
-        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "g.10"}
+        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "g.10", "day_obs": 20250101}
         self.assertTemplate(
             tmplstr,
             "run.2/calexp/00052/g_10-trail-run_2",
