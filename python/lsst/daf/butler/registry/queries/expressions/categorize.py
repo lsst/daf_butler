@@ -112,16 +112,8 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> tuple[Dimensi
         elif column in element.dimensions.names:
             # User said something like "patch.tract = x" or
             # "tract.tract = x" instead of just "tract = x" or
-            # "tract.id = x", which is at least needlessly confusing and
-            # possibly not actually a column name, though we can guess
-            # what they were trying to do.
-            # Encourage them to clean that up and try again.
-            name = universe[column].primaryKey.name  # type: ignore
-            raise RuntimeError(
-                f"Invalid reference to '{table}.{column}' "
-                f"in expression; please use '{column}' or "
-                f"'{column}.{name}' instead."
-            )
+            # "tract.id = x". Return the column as the element instead.
+            return element.dimensions[column], None
         else:
             return element, column
     else:
