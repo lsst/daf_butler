@@ -248,7 +248,7 @@ storageClasses:
   Linearizer:
     pytype: lsst.ip.isr.Linearizer
   FiberSpectrum:
-    pytype: lsst.obs.fiberSpectrograph.FiberSpectrum
+    pytype: lsst.obs.fiberspectrograph.FiberSpectrum
   PhotonTransferCurveDataset:
     pytype: lsst.ip.isr.PhotonTransferCurveDataset
   StrayLightData:
