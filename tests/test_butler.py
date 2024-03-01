@@ -1351,6 +1351,26 @@ class ButlerTests(ButlerPutGetTests):
             new_metric = butler.get(datasetTypeName, dataId=dataId)
             self.assertEqual(new_metric, metric)
 
+        # Check that we can find the datasets using the day_obs or the
+        # exposure.day_obs.
+        datasets_1 = list(
+            butler.registry.queryDatasets(
+                datasetType,
+                collections=self.default_run,
+                where="day_obs = dayObs AND instrument = instr",
+                bind={"dayObs": dayobs, "instr": "DummyCamComp"},
+            )
+        )
+        datasets_2 = list(
+            butler.registry.queryDatasets(
+                datasetType,
+                collections=self.default_run,
+                where="exposure.day_obs = dayObs AND instrument = instr",
+                bind={"dayObs": dayobs, "instr": "DummyCamComp"},
+            )
+        )
+        self.assertEqual(datasets_1, datasets_2)
+
     def testGetDatasetCollectionCaching(self):
         # Prior to DM-41117, there was a bug where get_dataset would throw
         # MissingCollectionError if you tried to fetch a dataset that was added
