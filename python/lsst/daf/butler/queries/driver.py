@@ -40,7 +40,7 @@ __all__ = (
 import dataclasses
 import uuid
 from abc import abstractmethod
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from contextlib import AbstractContextManager
 from typing import Any, TypeAlias, Union, overload
 
@@ -55,8 +55,6 @@ from ..dimensions import (
     DimensionRecordTable,
     DimensionUniverse,
 )
-from ..registry import CollectionSummary
-from ..registry.interfaces import CollectionRecord
 from .result_specs import (
     DataCoordinateResultSpec,
     DatasetRefResultSpec,
@@ -398,41 +396,6 @@ class QueryDriver(AbstractContextManager[None]):
         ------
         NoDefaultCollectionError
             Raised if there are no default collections.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def resolve_collection_path(
-        self, collections: Sequence[str]
-    ) -> list[tuple[CollectionRecord, CollectionSummary]]:
-        """Process a collection search path argument into a `list` of
-        collection records and summaries.
-
-        Parameters
-        ----------
-        collections : `~collections.abc.Sequence` [ `str` ]
-            The collection or collections to search.
-
-        Returns
-        -------
-        collection_info : `list` [ `tuple` [ `CollectionRecord`, \
-                `CollectionSummary` ] ]
-            A `list` of pairs of `CollectionRecord` and `CollectionSummary`
-            that flattens out all `~CollectionType.CHAINED` collections into
-            their children while maintaining the same order and avoiding
-            duplicates.
-
-        Raises
-        ------
-        MissingCollectionError
-            Raised if any collection in ``collections`` does not exist.
-
-        Notes
-        -----
-        Implementations are generally expected to cache the collection records
-        and summaries they obtain (including the records for
-        `~CollectionType.CHAINED` collections that are not returned) in order
-        to optimize multiple calls with collections in common.
         """
         raise NotImplementedError()
 

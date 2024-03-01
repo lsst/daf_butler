@@ -43,8 +43,8 @@ import dataclasses
 import itertools
 import unittest
 import uuid
-from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
-from typing import Any, cast
+from collections.abc import Iterable, Iterator, Mapping, Set
+from typing import Any
 
 import astropy.time
 from lsst.daf.butler import (
@@ -64,10 +64,9 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.queries import (
     DataCoordinateQueryResults,
-    DatasetQueryResults,
+    DatasetRefQueryResults,
     DimensionRecordQueryResults,
     Query,
-    SingleTypeDatasetQueryResults,
 )
 from lsst.daf.butler.queries import driver as qd
 from lsst.daf.butler.queries import result_specs as qrs
@@ -415,25 +414,6 @@ class _TestQueryDriver(qd.QueryDriver):
         if self._default_collections is None:
             raise NoDefaultCollectionError()
         return self._default_collections
-
-    def resolve_collection_path(
-        self, collections: Sequence[str], _done: set[str] | None = None
-    ) -> list[tuple[CollectionRecord, CollectionSummary]]:
-        if _done is None:
-            _done = set()
-        result: list[tuple[CollectionRecord, CollectionSummary]] = []
-        for name in collections:
-            if name in _done:
-                continue
-            _done.add(name)
-            record, summary = self._collection_info[name]
-            if record.type is CollectionType.CHAINED:
-                result.extend(
-                    self.resolve_collection_path(cast(ChainedCollectionRecord, record).children, _done=_done)
-                )
-            else:
-                result.append((record, summary))
-        return result
 
     def get_dataset_type(self, name: str) -> DatasetType:
         try:
@@ -1217,8 +1197,8 @@ class QueryTestCase(unittest.TestCase):
                 find_first: bool = True,
                 storage_class_name: str = self.raw.storageClass_name,
             ) -> None:
-                """Construct a DatasetQueryResults object from the query with
-                the given arguments and run a battery of tests on it.
+                """Construct a DatasetRefQueryResults object from the query
+                with the given arguments and run a battery of tests on it.
 
                 Parameters
                 ----------
@@ -1666,37 +1646,35 @@ class QueryTestCase(unittest.TestCase):
 
         - counting result rows;
         - expanding dimensions as needed for 'where' conditions;
-        - chained results for multiple dataset types;
         - different ways of passing a data ID to 'where' methods;
         - order_by, limit, and offset.
 
-        It does not include the iteration methods of the DatasetQueryResults
+        It does not include the iteration methods of the DatasetRefQueryResults
         classes, since those require a different mock driver setup (see
         test_dataset_iteration).  More tests for different inputs to
-        SingleTypeDatasetQueryResults construction are in test_dataset_join.
+        DatasetRefQueryResults construction are in test_dataset_join.
         """
         # Set up a few equivalent base query-results object to test.
         query = self.query()
         x = query.expression_factory
         self.assertFalse(query.constraint_dimensions)
-        results1 = query.datasets(...).where(x.instrument == "DummyCam", visit=4)
-        results2 = query.datasets(..., collections=["DummyCam/defaults"]).where(
+        results1 = query.datasets("raw").where(x.instrument == "DummyCam", visit=4)
+        results2 = query.datasets("raw", collections=["DummyCam/defaults"]).where(
             {"instrument": "DummyCam", "visit": 4}
         )
-        results3 = query.datasets(["raw", "bias", "refcat"]).where(
+        results3 = query.datasets("raw").where(
             DataCoordinate.standardize(instrument="DummyCam", visit=4, universe=self.universe)
         )
 
-        # Define a closure to handle single-dataset-type results.
-        def check_single_type(
-            results: SingleTypeDatasetQueryResults,
+        # Define a closure to check a DatasetRefQueryResults instance.
+        def check(
+            results: DatasetRefQueryResults,
             order_by: Any = (),
             limit: int | None = None,
             offset: int = 0,
             include_dimension_records: bool = False,
         ) -> list[str]:
             results = results.order_by(*order_by).limit(limit, offset=offset)
-            self.assertIs(list(results.by_dataset_type())[0], results)
             with self.assertRaises(_TestQueryExecution) as cm:
                 list(results)
             tree = cm.exception.tree
@@ -1741,59 +1719,21 @@ class QueryTestCase(unittest.TestCase):
             self.assertIs(cm.exception.tree, tree)
             return [str(term) for term in result_spec.order_by]
 
-        # Define a closure to run tests on variants of the base query, which
-        # is a chain of multiple dataset types.
-        def check_chained(
-            results: DatasetQueryResults,
-            order_by: tuple[Any, Any, Any] = ((), (), ()),
-            limit: int | None = None,
-            offset: int = 0,
-            include_dimension_records: bool = False,
-        ) -> list[list[str]]:
-            self.assertEqual(results.has_dimension_records, include_dimension_records)
-            types_seen: list[str] = []
-            order_by_strings: list[list[str]] = []
-            for single_type_results, single_type_order_by in zip(results.by_dataset_type(), order_by):
-                order_by_strings.append(
-                    check_single_type(
-                        single_type_results,
-                        order_by=single_type_order_by,
-                        limit=limit,
-                        offset=offset,
-                        include_dimension_records=include_dimension_records,
-                    )
-                )
-                types_seen.append(single_type_results.dataset_type.name)
-            self.assertEqual(types_seen, sorted(["raw", "bias", "refcat"]))
-            return order_by_strings
-
         # Run the closure's tests on variants of the base query.
-        self.assertEqual(check_chained(results1), [[], [], []])
-        self.assertEqual(check_chained(results2), [[], [], []])
-        self.assertEqual(check_chained(results3), [[], [], []])
+        self.assertEqual(check(results1), [])
+        self.assertEqual(check(results2), [])
+        self.assertEqual(check(results3), [])
+        self.assertEqual(check(results1.with_dimension_records(), include_dimension_records=True), [])
         self.assertEqual(
-            check_chained(results1.with_dimension_records(), include_dimension_records=True), [[], [], []]
+            check(results1.with_dimension_records().with_dimension_records(), include_dimension_records=True),
+            [],
         )
-        self.assertEqual(
-            check_chained(
-                results1.with_dimension_records().with_dimension_records(), include_dimension_records=True
-            ),
-            [[], [], []],
-        )
-        self.assertEqual(check_chained(results1, limit=2), [[], [], []])
-        self.assertEqual(check_chained(results1, offset=1), [[], [], []])
-        self.assertEqual(check_chained(results1, limit=3, offset=3), [[], [], []])
-        self.assertEqual(
-            check_chained(
-                results1,
-                order_by=[
-                    ["bias.timespan.begin"],
-                    ["ingest_date"],
-                    ["htm7"],
-                ],
-            ),
-            [["bias.timespan.begin"], ["raw.ingest_date"], ["htm7"]],
-        )
+        self.assertEqual(check(results1, limit=2), [])
+        self.assertEqual(check(results1, offset=1), [])
+        self.assertEqual(check(results1, limit=3, offset=3), [])
+        self.assertEqual(check(results1, order_by=["raw.timespan.begin"]), ["raw.timespan.begin"])
+        self.assertEqual(check(results1, order_by=["detector"]), ["detector"])
+        self.assertEqual(check(results1, order_by=["ingest_date"]), ["raw.ingest_date"])
 
     def test_dataset_iteration(self) -> None:
         """Tests for SingleTypeDatasetQueryResult iteration."""
@@ -1905,7 +1845,7 @@ class QueryTestCase(unittest.TestCase):
             )
         with self.assertRaises(qt.InvalidQueryError):
             # ResultSpec's datasets are not a subset of the query tree's.
-            SingleTypeDatasetQueryResults(
+            DatasetRefQueryResults(
                 _TestQueryDriver(),
                 qt.QueryTree(dimensions=self.raw.dimensions.as_group()),
                 qrs.DatasetRefResultSpec(

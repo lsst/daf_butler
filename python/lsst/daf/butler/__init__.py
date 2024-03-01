@@ -79,14 +79,7 @@ from .logging import ButlerLogRecords
 from .progress import Progress
 
 # Only import the main public symbols from queries
-from .queries import (
-    ChainedDatasetQueryResults,
-    DataCoordinateQueryResults,
-    DatasetQueryResults,
-    DimensionRecordQueryResults,
-    Query,
-    SingleTypeDatasetQueryResults,
-)
+from .queries import DataCoordinateQueryResults, DatasetRefQueryResults, DimensionRecordQueryResults, Query
 
 # Do not import or lift symbols from 'server' or 'server_models'.
 # Import the registry subpackage directly for other symbols.

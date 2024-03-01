@@ -30,8 +30,7 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 from collections.abc import Iterable, Mapping, Set
-from types import EllipsisType
-from typing import Any, final, overload
+from typing import Any, final
 
 from lsst.utils.iteration import ensure_iterable
 
@@ -39,13 +38,9 @@ from .._dataset_type import DatasetType
 from .._storage_class import StorageClassFactory
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from ..registry import DatasetTypeError, MissingDatasetTypeError
-from ._base import HomogeneousQueryBase
+from ._base import QueryBase
 from ._data_coordinate_query_results import DataCoordinateQueryResults
-from ._dataset_query_results import (
-    ChainedDatasetQueryResults,
-    DatasetQueryResults,
-    SingleTypeDatasetQueryResults,
-)
+from ._dataset_query_results import DatasetRefQueryResults
 from ._dimension_record_query_results import DimensionRecordQueryResults
 from .convert_args import convert_where_args
 from .driver import QueryDriver
@@ -55,7 +50,7 @@ from .tree import DatasetSearch, InvalidQueryError, Predicate, QueryTree, make_i
 
 
 @final
-class Query(HomogeneousQueryBase):
+class Query(QueryBase):
     """A method-chaining builder for butler queries.
 
     Parameters
@@ -205,40 +200,19 @@ class Query(HomogeneousQueryBase):
         result_spec = DataCoordinateResultSpec(dimensions=dimensions, include_dimension_records=False)
         return DataCoordinateQueryResults(self._driver, tree, result_spec)
 
-    @overload
     def datasets(
         self,
         dataset_type: str | DatasetType,
         collections: str | Iterable[str] | None = None,
         *,
         find_first: bool = True,
-    ) -> SingleTypeDatasetQueryResults: ...  # pragma: no cover
-
-    @overload
-    def datasets(
-        self,
-        dataset_type: Iterable[str | DatasetType] | EllipsisType,
-        collections: str | Iterable[str] | None = None,
-        *,
-        find_first: bool = True,
-    ) -> DatasetQueryResults: ...  # pragma: no cover
-
-    def datasets(
-        self,
-        dataset_type: str | DatasetType | Iterable[str | DatasetType] | EllipsisType,
-        collections: str | Iterable[str] | None = None,
-        *,
-        find_first: bool = True,
-    ) -> DatasetQueryResults:
+    ) -> DatasetRefQueryResults:
         """Return a result object that is a `DatasetRef` iterable.
 
         Parameters
         ----------
-        dataset_type : `str`, `DatasetType`, \
-                `~collections.abc.Iterable` [ `str` or `DatasetType` ], \
-                or ``...``
-            The dataset type or types to search for.  Passing ``...`` searches
-            for all datasets in the given collections.
+        dataset_type : `str` or `DatasetType`
+            The dataset type to search for.
         collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
             The collection or collections to search, in order.  If not provided
             or `None`, and the dataset has not already been joined into the
@@ -252,13 +226,13 @@ class Query(HomogeneousQueryBase):
 
         Returns
         -------
-        refs : `.queries.DatasetQueryResults`
+        refs : `.queries.DatasetRefQueryResults`
             Dataset references matching the given query criteria.  Nested data
             IDs are guaranteed to include values for all implied dimensions
             (i.e. `DataCoordinate.hasFull` will return `True`), but will not
             include dimension records (`DataCoordinate.hasRecords` will be
             `False`) unless
-            `~.queries.DatasetQueryResults.with_dimension_records` is
+            `~.queries.DatasetRefQueryResults.with_dimension_records` is
             called on the result object (which returns a new one).
 
         Raises
@@ -279,44 +253,22 @@ class Query(HomogeneousQueryBase):
         type separately in turn, and no information about the relationships
         between datasets of different types is included.
         """
-        queries: dict[str, Query] = {}
-        if dataset_type is ...:
-            if collections is None:
-                collections = self._driver.get_default_collections()
-            else:
-                collections = tuple(ensure_iterable(collections))
-            for _, summary in self._driver.resolve_collection_path(collections):
-                for dataset_type_name in summary.dataset_types.names:
-                    queries[dataset_type_name] = self.join_dataset_search(dataset_type_name, collections)
-        else:
-            for arg in ensure_iterable(dataset_type):
-                dataset_type_name, query = self._join_dataset_search_impl(arg, collections)
-                queries[dataset_type_name] = query
-
-        single_type_results: list[SingleTypeDatasetQueryResults] = []
-        for dataset_type_name in sorted(queries):
-            query = queries[dataset_type_name]
-            dataset_search = query._tree.datasets[dataset_type_name]
-            if dataset_search.storage_class_name is None:
-                raise MissingDatasetTypeError(
-                    f"No storage class provided for unregistered dataset type {dataset_type_name!r}. "
-                    "Provide a complete DatasetType object instead of a string name to turn this error "
-                    "into an empty result set."
-                )
-            spec = DatasetRefResultSpec.model_construct(
-                dataset_type_name=dataset_type_name,
-                dimensions=dataset_search.dimensions,
-                storage_class_name=dataset_search.storage_class_name,
-                include_dimension_records=False,
-                find_first=find_first,
+        dataset_type_name, query = self._join_dataset_search_impl(dataset_type, collections)
+        dataset_search = query._tree.datasets[dataset_type_name]
+        if dataset_search.storage_class_name is None:
+            raise MissingDatasetTypeError(
+                f"No storage class provided for unregistered dataset type {dataset_type_name!r}. "
+                "Provide a complete DatasetType object instead of a string name to turn this error "
+                "into an empty result set."
             )
-            single_type_results.append(
-                SingleTypeDatasetQueryResults(self._driver, tree=query._tree, spec=spec)
-            )
-        if len(single_type_results) == 1:
-            return single_type_results[0]
-        else:
-            return ChainedDatasetQueryResults(tuple(single_type_results))
+        spec = DatasetRefResultSpec.model_construct(
+            dataset_type_name=dataset_type_name,
+            dimensions=dataset_search.dimensions,
+            storage_class_name=dataset_search.storage_class_name,
+            include_dimension_records=False,
+            find_first=find_first,
+        )
+        return DatasetRefQueryResults(self._driver, tree=query._tree, spec=spec)
 
     def dimension_records(self, element: str) -> DimensionRecordQueryResults:
         """Return a result object that is a `DimensionRecord` iterable.

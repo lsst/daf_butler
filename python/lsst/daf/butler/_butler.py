@@ -32,7 +32,6 @@ __all__ = ["Butler"]
 from abc import abstractmethod
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
-from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TextIO
 
 from lsst.resources import ResourcePath, ResourcePathExpression
@@ -1531,7 +1530,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
     def _query_datasets(
         self,
-        dataset_type: str | Iterable[str] | DatasetType | Iterable[DatasetType] | EllipsisType,
+        dataset_type: str | DatasetType,
         collections: str | Iterable[str] | None = None,
         *,
         find_first: bool = True,
@@ -1546,12 +1545,8 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Parameters
         ----------
-        dataset_type : dataset type expression
-            An expression that fully or partially identifies the dataset types
-            to be queried.  Allowed types include `DatasetType`, `str`, and
-            iterables thereof.  The special value ``...`` can be used to query
-            all dataset types.  See :ref:`daf_butler_dataset_type_expressions`
-            for more information.
+        dataset_type : `str` or `DatasetType`
+            Dataset type object or name to search for.
         collections : collection expression, optional
             A collection name or iterable of collection names to search. If not
             provided, the default collections are used.  See
@@ -1592,7 +1587,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Returns
         -------
-        refs : `.queries.DatasetQueryResults`
+        refs : `.queries.DatasetRefQueryResults`
             Dataset references matching the given query criteria.  Nested data
             IDs are guaranteed to include values for all implied dimensions
             (i.e. `DataCoordinate.hasFull` will return `True`).

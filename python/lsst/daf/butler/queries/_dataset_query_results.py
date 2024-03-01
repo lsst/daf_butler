@@ -27,60 +27,24 @@
 
 from __future__ import annotations
 
-__all__ = (
-    "DatasetQueryResults",
-    "ChainedDatasetQueryResults",
-    "SingleTypeDatasetQueryResults",
-)
+__all__ = ("DatasetRefQueryResults",)
 
-import itertools
-from abc import abstractmethod
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, final
 
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
-from ..dimensions import DataId
-from ._base import CountableQueryBase, QueryResultsBase
+from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import DataCoordinateResultSpec, DatasetRefResultSpec
-from .tree import Predicate, QueryTree
+from .tree import QueryTree
 
 if TYPE_CHECKING:
     from ._data_coordinate_query_results import DataCoordinateQueryResults
 
 
-class DatasetQueryResults(CountableQueryBase, Iterable[DatasetRef]):
-    """A query for `DatasetRef` results."""
-
-    @abstractmethod
-    def by_dataset_type(self) -> Iterator[SingleTypeDatasetQueryResults]:
-        """Group results by dataset type.
-
-        Returns
-        -------
-        iter : `~collections.abc.Iterator` [ `SingleTypeDatasetQueryResults` ]
-            An iterator over `DatasetQueryResults` instances that are each
-            responsible for a single dataset type.
-        """
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def has_dimension_records(self) -> bool:
-        """Whether all data IDs in this iterable contain dimension records."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def with_dimension_records(self) -> DatasetQueryResults:
-        """Return a results object for which `has_dimension_records` is
-        `True`.
-        """
-        raise NotImplementedError()
-
-
 @final
-class SingleTypeDatasetQueryResults(DatasetQueryResults, QueryResultsBase):
+class DatasetRefQueryResults(QueryResultsBase):
     """A query for `DatasetRef` results with a single dataset type.
 
     Parameters
@@ -134,103 +98,25 @@ class SingleTypeDatasetQueryResults(DatasetQueryResults, QueryResultsBase):
 
     @property
     def has_dimension_records(self) -> bool:
-        # Docstring inherited.
+        """Whether all data IDs in this iterable contain dimension records."""
         return self._spec.include_dimension_records
 
-    def with_dimension_records(self) -> SingleTypeDatasetQueryResults:
-        # Docstring inherited.
+    def with_dimension_records(self) -> DatasetRefQueryResults:
+        """Return a results object for which `has_dimension_records` is
+        `True`.
+        """
         if self.has_dimension_records:
             return self
         return self._copy(tree=self._tree, include_dimension_records=True)
-
-    def by_dataset_type(self) -> Iterator[SingleTypeDatasetQueryResults]:
-        # Docstring inherited.
-        return iter((self,))
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
         return self._driver.count(self._tree, self._spec, exact=exact, discard=discard)
 
-    def _copy(self, tree: QueryTree, **kwargs: Any) -> SingleTypeDatasetQueryResults:
+    def _copy(self, tree: QueryTree, **kwargs: Any) -> DatasetRefQueryResults:
         # Docstring inherited.
-        return SingleTypeDatasetQueryResults(self._driver, tree, self._spec.model_copy(update=kwargs))
+        return DatasetRefQueryResults(self._driver, tree, self._spec.model_copy(update=kwargs))
 
     def _get_datasets(self) -> frozenset[str]:
         # Docstring inherited.
         return frozenset({self.dataset_type.name})
-
-
-@final
-class ChainedDatasetQueryResults(DatasetQueryResults):
-    """A query for `DatasetRef` results with multiple dataset types.
-
-    Parameters
-    ----------
-    by_dataset_type : `tuple` [ `SingleTypeDatasetQueryResults` ]
-        Tuple of single-dataset-type query result objects to combine.
-
-    Notes
-    -----
-    This class should never be constructed directly by users; use
-    `Query.datasets` instead.
-    """
-
-    def __init__(self, by_dataset_type: tuple[SingleTypeDatasetQueryResults, ...]):
-        self._by_dataset_type = by_dataset_type
-
-    def __iter__(self) -> Iterator[DatasetRef]:
-        return itertools.chain.from_iterable(self._by_dataset_type)
-
-    def by_dataset_type(self) -> Iterator[SingleTypeDatasetQueryResults]:
-        # Docstring inherited.
-        return iter(self._by_dataset_type)
-
-    @property
-    def has_dimension_records(self) -> bool:
-        # Docstring inherited.
-        return all(single_type_results.has_dimension_records for single_type_results in self._by_dataset_type)
-
-    def with_dimension_records(self) -> ChainedDatasetQueryResults:
-        # Docstring inherited.
-        return ChainedDatasetQueryResults(
-            tuple(
-                [
-                    single_type_results.with_dimension_records()
-                    for single_type_results in self._by_dataset_type
-                ]
-            )
-        )
-
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        # Docstring inherited.
-        return any(
-            single_type_results.any(execute=execute, exact=exact)
-            for single_type_results in self._by_dataset_type
-        )
-
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        # Docstring inherited.
-        messages: list[str] = []
-        for single_type_results in self._by_dataset_type:
-            messages.extend(single_type_results.explain_no_results(execute=execute))
-        return messages
-
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        # Docstring inherited.
-        return sum(
-            single_type_results.count(exact=exact, discard=discard)
-            for single_type_results in self._by_dataset_type
-        )
-
-    def where(
-        self, *args: DataId | str | Predicate, bind: Mapping[str, Any] | None = None, **kwargs: Any
-    ) -> ChainedDatasetQueryResults:
-        # Docstring inherited.
-        return ChainedDatasetQueryResults(
-            tuple(
-                [
-                    single_type_results.where(*args, bind=bind, **kwargs)
-                    for single_type_results in self._by_dataset_type
-                ]
-            )
-        )
