@@ -141,6 +141,12 @@ class Predicate(QueryTreeBase):
         predicate : `Predicate`
             Predicate that evaluates to the given boolean value.
         """
+        # The values for True and False here make sense if you think about
+        # calling `all` and `any` with empty sequences; note that the
+        # `self.operands` attribute is evaluated as:
+        #
+        #    value = all(any(or_group) for or_group in self.operands)
+        #
         return cls.model_construct(operands=() if value else ((),))
 
     @classmethod
