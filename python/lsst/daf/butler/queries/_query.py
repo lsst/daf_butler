@@ -37,7 +37,7 @@ from lsst.utils.iteration import ensure_iterable
 from .._dataset_type import DatasetType
 from .._storage_class import StorageClassFactory
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
-from ..registry import DatasetTypeError, MissingDatasetTypeError
+from ..registry import DatasetTypeError
 from ._base import QueryBase
 from ._data_coordinate_query_results import DataCoordinateQueryResults
 from ._dataset_query_results import DatasetRefQueryResults
@@ -253,18 +253,14 @@ class Query(QueryBase):
         type separately in turn, and no information about the relationships
         between datasets of different types is included.
         """
-        dataset_type_name, query = self._join_dataset_search_impl(dataset_type, collections)
+        dataset_type_name, storage_class_name, query = self._join_dataset_search_impl(
+            dataset_type, collections
+        )
         dataset_search = query._tree.datasets[dataset_type_name]
-        if dataset_search.storage_class_name is None:
-            raise MissingDatasetTypeError(
-                f"No storage class provided for unregistered dataset type {dataset_type_name!r}. "
-                "Provide a complete DatasetType object instead of a string name to turn this error "
-                "into an empty result set."
-            )
         spec = DatasetRefResultSpec.model_construct(
             dataset_type_name=dataset_type_name,
             dimensions=dataset_search.dimensions,
-            storage_class_name=dataset_search.storage_class_name,
+            storage_class_name=storage_class_name,
             include_dimension_records=False,
             find_first=find_first,
         )
@@ -356,7 +352,6 @@ class Query(QueryBase):
         self,
         dataset_type: str | DatasetType,
         collections: Iterable[str] | None = None,
-        dimensions: DimensionGroup | None = None,
     ) -> Query:
         """Return a new query with a search for a dataset joined in.
 
@@ -370,15 +365,6 @@ class Query(QueryBase):
             dimensions or if ``find_first=False`` when requesting results. If
             not present or `None`, the default collection search path will be
             used.
-        dimensions : `DimensionGroup`, optional
-            The dimensions to assume for the dataset type if it is not
-            registered, or to check against if it is registered.  When the
-            dataset is not registered and this is not provided,
-            `MissingDatasetTypeError` is raised, since we cannot construct a
-            query without knowing the dataset's dimensions.  Providing this
-            argument causes the returned query to instead return no rows (as it
-            does when the dataset type is registered but no matching datasets
-            are found).
 
         Returns
         -------
@@ -389,11 +375,11 @@ class Query(QueryBase):
         Raises
         ------
         DatasetTypeError
-            Raised if the dimensions were provided but they do not match the
-            registered dataset type.
+            Raised given dataset type is inconsistent with the registered
+            dataset type.
         MissingDatasetTypeError
-            Raised if the dimensions were not provided and the dataset type was
-            not registered.
+            Raised if the dataset type has not been registered and only a
+            `str` dataset type name was given.
 
         Notes
         -----
@@ -401,7 +387,9 @@ class Query(QueryBase):
         dataset type and collections have already been referenced by the same
         query context.
         """
-        _, query = self._join_dataset_search_impl(dataset_type, collections, dimensions)
+        _, _, query = self._join_dataset_search_impl(
+            dataset_type, collections, allow_storage_class_overrides=False
+        )
         return query
 
     def join_data_coordinates(self, iterable: Iterable[DataCoordinate]) -> Query:
@@ -510,22 +498,20 @@ class Query(QueryBase):
         self,
         dataset_type: str | DatasetType,
         collections: Iterable[str] | None = None,
-        dimensions: DimensionGroup | None = None,
-    ) -> tuple[str, Query]:
+        allow_storage_class_overrides: bool = True,
+    ) -> tuple[str, str, Query]:
         """Implement `join_dataset_search`, and also return the dataset type
-        name.
+        name and storage class, in addition to the modified Query.
         """
         # In this method we need the dimensions of the dataset type, but we
-        # don't necessarily need the storage class, since the dataset may only
-        # be used as an existence constraint.  But we also want to remember the
-        # storage class if it's passed in, so users don't get frustrated having
-        # to pass it twice if they do want DatasetRefs back.
+        # might not need the storage class, since the dataset may only be used
+        # as an existence constraint.  It depends on whether
+        # `join_dataset_search` or `datasets` is calling this method.
+        dimensions: DimensionGroup | None = None
         storage_class_name: str | None = None
         # Handle DatasetType vs. str arg.
         if isinstance(dataset_type, DatasetType):
             dataset_type_name = dataset_type.name
-            if dimensions is not None:
-                raise TypeError("Cannot provide a full DatasetType object and separate dimensions.")
             dimensions = dataset_type.dimensions.as_group()
             storage_class_name = dataset_type.storageClass_name
         elif isinstance(dataset_type, str):
@@ -546,42 +532,29 @@ class Query(QueryBase):
                     )
             if dimensions is None:
                 dimensions = existing_search.dimensions
-            elif dimensions != existing_search.dimensions:
-                raise DatasetTypeError(
-                    f"Given dimensions {dimensions} for dataset type {dataset_type_name!r} do not match the "
-                    f"previously-joined dimensions {existing_search.dimensions}."
-                )
-            if storage_class_name is None or storage_class_name == existing_search.storage_class_name:
-                # Nothing to do; this dataset has already been joined in with
-                # the parameters we want.  We don't need to check against the
-                # registered dataset type since that will have been done the
-                # first time we joined this dataset type in.
-                return dataset_type_name, self
         else:
             if collections is None:
                 collections = self._driver.get_default_collections()
         collections = tuple(ensure_iterable(collections))
-        # See if the dataset type is registered, to look up and/or check
-        # dimensions, and get a storage class if there isn't one already.
-        try:
-            resolved_dataset_type = self._driver.get_dataset_type(dataset_type_name)
-            resolved_dimensions = resolved_dataset_type.dimensions.as_group()
-            if storage_class_name is None:
-                storage_class_name = resolved_dataset_type.storageClass_name
-        except MissingDatasetTypeError:
-            if dimensions is None:
-                raise
-            resolved_dimensions = dimensions
-        else:
-            if dimensions is not None and dimensions != resolved_dimensions:
-                raise DatasetTypeError(
-                    f"Given dimensions {dimensions} for dataset type {dataset_type_name!r} do not match the "
-                    f"registered dimensions {resolved_dimensions}."
-                )
-            if (
-                storage_class_name is not None
-                and storage_class_name != resolved_dataset_type.storageClass_name
-            ):
+        # Look up the data repository definition of the dataset type to check
+        # for consistency, or get dimensions and storage class if we don't have
+        # them.
+        resolved_dataset_type = self._driver.get_dataset_type(dataset_type_name)
+        resolved_dimensions = resolved_dataset_type.dimensions.as_group()
+        if dimensions is not None and dimensions != resolved_dimensions:
+            raise DatasetTypeError(
+                f"Given dimensions {dimensions} for dataset type {dataset_type_name!r} do not match the "
+                f"registered dimensions {resolved_dimensions}."
+            )
+        if storage_class_name is not None:
+            if storage_class_name != resolved_dataset_type.storageClass_name:
+                if not allow_storage_class_overrides:
+                    raise InvalidQueryError(
+                        f"Storage class {storage_class_name!r} for dataset type {dataset_type!r} differs "
+                        f"from repository definition {resolved_dataset_type.storageClass_name!r}, but "
+                        "join_dataset_search does not are about storage classes and cannot record this "
+                        "override.  Pass the override to `Query.datasets` instead."
+                    )
                 if not (
                     StorageClassFactory()
                     .getStorageClass(storage_class_name)
@@ -591,14 +564,14 @@ class Query(QueryBase):
                         f"Given storage class {storage_class_name!r} for {dataset_type_name!r} is not "
                         f"compatible with repository storage class {resolved_dataset_type.storageClass_name}."
                     )
-        # We do not check the storage class for consistency with the registered
-        # storage class at this point, because it's not going to be used for
-        # anything yet other than a default that can still be overridden.
+        else:
+            storage_class_name = resolved_dataset_type.storageClass_name
         dataset_search = DatasetSearch.model_construct(
             collections=collections,
             dimensions=resolved_dimensions,
-            storage_class_name=storage_class_name,
         )
-        return dataset_type_name, Query(
-            self._driver, self._tree.join_dataset(dataset_type_name, dataset_search)
+        return (
+            dataset_type_name,
+            storage_class_name,
+            Query(self._driver, self._tree.join_dataset(dataset_type_name, dataset_search)),
         )
