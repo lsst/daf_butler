@@ -677,20 +677,20 @@ class ColumnExpressionsTestCase(unittest.TestCase):
             (self.x.visit.exposure_time - 10.0, "visit.exposure_time - 10.0", 20.0),
             (self.x.visit.exposure_time * 6.0, "visit.exposure_time * 6.0", 180.0),
             (self.x.visit.exposure_time / 30.0, "visit.exposure_time / 30.0", 1.0),
-            (15.0 + -self.x.visit.exposure_time, "15.0 + -visit.exposure_time", -15.0),
-            (10.0 - -self.x.visit.exposure_time, "10.0 - -visit.exposure_time", 40.0),
-            (6.0 * -self.x.visit.exposure_time, "6.0 * -visit.exposure_time", -180.0),
-            (30.0 / -self.x.visit.exposure_time, "30.0 / -visit.exposure_time", -1.0),
+            (15.0 + -self.x.visit.exposure_time, "15.0 + (-visit.exposure_time)", -15.0),
+            (10.0 - -self.x.visit.exposure_time, "10.0 - (-visit.exposure_time)", 40.0),
+            (6.0 * -self.x.visit.exposure_time, "6.0 * (-visit.exposure_time)", -180.0),
+            (30.0 / -self.x.visit.exposure_time, "30.0 / (-visit.exposure_time)", -1.0),
             ((self.x.visit.exposure_time + 15.0) * 6.0, "(visit.exposure_time + 15.0) * 6.0", 270.0),
-            ((self.x.visit.exposure_time + 15.0) + 45.0, "visit.exposure_time + 15.0 + 45.0", 90.0),
+            ((self.x.visit.exposure_time + 15.0) + 45.0, "(visit.exposure_time + 15.0) + 45.0", 90.0),
             ((self.x.visit.exposure_time + 15.0) / 5.0, "(visit.exposure_time + 15.0) / 5.0", 9.0),
             # We don't need the parentheses we generate in the next one, but
             # they're not a problem either.
             ((self.x.visit.exposure_time + 15.0) - 60.0, "(visit.exposure_time + 15.0) - 60.0", -15.0),
-            (6.0 * (-self.x.visit.exposure_time - 15.0), "6.0 * (-visit.exposure_time - 15.0)", -270.0),
-            (60.0 + (-self.x.visit.exposure_time - 15.0), "60.0 + -visit.exposure_time - 15.0", 15.0),
-            (90.0 / (-self.x.visit.exposure_time - 15.0), "90.0 / (-visit.exposure_time - 15.0)", -2.0),
-            (60.0 - (-self.x.visit.exposure_time - 15.0), "60.0 - (-visit.exposure_time - 15.0)", 105.0),
+            (6.0 * (-self.x.visit.exposure_time - 15.0), "6.0 * ((-visit.exposure_time) - 15.0)", -270.0),
+            (60.0 + (-self.x.visit.exposure_time - 15.0), "60.0 + ((-visit.exposure_time) - 15.0)", 15.0),
+            (90.0 / (-self.x.visit.exposure_time - 15.0), "90.0 / ((-visit.exposure_time) - 15.0)", -2.0),
+            (60.0 - (-self.x.visit.exposure_time - 15.0), "60.0 - ((-visit.exposure_time) - 15.0)", 105.0),
         ]:
             with self.subTest(string=string):
                 expr = self.x.unwrap(proxy)
