@@ -106,6 +106,9 @@ class TopologicalFamily(ABC):
     def __contains__(self, other: TopologicalRelationshipEndpoint) -> bool:
         return other.topology.get(self.space) == self
 
+    def __repr__(self) -> str:
+        return self.name
+
     @abstractmethod
     def choose(self, endpoints: Set[str], universe: DimensionUniverse) -> TopologicalRelationshipEndpoint:
         """Select the best member of this family to use.

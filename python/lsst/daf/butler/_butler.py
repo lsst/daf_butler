@@ -32,16 +32,19 @@ __all__ = ["Butler"]
 from abc import abstractmethod
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any, TextIO
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
+from lsst.utils.iteration import ensure_iterable
 from lsst.utils.logging import getLogger
 
 from ._butler_config import ButlerConfig, ButlerType
 from ._butler_instance_options import ButlerInstanceOptions
 from ._butler_repo_index import ButlerRepoIndex
 from ._config import Config, ConfigSubset
+from ._exceptions import EmptyQueryResultError
 from ._limited_butler import LimitedButler
 from .datastore import Datastore
 from .dimensions import DimensionConfig
@@ -54,12 +57,12 @@ if TYPE_CHECKING:
     from ._dataset_type import DatasetType
     from ._deferredDatasetHandle import DeferredDatasetHandle
     from ._file_dataset import FileDataset
-    from ._query import Query
     from ._storage_class import StorageClass
     from ._timespan import Timespan
     from .datastore import DatasetRefURIs
     from .dimensions import DataCoordinate, DataId, DimensionGroup, DimensionRecord
-    from .registry import CollectionArgType, Registry
+    from .queries import Query
+    from .registry import Registry
     from .transfers import RepoExportContext
 
 _LOG = getLogger(__name__)
@@ -1428,7 +1431,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def _query_data_ids(
         self,
         dimensions: DimensionGroup | Iterable[str] | str,
@@ -1436,7 +1438,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         data_id: DataId | None = None,
         where: str = "",
         bind: Mapping[str, Any] | None = None,
-        expanded: bool = False,
+        with_dimension_records: bool = False,
         order_by: Iterable[str] | str | None = None,
         limit: int | None = None,
         offset: int = 0,
@@ -1466,7 +1468,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Values of collection type can be expanded in some cases; see
             :ref:`daf_butler_dimension_expressions_identifiers` for more
             information.
-        expanded : `bool`, optional
+        with_dimension_records : `bool`, optional
             If `True` (default is `False`) then returned data IDs will have
             dimension records.
         order_by : `~collections.abc.Iterable` [`str`] or `str`, optional
@@ -1511,19 +1513,32 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Raised when the arguments are incompatible, e.g. ``offset`` is
             specified, but ``limit`` is not.
         """
-        raise NotImplementedError()
+        if data_id is None:
+            data_id = DataCoordinate.make_empty(self.dimensions)
+        with self._query() as query:
+            result = (
+                query.where(data_id, where, bind=bind, **kwargs)
+                .data_ids(dimensions)
+                .order_by(*ensure_iterable(order_by))
+                .limit(limit, offset)
+            )
+            if with_dimension_records:
+                result = result.with_dimension_records()
+            data_ids = list(result)
+        if explain and not data_ids:
+            raise EmptyQueryResultError(list(result.explain_no_results()))
+        return data_ids
 
-    @abstractmethod
     def _query_datasets(
         self,
-        dataset_type: Any,
-        collections: CollectionArgType | None = None,
+        dataset_type: str | Iterable[str] | DatasetType | Iterable[DatasetType] | EllipsisType,
+        collections: str | Iterable[str] | None = None,
         *,
         find_first: bool = True,
         data_id: DataId | None = None,
         where: str = "",
         bind: Mapping[str, Any] | None = None,
-        expanded: bool = False,
+        with_dimension_records: bool = False,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DatasetRef]:
@@ -1533,17 +1548,13 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         ----------
         dataset_type : dataset type expression
             An expression that fully or partially identifies the dataset types
-            to be queried.  Allowed types include `DatasetType`, `str`,
-            `re.Pattern`, and iterables thereof.  The special value ``...`` can
-            be used to query all dataset types.  See
-            :ref:`daf_butler_dataset_type_expressions` for more information.
+            to be queried.  Allowed types include `DatasetType`, `str`, and
+            iterables thereof.  The special value ``...`` can be used to query
+            all dataset types.  See :ref:`daf_butler_dataset_type_expressions`
+            for more information.
         collections : collection expression, optional
-            An expression that identifies the collections to search, such as a
-            `str` (for full matches or partial matches via globs), `re.Pattern`
-            (for partial matches), or iterable thereof.  ``...`` can be used to
-            search all collections (actually just all `~CollectionType.RUN`
-            collections, because this will still find all datasets).
-            If not provided, the default collections are used.  See
+            A collection name or iterable of collection names to search. If not
+            provided, the default collections are used.  See
             :ref:`daf_butler_collection_expressions` for more information.
         find_first : `bool`, optional
             If `True` (default), for each result data ID, only yield one
@@ -1552,20 +1563,20 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             order of ``collections`` passed in).  If `True`, ``collections``
             must not contain regular expressions and may not be ``...``.
         data_id : `dict` or `DataCoordinate`, optional
-            A data ID whose key-value pairs are used as equality constraints
-            in the query.
+            A data ID whose key-value pairs are used as equality constraints in
+            the query.
         where : `str`, optional
-            A string expression similar to a SQL WHERE clause.  May involve
-            any column of a dimension table or (as a shortcut for the primary
-            key column of a dimension table) dimension name.  See
+            A string expression similar to a SQL WHERE clause.  May involve any
+            column of a dimension table or (as a shortcut for the primary key
+            column of a dimension table) dimension name.  See
             :ref:`daf_butler_dimension_expressions` for more information.
         bind : `~collections.abc.Mapping`, optional
             Mapping containing literal values that should be injected into the
-            ``where`` expression, keyed by the identifiers they replace.
-            Values of collection type can be expanded in some cases; see
+            ``where`` expression, keyed by the identifiers they replace. Values
+            of collection type can be expanded in some cases; see
             :ref:`daf_butler_dimension_expressions_identifiers` for more
             information.
-        expanded : `bool`, optional
+        with_dimension_records : `bool`, optional
             If `True` (default is `False`) then returned data IDs will have
             dimension records.
         explain : `bool`, optional
@@ -1584,10 +1595,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         refs : `.queries.DatasetQueryResults`
             Dataset references matching the given query criteria.  Nested data
             IDs are guaranteed to include values for all implied dimensions
-            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
-            include dimension records (`DataCoordinate.hasRecords` will be
-            `False`) unless `~.queries.DatasetQueryResults.expanded` is
-            called on the result object (which returns a new one).
+            (i.e. `DataCoordinate.hasFull` will return `True`).
 
         Raises
         ------
@@ -1609,14 +1617,26 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
         Notes
         -----
-        When multiple dataset types are queried in a single call, the
-        results of this operation are equivalent to querying for each dataset
-        type separately in turn, and no information about the relationships
-        between datasets of different types is included.
+        When multiple dataset types are queried in a single call, the results
+        of this operation are equivalent to querying for each dataset type
+        separately in turn, and no information about the relationships between
+        datasets of different types is included.
         """
-        raise NotImplementedError()
+        if data_id is None:
+            data_id = DataCoordinate.make_empty(self.dimensions)
+        with self._query() as query:
+            result = query.where(data_id, where, bind=bind, **kwargs).datasets(
+                dataset_type,
+                collections=collections,
+                find_first=find_first,
+            )
+            if with_dimension_records:
+                result = result.with_dimension_records()
+            refs = list(result)
+        if explain and not refs:
+            raise EmptyQueryResultError(list(result.explain_no_results()))
+        return refs
 
-    @abstractmethod
     def _query_dimension_records(
         self,
         element: str,
@@ -1691,7 +1711,19 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             when ``collections`` is `None` and default butler collections are
             not defined.
         """
-        raise NotImplementedError()
+        if data_id is None:
+            data_id = DataCoordinate.make_empty(self.dimensions)
+        with self._query() as query:
+            result = (
+                query.where(data_id, where, bind=bind, **kwargs)
+                .dimension_records(element)
+                .order_by(*ensure_iterable(order_by))
+                .limit(limit, offset)
+            )
+            dimension_records = list(result)
+        if explain and not dimension_records:
+            raise EmptyQueryResultError(list(result.explain_no_results()))
+        return dimension_records
 
     @abstractmethod
     def _clone(

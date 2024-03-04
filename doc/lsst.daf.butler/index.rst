@@ -101,6 +101,7 @@ Python API reference
 
 .. automodapi:: lsst.daf.butler
    :no-main-docstr:
+   :no-inherited-members:
    :skip: RegistryConfig
 
 Example datastores
@@ -108,12 +109,15 @@ Example datastores
 
 .. automodapi:: lsst.daf.butler.datastores.chainedDatastore
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.datastores.inMemoryDatastore
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.datastores.fileDatastore
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 Example formatters
@@ -121,21 +125,27 @@ Example formatters
 
 .. automodapi:: lsst.daf.butler.formatters.file
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.json
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.matplotlib
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.parquet
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.pickle
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.yaml
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 Test utilities
@@ -143,6 +153,7 @@ Test utilities
 
 .. automodapi:: lsst.daf.butler.tests
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
    :no-inheritance-diagram:
 
@@ -158,6 +169,7 @@ Datastore utilities
 
 .. automodapi:: lsst.daf.butler.datastore
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
    :skip: Datastore
 
@@ -166,20 +178,24 @@ Registry utilities and interfaces
 
 .. automodapi:: lsst.daf.butler.registry
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
    :skip: Registry
    :skip: CollectionType
 
 .. automodapi:: lsst.daf.butler.registry.interfaces
    :headings: ^"
+   :no-inherited-members:
    :no-main-docstr:
 
 .. automodapi:: lsst.daf.butler.registry.queries
    :headings: ^"
+   :no-inherited-members:
    :no-main-docstr:
 
 .. automodapi:: lsst.daf.butler.registry.wildcards
    :headings: ^"
+   :no-inherited-members:
    :no-main-docstr:
 
 Database backends
@@ -187,10 +203,12 @@ Database backends
 
 .. automodapi:: lsst.daf.butler.registry.databases.sqlite
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.registry.databases.postgresql
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 General utilities
@@ -198,59 +216,73 @@ General utilities
 
 .. automodapi:: lsst.daf.butler.arrow_utils
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.column_spec
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.ddl
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.json
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.logging
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.mapping_factory
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.nonempty_mapping
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.persistence_context
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.progress
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.pydantic_utils
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.repo_relocation
    :no-main-docstr:
    :headings: ^"
+   :no-inherited-members:
    :include-all-objects:
 
 .. automodapi:: lsst.daf.butler.time_utils
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.timespan_database_representation
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 .. automodapi:: lsst.daf.butler.utils
    :no-main-docstr:
+   :no-inherited-members:
    :headings: ^"
 
 Command-Line Interface Utilities

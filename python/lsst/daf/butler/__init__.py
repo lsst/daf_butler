@@ -60,8 +60,6 @@ from ._location import *
 from ._named import *
 from ._quantum import *
 from ._quantum_backed import *
-from ._query import *
-from ._query_results import *
 from ._storage_class import *
 from ._storage_class_delegate import *
 from ._timespan import *
@@ -79,6 +77,16 @@ from .logging import ButlerLogRecords
 # as those are internal.
 # Only lift 'Progress' from 'progess'; the module is imported as-is above
 from .progress import Progress
+
+# Only import the main public symbols from queries
+from .queries import (
+    ChainedDatasetQueryResults,
+    DataCoordinateQueryResults,
+    DatasetQueryResults,
+    DimensionRecordQueryResults,
+    Query,
+    SingleTypeDatasetQueryResults,
+)
 
 # Do not import or lift symbols from 'server' or 'server_models'.
 # Import the registry subpackage directly for other symbols.
