@@ -110,7 +110,7 @@ class QueryBase(ABC):
         self,
         *args: str | Predicate | DataId,
         bind: Mapping[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: int | str,
     ) -> Self:
         """Return a query with a boolean-expression filter on its rows.
 
@@ -232,7 +232,7 @@ class QueryResultsBase(QueryBase):
         self,
         *args: str | Predicate | DataId,
         bind: Mapping[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: int | str,
     ) -> Self:
         # Docstring inherited.
         return self._copy(
@@ -251,7 +251,7 @@ class QueryResultsBase(QueryBase):
     def _copy(self, tree: QueryTree, **kwargs: Any) -> Self:
         """Return a modified copy of ``self``.
 
-        Implementations should validate odifications, not assume they are
+        Implementations should validate modifications, not assume they are
         correct.
         """
         raise NotImplementedError()
