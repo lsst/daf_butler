@@ -38,6 +38,7 @@ __all__ = (
     "RegionColumnSpec",
     "TimespanColumnSpec",
     "ColumnType",
+    "COLLECTION_NAME_MAX_LENGTH",
 )
 
 import textwrap
@@ -56,6 +57,12 @@ from ._timespan import Timespan
 ColumnType: TypeAlias = Literal[
     "int", "string", "hash", "float", "datetime", "bool", "uuid", "timespan", "region"
 ]
+
+
+COLLECTION_NAME_MAX_LENGTH = 64
+# TODO: DM-42541 would bee a good opportunity to move this constant to a
+# better home; this file is the least-bad home I can think of for now.  Note
+# that actually changing the value is a (minor) schema change.
 
 
 class _BaseColumnSpec(pydantic.BaseModel, ABC):
