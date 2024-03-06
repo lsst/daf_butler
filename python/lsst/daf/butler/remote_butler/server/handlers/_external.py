@@ -39,8 +39,8 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetFileResponseModel,
 )
 
+from ...._exceptions import ButlerLookupError
 from .._dependencies import factory_dependency
-from .._exceptions import NotFoundException
 from .._factory import Factory
 
 external_router = APIRouter()
@@ -157,7 +157,7 @@ def get_file(
     butler = factory.create_butler()
     ref = butler.get_dataset(dataset_id, datastore_records=True)
     if ref is None:
-        raise NotFoundException(f"Dataset ID {dataset_id} not found")
+        raise ButlerLookupError(f"Dataset ID {dataset_id} not found")
     return _get_file_by_ref(butler, ref)
 
 
@@ -171,16 +171,13 @@ def get_file_by_data_id(
     factory: Factory = Depends(factory_dependency),
 ) -> GetFileResponseModel:
     butler = factory.create_butler()
-    try:
-        ref = butler._findDatasetRef(
-            datasetRefOrType=request.dataset_type_name,
-            dataId=request.data_id,
-            collections=request.collections,
-            datastore_records=True,
-        )
-        return _get_file_by_ref(butler, ref)
-    except LookupError as e:
-        raise NotFoundException() from e
+    ref = butler._findDatasetRef(
+        datasetRefOrType=request.dataset_type_name,
+        dataId=request.data_id,
+        collections=request.collections,
+        datastore_records=True,
+    )
+    return _get_file_by_ref(butler, ref)
 
 
 def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:

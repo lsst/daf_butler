@@ -27,6 +27,7 @@
 
 """Specialized Butler exceptions."""
 __all__ = (
+    "ButlerLookupError",
     "ButlerUserError",
     "DatasetTypeNotSupportedError",
     "EmptyQueryResultError",
