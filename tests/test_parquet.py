@@ -267,10 +267,22 @@ def _makeSimpleAstropyTable(include_multidim=False, include_masked=False, includ
         nrow = len(table)
         mask = np.zeros(nrow, dtype=bool)
         mask[1] = True
-        table["m1"] = np.ma.masked_array(data=np.arange(nrow, dtype="i8"), mask=mask, fill_value=-1)
-        table["m2"] = np.ma.masked_array(data=np.arange(nrow, dtype="f4"), mask=mask, fill_value=np.nan)
+        # We set the masked columns with the underlying sentinel value
+        # to be able test after serialization.
+        arr = np.arange(nrow, dtype="i8")
+        arr[mask] = -1
+        table["m1"] = np.ma.masked_array(data=arr, mask=mask, fill_value=-1)
+        arr = np.arange(nrow, dtype="f4")
+        arr[mask] = np.nan
+        table["m2"] = np.ma.masked_array(data=arr, mask=mask, fill_value=np.nan)
         table["m3"] = np.arange(nrow, dtype="f4")
         table["m3"][mask] = np.nan
+        arr = np.zeros(nrow, dtype=np.bool_)
+        arr[mask] = True
+        table["m4"] = np.ma.masked_array(data=arr, mask=mask, fill_value=True)
+        arr = np.arange(nrow, dtype="u4")
+        arr[mask] = 0
+        table["m5"] = np.ma.masked_array(data=arr, mask=mask, fill_value=0)
         table["mstrcol"] = np.ma.masked_array(data=np.array(["text"] * nrow), mask=mask, fill_value="")
         table["mbytecol"] = np.ma.masked_array(data=np.array([b"bytes"] * nrow), mask=mask, fill_value=b"")
 
@@ -1022,15 +1034,21 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
                 self.assertEqual(table1[name].description, table2[name].description)
                 self.assertEqual(table1[name].format, table2[name].format)
                 # We need to check masked/regular columns after filling.
+                has_masked = False
                 if isinstance(table1[name], atable.column.MaskedColumn):
                     c1 = table1[name].filled()
+                    has_masked = True
                 else:
                     c1 = np.array(table1[name])
                 if isinstance(table2[name], atable.column.MaskedColumn):
                     c2 = table2[name].filled()
+                    has_masked = True
                 else:
                     c2 = np.array(table2[name])
                 np.testing.assert_array_equal(c1, c2)
+                # If we have a masked column then we test the underlying data.
+                if has_masked:
+                    np.testing.assert_array_equal(np.array(c1), np.array(c2))
 
 
 @unittest.skipUnless(atable is not None, "Cannot test InMemoryArrowAstropyDelegate without astropy.")
@@ -1597,15 +1615,21 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
             self.assertEqual(table1[name].description, table2[name].description)
             self.assertEqual(table1[name].format, table2[name].format)
             # We need to check masked/regular columns after filling.
+            has_masked = False
             if isinstance(table1[name], atable.column.MaskedColumn):
                 c1 = table1[name].filled()
+                has_masked = True
             else:
                 c1 = np.array(table1[name])
             if isinstance(table2[name], atable.column.MaskedColumn):
                 c2 = table2[name].filled()
+                has_masked = True
             else:
                 c2 = np.array(table2[name])
             np.testing.assert_array_equal(c1, c2)
+            # If we have a masked column then we test the underlying data.
+            if has_masked:
+                np.testing.assert_array_equal(np.array(c1), np.array(c2))
 
     def _checkNumpyTableEquality(self, table1, table2):
         """Check if two numpy tables have the same columns/values
