@@ -27,7 +27,7 @@
 
 """Specialized Butler exceptions."""
 __all__ = (
-    "ButlerLookupError",
+    "DatasetNotFoundError",
     "ButlerUserError",
     "DatasetTypeNotSupportedError",
     "EmptyQueryResultError",
@@ -70,8 +70,10 @@ class ButlerUserError(Exception):
         return super().__init__(detail)
 
 
-class ButlerLookupError(LookupError, ButlerUserError):
-    error_type = "lookup"
+class DatasetNotFoundError(LookupError, ButlerUserError):
+    """The requested dataset could not be found."""
+
+    error_type = "dataset_not_found"
 
 
 class MissingDatasetTypeError(DatasetTypeError, KeyError, ButlerUserError):
@@ -124,7 +126,7 @@ class UnknownButlerUserError(ButlerUserError):
 
 
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
-    ButlerLookupError,
+    DatasetNotFoundError,
     MissingDatasetTypeError,
     UnknownButlerUserError,
 )

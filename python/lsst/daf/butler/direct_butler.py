@@ -58,7 +58,7 @@ from ._dataset_existence import DatasetExistence
 from ._dataset_ref import DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from ._exceptions import ButlerLookupError, ValidationError
+from ._exceptions import DatasetNotFoundError, ValidationError
 from ._limited_butler import LimitedButler
 from ._registry_shim import RegistryShim
 from ._storage_class import StorageClass, StorageClassFactory
@@ -881,7 +881,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             else:
                 if collections is None:
                     collections = self._registry.defaults.collections
-                raise ButlerLookupError(
+                raise DatasetNotFoundError(
                     f"Dataset {datasetType.name} with data ID {dataId} "
                     f"could not be found in collections {collections}."
                 )

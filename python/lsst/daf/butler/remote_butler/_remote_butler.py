@@ -56,7 +56,7 @@ from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
-from .._exceptions import ButlerLookupError, create_butler_user_error
+from .._exceptions import DatasetNotFoundError, create_butler_user_error
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
@@ -266,7 +266,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         try:
             model = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
-        except ButlerLookupError as e:
+        except DatasetNotFoundError as e:
             raise FileNotFoundError(str(e)) from e
 
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
@@ -454,7 +454,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             response = self._get_file_info(
                 dataset_ref_or_type, dataId=data_id, collections=collections, kwargs=kwargs
             )
-        except ButlerLookupError:
+        except DatasetNotFoundError:
             return DatasetExistence.UNRECOGNIZED
 
         if response.artifact is None:
@@ -754,7 +754,7 @@ def _apply_storage_class_override(
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:
     if get_file_response.artifact is None:
         ref = get_file_response.dataset_ref
-        raise ButlerLookupError(f"Dataset is known, but artifact is not available. (datasetId='{ref.id}')")
+        raise DatasetNotFoundError(f"Dataset is known, but artifact is not available. (datasetId='{ref.id}')")
 
     return get_file_response.artifact
 

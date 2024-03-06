@@ -39,7 +39,7 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetFileResponseModel,
 )
 
-from ...._exceptions import ButlerLookupError
+from ...._exceptions import DatasetNotFoundError
 from .._dependencies import factory_dependency
 from .._factory import Factory
 
@@ -157,7 +157,7 @@ def get_file(
     butler = factory.create_butler()
     ref = butler.get_dataset(dataset_id, datastore_records=True)
     if ref is None:
-        raise ButlerLookupError(f"Dataset ID {dataset_id} not found")
+        raise DatasetNotFoundError(f"Dataset ID {dataset_id} not found")
     return _get_file_by_ref(butler, ref)
 
 
