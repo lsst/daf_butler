@@ -34,13 +34,12 @@ from lsst.daf.butler.tests.dict_convertible_model import DictConvertibleModel
 try:
     # Failing to import any of these should disable the tests.
     import safir.dependencies.logger
-    from fastapi import HTTPException
     from fastapi.testclient import TestClient
     from lsst.daf.butler.remote_butler import RemoteButler
     from lsst.daf.butler.remote_butler._authentication import _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY
     from lsst.daf.butler.remote_butler.server import create_app
     from lsst.daf.butler.remote_butler.server._dependencies import butler_factory_dependency
-    from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, create_test_server
+    from lsst.daf.butler.tests.server import TEST_REPOSITORY_NAME, UnhandledServerError, create_test_server
 except ImportError:
     create_test_server = None
 
@@ -336,9 +335,9 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # authentication headers is working.  It doesn't test actual server
         # functionality -- in a real deployment, the authentication headers are
         # handled by GafaelfawrIngress, not our app.
-        with self.assertRaises(HTTPException) as cm:
+        with self.assertRaises(UnhandledServerError) as cm:
             self.client.get("/v1/dataset_type/int")
-        self.assertEqual(cm.exception.status_code, 401)
+        self.assertEqual(cm.exception.__cause__.status_code, 401)
 
     def test_exception_logging(self):
         app = create_app()

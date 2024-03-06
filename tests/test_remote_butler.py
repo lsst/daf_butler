@@ -107,7 +107,17 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
     """Tests for RemoteButler's `Registry` shim."""
 
     def setUp(self):
-        self.server_instance = self.enterContext(create_test_server(TESTDIR))
+        self.server_instance = self.enterContext(
+            create_test_server(
+                TESTDIR,
+                # Currently, not all error-handling logic is in place between
+                # the server and the client.  This
+                # 'raise_original_server_exceptions' hides that in the unit
+                # tests by sending the server-side exceptions to the client, in
+                # a way that wouldn't occur in a real deployment.
+                raise_original_server_exceptions=True,
+            )
+        )
 
     @classmethod
     def getDataDir(cls) -> str:
