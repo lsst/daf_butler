@@ -269,6 +269,8 @@ def _makeSimpleAstropyTable(include_multidim=False, include_masked=False, includ
         mask[1] = True
         table["m1"] = np.ma.masked_array(data=np.arange(nrow, dtype="i8"), mask=mask, fill_value=-1)
         table["m2"] = np.ma.masked_array(data=np.arange(nrow, dtype="f4"), mask=mask, fill_value=np.nan)
+        table["m3"] = np.arange(nrow, dtype="f4")
+        table["m3"][mask] = np.nan
         table["mstrcol"] = np.ma.masked_array(data=np.array(["text"] * nrow), mask=mask, fill_value="")
         table["mbytecol"] = np.ma.masked_array(data=np.array([b"bytes"] * nrow), mask=mask, fill_value=b"")
 
@@ -1019,10 +1021,16 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
                 self.assertEqual(table1[name].unit, table2[name].unit)
                 self.assertEqual(table1[name].description, table2[name].description)
                 self.assertEqual(table1[name].format, table2[name].format)
+                # We need to check masked/regular columns after filling.
                 if isinstance(table1[name], atable.column.MaskedColumn):
-                    np.testing.assert_array_equal(table1[name].filled(), table2[name].filled())
+                    c1 = table1[name].filled()
                 else:
-                    np.testing.assert_array_equal(table1[name], table2[name])
+                    c1 = np.array(table1[name])
+                if isinstance(table2[name], atable.column.MaskedColumn):
+                    c2 = table2[name].filled()
+                else:
+                    c2 = np.array(table2[name])
+                np.testing.assert_array_equal(c1, c2)
 
 
 @unittest.skipUnless(atable is not None, "Cannot test InMemoryArrowAstropyDelegate without astropy.")
@@ -1341,7 +1349,13 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
         self.butler.put(tab1, self.datasetType, dataId={})
         # Read the whole Table.
         tab2 = self.butler.get(self.datasetType, dataId={})
-        self.assertEqual(tab2, tab1)
+        # We convert to use the numpy testing framework to handle nan
+        # comparisons.
+        self.assertEqual(tab1.schema, tab2.schema)
+        tab1_np = arrow_to_numpy(tab1)
+        tab2_np = arrow_to_numpy(tab2)
+        for col in tab1.column_names:
+            np.testing.assert_array_equal(tab2_np[col], tab1_np[col])
         # Read the columns.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertEqual(len(columns2), len(tab1.schema.names))
@@ -1582,11 +1596,16 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
             self.assertEqual(table1[name].unit, table2[name].unit)
             self.assertEqual(table1[name].description, table2[name].description)
             self.assertEqual(table1[name].format, table2[name].format)
-
+            # We need to check masked/regular columns after filling.
             if isinstance(table1[name], atable.column.MaskedColumn):
-                np.testing.assert_array_equal(table1[name].filled(), table2[name].filled())
+                c1 = table1[name].filled()
             else:
-                np.testing.assert_array_equal(table1[name], table2[name])
+                c1 = np.array(table1[name])
+            if isinstance(table2[name], atable.column.MaskedColumn):
+                c2 = table2[name].filled()
+            else:
+                c2 = np.array(table2[name])
+            np.testing.assert_array_equal(c1, c2)
 
     def _checkNumpyTableEquality(self, table1, table2):
         """Check if two numpy tables have the same columns/values
