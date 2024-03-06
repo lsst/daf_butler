@@ -39,7 +39,7 @@ from lsst.daf.butler import DimensionUniverse, Timespan
 from lsst.daf.butler.dimensions import DimensionElement, DimensionGroup
 from lsst.daf.butler.queries import tree as qt
 from lsst.daf.butler.queries.expression_factory import ExpressionFactory
-from lsst.daf.butler.queries.overlaps import OverlapsVisitor
+from lsst.daf.butler.queries.overlaps import OverlapsVisitor, _NaiveDisjointSet
 from lsst.daf.butler.queries.visitors import PredicateVisitFlags
 from lsst.sphgeom import Mq3cPixelization, Region
 
@@ -464,6 +464,22 @@ class OverlapsVisitorTestCase(unittest.TestCase):
     # There are no tests for temporal dimension joins, because the default
     # dimension universe only has one spatial family, and the untested logic
     # trivially duplicates the spatial-join logic.
+
+
+class NaiveDisjointSetTestCase(unittest.TestCase):
+    """Test the naive disjoint-set implementation that backs automatic overlap
+    join creation.
+    """
+
+    def test_naive_disjoint_set(self) -> None:
+        s = _NaiveDisjointSet(range(8))
+        self.assertCountEqual(s.subsets(), [{n} for n in range(8)])
+        s.merge(3, 4)
+        self.assertCountEqual(s.subsets(), [{0}, {1}, {2}, {3, 4}, {5}, {6}, {7}])
+        s.merge(2, 1)
+        self.assertCountEqual(s.subsets(), [{0}, {1, 2}, {3, 4}, {5}, {6}, {7}])
+        s.merge(1, 3)
+        self.assertCountEqual(s.subsets(), [{0}, {1, 2, 3, 4}, {5}, {6}, {7}])
 
 
 if __name__ == "__main__":

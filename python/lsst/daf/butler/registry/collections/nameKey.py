@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 
 from ... import ddl
+from ...column_spec import COLLECTION_NAME_MAX_LENGTH
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._collection_type import CollectionType
 from ..interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
@@ -50,7 +51,9 @@ if TYPE_CHECKING:
     from ..interfaces import Database, StaticTablesContext
 
 
-_KEY_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True)
+_KEY_FIELD_SPEC = ddl.FieldSpec(
+    "name", dtype=sqlalchemy.String, length=COLLECTION_NAME_MAX_LENGTH, primaryKey=True
+)
 
 
 # This has to be updated on every schema change

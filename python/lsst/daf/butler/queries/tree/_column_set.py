@@ -336,15 +336,12 @@ class ColumnSet:
             case "ingest_date":
                 return column_spec.DateTimeColumnSpec.model_construct(name=qualified_name)
             case "run":
-                # TODO: string length matches the one defined in the
-                # CollectionManager implementations; we need to find a way to
-                # avoid hard-coding the value in multiple places.
                 return column_spec.StringColumnSpec.model_construct(
-                    name=qualified_name, nullable=False, length=128
+                    name=qualified_name, nullable=False, length=column_spec.COLLECTION_NAME_MAX_LENGTH
                 )
             case "collection":
                 return column_spec.StringColumnSpec.model_construct(
-                    name=qualified_name, nullable=False, length=128
+                    name=qualified_name, nullable=False, length=column_spec.COLLECTION_NAME_MAX_LENGTH
                 )
             case "timespan":
                 return column_spec.TimespanColumnSpec.model_construct(name=qualified_name, nullable=False)

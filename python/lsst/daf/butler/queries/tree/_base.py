@@ -91,16 +91,8 @@ class ColumnExpressionBase(QueryTreeBase, ABC):
     is_literal: ClassVar[bool] = False
     """Whether this expression wraps a literal Python value."""
 
-    @property
-    @abstractmethod
-    def precedence(self) -> int:
-        """Operator precedence for this operation.
-
-        Lower values bind more tightly, so parentheses are needed when printing
-        an expression where an operand has a higher value than the expression
-        itself.
-        """
-        raise NotImplementedError()
+    is_column_reference: ClassVar[bool] = False
+    """Whether this expression wraps a direct reference to column."""
 
     @property
     @abstractmethod
@@ -164,11 +156,6 @@ class ColumnLiteralBase(ColumnExpressionBase):
 
     is_literal: ClassVar[bool] = True
     """Whether this expression wraps a literal Python value."""
-
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
 
     def get_literal_value(self) -> Any:
         # Docstring inherited.

@@ -100,13 +100,6 @@ class DatasetSearch(QueryTreeBase):
     checked later.
     """
 
-    storage_class_name: str | None
-    """Name of the storage class to use when returning `DatasetRef` results.
-
-    May be `None` if the dataset is only used as a constraint or to return
-    columns that do not include a full dataset type.
-    """
-
 
 @final
 class QueryTree(QueryTreeBase):
@@ -243,9 +236,15 @@ class QueryTree(QueryTreeBase):
         If this dataset type was already joined in, the new `DatasetSearch`
         replaces the old one.
         """
-        datasets = dict(self.datasets)
-        datasets[dataset_type] = search
-        return self.model_copy(update=dict(dimensions=self.dimensions | search.dimensions, datasets=datasets))
+        if existing := self.datasets.get(dataset_type):
+            assert existing == search, "Dataset search should be new or the same."
+            return self
+        else:
+            datasets = dict(self.datasets)
+            datasets[dataset_type] = search
+            return self.model_copy(
+                update=dict(dimensions=self.dimensions | search.dimensions, datasets=datasets)
+            )
 
     def where(self, *terms: Predicate) -> QueryTree:
         """Return a new tree that adds row filtering via a boolean column

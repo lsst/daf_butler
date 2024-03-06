@@ -63,27 +63,6 @@ class _NaiveDisjointSet(Generic[_T]):
         self._subsets = [{k} for k in superset]
         self._subsets.sort(key=len, reverse=True)
 
-    def add(self, k: _T) -> bool:  # numpydoc ignore=PR04
-        """Add a new element as its own single-element subset unless it is
-        already present.
-
-        Parameters
-        ----------
-        k
-            Value to add.
-
-        Returns
-        -------
-        added : `bool`:
-            `True` if the value was actually added, `False` if it was already
-            present.
-        """
-        for subset in self._subsets:
-            if k in subset:
-                return False
-        self._subsets.append({k})
-        return True
-
     def merge(self, a: _T, b: _T) -> bool:  # numpydoc ignore=PR04
         """Merge the subsets containing the given elements.
 

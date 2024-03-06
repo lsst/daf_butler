@@ -29,7 +29,7 @@ from __future__ import annotations
 
 __all__ = ("ColumnReference", "DimensionKeyReference", "DimensionFieldReference", "DatasetFieldReference")
 
-from typing import TYPE_CHECKING, Literal, TypeAlias, TypeVar, Union, final
+from typing import TYPE_CHECKING, ClassVar, Literal, TypeAlias, TypeVar, Union, final
 
 import pydantic
 
@@ -51,17 +51,14 @@ class DimensionKeyReference(ColumnExpressionBase):
 
     expression_type: Literal["dimension_key"] = "dimension_key"
 
+    is_column_reference: ClassVar[bool] = True
+
     dimension: Dimension
     """Definition and name of this dimension."""
 
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         columns.update_dimensions(self.dimension.minimal_group)
-
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
 
     @property
     def column_type(self) -> ColumnType:
@@ -84,6 +81,8 @@ class DimensionFieldReference(ColumnExpressionBase):
 
     expression_type: Literal["dimension_field"] = "dimension_field"
 
+    is_column_reference: ClassVar[bool] = True
+
     element: DimensionElement
     """Definition and name of the dimension element."""
 
@@ -94,11 +93,6 @@ class DimensionFieldReference(ColumnExpressionBase):
         # Docstring inherited.
         columns.update_dimensions(self.element.minimal_group)
         columns.dimension_fields[self.element.name].add(self.field)
-
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
 
     @property
     def column_type(self) -> ColumnType:
@@ -127,6 +121,8 @@ class DatasetFieldReference(ColumnExpressionBase):
 
     expression_type: Literal["dataset_field"] = "dataset_field"
 
+    is_column_reference: ClassVar[bool] = True
+
     dataset_type: str
     """Name of the dataset type."""
 
@@ -136,11 +132,6 @@ class DatasetFieldReference(ColumnExpressionBase):
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         columns.dataset_fields[self.dataset_type].add(self.field)
-
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 0
 
     @property
     def column_type(self) -> ColumnType:

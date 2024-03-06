@@ -78,11 +78,6 @@ class UnaryExpression(ColumnExpressionBase):
         self.operand.gather_required_columns(columns)
 
     @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        return 1
-
-    @property
     def column_type(self) -> ColumnType:
         # Docstring inherited.
         match self.operator:
@@ -94,6 +89,8 @@ class UnaryExpression(ColumnExpressionBase):
 
     def __str__(self) -> str:
         s = str(self.operand)
+        if not (self.operand.is_literal or self.operand.is_column_reference):
+            s = f"({s})"
         match self.operator:
             case "-":
                 return f"-{s}"
@@ -147,15 +144,6 @@ class BinaryExpression(ColumnExpressionBase):
         self.b.gather_required_columns(columns)
 
     @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        match self.operator:
-            case "*" | "/" | "%":
-                return 2
-            case "+" | "-":
-                return 3
-
-    @property
     def column_type(self) -> ColumnType:
         # Docstring inherited.
         return self.a.column_type
@@ -163,17 +151,10 @@ class BinaryExpression(ColumnExpressionBase):
     def __str__(self) -> str:
         a = str(self.a)
         b = str(self.b)
-        match self.operator:
-            case "*" | "+":
-                if self.a.precedence > self.precedence:
-                    a = f"({a})"
-                if self.b.precedence > self.precedence:
-                    b = f"({b})"
-            case _:
-                if self.a.precedence >= self.precedence:
-                    a = f"({a})"
-                if self.b.precedence >= self.precedence:
-                    b = f"({b})"
+        if not (self.a.is_literal or self.a.is_column_reference):
+            a = f"({a})"
+        if not (self.b.is_literal or self.b.is_column_reference):
+            b = f"({b})"
         return f"{a} {self.operator} {b}"
 
     @pydantic.model_validator(mode="after")
@@ -228,11 +209,6 @@ class Reversed(ColumnExpressionBase):
     def gather_required_columns(self, columns: ColumnSet) -> None:
         # Docstring inherited.
         self.operand.gather_required_columns(columns)
-
-    @property
-    def precedence(self) -> int:
-        # Docstring inherited.
-        raise AssertionError("Order-reversed expressions can never be nested in other column expressions.")
 
     @property
     def column_type(self) -> ColumnType:

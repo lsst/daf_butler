@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
+from ...column_spec import COLLECTION_NAME_MAX_LENGTH
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._collection_type import CollectionType
 from ..interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord, VersionTuple
@@ -67,7 +68,9 @@ def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> 
         collection=ddl.TableSpec(
             fields=[
                 _KEY_FIELD_SPEC,
-                ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
+                ddl.FieldSpec(
+                    "name", dtype=sqlalchemy.String, length=COLLECTION_NAME_MAX_LENGTH, nullable=False
+                ),
                 ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
                 ddl.FieldSpec("doc", dtype=sqlalchemy.Text, nullable=True),
             ],

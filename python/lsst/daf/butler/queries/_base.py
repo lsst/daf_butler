@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("QueryBase", "HomogeneousQueryBase", "CountableQueryBase", "QueryResultsBase")
+__all__ = ("QueryBase", "QueryResultsBase")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Set
@@ -45,9 +45,24 @@ class QueryBase(ABC):
 
     This class should rarely be referenced directly; it is public only because
     it provides public methods to its subclasses.
+
+    Parameters
+    ----------
+    driver : `QueryDriver`
+        Implementation object that knows how to actually execute queries.
+    tree : `QueryTree`
+        Description of the query as a tree of joins and column expressions.
     """
 
-    @abstractmethod
+    def __init__(self, driver: QueryDriver, tree: QueryTree):
+        self._driver = driver
+        self._tree = tree
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        """All dimensions included in the query's columns."""
+        return self._tree.dimensions
+
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         """Test whether the query would return any rows.
 
@@ -69,9 +84,8 @@ class QueryBase(ABC):
             `True` if the query would (or might, depending on arguments) yield
             result rows.  `False` if it definitely would not.
         """
-        raise NotImplementedError()
+        return self._driver.any(self._tree, execute=execute, exact=exact)
 
-    @abstractmethod
     def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
@@ -89,14 +103,14 @@ class QueryBase(ABC):
             String messages that describe reasons the query might not yield any
             results.
         """
-        raise NotImplementedError()
+        return self._driver.explain_no_results(self._tree, execute=execute)
 
     @abstractmethod
     def where(
         self,
         *args: str | Predicate | DataId,
         bind: Mapping[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: int | str,
     ) -> Self:
         """Return a query with a boolean-expression filter on its rows.
 
@@ -137,46 +151,8 @@ class QueryBase(ABC):
         raise NotImplementedError()
 
 
-class HomogeneousQueryBase(QueryBase):
-    """Common base class for `Query` and query result classes that are
-    iterables with consistent dimensions throughout.
-
-    This class should rarely be referenced directly; it is public only because
-    it provides public methods to its subclasses.
-
-    Parameters
-    ----------
-    driver : `QueryDriver`
-        Implementation object that knows how to actually execute queries.
-    tree : `QueryTree`
-        Description of the query as a tree of joins and column expressions.
-    """
-
-    def __init__(self, driver: QueryDriver, tree: QueryTree):
-        self._driver = driver
-        self._tree = tree
-
-    @property
-    def dimensions(self) -> DimensionGroup:
-        """All dimensions included in the query's columns."""
-        return self._tree.dimensions
-
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        # Docstring inherited.
-        return self._driver.any(self._tree, execute=execute, exact=exact)
-
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        # Docstring inherited.
-        return self._driver.explain_no_results(self._tree, execute=execute)
-
-
-class CountableQueryBase(QueryBase):
-    """Common base class for query result objects for which the number of
-    result rows is a well-defined concept.
-
-    This class should rarely be referenced directly; it is public only because
-    it provides public methods to its subclasses.
-    """
+class QueryResultsBase(QueryBase):
+    """Common base class for query result objects with countable rows."""
 
     @abstractmethod
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
@@ -203,12 +179,6 @@ class CountableQueryBase(QueryBase):
             ``exact=False``.
         """
         raise NotImplementedError()
-
-
-class QueryResultsBase(HomogeneousQueryBase, CountableQueryBase):
-    """Common base class for query result objects with homogeneous dimensions
-    and countable rows.
-    """
 
     def order_by(self, *args: str | OrderExpression | ExpressionProxy) -> Self:
         """Return a new query that yields ordered results.
@@ -262,7 +232,7 @@ class QueryResultsBase(HomogeneousQueryBase, CountableQueryBase):
         self,
         *args: str | Predicate | DataId,
         bind: Mapping[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: int | str,
     ) -> Self:
         # Docstring inherited.
         return self._copy(
@@ -281,7 +251,7 @@ class QueryResultsBase(HomogeneousQueryBase, CountableQueryBase):
     def _copy(self, tree: QueryTree, **kwargs: Any) -> Self:
         """Return a modified copy of ``self``.
 
-        Implementations should validate odifications, not assume they are
+        Implementations should validate modifications, not assume they are
         correct.
         """
         raise NotImplementedError()

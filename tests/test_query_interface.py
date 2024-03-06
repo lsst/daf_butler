@@ -43,8 +43,8 @@ import dataclasses
 import itertools
 import unittest
 import uuid
-from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
-from typing import Any, cast
+from collections.abc import Iterable, Iterator, Mapping, Set
+from typing import Any
 
 import astropy.time
 from lsst.daf.butler import (
@@ -64,10 +64,9 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.queries import (
     DataCoordinateQueryResults,
-    DatasetQueryResults,
+    DatasetRefQueryResults,
     DimensionRecordQueryResults,
     Query,
-    SingleTypeDatasetQueryResults,
 )
 from lsst.daf.butler.queries import driver as qd
 from lsst.daf.butler.queries import result_specs as qrs
@@ -416,25 +415,6 @@ class _TestQueryDriver(qd.QueryDriver):
             raise NoDefaultCollectionError()
         return self._default_collections
 
-    def resolve_collection_path(
-        self, collections: Sequence[str], _done: set[str] | None = None
-    ) -> list[tuple[CollectionRecord, CollectionSummary]]:
-        if _done is None:
-            _done = set()
-        result: list[tuple[CollectionRecord, CollectionSummary]] = []
-        for name in collections:
-            if name in _done:
-                continue
-            _done.add(name)
-            record, summary = self._collection_info[name]
-            if record.type is CollectionType.CHAINED:
-                result.extend(
-                    self.resolve_collection_path(cast(ChainedCollectionRecord, record).children, _done=_done)
-                )
-            else:
-                result.append((record, summary))
-        return result
-
     def get_dataset_type(self, name: str) -> DatasetType:
         try:
             return self._dataset_types[name]
@@ -697,20 +677,20 @@ class ColumnExpressionsTestCase(unittest.TestCase):
             (self.x.visit.exposure_time - 10.0, "visit.exposure_time - 10.0", 20.0),
             (self.x.visit.exposure_time * 6.0, "visit.exposure_time * 6.0", 180.0),
             (self.x.visit.exposure_time / 30.0, "visit.exposure_time / 30.0", 1.0),
-            (15.0 + -self.x.visit.exposure_time, "15.0 + -visit.exposure_time", -15.0),
-            (10.0 - -self.x.visit.exposure_time, "10.0 - -visit.exposure_time", 40.0),
-            (6.0 * -self.x.visit.exposure_time, "6.0 * -visit.exposure_time", -180.0),
-            (30.0 / -self.x.visit.exposure_time, "30.0 / -visit.exposure_time", -1.0),
+            (15.0 + -self.x.visit.exposure_time, "15.0 + (-visit.exposure_time)", -15.0),
+            (10.0 - -self.x.visit.exposure_time, "10.0 - (-visit.exposure_time)", 40.0),
+            (6.0 * -self.x.visit.exposure_time, "6.0 * (-visit.exposure_time)", -180.0),
+            (30.0 / -self.x.visit.exposure_time, "30.0 / (-visit.exposure_time)", -1.0),
             ((self.x.visit.exposure_time + 15.0) * 6.0, "(visit.exposure_time + 15.0) * 6.0", 270.0),
-            ((self.x.visit.exposure_time + 15.0) + 45.0, "visit.exposure_time + 15.0 + 45.0", 90.0),
+            ((self.x.visit.exposure_time + 15.0) + 45.0, "(visit.exposure_time + 15.0) + 45.0", 90.0),
             ((self.x.visit.exposure_time + 15.0) / 5.0, "(visit.exposure_time + 15.0) / 5.0", 9.0),
             # We don't need the parentheses we generate in the next one, but
             # they're not a problem either.
             ((self.x.visit.exposure_time + 15.0) - 60.0, "(visit.exposure_time + 15.0) - 60.0", -15.0),
-            (6.0 * (-self.x.visit.exposure_time - 15.0), "6.0 * (-visit.exposure_time - 15.0)", -270.0),
-            (60.0 + (-self.x.visit.exposure_time - 15.0), "60.0 + -visit.exposure_time - 15.0", 15.0),
-            (90.0 / (-self.x.visit.exposure_time - 15.0), "90.0 / (-visit.exposure_time - 15.0)", -2.0),
-            (60.0 - (-self.x.visit.exposure_time - 15.0), "60.0 - (-visit.exposure_time - 15.0)", 105.0),
+            (6.0 * (-self.x.visit.exposure_time - 15.0), "6.0 * ((-visit.exposure_time) - 15.0)", -270.0),
+            (60.0 + (-self.x.visit.exposure_time - 15.0), "60.0 + ((-visit.exposure_time) - 15.0)", 15.0),
+            (90.0 / (-self.x.visit.exposure_time - 15.0), "90.0 / ((-visit.exposure_time) - 15.0)", -2.0),
+            (60.0 - (-self.x.visit.exposure_time - 15.0), "60.0 - ((-visit.exposure_time) - 15.0)", 105.0),
         ]:
             with self.subTest(string=string):
                 expr = self.x.unwrap(proxy)
@@ -1152,8 +1132,6 @@ class QueryTestCase(unittest.TestCase):
         def check(
             query: Query,
             dimensions: DimensionGroup = self.raw.dimensions.as_group(),
-            has_storage_class: bool = True,
-            dataset_type_registered: bool = True,
         ) -> None:
             """Run a battery of tests on one of a set of very similar queries
             constructed in different ways (see below).
@@ -1162,7 +1140,6 @@ class QueryTestCase(unittest.TestCase):
             def check_query_tree(
                 tree: qt.QueryTree,
                 dimensions: DimensionGroup = dimensions,
-                storage_class_name: str | None = self.raw.storageClass_name if has_storage_class else None,
             ) -> None:
                 """Check the state of the QueryTree object that backs the Query
                 or a derived QueryResults object.
@@ -1174,9 +1151,6 @@ class QueryTestCase(unittest.TestCase):
                 dimensions : `DimensionGroup`
                     Dimensions to expect in the `QueryTree`, not necessarily
                     including those in the test 'raw' dataset type.
-                storage_class_name : `bool`, optional
-                    The storage class name the query is expected to have for
-                    the test 'raw' dataset type.
                 """
                 self.assertEqual(tree.dimensions, dimensions | self.raw.dimensions.as_group())
                 self.assertEqual(str(tree.predicate), "raw.run == 'DummyCam/raw/all'")
@@ -1185,7 +1159,6 @@ class QueryTestCase(unittest.TestCase):
                 self.assertEqual(tree.datasets.keys(), {"raw"})
                 self.assertEqual(tree.datasets["raw"].dimensions, self.raw.dimensions.as_group())
                 self.assertEqual(tree.datasets["raw"].collections, ("DummyCam/defaults",))
-                self.assertEqual(tree.datasets["raw"].storage_class_name, storage_class_name)
                 self.assertEqual(
                     tree.get_joined_dimension_groups(), frozenset({self.raw.dimensions.as_group()})
                 )
@@ -1217,8 +1190,8 @@ class QueryTestCase(unittest.TestCase):
                 find_first: bool = True,
                 storage_class_name: str = self.raw.storageClass_name,
             ) -> None:
-                """Construct a DatasetQueryResults object from the query with
-                the given arguments and run a battery of tests on it.
+                """Construct a DatasetRefQueryResults object from the query
+                with the given arguments and run a battery of tests on it.
 
                 Parameters
                 ----------
@@ -1242,7 +1215,7 @@ class QueryTestCase(unittest.TestCase):
                         find_first=find_first,
                     ),
                 )
-                check_query_tree(cm.exception.tree, storage_class_name=storage_class_name)
+                check_query_tree(cm.exception.tree)
 
             def check_materialization(
                 kwargs: Mapping[str, Any],
@@ -1333,20 +1306,10 @@ class QueryTestCase(unittest.TestCase):
             check_data_id_results([], query=query, dimensions=self.universe.conform([]))
 
             # Get DatasetRef results, with various arguments and defaulting.
-            if has_storage_class:
-                check_dataset_results("raw", query=query)
-                check_dataset_results("raw", query=query, find_first=True)
-                check_dataset_results("raw", ["DummyCam/defaults"], query=query)
-                check_dataset_results("raw", ["DummyCam/defaults"], query=query, find_first=True)
-            else:
-                with self.assertRaises(MissingDatasetTypeError):
-                    query.datasets("raw")
-                with self.assertRaises(MissingDatasetTypeError):
-                    query.datasets("raw", find_first=True)
-                with self.assertRaises(MissingDatasetTypeError):
-                    query.datasets("raw", ["DummyCam/defaults"])
-                with self.assertRaises(MissingDatasetTypeError):
-                    query.datasets("raw", ["DummyCam/defaults"], find_first=True)
+            check_dataset_results("raw", query=query)
+            check_dataset_results("raw", query=query, find_first=True)
+            check_dataset_results("raw", ["DummyCam/defaults"], query=query)
+            check_dataset_results("raw", ["DummyCam/defaults"], query=query, find_first=True)
             check_dataset_results(self.raw, query=query)
             check_dataset_results(self.raw, query=query, find_first=True)
             check_dataset_results(self.raw, ["DummyCam/defaults"], query=query)
@@ -1360,11 +1323,10 @@ class QueryTestCase(unittest.TestCase):
             check_dataset_results(
                 self.raw.overrideStorageClass("ArrowNumpy"), query=query, storage_class_name="ArrowNumpy"
             )
-            if dataset_type_registered:
-                with self.assertRaises(DatasetTypeError):
-                    # Can't use overrideStorageClass, because it'll raise
-                    # before the code we want to test can.
-                    query.datasets(DatasetType("raw", self.raw.dimensions, "int"))
+            with self.assertRaises(DatasetTypeError):
+                # Can't use overrideStorageClass, because it'll raise
+                # before the code we want to test can.
+                query.datasets(DatasetType("raw", self.raw.dimensions, "int"))
 
             # Check the 'any' and 'explain_no_results' methods on Query itself.
             for execute, exact in itertools.permutations([False, True], 2):
@@ -1425,43 +1387,26 @@ class QueryTestCase(unittest.TestCase):
                 self.raw, collections=["DummyCam/defaults"]
             )
         )
-        # Dataset type does not exist, but dimensions provided.  This will
-        # prohibit getting results without providing the dataset type
-        # later.
-        check(
-            self.query(dataset_types={}).join_dataset_search(
-                "raw", dimensions=self.universe.conform(["detector", "exposure"])
-            ),
-            has_storage_class=False,
-            dataset_type_registered=False,
-        )
-        # Dataset type does not exist, but a full dataset type was
-        # provided up front.
-        check(self.query(dataset_types={}).join_dataset_search(self.raw), dataset_type_registered=False)
-
         with self.assertRaises(MissingDatasetTypeError):
-            # Dataset type does not exist and no dimensions passed.
+            # Dataset type does not exist.
             self.query(dataset_types={}).join_dataset_search("raw", collections=["DummyCam/raw/all"])
         with self.assertRaises(DatasetTypeError):
-            # Dataset type does exist and bad dimensions passed.
+            # Dataset type object with bad dimensions passed.
             self.query().join_dataset_search(
-                "raw", collections=["DummyCam/raw/all"], dimensions=self.universe.conform(["visit"])
-            )
-        with self.assertRaises(TypeError):
-            # Dataset type object and dimensions were passed (illegal even if
-            # they agree)
-            self.query().join_dataset_search(
-                self.raw,
-                dimensions=self.raw.dimensions.as_group(),
+                DatasetType(
+                    "raw",
+                    dimensions={"detector", "visit"},
+                    storageClass=self.raw.storageClass_name,
+                    universe=self.universe,
+                )
             )
         with self.assertRaises(TypeError):
             # Bad type for dataset type argument.
             self.query().join_dataset_search(3)
-        with self.assertRaises(DatasetTypeError):
-            # Changing dimensions is an error.
-            self.query(dataset_types={}).join_dataset_search(
-                "raw", dimensions=self.universe.conform(["patch"])
-            ).datasets(self.raw)
+        with self.assertRaises(qt.InvalidQueryError):
+            # Cannot pass storage class override to join_dataset_search,
+            # because we cannot use it there.
+            self.query().join_dataset_search(self.raw.overrideStorageClass("ArrowAstropy"))
 
     def test_dimension_record_results(self) -> None:
         """Test queries that return dimension records.
@@ -1666,37 +1611,35 @@ class QueryTestCase(unittest.TestCase):
 
         - counting result rows;
         - expanding dimensions as needed for 'where' conditions;
-        - chained results for multiple dataset types;
         - different ways of passing a data ID to 'where' methods;
         - order_by, limit, and offset.
 
-        It does not include the iteration methods of the DatasetQueryResults
+        It does not include the iteration methods of the DatasetRefQueryResults
         classes, since those require a different mock driver setup (see
         test_dataset_iteration).  More tests for different inputs to
-        SingleTypeDatasetQueryResults construction are in test_dataset_join.
+        DatasetRefQueryResults construction are in test_dataset_join.
         """
         # Set up a few equivalent base query-results object to test.
         query = self.query()
         x = query.expression_factory
         self.assertFalse(query.constraint_dimensions)
-        results1 = query.datasets(...).where(x.instrument == "DummyCam", visit=4)
-        results2 = query.datasets(..., collections=["DummyCam/defaults"]).where(
+        results1 = query.datasets("raw").where(x.instrument == "DummyCam", visit=4)
+        results2 = query.datasets("raw", collections=["DummyCam/defaults"]).where(
             {"instrument": "DummyCam", "visit": 4}
         )
-        results3 = query.datasets(["raw", "bias", "refcat"]).where(
+        results3 = query.datasets("raw").where(
             DataCoordinate.standardize(instrument="DummyCam", visit=4, universe=self.universe)
         )
 
-        # Define a closure to handle single-dataset-type results.
-        def check_single_type(
-            results: SingleTypeDatasetQueryResults,
+        # Define a closure to check a DatasetRefQueryResults instance.
+        def check(
+            results: DatasetRefQueryResults,
             order_by: Any = (),
             limit: int | None = None,
             offset: int = 0,
             include_dimension_records: bool = False,
         ) -> list[str]:
             results = results.order_by(*order_by).limit(limit, offset=offset)
-            self.assertIs(list(results.by_dataset_type())[0], results)
             with self.assertRaises(_TestQueryExecution) as cm:
                 list(results)
             tree = cm.exception.tree
@@ -1711,10 +1654,6 @@ class QueryTestCase(unittest.TestCase):
             self.assertEqual(
                 tree.datasets[results.dataset_type.name].dimensions,
                 results.dataset_type.dimensions.as_group(),
-            )
-            self.assertEqual(
-                tree.datasets[results.dataset_type.name].storage_class_name,
-                results.dataset_type.storageClass_name,
             )
             self.assertFalse(tree.data_coordinate_uploads)
             result_spec = cm.exception.result_spec
@@ -1741,59 +1680,21 @@ class QueryTestCase(unittest.TestCase):
             self.assertIs(cm.exception.tree, tree)
             return [str(term) for term in result_spec.order_by]
 
-        # Define a closure to run tests on variants of the base query, which
-        # is a chain of multiple dataset types.
-        def check_chained(
-            results: DatasetQueryResults,
-            order_by: tuple[Any, Any, Any] = ((), (), ()),
-            limit: int | None = None,
-            offset: int = 0,
-            include_dimension_records: bool = False,
-        ) -> list[list[str]]:
-            self.assertEqual(results.has_dimension_records, include_dimension_records)
-            types_seen: list[str] = []
-            order_by_strings: list[list[str]] = []
-            for single_type_results, single_type_order_by in zip(results.by_dataset_type(), order_by):
-                order_by_strings.append(
-                    check_single_type(
-                        single_type_results,
-                        order_by=single_type_order_by,
-                        limit=limit,
-                        offset=offset,
-                        include_dimension_records=include_dimension_records,
-                    )
-                )
-                types_seen.append(single_type_results.dataset_type.name)
-            self.assertEqual(types_seen, sorted(["raw", "bias", "refcat"]))
-            return order_by_strings
-
         # Run the closure's tests on variants of the base query.
-        self.assertEqual(check_chained(results1), [[], [], []])
-        self.assertEqual(check_chained(results2), [[], [], []])
-        self.assertEqual(check_chained(results3), [[], [], []])
+        self.assertEqual(check(results1), [])
+        self.assertEqual(check(results2), [])
+        self.assertEqual(check(results3), [])
+        self.assertEqual(check(results1.with_dimension_records(), include_dimension_records=True), [])
         self.assertEqual(
-            check_chained(results1.with_dimension_records(), include_dimension_records=True), [[], [], []]
+            check(results1.with_dimension_records().with_dimension_records(), include_dimension_records=True),
+            [],
         )
-        self.assertEqual(
-            check_chained(
-                results1.with_dimension_records().with_dimension_records(), include_dimension_records=True
-            ),
-            [[], [], []],
-        )
-        self.assertEqual(check_chained(results1, limit=2), [[], [], []])
-        self.assertEqual(check_chained(results1, offset=1), [[], [], []])
-        self.assertEqual(check_chained(results1, limit=3, offset=3), [[], [], []])
-        self.assertEqual(
-            check_chained(
-                results1,
-                order_by=[
-                    ["bias.timespan.begin"],
-                    ["ingest_date"],
-                    ["htm7"],
-                ],
-            ),
-            [["bias.timespan.begin"], ["raw.ingest_date"], ["htm7"]],
-        )
+        self.assertEqual(check(results1, limit=2), [])
+        self.assertEqual(check(results1, offset=1), [])
+        self.assertEqual(check(results1, limit=3, offset=3), [])
+        self.assertEqual(check(results1, order_by=["raw.timespan.begin"]), ["raw.timespan.begin"])
+        self.assertEqual(check(results1, order_by=["detector"]), ["detector"])
+        self.assertEqual(check(results1, order_by=["ingest_date"]), ["raw.ingest_date"])
 
     def test_dataset_iteration(self) -> None:
         """Tests for SingleTypeDatasetQueryResult iteration."""
@@ -1880,7 +1781,6 @@ class QueryTestCase(unittest.TestCase):
                     "raw": qt.DatasetSearch(
                         collections=("DummyCam/raw/all",),
                         dimensions=self.raw.dimensions.as_group(),
-                        storage_class_name=None,
                     )
                 },
             )
@@ -1905,7 +1805,7 @@ class QueryTestCase(unittest.TestCase):
             )
         with self.assertRaises(qt.InvalidQueryError):
             # ResultSpec's datasets are not a subset of the query tree's.
-            SingleTypeDatasetQueryResults(
+            DatasetRefQueryResults(
                 _TestQueryDriver(),
                 qt.QueryTree(dimensions=self.raw.dimensions.as_group()),
                 qrs.DatasetRefResultSpec(
