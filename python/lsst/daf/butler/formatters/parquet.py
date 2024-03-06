@@ -288,6 +288,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
             # values with an appropriately typed value before conversion.
             # Then we apply the mask to get a masked array of the correct type.
             use_masked = True
+            null_value: Any
             match t:
                 case t if t in (pa.float64(), pa.float32(), pa.float16()):
                     # When filling with nans we do not need to use
