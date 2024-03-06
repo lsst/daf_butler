@@ -30,6 +30,7 @@ import unittest
 from unittest.mock import patch
 
 from lsst.daf.butler import Butler, Registry
+from lsst.daf.butler._exceptions import UnknownButlerUserError
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
 )
@@ -66,14 +67,40 @@ class RemoteButlerConfigTests(unittest.TestCase):
 class RemoteButlerErrorHandlingTests(unittest.TestCase):
     """Test RemoteButler error handling."""
 
-    def test_internal_server_error(self):
-        butler = RemoteButlerFactory.create_factory_for_url(
+    def setUp(self):
+        self.butler = RemoteButlerFactory.create_factory_for_url(
             "https://doesntmatter"
         ).create_butler_for_access_token("dontcare")
-        with patch.object(butler._client, "request") as mock:
-            mock.side_effect = httpx.HTTPError("unhandled error")
-            with self.assertRaises(ButlerServerError):
-                butler.get_dataset_type("int")
+        self.mock = self.enterContext(patch.object(self.butler._client, "request"))
+
+    def _mock_error_response(self, content: str) -> None:
+        self.mock.return_value = httpx.Response(
+            status_code=422, content=content, request=httpx.Request("GET", "/")
+        )
+
+    def test_internal_server_error(self):
+        self.mock.side_effect = httpx.HTTPError("unhandled error")
+        with self.assertRaises(ButlerServerError):
+            self.butler.get_dataset_type("int")
+
+    def test_unknown_error_type(self):
+        self.mock.return_value = httpx.Response(
+            status_code=422, json={"error_type": "not a known error type", "detail": "an error happened"}
+        )
+        with self.assertRaises(UnknownButlerUserError):
+            self.butler.get_dataset_type("int")
+
+    def test_non_json_error(self):
+        # Server returns a non-JSON body with an error
+        self._mock_error_response("notvalidjson")
+        with self.assertRaises(ButlerServerError):
+            self.butler.get_dataset_type("int")
+
+    def test_malformed_error(self):
+        # Server returns JSON, but not in the expected format.
+        self._mock_error_response("{}")
+        with self.assertRaises(ButlerServerError):
+            self.butler.get_dataset_type("int")
 
 
 class RemoteButlerMiscTests(unittest.TestCase):
