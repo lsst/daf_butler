@@ -267,10 +267,10 @@ def _makeSimpleAstropyTable(include_multidim=False, include_masked=False, includ
         nrow = len(table)
         mask = np.zeros(nrow, dtype=bool)
         mask[1] = True
-        table["m1"] = np.ma.masked_array(data=np.arange(nrow, dtype="i8"), mask=mask)
-        table["m2"] = np.ma.masked_array(data=np.arange(nrow, dtype="f4"), mask=mask)
-        table["mstrcol"] = np.ma.masked_array(data=np.array(["text"] * nrow), mask=mask)
-        table["mbytecol"] = np.ma.masked_array(data=np.array([b"bytes"] * nrow), mask=mask)
+        table["m1"] = np.ma.masked_array(data=np.arange(nrow, dtype="i8"), mask=mask, fill_value=-1)
+        table["m2"] = np.ma.masked_array(data=np.arange(nrow, dtype="f4"), mask=mask, fill_value=np.nan)
+        table["mstrcol"] = np.ma.masked_array(data=np.array(["text"] * nrow), mask=mask, fill_value="")
+        table["mbytecol"] = np.ma.masked_array(data=np.array([b"bytes"] * nrow), mask=mask, fill_value=b"")
 
     return table
 
@@ -1019,7 +1019,10 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
                 self.assertEqual(table1[name].unit, table2[name].unit)
                 self.assertEqual(table1[name].description, table2[name].description)
                 self.assertEqual(table1[name].format, table2[name].format)
-        self.assertTrue(np.all(table1 == table2))
+                if isinstance(table1[name], atable.column.MaskedColumn):
+                    np.testing.assert_array_equal(table1[name].filled(), table2[name].filled())
+                else:
+                    np.testing.assert_array_equal(table1[name], table2[name])
 
 
 @unittest.skipUnless(atable is not None, "Cannot test InMemoryArrowAstropyDelegate without astropy.")
@@ -1579,7 +1582,11 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
             self.assertEqual(table1[name].unit, table2[name].unit)
             self.assertEqual(table1[name].description, table2[name].description)
             self.assertEqual(table1[name].format, table2[name].format)
-        self.assertTrue(np.all(table1 == table2))
+
+            if isinstance(table1[name], atable.column.MaskedColumn):
+                np.testing.assert_array_equal(table1[name].filled(), table2[name].filled())
+            else:
+                np.testing.assert_array_equal(table1[name], table2[name])
 
     def _checkNumpyTableEquality(self, table1, table2):
         """Check if two numpy tables have the same columns/values
