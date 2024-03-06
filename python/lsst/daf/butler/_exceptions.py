@@ -29,6 +29,42 @@
 __all__ = ("DatasetTypeNotSupportedError", "EmptyQueryResultError", "ValidationError")
 
 
+class ButlerUserError(Exception):
+    """Base class for Butler exceptions that contain a user-facing error
+    message.
+
+    Parameters
+    ----------
+    detail : `str`
+        Details about the error that occurred.
+    """
+
+    # When used with Butler server, exceptions inheriting from
+    # this class will be sent to the client side and re-raised by RemoteButler
+    # there.  Be careful that error messages do not contain security-sensitive
+    # information.
+    #
+    # This should only be used for "expected" errors that occur because of
+    # errors in user-supplied data passed to Butler methods.  It should not be
+    # used for any issues caused by the Butler configuration file, errors in
+    # the library code itself or the underlying databases.
+    #
+    # When you create a new subclass of this type, add it to the list in
+    # _USER_ERROR_TYPES below.
+
+    error_type: str
+    """Unique name for this error type, used to identify it when sending
+    information about the error to the client.
+    """
+
+    def __init__(self, detail: str):
+        return super().__init__(detail)
+
+
+class ButlerLookupError(LookupError, ButlerUserError):
+    error_type = "lookup"
+
+
 class DatasetTypeNotSupportedError(RuntimeError):
     """A `DatasetType` is not handled by this routine.
 
@@ -61,3 +97,40 @@ class EmptyQueryResultError(Exception):
     def __str__(self) -> str:
         # There may be multiple reasons, format them into multiple lines.
         return "Possible reasons for empty result:\n" + "\n".join(self.reasons)
+
+
+class UnknownButlerUserError(ButlerUserError):
+    """Raised when the server sends an ``error_type`` for which we don't know
+    the corresponding exception type.  (This may happen if an old version of
+    the Butler client library connects to a new server).
+    """
+
+    error_type = "unknown"
+
+
+_USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
+    ButlerLookupError,
+    UnknownButlerUserError,
+)
+_USER_ERROR_MAPPING = {e.error_type: e for e in _USER_ERROR_TYPES}
+assert len(_USER_ERROR_MAPPING) == len(
+    _USER_ERROR_TYPES
+), "Subclasses of ButlerUserError must have unique 'error_type' property"
+
+
+def create_butler_user_error(error_type: str, message: str) -> ButlerUserError:
+    """Instantiate one of the subclasses of `ButlerUserError` based on its
+    ``error_type`` string.
+
+    Parameters
+    ----------
+    error_type : `str`
+        The value from the ``error_type`` class attribute on the exception
+        subclass you wish to instantiate.
+    message : `str`
+        Detailed error message passed to the exception constructor.
+    """
+    cls = _USER_ERROR_MAPPING.get(error_type)
+    if cls is None:
+        raise UnknownButlerUserError(f"Unknown exception type '{error_type}': {message}")
+    return cls(message)

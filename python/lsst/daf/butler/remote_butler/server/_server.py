@@ -38,7 +38,8 @@ from fastapi.responses import JSONResponse
 from lsst.daf.butler import MissingDatasetTypeError
 from safir.logging import configure_logging, configure_uvicorn_logging
 
-from ..server_models import CLIENT_REQUEST_ID_HEADER_NAME
+from ..._exceptions import ButlerUserError
+from ..server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
 from .handlers._external import external_router
 from .handlers._internal import internal_router
 
@@ -56,7 +57,13 @@ def create_app() -> FastAPI:
     # factory_dependency().
     repository_placeholder = "{repository}"
     default_api_path = "/api/butler"
-    app.include_router(external_router, prefix=f"{default_api_path}/repo/{repository_placeholder}")
+    app.include_router(
+        external_router,
+        prefix=f"{default_api_path}/repo/{repository_placeholder}",
+        # document that 422 responses will include a JSON-formatted error
+        # message, from `butler_exception_handler()` below.
+        responses={422: {"model": ErrorResponseModel}},
+    )
     app.include_router(internal_router)
 
     # Any time an exception is returned by a handler, add a log message that
@@ -93,6 +100,17 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=404,
             content={"detail": message, "exception": "MissingDatasetTypeError"},
+        )
+
+    # Configure FastAPI to forward to the client any exceptions tagged as
+    # user-facing Butler errors.
+    @app.exception_handler(ButlerUserError)
+    async def butler_exception_handler(request: Request, exc: ButlerUserError) -> Response:
+        error = ErrorResponseModel(error_type=exc.error_type, detail=str(exc))
+        return Response(
+            media_type="application/json",
+            status_code=ERROR_STATUS_CODE,
+            content=error.model_dump_json(),
         )
 
     return app

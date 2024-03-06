@@ -48,7 +48,7 @@ from lsst.daf.butler.datastores.fileDatastoreClient import (
     get_dataset_as_python_object,
 )
 from lsst.resources import ResourcePath, ResourcePathExpression
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from .._butler import Butler
 from .._butler_instance_options import ButlerInstanceOptions
@@ -56,6 +56,7 @@ from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
+from .._exceptions import create_butler_user_error
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
@@ -71,8 +72,10 @@ from ._authentication import get_authentication_headers
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from .server_models import (
     CLIENT_REQUEST_ID_HEADER_NAME,
+    ERROR_STATUS_CODE,
     CollectionList,
     DatasetTypeName,
+    ErrorResponseModel,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetFileByDataIdRequestModel,
@@ -647,8 +650,24 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             response = self._client.request(
                 method, url, content=content, params=params, headers=request_headers
             )
+
+            if response.status_code == ERROR_STATUS_CODE:
+                # Raise an exception that the server has forwarded to the
+                # client.
+                model = self._try_to_parse_model(response, ErrorResponseModel)
+                if model is not None:
+                    exc = create_butler_user_error(model.error_type, model.detail)
+                    exc.add_note(f"Client request ID: {request_id}")
+                    raise exc
+                else:
+                    # Server sent an expected error code, but the body wasn't
+                    # in the expected JSON format.  This likely means some HTTP
+                    # thing between us and the server is misbehaving.
+                    response.raise_for_status()
+
             if response.status_code not in expected_errors:
                 response.raise_for_status()
+
             return response
         except httpx.HTTPError as e:
             raise ButlerServerError(request_id) from e
@@ -656,6 +675,18 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _parse_model(self, response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:
         """Deserialize a Pydantic model from the body of an HTTP response."""
         return model.model_validate_json(response.content)
+
+    def _try_to_parse_model(
+        self, response: httpx.Response, model: type[_AnyPydanticModel]
+    ) -> _AnyPydanticModel | None:
+        """Attempt to deserialize a Pydantic model from the body of an HTTP
+        response.  Returns `None` if the content could not be parsed as JSON or
+        failed validation against the model.
+        """
+        try:
+            return self._parse_model(response, model)
+        except (ValueError, ValidationError):
+            return None
 
     def _normalize_collections(self, collections: CollectionArgType | None) -> CollectionList:
         """Convert the ``collections`` parameter in the format used by Butler
