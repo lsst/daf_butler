@@ -34,8 +34,6 @@ from typing import Awaitable, Callable
 import safir.dependencies.logger
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
-from lsst.daf.butler import MissingDatasetTypeError
 from safir.logging import configure_logging, configure_uvicorn_logging
 
 from ..._exceptions import ButlerUserError
@@ -89,18 +87,6 @@ def create_app() -> FastAPI:
                 user=request.headers.get("X-Auth-Request-User", "(unknown)"),
             )
             raise
-
-    @app.exception_handler(MissingDatasetTypeError)
-    def missing_dataset_type_exception_handler(
-        request: Request, exc: MissingDatasetTypeError
-    ) -> JSONResponse:
-        # Remove the double quotes around the string form. These confuse
-        # the JSON serialization when single quotes are in the message.
-        message = str(exc).strip('"')
-        return JSONResponse(
-            status_code=404,
-            content={"detail": message, "exception": "MissingDatasetTypeError"},
-        )
 
     # Configure FastAPI to forward to the client any exceptions tagged as
     # user-facing Butler errors.

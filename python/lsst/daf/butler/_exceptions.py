@@ -26,7 +26,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Specialized Butler exceptions."""
-__all__ = ("DatasetTypeNotSupportedError", "EmptyQueryResultError", "ValidationError")
+__all__ = (
+    "ButlerUserError",
+    "DatasetTypeNotSupportedError",
+    "EmptyQueryResultError",
+    "MissingDatasetTypeError",
+    "ValidationError",
+)
+
+from ._exceptions_legacy import DatasetTypeError
 
 
 class ButlerUserError(Exception):
@@ -63,6 +71,12 @@ class ButlerUserError(Exception):
 
 class ButlerLookupError(LookupError, ButlerUserError):
     error_type = "lookup"
+
+
+class MissingDatasetTypeError(DatasetTypeError, KeyError, ButlerUserError):
+    """Exception raised when a dataset type does not exist."""
+
+    error_type = "missing_dataset_type"
 
 
 class DatasetTypeNotSupportedError(RuntimeError):
@@ -110,6 +124,7 @@ class UnknownButlerUserError(ButlerUserError):
 
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     ButlerLookupError,
+    MissingDatasetTypeError,
     UnknownButlerUserError,
 )
 _USER_ERROR_MAPPING = {e.error_type: e for e in _USER_ERROR_TYPES}

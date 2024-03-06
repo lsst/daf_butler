@@ -61,13 +61,7 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
-from ..registry import (
-    CollectionArgType,
-    MissingDatasetTypeError,
-    NoDefaultCollectionError,
-    Registry,
-    RegistryDefaults,
-)
+from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
 from ._authentication import get_authentication_headers
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from .server_models import (
@@ -362,11 +356,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # In future implementation this should directly access the cache
         # and only go to the server if the dataset type is not known.
         path = f"dataset_type/{name}"
-        response = self._get(path, expected_errors=(404,))
-        if response.status_code != httpx.codes.OK:
-            content = response.json()
-            if content["exception"] == "MissingDatasetTypeError":
-                raise MissingDatasetTypeError(content["detail"])
+        response = self._get(path)
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def get_dataset(
