@@ -302,6 +302,7 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
                 case t if t in (pa.string(), pa.binary()):
                     null_value = ""
                 case _:
+                    # This is the fallback for unsigned ints in particular.
                     null_value = 0
 
             if use_masked:
