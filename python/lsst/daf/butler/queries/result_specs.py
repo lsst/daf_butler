@@ -57,9 +57,6 @@ class ResultSpecBase(pydantic.BaseModel, ABC):
     order_by: tuple[OrderExpression, ...] = ()
     """Expressions to sort the rows by."""
 
-    offset: int = 0
-    """Index of the first row to return."""
-
     limit: int | None = None
     """Maximum number of rows to return, or `None` for no bound."""
 

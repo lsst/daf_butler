@@ -203,7 +203,7 @@ class QueryResultsBase(QueryBase):
             self._tree, order_by=convert_order_by_args(self.dimensions, self._get_datasets(), *args)
         )
 
-    def limit(self, limit: int | None = None, offset: int = 0) -> Self:
+    def limit(self, limit: int | None = None) -> Self:
         """Return a new query that slices its result rows positionally.
 
         Parameters
@@ -211,9 +211,6 @@ class QueryResultsBase(QueryBase):
         limit : `int` or `None`, optional
             Upper limit on the number of returned records.  `None` (default)
             means no limit.
-        offset : `int`, optional
-            The number of records to skip before returning at most ``limit``
-            records.
 
         Returns
         -------
@@ -226,7 +223,7 @@ class QueryResultsBase(QueryBase):
         replace the old ones.  Slicing always occurs after sorting, even if
         `limit` is called before `order_by`.
         """
-        return self._copy(self._tree, limit=limit, offset=offset)
+        return self._copy(self._tree, limit=limit)
 
     def where(
         self,
