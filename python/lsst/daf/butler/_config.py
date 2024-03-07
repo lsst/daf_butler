@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Config", "ConfigSubset")
+__all__ = ("Config", "ConfigSubset", "Loader")
 
 import copy
 import io
