@@ -1440,7 +1440,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         with_dimension_records: bool = False,
         order_by: Iterable[str] | str | None = None,
         limit: int | None = None,
-        offset: int = 0,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DataCoordinate]:
@@ -1476,10 +1475,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             descending ordering.
         limit : `int`, optional
             Upper limit on the number of returned records.
-        offset : `int`, optional
-            The number of records to skip before returning at most ``limit``
-            records. If ``offset`` is specified then ``limit`` must be
-            specified as well.
         explain : `bool`, optional
             If `True` (default) then `EmptyQueryResultError` exception is
             raised when resulting list is empty. The exception contains
@@ -1509,8 +1504,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Raised when query generates empty result and ``explain`` is set to
             `True`.
         TypeError
-            Raised when the arguments are incompatible, e.g. ``offset`` is
-            specified, but ``limit`` is not.
+            Raised when the arguments are incompatible.
         """
         if data_id is None:
             data_id = DataCoordinate.make_empty(self.dimensions)
@@ -1519,7 +1513,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 query.where(data_id, where, bind=bind, **kwargs)
                 .data_ids(dimensions)
                 .order_by(*ensure_iterable(order_by))
-                .limit(limit, offset)
+                .limit(limit)
             )
             if with_dimension_records:
                 result = result.with_dimension_records()
@@ -1641,7 +1635,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         bind: Mapping[str, Any] | None = None,
         order_by: Iterable[str] | str | None = None,
         limit: int | None = None,
-        offset: int = 0,
         explain: bool = True,
         **kwargs: Any,
     ) -> list[DimensionRecord]:
@@ -1670,10 +1663,6 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             descending ordering.
         limit : `int`, optional
             Upper limit on the number of returned records.
-        offset : `int`, optional
-            The number of records to skip before returning at most ``limit``
-            records. If ``offset`` is specified then ``limit`` must be
-            specified as well.
         explain : `bool`, optional
             If `True` (default) then `EmptyQueryResultError` exception is
             raised when resulting list is empty. The exception contains
@@ -1713,7 +1702,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
                 query.where(data_id, where, bind=bind, **kwargs)
                 .dimension_records(element)
                 .order_by(*ensure_iterable(order_by))
-                .limit(limit, offset)
+                .limit(limit)
             )
             dimension_records = list(result)
         if explain and not dimension_records:

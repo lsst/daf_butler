@@ -1416,7 +1416,7 @@ class QueryTestCase(unittest.TestCase):
         - joining against uploaded data coordinates;
         - counting result rows;
         - expanding dimensions as needed for 'where' conditions;
-        - order_by, limit, and offset.
+        - order_by and limit.
 
         It does not include the iteration methods of
         DimensionRecordQueryResults, since those require a different mock
@@ -1443,9 +1443,8 @@ class QueryTestCase(unittest.TestCase):
             results: DimensionRecordQueryResults,
             order_by: Any = (),
             limit: int | None = None,
-            offset: int = 0,
         ) -> list[str]:
-            results = results.order_by(*order_by).limit(limit, offset=offset)
+            results = results.order_by(*order_by).limit(limit)
             self.assertEqual(results.element.name, "patch")
             with self.assertRaises(_TestQueryExecution) as cm:
                 list(results)
@@ -1461,7 +1460,6 @@ class QueryTestCase(unittest.TestCase):
             self.assertEqual(result_spec.result_type, "dimension_record")
             self.assertEqual(result_spec.element, self.universe["patch"])
             self.assertEqual(result_spec.limit, limit)
-            self.assertEqual(result_spec.offset, offset)
             for exact, discard in itertools.permutations([False, True], r=2):
                 with self.assertRaises(_TestQueryCount) as cm:
                     results.count(exact=exact, discard=discard)
@@ -1473,11 +1471,9 @@ class QueryTestCase(unittest.TestCase):
         # Run the closure's tests on variants of the base query.
         self.assertEqual(check(results), [])
         self.assertEqual(check(results, limit=2), [])
-        self.assertEqual(check(results, offset=1), [])
-        self.assertEqual(check(results, limit=3, offset=3), [])
         self.assertEqual(check(results, order_by=[x.patch.cell_x]), ["patch.cell_x"])
         self.assertEqual(
-            check(results, order_by=[x.patch.cell_x, x.patch.cell_y.desc], offset=2),
+            check(results, order_by=[x.patch.cell_x, x.patch.cell_y.desc]),
             ["patch.cell_x", "patch.cell_y DESC"],
         )
         with self.assertRaises(qt.InvalidQueryError):
@@ -1521,7 +1517,7 @@ class QueryTestCase(unittest.TestCase):
 
         - counting result rows;
         - expanding dimensions as needed for 'where' conditions;
-        - order_by, limit, and offset.
+        - order_by and limit.
 
         It does not include the iteration methods of
         DataCoordinateQueryResults, since those require a different mock
@@ -1542,10 +1538,9 @@ class QueryTestCase(unittest.TestCase):
             results: DataCoordinateQueryResults,
             order_by: Any = (),
             limit: int | None = None,
-            offset: int = 0,
             include_dimension_records: bool = False,
         ) -> list[str]:
-            results = results.order_by(*order_by).limit(limit, offset=offset)
+            results = results.order_by(*order_by).limit(limit)
             self.assertEqual(results.dimensions, self.universe.conform(["patch", "band"]))
             with self.assertRaises(_TestQueryExecution) as cm:
                 list(results)
@@ -1560,7 +1555,6 @@ class QueryTestCase(unittest.TestCase):
             self.assertEqual(result_spec.dimensions, self.universe.conform(["patch", "band"]))
             self.assertEqual(result_spec.include_dimension_records, include_dimension_records)
             self.assertEqual(result_spec.limit, limit)
-            self.assertEqual(result_spec.offset, offset)
             self.assertIsNone(result_spec.find_first_dataset)
             for exact, discard in itertools.permutations([False, True], r=2):
                 with self.assertRaises(_TestQueryCount) as cm:
@@ -1578,15 +1572,13 @@ class QueryTestCase(unittest.TestCase):
             [],
         )
         self.assertEqual(check(results, limit=2), [])
-        self.assertEqual(check(results, offset=1), [])
-        self.assertEqual(check(results, limit=3, offset=3), [])
         self.assertEqual(check(results, order_by=[x.patch.cell_x]), ["patch.cell_x"])
         self.assertEqual(
-            check(results, order_by=[x.patch.cell_x, x.patch.cell_y.desc], offset=2),
+            check(results, order_by=[x.patch.cell_x, x.patch.cell_y.desc]),
             ["patch.cell_x", "patch.cell_y DESC"],
         )
         self.assertEqual(
-            check(results, order_by=["patch.cell_x", "-cell_y"], offset=2),
+            check(results, order_by=["patch.cell_x", "-cell_y"]),
             ["patch.cell_x", "patch.cell_y DESC"],
         )
 
@@ -1612,7 +1604,7 @@ class QueryTestCase(unittest.TestCase):
         - counting result rows;
         - expanding dimensions as needed for 'where' conditions;
         - different ways of passing a data ID to 'where' methods;
-        - order_by, limit, and offset.
+        - order_by and limit.
 
         It does not include the iteration methods of the DatasetRefQueryResults
         classes, since those require a different mock driver setup (see
@@ -1636,10 +1628,9 @@ class QueryTestCase(unittest.TestCase):
             results: DatasetRefQueryResults,
             order_by: Any = (),
             limit: int | None = None,
-            offset: int = 0,
             include_dimension_records: bool = False,
         ) -> list[str]:
-            results = results.order_by(*order_by).limit(limit, offset=offset)
+            results = results.order_by(*order_by).limit(limit)
             with self.assertRaises(_TestQueryExecution) as cm:
                 list(results)
             tree = cm.exception.tree
@@ -1660,7 +1651,6 @@ class QueryTestCase(unittest.TestCase):
             self.assertEqual(result_spec.result_type, "dataset_ref")
             self.assertEqual(result_spec.include_dimension_records, include_dimension_records)
             self.assertEqual(result_spec.limit, limit)
-            self.assertEqual(result_spec.offset, offset)
             self.assertEqual(result_spec.find_first_dataset, result_spec.dataset_type_name)
             for exact, discard in itertools.permutations([False, True], r=2):
                 with self.assertRaises(_TestQueryCount) as cm:
@@ -1690,8 +1680,6 @@ class QueryTestCase(unittest.TestCase):
             [],
         )
         self.assertEqual(check(results1, limit=2), [])
-        self.assertEqual(check(results1, offset=1), [])
-        self.assertEqual(check(results1, limit=3, offset=3), [])
         self.assertEqual(check(results1, order_by=["raw.timespan.begin"]), ["raw.timespan.begin"])
         self.assertEqual(check(results1, order_by=["detector"]), ["detector"])
         self.assertEqual(check(results1, order_by=["ingest_date"]), ["raw.ingest_date"])
