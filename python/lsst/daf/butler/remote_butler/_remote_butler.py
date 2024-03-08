@@ -264,10 +264,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         **kwargs: Any,
     ) -> Any:
         # Docstring inherited.
-        try:
-            model = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
-        except DatasetNotFoundError as e:
-            raise FileNotFoundError(str(e)) from e
+        model = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
 
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         # If the caller provided a DatasetRef, they may have overridden the

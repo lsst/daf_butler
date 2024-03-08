@@ -86,6 +86,7 @@ from lsst.daf.butler import (
     Config,
     DataCoordinate,
     DatasetExistence,
+    DatasetNotFoundError,
     DatasetRef,
     DatasetType,
     FileDataset,
@@ -287,6 +288,10 @@ class ButlerPutGetTests(TestCaseMixin):
         metric = makeExampleMetrics()
         dataId = butler.registry.expandDataId({"instrument": "DummyCamComp", "visit": 423})
 
+        # Dataset should not exist if we haven't added it
+        with self.assertRaises(DatasetNotFoundError):
+            butler.get(datasetTypeName, dataId)
+
         # Put and remove the dataset once as a DatasetRef, once as a dataId,
         # and once with a DatasetType
 
@@ -413,7 +418,7 @@ class ButlerPutGetTests(TestCaseMixin):
                     kwargs = {}  # Prevent warning from being issued.
                 self.assertFalse(butler.exists(*args, **kwargs))
                 # get() should still fail.
-                with self.assertRaises(FileNotFoundError):
+                with self.assertRaises((FileNotFoundError, DatasetNotFoundError)):
                     butler.get(ref)
                 # Registry shouldn't be able to find it by dataset_id anymore.
                 self.assertIsNone(butler.get_dataset(ref.id))
@@ -496,7 +501,7 @@ class ButlerPutGetTests(TestCaseMixin):
         with self.assertRaisesRegex(ValueError, "DatasetRef given, cannot use dataId as well"):
             butler.get(ref, dataId)
         # Getting with an explicit ref should fail if the id doesn't match.
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaises((FileNotFoundError, DatasetNotFoundError)):
             butler.get(DatasetRef(ref.datasetType, ref.dataId, id=uuid.UUID(int=101), run=butler.run))
 
         # Getting a dataset with unknown parameters should fail
