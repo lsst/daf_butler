@@ -45,6 +45,7 @@ from deprecated.sphinx import deprecated
 
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
+from ..._exceptions_legacy import DatasetTypeError
 from ...dimensions import (
     DataCoordinate,
     DataCoordinateIterable,
@@ -53,7 +54,6 @@ from ...dimensions import (
     DimensionGroup,
     DimensionRecord,
 )
-from .._exceptions import DatasetTypeError
 from ._query import Query
 from ._structs import OrderByClause
 

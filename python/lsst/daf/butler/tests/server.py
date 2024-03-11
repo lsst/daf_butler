@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from lsst.daf.butler import Butler, Config, LabeledButlerFactory
 from lsst.daf.butler.remote_butler import RemoteButler, RemoteButlerFactory
@@ -58,7 +59,9 @@ class TestServerInstance:
 
 
 @contextmanager
-def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
+def create_test_server(
+    test_directory: str, raise_original_server_exceptions: bool = False
+) -> Iterator[TestServerInstance]:
     """Create a temporary Butler server instance for testing.
 
     Parameters
@@ -66,6 +69,10 @@ def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
     test_directory : `str`
         Path to the ``tests/`` directory at the root of the repository,
         containing Butler test configuration files.
+    raise_original_server_exceptions : `bool`, optional
+        If True, exceptions raised by the server are passed up unchanged
+        through the client.  If False, they are converted to
+        `UnhandledServerError` first.
 
     Returns
     -------
@@ -90,6 +97,8 @@ def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
 
                 app = create_app()
                 add_auth_header_check_middleware(app)
+                if not raise_original_server_exceptions:
+                    _add_root_exception_handler(app)
                 # Override the server's Butler initialization to point at our
                 # test repo
                 server_butler_factory = LabeledButlerFactory({TEST_REPOSITORY_NAME: config_file_path})
@@ -122,3 +131,25 @@ def _make_remote_butler(client: TestClient) -> RemoteButler:
         f"https://test.example/api/butler/repo/{TEST_REPOSITORY_NAME}", client
     )
     return remote_butler_factory.create_butler_for_access_token("fake-access-token")
+
+
+class UnhandledServerError(Exception):
+    """Raised for unhandled exceptions within the server that would result in a
+    500 Internal Server Error in a real deployment.  This allows us to tell the
+    difference between exceptions being propagated intentionally, and those
+    just bubbling up implicitly from the server to the client.
+
+    The FastAPI TestClient by default passes unhandled exceptions up from the
+    server to the client.  This is useful behavior for unit testing because it
+    gives you traceability from the test to the problem in the server code.
+    However, because RemoteButler is in some ways just a proxy for the
+    server-side Butler, we raise similar exceptions on the client and server
+    side. Thus the default TestClient behavior can mask missing error-handling
+    logic.
+    """
+
+
+def _add_root_exception_handler(app: FastAPI) -> None:
+    @app.exception_handler(Exception)
+    async def convert_exception_types(request: Request, exc: Exception) -> None:
+        raise UnhandledServerError("Unhandled server exception") from exc

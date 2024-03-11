@@ -43,6 +43,7 @@ from lsst.daf.butler import SerializedDataId, SerializedDatasetRef, SerializedTi
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
+ERROR_STATUS_CODE = 422
 
 CollectionList = NewType("CollectionList", list[str])
 """A list of search patterns for collection names.  May use glob
@@ -88,3 +89,16 @@ class GetFileResponseModel(pydantic.BaseModel):
     save space, but the fact that it was once available must be recorded for
     provenance tracking.
     """
+
+
+class ErrorResponseModel(pydantic.BaseModel):
+    """Error response sent with a 422 status code, to propagate server
+    exceptions with user-facing error messages to the client.
+    """
+
+    error_type: str
+    """The ``error_type`` string from one of the subclasses of
+    `ButlerUserError`.
+    """
+    detail: str
+    """Detailed explanation of the error that will be sent to the client."""

@@ -48,7 +48,7 @@ from lsst.daf.butler.datastores.fileDatastoreClient import (
     get_dataset_as_python_object,
 )
 from lsst.resources import ResourcePath, ResourcePathExpression
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from .._butler import Butler
 from .._butler_instance_options import ButlerInstanceOptions
@@ -56,23 +56,20 @@ from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
+from .._exceptions import DatasetNotFoundError, create_butler_user_error
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
-from ..registry import (
-    CollectionArgType,
-    MissingDatasetTypeError,
-    NoDefaultCollectionError,
-    Registry,
-    RegistryDefaults,
-)
+from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
 from ._authentication import get_authentication_headers
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from .server_models import (
     CLIENT_REQUEST_ID_HEADER_NAME,
+    ERROR_STATUS_CODE,
     CollectionList,
     DatasetTypeName,
+    ErrorResponseModel,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetFileByDataIdRequestModel,
@@ -249,14 +246,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         storageClass: str | StorageClass | None = None,
         **kwargs: Any,
     ) -> DeferredDatasetHandle:
-        try:
-            response = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
-            # Check that artifact information is available.
-            _to_file_payload(response)
-        except FileNotFoundError as e:
-            # Inconsistent with the behavior of get(), DirectButler returns
-            # LookupError if a dataset cannot be found here.
-            raise LookupError(str(e)) from e
+        response = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
+        # Check that artifact information is available.
+        _to_file_payload(response)
         ref = DatasetRef.from_simple(response.dataset_ref, universe=self.dimensions)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
@@ -310,18 +302,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 collections=self._normalize_collections(collections),
                 data_id=self._simplify_dataId(dataId, kwargs),
             )
-            response = self._post("get_file_by_data_id", request, expected_errors=(404,))
-            if response.status_code == 404:
-                raise FileNotFoundError(
-                    f"Dataset not found with DataId: {dataId} DatasetType: {datasetRefOrType}"
-                    f" collections: {collections}"
-                )
+            response = self._post("get_file_by_data_id", request)
             return self._parse_model(response, GetFileResponseModel)
 
     def _get_file_info_for_ref(self, ref: DatasetRef) -> GetFileResponseModel:
-        response = self._get(f"get_file/{ref.id}", expected_errors=(404,))
-        if response.status_code == 404:
-            raise FileNotFoundError(f"Dataset not found: {ref.id}")
+        response = self._get(f"get_file/{ref.id}")
         return self._parse_model(response, GetFileResponseModel)
 
     def getURIs(
@@ -359,11 +344,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # In future implementation this should directly access the cache
         # and only go to the server if the dataset type is not known.
         path = f"dataset_type/{name}"
-        response = self._get(path, expected_errors=(404,))
-        if response.status_code != httpx.codes.OK:
-            content = response.json()
-            if content["exception"] == "MissingDatasetTypeError":
-                raise MissingDatasetTypeError(content["detail"])
+        response = self._get(path)
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def get_dataset(
@@ -470,7 +451,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             response = self._get_file_info(
                 dataset_ref_or_type, dataId=data_id, collections=collections, kwargs=kwargs
             )
-        except FileNotFoundError:
+        except DatasetNotFoundError:
             return DatasetExistence.UNRECOGNIZED
 
         if response.artifact is None:
@@ -608,7 +589,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         slash = "" if self._server_url.endswith("/") else "/"
         return f"{self._server_url}{slash}{version}/{path}"
 
-    def _post(self, path: str, model: BaseModel, expected_errors: Iterable[int] = ()) -> httpx.Response:
+    def _post(self, path: str, model: BaseModel) -> httpx.Response:
         """Send a POST request to the Butler server."""
         json = model.model_dump_json(exclude_unset=True).encode("utf-8")
         return self._send_request(
@@ -616,14 +597,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             path,
             content=json,
             headers={"content-type": "application/json"},
-            expected_errors=expected_errors,
         )
 
-    def _get(
-        self, path: str, params: Mapping[str, str | bool] | None = None, expected_errors: Iterable[int] = ()
-    ) -> httpx.Response:
+    def _get(self, path: str, params: Mapping[str, str | bool] | None = None) -> httpx.Response:
         """Send a GET request to the Butler server."""
-        return self._send_request("GET", path, params=params, expected_errors=expected_errors)
+        return self._send_request("GET", path, params=params)
 
     def _send_request(
         self,
@@ -633,7 +611,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         content: bytes | None = None,
         params: Mapping[str, str | bool] | None = None,
         headers: Mapping[str, str] | None = None,
-        expected_errors: Iterable[int],
     ) -> httpx.Response:
         url = self._get_url(path)
 
@@ -647,8 +624,20 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             response = self._client.request(
                 method, url, content=content, params=params, headers=request_headers
             )
-            if response.status_code not in expected_errors:
-                response.raise_for_status()
+
+            if response.status_code == ERROR_STATUS_CODE:
+                # Raise an exception that the server has forwarded to the
+                # client.
+                model = self._try_to_parse_model(response, ErrorResponseModel)
+                if model is not None:
+                    exc = create_butler_user_error(model.error_type, model.detail)
+                    exc.add_note(f"Client request ID: {request_id}")
+                    raise exc
+                # If model is None, server sent an expected error code, but the
+                # body wasn't in the expected JSON format.  This likely means
+                # some HTTP thing between us and the server is misbehaving.
+
+            response.raise_for_status()
             return response
         except httpx.HTTPError as e:
             raise ButlerServerError(request_id) from e
@@ -656,6 +645,18 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _parse_model(self, response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:
         """Deserialize a Pydantic model from the body of an HTTP response."""
         return model.model_validate_json(response.content)
+
+    def _try_to_parse_model(
+        self, response: httpx.Response, model: type[_AnyPydanticModel]
+    ) -> _AnyPydanticModel | None:
+        """Attempt to deserialize a Pydantic model from the body of an HTTP
+        response.  Returns `None` if the content could not be parsed as JSON or
+        failed validation against the model.
+        """
+        try:
+            return self._parse_model(response, model)
+        except (ValueError, ValidationError):
+            return None
 
     def _normalize_collections(self, collections: CollectionArgType | None) -> CollectionList:
         """Convert the ``collections`` parameter in the format used by Butler
@@ -750,7 +751,7 @@ def _apply_storage_class_override(
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:
     if get_file_response.artifact is None:
         ref = get_file_response.dataset_ref
-        raise FileNotFoundError(f"Dataset is known, but artifact is not available. (datasetId='{ref.id}')")
+        raise DatasetNotFoundError(f"Dataset is known, but artifact is not available. (datasetId='{ref.id}')")
 
     return get_file_response.artifact
 

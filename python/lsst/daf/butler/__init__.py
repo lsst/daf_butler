@@ -86,7 +86,6 @@ from .queries import DataCoordinateQueryResults, DatasetRefQueryResults, Dimensi
 from .registry import (
     CollectionType,
     MissingCollectionError,
-    MissingDatasetTypeError,
     NoDefaultCollectionError,
     Registry,
     RegistryConfig,

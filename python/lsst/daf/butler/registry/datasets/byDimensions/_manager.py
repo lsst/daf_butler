@@ -12,14 +12,10 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 
 from ...._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef, DatasetType
+from ...._exceptions_legacy import DatasetTypeError
 from ....dimensions import DimensionUniverse
 from ..._collection_summary import CollectionSummary
-from ..._exceptions import (
-    ConflictingDefinitionError,
-    DatasetTypeError,
-    DatasetTypeExpressionError,
-    OrphanedRecordError,
-)
+from ..._exceptions import ConflictingDefinitionError, DatasetTypeExpressionError, OrphanedRecordError
 from ...interfaces import DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple
 from ...wildcards import DatasetTypeWildcard
 from ._storage import ByDimensionsDatasetRecordStorage, ByDimensionsDatasetRecordStorageUUID
