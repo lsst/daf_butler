@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
+from ..dimensions import DimensionGroup
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import DataCoordinateResultSpec, DatasetRefResultSpec
@@ -76,6 +77,11 @@ class DatasetRefQueryResults(QueryResultsBase):
         while page.next_key is not None:
             page = self._driver.fetch_next_page(self._spec, page.next_key)
             yield from page.rows
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        # Docstring inherited
+        return self._spec.dimensions
 
     @property
     def dataset_type(self) -> DatasetType:

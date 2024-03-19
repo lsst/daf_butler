@@ -32,7 +32,7 @@ __all__ = ("DataCoordinateQueryResults",)
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, final
 
-from ..dimensions import DataCoordinate
+from ..dimensions import DataCoordinate, DimensionGroup
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .tree import QueryTree
@@ -74,6 +74,11 @@ class DataCoordinateQueryResults(QueryResultsBase):
         while page.next_key is not None:
             page = self._driver.fetch_next_page(self._spec, page.next_key)
             yield from page.rows
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        # Docstring inherited
+        return self._spec.dimensions
 
     @property
     def has_dimension_records(self) -> bool:

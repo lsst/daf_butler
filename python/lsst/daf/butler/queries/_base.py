@@ -58,11 +58,6 @@ class QueryBase(ABC):
         self._driver = driver
         self._tree = tree
 
-    @property
-    def dimensions(self) -> DimensionGroup:
-        """All dimensions included in the query's columns."""
-        return self._tree.dimensions
-
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         """Test whether the query would return any rows.
 
@@ -153,6 +148,12 @@ class QueryBase(ABC):
 
 class QueryResultsBase(QueryBase):
     """Common base class for query result objects with countable rows."""
+
+    @property
+    @abstractmethod
+    def dimensions(self) -> DimensionGroup:
+        """All dimensions included in the query's columns."""
+        raise NotImplementedError()
 
     @abstractmethod
     def count(self, *, exact: bool = True, discard: bool = False) -> int:

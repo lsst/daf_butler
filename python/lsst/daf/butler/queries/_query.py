@@ -490,7 +490,13 @@ class Query(QueryBase):
         """
         return Query(
             tree=self._tree.where(
-                convert_where_args(self.dimensions, self.constraint_dataset_types, *args, bind=bind, **kwargs)
+                convert_where_args(
+                    self.constraint_dimensions,
+                    self.constraint_dataset_types,
+                    *args,
+                    bind=bind,
+                    **kwargs,
+                )
             ),
             driver=self._driver,
         )
