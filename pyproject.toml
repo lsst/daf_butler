@@ -194,6 +194,7 @@ select = [
     "N",  # pep8-naming
     "W",  # pycodestyle
     "D",  # pydocstyle
+    "UP",  # pyupgrade
 ]
 # Commented out to suppress "unused noqa" in jenkins which has older ruff not
 # generating E721.
