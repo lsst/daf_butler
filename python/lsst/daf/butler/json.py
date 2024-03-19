@@ -30,7 +30,9 @@ from __future__ import annotations
 __all__ = ("to_json_generic", "from_json_generic", "to_json_pydantic", "from_json_pydantic")
 
 import json
-from typing import TYPE_CHECKING, Any, Protocol, Type
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from .dimensions import DimensionUniverse
@@ -42,7 +44,7 @@ class SupportsSimple(Protocol):
     serialization using "simple" methods names.
     """
 
-    _serializedType: Type
+    _serializedType: ClassVar[type[BaseModel]]
 
     def to_simple(self, minimal: bool) -> Any: ...
 
