@@ -10,4 +10,4 @@ datastore:
       mode: files
       threshold: 1
     cacheable:
-      StructuredDataDictYaml: false
+      StructuredDataDictYaml: true
