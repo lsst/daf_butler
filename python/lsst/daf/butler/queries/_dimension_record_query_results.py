@@ -32,7 +32,13 @@ __all__ = ("DimensionRecordQueryResults",)
 from collections.abc import Iterator
 from typing import Any, final
 
-from ..dimensions import DimensionElement, DimensionRecord, DimensionRecordSet, DimensionRecordTable
+from ..dimensions import (
+    DimensionElement,
+    DimensionGroup,
+    DimensionRecord,
+    DimensionRecordSet,
+    DimensionRecordTable,
+)
 from ._base import QueryResultsBase
 from .driver import QueryDriver
 from .result_specs import DimensionRecordResultSpec
@@ -107,6 +113,11 @@ class DimensionRecordQueryResults(QueryResultsBase):
     def element(self) -> DimensionElement:
         # Docstring inherited.
         return self._spec.element
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        # Docstring inherited
+        return self._spec.dimensions
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
