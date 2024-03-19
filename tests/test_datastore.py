@@ -36,8 +36,8 @@ import time
 import unittest
 import unittest.mock
 import uuid
-from collections.abc import Callable
-from typing import Any, Iterator, cast
+from collections.abc import Callable, Iterator
+from typing import Any, cast
 
 import lsst.utils.tests
 import yaml

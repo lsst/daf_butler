@@ -37,7 +37,8 @@ __all__ = (
 
 import itertools
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Annotated, Iterable, Literal, TypeAlias, TypeVar, Union, cast, final
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union, cast, final
 
 import pydantic
 
