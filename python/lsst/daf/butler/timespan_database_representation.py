@@ -31,7 +31,7 @@ __all__ = ("TimespanDatabaseRepresentation",)
 import enum
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, Union
+from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, TypeVar
 
 import astropy.time
 import astropy.utils.exceptions
@@ -66,7 +66,7 @@ class _SpecialTimespanBound(enum.Enum):
     """
 
 
-TimespanBound = Union[astropy.time.Time, _SpecialTimespanBound, None]
+TimespanBound: TypeAlias = astropy.time.Time | _SpecialTimespanBound | None
 
 
 _S = TypeVar("_S", bound="TimespanDatabaseRepresentation")
