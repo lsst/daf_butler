@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = ("DimensionRecord", "SerializedDimensionRecord")
 
 from collections.abc import Hashable
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 import lsst.sphgeom
 from lsst.utils.classes import immutable
@@ -108,7 +108,7 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSe
             field_type = Optional[field_type]  # type: ignore
         members[field.name] = (field_type, ...)
     if definition.temporal:
-        members["timespan"] = (Optional[Tuple[int, int]], ...)  # type: ignore
+        members["timespan"] = (Optional[tuple[int, int]], ...)  # type: ignore
     if definition.spatial:
         members["region"] = (str, ...)
 
