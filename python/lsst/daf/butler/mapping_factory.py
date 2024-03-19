@@ -264,9 +264,8 @@ class MappingFactory:
                 return
 
             raise KeyError(
-                "Item with key {} already registered with different value ({} != {})".format(
-                    key, self._registry[key], typeName
-                )
+                f"Item with key {key} already registered with different value "
+                f"({self._registry[key]} != {typeName})"
             )
 
         self._registry[key] = {

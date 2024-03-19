@@ -302,8 +302,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         )
 
     def __str__(self) -> str:
-        return "Butler(collections={}, run={}, datastore='{}', registry='{}')".format(
-            self.collections, self.run, self._datastore, self._registry
+        return (
+            f"Butler(collections={self.collections}, run={self.run}, "
+            f"datastore='{self._datastore}', registry='{self._registry}')"
         )
 
     def isWriteable(self) -> bool:

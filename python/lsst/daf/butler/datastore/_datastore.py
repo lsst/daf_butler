@@ -953,10 +953,10 @@ class Datastore(metaclass=ABCMeta):
             except FileNotFoundError:
                 missing_refs.append(ref)
         if missing_refs and not allow_missing:
+            num_missing = len(missing_refs)
             raise FileNotFoundError(
-                "Missing {} refs from datastore out of {} and predict=False.".format(
-                    num_missing := len(missing_refs), num_missing + len(uris)
-                )
+                f"Missing {num_missing} refs from datastore out of "
+                f"{num_missing + len(uris)} and predict=False."
             )
         return uris
 
