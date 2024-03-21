@@ -127,7 +127,7 @@ class DataCoordinateResultSpec(ResultSpecBase):
         if self.include_dimension_records:
             for element_name in self.dimensions.elements:
                 element = self.dimensions.universe[element_name]
-                if not element.is_cached:
+                if not element.is_cached and element not in self.dimensions.universe.skypix_dimensions:
                     result.dimension_fields[element_name].update(element.schema.remainder.names)
         return result
 
@@ -151,7 +151,8 @@ class DimensionRecordResultSpec(ResultSpecBase):
     def get_result_columns(self) -> ColumnSet:
         # Docstring inherited.
         result = ColumnSet(self.element.minimal_group)
-        result.dimension_fields[self.element.name].update(self.element.schema.remainder.names)
+        if self.element not in self.dimensions.universe.skypix_dimensions:
+            result.dimension_fields[self.element.name].update(self.element.schema.remainder.names)
         result.drop_dimension_keys(self.element.minimal_group.names - self.element.dimensions.names)
         return result
 
@@ -191,7 +192,7 @@ class DatasetRefResultSpec(ResultSpecBase):
         if self.include_dimension_records:
             for element_name in self.dimensions.elements:
                 element = self.dimensions.universe[element_name]
-                if not element.is_cached:
+                if not element.is_cached and element not in self.dimensions.universe.skypix_dimensions:
                     result.dimension_fields[element_name].update(element.schema.remainder.names)
         return result
 
@@ -246,6 +247,11 @@ class GeneralResultSpec(ResultSpecBase):
             if not fields_for_element:
                 raise InvalidQueryError(
                     f"Empty dimension element field set for {element_name!r} is not permitted."
+                )
+            elif element_name in self.dimensions.universe.skypix_dimensions.names:
+                raise InvalidQueryError(
+                    f"Regions for skypix dimension {element_name!r} are not stored; compute them via "
+                    f"{element_name}.pixelization.pixel(id) instead."
                 )
         for dataset_type, fields_for_dataset in self.dataset_fields.items():
             if not fields_for_dataset:
