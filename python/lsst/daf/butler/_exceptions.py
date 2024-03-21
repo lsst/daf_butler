@@ -27,6 +27,7 @@
 
 """Specialized Butler exceptions."""
 __all__ = (
+    "CalibrationLookupError",
     "DatasetNotFoundError",
     "ButlerUserError",
     "DatasetTypeNotSupportedError",
@@ -68,6 +69,12 @@ class ButlerUserError(Exception):
 
     def __init__(self, detail: str):
         return super().__init__(detail)
+
+
+class CalibrationLookupError(LookupError, ButlerUserError):
+    """Exception raised for failures to look up a calibration dataset."""
+
+    error_type = "calibration_lookup"
 
 
 class DatasetNotFoundError(LookupError, ButlerUserError):
@@ -126,6 +133,7 @@ class UnknownButlerUserError(ButlerUserError):
 
 
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
+    CalibrationLookupError,
     DatasetNotFoundError,
     MissingDatasetTypeError,
     UnknownButlerUserError,

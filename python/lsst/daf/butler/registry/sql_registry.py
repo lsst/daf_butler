@@ -48,6 +48,7 @@ from .._config import Config
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
+from .._exceptions import CalibrationLookupError
 from .._named import NamedKeyMapping, NameLookupMapping
 from .._storage_class import StorageClassFactory
 from .._timespan import Timespan
@@ -963,7 +964,7 @@ class SqlRegistry:
                         have_tie = True
                         assert timespan is not None, "Rank ties should be impossible given DB constraints."
                 if have_tie:
-                    raise LookupError(
+                    raise CalibrationLookupError(
                         f"Ambiguous calibration lookup for {resolved_dataset_type.name} in collections "
                         f"{collection_wildcard.strings} with timespan {timespan}."
                     )
