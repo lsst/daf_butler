@@ -29,6 +29,7 @@
 __all__ = (
     "CalibrationLookupError",
     "DatasetNotFoundError",
+    "DimensionNameError",
     "ButlerUserError",
     "DatasetTypeNotSupportedError",
     "EmptyQueryResultError",
@@ -36,7 +37,7 @@ __all__ = (
     "ValidationError",
 )
 
-from ._exceptions_legacy import DatasetTypeError
+from ._exceptions_legacy import DataIdError, DatasetTypeError
 
 
 class ButlerUserError(Exception):
@@ -81,6 +82,14 @@ class DatasetNotFoundError(LookupError, ButlerUserError):
     """The requested dataset could not be found."""
 
     error_type = "dataset_not_found"
+
+
+class DimensionNameError(KeyError, DataIdError, ButlerUserError):
+    """Exception raised when a dimension specified in a data ID does not exist
+    or required dimension is not provided.
+    """
+
+    error_type = "dimension_name"
 
 
 class MissingDatasetTypeError(DatasetTypeError, KeyError, ButlerUserError):
@@ -134,6 +143,7 @@ class UnknownButlerUserError(ButlerUserError):
 
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     CalibrationLookupError,
+    DimensionNameError,
     DatasetNotFoundError,
     MissingDatasetTypeError,
     UnknownButlerUserError,

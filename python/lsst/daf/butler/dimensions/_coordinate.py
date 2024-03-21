@@ -52,6 +52,7 @@ from deprecated.sphinx import deprecated
 from lsst.sphgeom import IntersectionRegion, Region
 from lsst.utils.introspection import find_outside_stacklevel
 
+from .._exceptions import DimensionNameError
 from .._named import NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping
 from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
@@ -218,7 +219,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         ------
         TypeError
             Raised if the set of optional arguments provided is not supported.
-        KeyError
+        DimensionNameError
             Raised if a key-value pair for a required dimension is missing.
         """
         universe = (
@@ -294,7 +295,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             try:
                 values = tuple(new_mapping[name] for name in dimensions.required)
             except KeyError as err:
-                raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
+                raise DimensionNameError(
+                    f"No value in data ID ({mapping}) for required dimension {err}."
+                ) from err
             return DataCoordinate.from_required_values(dimensions, values)
 
     @property

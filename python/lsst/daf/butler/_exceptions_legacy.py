@@ -25,7 +25,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DatasetTypeError", "RegistryError")
+__all__ = ("DataIdError", "DatasetTypeError", "RegistryError")
 
 # The classes in this file exist only for backwards compatibility.  New
 # exception types should not inherit from these.
@@ -44,6 +44,12 @@ class RegistryError(Exception):
     handle all possible exceptions, then it should also catch a standard
     `Exception` type as well. Additionally, some Registry methods can be
     explicitly documented to raise exceptions outside this class hierarchy.
+    """
+
+
+class DataIdError(RegistryError):
+    """Exception raised for incorrect data IDs, this is a base class for other
+    specific error types.
     """
 
 
