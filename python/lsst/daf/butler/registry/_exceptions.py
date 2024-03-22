@@ -32,10 +32,8 @@ __all__ = (
     "CollectionExpressionError",
     "CollectionTypeError",
     "ConflictingDefinitionError",
-    "DataIdError",
     "DataIdValueError",
     "DatasetTypeExpressionError",
-    "DimensionNameError",
     "InconsistentDataIdError",
     "MissingCollectionError",
     "MissingSpatialOverlapError",
@@ -47,7 +45,7 @@ __all__ = (
     "UserExpressionSyntaxError",
 )
 
-from .._exceptions_legacy import RegistryError
+from .._exceptions_legacy import DataIdError, RegistryError
 
 
 class ArgumentError(RegistryError):
@@ -56,18 +54,6 @@ class ArgumentError(RegistryError):
 
 class DatasetTypeExpressionError(RegistryError):
     """Exception raised for an incorrect dataset type expression."""
-
-
-class DataIdError(RegistryError):
-    """Exception raised for incorrect data IDs, this is a base class for other
-    specific error types.
-    """
-
-
-class DimensionNameError(DataIdError):
-    """Exception raised when a dimension specified in a data ID does not exist
-    or required dimension is not provided.
-    """
 
 
 class DataIdValueError(DataIdError):

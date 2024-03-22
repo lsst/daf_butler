@@ -59,9 +59,7 @@ class TestServerInstance:
 
 
 @contextmanager
-def create_test_server(
-    test_directory: str, raise_original_server_exceptions: bool = False
-) -> Iterator[TestServerInstance]:
+def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
     """Create a temporary Butler server instance for testing.
 
     Parameters
@@ -69,10 +67,6 @@ def create_test_server(
     test_directory : `str`
         Path to the ``tests/`` directory at the root of the repository,
         containing Butler test configuration files.
-    raise_original_server_exceptions : `bool`, optional
-        If True, exceptions raised by the server are passed up unchanged
-        through the client.  If False, they are converted to
-        `UnhandledServerError` first.
 
     Returns
     -------
@@ -97,8 +91,7 @@ def create_test_server(
 
                 app = create_app()
                 add_auth_header_check_middleware(app)
-                if not raise_original_server_exceptions:
-                    _add_root_exception_handler(app)
+                _add_root_exception_handler(app)
                 # Override the server's Butler initialization to point at our
                 # test repo
                 server_butler_factory = LabeledButlerFactory({TEST_REPOSITORY_NAME: config_file_path})

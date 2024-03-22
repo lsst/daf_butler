@@ -48,6 +48,7 @@ from .._config import Config
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
+from .._exceptions import CalibrationLookupError, DimensionNameError
 from .._named import NamedKeyMapping, NameLookupMapping
 from .._storage_class import StorageClassFactory
 from .._timespan import Timespan
@@ -73,7 +74,6 @@ from ..registry import (
     ConflictingDefinitionError,
     DataIdValueError,
     DatasetTypeError,
-    DimensionNameError,
     InconsistentDataIdError,
     MissingDatasetTypeError,
     NoDefaultCollectionError,
@@ -963,7 +963,7 @@ class SqlRegistry:
                         have_tie = True
                         assert timespan is not None, "Rank ties should be impossible given DB constraints."
                 if have_tie:
-                    raise LookupError(
+                    raise CalibrationLookupError(
                         f"Ambiguous calibration lookup for {resolved_dataset_type.name} in collections "
                         f"{collection_wildcard.strings} with timespan {timespan}."
                     )
@@ -1531,19 +1531,14 @@ class SqlRegistry:
             defaults = None
         else:
             defaults = self.defaults.dataId
-        try:
-            standardized = DataCoordinate.standardize(
-                dataId,
-                graph=graph,
-                dimensions=dimensions,
-                universe=self.dimensions,
-                defaults=defaults,
-                **kwargs,
-            )
-        except KeyError as exc:
-            # This means either kwargs have some odd name or required
-            # dimension is missing.
-            raise DimensionNameError(str(exc)) from exc
+        standardized = DataCoordinate.standardize(
+            dataId,
+            graph=graph,
+            dimensions=dimensions,
+            universe=self.dimensions,
+            defaults=defaults,
+            **kwargs,
+        )
         if standardized.hasRecords():
             return standardized
         if records is None:
