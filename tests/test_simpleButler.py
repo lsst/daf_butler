@@ -389,13 +389,22 @@ class SimpleButlerTestCase(unittest.TestCase):
             "day_obs",
             {"instrument": "Cam1", "id": 20211114},
         )
+        # Choose timespans for exposures within the above calibration ranges
+        # but make sure they are not identical to the full range.
+        exp_time = astropy.time.TimeDelta(15.0, format="sec", scale="tai")
+        span_delta = t2 - t1
+        exp3_begin = t1 + (span_delta / 2.0)
+        exp3_end = exp3_begin + exp_time
+        span_delta = t3 - t2
+        exp4_begin = t2 + (span_delta / 2.0)
+        exp4_end = exp4_begin + exp_time
         registry.insertDimensionData(
             "exposure",
             {
                 "instrument": "Cam1",
                 "id": 3,
                 "obs_id": "three",
-                "timespan": Timespan(t1, t2),
+                "timespan": Timespan(exp3_begin, exp3_end),
                 "physical_filter": "Cam1-G",
                 "group": "three",
                 "day_obs": 20211114,
@@ -405,7 +414,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "instrument": "Cam1",
                 "id": 4,
                 "obs_id": "four",
-                "timespan": Timespan(t2, t3),
+                "timespan": Timespan(exp4_begin, exp4_end),
                 "physical_filter": "Cam1-G",
                 "group": "four",
                 "day_obs": 20211114,
