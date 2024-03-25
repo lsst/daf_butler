@@ -244,9 +244,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         parameters: dict | None = None,
         collections: Any = None,
         storageClass: str | StorageClass | None = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
     ) -> DeferredDatasetHandle:
-        response = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
+        response = self._get_file_info(datasetRefOrType, dataId, collections, timespan, kwargs)
         # Check that artifact information is available.
         _to_file_payload(response)
         ref = DatasetRef.from_simple(response.dataset_ref, universe=self.dimensions)
@@ -261,10 +262,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         parameters: dict[str, Any] | None = None,
         collections: Any = None,
         storageClass: StorageClass | str | None = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
     ) -> Any:
         # Docstring inherited.
-        model = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
+        model = self._get_file_info(datasetRefOrType, dataId, collections, timespan, kwargs)
 
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         # If the caller provided a DatasetRef, they may have overridden the
@@ -287,6 +289,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         datasetRefOrType: DatasetRef | DatasetType | str,
         dataId: DataId | None,
         collections: CollectionArgType,
+        timespan: Timespan | None,
         kwargs: dict[str, DataIdValue],
     ) -> GetFileResponseModel:
         """Send a request to the server for the file URLs and metadata
@@ -301,6 +304,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
                 collections=self._normalize_collections(collections),
                 data_id=self._simplify_dataId(dataId, kwargs),
+                timespan=timespan.to_simple() if timespan is not None else None,
             )
             response = self._post("get_file_by_data_id", request)
             return self._parse_model(response, GetFileResponseModel)
@@ -324,7 +328,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         if predict or run:
             raise NotImplementedError("Predict mode is not supported by RemoteButler")
 
-        response = self._get_file_info(datasetRefOrType, dataId, collections, kwargs)
+        response = self._get_file_info(datasetRefOrType, dataId, collections, None, kwargs)
         file_info = _to_file_payload(response).file_info
         if len(file_info) == 1:
             return DatasetRefURIs(primaryURI=ResourcePath(str(file_info[0].url)))
@@ -449,7 +453,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     ) -> DatasetExistence:
         try:
             response = self._get_file_info(
-                dataset_ref_or_type, dataId=data_id, collections=collections, kwargs=kwargs
+                dataset_ref_or_type, dataId=data_id, collections=collections, timespan=None, kwargs=kwargs
             )
         except DatasetNotFoundError:
             return DatasetExistence.UNRECOGNIZED

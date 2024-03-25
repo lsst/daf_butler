@@ -171,11 +171,13 @@ def get_file_by_data_id(
     factory: Factory = Depends(factory_dependency),
 ) -> GetFileResponseModel:
     butler = factory.create_butler()
+    timespan = Timespan.from_simple(request.timespan) if request.timespan is not None else None
     ref = butler._findDatasetRef(
         datasetRefOrType=request.dataset_type_name,
         dataId=request.data_id,
         collections=request.collections,
         datastore_records=True,
+        timespan=timespan,
     )
     return _get_file_by_ref(butler, ref)
 
