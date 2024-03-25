@@ -31,7 +31,7 @@ import os
 from fnmatch import fnmatchcase
 from urllib.parse import urlparse
 
-_SERVER_WHITELIST = ["*.lsst.cloud"]
+_SERVER_WHITELIST = ["*.lsst.cloud", "*.slac.stanford.edu"]
 _EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY = "BUTLER_RUBIN_ACCESS_TOKEN"
 _RSP_JUPYTER_ACCESS_TOKEN_ENVIRONMENT_KEY = "ACCESS_TOKEN"
 
