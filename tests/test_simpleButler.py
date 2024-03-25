@@ -431,6 +431,15 @@ class SimpleButlerTestCase(unittest.TestCase):
         )
         self.assertEqual(bias3b_id, bias3b.id)
 
+        # Use explicit timespan and no exposure record.
+        bias3b_id, _ = butler.get(
+            "bias",
+            {"instrument": "Cam1", "detector": 3},
+            collections="calibs",
+            timespan=Timespan(exp4_begin, exp4_end),
+        )
+        self.assertEqual(bias3b_id, bias3b.id)
+
         # Get using the kwarg form
         bias3b_id, _ = butler.get("bias", instrument="Cam1", exposure=4, detector=3, collections="calibs")
         self.assertEqual(bias3b_id, bias3b.id)
