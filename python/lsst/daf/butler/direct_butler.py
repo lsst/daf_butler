@@ -221,7 +221,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         **kwargs: Any,
     ) -> DirectButler:
         # Docstring inherited
-        defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
+        defaults = self._registry.defaults.copy(
+            collections=collections, run=run, infer=inferDefaults, **kwargs
+        )
         registry = self._registry.copy(defaults)
 
         return DirectButler(

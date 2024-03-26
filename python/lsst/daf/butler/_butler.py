@@ -1719,7 +1719,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         **kwargs: Any,
     ) -> Butler:
         """Return a new Butler instance connected to the same repository
-        as this one, but overriding ``collections``, ``run``,
+        as this one, optionally overriding ``collections``, ``run``,
         ``inferDefaults``, and default data ID.
         """
         raise NotImplementedError()

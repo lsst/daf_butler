@@ -93,6 +93,43 @@ class RegistryDefaults:
         self._infer = infer
         self._kwargs = kwargs
 
+    def copy(
+        self, collections: Any = None, run: str | None = None, infer: bool = True, **kwargs: str
+    ) -> RegistryDefaults:
+        """Make a copy of this object, optionally overriding some of its values.
+
+        Parameters
+        ----------
+        collections : `str` or `~collections.abc.Iterable` [ `str` ], optional
+            Same as constructor.  If `None`, uses the same value as
+            the original object.
+        run : `str`, optional
+            Same as constructor.  If `None`, uses the same value as
+            the original object.
+        infer : `bool`, optional
+            Same as constructor.
+        **kwargs : `str`
+            Default data ID key-value pairs, as in the constructor.  If none
+            are provided, uses the same values as the original object.
+        """
+        # We can avoid unnecessary database queries in finish() for
+        # the common case where the default data ID has not changed.
+        can_reuse_dataid = (not kwargs) and ((collections is None) or not infer)
+
+        if collections is None:
+            collections = self.collections
+        if run is None:
+            run = self.run
+        if not kwargs:
+            kwargs = self._kwargs
+
+        copy = RegistryDefaults(collections, run, infer, **kwargs)
+        if can_reuse_dataid:
+            copy.dataId = self.dataId
+            copy._finished = True
+
+        return copy
+
     def __repr__(self) -> str:
         collections = f"collections={self.collections!r}" if self.collections else ""
         run = f"run={self.run!r}" if self.run else ""

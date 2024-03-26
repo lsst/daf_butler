@@ -122,6 +122,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     _headers: dict[str, str]
     _cache: RemoteButlerCache
     _registry: Registry
+    _default_data_id: dict[str, str]
 
     # This is __new__ instead of __init__ because we have to support
     # instantiation via the legacy constructor Butler.__new__(), which
@@ -153,6 +154,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._registry_defaults = RegistryDefaults(
             options.collections, options.run, options.inferDefaults, **options.kwargs
         )
+        self._default_data_id = dict(options.kwargs)
 
         auth_headers = get_authentication_headers(access_token)
         headers = {"user-agent": f"RemoteButler/{__version__}"}
@@ -687,6 +689,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         inferDefaults: bool = True,
         **kwargs: Any,
     ) -> RemoteButler:
+        if collections is None:
+            collections = self.collections
+        if run is None:
+            run = self.run
+        if not kwargs:
+            kwargs = self._default_data_id
         return RemoteButler(
             server_url=self._server_url,
             http_client=self._client,
