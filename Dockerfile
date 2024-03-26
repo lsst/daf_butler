@@ -62,18 +62,18 @@ RUN python -m venv $VIRTUAL_ENV
 # Make sure we use the virtualenv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # Put the latest pip and setuptools in the virtualenv
-RUN pip install --upgrade --no-cache-dir pip setuptools wheel
+RUN pip install --upgrade --no-cache-dir pip setuptools wheel uv
 
 # Install the app's Python runtime dependencies
 COPY requirements/docker.txt ./docker-requirements.txt
-RUN pip install --no-cache-dir -r docker-requirements.txt
+RUN uv pip install --no-cache-dir -r docker-requirements.txt
 
 # Install dependencies only required by unit tests in a separate image for better caching
 FROM dependencies-image AS test-dependencies-image
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends postgresql postgresql-pgsphere
 COPY requirements/docker-test.txt ./docker-test-requirements.txt
-RUN pip install --no-cache-dir -r docker-test-requirements.txt
+RUN uv pip install --no-cache-dir -r docker-test-requirements.txt
 
 # Run unit tests
 FROM test-dependencies-image AS unit-test
