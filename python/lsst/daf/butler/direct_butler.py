@@ -854,13 +854,17 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             dataId = DataCoordinate.standardize(
                 dataId, universe=self.dimensions, defaults=self._registry.defaults.dataId, **kwargs
             )
-            if dataId.dimensions.temporal:
-                dataId = self._registry.expandDataId(dataId)
-                if timespan is None:
+            if timespan is None:
+                if dataId.dimensions.temporal:
+                    dataId = self._registry.expandDataId(dataId)
                     # Use the timespan from the data ID to constrain the
                     # calibration lookup, but only if the caller has not
                     # specified an explicit timespan.
                     timespan = dataId.timespan
+                else:
+                    # Try an arbitrary timespan. Downstream will fail if this
+                    # results in more than one matching dataset.
+                    timespan = Timespan(None, None)
         else:
             # Standardize the data ID to just the dimensions of the dataset
             # type instead of letting registry.findDataset do it, so we get the
