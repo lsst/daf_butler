@@ -26,7 +26,7 @@ jobs:
             'DO NOT MERGE'. Remove this commit from the branch before merging
             or change the commit summary."
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Check requirements.txt for branches
         shell: bash
