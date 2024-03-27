@@ -29,17 +29,17 @@
 
 __all__ = [
     "CLIENT_REQUEST_ID_HEADER_NAME",
-    "CollectionList",
     "DatasetTypeName",
     "FindDatasetRequestModel",
     "FindDatasetResponseModel",
     "GetFileResponseModel",
+    "GetCollectionInfoResponseModel",
 ]
 
 from typing import NewType
 
 import pydantic
-from lsst.daf.butler import SerializedDataId, SerializedDatasetRef, SerializedTimespan
+from lsst.daf.butler import CollectionType, SerializedDataId, SerializedDatasetRef, SerializedTimespan
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
@@ -103,3 +103,11 @@ class ErrorResponseModel(pydantic.BaseModel):
     """
     detail: str
     """Detailed explanation of the error that will be sent to the client."""
+
+
+class GetCollectionInfoResponseModel(pydantic.BaseModel):
+    """Response model for get_collection_info."""
+
+    name: str
+    type: CollectionType
+    children: list[str]

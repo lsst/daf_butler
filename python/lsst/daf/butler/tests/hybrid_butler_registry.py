@@ -105,7 +105,7 @@ class HybridButlerRegistry(Registry):
         return self._direct.registerCollection(name, type, doc)
 
     def getCollectionType(self, name: str) -> CollectionType:
-        return self._direct.getCollectionType(name)
+        return self._remote.getCollectionType(name)
 
     def registerRun(self, name: str, doc: str | None = None) -> bool:
         return self._direct.registerRun(name, doc)
@@ -114,7 +114,7 @@ class HybridButlerRegistry(Registry):
         return self._direct.removeCollection(name)
 
     def getCollectionChain(self, parent: str) -> Sequence[str]:
-        return self._direct.getCollectionChain(parent)
+        return self._remote.getCollectionChain(parent)
 
     def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
         return self._direct.setCollectionChain(parent, children, flatten=flatten)

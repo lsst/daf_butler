@@ -72,6 +72,7 @@ from .server_models import (
     ErrorResponseModel,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
+    GetCollectionInfoResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
@@ -707,6 +708,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     def __str__(self) -> str:
         return f"RemoteButler({self._server_url})"
+
+    def _get_collection_info(self, collection_name: str) -> GetCollectionInfoResponseModel:
+        response = self._get("collection_info", {"name": collection_name})
+        return self._parse_model(response, GetCollectionInfoResponseModel)
 
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
