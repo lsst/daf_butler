@@ -120,10 +120,10 @@ class HybridButlerRegistry(Registry):
         return self._direct.setCollectionChain(parent, children, flatten=flatten)
 
     def getCollectionParentChains(self, collection: str) -> set[str]:
-        return self._direct.getCollectionParentChains(collection)
+        return self._remote.getCollectionParentChains(collection)
 
     def getCollectionDocumentation(self, collection: str) -> str | None:
-        return self._direct.getCollectionDocumentation(collection)
+        return self._remote.getCollectionDocumentation(collection)
 
     def setCollectionDocumentation(self, collection: str, doc: str | None) -> None:
         return self._direct.setCollectionDocumentation(collection, doc)

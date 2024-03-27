@@ -718,8 +718,13 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def __str__(self) -> str:
         return f"RemoteButler({self._server_url})"
 
-    def _get_collection_info(self, collection_name: str) -> GetCollectionInfoResponseModel:
-        response = self._get("collection_info", {"name": collection_name})
+    def _get_collection_info(
+        self, collection_name: str, include_doc: bool = False, include_parents: bool = False
+    ) -> GetCollectionInfoResponseModel:
+        response = self._get(
+            "collection_info",
+            {"name": collection_name, "include_doc": include_doc, "include_parents": include_parents},
+        )
         return self._parse_model(response, GetCollectionInfoResponseModel)
 
     def _get_collection_summary(self, collection_name: str) -> CollectionSummary:

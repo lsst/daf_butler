@@ -113,6 +113,12 @@ class GetCollectionInfoResponseModel(pydantic.BaseModel):
     name: str
     type: CollectionType
     children: list[str]
+    doc: str | None = None
+    """Will be `None` unless requested with ``include_doc=True`` query
+    parameter."""
+    parents: set[str] | None = None
+    """Chained collections that directly contain this collection. Will be
+    `None` unless requested with ``include_parents=True`` query parameter."""
 
 
 class GetCollectionSummaryResponseModel(pydantic.BaseModel):
