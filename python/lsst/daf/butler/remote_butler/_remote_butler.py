@@ -82,6 +82,8 @@ from .server_models import (
     GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    QueryCollectionsRequestModel,
+    QueryCollectionsResponseModel,
 )
 
 if TYPE_CHECKING:
@@ -724,6 +726,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         response = self._get("collection_summary", {"name": collection_name})
         parsed = self._parse_model(response, GetCollectionSummaryResponseModel)
         return CollectionSummary.from_simple(parsed.summary, self.dimensions)
+
+    def _query_collections(self, query: QueryCollectionsRequestModel) -> QueryCollectionsResponseModel:
+        response = self._post("query_collections", query)
+        return self._parse_model(response, QueryCollectionsResponseModel)
 
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:

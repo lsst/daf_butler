@@ -259,7 +259,7 @@ class HybridButlerRegistry(Registry):
         flattenChains: bool = False,
         includeChains: bool | None = None,
     ) -> Sequence[str]:
-        return self._direct.queryCollections(
+        return self._remote.queryCollections(
             expression, datasetType, collectionTypes, flattenChains, includeChains
         )
 

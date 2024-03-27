@@ -133,6 +133,8 @@ class RemoteButlerMiscTests(unittest.TestCase):
 class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
     """Tests for RemoteButler's `Registry` shim."""
 
+    supportsCollectionRegex = False
+
     def setUp(self):
         self.server_instance = self.enterContext(create_test_server(TESTDIR))
 
