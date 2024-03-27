@@ -119,3 +119,19 @@ class GetCollectionSummaryResponseModel(pydantic.BaseModel):
     """Response model for get_collection_summary."""
 
     summary: SerializedCollectionSummary
+
+
+class QueryCollectionsRequestModel(pydantic.BaseModel):
+    """Request model for query_collections."""
+
+    search: CollectionList
+    collection_types: list[CollectionType]
+    flatten_chains: bool
+    include_chains: bool
+
+
+class QueryCollectionsResponseModel(pydantic.BaseModel):
+    """Response model for query_collections."""
+
+    collections: list[str]
+    """Collection names that match the search."""

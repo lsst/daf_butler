@@ -47,6 +47,8 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    QueryCollectionsRequestModel,
+    QueryCollectionsResponseModel,
 )
 
 from ...._exceptions import DatasetNotFoundError
@@ -220,3 +222,19 @@ def get_collection_summary(
 ) -> GetCollectionSummaryResponseModel:
     butler = factory.create_butler()
     return GetCollectionSummaryResponseModel(summary=butler.registry.getCollectionSummary(name).to_simple())
+
+
+@external_router.post(
+    "/v1/query_collections", summary="Search for collections with names that match an expression"
+)
+def query_collections(
+    request: QueryCollectionsRequestModel, factory: Factory = Depends(factory_dependency)
+) -> QueryCollectionsResponseModel:
+    butler = factory.create_butler()
+    collections = butler.registry.queryCollections(
+        expression=request.search,
+        collectionTypes=request.collection_types,
+        flattenChains=request.flatten_chains,
+        includeChains=request.include_chains,
+    )
+    return QueryCollectionsResponseModel(collections=collections)
