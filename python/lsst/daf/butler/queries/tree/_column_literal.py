@@ -46,7 +46,7 @@ from ..._timespan import Timespan
 from ...time_utils import TimeConverter
 from ._base import ColumnLiteralBase
 
-LiteralValue: TypeAlias = Union[int, str, float, bytes, uuid.UUID, astropy.time.Time, Timespan, Region]
+LiteralValue: TypeAlias = int | str | float | bytes | uuid.UUID | astropy.time.Time | Timespan | Region
 
 
 @final

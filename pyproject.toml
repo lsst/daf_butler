@@ -187,6 +187,7 @@ ignore = [
     "D200",
     "D205",
     "D400",
+    "UP007",  # Allow UNION in type annotation
 ]
 select = [
     "E",  # pycodestyle

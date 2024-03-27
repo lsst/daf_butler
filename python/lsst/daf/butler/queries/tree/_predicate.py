@@ -38,7 +38,7 @@ __all__ = (
 import itertools
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union, cast, final
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, cast, final
 
 import pydantic
 
@@ -622,15 +622,9 @@ class InQuery(PredicateLeafBase):
         return self
 
 
-LogicalNotOperand: TypeAlias = Union[
-    IsNull,
-    Comparison,
-    InContainer,
-    InRange,
-    InQuery,
-]
+LogicalNotOperand: TypeAlias = IsNull | Comparison | InContainer | InRange | InQuery
 PredicateLeaf: TypeAlias = Annotated[
-    Union[LogicalNotOperand, LogicalNot], pydantic.Field(discriminator="predicate_type")
+    LogicalNotOperand | LogicalNot, pydantic.Field(discriminator="predicate_type")
 ]
 
 PredicateOperands: TypeAlias = tuple[tuple[PredicateLeaf, ...], ...]
