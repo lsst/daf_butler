@@ -128,10 +128,13 @@ class RemoteButlerRegistry(Registry):
         raise NotImplementedError()
 
     def getCollectionParentChains(self, collection: str) -> set[str]:
-        raise NotImplementedError()
+        info = self._butler._get_collection_info(collection, include_parents=True)
+        assert info.parents is not None, "Requested list of parents from server, but it did not send them."
+        return info.parents
 
     def getCollectionDocumentation(self, collection: str) -> str | None:
-        raise NotImplementedError()
+        info = self._butler._get_collection_info(collection, include_doc=True)
+        return info.doc
 
     def setCollectionDocumentation(self, collection: str, doc: str | None) -> None:
         raise NotImplementedError()

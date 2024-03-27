@@ -200,9 +200,14 @@ def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
 
 
-@external_router.get("/v1/collection_info", summary="Get information about a collection")
+@external_router.get(
+    "/v1/collection_info", summary="Get information about a collection", response_model_exclude_unset=True
+)
 def get_collection_info(
-    name: str, factory: Factory = Depends(factory_dependency)
+    name: str,
+    include_doc: bool = False,
+    include_parents: bool = False,
+    factory: Factory = Depends(factory_dependency),
 ) -> GetCollectionInfoResponseModel:
     butler = factory.create_butler()
     record = butler._registry.get_collection_record(name)
@@ -211,7 +216,12 @@ def get_collection_info(
         children = record.children
     else:
         children = ()
-    return GetCollectionInfoResponseModel(name=record.name, type=record.type, children=children)
+    response = GetCollectionInfoResponseModel(name=record.name, type=record.type, children=children)
+    if include_doc:
+        response.doc = butler._registry.getCollectionDocumentation(name)
+    if include_parents:
+        response.parents = butler._registry.getCollectionParentChains(name)
+    return response
 
 
 @external_router.get(
