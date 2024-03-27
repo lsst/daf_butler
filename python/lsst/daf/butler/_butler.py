@@ -588,6 +588,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         parameters: dict | None = None,
         collections: Any = None,
         storageClass: str | StorageClass | None = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
@@ -615,6 +616,11 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             the dataset type definition for this dataset. Specifying a
             read `StorageClass` can force a different type to be returned.
             This type must be compatible with the original type.
+        timespan : `Timespan` or `None`, optional
+            A timespan that the validity range of the dataset must overlap.
+            If not provided and this is a calibration dataset type, an attempt
+            will be made to find the timespan from any temporal coordinate
+            in the data ID.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -647,6 +653,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         parameters: dict[str, Any] | None = None,
         collections: Any = None,
         storageClass: StorageClass | str | None = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
     ) -> Any:
         """Retrieve a stored dataset.
@@ -675,6 +682,11 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             the dataset type definition for this dataset. Specifying a
             read `StorageClass` can force a different type to be returned.
             This type must be compatible with the original type.
+        timespan : `Timespan` or `None`, optional
+            A timespan that the validity range of the dataset must overlap.
+            If not provided and this is a calibration dataset type, an attempt
+            will be made to find the timespan from any temporal coordinate
+            in the data ID.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
