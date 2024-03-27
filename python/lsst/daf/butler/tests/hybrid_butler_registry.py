@@ -129,7 +129,7 @@ class HybridButlerRegistry(Registry):
         return self._direct.setCollectionDocumentation(collection, doc)
 
     def getCollectionSummary(self, collection: str) -> CollectionSummary:
-        return self._direct.getCollectionSummary(collection)
+        return self._remote.getCollectionSummary(collection)
 
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         return self._direct.registerDatasetType(datasetType)

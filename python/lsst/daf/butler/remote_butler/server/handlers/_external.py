@@ -44,6 +44,7 @@ from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
+    GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
@@ -209,3 +210,13 @@ def get_collection_info(
     else:
         children = ()
     return GetCollectionInfoResponseModel(name=record.name, type=record.type, children=children)
+
+
+@external_router.get(
+    "/v1/collection_summary", summary="Get summary information about the datasets in a collection"
+)
+def get_collection_summary(
+    name: str, factory: Factory = Depends(factory_dependency)
+) -> GetCollectionSummaryResponseModel:
+    butler = factory.create_butler()
+    return GetCollectionSummaryResponseModel(summary=butler.registry.getCollectionSummary(name).to_simple())

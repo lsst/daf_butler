@@ -34,6 +34,7 @@ __all__ = [
     "FindDatasetResponseModel",
     "GetFileResponseModel",
     "GetCollectionInfoResponseModel",
+    "GetCollectionSummaryResponseModel",
 ]
 
 from typing import NewType
@@ -41,6 +42,7 @@ from typing import NewType
 import pydantic
 from lsst.daf.butler import CollectionType, SerializedDataId, SerializedDatasetRef, SerializedTimespan
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
+from lsst.daf.butler.registry import SerializedCollectionSummary
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
 ERROR_STATUS_CODE = 422
@@ -111,3 +113,9 @@ class GetCollectionInfoResponseModel(pydantic.BaseModel):
     name: str
     type: CollectionType
     children: list[str]
+
+
+class GetCollectionSummaryResponseModel(pydantic.BaseModel):
+    """Response model for get_collection_summary."""
+
+    summary: SerializedCollectionSummary

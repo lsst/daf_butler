@@ -134,7 +134,7 @@ class RemoteButlerRegistry(Registry):
         raise NotImplementedError()
 
     def getCollectionSummary(self, collection: str) -> CollectionSummary:
-        raise NotImplementedError()
+        return self._butler._get_collection_summary(collection)
 
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         raise NotImplementedError()
