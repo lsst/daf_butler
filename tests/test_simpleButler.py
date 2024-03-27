@@ -372,10 +372,12 @@ class SimpleButlerTestCase(unittest.TestCase):
         t1 = astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")
         t2 = astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai")
         t3 = astropy.time.Time("2020-01-01T03:00:00", format="isot", scale="tai")
+        bias1a = registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g")
         bias2a = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
         bias3a = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
         bias2b = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r")
         bias3b = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r")
+        registry.certify("calibs", [bias1a], Timespan(t1, t2))
         registry.certify("calibs", [bias2a, bias3a], Timespan(t1, t2))
         registry.certify("calibs", [bias2b], Timespan(t2, None))
         registry.certify("calibs", [bias3b], Timespan(t2, t3))
@@ -389,13 +391,22 @@ class SimpleButlerTestCase(unittest.TestCase):
             "day_obs",
             {"instrument": "Cam1", "id": 20211114},
         )
+        # Choose timespans for exposures within the above calibration ranges
+        # but make sure they are not identical to the full range.
+        exp_time = astropy.time.TimeDelta(15.0, format="sec", scale="tai")
+        span_delta = t2 - t1
+        exp3_begin = t1 + (span_delta / 2.0)
+        exp3_end = exp3_begin + exp_time
+        span_delta = t3 - t2
+        exp4_begin = t2 + (span_delta / 2.0)
+        exp4_end = exp4_begin + exp_time
         registry.insertDimensionData(
             "exposure",
             {
                 "instrument": "Cam1",
                 "id": 3,
                 "obs_id": "three",
-                "timespan": Timespan(t1, t2),
+                "timespan": Timespan(exp3_begin, exp3_end),
                 "physical_filter": "Cam1-G",
                 "group": "three",
                 "day_obs": 20211114,
@@ -405,7 +416,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "instrument": "Cam1",
                 "id": 4,
                 "obs_id": "four",
-                "timespan": Timespan(t2, t3),
+                "timespan": Timespan(exp4_begin, exp4_end),
                 "physical_filter": "Cam1-G",
                 "group": "four",
                 "day_obs": 20211114,
@@ -421,6 +432,26 @@ class SimpleButlerTestCase(unittest.TestCase):
             "bias", {"instrument": "Cam1", "exposure": 4, "detector": 3}, collections="calibs"
         )
         self.assertEqual(bias3b_id, bias3b.id)
+
+        # Use explicit timespan and no exposure record.
+        bias3b_id, _ = butler.get(
+            "bias",
+            {"instrument": "Cam1", "detector": 3},
+            collections="calibs",
+            timespan=Timespan(exp4_begin, exp4_end),
+        )
+        self.assertEqual(bias3b_id, bias3b.id)
+
+        # No timespan at all.
+        # Only one matching dataset in calibs collection so this works with
+        # a defaulted timespan.
+        bias1a_id, _ = butler.get("bias", {"instrument": "Cam1", "detector": 1}, collections="calibs")
+        self.assertEqual(bias1a_id, bias1a.id)
+
+        # Multiple datasets match in calibs collection with infinite timespan
+        # so this fails.
+        with self.assertRaises(LookupError):
+            bias3b_id, _ = butler.get("bias", {"instrument": "Cam1", "detector": 3}, collections="calibs")
 
         # Get using the kwarg form
         bias3b_id, _ = butler.get("bias", instrument="Cam1", exposure=4, detector=3, collections="calibs")

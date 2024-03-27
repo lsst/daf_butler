@@ -16,12 +16,12 @@ jobs:
         python-version: ["3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # Need to clone everything for the git tags.
           fetch-depth: 0
 
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
           channels: conda-forge,defaults
@@ -92,9 +92,10 @@ jobs:
         run: |
           pytest -r a -v -n 3 --open-files --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch
       - name: Upload coverage to codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   pypi:
     runs-on: ubuntu-latest
@@ -104,13 +105,13 @@ jobs:
     if: startsWith(github.ref, 'refs/tags') && ! startsWith(github.ref, 'refs/tags/s')
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # Need to clone everything to embed the version.
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 

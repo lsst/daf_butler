@@ -779,6 +779,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         predict: bool = False,
         run: str | None = None,
         datastore_records: bool = False,
+        timespan: Timespan | None = None,
         **kwargs: Any,
     ) -> DatasetRef:
         """Shared logic for methods that start with a search for a dataset in
@@ -806,6 +807,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             datasets. Only used if ``predict`` is `True`.
         datastore_records : `bool`, optional
             If `True` add datastore records to returned `DatasetRef`.
+        timespan : `Timespan` or `None`, optional
+            A timespan that the validity range of the dataset must overlap.
+            If not provided and this is a calibration dataset type, an attempt
+            will be made to find the timespan from any temporal coordinate
+            in the data ID.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -836,7 +842,6 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             if datastore_records and datasetRefOrType._datastore_records is None:
                 datasetRefOrType = self._registry.get_datastore_records(datasetRefOrType)
             return datasetRefOrType
-        timespan: Timespan | None = None
 
         dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
 
@@ -849,9 +854,17 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             dataId = DataCoordinate.standardize(
                 dataId, universe=self.dimensions, defaults=self._registry.defaults.dataId, **kwargs
             )
-            if dataId.dimensions.temporal:
-                dataId = self._registry.expandDataId(dataId)
-                timespan = dataId.timespan
+            if timespan is None:
+                if dataId.dimensions.temporal:
+                    dataId = self._registry.expandDataId(dataId)
+                    # Use the timespan from the data ID to constrain the
+                    # calibration lookup, but only if the caller has not
+                    # specified an explicit timespan.
+                    timespan = dataId.timespan
+                else:
+                    # Try an arbitrary timespan. Downstream will fail if this
+                    # results in more than one matching dataset.
+                    timespan = Timespan(None, None)
         else:
             # Standardize the data ID to just the dimensions of the dataset
             # type instead of letting registry.findDataset do it, so we get the
@@ -988,6 +1001,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         parameters: dict | None = None,
         collections: Any = None,
         storageClass: str | StorageClass | None = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
     ) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
@@ -1015,6 +1029,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             the dataset type definition for this dataset. Specifying a
             read `StorageClass` can force a different type to be returned.
             This type must be compatible with the original type.
+        timespan : `Timespan` or `None`, optional
+            A timespan that the validity range of the dataset must overlap.
+            If not provided and this is a calibration dataset type, an attempt
+            will be made to find the timespan from any temporal coordinate
+            in the data ID.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -1045,7 +1064,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             else:
                 raise LookupError(f"Dataset reference {datasetRefOrType} does not exist.")
         else:
-            ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
+            ref = self._findDatasetRef(
+                datasetRefOrType, dataId, collections=collections, timespan=timespan, **kwargs
+            )
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters, storageClass=storageClass)
 
     def get(
@@ -1057,6 +1078,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         parameters: dict[str, Any] | None = None,
         collections: Any = None,
         storageClass: StorageClass | str | None = None,
+        timespan: Timespan | None = None,
         **kwargs: Any,
     ) -> Any:
         """Retrieve a stored dataset.
@@ -1085,6 +1107,11 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             the dataset type definition for this dataset. Specifying a
             read `StorageClass` can force a different type to be returned.
             This type must be compatible with the original type.
+        timespan : `Timespan` or `None`, optional
+            A timespan that the validity range of the dataset must overlap.
+            If not provided and this is a calibration dataset type, an attempt
+            will be made to find the timespan from any temporal coordinate
+            in the data ID.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -1114,7 +1141,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         """
         _LOG.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(
-            datasetRefOrType, dataId, collections=collections, datastore_records=True, **kwargs
+            datasetRefOrType,
+            dataId,
+            collections=collections,
+            datastore_records=True,
+            timespan=timespan,
+            **kwargs,
         )
         return self._datastore.get(ref, parameters=parameters, storageClass=storageClass)
 

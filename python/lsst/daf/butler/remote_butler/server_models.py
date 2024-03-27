@@ -73,6 +73,7 @@ class GetFileByDataIdRequestModel(pydantic.BaseModel):
     dataset_type_name: DatasetTypeName
     data_id: SerializedDataId
     collections: CollectionList
+    timespan: SerializedTimespan | None = None
 
 
 class GetFileResponseModel(pydantic.BaseModel):
