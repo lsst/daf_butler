@@ -61,7 +61,13 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
-from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
+from ..registry import (
+    CollectionArgType,
+    CollectionSummary,
+    NoDefaultCollectionError,
+    Registry,
+    RegistryDefaults,
+)
 from ._authentication import get_authentication_headers
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from .server_models import (
@@ -73,6 +79,7 @@ from .server_models import (
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
+    GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
@@ -712,6 +719,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _get_collection_info(self, collection_name: str) -> GetCollectionInfoResponseModel:
         response = self._get("collection_info", {"name": collection_name})
         return self._parse_model(response, GetCollectionInfoResponseModel)
+
+    def _get_collection_summary(self, collection_name: str) -> CollectionSummary:
+        response = self._get("collection_summary", {"name": collection_name})
+        parsed = self._parse_model(response, GetCollectionSummaryResponseModel)
+        return CollectionSummary.from_simple(parsed.summary, self.dimensions)
 
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:

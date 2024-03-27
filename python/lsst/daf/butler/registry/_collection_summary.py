@@ -26,16 +26,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("CollectionSummary",)
+__all__ = ("CollectionSummary", "SerializedCollectionSummary")
 
 import dataclasses
 from collections.abc import Generator, Iterable, Mapping, Set
 from typing import cast
 
+import pydantic
+
 from .._dataset_ref import DatasetRef
-from .._dataset_type import DatasetType
+from .._dataset_type import DatasetType, SerializedDatasetType
 from .._named import NamedValueSet
-from ..dimensions import DataCoordinate
+from ..dimensions import DataCoordinate, DimensionUniverse
 
 
 @dataclasses.dataclass
@@ -52,8 +54,7 @@ class CollectionSummary:
             at all.
         """
         return CollectionSummary(
-            dataset_types=self.dataset_types.copy(),
-            governors={k: v.copy() for k, v in self.governors.items()},
+            dataset_types=self.dataset_types.copy(), governors=_copy_governors(self.governors)
         )
 
     def add_datasets_generator(self, refs: Iterable[DatasetRef]) -> Generator[DatasetRef, None, None]:
@@ -223,6 +224,21 @@ class CollectionSummary:
                 return False
         return True
 
+    def to_simple(self) -> SerializedCollectionSummary:
+        return SerializedCollectionSummary(
+            dataset_types=[x.to_simple() for x in self.dataset_types],
+            governors=_copy_governors(self.governors),
+        )
+
+    @staticmethod
+    def from_simple(simple: SerializedCollectionSummary, universe: DimensionUniverse) -> CollectionSummary:
+        summary = CollectionSummary()
+        summary.dataset_types = NamedValueSet(
+            [DatasetType.from_simple(x, universe) for x in simple.dataset_types]
+        )
+        summary.governors = _copy_governors(simple.governors)
+        return summary
+
     dataset_types: NamedValueSet[DatasetType] = dataclasses.field(default_factory=NamedValueSet)
     """Dataset types that may be present in the collection
     (`NamedValueSet` [ `DatasetType` ]).
@@ -241,3 +257,15 @@ class CollectionSummary:
     IDs, and hence the values of those data IDs are unconstrained by this
     collection in the query.
     """
+
+
+def _copy_governors(governors: dict[str, set[str]]) -> dict[str, set[str]]:
+    """Make an independent copy of the 'governors' data structure."""
+    return {k: v.copy() for k, v in governors.items()}
+
+
+class SerializedCollectionSummary(pydantic.BaseModel):
+    """Serialized version of CollectionSummary."""
+
+    dataset_types: list[SerializedDatasetType]
+    governors: dict[str, set[str]]
