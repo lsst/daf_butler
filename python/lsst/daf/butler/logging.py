@@ -25,6 +25,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler", "ButlerLogRecord", "JsonLogFormatter")
 
 import datetime
@@ -33,7 +35,7 @@ import traceback
 from collections.abc import Callable, Generator, Iterable, Iterator
 from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
-from typing import IO, Any, ClassVar, Union, overload
+from typing import IO, Any, ClassVar, overload
 
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
@@ -200,7 +202,7 @@ class ButlerLogRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     @classmethod
-    def from_record(cls, record: LogRecord) -> "ButlerLogRecord":
+    def from_record(cls, record: LogRecord) -> ButlerLogRecord:
         """Create a new instance from a `~logging.LogRecord`.
 
         Parameters
@@ -292,7 +294,7 @@ class ButlerLogRecords(_ButlerLogRecords):
     _log_format: str | None = PrivateAttr(None)
 
     @classmethod
-    def from_records(cls, records: Iterable[ButlerLogRecord]) -> "ButlerLogRecords":
+    def from_records(cls, records: Iterable[ButlerLogRecord]) -> ButlerLogRecords:
         """Create collection from iterable.
 
         Parameters
@@ -303,7 +305,7 @@ class ButlerLogRecords(_ButlerLogRecords):
         return cls.model_construct(root=list(records))
 
     @classmethod
-    def from_file(cls, filename: str) -> "ButlerLogRecords":
+    def from_file(cls, filename: str) -> ButlerLogRecords:
         """Read records from file.
 
         Parameters
@@ -374,7 +376,7 @@ class ButlerLogRecords(_ButlerLogRecords):
         return False
 
     @classmethod
-    def from_stream(cls, stream: IO) -> "ButlerLogRecords":
+    def from_stream(cls, stream: IO) -> ButlerLogRecords:
         """Read records from I/O stream.
 
         Parameters
@@ -411,7 +413,7 @@ class ButlerLogRecords(_ButlerLogRecords):
         return cls.from_records(records)
 
     @classmethod
-    def from_raw(cls, serialized: str | bytes) -> "ButlerLogRecords":
+    def from_raw(cls, serialized: str | bytes) -> ButlerLogRecords:
         """Parse raw serialized form and return records.
 
         Parameters
@@ -489,9 +491,9 @@ class ButlerLogRecords(_ButlerLogRecords):
     def __getitem__(self, index: int) -> ButlerLogRecord: ...
 
     @overload
-    def __getitem__(self, index: slice) -> "ButlerLogRecords": ...
+    def __getitem__(self, index: slice) -> ButlerLogRecords: ...
 
-    def __getitem__(self, index: slice | int) -> "Union[ButlerLogRecords, ButlerLogRecord]":
+    def __getitem__(self, index: slice | int) -> ButlerLogRecords | ButlerLogRecord:
         # Handles slices and returns a new collection in that
         # case.
         item = self.root[index]
