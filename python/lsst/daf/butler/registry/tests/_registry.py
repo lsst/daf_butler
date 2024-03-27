@@ -56,7 +56,7 @@ from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iterat
 from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
-from ..._exceptions import MissingDatasetTypeError
+from ..._exceptions import MissingCollectionError, MissingDatasetTypeError
 from ..._exceptions_legacy import DatasetTypeError
 from ..._storage_class import StorageClass
 from ..._timespan import Timespan
@@ -72,7 +72,6 @@ from .._exceptions import (
     DataIdValueError,
     DatasetTypeExpressionError,
     InconsistentDataIdError,
-    MissingCollectionError,
     NoDefaultCollectionError,
     OrphanedRecordError,
 )

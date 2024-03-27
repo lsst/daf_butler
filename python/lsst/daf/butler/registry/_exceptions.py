@@ -28,14 +28,12 @@
 
 __all__ = (
     "ArgumentError",
-    "CollectionError",
     "CollectionExpressionError",
     "CollectionTypeError",
     "ConflictingDefinitionError",
     "DataIdValueError",
     "DatasetTypeExpressionError",
     "InconsistentDataIdError",
-    "MissingCollectionError",
     "MissingSpatialOverlapError",
     "NoDefaultCollectionError",
     "OrphanedRecordError",
@@ -45,7 +43,7 @@ __all__ = (
     "UserExpressionSyntaxError",
 )
 
-from .._exceptions_legacy import DataIdError, RegistryError
+from .._exceptions_legacy import CollectionError, DataIdError, RegistryError
 
 
 class ArgumentError(RegistryError):
@@ -66,22 +64,12 @@ class InconsistentDataIdError(DataIdError):
     """
 
 
-class CollectionError(RegistryError):
-    """Exception raised for collection-related errors."""
-
-
 class CollectionTypeError(CollectionError):
     """Exception raised when type of a collection is incorrect."""
 
 
 class CollectionExpressionError(CollectionError):
     """Exception raised for an incorrect collection expression."""
-
-
-class MissingCollectionError(CollectionError):
-    """Exception raised when an operation attempts to use a collection that
-    does not exist.
-    """
 
 
 class NoDefaultCollectionError(CollectionError):
