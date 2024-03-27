@@ -31,10 +31,19 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, SerializedDatasetType, Timespan
+from lsst.daf.butler import (
+    Butler,
+    CollectionType,
+    DatasetRef,
+    SerializedDatasetRef,
+    SerializedDatasetType,
+    Timespan,
+)
+from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
 from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetRequestModel,
     FindDatasetResponseModel,
+    GetCollectionInfoResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
@@ -186,3 +195,17 @@ def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     """Return file information associated with ``ref``."""
     payload = butler._datastore.prepare_get_for_external_client(ref)
     return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
+
+
+@external_router.get("/v1/collection_info", summary="Get information about a collection")
+def get_collection_info(
+    name: str, factory: Factory = Depends(factory_dependency)
+) -> GetCollectionInfoResponseModel:
+    butler = factory.create_butler()
+    record = butler._registry.get_collection_record(name)
+    if record.type == CollectionType.CHAINED:
+        assert isinstance(record, ChainedCollectionRecord)
+        children = record.children
+    else:
+        children = ()
+    return GetCollectionInfoResponseModel(name=record.name, type=record.type, children=children)

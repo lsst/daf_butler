@@ -51,6 +51,7 @@ from ..registry import (
     CollectionArgType,
     CollectionSummary,
     CollectionType,
+    CollectionTypeError,
     DatasetTypeError,
     Registry,
     RegistryDefaults,
@@ -106,7 +107,7 @@ class RemoteButlerRegistry(Registry):
         raise NotImplementedError()
 
     def getCollectionType(self, name: str) -> CollectionType:
-        raise NotImplementedError()
+        return self._butler._get_collection_info(name).type
 
     def registerRun(self, name: str, doc: str | None = None) -> bool:
         raise NotImplementedError()
@@ -115,7 +116,10 @@ class RemoteButlerRegistry(Registry):
         raise NotImplementedError()
 
     def getCollectionChain(self, parent: str) -> Sequence[str]:
-        raise NotImplementedError()
+        info = self._butler._get_collection_info(parent)
+        if info.type is not CollectionType.CHAINED:
+            raise CollectionTypeError(f"Collection '{parent}' has type {info.type.name}, not CHAINED.")
+        return info.children
 
     def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
         raise NotImplementedError()
