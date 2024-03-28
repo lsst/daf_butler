@@ -288,6 +288,16 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 ref = ref.makeComponentRef(componentOverride)
         ref = _apply_storage_class_override(ref, datasetRefOrType, storageClass)
 
+        return self._get_dataset_as_python_object(ref, model, parameters)
+
+    def _get_dataset_as_python_object(
+        self,
+        ref: DatasetRef,
+        model: GetFileResponseModel,
+        parameters: dict[str, Any] | None,
+    ) -> Any:
+        # This thin wrapper method is here to provide a place to hook in a mock
+        # mimicking DatastoreMock functionality for use in unit tests.
         return get_dataset_as_python_object(
             ref,
             _to_file_payload(model),
