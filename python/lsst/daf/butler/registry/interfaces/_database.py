@@ -464,7 +464,7 @@ class Database(ABC):
         ----------
         interrupting : `bool`, optional
             If `True` (`False` is default), this transaction block may not be
-            nested without an outer one, and attempting to do so is a logic
+            nested within an outer one, and attempting to do so is a logic
             (i.e. assertion) error.
         savepoint : `bool`, optional
             If `True` (`False` is default), create a `SAVEPOINT`, allowing

@@ -41,8 +41,8 @@ from lsst.daf.relation import ColumnTag, Relation, Sort, UnaryOperation, UnaryOp
 from ..._column_tags import is_timespan_column
 from ..._column_type_info import ColumnTypeInfo, LogicalColumn
 from ..._timespan import Timespan
+from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
-from ..nameShrinker import NameShrinker
 from .find_first_dataset import FindFirstDataset
 
 

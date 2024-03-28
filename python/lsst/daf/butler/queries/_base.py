@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("QueryBase", "QueryResultsBase")
+__all__ = ("QueryBase", "QueryResultsBase", "ValidityRangeMatchError")
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Set
@@ -38,6 +38,20 @@ from .convert_args import convert_order_by_args, convert_where_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionProxy
 from .tree import OrderExpression, Predicate, QueryTree
+
+
+class ValidityRangeMatchError(RuntimeError):
+    """Exception raised when a find-first calibration dataset query does not
+    fully resolve validity ranges.
+
+    For a find-first query involving a calibration dataset to work, either the
+    query's result rows need to include a temporal dimension or needs to be
+    constrained temporally, such that each result row corresponds to a unique
+    calibration dataset.  This exception can be raised if those dimensions or
+    constraint are missing, or if a temporal dimension timespan overlaps
+    multiple validity ranges (e.g. the recommended bias changes in the middle
+    of an exposure).
+    """
 
 
 class QueryBase(ABC):
@@ -57,11 +71,6 @@ class QueryBase(ABC):
     def __init__(self, driver: QueryDriver, tree: QueryTree):
         self._driver = driver
         self._tree = tree
-
-    @property
-    def dimensions(self) -> DimensionGroup:
-        """All dimensions included in the query's columns."""
-        return self._tree.dimensions
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         """Test whether the query would return any rows.
@@ -153,6 +162,12 @@ class QueryBase(ABC):
 
 class QueryResultsBase(QueryBase):
     """Common base class for query result objects with countable rows."""
+
+    @property
+    @abstractmethod
+    def dimensions(self) -> DimensionGroup:
+        """All dimensions included in the query's columns."""
+        raise NotImplementedError()
 
     @abstractmethod
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
