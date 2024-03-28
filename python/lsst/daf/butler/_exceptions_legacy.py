@@ -55,3 +55,7 @@ class DataIdError(RegistryError):
 
 class DatasetTypeError(RegistryError):
     """Exception raised for problems with dataset types."""
+
+
+class CollectionError(RegistryError):
+    """Exception raised for collection-related errors."""

@@ -56,7 +56,7 @@ from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iterat
 from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
-from ..._exceptions import MissingDatasetTypeError
+from ..._exceptions import MissingCollectionError, MissingDatasetTypeError
 from ..._exceptions_legacy import DatasetTypeError
 from ..._storage_class import StorageClass
 from ..._timespan import Timespan
@@ -72,7 +72,6 @@ from .._exceptions import (
     DataIdValueError,
     DatasetTypeExpressionError,
     InconsistentDataIdError,
-    MissingCollectionError,
     NoDefaultCollectionError,
     OrphanedRecordError,
 )
@@ -99,6 +98,10 @@ class RegistryTests(ABC):
     subclass provides value for this member then it overrides name specified
     in default configuration (`str` or `dict`).
     """
+
+    supportsCollectionRegex: bool = True
+    """True if the registry class being tested supports regex searches for
+    collections."""
 
     @classmethod
     @abstractmethod
@@ -770,16 +773,30 @@ class RegistryTests(ABC):
         registry.setCollectionChain(chain2, [run2, chain1])
         self.assertEqual(registry.getCollectionParentChains(chain1), {chain2})
         self.assertEqual(registry.getCollectionParentChains(run2), {chain1, chain2})
-        # Query for collections matching a regex.
+
+        if self.supportsCollectionRegex:
+            # Query for collections matching a regex.
+            self.assertCountEqual(
+                list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
+                ["imported_r", "imported_g"],
+            )
+            # Query for collections matching a regex or an explicit str.
+            self.assertCountEqual(
+                list(registry.queryCollections([re.compile("imported_."), "chain1"], flattenChains=False)),
+                ["imported_r", "imported_g", "chain1"],
+            )
+        # Same queries as the regex ones above, but using globs instead of
+        # regex.
         self.assertCountEqual(
-            list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
+            list(registry.queryCollections("imported_*", flattenChains=False)),
             ["imported_r", "imported_g"],
         )
         # Query for collections matching a regex or an explicit str.
         self.assertCountEqual(
-            list(registry.queryCollections([re.compile("imported_."), "chain1"], flattenChains=False)),
+            list(registry.queryCollections(["imported_*", "chain1"], flattenChains=False)),
             ["imported_r", "imported_g", "chain1"],
         )
+
         # Search for bias with dataId1 should find it via tag1 in chain2,
         # recursing, because is not in run1.
         self.assertIsNone(registry.findDataset(datasetType, dataId1, collections=run2))

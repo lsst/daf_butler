@@ -27,8 +27,8 @@
 
 # Re-export some top-level exception types for backwards compatibility -- these
 # used to be part of registry.
-from .._exceptions import DimensionNameError, MissingDatasetTypeError
-from .._exceptions_legacy import DataIdError, DatasetTypeError, RegistryError
+from .._exceptions import DimensionNameError, MissingCollectionError, MissingDatasetTypeError
+from .._exceptions_legacy import CollectionError, DataIdError, DatasetTypeError, RegistryError
 
 # Registry imports.
 from . import interfaces, managers, queries, wildcards

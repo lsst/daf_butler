@@ -34,10 +34,11 @@ __all__ = (
     "DatasetTypeNotSupportedError",
     "EmptyQueryResultError",
     "MissingDatasetTypeError",
+    "MissingCollectionError",
     "ValidationError",
 )
 
-from ._exceptions_legacy import DataIdError, DatasetTypeError
+from ._exceptions_legacy import CollectionError, DataIdError, DatasetTypeError
 
 
 class ButlerUserError(Exception):
@@ -90,6 +91,14 @@ class DimensionNameError(KeyError, DataIdError, ButlerUserError):
     """
 
     error_type = "dimension_name"
+
+
+class MissingCollectionError(CollectionError, ButlerUserError):
+    """Exception raised when an operation attempts to use a collection that
+    does not exist.
+    """
+
+    error_type = "missing_collection"
 
 
 class MissingDatasetTypeError(DatasetTypeError, KeyError, ButlerUserError):
@@ -145,6 +154,7 @@ _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     CalibrationLookupError,
     DimensionNameError,
     DatasetNotFoundError,
+    MissingCollectionError,
     MissingDatasetTypeError,
     UnknownButlerUserError,
 )
