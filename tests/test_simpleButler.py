@@ -54,45 +54,30 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastore.file_templates import FileTemplate
 from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, _RegistryFactory
 from lsst.daf.butler.tests import DatastoreMock
-from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
+
+try:
+    from lsst.daf.butler.tests.server import create_test_server
+except ImportError:
+    create_test_server = None
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-class SimpleButlerTestCase(unittest.TestCase):
+class SimpleButlerTests(TestCaseMixin):
     """Tests for butler (including import/export functionality) that should not
     depend on the Registry Database backend or Datastore implementation, and
     can instead utilize an in-memory SQLite Registry and a mocked Datastore.
     """
 
-    datasetsManager = (
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
-    )
     datasetsImportFile = "datasets.yaml"
 
-    def setUp(self):
-        self.root = makeTestTempDir(TESTDIR)
+    supportsCollectionRegex: bool = True
+    """True if the registry class being tested supports regex searches for
+    collections."""
 
-    def tearDown(self):
-        removeTestTempDir(self.root)
-
-    def makeButler(self, **kwargs: Any) -> Butler:
-        """Return new Butler instance on each call."""
-        config = ButlerConfig()
-
-        # make separate temporary directory for registry of this instance
-        tmpdir = tempfile.mkdtemp(dir=self.root)
-        config["registry", "db"] = f"sqlite:///{tmpdir}/gen3.sqlite3"
-        config["registry", "managers", "datasets"] = self.datasetsManager
-        config["root"] = self.root
-
-        # have to make a registry first
-        registryConfig = RegistryConfig(config.get("registry"))
-        _RegistryFactory(registryConfig).create_from_config()
-
-        butler = Butler.from_config(config, **kwargs)
-        DatastoreMock.apply(butler)
-        return butler
+    def makeButler(self, writeable: bool = False) -> Butler:
+        raise NotImplementedError()
 
     def comparableRef(self, ref: DatasetRef) -> DatasetRef:
         """Return a DatasetRef that can be compared to a DatasetRef from
@@ -729,18 +714,23 @@ class SimpleButlerTestCase(unittest.TestCase):
         collections = butler.registry.queryCollections()
         self.assertEqual(set(collections), created)
 
-        expressions = (
+        expressions = [
             ("collection", {"collection"}),
             (..., created),
             ("*", created),
             (("collection", "*"), created),
             ("u/*", {"u/user/test"}),
-            (re.compile("u.*"), {"u/user/test"}),
-            (re.compile(".*oll.*"), {"collection", "coll3"}),
             ("*oll*", {"collection", "coll3"}),
-            ((re.compile(r".*\d$"), "u/user/test"), {"coll3", "u/user/test"}),
             ("*[0-9]", {"coll3"}),
-        )
+        ]
+        if self.supportsCollectionRegex:
+            expressions.extend(
+                [
+                    (re.compile("u.*"), {"u/user/test"}),
+                    (re.compile(".*oll.*"), {"collection", "coll3"}),
+                    ((re.compile(r".*\d$"), "u/user/test"), {"coll3", "u/user/test"}),
+                ]
+            )
         for expression, expected in expressions:
             result = butler.registry.queryCollections(expression)
             self.assertEqual(set(result), expected)
@@ -765,6 +755,71 @@ class SimpleButlerTestCase(unittest.TestCase):
         file_template = FileTemplate(tmplstr)
         path = file_template.format(ref)
         self.assertEqual(path, "test/warp/HSCA02713600_12345_12345_12345_12345")
+
+
+class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
+    """Run tests against DirectButler implementation."""
+
+    datasetsManager = (
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
+
+    def setUp(self):
+        self.root = makeTestTempDir(TESTDIR)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def makeButler(self, writeable: bool = False) -> Butler:
+        config = ButlerConfig()
+
+        # make separate temporary directory for registry of this instance
+        tmpdir = tempfile.mkdtemp(dir=self.root)
+        config["registry", "db"] = f"sqlite:///{tmpdir}/gen3.sqlite3"
+        config["registry", "managers", "datasets"] = self.datasetsManager
+        config["root"] = self.root
+
+        # have to make a registry first
+        registryConfig = RegistryConfig(config.get("registry"))
+        _RegistryFactory(registryConfig).create_from_config()
+
+        butler = Butler.from_config(config, writeable=writeable)
+        DatastoreMock.apply(butler)
+        return butler
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class RemoteSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
+    """Run tests against Butler client/server."""
+
+    supportsCollectionRegex = False
+
+    def makeButler(self, writeable: bool = False) -> Butler:
+        server_instance = self.enterContext(create_test_server(TESTDIR))
+        butler = server_instance.hybrid_butler
+        DatastoreMock.apply(butler)
+        # Because RemoteButler doesn't have a Datastore object, we have to
+        # duplicate some of the functionality from DatastoreMock separately.
+        butler._remote_butler._get_dataset_as_python_object = _mock_get_dataset_as_python_object
+        return butler
+
+    def testRegistryDefaults(self):
+        # Registry defaults are not yet fully implemented in RemoteButler.
+        pass
+
+    def testJson(self):
+        # Needs registry defaults functionality that's not yet implemented in
+        # RemoteButler.
+        pass
+
+
+def _mock_get_dataset_as_python_object(
+    ref: DatasetRef,
+    model: Any,
+    parameters: dict[str, Any] | None,
+) -> Any:
+    """Mimic the functionality of DatastoreMock's get() mock."""
+    return (ref.id, parameters)
 
 
 if __name__ == "__main__":
