@@ -93,6 +93,12 @@ class DimensionNameError(KeyError, DataIdError, ButlerUserError):
     error_type = "dimension_name"
 
 
+class DimensionValueError(ValueError, ButlerUserError):
+    """Exception raised for issues with dimension values in a data ID."""
+
+    error_type = "dimension_value"
+
+
 class MissingCollectionError(CollectionError, ButlerUserError):
     """Exception raised when an operation attempts to use a collection that
     does not exist.
@@ -153,6 +159,7 @@ class UnknownButlerUserError(ButlerUserError):
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     CalibrationLookupError,
     DimensionNameError,
+    DimensionValueError,
     DatasetNotFoundError,
     MissingCollectionError,
     MissingDatasetTypeError,
