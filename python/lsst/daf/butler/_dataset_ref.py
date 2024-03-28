@@ -309,7 +309,7 @@ class DatasetRef:
     See also :ref:`daf_butler_organizing_datasets`
     """
 
-    _serializedType = SerializedDatasetRef
+    _serializedType: ClassVar[type[pydantic.BaseModel]] = SerializedDatasetRef
     __slots__ = (
         "_id",
         "datasetType",

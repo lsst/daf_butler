@@ -182,7 +182,7 @@ class DatasetType:
         "_isCalibration",
     )
 
-    _serializedType = SerializedDatasetType
+    _serializedType: ClassVar[type[BaseModel]] = SerializedDatasetType
 
     VALID_NAME_REGEX = re.compile("^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
 

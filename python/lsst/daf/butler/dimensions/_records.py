@@ -265,7 +265,7 @@ class DimensionRecord:
     # when they access self.__slots__.
     __slots__ = ("dataId",)
 
-    _serializedType = SerializedDimensionRecord
+    _serializedType: ClassVar[type[BaseModel]] = SerializedDimensionRecord
 
     def __init__(self, **kwargs: Any):
         # Accept either the dimension name or the actual name of its primary
