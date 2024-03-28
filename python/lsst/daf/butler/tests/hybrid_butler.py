@@ -43,7 +43,14 @@ from .._limited_butler import LimitedButler
 from .._storage_class import StorageClass
 from .._timespan import Timespan
 from ..datastore import DatasetRefURIs
-from ..dimensions import DataCoordinate, DataId, DimensionGroup, DimensionRecord, DimensionUniverse
+from ..dimensions import (
+    DataCoordinate,
+    DataId,
+    DimensionElement,
+    DimensionGroup,
+    DimensionRecord,
+    DimensionUniverse,
+)
 from ..direct_butler import DirectButler
 from ..queries import Query
 from ..registry import Registry
@@ -435,3 +442,13 @@ class HybridButler(Butler):
     @property
     def dimensions(self) -> DimensionUniverse:
         return self._remote_butler.dimensions
+
+    def _extract_all_dimension_records_from_data_ids(
+        self,
+        source_butler: LimitedButler | Butler,
+        data_ids: set[DataCoordinate],
+        allowed_elements: frozenset[DimensionElement],
+    ) -> dict[DimensionElement, dict[DataCoordinate, DimensionRecord]]:
+        return self._direct_butler._extract_all_dimension_records_from_data_ids(
+            source_butler, data_ids, allowed_elements
+        )

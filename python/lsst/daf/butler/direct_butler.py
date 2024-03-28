@@ -58,7 +58,7 @@ from ._dataset_existence import DatasetExistence
 from ._dataset_ref import DatasetRef
 from ._dataset_type import DatasetType
 from ._deferredDatasetHandle import DeferredDatasetHandle
-from ._exceptions import DatasetNotFoundError, ValidationError
+from ._exceptions import DatasetNotFoundError, DimensionValueError, ValidationError
 from ._limited_butler import LimitedButler
 from ._registry_shim import RegistryShim
 from ._storage_class import StorageClass, StorageClassFactory
@@ -596,7 +596,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             never_found = set(not_dimensions) - matched_dims
 
             if never_found:
-                raise ValueError(f"Unrecognized keyword args given: {never_found}")
+                raise DimensionValueError(f"Unrecognized keyword args given: {never_found}")
 
             # There is a chance we have allocated a single dataId item
             # to multiple dimensions. Need to decide which should be retained.
@@ -669,7 +669,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     try:
                         recs = list(self._registry.queryDimensionRecords(dimensionName, dataId=newDataId))
                     except DataIdError:
-                        raise ValueError(
+                        raise DimensionValueError(
                             f"Could not find dimension '{dimensionName}'"
                             f" with dataId {newDataId} as part of comparing with"
                             f" record values {byRecord[dimensionName]}"
@@ -680,7 +680,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                             if (recval := getattr(recs[0], k)) != v:
                                 errmsg.append(f"{k}({recval} != {v})")
                         if errmsg:
-                            raise ValueError(
+                            raise DimensionValueError(
                                 f"Dimension {dimensionName} in dataId has explicit value"
                                 " inconsistent with records: " + ", ".join(errmsg)
                             )
@@ -750,13 +750,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                             )
                             for r in records:
                                 _LOG.debug("- %s", str(r))
-                            raise ValueError(
+                            raise DimensionValueError(
                                 f"DataId specification for dimension {dimensionName} is not"
                                 f" uniquely constrained to a single dataset by {values}."
                                 f" Got {len(records)} results."
                             )
                     else:
-                        raise ValueError(
+                        raise DimensionValueError(
                             f"DataId specification for dimension {dimensionName} matched no"
                             f" records when constrained by {values}"
                         )
