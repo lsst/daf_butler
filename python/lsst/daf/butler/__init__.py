@@ -75,7 +75,7 @@ from .logging import ButlerLogRecords
 
 # Do not import or lift symbols from mapping_factory and persistence_content,
 # as those are internal.
-# Only lift 'Progress' from 'progess'; the module is imported as-is above
+# Only lift 'Progress' from 'progress'; the module is imported as-is above
 from .progress import Progress
 
 # Only import the main public symbols from queries
