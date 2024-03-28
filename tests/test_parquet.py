@@ -269,22 +269,35 @@ def _makeSimpleAstropyTable(include_multidim=False, include_masked=False, includ
         mask[1] = True
         # We set the masked columns with the underlying sentinel value
         # to be able test after serialization.
+
+        # Masked 64-bit integer.
         arr = np.arange(nrow, dtype="i8")
         arr[mask] = -1
-        table["m1"] = np.ma.masked_array(data=arr, mask=mask, fill_value=-1)
+        table["m_i8"] = np.ma.masked_array(data=arr, mask=mask, fill_value=-1)
+        # Masked 32-bit float.
         arr = np.arange(nrow, dtype="f4")
         arr[mask] = np.nan
-        table["m2"] = np.ma.masked_array(data=arr, mask=mask, fill_value=np.nan)
-        table["m3"] = np.arange(nrow, dtype="f4")
-        table["m3"][mask] = np.nan
+        table["m_f4"] = np.ma.masked_array(data=arr, mask=mask, fill_value=np.nan)
+        # Unmasked 32-bit float with NaNs.
+        table["um_f4"] = arr
+        # Masked 64-bit float.
+        arr = np.arange(nrow, dtype="f8")
+        arr[mask] = np.nan
+        table["m_f8"] = np.ma.masked_array(data=arr, mask=mask, fill_value=np.nan)
+        # Unmasked 64-bit float with NaNs.
+        table["um_f8"] = arr
+        # Masked boolean.
         arr = np.zeros(nrow, dtype=np.bool_)
         arr[mask] = True
-        table["m4"] = np.ma.masked_array(data=arr, mask=mask, fill_value=True)
+        table["m_bool"] = np.ma.masked_array(data=arr, mask=mask, fill_value=True)
+        # Masked unsigned 32-bit unsigned int.
         arr = np.arange(nrow, dtype="u4")
         arr[mask] = 0
-        table["m5"] = np.ma.masked_array(data=arr, mask=mask, fill_value=0)
-        table["mstrcol"] = np.ma.masked_array(data=np.array(["text"] * nrow), mask=mask, fill_value="")
-        table["mbytecol"] = np.ma.masked_array(data=np.array([b"bytes"] * nrow), mask=mask, fill_value=b"")
+        table["m_u4"] = np.ma.masked_array(data=arr, mask=mask, fill_value=0)
+        # Masked string.
+        table["m_str"] = np.ma.masked_array(data=np.array(["text"] * nrow), mask=mask, fill_value="")
+        # Masked bytes.
+        table["m_byte"] = np.ma.masked_array(data=np.array([b"bytes"] * nrow), mask=mask, fill_value=b"")
 
     return table
 
@@ -1040,15 +1053,17 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
                     has_masked = True
                 else:
                     c1 = np.array(table1[name])
-                if isinstance(table2[name], atable.column.MaskedColumn):
+                if has_masked:
+                    self.assertIsInstance(table2[name], atable.column.MaskedColumn)
                     c2 = table2[name].filled()
-                    has_masked = True
                 else:
+                    self.assertFalse(isinstance(table2[name], atable.column.MaskedColumn))
                     c2 = np.array(table2[name])
                 np.testing.assert_array_equal(c1, c2)
                 # If we have a masked column then we test the underlying data.
                 if has_masked:
                     np.testing.assert_array_equal(np.array(c1), np.array(c2))
+                    np.testing.assert_array_equal(table1[name].mask, table2[name].mask)
 
 
 @unittest.skipUnless(atable is not None, "Cannot test InMemoryArrowAstropyDelegate without astropy.")
@@ -1621,15 +1636,17 @@ class ParquetFormatterArrowTableTestCase(unittest.TestCase):
                 has_masked = True
             else:
                 c1 = np.array(table1[name])
-            if isinstance(table2[name], atable.column.MaskedColumn):
+            if has_masked:
+                self.assertIsInstance(table2[name], atable.column.MaskedColumn)
                 c2 = table2[name].filled()
-                has_masked = True
             else:
+                self.assertFalse(isinstance(table2[name], atable.column.MaskedColumn))
                 c2 = np.array(table2[name])
             np.testing.assert_array_equal(c1, c2)
             # If we have a masked column then we test the underlying data.
             if has_masked:
                 np.testing.assert_array_equal(np.array(c1), np.array(c2))
+                np.testing.assert_array_equal(table1[name].mask, table2[name].mask)
 
     def _checkNumpyTableEquality(self, table1, table2):
         """Check if two numpy tables have the same columns/values
