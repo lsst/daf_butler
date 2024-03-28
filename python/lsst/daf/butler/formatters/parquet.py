@@ -287,14 +287,10 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
             # For a masked column, we need to ask arrow to fill the null
             # values with an appropriately typed value before conversion.
             # Then we apply the mask to get a masked array of the correct type.
-            use_masked = True
             null_value: Any
             match t:
                 case t if t in (pa.float64(), pa.float32(), pa.float16()):
-                    # When filling with nans we do not need to use
-                    # the masked array.
                     null_value = np.nan
-                    use_masked = False
                 case t if t in (pa.int64(), pa.int32(), pa.int16(), pa.int8()):
                     null_value = -1
                 case t if t in (pa.bool_(),):
@@ -305,14 +301,11 @@ def arrow_to_numpy_dict(arrow_table: pa.Table) -> dict[str, np.ndarray]:
                     # This is the fallback for unsigned ints in particular.
                     null_value = 0
 
-            if use_masked:
-                col = np.ma.masked_array(
-                    data=arrow_table[name].fill_null(null_value).to_numpy(),
-                    mask=arrow_table[name].is_null().to_numpy(),
-                    fill_value=null_value,
-                )
-            else:
-                col = arrow_table[name].fill_null(null_value).to_numpy()
+            col = np.ma.masked_array(
+                data=arrow_table[name].fill_null(null_value).to_numpy(),
+                mask=arrow_table[name].is_null().to_numpy(),
+                fill_value=null_value,
+            )
 
         if t in (pa.string(), pa.binary()):
             col = col.astype(_arrow_string_to_numpy_dtype(schema, name, col))
