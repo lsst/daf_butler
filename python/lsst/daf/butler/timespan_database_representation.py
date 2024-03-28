@@ -28,13 +28,10 @@ from __future__ import annotations
 
 __all__ = ("TimespanDatabaseRepresentation",)
 
-import enum
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, Union
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
-import astropy.time
-import astropy.utils.exceptions
 import sqlalchemy
 
 # As of astropy 4.2, the erfa interface is shipped independently and
@@ -51,22 +48,6 @@ from .time_utils import TimeConverter
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     pass
-
-
-class _SpecialTimespanBound(enum.Enum):
-    """Enumeration to provide a singleton value for empty timespan bounds.
-
-    This enum's only member should generally be accessed via the
-    `Timespan.EMPTY` alias.
-    """
-
-    EMPTY = enum.auto()
-    """The value used for both `Timespan.begin` and `Timespan.end` for empty
-    Timespans that contain no points.
-    """
-
-
-TimespanBound = Union[astropy.time.Time, _SpecialTimespanBound, None]
 
 
 _S = TypeVar("_S", bound="TimespanDatabaseRepresentation")

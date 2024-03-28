@@ -495,7 +495,7 @@ class DimensionGraph:  # numpydoc ignore=PR02
 
     def __eq__(self, other: Any) -> bool:
         """Test the arguments have exactly the same dimensions & elements."""
-        if isinstance(other, (DimensionGraph, DimensionGroup)):
+        if isinstance(other, DimensionGraph | DimensionGroup):
             return self._group == other.as_group()
         return False
 

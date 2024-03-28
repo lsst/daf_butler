@@ -38,7 +38,7 @@ __all__ = (
     "validate_order_expression",
 )
 
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, Union, final
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, final
 
 import pydantic
 
@@ -184,12 +184,7 @@ class BinaryExpression(ColumnExpressionBase):
 # in other unions that will add that annotation.  It's not clear whether it
 # would work to just nest the annotated ones, but it seems safest not to rely
 # on undocumented behavior.
-_ColumnExpression: TypeAlias = Union[
-    ColumnLiteral,
-    ColumnReference,
-    UnaryExpression,
-    BinaryExpression,
-]
+_ColumnExpression: TypeAlias = ColumnLiteral | ColumnReference | UnaryExpression | BinaryExpression
 
 
 ColumnExpression: TypeAlias = Annotated[_ColumnExpression, pydantic.Field(discriminator="expression_type")]
@@ -248,7 +243,7 @@ def validate_order_expression(expression: _ColumnExpression | Reversed) -> _Colu
 
 
 OrderExpression: TypeAlias = Annotated[
-    Union[_ColumnExpression, Reversed],
+    _ColumnExpression | Reversed,
     pydantic.Field(discriminator="expression_type"),
     pydantic.AfterValidator(validate_order_expression),
 ]

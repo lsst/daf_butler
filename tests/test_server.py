@@ -95,6 +95,12 @@ class ButlerClientServerTestCase(unittest.TestCase):
         direct_butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
 
     def test_health_check(self):
+        try:
+            import importlib.metadata
+
+            importlib.metadata.metadata("lsst.daf.butler")
+        except ModuleNotFoundError:
+            raise self.skipTest("Standard python package metadata not available. Butler not pip installed.")
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["name"], "butler")

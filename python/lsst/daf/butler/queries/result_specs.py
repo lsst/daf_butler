@@ -36,7 +36,7 @@ __all__ = (
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Annotated, Literal, TypeAlias, Union, cast
+from typing import Annotated, Literal, TypeAlias, cast
 
 import pydantic
 
@@ -254,6 +254,6 @@ class GeneralResultSpec(ResultSpecBase):
 
 
 ResultSpec: TypeAlias = Annotated[
-    Union[DataCoordinateResultSpec, DimensionRecordResultSpec, DatasetRefResultSpec, GeneralResultSpec],
+    DataCoordinateResultSpec | DimensionRecordResultSpec | DatasetRefResultSpec | GeneralResultSpec,
     pydantic.Field(discriminator="result_type"),
 ]

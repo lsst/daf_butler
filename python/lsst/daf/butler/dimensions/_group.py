@@ -352,7 +352,7 @@ class DimensionGroup:  # numpydoc ignore=PR02
         from ._graph import DimensionGraph
 
         # TODO: Drop DimensionGraph support here on DM-41326.
-        if isinstance(other, (DimensionGroup, DimensionGraph)):
+        if isinstance(other, DimensionGroup | DimensionGraph):
             return self.names == other.names
         else:
             return False

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 __all__ = ("create_app",)
 
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 import safir.dependencies.logger
 from fastapi import FastAPI, Request, Response

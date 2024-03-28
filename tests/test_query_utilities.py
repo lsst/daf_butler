@@ -32,7 +32,7 @@ any Butler or QueryDriver implementation.
 from __future__ import annotations
 
 import unittest
-from typing import Iterable
+from collections.abc import Iterable
 
 import astropy.time
 from lsst.daf.butler import DimensionUniverse, Timespan

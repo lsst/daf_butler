@@ -34,7 +34,7 @@ __all__ = (
 import enum
 import warnings
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeAlias
 
 import astropy.time
 import astropy.utils.exceptions
@@ -74,7 +74,7 @@ class _SpecialTimespanBound(enum.Enum):
     """
 
 
-TimespanBound = Union[astropy.time.Time, _SpecialTimespanBound, None]
+TimespanBound: TypeAlias = astropy.time.Time | _SpecialTimespanBound | None
 
 SerializedTimespan = Annotated[list[int], Field(min_length=2, max_length=2)]
 """JSON-serializable representation of the Timespan class, as a list of two
