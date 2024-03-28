@@ -29,18 +29,20 @@
 
 __all__ = [
     "CLIENT_REQUEST_ID_HEADER_NAME",
-    "CollectionList",
     "DatasetTypeName",
     "FindDatasetRequestModel",
     "FindDatasetResponseModel",
     "GetFileResponseModel",
+    "GetCollectionInfoResponseModel",
+    "GetCollectionSummaryResponseModel",
 ]
 
 from typing import NewType
 
 import pydantic
-from lsst.daf.butler import SerializedDataId, SerializedDatasetRef, SerializedTimespan
+from lsst.daf.butler import CollectionType, SerializedDataId, SerializedDatasetRef, SerializedTimespan
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
+from lsst.daf.butler.registry import SerializedCollectionSummary
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
 ERROR_STATUS_CODE = 422
@@ -103,3 +105,39 @@ class ErrorResponseModel(pydantic.BaseModel):
     """
     detail: str
     """Detailed explanation of the error that will be sent to the client."""
+
+
+class GetCollectionInfoResponseModel(pydantic.BaseModel):
+    """Response model for get_collection_info."""
+
+    name: str
+    type: CollectionType
+    children: list[str]
+    doc: str | None = None
+    """Will be `None` unless requested with ``include_doc=True`` query
+    parameter."""
+    parents: set[str] | None = None
+    """Chained collections that directly contain this collection. Will be
+    `None` unless requested with ``include_parents=True`` query parameter."""
+
+
+class GetCollectionSummaryResponseModel(pydantic.BaseModel):
+    """Response model for get_collection_summary."""
+
+    summary: SerializedCollectionSummary
+
+
+class QueryCollectionsRequestModel(pydantic.BaseModel):
+    """Request model for query_collections."""
+
+    search: CollectionList
+    collection_types: list[CollectionType]
+    flatten_chains: bool
+    include_chains: bool
+
+
+class QueryCollectionsResponseModel(pydantic.BaseModel):
+    """Response model for query_collections."""
+
+    collections: list[str]
+    """Collection names that match the search."""

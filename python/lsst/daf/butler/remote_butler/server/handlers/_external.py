@@ -31,12 +31,24 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import Butler, DatasetRef, SerializedDatasetRef, SerializedDatasetType, Timespan
+from lsst.daf.butler import (
+    Butler,
+    CollectionType,
+    DatasetRef,
+    SerializedDatasetRef,
+    SerializedDatasetType,
+    Timespan,
+)
+from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
 from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetRequestModel,
     FindDatasetResponseModel,
+    GetCollectionInfoResponseModel,
+    GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    QueryCollectionsRequestModel,
+    QueryCollectionsResponseModel,
 )
 
 from ...._exceptions import DatasetNotFoundError
@@ -186,3 +198,53 @@ def _get_file_by_ref(butler: Butler, ref: DatasetRef) -> GetFileResponseModel:
     """Return file information associated with ``ref``."""
     payload = butler._datastore.prepare_get_for_external_client(ref)
     return GetFileResponseModel(dataset_ref=ref.to_simple(), artifact=payload)
+
+
+@external_router.get(
+    "/v1/collection_info", summary="Get information about a collection", response_model_exclude_unset=True
+)
+def get_collection_info(
+    name: str,
+    include_doc: bool = False,
+    include_parents: bool = False,
+    factory: Factory = Depends(factory_dependency),
+) -> GetCollectionInfoResponseModel:
+    butler = factory.create_butler()
+    record = butler._registry.get_collection_record(name)
+    if record.type == CollectionType.CHAINED:
+        assert isinstance(record, ChainedCollectionRecord)
+        children = record.children
+    else:
+        children = ()
+    response = GetCollectionInfoResponseModel(name=record.name, type=record.type, children=children)
+    if include_doc:
+        response.doc = butler._registry.getCollectionDocumentation(name)
+    if include_parents:
+        response.parents = butler._registry.getCollectionParentChains(name)
+    return response
+
+
+@external_router.get(
+    "/v1/collection_summary", summary="Get summary information about the datasets in a collection"
+)
+def get_collection_summary(
+    name: str, factory: Factory = Depends(factory_dependency)
+) -> GetCollectionSummaryResponseModel:
+    butler = factory.create_butler()
+    return GetCollectionSummaryResponseModel(summary=butler.registry.getCollectionSummary(name).to_simple())
+
+
+@external_router.post(
+    "/v1/query_collections", summary="Search for collections with names that match an expression"
+)
+def query_collections(
+    request: QueryCollectionsRequestModel, factory: Factory = Depends(factory_dependency)
+) -> QueryCollectionsResponseModel:
+    butler = factory.create_butler()
+    collections = butler.registry.queryCollections(
+        expression=request.search,
+        collectionTypes=request.collection_types,
+        flattenChains=request.flatten_chains,
+        includeChains=request.include_chains,
+    )
+    return QueryCollectionsResponseModel(collections=collections)

@@ -61,7 +61,13 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
-from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
+from ..registry import (
+    CollectionArgType,
+    CollectionSummary,
+    NoDefaultCollectionError,
+    Registry,
+    RegistryDefaults,
+)
 from ._authentication import get_authentication_headers
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from .server_models import (
@@ -72,8 +78,12 @@ from .server_models import (
     ErrorResponseModel,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
+    GetCollectionInfoResponseModel,
+    GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    QueryCollectionsRequestModel,
+    QueryCollectionsResponseModel,
 )
 
 if TYPE_CHECKING:
@@ -707,6 +717,24 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     def __str__(self) -> str:
         return f"RemoteButler({self._server_url})"
+
+    def _get_collection_info(
+        self, collection_name: str, include_doc: bool = False, include_parents: bool = False
+    ) -> GetCollectionInfoResponseModel:
+        response = self._get(
+            "collection_info",
+            {"name": collection_name, "include_doc": include_doc, "include_parents": include_parents},
+        )
+        return self._parse_model(response, GetCollectionInfoResponseModel)
+
+    def _get_collection_summary(self, collection_name: str) -> CollectionSummary:
+        response = self._get("collection_summary", {"name": collection_name})
+        parsed = self._parse_model(response, GetCollectionSummaryResponseModel)
+        return CollectionSummary.from_simple(parsed.summary, self.dimensions)
+
+    def _query_collections(self, query: QueryCollectionsRequestModel) -> QueryCollectionsResponseModel:
+        response = self._post("query_collections", query)
+        return self._parse_model(response, QueryCollectionsResponseModel)
 
 
 def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:

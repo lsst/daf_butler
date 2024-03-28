@@ -494,7 +494,7 @@ class SqlRegistry:
         """
         return self._managers.collections.find(name).type
 
-    def _get_collection_record(self, name: str) -> CollectionRecord:
+    def get_collection_record(self, name: str) -> CollectionRecord:
         """Return the record for this collection.
 
         Parameters

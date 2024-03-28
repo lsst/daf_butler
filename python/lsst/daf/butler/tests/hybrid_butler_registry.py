@@ -105,7 +105,7 @@ class HybridButlerRegistry(Registry):
         return self._direct.registerCollection(name, type, doc)
 
     def getCollectionType(self, name: str) -> CollectionType:
-        return self._direct.getCollectionType(name)
+        return self._remote.getCollectionType(name)
 
     def registerRun(self, name: str, doc: str | None = None) -> bool:
         return self._direct.registerRun(name, doc)
@@ -114,22 +114,22 @@ class HybridButlerRegistry(Registry):
         return self._direct.removeCollection(name)
 
     def getCollectionChain(self, parent: str) -> Sequence[str]:
-        return self._direct.getCollectionChain(parent)
+        return self._remote.getCollectionChain(parent)
 
     def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
         return self._direct.setCollectionChain(parent, children, flatten=flatten)
 
     def getCollectionParentChains(self, collection: str) -> set[str]:
-        return self._direct.getCollectionParentChains(collection)
+        return self._remote.getCollectionParentChains(collection)
 
     def getCollectionDocumentation(self, collection: str) -> str | None:
-        return self._direct.getCollectionDocumentation(collection)
+        return self._remote.getCollectionDocumentation(collection)
 
     def setCollectionDocumentation(self, collection: str, doc: str | None) -> None:
         return self._direct.setCollectionDocumentation(collection, doc)
 
     def getCollectionSummary(self, collection: str) -> CollectionSummary:
-        return self._direct.getCollectionSummary(collection)
+        return self._remote.getCollectionSummary(collection)
 
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         return self._direct.registerDatasetType(datasetType)
@@ -259,7 +259,7 @@ class HybridButlerRegistry(Registry):
         flattenChains: bool = False,
         includeChains: bool | None = None,
     ) -> Sequence[str]:
-        return self._direct.queryCollections(
+        return self._remote.queryCollections(
             expression, datasetType, collectionTypes, flattenChains, includeChains
         )
 
