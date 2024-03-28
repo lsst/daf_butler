@@ -167,7 +167,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
     __slots__ = ()
 
-    _serializedType = SerializedDataCoordinate
+    _serializedType: ClassVar[type[pydantic.BaseModel]] = SerializedDataCoordinate
 
     @staticmethod
     def standardize(

@@ -229,7 +229,7 @@ class DimensionGraph:  # numpydoc ignore=PR02
     required.
     """
 
-    _serializedType = SerializedDimensionGraph
+    _serializedType: ClassVar[type[pydantic.BaseModel]] = SerializedDimensionGraph
 
     def __new__(
         cls,
