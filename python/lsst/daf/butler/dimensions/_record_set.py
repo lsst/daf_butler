@@ -30,13 +30,14 @@ from __future__ import annotations
 __all__ = ("DimensionRecordSet",)
 
 from collections import ChainMap
-from collections.abc import Collection, Iterable, Iterator, Mapping
+from collections.abc import Collection, Iterable, Iterator, KeysView, Mapping
 from typing import TYPE_CHECKING, cast, final
 
 from ._coordinate import DataCoordinate, DataIdValue
 from ._records import DimensionRecord
 
 if TYPE_CHECKING:
+    from ._data_id_set import DataIdSet
     from ._elements import DimensionElement
     from ._universe import DimensionUniverse
 
@@ -108,6 +109,14 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
     def element(self) -> DimensionElement:
         """Name of the dimension element these records correspond to."""
         return self._record_type.definition
+
+    @property
+    def data_ids(self) -> DataIdSet:
+        from ._data_id_set import DataIdSet
+
+        return DataIdSet(
+            self.element.minimal_group, has_implied_values=False, values_mapping=_DataIdMappingAdapter(self)
+        )
 
     def __contains__(self, key: object) -> bool:
         match key:
@@ -335,3 +344,22 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             Raised if no record with these values were found.
         """
         return self._by_required_values[required_values]
+
+
+class _DataIdMappingAdapter(Mapping[tuple[DataIdValue, ...], tuple[DataIdValue, ...]]):
+    def __init__(self, parent: DimensionRecordSet) -> None:
+        self._parent = parent
+
+    def __iter__(self) -> Iterator[tuple[DataIdValue, ...]]:
+        return iter(self._parent._by_required_values.keys())
+
+    def __getitem__(self, key: tuple[DataIdValue, ...]) -> tuple[DataIdValue, ...]:
+        if key not in self._parent._by_required_values:
+            raise KeyError(key)
+        return ()
+
+    def __len__(self) -> int:
+        return len(self._parent._by_required_values)
+
+    def keys(self) -> KeysView[tuple[DataIdValue, ...]]:
+        return self._parent._by_required_values.keys()
