@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = ("DimensionRecordSet", "DimensionRecordFactory")
 
 from collections.abc import Collection, Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Protocol, cast, final
+from typing import TYPE_CHECKING, Any, Never, Protocol, cast, final
 
 from ._coordinate import DataCoordinate, DataIdValue
 from ._records import DimensionRecord
@@ -63,8 +63,8 @@ class DimensionRecordFactory(Protocol):
 
 def fail_record_lookup(
     record_class: type[DimensionRecord], required_values: tuple[DataIdValue, ...]
-) -> DimensionRecord:
-    """Raise `LookupError` to indicate that a `DimensionRecord` could not be
+) -> Never:
+    """Raise `KeyError` to indicate that a `DimensionRecord` could not be
     found or created.
 
     This is intended for use as the default value for arguments that take a
@@ -77,13 +77,8 @@ def fail_record_lookup(
     required_values : `tuple`
         Tuple of data ID required values that are sufficient to identify a
         record that exists in the data repository.
-
-    Returns
-    -------
-    record :  `DimensionRecord`
-        Never returned; this function always raises `LookupError`.
     """
-    raise LookupError(
+    raise KeyError(
         f"No {record_class.definition.name!r} record with data ID "
         f"{DataCoordinate.from_required_values(record_class.definition.minimal_group, required_values)}."
     )
@@ -350,7 +345,8 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
         Raises
         ------
         KeyError
-            Raised if no record with this data ID was found.
+            Raised if no record with this data ID was found, and no ``or_add``
+            callback was provided.
         ValueError
             Raised if the data ID did not have the right dimensions.
         """
@@ -382,8 +378,9 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
 
         Raises
         ------
-        ValueError
-            Raised if the data ID did not have the right dimensions.
+        KeyError
+            Raised if no record with these values were found, and no ``or_add``
+            callback was provided.
         """
         if (result := self._by_required_values.get(required_values)) is None:
             result = or_add(self._record_type, required_values)
