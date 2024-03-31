@@ -402,7 +402,7 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
         ValueError
             Raised if ``value.element != self.element``.
         """
-        if value.definition.name != self.element:
+        if value.definition != self.element:
             raise ValueError(
                 f"Cannot add record {value} for {value.definition.name!r} to set for {self.element!r}."
             )
