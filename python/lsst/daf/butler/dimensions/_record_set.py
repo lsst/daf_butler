@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = ("DimensionRecordSet", "DimensionRecordFactory")
 
 from collections.abc import Collection, Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Protocol, final
+from typing import TYPE_CHECKING, Any, Protocol, cast, final
 
 from ._coordinate import DataCoordinate, DataIdValue
 from ._records import DimensionRecord
@@ -159,6 +159,10 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
                 required_values = key.dataId.required_values
             case DataCoordinate() if key.dimensions == self.element.minimal_group:
                 required_values = key.required_values
+            case {**mapping}:
+                key = DataCoordinate.standardize(
+                    cast(dict[str, DataIdValue], mapping), dimensions=self.element.minimal_group
+                )
             case _:
                 return False
         return required_values in self._by_required_values
