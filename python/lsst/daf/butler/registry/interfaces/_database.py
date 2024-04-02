@@ -632,7 +632,7 @@ class Database(ABC):
             - ``connection`` (`sqlalchemy.engine.Connection`): the connection.
         """
         with self._session() as connection:
-            already_in_transaction = connection.in_transaction()
+            already_in_transaction = self.isInTransaction()
             assert not (interrupting and already_in_transaction), (
                 "Logic error in transaction nesting: an operation that would "
                 "interrupt the active transaction context has been requested."
@@ -793,6 +793,13 @@ class Database(ABC):
     def isWriteable(self) -> bool:
         """Return `True` if this database can be modified by this client."""
         raise NotImplementedError()
+
+    def isInTransaction(self) -> bool:
+        """Return `True` if there is currently a database connection open with
+        an active transaction; `False` otherwise.
+        """
+        session = self._session_connection
+        return session is not None and session.in_transaction()
 
     @abstractmethod
     def __str__(self) -> str:
@@ -1120,9 +1127,7 @@ class Database(ABC):
         """
         # TODO: if _engine is used to make a table then it uses separate
         # connection and should not interfere with current transaction
-        assert (
-            self._session_connection is None or not self._session_connection.in_transaction()
-        ), "Table creation interrupts transactions."
+        assert not self.isInTransaction(), "Table creation interrupts transactions."
         assert self._metadata is not None, "Static tables must be declared before dynamic tables."
         table = self.getExistingTable(name, spec)
         if table is not None:
