@@ -32,9 +32,8 @@ __all__ = ()
 
 import itertools
 from abc import abstractmethod
-from collections import namedtuple
 from collections.abc import Iterable, Iterator, Set
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar, cast
 
 import sqlalchemy
 
@@ -77,7 +76,13 @@ def _makeCollectionForeignKey(
     return ddl.ForeignKeySpec("collection", source=(sourceColumnName,), target=(collectionIdName,), **kwargs)
 
 
-CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
+_T = TypeVar("_T")
+
+
+class CollectionTablesTuple(NamedTuple, Generic[_T]):
+    collection: _T
+    run: _T
+    collection_chain: _T
 
 
 def makeRunTableSpec(
@@ -188,7 +193,7 @@ class DefaultCollectionManager(CollectionManager[K]):
     def __init__(
         self,
         db: Database,
-        tables: CollectionTablesTuple,
+        tables: CollectionTablesTuple[sqlalchemy.Table],
         collectionIdName: str,
         *,
         caching_context: CachingContext,

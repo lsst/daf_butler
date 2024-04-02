@@ -63,7 +63,9 @@ _VERSION = VersionTuple(2, 0, 0)
 _LOG = logging.getLogger(__name__)
 
 
-def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
+def _makeTableSpecs(
+    TimespanReprClass: type[TimespanDatabaseRepresentation],
+) -> CollectionTablesTuple[ddl.TableSpec]:
     return CollectionTablesTuple(
         collection=ddl.TableSpec(
             fields=[
