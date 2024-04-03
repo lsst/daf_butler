@@ -40,8 +40,9 @@ import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from threading import Barrier, Thread
+from threading import Barrier
 
 import astropy.time
 import sqlalchemy
@@ -922,24 +923,22 @@ class RegistryTests(ABC):
 
         registry1._managers.collections._block_for_concurrency_test = wait_for_barrier
 
-        thread1 = Thread(target=blocked_thread_func, args=[registry1])
-        thread2 = Thread(target=unblocked_thread_func, args=[registry2])
-        try:
-            thread1.start()
-            enter_barrier.wait()
+        with ThreadPoolExecutor(max_workers=1) as exec1:
+            with ThreadPoolExecutor(max_workers=1) as exec2:
+                future1 = exec1.submit(blocked_thread_func, registry1)
+                enter_barrier.wait()
 
-            # At this point registry 1 has entered the critical section and is
-            # waiting for us to release it.  Start the other thread.
-            thread2.start()
-            # thread2 should block inside a database call, but we have no way
-            # to detect when it is in this state.
-            time.sleep(0.100)
+                # At this point registry 1 has entered the critical section and
+                # is waiting for us to release it.  Start the other thread.
+                future2 = exec2.submit(unblocked_thread_func, registry2)
+                # thread2 should block inside a database call, but we have no
+                # way to detect when it is in this state.
+                time.sleep(0.200)
 
-            # Let the threads run to completion.
-            exit_barrier.wait()
-        finally:
-            thread1.join()
-            thread2.join()
+                # Let the threads run to completion.
+                exit_barrier.wait()
+                future1.result()
+                future2.result()
 
         return registry1
 
