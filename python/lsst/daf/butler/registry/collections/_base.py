@@ -413,18 +413,14 @@ class DefaultCollectionManager(CollectionManager[K]):
         self, chain: ChainedCollectionRecord[K], children: Iterable[str], flatten: bool = False
     ) -> ChainedCollectionRecord[K]:
         # Docstring inherited from CollectionManager.
-        children_as_wildcard = CollectionWildcard.from_names(children)
-        for record in self.resolve_wildcard(
-            children_as_wildcard,
-            flatten_chains=True,
-            include_chains=True,
-            collection_types={CollectionType.CHAINED},
-        ):
-            if record == chain:
-                raise ValueError(f"Cycle in collection chaining when defining '{chain.name}'.")
+        children = list(children)
+        self._sanity_check_collection_cycles(chain.name, children)
         if flatten:
             children = tuple(
-                record.name for record in self.resolve_wildcard(children_as_wildcard, flatten_chains=True)
+                record.name
+                for record in self.resolve_wildcard(
+                    CollectionWildcard.from_names(children), flatten_chains=True
+                )
             )
 
         child_records = self.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False)
@@ -436,6 +432,23 @@ class DefaultCollectionManager(CollectionManager[K]):
         record = ChainedCollectionRecord[K](chain.key, chain.name, children=tuple(names))
         self._addCachedRecord(record)
         return record
+
+    def _sanity_check_collection_cycles(self, parent_name: str, child_names: list[str]) -> None:
+        """Raise an exception if any of the collections in the ``child_names``
+        list have ``parent_name`` as a child, creating a collection cycle.
+
+        This is only a sanity check, and does not guarantee that no collection
+        cycles are possible.  Concurrent updates might allow collection cycles
+        to be inserted.
+        """
+        for record in self.resolve_wildcard(
+            CollectionWildcard.from_names(child_names),
+            flatten_chains=True,
+            include_chains=True,
+            collection_types={CollectionType.CHAINED},
+        ):
+            if record.name == parent_name:
+                raise ValueError(f"Cycle in collection chaining when defining '{parent_name}'.")
 
     def _insert_collection_chain_rows(
         self,
