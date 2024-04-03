@@ -302,6 +302,12 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
 
         return records
 
+    def _select_pkey_by_name(self, collection_name: str) -> sqlalchemy.Select:
+        table = self._tables.collection
+        return sqlalchemy.select(table.c.collection_id.label("key"), table.c.type).where(
+            table.c.name == collection_name
+        )
+
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:
         # Docstring inherited from VersionedExtension.

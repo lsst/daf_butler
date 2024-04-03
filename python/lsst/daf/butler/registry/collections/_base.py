@@ -40,6 +40,7 @@ import sqlalchemy
 from ..._exceptions import MissingCollectionError
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._collection_type import CollectionType
+from .._exceptions import CollectionTypeError
 from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord, VersionTuple
 from ..wildcards import CollectionWildcard
 
@@ -452,3 +453,94 @@ class DefaultCollectionManager(CollectionManager[K]):
             for child in child_keys
         ]
         self._db.insert(self._tables.collection_chain, *rows)
+
+    def prepend_collection_chain(
+        self, parent_collection_name: str, child_collection_names: list[str]
+    ) -> None:
+        child_records = self.resolve_wildcard(
+            CollectionWildcard.from_names(child_collection_names), flatten_chains=False
+        )
+        child_keys = [child.key for child in child_records]
+        assert len(child_keys) == len(child_collection_names)
+
+        with self._db.transaction():
+            parent_key = self._find_and_lock_collection_chain(parent_collection_name)
+            starting_position = self._find_lowest_position_in_collection_chain(parent_key) - len(child_keys)
+            self._insert_collection_chain_rows(parent_key, starting_position, child_keys)
+
+    def _find_lowest_position_in_collection_chain(self, chain_key: K) -> int:
+        """Return the lowest-numbered position in a collection chain, or 0 if
+        the chain is empty.
+        """
+        table = self._tables.collection_chain
+        query = sqlalchemy.select(sqlalchemy.func.min(table.c.position)).where(table.c.parent == chain_key)
+        with self._db.query(query) as cursor:
+            lowest_existing_position = cursor.scalar()
+
+        if lowest_existing_position is None:
+            return 0
+
+        return lowest_existing_position
+
+    def _find_and_lock_collection_chain(self, collection_name: str) -> K:
+        """
+        Take a row lock on the specified collection's row in the collections
+        table, and return the collection's primary key.
+
+        This lock is used to synchronize updates to collection chains.
+
+        The locking strategy requires cooperation from everything modifying the
+        collection chain table -- all operations that modify collection chains
+        must obtain this lock first.  The database will NOT automatically
+        prevent modification of tables based on this lock.  The only guarantee
+        is that only one caller will be allowed to hold this lock for a given
+        collection at a time.  Concurrent calls will block until the caller
+        holding the lock has completed its transaction.
+
+        Parameters
+        ----------
+        collection_name : `str`
+            Name of the collection whose chain is being modified.
+
+        Returns
+        -------
+        id : ``K``
+            The primary key for the given collection.
+
+        Raises
+        ------
+        MissingCollectionError
+            If the specified collection is not in the database table.
+        CollectionTypeError
+            If the specified collection is not a chained collection.
+        """
+        assert self._db.isInTransaction(), (
+            "Row locks are only held until the end of the current transaction,"
+            " so it makes no sense to take a lock outside a transaction."
+        )
+        assert self._db.isWriteable(), "Collection row locks are only useful for write operations."
+
+        query = self._select_pkey_by_name(collection_name).with_for_update()
+        with self._db.query(query) as cursor:
+            rows = cursor.all()
+
+        if len(rows) == 0:
+            raise MissingCollectionError(
+                f"Parent collection {collection_name} not found when updating collection chain."
+            )
+        assert len(rows) == 1, "There should only be one entry for each collection in collection table."
+        r = rows[0]._mapping
+        if r["type"] != CollectionType.CHAINED:
+            raise CollectionTypeError(f"Parent collection {collection_name} is not a chained collection.")
+        return r["key"]
+
+    @abstractmethod
+    def _select_pkey_by_name(self, collection_name: str) -> sqlalchemy.Select:
+        """Return a SQLAlchemy select statement that will return columns from
+        the one row in the ``collection` table matching the given name.  The
+        select statement includes two columns:
+
+        - ``key`` : the primary key for the collection
+        - ``type`` : the collection type
+        """
+        raise NotImplementedError()
