@@ -486,6 +486,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         with self._db.transaction():
             parent_key = self._find_and_lock_collection_chain(parent_collection_name)
             starting_position = self._find_lowest_position_in_collection_chain(parent_key) - len(child_keys)
+            self._block_for_concurrency_test()
             self._insert_collection_chain_rows(parent_key, starting_position, child_keys)
 
         self._refresh_cache_for_key(parent_key)

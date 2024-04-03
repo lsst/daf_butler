@@ -622,6 +622,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: list[str]
     ) -> None:
@@ -652,3 +653,8 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         transactions short.
         """
         raise NotImplementedError()
+
+    def _block_for_concurrency_test(self) -> None:
+        """No-op normally. Provide a place for unit tests to hook in and
+        verify locking behavior.
+        """
