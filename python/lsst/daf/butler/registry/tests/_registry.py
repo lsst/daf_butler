@@ -34,13 +34,14 @@ import datetime
 import itertools
 import os
 import re
+import time
 import unittest
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
 from collections.abc import Iterator
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from threading import Barrier, Thread
 
 import astropy.time
 import sqlalchemy
@@ -77,9 +78,7 @@ from .._exceptions import (
 )
 from .._registry import Registry
 from ..interfaces import ButlerAttributeExistsError
-
-if TYPE_CHECKING:
-    from ..sql_registry import SqlRegistry
+from ..sql_registry import SqlRegistry
 
 
 class RegistryTests(ABC):
@@ -848,6 +847,62 @@ class RegistryTests(ABC):
         self.assertEqual(list(registry.getCollectionChain("outer")), ["inner"])
         registry.setCollectionChain("outer", ["inner"], flatten=True)
         self.assertEqual(list(registry.getCollectionChain("outer")), ["innermost"])
+
+    def testCollectionChainConcurrency(self):
+        """Verify that locking via database row locks is working as
+        expected.
+        """
+        registry1 = self.makeRegistry()
+        assert isinstance(registry1, SqlRegistry)
+        registry2 = self.makeRegistry(share_repo_with=registry1)
+        if registry2 is None:
+            # This will happen for in-memory SQL databases.
+            raise unittest.SkipTest("Testing concurrency requires two connections to the same DB.")
+
+        registry1.registerCollection("chain", CollectionType.CHAINED)
+        for collection in ["a", "b"]:
+            registry1.registerCollection(collection)
+
+        # Cause registry1 to block at the worst possible moment -- after it has
+        # decided on positions for the new children in the collection chain,
+        # but before inserting them.
+        enter_barrier = Barrier(2, timeout=60)
+        exit_barrier = Barrier(2, timeout=60)
+
+        def wait_for_barrier():
+            enter_barrier.wait()
+            exit_barrier.wait()
+
+        registry1._managers.collections._block_for_concurrency_test = wait_for_barrier
+
+        def thread1_func():
+            registry1._managers.collections.prepend_collection_chain("chain", ["a"])
+
+        def thread2_func():
+            registry2._managers.collections.prepend_collection_chain("chain", ["b"])
+
+        thread1 = Thread(target=thread1_func)
+        thread2 = Thread(target=thread2_func)
+        try:
+            thread1.start()
+            enter_barrier.wait()
+
+            # At this point registry 1 has entered the critical section and is
+            # waiting for us to release it.  Start the other thread.
+            thread2.start()
+            # thread2 should block inside a database call, but we have no way
+            # to detect when it is in this state.
+            time.sleep(0.100)
+
+            # Let the threads run to completion.
+            exit_barrier.wait()
+        finally:
+            thread1.join()
+            thread2.join()
+
+        # Thread1 should have finished first, inserting "a".  Thread2 should
+        # have finished second, prepending "b".
+        self.assertEqual(("b", "a"), registry1.getCollectionChain("chain"))
 
     def testBasicTransaction(self):
         """Test that all operations within a single transaction block are

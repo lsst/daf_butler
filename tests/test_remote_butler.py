@@ -161,6 +161,11 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
         # the client side.
         pass
 
+    def testCollectionChainConcurrency(self):
+        # This tests an implementation detail that requires access to the
+        # collection manager object.
+        pass
+
     def testAttributeManager(self):
         # Tests a non-public API that isn't relevant on the client side.
         pass
