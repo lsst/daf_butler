@@ -1389,6 +1389,14 @@ class ButlerTests(ButlerPutGetTests):
 
     def testCollectionChainPrepend(self):
         butler = self.create_empty_butler(writeable=True)
+        self._testCollectionChainPrepend(butler)
+
+    def testCollectionChainPrependCached(self):
+        butler = self.create_empty_butler(writeable=True)
+        with butler._caching_context():
+            self._testCollectionChainPrepend(butler)
+
+    def _testCollectionChainPrepend(self, butler: Butler) -> None:
         butler.registry.registerCollection("chain", CollectionType.CHAINED)
         runs = ["a", "b", "c", "d"]
         for run in runs:

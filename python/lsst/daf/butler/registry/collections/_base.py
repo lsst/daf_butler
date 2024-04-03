@@ -468,6 +468,8 @@ class DefaultCollectionManager(CollectionManager[K]):
             starting_position = self._find_lowest_position_in_collection_chain(parent_key) - len(child_keys)
             self._insert_collection_chain_rows(parent_key, starting_position, child_keys)
 
+        self._refresh_cache_for_key(parent_key)
+
     def _find_lowest_position_in_collection_chain(self, chain_key: K) -> int:
         """Return the lowest-numbered position in a collection chain, or 0 if
         the chain is empty.
@@ -544,3 +546,12 @@ class DefaultCollectionManager(CollectionManager[K]):
         - ``type`` : the collection type
         """
         raise NotImplementedError()
+
+    def _refresh_cache_for_key(self, key: K) -> None:
+        """Refresh the data in the cache for a single collection."""
+        cache = self._caching_context.collection_records
+        if cache is not None:
+            records = self._fetch_by_key([key])
+            if records:
+                assert len(records) == 1
+                cache.add(records[0])
