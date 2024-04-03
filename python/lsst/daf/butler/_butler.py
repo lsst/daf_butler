@@ -1735,3 +1735,33 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         ``inferDefaults``, and default data ID.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def prepend_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        """Add children to the beginning of a CHAINED collection.
+
+        Parameters
+        ----------
+        parent_collection_name : `str`
+            The name of a CHAINED collection to which we will add new children.
+        child_collection_names : `Iterable` [ `str ` ] | `str`
+            A child collection name or list of child collection names to be
+            added to the parent.
+
+        Raises
+        ------
+        MissingCollectionError
+            If any of the specified collections do not exist.
+        CollectionTypeError
+            If the parent collection is not a CHAINED collection.
+
+        Notes
+        -----
+        If this function is called within a call to ``Butler.transaction``, it
+        will hold a lock that prevents other processes from modifying the
+        parent collection until the end of the transaction.  Keep these
+        transactions short.
+        """
+        raise NotImplementedError()

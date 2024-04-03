@@ -1387,6 +1387,34 @@ class ButlerTests(ButlerPutGetTests):
         get_ref = reader_butler.get_dataset(put_ref.id)
         self.assertEqual(get_ref.id, put_ref.id)
 
+    def testCollectionChainPrepend(self):
+        butler = self.create_empty_butler(writeable=True)
+        butler.registry.registerCollection("chain", CollectionType.CHAINED)
+        runs = ["a", "b", "c", "d"]
+        for run in runs:
+            butler.registry.registerCollection(run)
+
+        def check_chain(expected: list[str]) -> None:
+            children = butler.registry.getCollectionChain("chain")
+            self.assertEqual(expected, list(children))
+
+        butler.prepend_collection_chain("chain", ["c", "b"])
+        check_chain(["c", "b"])
+        butler.prepend_collection_chain("chain", ["a"])
+        check_chain(["a", "c", "b"])
+        butler.prepend_collection_chain("chain", [])
+        check_chain(["a", "c", "b"])
+
+        # Missing parent collection
+        with self.assertRaises(MissingCollectionError):
+            butler.prepend_collection_chain("chain2", [])
+        # Missing child collection
+        with self.assertRaises(MissingCollectionError):
+            butler.prepend_collection_chain("chain", ["doesnotexist"])
+        # Forbid operations on non-chained collections
+        with self.assertRaises(CollectionTypeError):
+            butler.prepend_collection_chain("d", ["a"])
+
 
 class FileDatastoreButlerTests(ButlerTests):
     """Common tests and specialization of ButlerTests for butlers backed
