@@ -426,7 +426,9 @@ class DefaultCollectionManager(CollectionManager[K]):
         child_records = self.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False)
         names = [child.name for child in child_records]
         with self._db.transaction():
+            self._find_and_lock_collection_chain(chain.name)
             self._db.delete(self._tables.collection_chain, ["parent"], {"parent": chain.key})
+            self._block_for_concurrency_test()
             self._insert_collection_chain_rows(chain.key, 0, [child.key for child in child_records])
 
         record = ChainedCollectionRecord[K](chain.key, chain.name, children=tuple(names))

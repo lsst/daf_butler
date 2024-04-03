@@ -39,7 +39,7 @@ import unittest
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import timedelta
 from threading import Barrier, Thread
 
@@ -847,10 +847,59 @@ class RegistryTests(ABC):
         registry.setCollectionChain("outer", ["inner"], flatten=True)
         self.assertEqual(list(registry.getCollectionChain("outer")), ["innermost"])
 
-    def testCollectionChainConcurrency(self):
+    def testCollectionChainPrependConcurrency(self):
         """Verify that locking via database row locks is working as
         expected.
         """
+
+        def blocked_thread_func(registry: SqlRegistry):
+            # This call will become blocked after it has decided on positions
+            # for the new children in the collection chain, but before
+            # inserting them.
+            registry._managers.collections.prepend_collection_chain("chain", ["a"])
+
+        def unblocked_thread_func(registry: SqlRegistry):
+            registry._managers.collections.prepend_collection_chain("chain", ["b"])
+
+        registry = self._do_collection_concurrency_test(blocked_thread_func, unblocked_thread_func)
+
+        # blocked_thread_func should have finished first, inserting "a".
+        # unblocked_thread_func should have finished second, prepending "b".
+        self.assertEqual(("b", "a"), registry.getCollectionChain("chain"))
+
+    def testCollectionChainReplaceConcurrency(self):
+        """Verify that locking via database row locks is working as
+        expected.
+        """
+
+        def blocked_thread_func(registry: SqlRegistry):
+            # This call will become blocked after deleting children, but before
+            # inserting new ones.
+            registry.setCollectionChain("chain", ["a"])
+
+        def unblocked_thread_func(registry: SqlRegistry):
+            registry.setCollectionChain("chain", ["b"])
+
+        registry = self._do_collection_concurrency_test(blocked_thread_func, unblocked_thread_func)
+
+        # blocked_thread_func should have finished first.
+        # unblocked_thread_func should have finished second, overwriting the
+        # chain with "b".
+        self.assertEqual(("b",), registry.getCollectionChain("chain"))
+
+    def _do_collection_concurrency_test(
+        self, blocked_thread_func: Callable[[SqlRegistry]], unblocked_thread_func: Callable[[SqlRegistry]]
+    ) -> SqlRegistry:
+        # This function:
+        # 1. Sets up two registries pointing at the same database.
+        # 2. Start running 'blocked_thread_func' in a background thread,
+        #    arranging for it to become blocked during a critical section in
+        #    the collections manager.
+        # 3. Wait for 'blocked_thread_func' to reach the critical section
+        # 4. Start running 'unblocked_thread_func'.
+        # 5. Allow both functions to run to completion.
+
+        # Set up two registries pointing to the same DB
         registry1 = self.makeRegistry()
         assert isinstance(registry1, SqlRegistry)
         registry2 = self.makeRegistry(share_repo_with=registry1)
@@ -862,9 +911,8 @@ class RegistryTests(ABC):
         for collection in ["a", "b"]:
             registry1.registerCollection(collection)
 
-        # Cause registry1 to block at the worst possible moment -- after it has
-        # decided on positions for the new children in the collection chain,
-        # but before inserting them.
+        # Arrange for registry1 to block during its critical section, allowing
+        # us to detect this and control when it becomes unblocked.
         enter_barrier = Barrier(2, timeout=60)
         exit_barrier = Barrier(2, timeout=60)
 
@@ -874,14 +922,8 @@ class RegistryTests(ABC):
 
         registry1._managers.collections._block_for_concurrency_test = wait_for_barrier
 
-        def thread1_func():
-            registry1._managers.collections.prepend_collection_chain("chain", ["a"])
-
-        def thread2_func():
-            registry2._managers.collections.prepend_collection_chain("chain", ["b"])
-
-        thread1 = Thread(target=thread1_func)
-        thread2 = Thread(target=thread2_func)
+        thread1 = Thread(target=blocked_thread_func, args=[registry1])
+        thread2 = Thread(target=unblocked_thread_func, args=[registry2])
         try:
             thread1.start()
             enter_barrier.wait()
@@ -899,9 +941,7 @@ class RegistryTests(ABC):
             thread1.join()
             thread2.join()
 
-        # Thread1 should have finished first, inserting "a".  Thread2 should
-        # have finished second, prepending "b".
-        self.assertEqual(("b", "a"), registry1.getCollectionChain("chain"))
+        return registry1
 
     def testBasicTransaction(self):
         """Test that all operations within a single transaction block are
