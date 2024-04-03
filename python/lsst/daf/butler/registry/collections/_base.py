@@ -37,10 +37,9 @@ from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar, cast
 
 import sqlalchemy
 
-from ..._exceptions import CollectionCycleError, MissingCollectionError
+from ..._exceptions import CollectionCycleError, CollectionTypeError, MissingCollectionError
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._collection_type import CollectionType
-from .._exceptions import CollectionTypeError
 from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord, VersionTuple
 from ..wildcards import CollectionWildcard
 

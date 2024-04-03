@@ -29,6 +29,7 @@
 __all__ = (
     "CalibrationLookupError",
     "CollectionCycleError",
+    "CollectionTypeError",
     "DatasetNotFoundError",
     "DimensionNameError",
     "ButlerUserError",
@@ -86,6 +87,12 @@ class CollectionCycleError(ValueError, ButlerUserError):
     """
 
     error_type = "collection_cycle"
+
+
+class CollectionTypeError(CollectionError, ButlerUserError):
+    """Exception raised when type of a collection is incorrect."""
+
+    error_type = "collection_type"
 
 
 class DatasetNotFoundError(LookupError, ButlerUserError):
@@ -168,6 +175,7 @@ class UnknownButlerUserError(ButlerUserError):
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     CalibrationLookupError,
     CollectionCycleError,
+    CollectionTypeError,
     DimensionNameError,
     DimensionValueError,
     DatasetNotFoundError,

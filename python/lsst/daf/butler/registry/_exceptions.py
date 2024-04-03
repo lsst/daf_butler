@@ -29,7 +29,6 @@
 __all__ = (
     "ArgumentError",
     "CollectionExpressionError",
-    "CollectionTypeError",
     "ConflictingDefinitionError",
     "DataIdValueError",
     "DatasetTypeExpressionError",
@@ -62,10 +61,6 @@ class InconsistentDataIdError(DataIdError):
     """Exception raised when a data ID contains contradictory key-value pairs,
     according to dimension relationships.
     """
-
-
-class CollectionTypeError(CollectionError):
-    """Exception raised when type of a collection is incorrect."""
 
 
 class CollectionExpressionError(CollectionError):
