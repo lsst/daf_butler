@@ -82,6 +82,7 @@ from lsst.daf.butler import (
     Butler,
     ButlerConfig,
     ButlerRepoIndex,
+    CollectionCycleError,
     CollectionType,
     Config,
     DataCoordinate,
@@ -1398,6 +1399,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def _testCollectionChainPrepend(self, butler: Butler) -> None:
         butler.registry.registerCollection("chain", CollectionType.CHAINED)
+
         runs = ["a", "b", "c", "d"]
         for run in runs:
             butler.registry.registerCollection(run)
@@ -1415,13 +1417,19 @@ class ButlerTests(ButlerPutGetTests):
 
         # Missing parent collection
         with self.assertRaises(MissingCollectionError):
-            butler.prepend_collection_chain("chain2", [])
+            butler.prepend_collection_chain("doesnotexist", [])
         # Missing child collection
         with self.assertRaises(MissingCollectionError):
             butler.prepend_collection_chain("chain", ["doesnotexist"])
         # Forbid operations on non-chained collections
         with self.assertRaises(CollectionTypeError):
             butler.prepend_collection_chain("d", ["a"])
+
+        # Prevent collection cycles
+        butler.registry.registerCollection("chain2", CollectionType.CHAINED)
+        butler.prepend_collection_chain("chain2", "chain")
+        with self.assertRaises(CollectionCycleError):
+            butler.prepend_collection_chain("chain", "chain2")
 
 
 class FileDatastoreButlerTests(ButlerTests):

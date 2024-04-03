@@ -28,6 +28,7 @@
 """Specialized Butler exceptions."""
 __all__ = (
     "CalibrationLookupError",
+    "CollectionCycleError",
     "DatasetNotFoundError",
     "DimensionNameError",
     "ButlerUserError",
@@ -77,6 +78,14 @@ class CalibrationLookupError(LookupError, ButlerUserError):
     """Exception raised for failures to look up a calibration dataset."""
 
     error_type = "calibration_lookup"
+
+
+class CollectionCycleError(ValueError, ButlerUserError):
+    """Raised when an operation would cause a chained collection to be a child
+    of itself.
+    """
+
+    error_type = "collection_cycle"
 
 
 class DatasetNotFoundError(LookupError, ButlerUserError):
@@ -158,6 +167,7 @@ class UnknownButlerUserError(ButlerUserError):
 
 _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     CalibrationLookupError,
+    CollectionCycleError,
     DimensionNameError,
     DimensionValueError,
     DatasetNotFoundError,

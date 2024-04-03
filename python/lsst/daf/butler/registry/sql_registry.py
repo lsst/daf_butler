@@ -621,7 +621,7 @@ class SqlRegistry:
         lsst.daf.butler.registry.CollectionTypeError
             Raised if ``parent`` does not correspond to a
             `~CollectionType.CHAINED` collection.
-        ValueError
+        CollectionCycleError
             Raised if the given collections contains a cycle.
         """
         record = self._managers.collections.find(parent)
