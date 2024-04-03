@@ -31,6 +31,7 @@ from collections.abc import Iterable
 
 from .._butler import Butler
 from ..registry import CollectionType, MissingCollectionError
+from ..registry.wildcards import CollectionWildcard
 
 
 def collectionChain(
@@ -91,49 +92,59 @@ def collectionChain(
                 f"but collection '{parent}' is not known to this registry"
             ) from None
 
-    current = list(butler.registry.getCollectionChain(parent))
+    if flatten:
+        if mode not in ("redefine", "prepend", "extend"):
+            raise RuntimeError(f"'flatten' flag is not allowed for {mode}")
+        wildcard = CollectionWildcard.from_names(children)
+        children = butler.registry.queryCollections(wildcard, flattenChains=True)
 
-    if mode == "redefine":
-        # Given children are what we want.
-        pass
-    elif mode == "prepend":
-        children = tuple(children) + tuple(current)
-    elif mode == "extend":
-        current.extend(children)
-        children = current
-    elif mode == "remove":
-        for child in children:
-            current.remove(child)
-        children = current
-    elif mode == "pop":
-        if children:
-            n_current = len(current)
-
-            def convert_index(i: int) -> int:
-                """Convert negative index to positive."""
-                if i >= 0:
-                    return i
-                return n_current + i
-
-            # For this mode the children should be integers.
-            # Convert negative integers to positive ones to allow
-            # sorting.
-            indices = [convert_index(int(child)) for child in children]
-
-            # Reverse sort order so we can remove from the end first
-            indices = sorted(indices, reverse=True)
-
-        else:
-            # Nothing specified, pop from the front of the chain.
-            indices = [0]
-
-        for i in indices:
-            current.pop(i)
-
-        children = current
-    else:
-        raise ValueError(f"Unrecognized update mode: '{mode}'")
-
-    butler.registry.setCollectionChain(parent, children, flatten=flatten)
+    _modify_collection_chain(butler, mode, parent, children)
 
     return tuple(butler.registry.getCollectionChain(parent))
+
+
+def _modify_collection_chain(butler: Butler, mode: str, parent: str, children: Iterable[str]) -> None:
+    if mode == "prepend":
+        butler.prepend_collection_chain(parent, children)
+    elif mode == "redefine":
+        butler.registry.setCollectionChain(parent, children)
+    else:
+        current = list(butler.registry.getCollectionChain(parent))
+
+        if mode == "extend":
+            current.extend(children)
+            children = current
+        elif mode == "remove":
+            for child in children:
+                current.remove(child)
+            children = current
+        elif mode == "pop":
+            if children:
+                n_current = len(current)
+
+                def convert_index(i: int) -> int:
+                    """Convert negative index to positive."""
+                    if i >= 0:
+                        return i
+                    return n_current + i
+
+                # For this mode the children should be integers.
+                # Convert negative integers to positive ones to allow
+                # sorting.
+                indices = [convert_index(int(child)) for child in children]
+
+                # Reverse sort order so we can remove from the end first
+                indices = sorted(indices, reverse=True)
+
+            else:
+                # Nothing specified, pop from the front of the chain.
+                indices = [0]
+
+            for i in indices:
+                current.pop(i)
+
+            children = current
+        else:
+            raise ValueError(f"Unrecognized update mode: '{mode}'")
+
+        butler.registry.setCollectionChain(parent, children)
