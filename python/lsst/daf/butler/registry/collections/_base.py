@@ -426,22 +426,29 @@ class DefaultCollectionManager(CollectionManager[K]):
                 record.name for record in self.resolve_wildcard(children_as_wildcard, flatten_chains=True)
             )
 
-        rows = []
-        position = itertools.count()
-        names = []
-        for child in self.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False):
-            rows.append(
-                {
-                    "parent": chain.key,
-                    "child": child.key,
-                    "position": next(position),
-                }
-            )
-            names.append(child.name)
+        child_records = self.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False)
+        names = [child.name for child in child_records]
         with self._db.transaction():
             self._db.delete(self._tables.collection_chain, ["parent"], {"parent": chain.key})
-            self._db.insert(self._tables.collection_chain, *rows)
+            self._insert_collection_chain_rows(chain.key, 0, [child.key for child in child_records])
 
         record = ChainedCollectionRecord[K](chain.key, chain.name, children=tuple(names))
         self._addCachedRecord(record)
         return record
+
+    def _insert_collection_chain_rows(
+        self,
+        parent_key: K,
+        starting_position: int,
+        child_keys: Iterable[K],
+    ) -> None:
+        position = itertools.count(starting_position)
+        rows = [
+            {
+                "parent": parent_key,
+                "child": child,
+                "position": next(position),
+            }
+            for child in child_keys
+        ]
+        self._db.insert(self._tables.collection_chain, *rows)
