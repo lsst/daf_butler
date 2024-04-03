@@ -641,6 +641,8 @@ class CollectionManager(Generic[_Key], VersionedExtension):
             If any of the specified collections do not exist.
         CollectionTypeError
             If the parent collection is not a CHAINED collection.
+        CollectionCycleError
+            If this operation would create a collection cycle.
 
         Notes
         -----

@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar, cast
 
 import sqlalchemy
 
-from ..._exceptions import MissingCollectionError
+from ..._exceptions import CollectionCycleError, MissingCollectionError
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._collection_type import CollectionType
 from .._exceptions import CollectionTypeError
@@ -415,6 +415,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         # Docstring inherited from CollectionManager.
         children = list(children)
         self._sanity_check_collection_cycles(chain.name, children)
+
         if flatten:
             children = tuple(
                 record.name
@@ -433,7 +434,9 @@ class DefaultCollectionManager(CollectionManager[K]):
         self._addCachedRecord(record)
         return record
 
-    def _sanity_check_collection_cycles(self, parent_name: str, child_names: list[str]) -> None:
+    def _sanity_check_collection_cycles(
+        self, parent_collection_name: str, child_collection_names: list[str]
+    ) -> None:
         """Raise an exception if any of the collections in the ``child_names``
         list have ``parent_name`` as a child, creating a collection cycle.
 
@@ -442,13 +445,15 @@ class DefaultCollectionManager(CollectionManager[K]):
         to be inserted.
         """
         for record in self.resolve_wildcard(
-            CollectionWildcard.from_names(child_names),
+            CollectionWildcard.from_names(child_collection_names),
             flatten_chains=True,
             include_chains=True,
             collection_types={CollectionType.CHAINED},
         ):
-            if record.name == parent_name:
-                raise ValueError(f"Cycle in collection chaining when defining '{parent_name}'.")
+            if record.name == parent_collection_name:
+                raise CollectionCycleError(
+                    f"Cycle in collection chaining when defining '{parent_collection_name}'."
+                )
 
     def _insert_collection_chain_rows(
         self,
@@ -470,6 +475,8 @@ class DefaultCollectionManager(CollectionManager[K]):
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: list[str]
     ) -> None:
+        self._sanity_check_collection_cycles(parent_collection_name, child_collection_names)
+
         child_records = self.resolve_wildcard(
             CollectionWildcard.from_names(child_collection_names), flatten_chains=False
         )
