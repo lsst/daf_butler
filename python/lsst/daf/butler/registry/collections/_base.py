@@ -32,6 +32,7 @@ __all__ = ()
 
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Set
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar, cast
 
 import sqlalchemy
@@ -408,20 +409,21 @@ class DefaultCollectionManager(CollectionManager[K]):
         raise NotImplementedError()
 
     def update_chain(self, parent_collection_name: str, child_collection_names: list[str]) -> None:
-        # Docstring inherited from CollectionManager.
-        self._sanity_check_collection_cycles(parent_collection_name, child_collection_names)
-
-        child_records = self.resolve_wildcard(
-            CollectionWildcard.from_names(child_collection_names), flatten_chains=False
-        )
-        names = [child.name for child in child_records]
-        with self._db.transaction():
-            parent_key = self._find_and_lock_collection_chain(parent_collection_name)
-            self._db.delete(self._tables.collection_chain, ["parent"], {"parent": parent_key})
+        with self._modify_collection_chain(
+            parent_collection_name,
+            child_collection_names,
+            # update_chain is currently used in setCollectionChain, which is
+            # called within caching contexts.  (At least in Butler.import_ and
+            # possibly other places.)  So, unlike the other collection chain
+            # modification methods, it has to update the collection cache.
+            skip_caching_check=True,
+        ) as c:
+            self._db.delete(self._tables.collection_chain, ["parent"], {"parent": c.parent_key})
             self._block_for_concurrency_test()
-            self._insert_collection_chain_rows(parent_key, 0, [child.key for child in child_records])
+            self._insert_collection_chain_rows(c.parent_key, 0, c.child_keys)
 
-        record = ChainedCollectionRecord[K](parent_key, parent_collection_name, children=tuple(names))
+        names = [child.name for child in c.child_records]
+        record = ChainedCollectionRecord[K](c.parent_key, parent_collection_name, children=tuple(names))
         self._addCachedRecord(record)
 
     def _sanity_check_collection_cycles(
@@ -473,7 +475,23 @@ class DefaultCollectionManager(CollectionManager[K]):
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: list[str]
     ) -> None:
-        if self._caching_context.is_enabled:
+        with self._modify_collection_chain(parent_collection_name, child_collection_names) as c:
+            self._remove_collection_chain_rows(c.parent_key, c.child_keys)
+            starting_position = self._find_lowest_position_in_collection_chain(c.parent_key) - len(
+                c.child_keys
+            )
+            self._block_for_concurrency_test()
+            self._insert_collection_chain_rows(c.parent_key, starting_position, c.child_keys)
+
+    @contextmanager
+    def _modify_collection_chain(
+        self,
+        parent_collection_name: str,
+        child_collection_names: list[str],
+        *,
+        skip_caching_check: bool = False,
+    ) -> Iterator[_CollectionChainModificationContext[K]]:
+        if (not skip_caching_check) and self._caching_context.is_enabled:
             # Avoid having cache-maintenance code around that is unlikely to
             # ever be used.
             raise RuntimeError("Chained collection modification not permitted with active caching context.")
@@ -487,10 +505,9 @@ class DefaultCollectionManager(CollectionManager[K]):
 
         with self._db.transaction():
             parent_key = self._find_and_lock_collection_chain(parent_collection_name)
-            self._remove_collection_chain_rows(parent_key, child_keys)
-            starting_position = self._find_lowest_position_in_collection_chain(parent_key) - len(child_keys)
-            self._block_for_concurrency_test()
-            self._insert_collection_chain_rows(parent_key, starting_position, child_keys)
+            yield _CollectionChainModificationContext[K](
+                parent_key=parent_key, child_keys=child_keys, child_records=child_records
+            )
 
     def _find_lowest_position_in_collection_chain(self, chain_key: K) -> int:
         """Return the lowest-numbered position in a collection chain, or 0 if
@@ -568,3 +585,9 @@ class DefaultCollectionManager(CollectionManager[K]):
         - ``type`` : the collection type
         """
         raise NotImplementedError()
+
+
+class _CollectionChainModificationContext(NamedTuple, Generic[K]):
+    parent_key: K
+    child_keys: list[K]
+    child_records: list[CollectionRecord[K]]
