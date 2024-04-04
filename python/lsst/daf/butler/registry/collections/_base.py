@@ -407,32 +407,22 @@ class DefaultCollectionManager(CollectionManager[K]):
         """
         raise NotImplementedError()
 
-    def update_chain(
-        self, chain: ChainedCollectionRecord[K], children: Iterable[str], flatten: bool = False
-    ) -> ChainedCollectionRecord[K]:
+    def update_chain(self, parent_collection_name: str, child_collection_names: list[str]) -> None:
         # Docstring inherited from CollectionManager.
-        children = list(children)
-        self._sanity_check_collection_cycles(chain.name, children)
+        self._sanity_check_collection_cycles(parent_collection_name, child_collection_names)
 
-        if flatten:
-            children = tuple(
-                record.name
-                for record in self.resolve_wildcard(
-                    CollectionWildcard.from_names(children), flatten_chains=True
-                )
-            )
-
-        child_records = self.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False)
+        child_records = self.resolve_wildcard(
+            CollectionWildcard.from_names(child_collection_names), flatten_chains=False
+        )
         names = [child.name for child in child_records]
         with self._db.transaction():
-            self._find_and_lock_collection_chain(chain.name)
-            self._db.delete(self._tables.collection_chain, ["parent"], {"parent": chain.key})
+            parent_key = self._find_and_lock_collection_chain(parent_collection_name)
+            self._db.delete(self._tables.collection_chain, ["parent"], {"parent": parent_key})
             self._block_for_concurrency_test()
-            self._insert_collection_chain_rows(chain.key, 0, [child.key for child in child_records])
+            self._insert_collection_chain_rows(parent_key, 0, [child.key for child in child_records])
 
-        record = ChainedCollectionRecord[K](chain.key, chain.name, children=tuple(names))
+        record = ChainedCollectionRecord[K](parent_key, parent_collection_name, children=tuple(names))
         self._addCachedRecord(record)
-        return record
 
     def _sanity_check_collection_cycles(
         self, parent_collection_name: str, child_collection_names: list[str]
