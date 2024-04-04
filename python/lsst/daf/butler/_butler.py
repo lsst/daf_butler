@@ -1770,3 +1770,34 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         transactions short.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def remove_from_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        """Remove children from a CHAINED collection.
+
+        Parameters
+        ----------
+        parent_collection_name : `str`
+            The name of a CHAINED collection from which we will remove
+            children.
+        child_collection_names : `Iterable` [ `str ` ] | `str`
+            A child collection name or list of child collection names to be
+            removed from the parent.
+
+        Raises
+        ------
+        MissingCollectionError
+            If any of the specified collections do not exist.
+        CollectionTypeError
+            If the parent collection is not a CHAINED collection.
+
+        Notes
+        -----
+        If this function is called within a call to ``Butler.transaction``, it
+        will hold a lock that prevents other processes from modifying the
+        parent collection until the end of the transaction.  Keep these
+        transactions short.
+        """
+        raise NotImplementedError()

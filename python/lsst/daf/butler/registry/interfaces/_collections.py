@@ -642,6 +642,9 @@ class CollectionManager(Generic[_Key], VersionedExtension):
     ) -> None:
         """Add children to the beginning of a CHAINED collection.
 
+        If any of the children already existed in the chain, they will be moved
+        to the new position at the beginning of the chain.
+
         Parameters
         ----------
         parent_collection_name : `str`
@@ -658,6 +661,37 @@ class CollectionManager(Generic[_Key], VersionedExtension):
             If the parent collection is not a CHAINED collection.
         CollectionCycleError
             If this operation would create a collection cycle.
+
+        Notes
+        -----
+        If this function is called within a call to ``Butler.transaction``, it
+        will hold a lock that prevents other processes from modifying the
+        parent collection until the end of the transaction.  Keep these
+        transactions short.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def remove_from_collection_chain(
+        self, parent_collection_name: str, child_collection_names: list[str]
+    ) -> None:
+        """Remove children from a CHAINED collection.
+
+        Parameters
+        ----------
+        parent_collection_name : `str`
+            The name of a CHAINED collection from which we will remove
+            children.
+        child_collection_names : `list` [ `str ` ]
+            A child collection name or list of child collection names to be
+            removed from the parent.
+
+        Raises
+        ------
+        MissingCollectionError
+            If any of the specified collections do not exist.
+        CollectionTypeError
+            If the parent collection is not a CHAINED collection.
 
         Notes
         -----

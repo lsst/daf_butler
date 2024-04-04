@@ -1408,7 +1408,35 @@ class ButlerTests(ButlerPutGetTests):
         butler.prepend_collection_chain("chain", ["d", "b", "c"])
         self._check_chain(butler, ["d", "b", "c", "a"])
 
+        # Prevent collection cycles
+        butler.registry.registerCollection("chain2", CollectionType.CHAINED)
+        butler.prepend_collection_chain("chain2", "chain")
+        with self.assertRaises(CollectionCycleError):
+            butler.prepend_collection_chain("chain", "chain2")
+
         self._test_common_chain_functionality(butler, butler.prepend_collection_chain)
+
+    def testCollectionChainRemove(self):
+        butler = self._setup_to_test_collection_chain()
+
+        butler.registry.setCollectionChain("chain", ["a", "b", "c", "d"])
+
+        butler.remove_from_collection_chain("chain", "c")
+        self._check_chain(butler, ["a", "b", "d"])
+
+        # Duplicates are allowed in the list of children
+        butler.remove_from_collection_chain("chain", ["b", "b", "a"])
+        self._check_chain(butler, ["d"])
+
+        # Empty remove does nothing
+        butler.remove_from_collection_chain("chain", [])
+        self._check_chain(butler, ["d"])
+
+        # Removing children that aren't in the chain does nothing
+        butler.remove_from_collection_chain("chain", ["a", "chain"])
+        self._check_chain(butler, ["d"])
+
+        self._test_common_chain_functionality(butler, butler.remove_from_collection_chain)
 
     def _setup_to_test_collection_chain(self) -> Butler:
         butler = self.create_empty_butler(writeable=True)
@@ -1439,13 +1467,8 @@ class ButlerTests(ButlerPutGetTests):
         with self.assertRaises(CollectionTypeError):
             func("d", ["a"])
 
-        # Prevent collection cycles
-        butler.registry.registerCollection("chain2", CollectionType.CHAINED)
-        func("chain2", "chain")
-        with self.assertRaises(CollectionCycleError):
-            func("chain", "chain2")
-
-        # Make sure none of those operations interfered with unrelated chains
+        # Make sure none of the earlier operations interfered with unrelated
+        # chains.
         self.assertEqual(["a", "b"], list(butler.registry.getCollectionChain("staticchain")))
 
         with butler._caching_context():

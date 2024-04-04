@@ -2156,6 +2156,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             parent_collection_name, list(ensure_iterable(child_collection_names))
         )
 
+    def remove_from_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        return self._registry._managers.collections.remove_from_collection_chain(
+            parent_collection_name, list(ensure_iterable(child_collection_names))
+        )
+
     _config: ButlerConfig
     """Configuration for this Butler instance."""
 

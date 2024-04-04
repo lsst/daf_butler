@@ -437,6 +437,17 @@ class DefaultCollectionManager(CollectionManager[K]):
             self._block_for_concurrency_test()
             self._insert_collection_chain_rows(c.parent_key, starting_position, c.child_keys)
 
+    def remove_from_collection_chain(
+        self, parent_collection_name: str, child_collection_names: list[str]
+    ) -> None:
+        with self._modify_collection_chain(
+            parent_collection_name,
+            child_collection_names,
+            # Removing members from a chain can't create collection cycles
+            skip_cycle_check=True,
+        ) as c:
+            self._remove_collection_chain_rows(c.parent_key, c.child_keys)
+
     @contextmanager
     def _modify_collection_chain(
         self,
@@ -444,13 +455,15 @@ class DefaultCollectionManager(CollectionManager[K]):
         child_collection_names: list[str],
         *,
         skip_caching_check: bool = False,
+        skip_cycle_check: bool = False,
     ) -> Iterator[_CollectionChainModificationContext[K]]:
         if (not skip_caching_check) and self._caching_context.is_enabled:
             # Avoid having cache-maintenance code around that is unlikely to
             # ever be used.
             raise RuntimeError("Chained collection modification not permitted with active caching context.")
 
-        self._sanity_check_collection_cycles(parent_collection_name, child_collection_names)
+        if not skip_cycle_check:
+            self._sanity_check_collection_cycles(parent_collection_name, child_collection_names)
 
         child_records = self.resolve_wildcard(
             CollectionWildcard.from_names(child_collection_names), flatten_chains=False
