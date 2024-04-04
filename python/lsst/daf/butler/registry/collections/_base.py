@@ -30,7 +30,6 @@ from ... import ddl
 
 __all__ = ()
 
-import itertools
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Set
 from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar, cast
@@ -462,14 +461,13 @@ class DefaultCollectionManager(CollectionManager[K]):
         starting_position: int,
         child_keys: list[K],
     ) -> None:
-        position = itertools.count(starting_position)
         rows = [
             {
                 "parent": parent_key,
                 "child": child,
-                "position": next(position),
+                "position": position,
             }
-            for child in child_keys
+            for position, child in enumerate(child_keys, starting_position)
         ]
         self._db.insert(self._tables.collection_chain, *rows)
 
