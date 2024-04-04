@@ -31,6 +31,7 @@ import uuid
 
 __all__ = ("DirectQueryDriver",)
 
+import dataclasses
 import logging
 import sys
 from collections.abc import Iterable, Mapping, Set
@@ -124,9 +125,7 @@ class DirectQueryDriver(QueryDriver):
         self.managers = managers
         self._universe = universe
         self._defaults = defaults
-        self._materializations: dict[
-            qt.MaterializationKey, tuple[sqlalchemy.Table, frozenset[str], Postprocessing]
-        ] = {}
+        self._materializations: dict[qt.MaterializationKey, _MaterializationState] = {}
         self._upload_tables: dict[qt.DataCoordinateUploadKey, sqlalchemy.FromClause] = {}
         self._exit_stack: ExitStack | None = None
         self._raw_page_size = raw_page_size
@@ -281,7 +280,7 @@ class DirectQueryDriver(QueryDriver):
         table = self._exit_stack.enter_context(self.db.temporary_table(builder.make_table_spec()))
         self.db.insert(table, select=sql_select)
         key = uuid.uuid4()
-        self._materializations[key] = (table, datasets, builder.postprocessing)
+        self._materializations[key] = _MaterializationState(table, datasets, builder.postprocessing)
         return key
 
     def upload_data_coordinates(
@@ -864,15 +863,19 @@ class DirectQueryDriver(QueryDriver):
                     )
         # Add materializations, which can also bring in more postprocessing.
         for m_key, m_dimensions in tree.materializations.items():
-            _, _, m_postprocessing = self._materializations[m_key]
+            m_state = self._materializations[m_key]
             result.materializations[m_key] = m_dimensions
             # When a query is materialized, the new tree has an empty
             # (trivially true) predicate because the original was used to make
             # the materialized rows.  But the original postprocessing isn't
             # executed when the materialization happens, so we have to include
             # it here.
-            builder.postprocessing.spatial_join_filtering.extend(m_postprocessing.spatial_join_filtering)
-            builder.postprocessing.spatial_where_filtering.extend(m_postprocessing.spatial_where_filtering)
+            builder.postprocessing.spatial_join_filtering.extend(
+                m_state.postprocessing.spatial_join_filtering
+            )
+            builder.postprocessing.spatial_where_filtering.extend(
+                m_state.postprocessing.spatial_where_filtering
+            )
         # Add data coordinate uploads.
         result.data_coordinate_uploads.update(tree.data_coordinate_uploads)
         # Add dataset_searches and filter out collections that don't have the
@@ -1010,9 +1013,9 @@ class DirectQueryDriver(QueryDriver):
             materialization was created.
         """
         columns = qt.ColumnSet(dimensions)
-        table, datasets, postprocessing = self._materializations[key]
-        joiner.join(QueryJoiner(self.db, table).extract_columns(columns, postprocessing))
-        return datasets
+        m_state = self._materializations[key]
+        joiner.join(QueryJoiner(self.db, m_state.table).extract_columns(columns, m_state.postprocessing))
+        return m_state.datasets
 
     def _join_dataset_search(
         self,
@@ -1042,6 +1045,13 @@ class DirectQueryDriver(QueryDriver):
             resolved_search.name not in joiner.timespans
         ), "Dataset timespan has unexpectedly already been joined in."
         joiner.join(storage.make_query_joiner(resolved_search.collection_records, fields))
+
+
+@dataclasses.dataclass
+class _MaterializationState:
+    table: sqlalchemy.Table
+    datasets: frozenset[str]
+    postprocessing: Postprocessing
 
 
 class _Cursor:
