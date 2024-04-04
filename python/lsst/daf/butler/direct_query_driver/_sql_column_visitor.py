@@ -29,7 +29,7 @@ from __future__ import annotations
 
 __all__ = ("SqlColumnVisitor",)
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
@@ -257,7 +257,11 @@ class SqlColumnVisitor(
         return sqlalchemy.not_(result)
 
     def expect_scalar(self, expression: qt.OrderExpression) -> sqlalchemy.ColumnElement[Any]:
-        return cast(sqlalchemy.ColumnElement[Any], expression.visit(self))
+        result = expression.visit(self)
+        assert isinstance(result, sqlalchemy.ColumnElement)
+        return result
 
     def expect_timespan(self, expression: qt.ColumnExpression) -> TimespanDatabaseRepresentation:
-        return cast(TimespanDatabaseRepresentation, expression.visit(self))
+        result = expression.visit(self)
+        assert isinstance(result, TimespanDatabaseRepresentation)
+        return result
