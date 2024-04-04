@@ -2141,8 +2141,9 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
             self._registry._db, self.dimensions, self._registry._managers, self._registry.defaults
         )
         query = Query(driver)
-        with driver:
-            yield query
+        with self._caching_context():
+            with driver:
+                yield query
 
     def _preload_cache(self) -> None:
         """Immediately load caches that are used for common operations."""
