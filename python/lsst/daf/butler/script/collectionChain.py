@@ -108,15 +108,13 @@ def _modify_collection_chain(butler: Butler, mode: str, parent: str, children: I
         butler.prepend_collection_chain(parent, children)
     elif mode == "redefine":
         butler.registry.setCollectionChain(parent, children)
+    elif mode == "remove":
+        butler.remove_from_collection_chain(parent, children)
     else:
         current = list(butler.registry.getCollectionChain(parent))
 
         if mode == "extend":
             current.extend(children)
-            children = current
-        elif mode == "remove":
-            for child in children:
-                current.remove(child)
             children = current
         elif mode == "pop":
             if children:
