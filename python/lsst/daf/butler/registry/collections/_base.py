@@ -483,6 +483,11 @@ class DefaultCollectionManager(CollectionManager[K]):
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: list[str]
     ) -> None:
+        if self._caching_context.is_enabled:
+            # Avoid having cache-maintenance code around that is unlikely to
+            # ever be used.
+            raise RuntimeError("Chained collection modification not permitted with active caching context.")
+
         self._sanity_check_collection_cycles(parent_collection_name, child_collection_names)
 
         child_records = self.resolve_wildcard(
@@ -496,8 +501,6 @@ class DefaultCollectionManager(CollectionManager[K]):
             starting_position = self._find_lowest_position_in_collection_chain(parent_key) - len(child_keys)
             self._block_for_concurrency_test()
             self._insert_collection_chain_rows(parent_key, starting_position, child_keys)
-
-        self._refresh_cache_for_key(parent_key)
 
     def _find_lowest_position_in_collection_chain(self, chain_key: K) -> int:
         """Return the lowest-numbered position in a collection chain, or 0 if
@@ -575,12 +578,3 @@ class DefaultCollectionManager(CollectionManager[K]):
         - ``type`` : the collection type
         """
         raise NotImplementedError()
-
-    def _refresh_cache_for_key(self, key: K) -> None:
-        """Refresh the data in the cache for a single collection."""
-        cache = self._caching_context.collection_records
-        if cache is not None:
-            records = self._fetch_by_key([key])
-            if records:
-                assert len(records) == 1
-                cache.add(records[0])

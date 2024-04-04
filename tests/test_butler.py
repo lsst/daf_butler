@@ -1390,14 +1390,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def testCollectionChainPrepend(self):
         butler = self.create_empty_butler(writeable=True)
-        self._testCollectionChainPrepend(butler)
 
-    def testCollectionChainPrependCached(self):
-        butler = self.create_empty_butler(writeable=True)
-        with butler._caching_context():
-            self._testCollectionChainPrepend(butler)
-
-    def _testCollectionChainPrepend(self, butler: Butler) -> None:
         butler.registry.registerCollection("chain", CollectionType.CHAINED)
 
         runs = ["a", "b", "c", "d"]
@@ -1446,6 +1439,10 @@ class ButlerTests(ButlerPutGetTests):
 
         # Make sure none of those operations interfered with unrelated chains
         self.assertEqual(["a", "b"], list(butler.registry.getCollectionChain("staticchain")))
+
+        with butler._caching_context():
+            with self.assertRaisesRegex(RuntimeError, "Chained collection modification not permitted"):
+                butler.prepend_collection_chain("chain", "a")
 
 
 class FileDatastoreButlerTests(ButlerTests):
