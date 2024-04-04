@@ -145,10 +145,8 @@ class DirectQueryDriver(QueryDriver):
         # transaction starts safe against deadlocks, and it'd be more
         # complicated to implement anyway.
         #
-        # We start a transaction rather than just opening a connection both
-        # to establish consistency guarantees throughout the query context and
-        # to make temp table and cursors work with pg_bouncer transaction
-        # affinity.
+        # We start a transaction rather than just opening a connection to make
+        # temp table and cursors work with pg_bouncer transaction affinity.
         self._exit_stack.enter_context(self.db.transaction(for_temp_tables=True))
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
