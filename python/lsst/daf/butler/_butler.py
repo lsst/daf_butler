@@ -1742,6 +1742,9 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     ) -> None:
         """Add children to the beginning of a CHAINED collection.
 
+        If any of the children already existed in the chain, they will be moved
+        to the new position at the beginning of the chain.
+
         Parameters
         ----------
         parent_collection_name : `str`

@@ -460,7 +460,7 @@ class DefaultCollectionManager(CollectionManager[K]):
         self,
         parent_key: K,
         starting_position: int,
-        child_keys: Iterable[K],
+        child_keys: list[K],
     ) -> None:
         position = itertools.count(starting_position)
         rows = [
@@ -473,6 +473,15 @@ class DefaultCollectionManager(CollectionManager[K]):
         ]
         self._db.insert(self._tables.collection_chain, *rows)
 
+    def _remove_collection_chain_rows(
+        self,
+        parent_key: K,
+        child_keys: list[K],
+    ) -> None:
+        table = self._tables.collection_chain
+        where = sqlalchemy.and_(table.c.parent == parent_key, table.c.child.in_(child_keys))
+        self._db.deleteWhere(table, where)
+
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: list[str]
     ) -> None:
@@ -482,10 +491,10 @@ class DefaultCollectionManager(CollectionManager[K]):
             CollectionWildcard.from_names(child_collection_names), flatten_chains=False
         )
         child_keys = [child.key for child in child_records]
-        assert len(child_keys) == len(child_collection_names)
 
         with self._db.transaction():
             parent_key = self._find_and_lock_collection_chain(parent_collection_name)
+            self._remove_collection_chain_rows(parent_key, child_keys)
             starting_position = self._find_lowest_position_in_collection_chain(parent_key) - len(child_keys)
             self._block_for_concurrency_test()
             self._insert_collection_chain_rows(parent_key, starting_position, child_keys)

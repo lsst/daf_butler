@@ -1404,16 +1404,29 @@ class ButlerTests(ButlerPutGetTests):
         for run in runs:
             butler.registry.registerCollection(run)
 
+        butler.registry.registerCollection("staticchain", CollectionType.CHAINED)
+        butler.registry.setCollectionChain("staticchain", ["a", "b"])
+
         def check_chain(expected: list[str]) -> None:
             children = butler.registry.getCollectionChain("chain")
             self.assertEqual(expected, list(children))
 
-        butler.prepend_collection_chain("chain", ["c", "b"])
+        # Duplicates are removed from the list of children
+        butler.prepend_collection_chain("chain", ["c", "b", "c"])
         check_chain(["c", "b"])
+
+        # Prepend goes on the front of existing chain
         butler.prepend_collection_chain("chain", ["a"])
         check_chain(["a", "c", "b"])
+
+        # Empty prepend does nothing
         butler.prepend_collection_chain("chain", [])
         check_chain(["a", "c", "b"])
+
+        # Prepending children that already exist in the chain removes them from
+        # their current position.
+        butler.prepend_collection_chain("chain", ["d", "b", "c"])
+        check_chain(["d", "b", "c", "a"])
 
         # Missing parent collection
         with self.assertRaises(MissingCollectionError):
@@ -1430,6 +1443,9 @@ class ButlerTests(ButlerPutGetTests):
         butler.prepend_collection_chain("chain2", "chain")
         with self.assertRaises(CollectionCycleError):
             butler.prepend_collection_chain("chain", "chain2")
+
+        # Make sure none of those operations interfered with unrelated chains
+        self.assertEqual(["a", "b"], list(butler.registry.getCollectionChain("staticchain")))
 
 
 class FileDatastoreButlerTests(ButlerTests):
