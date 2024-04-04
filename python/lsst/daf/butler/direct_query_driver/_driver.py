@@ -1186,17 +1186,16 @@ class _Cursor:
                     column_map.append(
                         (field, qt.ColumnSet.get_qualified_name(result_spec.element.name, field))
                     )
-            if not result_spec.element.temporal:
-                for raw_row in raw_rows:
-                    m = raw_row._mapping
-                    record_set.add(record_cls(**{k: m[v] for k, v in column_map}))
-            else:
+            if result_spec.element.temporal:
                 timespan_qualified_name = qt.ColumnSet.get_qualified_name(
                     result_spec.element.name, "timespan"
                 )
-                for raw_row in raw_rows:
-                    m = raw_row._mapping
-                    d = {k: m[v] for k, v in column_map}
+            else:
+                timespan_qualified_name = None
+            for raw_row in raw_rows:
+                m = raw_row._mapping
+                d = {k: m[v] for k, v in column_map}
+                if timespan_qualified_name is not None:
                     d["timespan"] = self._timespan_repr_cls.extract(m, name=timespan_qualified_name)
-                    record_set.add(record_cls(**d))
+                record_set.add(record_cls(**d))
         return DimensionRecordResultPage(spec=result_spec, next_key=next_key, rows=record_set)
