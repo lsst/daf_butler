@@ -217,10 +217,7 @@ class DirectQueryDriver(QueryDriver):
             raw_page_size=raw_page_size,
         )
         result_page = cursor.next()
-        if result_page.next_key is None:
-            # Cursor has been exhausted; close it here.
-            cursor.close()
-        else:
+        if result_page.next_key is not None:
             # Cursor has not been exhausted; add it to the driver for use by
             # fetch_next_page.
             self._cursors[result_page.next_key] = cursor
