@@ -104,9 +104,6 @@ class QueryBuilder:
     queries that have no real columns.
     """
 
-    def __post_init__(self) -> None:
-        assert not (self.distinct and self.group_by), "At most one of distinct and group_by can be set."
-
     @classmethod
     def handle_empty_columns(
         cls, columns: list[sqlalchemy.sql.ColumnElement]
@@ -139,6 +136,7 @@ class QueryBuilder:
         select : `sqlalchemy.Select`
             SQLAlchemy SELECT statement.
         """
+        assert not (self.distinct and self.group_by), "At most one of distinct and group_by can be set."
         if self.joiner.name_shrinker is None:
             self.joiner.name_shrinker = self.joiner._make_name_shrinker()
         sql_columns: list[sqlalchemy.ColumnElement[Any]] = []
