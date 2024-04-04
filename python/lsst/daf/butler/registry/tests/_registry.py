@@ -34,13 +34,15 @@ import datetime
 import itertools
 import os
 import re
+import time
 import unittest
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from threading import Barrier
 
 import astropy.time
 import sqlalchemy
@@ -56,7 +58,7 @@ from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iterat
 from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
-from ..._exceptions import MissingCollectionError, MissingDatasetTypeError
+from ..._exceptions import CollectionTypeError, MissingCollectionError, MissingDatasetTypeError
 from ..._exceptions_legacy import DatasetTypeError
 from ..._storage_class import StorageClass
 from ..._timespan import Timespan
@@ -67,7 +69,6 @@ from .._config import RegistryConfig
 from .._exceptions import (
     ArgumentError,
     CollectionError,
-    CollectionTypeError,
     ConflictingDefinitionError,
     DataIdValueError,
     DatasetTypeExpressionError,
@@ -77,9 +78,7 @@ from .._exceptions import (
 )
 from .._registry import Registry
 from ..interfaces import ButlerAttributeExistsError
-
-if TYPE_CHECKING:
-    from ..sql_registry import SqlRegistry
+from ..sql_registry import SqlRegistry
 
 
 class RegistryTests(ABC):
@@ -848,6 +847,100 @@ class RegistryTests(ABC):
         self.assertEqual(list(registry.getCollectionChain("outer")), ["inner"])
         registry.setCollectionChain("outer", ["inner"], flatten=True)
         self.assertEqual(list(registry.getCollectionChain("outer")), ["innermost"])
+
+    def testCollectionChainPrependConcurrency(self):
+        """Verify that locking via database row locks is working as
+        expected.
+        """
+
+        def blocked_thread_func(registry: SqlRegistry):
+            # This call will become blocked after it has decided on positions
+            # for the new children in the collection chain, but before
+            # inserting them.
+            registry._managers.collections.prepend_collection_chain("chain", ["a"])
+
+        def unblocked_thread_func(registry: SqlRegistry):
+            registry._managers.collections.prepend_collection_chain("chain", ["b"])
+
+        registry = self._do_collection_concurrency_test(blocked_thread_func, unblocked_thread_func)
+
+        # blocked_thread_func should have finished first, inserting "a".
+        # unblocked_thread_func should have finished second, prepending "b".
+        self.assertEqual(("b", "a"), registry.getCollectionChain("chain"))
+
+    def testCollectionChainReplaceConcurrency(self):
+        """Verify that locking via database row locks is working as
+        expected.
+        """
+
+        def blocked_thread_func(registry: SqlRegistry):
+            # This call will become blocked after deleting children, but before
+            # inserting new ones.
+            registry.setCollectionChain("chain", ["a"])
+
+        def unblocked_thread_func(registry: SqlRegistry):
+            registry.setCollectionChain("chain", ["b"])
+
+        registry = self._do_collection_concurrency_test(blocked_thread_func, unblocked_thread_func)
+
+        # blocked_thread_func should have finished first.
+        # unblocked_thread_func should have finished second, overwriting the
+        # chain with "b".
+        self.assertEqual(("b",), registry.getCollectionChain("chain"))
+
+    def _do_collection_concurrency_test(
+        self, blocked_thread_func: Callable[[SqlRegistry]], unblocked_thread_func: Callable[[SqlRegistry]]
+    ) -> SqlRegistry:
+        # This function:
+        # 1. Sets up two registries pointing at the same database.
+        # 2. Start running 'blocked_thread_func' in a background thread,
+        #    arranging for it to become blocked during a critical section in
+        #    the collections manager.
+        # 3. Wait for 'blocked_thread_func' to reach the critical section
+        # 4. Start running 'unblocked_thread_func'.
+        # 5. Allow both functions to run to completion.
+
+        # Set up two registries pointing to the same DB
+        registry1 = self.makeRegistry()
+        assert isinstance(registry1, SqlRegistry)
+        registry2 = self.makeRegistry(share_repo_with=registry1)
+        if registry2 is None:
+            # This will happen for in-memory SQL databases.
+            raise unittest.SkipTest("Testing concurrency requires two connections to the same DB.")
+
+        registry1.registerCollection("chain", CollectionType.CHAINED)
+        for collection in ["a", "b"]:
+            registry1.registerCollection(collection)
+
+        # Arrange for registry1 to block during its critical section, allowing
+        # us to detect this and control when it becomes unblocked.
+        enter_barrier = Barrier(2, timeout=60)
+        exit_barrier = Barrier(2, timeout=60)
+
+        def wait_for_barrier():
+            enter_barrier.wait()
+            exit_barrier.wait()
+
+        registry1._managers.collections._block_for_concurrency_test = wait_for_barrier
+
+        with ThreadPoolExecutor(max_workers=1) as exec1:
+            with ThreadPoolExecutor(max_workers=1) as exec2:
+                future1 = exec1.submit(blocked_thread_func, registry1)
+                enter_barrier.wait()
+
+                # At this point registry 1 has entered the critical section and
+                # is waiting for us to release it.  Start the other thread.
+                future2 = exec2.submit(unblocked_thread_func, registry2)
+                # thread2 should block inside a database call, but we have no
+                # way to detect when it is in this state.
+                time.sleep(0.200)
+
+                # Let the threads run to completion.
+                exit_barrier.wait()
+                future1.result()
+                future2.result()
+
+        return registry1
 
     def testBasicTransaction(self):
         """Test that all operations within a single transaction block are

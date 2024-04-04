@@ -30,15 +30,13 @@ from ... import ddl
 
 __all__ = ()
 
-import itertools
 from abc import abstractmethod
-from collections import namedtuple
 from collections.abc import Iterable, Iterator, Set
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar, cast
 
 import sqlalchemy
 
-from ..._exceptions import MissingCollectionError
+from ..._exceptions import CollectionCycleError, CollectionTypeError, MissingCollectionError
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._collection_type import CollectionType
 from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord, VersionTuple
@@ -77,7 +75,13 @@ def _makeCollectionForeignKey(
     return ddl.ForeignKeySpec("collection", source=(sourceColumnName,), target=(collectionIdName,), **kwargs)
 
 
-CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
+_T = TypeVar("_T")
+
+
+class CollectionTablesTuple(NamedTuple, Generic[_T]):
+    collection: _T
+    run: _T
+    collection_chain: _T
 
 
 def makeRunTableSpec(
@@ -188,7 +192,7 @@ class DefaultCollectionManager(CollectionManager[K]):
     def __init__(
         self,
         db: Database,
-        tables: CollectionTablesTuple,
+        tables: CollectionTablesTuple[sqlalchemy.Table],
         collectionIdName: str,
         *,
         caching_context: CachingContext,
@@ -407,36 +411,170 @@ class DefaultCollectionManager(CollectionManager[K]):
         self, chain: ChainedCollectionRecord[K], children: Iterable[str], flatten: bool = False
     ) -> ChainedCollectionRecord[K]:
         # Docstring inherited from CollectionManager.
-        children_as_wildcard = CollectionWildcard.from_names(children)
-        for record in self.resolve_wildcard(
-            children_as_wildcard,
-            flatten_chains=True,
-            include_chains=True,
-            collection_types={CollectionType.CHAINED},
-        ):
-            if record == chain:
-                raise ValueError(f"Cycle in collection chaining when defining '{chain.name}'.")
+        children = list(children)
+        self._sanity_check_collection_cycles(chain.name, children)
+
         if flatten:
             children = tuple(
-                record.name for record in self.resolve_wildcard(children_as_wildcard, flatten_chains=True)
+                record.name
+                for record in self.resolve_wildcard(
+                    CollectionWildcard.from_names(children), flatten_chains=True
+                )
             )
 
-        rows = []
-        position = itertools.count()
-        names = []
-        for child in self.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False):
-            rows.append(
-                {
-                    "parent": chain.key,
-                    "child": child.key,
-                    "position": next(position),
-                }
-            )
-            names.append(child.name)
+        child_records = self.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False)
+        names = [child.name for child in child_records]
         with self._db.transaction():
+            self._find_and_lock_collection_chain(chain.name)
             self._db.delete(self._tables.collection_chain, ["parent"], {"parent": chain.key})
-            self._db.insert(self._tables.collection_chain, *rows)
+            self._block_for_concurrency_test()
+            self._insert_collection_chain_rows(chain.key, 0, [child.key for child in child_records])
 
         record = ChainedCollectionRecord[K](chain.key, chain.name, children=tuple(names))
         self._addCachedRecord(record)
         return record
+
+    def _sanity_check_collection_cycles(
+        self, parent_collection_name: str, child_collection_names: list[str]
+    ) -> None:
+        """Raise an exception if any of the collections in the ``child_names``
+        list have ``parent_name`` as a child, creating a collection cycle.
+
+        This is only a sanity check, and does not guarantee that no collection
+        cycles are possible.  Concurrent updates might allow collection cycles
+        to be inserted.
+        """
+        for record in self.resolve_wildcard(
+            CollectionWildcard.from_names(child_collection_names),
+            flatten_chains=True,
+            include_chains=True,
+            collection_types={CollectionType.CHAINED},
+        ):
+            if record.name == parent_collection_name:
+                raise CollectionCycleError(
+                    f"Cycle in collection chaining when defining '{parent_collection_name}'."
+                )
+
+    def _insert_collection_chain_rows(
+        self,
+        parent_key: K,
+        starting_position: int,
+        child_keys: list[K],
+    ) -> None:
+        rows = [
+            {
+                "parent": parent_key,
+                "child": child,
+                "position": position,
+            }
+            for position, child in enumerate(child_keys, starting_position)
+        ]
+        self._db.insert(self._tables.collection_chain, *rows)
+
+    def _remove_collection_chain_rows(
+        self,
+        parent_key: K,
+        child_keys: list[K],
+    ) -> None:
+        table = self._tables.collection_chain
+        where = sqlalchemy.and_(table.c.parent == parent_key, table.c.child.in_(child_keys))
+        self._db.deleteWhere(table, where)
+
+    def prepend_collection_chain(
+        self, parent_collection_name: str, child_collection_names: list[str]
+    ) -> None:
+        if self._caching_context.is_enabled:
+            # Avoid having cache-maintenance code around that is unlikely to
+            # ever be used.
+            raise RuntimeError("Chained collection modification not permitted with active caching context.")
+
+        self._sanity_check_collection_cycles(parent_collection_name, child_collection_names)
+
+        child_records = self.resolve_wildcard(
+            CollectionWildcard.from_names(child_collection_names), flatten_chains=False
+        )
+        child_keys = [child.key for child in child_records]
+
+        with self._db.transaction():
+            parent_key = self._find_and_lock_collection_chain(parent_collection_name)
+            self._remove_collection_chain_rows(parent_key, child_keys)
+            starting_position = self._find_lowest_position_in_collection_chain(parent_key) - len(child_keys)
+            self._block_for_concurrency_test()
+            self._insert_collection_chain_rows(parent_key, starting_position, child_keys)
+
+    def _find_lowest_position_in_collection_chain(self, chain_key: K) -> int:
+        """Return the lowest-numbered position in a collection chain, or 0 if
+        the chain is empty.
+        """
+        table = self._tables.collection_chain
+        query = sqlalchemy.select(sqlalchemy.func.min(table.c.position)).where(table.c.parent == chain_key)
+        with self._db.query(query) as cursor:
+            lowest_existing_position = cursor.scalar()
+
+        if lowest_existing_position is None:
+            return 0
+
+        return lowest_existing_position
+
+    def _find_and_lock_collection_chain(self, collection_name: str) -> K:
+        """
+        Take a row lock on the specified collection's row in the collections
+        table, and return the collection's primary key.
+
+        This lock is used to synchronize updates to collection chains.
+
+        The locking strategy requires cooperation from everything modifying the
+        collection chain table -- all operations that modify collection chains
+        must obtain this lock first.  The database will NOT automatically
+        prevent modification of tables based on this lock.  The only guarantee
+        is that only one caller will be allowed to hold this lock for a given
+        collection at a time.  Concurrent calls will block until the caller
+        holding the lock has completed its transaction.
+
+        Parameters
+        ----------
+        collection_name : `str`
+            Name of the collection whose chain is being modified.
+
+        Returns
+        -------
+        id : ``K``
+            The primary key for the given collection.
+
+        Raises
+        ------
+        MissingCollectionError
+            If the specified collection is not in the database table.
+        CollectionTypeError
+            If the specified collection is not a chained collection.
+        """
+        assert self._db.isInTransaction(), (
+            "Row locks are only held until the end of the current transaction,"
+            " so it makes no sense to take a lock outside a transaction."
+        )
+        assert self._db.isWriteable(), "Collection row locks are only useful for write operations."
+
+        query = self._select_pkey_by_name(collection_name).with_for_update()
+        with self._db.query(query) as cursor:
+            rows = cursor.all()
+
+        if len(rows) == 0:
+            raise MissingCollectionError(
+                f"Parent collection {collection_name} not found when updating collection chain."
+            )
+        assert len(rows) == 1, "There should only be one entry for each collection in collection table."
+        r = rows[0]._mapping
+        if r["type"] != CollectionType.CHAINED:
+            raise CollectionTypeError(f"Parent collection {collection_name} is not a chained collection.")
+        return r["key"]
+
+    @abstractmethod
+    def _select_pkey_by_name(self, collection_name: str) -> sqlalchemy.Select:
+        """Return a SQLAlchemy select statement that will return columns from
+        the one row in the ``collection` table matching the given name.  The
+        select statement includes two columns:
+
+        - ``key`` : the primary key for the collection
+        - ``type`` : the collection type
+        """
+        raise NotImplementedError()

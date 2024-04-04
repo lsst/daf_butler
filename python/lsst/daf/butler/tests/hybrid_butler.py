@@ -452,3 +452,8 @@ class HybridButler(Butler):
         return self._direct_butler._extract_all_dimension_records_from_data_ids(
             source_butler, data_ids, allowed_elements
         )
+
+    def prepend_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        return self._direct_butler.prepend_collection_chain(parent_collection_name, child_collection_names)

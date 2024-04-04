@@ -63,7 +63,9 @@ _VERSION = VersionTuple(2, 0, 0)
 _LOG = logging.getLogger(__name__)
 
 
-def _makeTableSpecs(TimespanReprClass: type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
+def _makeTableSpecs(
+    TimespanReprClass: type[TimespanDatabaseRepresentation],
+) -> CollectionTablesTuple[ddl.TableSpec]:
     return CollectionTablesTuple(
         collection=ddl.TableSpec(
             fields=[
@@ -299,6 +301,12 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
             records.append(record)
 
         return records
+
+    def _select_pkey_by_name(self, collection_name: str) -> sqlalchemy.Select:
+        table = self._tables.collection
+        return sqlalchemy.select(table.c.collection_id.label("key"), table.c.type).where(
+            table.c.name == collection_name
+        )
 
     @classmethod
     def currentVersions(cls) -> list[VersionTuple]:

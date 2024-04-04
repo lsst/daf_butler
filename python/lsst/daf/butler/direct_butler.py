@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, TextIO, cast
 
 from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of
+from lsst.utils.iteration import ensure_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from sqlalchemy.exc import IntegrityError
 
@@ -2140,6 +2141,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     def _preload_cache(self) -> None:
         """Immediately load caches that are used for common operations."""
         self._registry.preload_cache()
+
+    def prepend_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        return self._registry._managers.collections.prepend_collection_chain(
+            parent_collection_name, list(ensure_iterable(child_collection_names))
+        )
 
     _config: ButlerConfig
     """Configuration for this Butler instance."""

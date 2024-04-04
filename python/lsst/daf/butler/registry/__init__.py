@@ -27,7 +27,12 @@
 
 # Re-export some top-level exception types for backwards compatibility -- these
 # used to be part of registry.
-from .._exceptions import DimensionNameError, MissingCollectionError, MissingDatasetTypeError
+from .._exceptions import (
+    CollectionTypeError,
+    DimensionNameError,
+    MissingCollectionError,
+    MissingDatasetTypeError,
+)
 from .._exceptions_legacy import CollectionError, DataIdError, DatasetTypeError, RegistryError
 
 # Registry imports.

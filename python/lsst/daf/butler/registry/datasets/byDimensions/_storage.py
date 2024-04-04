@@ -44,11 +44,12 @@ from ...._column_tags import DatasetColumnTag, DimensionKeyColumnTag
 from ...._column_type_info import LogicalColumn
 from ...._dataset_ref import DatasetId, DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ...._dataset_type import DatasetType
+from ...._exceptions import CollectionTypeError
 from ...._timespan import Timespan
 from ....dimensions import DataCoordinate
 from ..._collection_summary import CollectionSummary
 from ..._collection_type import CollectionType
-from ..._exceptions import CollectionTypeError, ConflictingDefinitionError
+from ..._exceptions import ConflictingDefinitionError
 from ...interfaces import DatasetRecordStorage
 from ...queries import SqlQueryContext
 from .tables import makeTagTableSpec

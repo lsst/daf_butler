@@ -621,8 +621,15 @@ class SqlRegistry:
         lsst.daf.butler.registry.CollectionTypeError
             Raised if ``parent`` does not correspond to a
             `~CollectionType.CHAINED` collection.
-        ValueError
+        CollectionCycleError
             Raised if the given collections contains a cycle.
+
+        Notes
+        -----
+        If this function is called within a call to ``Butler.transaction``, it
+        will hold a lock that prevents other processes from modifying the
+        parent collection until the end of the transaction.  Keep these
+        transactions short.
         """
         record = self._managers.collections.find(parent)
         if record.type is not CollectionType.CHAINED:
