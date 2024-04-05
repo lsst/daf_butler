@@ -1388,6 +1388,22 @@ class ButlerTests(ButlerPutGetTests):
         get_ref = reader_butler.get_dataset(put_ref.id)
         self.assertEqual(get_ref.id, put_ref.id)
 
+    def testCollectionChainRedefine(self):
+        butler = self._setup_to_test_collection_chain()
+
+        butler.redefine_collection_chain("chain", "a")
+        self._check_chain(butler, ["a"])
+
+        # Duplicates are removed from the list of children
+        butler.redefine_collection_chain("chain", ["c", "b", "c"])
+        self._check_chain(butler, ["c", "b"])
+
+        # Empty list clears the chain
+        butler.redefine_collection_chain("chain", [])
+        self._check_chain(butler, [])
+
+        self._test_common_chain_functionality(butler, butler.redefine_collection_chain)
+
     def testCollectionChainPrepend(self):
         butler = self._setup_to_test_collection_chain()
 
@@ -1407,12 +1423,6 @@ class ButlerTests(ButlerPutGetTests):
         # their current position.
         butler.prepend_collection_chain("chain", ["d", "b", "c"])
         self._check_chain(butler, ["d", "b", "c", "a"])
-
-        # Prevent collection cycles
-        butler.registry.registerCollection("chain2", CollectionType.CHAINED)
-        butler.prepend_collection_chain("chain2", "chain")
-        with self.assertRaises(CollectionCycleError):
-            butler.prepend_collection_chain("chain", "chain2")
 
         self._test_common_chain_functionality(butler, butler.prepend_collection_chain)
 

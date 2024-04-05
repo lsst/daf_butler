@@ -635,7 +635,7 @@ class SqlRegistry:
         if flatten:
             children = self.queryCollections(children, flattenChains=True)
 
-        self._managers.collections.update_chain(parent, list(children))
+        self._managers.collections.update_chain(parent, list(children), allow_use_in_caching_context=True)
 
     def getCollectionParentChains(self, collection: str) -> set[str]:
         """Return the CHAINED collections that directly contain the given one.

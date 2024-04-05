@@ -607,7 +607,12 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def update_chain(self, parent_collection_name: str, child_collection_names: list[str]) -> None:
+    def update_chain(
+        self,
+        parent_collection_name: str,
+        child_collection_names: list[str],
+        allow_use_in_caching_context: bool = False,
+    ) -> None:
         """Replace all of the children in a chained collection with a new list.
 
         Parameters
@@ -617,6 +622,10 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         child_collection_names : `list` [ `str ` ]
             A child collection name or list of child collection names to be
             assigned to the parent.
+        allow_use_in_caching_context : `bool`, optional
+            If `True`, skip a check that would otherwise disallow this function
+            from being called inside an active caching context.
+            (Only exists for legacy use, will eventually be removed).
 
         Raises
         ------

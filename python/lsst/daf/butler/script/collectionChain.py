@@ -107,7 +107,7 @@ def _modify_collection_chain(butler: Butler, mode: str, parent: str, children: I
     if mode == "prepend":
         butler.prepend_collection_chain(parent, children)
     elif mode == "redefine":
-        butler.registry.setCollectionChain(parent, children)
+        butler.redefine_collection_chain(parent, children)
     elif mode == "remove":
         butler.remove_from_collection_chain(parent, children)
     elif mode == "pop":

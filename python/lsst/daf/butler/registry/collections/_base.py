@@ -408,7 +408,12 @@ class DefaultCollectionManager(CollectionManager[K]):
         """
         raise NotImplementedError()
 
-    def update_chain(self, parent_collection_name: str, child_collection_names: list[str]) -> None:
+    def update_chain(
+        self,
+        parent_collection_name: str,
+        child_collection_names: list[str],
+        allow_use_in_caching_context: bool = False,
+    ) -> None:
         with self._modify_collection_chain(
             parent_collection_name,
             child_collection_names,
@@ -416,7 +421,7 @@ class DefaultCollectionManager(CollectionManager[K]):
             # called within caching contexts.  (At least in Butler.import_ and
             # possibly other places.)  So, unlike the other collection chain
             # modification methods, it has to update the collection cache.
-            skip_caching_check=True,
+            skip_caching_check=allow_use_in_caching_context,
         ) as c:
             self._db.delete(self._tables.collection_chain, ["parent"], {"parent": c.parent_key})
             self._block_for_concurrency_test()

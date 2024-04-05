@@ -453,6 +453,11 @@ class HybridButler(Butler):
             source_butler, data_ids, allowed_elements
         )
 
+    def redefine_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        return self._direct_butler.redefine_collection_chain(parent_collection_name, child_collection_names)
+
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:

@@ -1737,6 +1737,39 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
+    def redefine_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        """Replace the contents of a CHAINED collection with new children.
+
+        Parameters
+        ----------
+        parent_collection_name : `str`
+            The name of a CHAINED collection to which we will assign new
+            children.
+        child_collection_names : `Iterable` [ `str ` ] | `str`
+            A child collection name or list of child collection names to be
+            added to the parent.
+
+        Raises
+        ------
+        MissingCollectionError
+            If any of the specified collections do not exist.
+        CollectionTypeError
+            If the parent collection is not a CHAINED collection.
+        CollectionCycleError
+            If this operation would create a collection cycle.
+
+        Notes
+        -----
+        If this function is called within a call to ``Butler.transaction``, it
+        will hold a lock that prevents other processes from modifying the
+        parent collection until the end of the transaction.  Keep these
+        transactions short.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:

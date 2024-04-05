@@ -2149,6 +2149,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         """Immediately load caches that are used for common operations."""
         self._registry.preload_cache()
 
+    def redefine_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        self._registry._managers.collections.update_chain(
+            parent_collection_name, list(ensure_iterable(child_collection_names))
+        )
+
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:
