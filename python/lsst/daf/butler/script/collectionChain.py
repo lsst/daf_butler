@@ -114,9 +114,7 @@ def _modify_collection_chain(butler: Butler, mode: str, parent: str, children: I
         children_to_pop = _find_children_to_pop(butler, parent, children)
         butler.remove_from_collection_chain(parent, children_to_pop)
     elif mode == "extend":
-        current = list(butler.registry.getCollectionChain(parent))
-        current.extend(children)
-        butler.registry.setCollectionChain(parent, current)
+        butler.extend_collection_chain(parent, children)
     else:
         raise ValueError(f"Unrecognized update mode: '{mode}'")
 

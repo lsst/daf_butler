@@ -31,9 +31,9 @@ from ... import ddl
 __all__ = ()
 
 from abc import abstractmethod
-from collections.abc import Iterable, Iterator, Set
+from collections.abc import Callable, Iterable, Iterator, Set
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, Literal, NamedTuple, TypeVar, cast
 
 import sqlalchemy
 
@@ -429,11 +429,24 @@ class DefaultCollectionManager(CollectionManager[K]):
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: list[str]
     ) -> None:
+        self._add_to_collection_chain(
+            parent_collection_name, child_collection_names, self._find_prepend_position
+        )
+
+    def extend_collection_chain(self, parent_collection_name: str, child_collection_names: list[str]) -> None:
+        self._add_to_collection_chain(
+            parent_collection_name, child_collection_names, self._find_extend_position
+        )
+
+    def _add_to_collection_chain(
+        self,
+        parent_collection_name: str,
+        child_collection_names: list[str],
+        position_func: Callable[[_CollectionChainModificationContext], int],
+    ) -> None:
         with self._modify_collection_chain(parent_collection_name, child_collection_names) as c:
             self._remove_collection_chain_rows(c.parent_key, c.child_keys)
-            starting_position = self._find_lowest_position_in_collection_chain(c.parent_key) - len(
-                c.child_keys
-            )
+            starting_position = position_func(c)
             self._block_for_concurrency_test()
             self._insert_collection_chain_rows(c.parent_key, starting_position, c.child_keys)
 
@@ -511,6 +524,21 @@ class DefaultCollectionManager(CollectionManager[K]):
             }
             for position, child in enumerate(child_keys, starting_position)
         ]
+
+        # It's possible for the DB to raise an exception for the integers being
+        # out of range here.  The position column is only a 16-bit number.
+        # Even if there aren't an unreasonably large number of children in the
+        # collection, a series of many deletes and insertions could cause the
+        # space to become fragmented.
+        #
+        # If this ever actually happens, we should consider doing a migration
+        # to increase the position column to a 32-bit number.
+        # To fix it in the short term, you can re-write the collection chain to
+        # defragment it by doing something like:
+        # registry.setCollectionChain(
+        #     parent,
+        #     registry.getCollectionChain(parent)
+        # )
         self._db.insert(self._tables.collection_chain, *rows)
 
     def _remove_collection_chain_rows(
@@ -522,19 +550,39 @@ class DefaultCollectionManager(CollectionManager[K]):
         where = sqlalchemy.and_(table.c.parent == parent_key, table.c.child.in_(child_keys))
         self._db.deleteWhere(table, where)
 
-    def _find_lowest_position_in_collection_chain(self, chain_key: K) -> int:
-        """Return the lowest-numbered position in a collection chain, or 0 if
-        the chain is empty.
+    def _find_prepend_position(self, c: _CollectionChainModificationContext) -> int:
+        """Return the position where children can be inserted to
+        prepend them to a collection chain.
+        """
+        return self._find_position_in_collection_chain(c.parent_key, "begin") - len(c.child_keys)
+
+    def _find_extend_position(self, c: _CollectionChainModificationContext) -> int:
+        """Return the position where children can be inserted to append them to
+        a collection chain.
+        """
+        return self._find_position_in_collection_chain(c.parent_key, "end") + 1
+
+    def _find_position_in_collection_chain(self, chain_key: K, begin_or_end: Literal["begin", "end"]) -> int:
+        """Return the lowest or highest numbered position in a collection
+        chain, or 0 if the chain is empty.
         """
         table = self._tables.collection_chain
-        query = sqlalchemy.select(sqlalchemy.func.min(table.c.position)).where(table.c.parent == chain_key)
-        with self._db.query(query) as cursor:
-            lowest_existing_position = cursor.scalar()
 
-        if lowest_existing_position is None:
+        func: sqlalchemy.Function
+        match (begin_or_end):
+            case "begin":
+                func = sqlalchemy.func.min(table.c.position)
+            case "end":
+                func = sqlalchemy.func.max(table.c.position)
+
+        query = sqlalchemy.select(func).where(table.c.parent == chain_key)
+        with self._db.query(query) as cursor:
+            position = cursor.scalar()
+
+        if position is None:
             return 0
 
-        return lowest_existing_position
+        return position
 
     def _find_and_lock_collection_chain(self, collection_name: str) -> K:
         """
