@@ -168,7 +168,7 @@ class LogCliRunner(click.testing.CliRunner):
     `CliLog.defaultLsstLogLevel`.
     """
 
-    def invoke(self, *args: Any, **kwargs: Any) -> Any:
+    def invoke(self, *args: Any, **kwargs: Any) -> click.testing.Result:
         result = super().invoke(*args, **kwargs)
         CliLog.resetLog()
         return result

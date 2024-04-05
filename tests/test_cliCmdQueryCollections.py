@@ -299,6 +299,10 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
 
             self.assertChain(["--mode", "pop", "chain1", "--", "-1", "-3"], "[calibration1, run1, run3]")
 
+            # Out-of-bounds index
+            result = self.runner.invoke(cli, ["collection-chain", "here", "--mode", "pop", "chain1", "10"])
+            self.assertEqual(result.exit_code, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
