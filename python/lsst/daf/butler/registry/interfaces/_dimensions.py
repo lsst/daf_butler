@@ -29,7 +29,7 @@ from __future__ import annotations
 __all__ = ("DimensionRecordStorageManager",)
 
 from abc import abstractmethod
-from collections.abc import Set
+from collections.abc import Iterable, Set
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.relation import Join, Relation
@@ -46,7 +46,9 @@ from ...dimensions.record_cache import DimensionRecordCache
 from ._versioning import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from .. import queries
+    from ...direct_query_driver import QueryBuilder, QueryJoiner  # Future query system (direct,server).
+    from ...queries.tree import Predicate  # Future query system (direct,client,server).
+    from .. import queries  # Old Registry.query* system.
     from ._database import Database, StaticTablesContext
 
 
@@ -354,6 +356,80 @@ class DimensionRecordStorageManager(VersionedExtension):
         needs_refinement : `bool`
             Whether the returned relation represents a conservative join that
             needs refinement via native-iteration predicate.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_query_joiner(self, element: DimensionElement, fields: Set[str]) -> QueryJoiner:
+        """Make a `..direct_query_driver.QueryJoiner` that represents a
+        dimension element table.
+
+        Parameters
+        ----------
+        element : `DimensionElement`
+            Dimension element the table corresponds to.
+        fields : `~collections.abc.Set` [ `str` ]
+            Names of fields to make available in the joiner.  These can be any
+            metadata or alternate key field in the element's schema, including
+            the special ``region`` and ``timespan`` fields. Dimension keys in
+            the element's schema are always included.
+
+        Returns
+        -------
+        joiner : `..direct_query_driver.QueryJoiner`
+            A query-construction object representing a table or subquery.  This
+            is guaranteed to have rows that are unique over dimension keys and
+            all possible key values for this dimension, so joining in a
+            dimension element table:
+
+             - never introduces duplicates into the query's result rows;
+             - never restricts the query's rows *except* to ensure
+               required-implied relationships are followed.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def process_query_overlaps(
+        self,
+        dimensions: DimensionGroup,
+        predicate: Predicate,
+        join_operands: Iterable[DimensionGroup],
+    ) -> tuple[Predicate, QueryBuilder]:
+        """Process a query's WHERE predicate and dimensions to handle spatial
+        and temporal overlaps.
+
+        Parameters
+        ----------
+        dimensions : `..dimensions.DimensionGroup`
+            Full dimensions of all tables to be joined into the query (even if
+            they are not included in the query results).
+        predicate : `..queries.tree.Predicate`
+            Boolean column expression that may contain user-provided  spatial
+            and/or temporal overlaps intermixed with other constraints.
+        join_operands : `~collections.abc.Iterable` [ \
+                `..dimensions.DimensionGroup` ]
+            Dimensions of tables or subqueries that are already going to be
+            joined into the query that may establish their own spatial or
+            temporal relationships (e.g. a dataset search with both ``visit``
+            and ``patch`` dimensions).
+
+        Returns
+        -------
+        predicate : `..queries.tree.Predicate`
+            A version of the given predicate that preserves the overall
+            behavior of the filter while possibly rewriting overlap expressions
+            that have been partially moved into ``builder`` as some combination
+            of new nested predicates, joins, and postprocessing.
+        builder : `..direct_query_driver.QueryBuilder`
+            A query-construction helper object that includes any initial joins
+            and postprocessing needed to handle overlap expression extracted
+            from the original predicate.
+
+        Notes
+        -----
+        Implementations must delegate to `.queries.overlaps.OverlapsVisitor`
+        (possibly by subclassing it) to ensure "automatic" spatial and temporal
+        joins are added consistently by all query-construction implementations.
         """
         raise NotImplementedError()
 

@@ -29,8 +29,9 @@ from __future__ import annotations
 
 __all__ = ("ExpressionFactory", "ExpressionProxy", "ScalarExpressionProxy", "TimespanProxy", "RegionProxy")
 
+from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from lsst.sphgeom import Region
 
@@ -46,18 +47,10 @@ if TYPE_CHECKING:
 # we don't need to overload any operators or define any methods on those.
 
 
-class ExpressionProxy:
+class ExpressionProxy(ABC):
     """A wrapper for column expressions that overloads comparison operators
     to return new expression proxies.
-
-    Parameters
-    ----------
-    expression : `tree.ColumnExpression`
-        Underlying expression object.
     """
-
-    def __init__(self, expression: tree.ColumnExpression):
-        self._expression = expression
 
     def __repr__(self) -> str:
         return str(self._expression)
@@ -76,6 +69,11 @@ class ExpressionProxy:
 
     def _make_comparison(self, other: object, operator: tree.ComparisonOperator) -> tree.Predicate:
         return tree.Predicate.compare(a=self._expression, b=self._make_expression(other), operator=operator)
+
+    @property
+    @abstractmethod
+    def _expression(self) -> tree.ColumnExpression:
+        raise NotImplementedError()
 
 
 class ScalarExpressionProxy(ExpressionProxy):
@@ -107,55 +105,55 @@ class ScalarExpressionProxy(ExpressionProxy):
         return self._make_comparison(other, ">=")
 
     def __neg__(self) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(tree.UnaryExpression(operand=self._expression, operator="-"))
+        return ResolvedScalarExpressionProxy(tree.UnaryExpression(operand=self._expression, operator="-"))
 
     def __add__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._expression, b=self._make_expression(other), operator="+")
         )
 
     def __radd__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._make_expression(other), b=self._expression, operator="+")
         )
 
     def __sub__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._expression, b=self._make_expression(other), operator="-")
         )
 
     def __rsub__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._make_expression(other), b=self._expression, operator="-")
         )
 
     def __mul__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._expression, b=self._make_expression(other), operator="*")
         )
 
     def __rmul__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._make_expression(other), b=self._expression, operator="*")
         )
 
     def __truediv__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._expression, b=self._make_expression(other), operator="/")
         )
 
     def __rtruediv__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._make_expression(other), b=self._expression, operator="/")
         )
 
     def __mod__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._expression, b=self._make_expression(other), operator="%")
         )
 
     def __rmod__(self, other: object) -> ScalarExpressionProxy:
-        return ScalarExpressionProxy(
+        return ResolvedScalarExpressionProxy(
             tree.BinaryExpression(a=self._make_expression(other), b=self._expression, operator="%")
         )
 
@@ -216,18 +214,48 @@ class ScalarExpressionProxy(ExpressionProxy):
         return tree.Predicate.in_query(self._expression, column._expression, query._tree)
 
 
+class ResolvedScalarExpressionProxy(ScalarExpressionProxy):
+    """A `ScalarExpressionProxy` backed by an actual expression.
+
+    Parameters
+    ----------
+    expression : `.tree.ColumnExpression`
+        Expression that backs this proxy.
+    """
+
+    def __init__(self, expression: tree.ColumnExpression):
+        self._expr = expression
+
+    @property
+    def _expression(self) -> tree.ColumnExpression:
+        return self._expr
+
+
 class TimespanProxy(ExpressionProxy):
-    """An `ExpressionProxy` specialized for timespan columns and literals."""
+    """An `ExpressionProxy` specialized for timespan columns and literals.
+
+    Parameters
+    ----------
+    expression : `.tree.ColumnExpression`
+        Expression that backs this proxy.
+    """
+
+    def __init__(self, expression: tree.ColumnExpression):
+        self._expr = expression
 
     @property
-    def begin(self) -> ExpressionProxy:
+    def begin(self) -> ScalarExpressionProxy:
         """An expression representing the lower bound (inclusive)."""
-        return ExpressionProxy(tree.UnaryExpression(operand=self._expression, operator="begin_of"))
+        return ResolvedScalarExpressionProxy(
+            tree.UnaryExpression(operand=self._expression, operator="begin_of")
+        )
 
     @property
-    def end(self) -> ExpressionProxy:
+    def end(self) -> ScalarExpressionProxy:
         """An expression representing the upper bound (exclusive)."""
-        return ExpressionProxy(tree.UnaryExpression(operand=self._expression, operator="end_of"))
+        return ResolvedScalarExpressionProxy(
+            tree.UnaryExpression(operand=self._expression, operator="end_of")
+        )
 
     def overlaps(self, other: TimespanProxy | Timespan) -> tree.Predicate:
         """Return a boolean expression representing an overlap test between
@@ -245,9 +273,22 @@ class TimespanProxy(ExpressionProxy):
         """
         return self._make_comparison(other, "overlaps")
 
+    @property
+    def _expression(self) -> tree.ColumnExpression:
+        return self._expr
+
 
 class RegionProxy(ExpressionProxy):
-    """An `ExpressionProxy` specialized for region columns and literals."""
+    """An `ExpressionProxy` specialized for region columns and literals.
+
+    Parameters
+    ----------
+    expression : `.tree.ColumnExpression`
+        Expression that backs this proxy.
+    """
+
+    def __init__(self, expression: tree.ColumnExpression):
+        self._expr = expression
 
     def overlaps(self, other: RegionProxy | Region) -> tree.Predicate:
         """Return a boolean expression representing an overlap test between
@@ -265,8 +306,12 @@ class RegionProxy(ExpressionProxy):
         """
         return self._make_comparison(other, "overlaps")
 
+    @property
+    def _expression(self) -> tree.ColumnExpression:
+        return self._expr
 
-class DimensionElementProxy:
+
+class DimensionElementProxy(ScalarExpressionProxy):
     """An expression-creation proxy for a dimension element logical table.
 
     Parameters
@@ -283,60 +328,51 @@ class DimensionElementProxy:
     def __init__(self, element: DimensionElement):
         self._element = element
 
+    @property
+    def _expression(self) -> tree.ColumnExpression:
+        if isinstance(self._element, Dimension):
+            return tree.DimensionKeyReference(dimension=self._element)
+        else:
+            raise TypeError(f"Proxy expression {self!r} is does not resolve to a column.")
+
     def __repr__(self) -> str:
         return self._element.name
 
-    def __getattr__(self, field: str) -> ExpressionProxy:
+    def __getattr__(self, field: str) -> ScalarExpressionProxy:
         if field in self._element.schema.dimensions.names:
-            return DimensionProxy(self._element.dimensions[field])
+            if field not in self._element.dimensions.names:
+                # This is a dimension self-reference, like visit.id.
+                return self
+            return DimensionElementProxy(self._element.dimensions[field])
         try:
             expression = tree.DimensionFieldReference(element=self._element, field=field)
         except tree.InvalidQueryError:
             raise AttributeError(field)
-        match expression.column_type:
-            case "region":
-                return RegionProxy(expression)
-            case "timespan":
-                return TimespanProxy(expression)
-        return ScalarExpressionProxy(expression)
+        return ResolvedScalarExpressionProxy(expression)
+
+    @property
+    def region(self) -> RegionProxy:
+        try:
+            expression = tree.DimensionFieldReference(element=self._element, field="region")
+        except tree.InvalidQueryError:
+            raise AttributeError("region")
+        return RegionProxy(expression)
+
+    @property
+    def timespan(self) -> TimespanProxy:
+        try:
+            expression = tree.DimensionFieldReference(element=self._element, field="timespan")
+        except tree.InvalidQueryError:
+            raise AttributeError("timespan")
+        return TimespanProxy(expression)
 
     def __dir__(self) -> list[str]:
-        result = list(super().__dir__())
+        # We only want timespan and region to appear in dir() for elements that
+        # have them, but we can't implement them in getattr without muddling
+        # the type annotations.
+        result = [entry for entry in super().__dir__() if entry != "timespan" and entry != "region"]
         result.extend(self._element.schema.names)
         return result
-
-
-class DimensionProxy(ScalarExpressionProxy, DimensionElementProxy):
-    """An expression-creation proxy for a dimension logical table.
-
-    Parameters
-    ----------
-    dimension : `Dimension`
-        Dimension this object wraps.
-
-    Notes
-    -----
-    This class combines record-field attribute access from `DimensionElement`
-    proxy with direct interpretation as a dimension key column via
-    `ScalarExpressionProxy`.  For example::
-
-        x = query.expression_factory
-        query.where(
-            x.detector.purpose == "SCIENCE",  # field access
-            x.detector > 100,  # direct usage as an expression
-        )
-    """
-
-    def __init__(self, dimension: Dimension):
-        ScalarExpressionProxy.__init__(self, tree.DimensionKeyReference(dimension=dimension))
-        DimensionElementProxy.__init__(self, dimension)
-
-    def __getattr__(self, field: str) -> ExpressionProxy:
-        if field == self._element.primary_key.name:
-            return self
-        return super().__getattr__(field)
-
-    _element: Dimension
 
 
 class DatasetTypeProxy:
@@ -364,18 +400,25 @@ class DatasetTypeProxy:
     # and __dir__ to avoid repeating the list.  And someday they might expand
     # to include Datastore record fields.
 
-    def __getattr__(self, field: str) -> ExpressionProxy:
+    def __getattr__(self, field: str) -> ScalarExpressionProxy:
         if field not in tree.DATASET_FIELD_NAMES:
             raise AttributeError(field)
         expression = tree.DatasetFieldReference(dataset_type=self._dataset_type, field=field)
-        match expression.column_type:
-            case "timespan":
-                return TimespanProxy(expression)
-        return ScalarExpressionProxy(expression)
+        return ResolvedScalarExpressionProxy(expression)
+
+    @property
+    def timespan(self) -> TimespanProxy:
+        try:
+            expression = tree.DimensionFieldReference(element=self._element, field="timespan")
+        except tree.InvalidQueryError:
+            raise AttributeError("timespan")
+        return TimespanProxy(expression)
 
     def __dir__(self) -> list[str]:
         result = list(super().__dir__())
-        result.extend(tree.DATASET_FIELD_NAMES)
+        # "timespan" will be added by delegation to super() and we don't want
+        # it to appear twice.
+        result.extend(name for name in tree.DATASET_FIELD_NAMES if name != "timespan")
         return result
 
 
@@ -397,9 +440,10 @@ class ExpressionFactory:
         self._universe = universe
 
     def __getattr__(self, name: str) -> DimensionElementProxy:
-        element = self._universe.elements[name]
-        if element in self._universe.dimensions:
-            return DimensionProxy(cast(Dimension, element))
+        try:
+            element = self._universe.elements[name]
+        except KeyError:
+            raise AttributeError(name)
         return DimensionElementProxy(element)
 
     def __getitem__(self, name: str) -> DatasetTypeProxy:
@@ -483,7 +527,7 @@ class ExpressionFactory:
             case "bool":
                 raise NotImplementedError("Boolean literals are not supported.")
             case _:
-                return ScalarExpressionProxy(expression)
+                return ResolvedScalarExpressionProxy(expression)
 
     @staticmethod
     def unwrap(proxy: ExpressionProxy) -> tree.ColumnExpression:

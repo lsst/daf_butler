@@ -53,6 +53,7 @@ from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
 from ._timespan import Timespan
+from .name_shrinker import NameShrinker
 
 ColumnType: TypeAlias = Literal[
     "int", "string", "hash", "float", "datetime", "bool", "uuid", "timespan", "region"
@@ -79,11 +80,14 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         description="Whether the column may be ``NULL``.",
     )
 
-    def to_sql_spec(self, **kwargs: Any) -> ddl.FieldSpec:
+    def to_sql_spec(self, name_shrinker: NameShrinker | None = None, **kwargs: Any) -> ddl.FieldSpec:
         """Convert this specification to a SQL-specific one.
 
         Parameters
         ----------
+        name_shrinker : `NameShrinker`, optional
+            Object that should be used to shrink the field name to ensure it
+            fits within database-specific limits.
         **kwargs
             Forwarded to `ddl.FieldSpec`.
 
@@ -92,7 +96,10 @@ class _BaseColumnSpec(pydantic.BaseModel, ABC):
         sql_spec : `ddl.FieldSpec`
             A SQL-specific version of this specification.
         """
-        return ddl.FieldSpec(name=self.name, dtype=ddl.VALID_CONFIG_COLUMN_TYPES[self.type], **kwargs)
+        name = self.name
+        if name_shrinker is not None:
+            name = name_shrinker.shrink(name)
+        return ddl.FieldSpec(name=name, dtype=ddl.VALID_CONFIG_COLUMN_TYPES[self.type], **kwargs)
 
     @abstractmethod
     def to_arrow(self) -> arrow_utils.ToArrow:
@@ -162,9 +169,9 @@ class StringColumnSpec(_BaseColumnSpec):
     length: int
     """Maximum length of strings."""
 
-    def to_sql_spec(self, **kwargs: Any) -> ddl.FieldSpec:
+    def to_sql_spec(self, name_shrinker: NameShrinker | None = None, **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited.
-        return super().to_sql_spec(length=self.length, **kwargs)
+        return super().to_sql_spec(length=self.length, name_shrinker=name_shrinker, **kwargs)
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.
@@ -182,9 +189,9 @@ class HashColumnSpec(_BaseColumnSpec):
     nbytes: int
     """Number of bytes for the hash."""
 
-    def to_sql_spec(self, **kwargs: Any) -> ddl.FieldSpec:
+    def to_sql_spec(self, name_shrinker: NameShrinker | None = None, **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited.
-        return super().to_sql_spec(nbytes=self.nbytes, **kwargs)
+        return super().to_sql_spec(nbytes=self.nbytes, name_shrinker=name_shrinker, **kwargs)
 
     def to_arrow(self) -> arrow_utils.ToArrow:
         # Docstring inherited.

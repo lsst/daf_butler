@@ -29,6 +29,7 @@ from __future__ import annotations
 __all__ = ["NameShrinker"]
 
 import hashlib
+from collections.abc import Iterator
 
 
 class NameShrinker:
@@ -97,3 +98,20 @@ class NameShrinker:
             or was not modified by it, it is returned unmodified.
         """
         return self._by_shrunk.get(shrunk, shrunk)
+
+    def __iter__(self) -> Iterator[tuple[str, str]]:
+        return iter(self._by_original.items())
+
+    def __len__(self) -> int:
+        return len(self._by_original)
+
+    def update(self, other: NameShrinker) -> None:
+        """Add all original <-> shrunk mappings from ``other`` to ``self``.
+
+        Parameters
+        ----------
+        other : `NameShrinker`
+            Object to extract name mappings from.
+        """
+        self._by_original.update(other._by_original)
+        self._by_shrunk.update(other._by_shrunk)

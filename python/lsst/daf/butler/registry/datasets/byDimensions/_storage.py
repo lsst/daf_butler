@@ -47,11 +47,13 @@ from ...._dataset_type import DatasetType
 from ...._exceptions import CollectionTypeError
 from ...._timespan import Timespan
 from ....dimensions import DataCoordinate
+from ....direct_query_driver import QueryBuilder, QueryJoiner  # new query system, server+direct only
+from ....queries import tree as qt  # new query system, both clients + server
 from ..._collection_summary import CollectionSummary
 from ..._collection_type import CollectionType
 from ..._exceptions import ConflictingDefinitionError
 from ...interfaces import DatasetRecordStorage
-from ...queries import SqlQueryContext
+from ...queries import SqlQueryContext  # old registry query system
 from .tables import makeTagTableSpec
 
 if TYPE_CHECKING:
@@ -552,6 +554,199 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             parameters={record.name: rank for record, rank in collections},
         )
         return leaf
+
+    def make_query_joiner(self, collections: Sequence[CollectionRecord], fields: Set[str]) -> QueryJoiner:
+        # This method largely mimics `make_relation`, but it uses the new query
+        # system primitives instead of the old one.  In terms of the SQL
+        # queries it builds, there are two more main differences:
+        #
+        # - Collection and run columns are now string names rather than IDs.
+        #   This insulates the query result-processing code from collection
+        #   caching and the collection manager subclass details.
+        #
+        # - The subquery always has unique rows, which is achieved by using
+        #   SELECT DISTINCT when necessary.
+        #
+        collection_types = {collection.type for collection in collections}
+        assert CollectionType.CHAINED not in collection_types, "CHAINED collections must be flattened."
+        #
+        # There are two kinds of table in play here:
+        #
+        #  - the static dataset table (with the dataset ID, dataset type ID,
+        #    run ID/name, and ingest date);
+        #
+        #  - the dynamic tags/calibs table (with the dataset ID, dataset type
+        #    type ID, collection ID/name, data ID, and possibly validity
+        #    range).
+        #
+        # That means that we might want to return a query against either table
+        # or a JOIN of both, depending on which quantities the caller wants.
+        # But the data ID is always included, which means we'll always include
+        # the tags/calibs table and join in the static dataset table only if we
+        # need things from it that we can't get from the tags/calibs table.
+        #
+        # Note that it's important that we include a WHERE constraint on both
+        # tables for any column (e.g. dataset_type_id) that is in both when
+        # it's given explicitly; not doing can prevent the query planner from
+        # using very important indexes.  At present, we don't include those
+        # redundant columns in the JOIN ON expression, however, because the
+        # FOREIGN KEY (and its index) are defined only on dataset_id.
+        columns = qt.ColumnSet(self.datasetType.dimensions.as_group())
+        columns.drop_implied_dimension_keys()
+        columns.dataset_fields[self.datasetType.name].update(fields)
+        tags_builder: QueryBuilder | None = None
+        if collection_types != {CollectionType.CALIBRATION}:
+            # We'll need a subquery for the tags table if any of the given
+            # collections are not a CALIBRATION collection.  This intentionally
+            # also fires when the list of collections is empty as a way to
+            # create a dummy subquery that we know will fail.
+            # We give the table an alias because it might appear multiple times
+            # in the same query, for different dataset types.
+            tags_builder = self._finish_query_builder(
+                QueryJoiner(self._db, self._tags.alias(f"{self.datasetType.name}_tags")).to_builder(columns),
+                [record for record in collections if record.type is not CollectionType.CALIBRATION],
+                fields,
+            )
+            if "timespan" in fields:
+                tags_builder.joiner.timespans[self.datasetType.name] = (
+                    self._db.getTimespanRepresentation().fromLiteral(Timespan(None, None))
+                )
+        calibs_builder: QueryBuilder | None = None
+        if CollectionType.CALIBRATION in collection_types:
+            # If at least one collection is a CALIBRATION collection, we'll
+            # need a subquery for the calibs table, and could include the
+            # timespan as a result or constraint.
+            assert (
+                self._calibs is not None
+            ), "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
+            calibs_builder = self._finish_query_builder(
+                QueryJoiner(self._db, self._calibs.alias(f"{self.datasetType.name}_calibs")).to_builder(
+                    columns
+                ),
+                [record for record in collections if record.type is CollectionType.CALIBRATION],
+                fields,
+            )
+            if "timespan" in fields:
+                calibs_builder.joiner.timespans[self.datasetType.name] = (
+                    self._db.getTimespanRepresentation().from_columns(self._calibs.columns)
+                )
+
+            # In calibration collections, we need timespan as well as data ID
+            # to ensure unique rows.
+            calibs_builder.distinct = calibs_builder.distinct and "timespan" not in fields
+        if tags_builder is not None:
+            if calibs_builder is not None:
+                # Need a UNION subquery.
+                return tags_builder.union_subquery([calibs_builder])
+            else:
+                return tags_builder.to_joiner()
+        elif calibs_builder is not None:
+            return calibs_builder.to_joiner()
+        else:
+            raise AssertionError("Branch should be unreachable.")
+
+    def _finish_query_builder(
+        self,
+        sql_projection: QueryBuilder,
+        collections: Sequence[CollectionRecord],
+        fields: Set[str],
+    ) -> QueryBuilder:
+        # This method plays the same role as _finish_single_relation in the new
+        # query system. It is called exactly one or two times by
+        # make_sql_builder, just as _finish_single_relation is called exactly
+        # one or two times by make_relation.  See make_sql_builder comments for
+        # what's different.
+        assert sql_projection.joiner.from_clause is not None
+        run_collections_only = all(record.type is CollectionType.RUN for record in collections)
+        sql_projection.joiner.where(
+            sql_projection.joiner.from_clause.c.dataset_type_id == self._dataset_type_id
+        )
+        dataset_id_col = sql_projection.joiner.from_clause.c.dataset_id
+        collection_col = sql_projection.joiner.from_clause.c[self._collections.getCollectionForeignKeyName()]
+        fields_provided = sql_projection.joiner.fields[self.datasetType.name]
+        # We always constrain and optionally retrieve the collection(s) via the
+        # tags/calibs table.
+        if "collection_key" in fields:
+            sql_projection.joiner.fields[self.datasetType.name]["collection_key"] = collection_col
+        if len(collections) == 1:
+            only_collection_record = collections[0]
+            sql_projection.joiner.where(collection_col == only_collection_record.key)
+            if "collection" in fields:
+                fields_provided["collection"] = sqlalchemy.literal(only_collection_record.name)
+        elif not collections:
+            sql_projection.joiner.where(sqlalchemy.literal(False))
+            if "collection" in fields:
+                fields_provided["collection"] = sqlalchemy.literal("NO COLLECTIONS")
+        else:
+            sql_projection.joiner.where(collection_col.in_([collection.key for collection in collections]))
+            if "collection" in fields:
+                # Avoid a join to the collection table to get the name by using
+                # a CASE statement.  The SQL will be a bit more verbose but
+                # more efficient.
+                fields_provided["collection"] = sqlalchemy.case(
+                    {record.key: record.name for record in collections}, value=collection_col
+                )
+        # Add more column definitions, starting with the data ID.
+        sql_projection.joiner.extract_dimensions(self.datasetType.dimensions.required.names)
+        # We can always get the dataset_id from the tags/calibs table, even if
+        # could also get it from the 'static' dataset table.
+        if "dataset_id" in fields:
+            fields_provided["dataset_id"] = dataset_id_col
+
+        # It's possible we now have everything we need, from just the
+        # tags/calibs table.  The things we might need to get from the static
+        # dataset table are the run key and the ingest date.
+        need_static_table = False
+        if "run" in fields:
+            if len(collections) == 1 and run_collections_only:
+                # If we are searching exactly one RUN collection, we
+                # know that if we find the dataset in that collection,
+                # then that's the datasets's run; we don't need to
+                # query for it.
+                fields_provided["run"] = sqlalchemy.literal(only_collection_record.name)
+            elif run_collections_only:
+                # Once again we can avoid joining to the collection table by
+                # adding a CASE statement.
+                fields_provided["run"] = sqlalchemy.case(
+                    {record.key: record.name for record in collections},
+                    value=self._static.dataset.c[self._runKeyColumn],
+                )
+                need_static_table = True
+            else:
+                # Here we can't avoid a join to the collection table, because
+                # we might find a dataset via something other than its RUN
+                # collection.
+                (
+                    fields_provided["run"],
+                    sql_projection.joiner.from_clause,
+                ) = self._collections.lookup_name_sql(
+                    self._static.dataset.c[self._runKeyColumn],
+                    sql_projection.joiner.from_clause,
+                )
+                need_static_table = True
+        # Ingest date can only come from the static table.
+        if "ingest_date" in fields:
+            fields_provided["ingest_date"] = self._static.dataset.c.ingest_date
+            need_static_table = True
+        if need_static_table:
+            # If we need the static table, join it in via dataset_id.  We don't
+            # use QueryJoiner.join because we're joining on dataset ID, not
+            # dimensions.
+            sql_projection.joiner.from_clause = sql_projection.joiner.from_clause.join(
+                self._static.dataset, onclause=(dataset_id_col == self._static.dataset.c.id)
+            )
+            # Also constrain dataset_type_id in static table in case that helps
+            # generate a better plan. We could also include this in the JOIN ON
+            # clause, but my guess is that that's a good idea IFF it's in the
+            # foreign key, and right now it isn't.
+            sql_projection.joiner.where(self._static.dataset.c.dataset_type_id == self._dataset_type_id)
+        sql_projection.distinct = (
+            # If there are multiple collections, this subquery might have
+            # non-unique rows.
+            len(collections) > 1
+            and not fields
+        )
+        return sql_projection
 
     def getDataId(self, id: DatasetId) -> DataCoordinate:
         """Return DataId for a dataset.

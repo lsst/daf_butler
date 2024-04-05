@@ -55,7 +55,8 @@ class ColumnSet:
     ``logical_table`` is a dimension element name or dataset type name, and
     ``field`` is a column associated with one of those, or `None` for dimension
     key columns.  Iteration order is guaranteed to be deterministic and to
-    start with all included dimension keys in `DimensionGroup.dimension_
+    start with all included dimension keys in
+    `DimensionGroup.data_coordinate_keys`.
     """
 
     def __init__(self, dimensions: DimensionGroup) -> None:

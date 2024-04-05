@@ -66,6 +66,7 @@ from ._storage_class import StorageClass, StorageClassFactory
 from ._timespan import Timespan
 from .datastore import Datastore, NullDatastore
 from .dimensions import DataCoordinate, Dimension
+from .direct_query_driver import DirectQueryDriver
 from .progress import Progress
 from .queries import Query
 from .registry import (
@@ -2136,7 +2137,13 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     @contextlib.contextmanager
     def _query(self) -> Iterator[Query]:
         # Docstring inherited.
-        raise NotImplementedError("TODO DM-41159")
+        driver = DirectQueryDriver(
+            self._registry._db, self.dimensions, self._registry._managers, self._registry.defaults
+        )
+        query = Query(driver)
+        with self._caching_context():
+            with driver:
+                yield query
 
     def _preload_cache(self) -> None:
         """Immediately load caches that are used for common operations."""

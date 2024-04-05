@@ -57,10 +57,9 @@ class Query(QueryBase):
     ----------
     driver : `QueryDriver`
         Implementation object that knows how to actually execute queries.
-    tree : `QueryTree`
-        Description of the query as a tree of joins and column expressions. The
-        instance returned directly by the `Butler._query` entry point should be
-        constructed via `make_identity_query_tree`.
+    tree : `QueryTree`, optional
+        Description of the query as a tree of joins and column expressions.
+        Defaults to the result of a call to  `tree.make_identity_query_tree`.
 
     Notes
     -----
@@ -79,11 +78,13 @@ class Query(QueryBase):
     always return a new object without modifying the current one.
     """
 
-    def __init__(self, driver: QueryDriver, tree: QueryTree):
+    def __init__(self, driver: QueryDriver, tree: QueryTree | None = None):
         # __init__ defined here because there are multiple base classes and
         # not all define __init__ (and hence inherit object.__init__, which
         # just ignores its args).  Even if we just delegate to super(), it
         # seems less fragile to make it explicit here.
+        if tree is None:
+            tree = make_identity_query_tree(driver.universe)
         super().__init__(driver, tree)
 
     @property
@@ -489,7 +490,13 @@ class Query(QueryBase):
         """
         return Query(
             tree=self._tree.where(
-                convert_where_args(self.dimensions, self.constraint_dataset_types, *args, bind=bind, **kwargs)
+                convert_where_args(
+                    self.constraint_dimensions,
+                    self.constraint_dataset_types,
+                    *args,
+                    bind=bind,
+                    **kwargs,
+                )
             ),
             driver=self._driver,
         )
