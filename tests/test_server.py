@@ -204,8 +204,8 @@ class ButlerClientServerTestCase(unittest.TestCase):
             factory_created_butler = butler_factory.create_butler(label="server", access_token="token")
         self.assertIsInstance(butler, RemoteButler)
         self.assertIsInstance(factory_created_butler, RemoteButler)
-        self.assertEqual(butler._server_url, server_url)
-        self.assertEqual(factory_created_butler._server_url, server_url)
+        self.assertEqual(butler._connection.server_url, server_url)
+        self.assertEqual(factory_created_butler._connection.server_url, server_url)
 
         self.assertEqual(butler.collections, ("collection1", "collection2"))
         self.assertEqual(butler.run, "collection2")
