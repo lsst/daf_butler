@@ -46,6 +46,19 @@ _AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=BaseModel)
 
 
 class RemoteButlerHttpConnection:
+    """HTTP connection to a Butler server.
+
+    Parameters
+    ----------
+    http_client : `httpx.Client`
+        HTTP connection pool we will use to connect to the server.
+    server_url : `str`
+        URL of the Butler server we will connect to.
+    access_token : `str`
+        Rubin Science Platform Gafaelfawr access token that will be used to
+        authenticate with the server.
+    """
+
     def __init__(self, http_client: httpx.Client, server_url: str, access_token: str) -> None:
         self._client = http_client
         self.server_url = server_url
@@ -95,8 +108,7 @@ class RemoteButlerHttpConnection:
         path : `str`
             A relative path to an endpoint.
         params : `Mapping` [ `str` , `str` | `bool` ]
-            Pydantic model containing the request body to be sent to the
-            server.
+            Query parameters included in the request URL.
 
         Returns
         -------
@@ -139,6 +151,12 @@ class RemoteButlerHttpConnection:
         params: Mapping[str, str | bool] | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
+        """Send an HTTP request to the Butler server with authentication
+        headers and a request ID.
+
+        If the server returns a user-facing error detail, raises an exception
+        with the message as a subclass of ButlerUserError.
+        """
         url = self._get_url(path)
 
         request_id = str(uuid4())

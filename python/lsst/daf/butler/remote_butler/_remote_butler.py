@@ -42,7 +42,6 @@ from lsst.daf.butler.datastores.fileDatastoreClient import (
     get_dataset_as_python_object,
 )
 from lsst.resources import ResourcePath, ResourcePathExpression
-from pydantic import TypeAdapter
 
 from .._butler import Butler
 from .._butler_instance_options import ButlerInstanceOptions
@@ -54,7 +53,7 @@ from .._exceptions import DatasetNotFoundError
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
-from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
+from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse
 from ..registry import (
     CollectionArgType,
     CollectionSummary,
@@ -63,9 +62,9 @@ from ..registry import (
     RegistryDefaults,
 )
 from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
 from .server_models import (
     CollectionList,
-    DatasetTypeName,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
@@ -86,24 +85,17 @@ if TYPE_CHECKING:
 
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 
-_SERIALIZED_DATA_ID_TYPE_ADAPTER = TypeAdapter(SerializedDataId)
-
 
 class RemoteButler(Butler):  # numpydoc ignore=PR02
     """A `Butler` that can be used to connect through a remote server.
 
     Parameters
     ----------
-    server_url : `str`
-        URL of the Butler server we will connect to.
     options : `ButlerInstanceOptions`
         Default values and other settings for the Butler instance.
-    http_client : `httpx.Client`
-        HTTP connection pool we will use to connect to the server.
-    access_token : `str`
-        Rubin Science Platform Gafaelfawr access token that will be used to
-        authenticate with the server.
-    cache : RemoteButlerCache
+    connection : `RemoteButlerHttpConnection`
+        Connection to Butler server.
+    cache : `RemoteButlerCache`
         Cache of data shared between multiple RemoteButler instances connected
         to the same server.
 
@@ -172,30 +164,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 cache.dimensions = universe
             return cache.dimensions
 
-    def _simplify_dataId(self, dataId: DataId | None, kwargs: dict[str, DataIdValue]) -> SerializedDataId:
-        """Take a generic Data ID and convert it to a serializable form.
-
-        Parameters
-        ----------
-        dataId : `dict`, `None`, `DataCoordinate`
-            The data ID to serialize.
-        kwargs : `dict`
-            Additional entries to augment or replace the values in ``dataId``.
-
-        Returns
-        -------
-        data_id : `SerializedDataId`
-            A serializable form.
-        """
-        if dataId is None:
-            dataId = {}
-        elif isinstance(dataId, DataCoordinate):
-            dataId = dataId.to_simple(minimal=True).dataId
-        else:
-            dataId = dict(dataId)
-
-        return _SERIALIZED_DATA_ID_TYPE_ADAPTER.validate_python(dataId | kwargs)
-
     def _caching_context(self) -> AbstractContextManager[None]:
         # Docstring inherited.
         # Not implemented for now, will have to think whether this needs to
@@ -262,7 +230,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             componentOverride = datasetRefOrType.datasetType.component()
             if componentOverride:
                 ref = ref.makeComponentRef(componentOverride)
-        ref = _apply_storage_class_override(ref, datasetRefOrType, storageClass)
+        ref = apply_storage_class_override(ref, datasetRefOrType, storageClass)
 
         return self._get_dataset_as_python_object(ref, model, parameters)
 
@@ -297,9 +265,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return self._get_file_info_for_ref(datasetRefOrType)
         else:
             request = GetFileByDataIdRequestModel(
-                dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
+                dataset_type_name=normalize_dataset_type_name(datasetRefOrType),
                 collections=self._normalize_collections(collections),
-                data_id=self._simplify_dataId(dataId, kwargs),
+                data_id=simplify_dataId(dataId, kwargs),
                 timespan=timespan.to_simple() if timespan is not None else None,
             )
             response = self._connection.post("get_file_by_data_id", request)
@@ -386,14 +354,14 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
 
         query = FindDatasetRequestModel(
-            data_id=self._simplify_dataId(data_id, kwargs),
+            data_id=simplify_dataId(data_id, kwargs),
             collections=self._normalize_collections(collections),
             timespan=timespan.to_simple() if timespan is not None else None,
             dimension_records=dimension_records,
             datastore_records=datastore_records,
         )
 
-        dataset_type_name = self._normalize_dataset_type_name(dataset_type)
+        dataset_type_name = normalize_dataset_type_name(dataset_type)
         path = f"find_dataset/{dataset_type_name}"
         response = self._connection.post(path, query)
 
@@ -402,7 +370,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return None
 
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
-        return _apply_storage_class_override(ref, dataset_type, storage_class)
+        return apply_storage_class_override(ref, dataset_type, storage_class)
 
     def retrieveArtifacts(
         self,
@@ -586,15 +554,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             collections = self.collections
         return convert_collection_arg_to_glob_string_list(collections)
 
-    def _normalize_dataset_type_name(self, datasetTypeOrName: DatasetType | str) -> DatasetTypeName:
-        """Convert DatasetType parameters in the format used by Butler methods
-        to a standardized string name for the REST API.
-        """
-        if isinstance(datasetTypeOrName, DatasetType):
-            return DatasetTypeName(datasetTypeOrName.name)
-        else:
-            return DatasetTypeName(datasetTypeOrName)
-
     def _clone(
         self,
         *,
@@ -635,49 +594,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _query_collections(self, query: QueryCollectionsRequestModel) -> QueryCollectionsResponseModel:
         response = self._connection.post("query_collections", query)
         return parse_model(response, QueryCollectionsResponseModel)
-
-
-def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
-    """Return the DatasetType associated with the argument, or None if the
-    argument is not an object that contains a DatasetType object.
-    """
-    if isinstance(datasetRefOrType, DatasetType):
-        return datasetRefOrType
-    elif isinstance(datasetRefOrType, DatasetRef):
-        return datasetRefOrType.datasetType
-    else:
-        return None
-
-
-def _apply_storage_class_override(
-    ref: DatasetRef,
-    original_dataset_ref_or_type: DatasetRef | DatasetType | str,
-    explicit_storage_class: StorageClass | str | None,
-) -> DatasetRef:
-    """Return a DatasetRef with its storage class overridden to match the
-    StorageClass supplied by the user as input to one of the search functions.
-
-    Parameters
-    ----------
-    ref : `DatasetRef`
-        The ref to which we will apply the StorageClass override.
-    original_dataset_ref_or_type : `DatasetRef` | `DatasetType` | `str`
-        The ref or type that was input to the search, which may contain a
-        storage class override.
-    explicit_storage_class : `StorageClass` | `str` | `None`
-        A storage class that the user explicitly requested as an override.
-    """
-    if explicit_storage_class is not None:
-        return ref.overrideStorageClass(explicit_storage_class)
-
-    # If the caller provided a DatasetRef or DatasetType, they may have
-    # overridden the storage class on it, and we need to propagate that to the
-    # output.
-    dataset_type = _extract_dataset_type(original_dataset_ref_or_type)
-    if dataset_type is not None:
-        return ref.overrideStorageClass(dataset_type.storageClass)
-
-    return ref
 
 
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:
