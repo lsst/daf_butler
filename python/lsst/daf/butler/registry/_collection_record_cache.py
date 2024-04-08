@@ -79,8 +79,7 @@ class CollectionRecordCache:
         if (old_record := self._by_key.get(record.key)) is not None:
             self._by_name.pop(old_record.name)
         self._by_name[record.name] = record
-        if not isinstance(record.key, str):
-            self._by_key[record.key] = record
+        self._by_key[record.key] = record
 
     def set(self, records: Iterable[CollectionRecord], *, full: bool = False) -> None:
         """Replace cache contents with the new set of records.
@@ -95,8 +94,7 @@ class CollectionRecordCache:
         self.clear()
         for record in records:
             self._by_name[record.name] = record
-            if not isinstance(record.key, str):
-                self._by_key[record.key] = record
+            self._by_key[record.key] = record
         self._full = full
 
     def clear(self) -> None:
@@ -114,8 +112,7 @@ class CollectionRecordCache:
             Collection record to remove.
         """
         self._by_name.pop(record.name, None)
-        if not isinstance(record.key, str):
-            self._by_key.pop(record.key, None)
+        self._by_key.pop(record.key, None)
 
     def get_by_name(self, name: str) -> CollectionRecord | None:
         """Return collection record given its name.
@@ -147,8 +144,6 @@ class CollectionRecordCache:
             Collection record, `None` is returned if the key is not in the
             cache.
         """
-        if isinstance(key, str):
-            return self._by_name.get(key)
         return self._by_key.get(key)
 
     def records(self) -> Iterator[CollectionRecord]:

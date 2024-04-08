@@ -834,6 +834,17 @@ class RegistryTests(ABC):
         with self.assertRaises(MissingCollectionError):
             registry.getCollectionType(tag1)
 
+    def testCollectionChainCaching(self):
+        registry = self.makeRegistry()
+        with registry.caching_context():
+            registry.registerCollection("a")
+            registry.registerCollection("chain", CollectionType.CHAINED)
+            # There used to be a caching bug (DM-43750) that would throw an
+            # exception if you modified a collection chain for a collection
+            # that was already in the cache.
+            registry.setCollectionChain("chain", ["a"])
+            self.assertEqual(list(registry.getCollectionChain("chain")), ["a"])
+
     def testCollectionChainFlatten(self):
         """Test that `SqlRegistry.setCollectionChain` obeys its 'flatten'
         option.
