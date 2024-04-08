@@ -764,6 +764,8 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
     )
 
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
 
@@ -777,6 +779,7 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         tmpdir = tempfile.mkdtemp(dir=self.root)
         config["registry", "db"] = f"sqlite:///{tmpdir}/gen3.sqlite3"
         config["registry", "managers", "datasets"] = self.datasetsManager
+        config["registry", "managers", "collections"] = self.collectionsManager
         config["root"] = self.root
 
         # have to make a registry first
@@ -786,6 +789,14 @@ class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         butler = Butler.from_config(config, writeable=writeable)
         DatastoreMock.apply(butler)
         return butler
+
+
+class NameKeyCollectionManagerDirectSimpleButlerTestCase(DirectSimpleButlerTestCase, unittest.TestCase):
+    """Run tests against DirectButler implementation using the
+    NameKeyCollectionsManager.
+    """
+
+    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
 
 
 @unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
