@@ -450,7 +450,11 @@ class DefaultCollectionManager(CollectionManager[K]):
         position_func: Callable[[_CollectionChainModificationContext], int],
     ) -> None:
         with self._modify_collection_chain(parent_collection_name, child_collection_names) as c:
+            # Remove any of the new children that are already in the
+            # collection, so they move to a new position instead of being
+            # duplicated.
             self._remove_collection_chain_rows(c.parent_key, c.child_keys)
+            # Figure out where to insert the new children.
             starting_position = position_func(c)
             self._block_for_concurrency_test()
             self._insert_collection_chain_rows(c.parent_key, starting_position, c.child_keys)
@@ -483,12 +487,20 @@ class DefaultCollectionManager(CollectionManager[K]):
         if not skip_cycle_check:
             self._sanity_check_collection_cycles(parent_collection_name, child_collection_names)
 
+        # Look up the collection primary keys corresponding to the
+        # user-provided list of child collection names.  Because there is no
+        # locking for the child collections, it's possible for a concurrent
+        # deletion of one of the children to cause a foreign key constraint
+        # violation when we attempt to insert them in the collection chain
+        # table later.
         child_records = self.resolve_wildcard(
             CollectionWildcard.from_names(child_collection_names), flatten_chains=False
         )
         child_keys = [child.key for child in child_records]
 
         with self._db.transaction():
+            # Lock the parent collection to prevent concurrent updates to the
+            # same collection chain.
             parent_key = self._find_and_lock_collection_chain(parent_collection_name)
             yield _CollectionChainModificationContext[K](
                 parent_key=parent_key, child_keys=child_keys, child_records=child_records
