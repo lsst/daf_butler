@@ -1737,6 +1737,39 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         raise NotImplementedError()
 
     @abstractmethod
+    def redefine_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        """Replace the contents of a CHAINED collection with new children.
+
+        Parameters
+        ----------
+        parent_collection_name : `str`
+            The name of a CHAINED collection to which we will assign new
+            children.
+        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
+            A child collection name or list of child collection names to be
+            added to the parent.
+
+        Raises
+        ------
+        MissingCollectionError
+            If any of the specified collections do not exist.
+        CollectionTypeError
+            If the parent collection is not a CHAINED collection.
+        CollectionCycleError
+            If this operation would create a collection cycle.
+
+        Notes
+        -----
+        If this function is called within a call to ``Butler.transaction``, it
+        will hold a lock that prevents other processes from modifying the
+        parent collection until the end of the transaction.  Keep these
+        transactions short.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def prepend_collection_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:
@@ -1761,6 +1794,72 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             If the parent collection is not a CHAINED collection.
         CollectionCycleError
             If this operation would create a collection cycle.
+
+        Notes
+        -----
+        If this function is called within a call to ``Butler.transaction``, it
+        will hold a lock that prevents other processes from modifying the
+        parent collection until the end of the transaction.  Keep these
+        transactions short.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def extend_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        """Add children to the end of a CHAINED collection.
+
+        If any of the children already existed in the chain, they will be moved
+        to the new position at the end of the chain.
+
+        Parameters
+        ----------
+        parent_collection_name : `str`
+            The name of a CHAINED collection to which we will add new children.
+        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
+            A child collection name or list of child collection names to be
+            added to the parent.
+
+        Raises
+        ------
+        MissingCollectionError
+            If any of the specified collections do not exist.
+        CollectionTypeError
+            If the parent collection is not a CHAINED collection.
+        CollectionCycleError
+            If this operation would create a collection cycle.
+
+        Notes
+        -----
+        If this function is called within a call to ``Butler.transaction``, it
+        will hold a lock that prevents other processes from modifying the
+        parent collection until the end of the transaction.  Keep these
+        transactions short.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def remove_from_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        """Remove children from a CHAINED collection.
+
+        Parameters
+        ----------
+        parent_collection_name : `str`
+            The name of a CHAINED collection from which we will remove
+            children.
+        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
+            A child collection name or list of child collection names to be
+            removed from the parent.
+
+        Raises
+        ------
+        MissingCollectionError
+            If any of the specified collections do not exist.
+        CollectionTypeError
+            If the parent collection is not a CHAINED collection.
 
         Notes
         -----

@@ -512,7 +512,22 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         return self._registry_defaults.collections
 
+    def redefine_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        raise NotImplementedError()
+
     def prepend_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        raise NotImplementedError()
+
+    def extend_collection_chain(
+        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
+    ) -> None:
+        raise NotImplementedError()
+
+    def remove_from_collection_chain(
         self, parent_collection_name: str, child_collection_names: str | Iterable[str]
     ) -> None:
         raise NotImplementedError()

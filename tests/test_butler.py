@@ -42,7 +42,7 @@ import string
 import tempfile
 import unittest
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 try:
@@ -1388,7 +1388,91 @@ class ButlerTests(ButlerPutGetTests):
         get_ref = reader_butler.get_dataset(put_ref.id)
         self.assertEqual(get_ref.id, put_ref.id)
 
+    def testCollectionChainRedefine(self):
+        butler = self._setup_to_test_collection_chain()
+
+        butler.redefine_collection_chain("chain", "a")
+        self._check_chain(butler, ["a"])
+
+        # Duplicates are removed from the list of children
+        butler.redefine_collection_chain("chain", ["c", "b", "c"])
+        self._check_chain(butler, ["c", "b"])
+
+        # Empty list clears the chain
+        butler.redefine_collection_chain("chain", [])
+        self._check_chain(butler, [])
+
+        self._test_common_chain_functionality(butler, butler.redefine_collection_chain)
+
     def testCollectionChainPrepend(self):
+        butler = self._setup_to_test_collection_chain()
+
+        # Duplicates are removed from the list of children
+        butler.prepend_collection_chain("chain", ["c", "b", "c"])
+        self._check_chain(butler, ["c", "b"])
+
+        # Prepend goes on the front of existing chain
+        butler.prepend_collection_chain("chain", ["a"])
+        self._check_chain(butler, ["a", "c", "b"])
+
+        # Empty prepend does nothing
+        butler.prepend_collection_chain("chain", [])
+        self._check_chain(butler, ["a", "c", "b"])
+
+        # Prepending children that already exist in the chain removes them from
+        # their current position.
+        butler.prepend_collection_chain("chain", ["d", "b", "c"])
+        self._check_chain(butler, ["d", "b", "c", "a"])
+
+        self._test_common_chain_functionality(butler, butler.prepend_collection_chain)
+
+    def testCollectionChainExtend(self):
+        butler = self._setup_to_test_collection_chain()
+
+        # Duplicates are removed from the list of children
+        butler.extend_collection_chain("chain", ["c", "b", "c"])
+        self._check_chain(butler, ["c", "b"])
+
+        # Extend goes on the end of existing chain
+        butler.extend_collection_chain("chain", ["a"])
+        self._check_chain(butler, ["c", "b", "a"])
+
+        # Empty extend does nothing
+        butler.extend_collection_chain("chain", [])
+        self._check_chain(butler, ["c", "b", "a"])
+
+        # Extending children that already exist in the chain removes them from
+        # their current position.
+        butler.extend_collection_chain("chain", ["d", "b", "c"])
+        self._check_chain(butler, ["a", "d", "b", "c"])
+
+        self._test_common_chain_functionality(butler, butler.extend_collection_chain)
+
+    def testCollectionChainRemove(self) -> None:
+        butler = self._setup_to_test_collection_chain()
+
+        butler.registry.setCollectionChain("chain", ["a", "b", "c", "d"])
+
+        butler.remove_from_collection_chain("chain", "c")
+        self._check_chain(butler, ["a", "b", "d"])
+
+        # Duplicates are allowed in the list of children
+        butler.remove_from_collection_chain("chain", ["b", "b", "a"])
+        self._check_chain(butler, ["d"])
+
+        # Empty remove does nothing
+        butler.remove_from_collection_chain("chain", [])
+        self._check_chain(butler, ["d"])
+
+        # Removing children that aren't in the chain does nothing
+        butler.remove_from_collection_chain("chain", ["a", "chain"])
+        self._check_chain(butler, ["d"])
+
+        self._test_common_chain_functionality(
+            butler, butler.remove_from_collection_chain, skip_cycle_check=True
+        )
+
+    def _setup_to_test_collection_chain(self) -> Butler:
         butler = self.create_empty_butler(writeable=True)
 
         butler.registry.registerCollection("chain", CollectionType.CHAINED)
@@ -1400,49 +1484,39 @@ class ButlerTests(ButlerPutGetTests):
         butler.registry.registerCollection("staticchain", CollectionType.CHAINED)
         butler.registry.setCollectionChain("staticchain", ["a", "b"])
 
-        def check_chain(expected: list[str]) -> None:
-            children = butler.registry.getCollectionChain("chain")
-            self.assertEqual(expected, list(children))
+        return butler
 
-        # Duplicates are removed from the list of children
-        butler.prepend_collection_chain("chain", ["c", "b", "c"])
-        check_chain(["c", "b"])
+    def _check_chain(self, butler: Butler, expected: list[str]) -> None:
+        children = butler.registry.getCollectionChain("chain")
+        self.assertEqual(expected, list(children))
 
-        # Prepend goes on the front of existing chain
-        butler.prepend_collection_chain("chain", ["a"])
-        check_chain(["a", "c", "b"])
-
-        # Empty prepend does nothing
-        butler.prepend_collection_chain("chain", [])
-        check_chain(["a", "c", "b"])
-
-        # Prepending children that already exist in the chain removes them from
-        # their current position.
-        butler.prepend_collection_chain("chain", ["d", "b", "c"])
-        check_chain(["d", "b", "c", "a"])
-
+    def _test_common_chain_functionality(
+        self, butler, func: Callable[[str, str | list[str]], Any], *, skip_cycle_check=False
+    ) -> None:
         # Missing parent collection
         with self.assertRaises(MissingCollectionError):
-            butler.prepend_collection_chain("doesnotexist", [])
+            func("doesnotexist", [])
         # Missing child collection
         with self.assertRaises(MissingCollectionError):
-            butler.prepend_collection_chain("chain", ["doesnotexist"])
+            func("chain", ["doesnotexist"])
         # Forbid operations on non-chained collections
         with self.assertRaises(CollectionTypeError):
-            butler.prepend_collection_chain("d", ["a"])
+            func("d", ["a"])
 
         # Prevent collection cycles
-        butler.registry.registerCollection("chain2", CollectionType.CHAINED)
-        butler.prepend_collection_chain("chain2", "chain")
-        with self.assertRaises(CollectionCycleError):
-            butler.prepend_collection_chain("chain", "chain2")
+        if not skip_cycle_check:
+            butler.registry.registerCollection("chain2", CollectionType.CHAINED)
+            func("chain2", "chain")
+            with self.assertRaises(CollectionCycleError):
+                func("chain", "chain2")
 
-        # Make sure none of those operations interfered with unrelated chains
+        # Make sure none of the earlier operations interfered with unrelated
+        # chains.
         self.assertEqual(["a", "b"], list(butler.registry.getCollectionChain("staticchain")))
 
         with butler._caching_context():
             with self.assertRaisesRegex(RuntimeError, "Chained collection modification not permitted"):
-                butler.prepend_collection_chain("chain", "a")
+                func("chain", "a")
 
 
 class FileDatastoreButlerTests(ButlerTests):

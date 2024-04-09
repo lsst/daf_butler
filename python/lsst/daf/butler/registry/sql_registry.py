@@ -631,13 +631,11 @@ class SqlRegistry:
         parent collection until the end of the transaction.  Keep these
         transactions short.
         """
-        record = self._managers.collections.find(parent)
-        if record.type is not CollectionType.CHAINED:
-            raise CollectionTypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
-        assert isinstance(record, ChainedCollectionRecord)
         children = CollectionWildcard.from_expression(children).require_ordered()
-        if children != record.children or flatten:
-            self._managers.collections.update_chain(record, children, flatten=flatten)
+        if flatten:
+            children = self.queryCollections(children, flattenChains=True)
+
+        self._managers.collections.update_chain(parent, list(children), allow_use_in_caching_context=True)
 
     def getCollectionParentChains(self, collection: str) -> set[str]:
         """Return the CHAINED collections that directly contain the given one.

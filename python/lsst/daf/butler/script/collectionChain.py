@@ -107,44 +107,45 @@ def _modify_collection_chain(butler: Butler, mode: str, parent: str, children: I
     if mode == "prepend":
         butler.prepend_collection_chain(parent, children)
     elif mode == "redefine":
-        butler.registry.setCollectionChain(parent, children)
+        butler.redefine_collection_chain(parent, children)
+    elif mode == "remove":
+        butler.remove_from_collection_chain(parent, children)
+    elif mode == "pop":
+        children_to_pop = _find_children_to_pop(butler, parent, children)
+        butler.remove_from_collection_chain(parent, children_to_pop)
+    elif mode == "extend":
+        butler.extend_collection_chain(parent, children)
     else:
-        current = list(butler.registry.getCollectionChain(parent))
+        raise ValueError(f"Unrecognized update mode: '{mode}'")
 
-        if mode == "extend":
-            current.extend(children)
-            children = current
-        elif mode == "remove":
-            for child in children:
-                current.remove(child)
-            children = current
-        elif mode == "pop":
-            if children:
-                n_current = len(current)
 
-                def convert_index(i: int) -> int:
-                    """Convert negative index to positive."""
-                    if i >= 0:
-                        return i
-                    return n_current + i
+def _find_children_to_pop(butler: Butler, parent: str, children: Iterable[str]) -> list[str]:
+    """Find the names of the children in the parent collection corresponding to
+    the given indexes.
+    """
+    children = list(children)
+    current = butler.registry.getCollectionChain(parent)
+    n_current = len(current)
+    if children:
 
-                # For this mode the children should be integers.
-                # Convert negative integers to positive ones to allow
-                # sorting.
-                indices = [convert_index(int(child)) for child in children]
+        def convert_index(i: int) -> int:
+            """Convert negative index to positive."""
+            if i >= 0:
+                return i
+            return n_current + i
 
-                # Reverse sort order so we can remove from the end first
-                indices = sorted(indices, reverse=True)
+        # For this mode the children should be integers.
+        # Convert negative integers to positive ones to allow
+        # sorting.
+        indices = [convert_index(int(child)) for child in children]
+    else:
+        # Nothing specified, pop from the front of the chain.
+        indices = [0]
 
-            else:
-                # Nothing specified, pop from the front of the chain.
-                indices = [0]
+    for index in indices:
+        if index >= n_current:
+            raise IndexError(
+                f"Index {index} is out of range.  Parent collection {parent} has {n_current} children."
+            )
 
-            for i in indices:
-                current.pop(i)
-
-            children = current
-        else:
-            raise ValueError(f"Unrecognized update mode: '{mode}'")
-
-        butler.registry.setCollectionChain(parent, children)
+    return [current[i] for i in indices]
