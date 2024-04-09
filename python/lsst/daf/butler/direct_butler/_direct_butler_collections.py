@@ -42,7 +42,7 @@ class DirectButlerCollections(ButlerCollections):
 
     Parameters
     ----------
-    registry : `SqlRegistry`
+    registry : `~lsst.daf.butler.registry.sql_registry.SqlRegistry`
         Registry object used to work with the collections database.
     """
 
