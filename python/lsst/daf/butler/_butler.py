@@ -1747,7 +1747,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         parent_collection_name : `str`
             The name of a CHAINED collection to which we will assign new
             children.
-        child_collection_names : `Iterable` [ `str ` ] | `str`
+        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
             A child collection name or list of child collection names to be
             added to the parent.
 
@@ -1817,7 +1817,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         ----------
         parent_collection_name : `str`
             The name of a CHAINED collection to which we will add new children.
-        child_collection_names : `Iterable` [ `str ` ] | `str`
+        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
             A child collection name or list of child collection names to be
             added to the parent.
 
@@ -1850,7 +1850,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         parent_collection_name : `str`
             The name of a CHAINED collection from which we will remove
             children.
-        child_collection_names : `Iterable` [ `str ` ] | `str`
+        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
             A child collection name or list of child collection names to be
             removed from the parent.
 
