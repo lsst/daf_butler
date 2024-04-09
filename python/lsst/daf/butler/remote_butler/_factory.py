@@ -36,6 +36,7 @@ from .._butler_config import ButlerConfig
 from .._butler_instance_options import ButlerInstanceOptions
 from ._authentication import get_authentication_token_from_environment
 from ._config import RemoteButlerConfigModel
+from ._http_connection import RemoteButlerHttpConnection
 from ._remote_butler import RemoteButler, RemoteButlerCache
 
 
@@ -91,10 +92,10 @@ class RemoteButlerFactory:
         if butler_options is None:
             butler_options = ButlerInstanceOptions()
         return RemoteButler(
-            http_client=self.http_client,
-            access_token=access_token,
+            connection=RemoteButlerHttpConnection(
+                http_client=self.http_client, server_url=self.server_url, access_token=access_token
+            ),
             options=butler_options,
-            server_url=self.server_url,
             cache=self._cache,
         )
 

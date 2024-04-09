@@ -71,7 +71,7 @@ class RemoteButlerErrorHandlingTests(unittest.TestCase):
         self.butler = RemoteButlerFactory.create_factory_for_url(
             "https://doesntmatter"
         ).create_butler_for_access_token("dontcare")
-        self.mock = self.enterContext(patch.object(self.butler._client, "request"))
+        self.mock = self.enterContext(patch.object(self.butler._connection._client, "request"))
 
     def _mock_error_response(self, content: str) -> None:
         self.mock.return_value = httpx.Response(

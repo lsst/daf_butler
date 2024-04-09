@@ -27,19 +27,13 @@
 
 from __future__ import annotations
 
-__all__ = (
-    "ButlerServerError",
-    "RemoteButler",
-)
+__all__ = ("RemoteButler",)
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TextIO, TypeVar, cast
-from uuid import uuid4
+from typing import TYPE_CHECKING, Any, TextIO, cast
 
-import httpx
-from lsst.daf.butler import __version__
 from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
 )
@@ -48,7 +42,6 @@ from lsst.daf.butler.datastores.fileDatastoreClient import (
     get_dataset_as_python_object,
 )
 from lsst.resources import ResourcePath, ResourcePathExpression
-from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from .._butler import Butler
 from .._butler_instance_options import ButlerInstanceOptions
@@ -56,11 +49,11 @@ from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
 from .._dataset_type import DatasetType, SerializedDatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
-from .._exceptions import DatasetNotFoundError, create_butler_user_error
+from .._exceptions import DatasetNotFoundError
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
-from ..dimensions import DataCoordinate, DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
+from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse
 from ..registry import (
     CollectionArgType,
     CollectionSummary,
@@ -68,14 +61,10 @@ from ..registry import (
     Registry,
     RegistryDefaults,
 )
-from ._authentication import get_authentication_headers
 from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
 from .server_models import (
-    CLIENT_REQUEST_ID_HEADER_NAME,
-    ERROR_STATUS_CODE,
     CollectionList,
-    DatasetTypeName,
-    ErrorResponseModel,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
@@ -94,11 +83,7 @@ if TYPE_CHECKING:
     from ..queries import Query
     from ..transfers import RepoExportContext
 
-
-_AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=BaseModel)
-"""Generic type variable that accepts any Pydantic model class."""
-
-_SERIALIZED_DATA_ID_TYPE_ADAPTER = TypeAdapter(SerializedDataId)
+from ._http_connection import RemoteButlerHttpConnection, parse_model
 
 
 class RemoteButler(Butler):  # numpydoc ignore=PR02
@@ -106,16 +91,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     Parameters
     ----------
-    server_url : `str`
-        URL of the Butler server we will connect to.
     options : `ButlerInstanceOptions`
         Default values and other settings for the Butler instance.
-    http_client : `httpx.Client`
-        HTTP connection pool we will use to connect to the server.
-    access_token : `str`
-        Rubin Science Platform Gafaelfawr access token that will be used to
-        authenticate with the server.
-    cache : RemoteButlerCache
+    connection : `RemoteButlerHttpConnection`
+        Connection to Butler server.
+    cache : `RemoteButlerCache`
         Cache of data shared between multiple RemoteButler instances connected
         to the same server.
 
@@ -126,10 +106,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     """
 
     _registry_defaults: RegistryDefaults
-    _client: httpx.Client
-    _server_url: str
-    _access_token: str
-    _headers: dict[str, str]
+    _connection: RemoteButlerHttpConnection
     _cache: RemoteButlerCache
     _registry: Registry
 
@@ -144,30 +121,21 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def __new__(
         cls,
         *,
-        server_url: str,
+        connection: RemoteButlerHttpConnection,
         options: ButlerInstanceOptions,
-        http_client: httpx.Client,
-        access_token: str,
         cache: RemoteButlerCache,
     ) -> RemoteButler:
         self = cast(RemoteButler, super().__new__(cls))
         self.storageClasses = StorageClassFactory()
 
-        self._client = http_client
-        self._server_url = server_url
+        self._connection = connection
         self._cache = cache
-        self._access_token = access_token
 
         # TODO: RegistryDefaults should have finish() called on it, but this
         # requires getCollectionSummary() which is not yet implemented
         self._registry_defaults = RegistryDefaults(
             options.collections, options.run, options.inferDefaults, **options.kwargs
         )
-
-        auth_headers = get_authentication_headers(access_token)
-        headers = {"user-agent": f"RemoteButler/{__version__}"}
-
-        self._headers = auth_headers | headers
 
         # Avoid a circular import by deferring this import.
         from ._registry import RemoteButlerRegistry
@@ -187,7 +155,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             if cache.dimensions is not None:
                 return cache.dimensions
 
-        response = self._get("universe")
+        response = self._connection.get("universe")
 
         config = DimensionConfig.fromString(response.text, format="json")
         universe = DimensionUniverse(config)
@@ -195,30 +163,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             if cache.dimensions is None:
                 cache.dimensions = universe
             return cache.dimensions
-
-    def _simplify_dataId(self, dataId: DataId | None, kwargs: dict[str, DataIdValue]) -> SerializedDataId:
-        """Take a generic Data ID and convert it to a serializable form.
-
-        Parameters
-        ----------
-        dataId : `dict`, `None`, `DataCoordinate`
-            The data ID to serialize.
-        kwargs : `dict`
-            Additional entries to augment or replace the values in ``dataId``.
-
-        Returns
-        -------
-        data_id : `SerializedDataId`
-            A serializable form.
-        """
-        if dataId is None:
-            dataId = {}
-        elif isinstance(dataId, DataCoordinate):
-            dataId = dataId.to_simple(minimal=True).dataId
-        else:
-            dataId = dict(dataId)
-
-        return _SERIALIZED_DATA_ID_TYPE_ADAPTER.validate_python(dataId | kwargs)
 
     def _caching_context(self) -> AbstractContextManager[None]:
         # Docstring inherited.
@@ -286,7 +230,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             componentOverride = datasetRefOrType.datasetType.component()
             if componentOverride:
                 ref = ref.makeComponentRef(componentOverride)
-        ref = _apply_storage_class_override(ref, datasetRefOrType, storageClass)
+        ref = apply_storage_class_override(ref, datasetRefOrType, storageClass)
 
         return self._get_dataset_as_python_object(ref, model, parameters)
 
@@ -321,17 +265,17 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return self._get_file_info_for_ref(datasetRefOrType)
         else:
             request = GetFileByDataIdRequestModel(
-                dataset_type_name=self._normalize_dataset_type_name(datasetRefOrType),
+                dataset_type_name=normalize_dataset_type_name(datasetRefOrType),
                 collections=self._normalize_collections(collections),
-                data_id=self._simplify_dataId(dataId, kwargs),
+                data_id=simplify_dataId(dataId, kwargs),
                 timespan=timespan.to_simple() if timespan is not None else None,
             )
-            response = self._post("get_file_by_data_id", request)
-            return self._parse_model(response, GetFileResponseModel)
+            response = self._connection.post("get_file_by_data_id", request)
+            return parse_model(response, GetFileResponseModel)
 
     def _get_file_info_for_ref(self, ref: DatasetRef) -> GetFileResponseModel:
-        response = self._get(f"get_file/{ref.id}")
-        return self._parse_model(response, GetFileResponseModel)
+        response = self._connection.get(f"get_file/{ref.id}")
+        return parse_model(response, GetFileResponseModel)
 
     def getURIs(
         self,
@@ -368,7 +312,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # In future implementation this should directly access the cache
         # and only go to the server if the dataset type is not known.
         path = f"dataset_type/{name}"
-        response = self._get(path)
+        response = self._connection.get(path)
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def get_dataset(
@@ -386,12 +330,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         }
         if datastore_records:
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
-        response = self._get(path, params=params)
+        response = self._connection.get(path, params=params)
         if response.json() is None:
             return None
-        ref = DatasetRef.from_simple(
-            self._parse_model(response, SerializedDatasetRef), universe=self.dimensions
-        )
+        ref = DatasetRef.from_simple(parse_model(response, SerializedDatasetRef), universe=self.dimensions)
         if storage_class is not None:
             ref = ref.overrideStorageClass(storage_class)
         return ref
@@ -412,23 +354,23 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
 
         query = FindDatasetRequestModel(
-            data_id=self._simplify_dataId(data_id, kwargs),
+            data_id=simplify_dataId(data_id, kwargs),
             collections=self._normalize_collections(collections),
             timespan=timespan.to_simple() if timespan is not None else None,
             dimension_records=dimension_records,
             datastore_records=datastore_records,
         )
 
-        dataset_type_name = self._normalize_dataset_type_name(dataset_type)
+        dataset_type_name = normalize_dataset_type_name(dataset_type)
         path = f"find_dataset/{dataset_type_name}"
-        response = self._post(path, query)
+        response = self._connection.post(path, query)
 
-        model = self._parse_model(response, FindDatasetResponseModel)
+        model = parse_model(response, FindDatasetResponseModel)
         if model.dataset_ref is None:
             return None
 
         ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
-        return _apply_storage_class_override(ref, dataset_type, storage_class)
+        return apply_storage_class_override(ref, dataset_type, storage_class)
 
     def retrieveArtifacts(
         self,
@@ -600,93 +542,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # Docstring inherited.
         raise NotImplementedError()
 
-    def _get_url(self, path: str, version: str = "v1") -> str:
-        """Form the complete path to an endpoint on the server.
-
-        Parameters
-        ----------
-        path : `str`
-            The relative path to the server endpoint.
-        version : `str`, optional
-            Version string to prepend to path. Defaults to "v1".
-
-        Returns
-        -------
-        path : `str`
-            The full path to the endpoint.
-        """
-        slash = "" if self._server_url.endswith("/") else "/"
-        return f"{self._server_url}{slash}{version}/{path}"
-
-    def _post(self, path: str, model: BaseModel) -> httpx.Response:
-        """Send a POST request to the Butler server."""
-        json = model.model_dump_json(exclude_unset=True).encode("utf-8")
-        return self._send_request(
-            "POST",
-            path,
-            content=json,
-            headers={"content-type": "application/json"},
-        )
-
-    def _get(self, path: str, params: Mapping[str, str | bool] | None = None) -> httpx.Response:
-        """Send a GET request to the Butler server."""
-        return self._send_request("GET", path, params=params)
-
-    def _send_request(
-        self,
-        method: str,
-        path: str,
-        *,
-        content: bytes | None = None,
-        params: Mapping[str, str | bool] | None = None,
-        headers: Mapping[str, str] | None = None,
-    ) -> httpx.Response:
-        url = self._get_url(path)
-
-        request_id = str(uuid4())
-        request_headers = {CLIENT_REQUEST_ID_HEADER_NAME: request_id}
-        request_headers.update(self._headers)
-        if headers is not None:
-            request_headers.update(headers)
-
-        try:
-            response = self._client.request(
-                method, url, content=content, params=params, headers=request_headers
-            )
-
-            if response.status_code == ERROR_STATUS_CODE:
-                # Raise an exception that the server has forwarded to the
-                # client.
-                model = self._try_to_parse_model(response, ErrorResponseModel)
-                if model is not None:
-                    exc = create_butler_user_error(model.error_type, model.detail)
-                    exc.add_note(f"Client request ID: {request_id}")
-                    raise exc
-                # If model is None, server sent an expected error code, but the
-                # body wasn't in the expected JSON format.  This likely means
-                # some HTTP thing between us and the server is misbehaving.
-
-            response.raise_for_status()
-            return response
-        except httpx.HTTPError as e:
-            raise ButlerServerError(request_id) from e
-
-    def _parse_model(self, response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:
-        """Deserialize a Pydantic model from the body of an HTTP response."""
-        return model.model_validate_json(response.content)
-
-    def _try_to_parse_model(
-        self, response: httpx.Response, model: type[_AnyPydanticModel]
-    ) -> _AnyPydanticModel | None:
-        """Attempt to deserialize a Pydantic model from the body of an HTTP
-        response.  Returns `None` if the content could not be parsed as JSON or
-        failed validation against the model.
-        """
-        try:
-            return self._parse_model(response, model)
-        except (ValueError, ValidationError):
-            return None
-
     def _normalize_collections(self, collections: CollectionArgType | None) -> CollectionList:
         """Convert the ``collections`` parameter in the format used by Butler
         methods to a standardized format for the REST API.
@@ -699,15 +554,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             collections = self.collections
         return convert_collection_arg_to_glob_string_list(collections)
 
-    def _normalize_dataset_type_name(self, datasetTypeOrName: DatasetType | str) -> DatasetTypeName:
-        """Convert DatasetType parameters in the format used by Butler methods
-        to a standardized string name for the REST API.
-        """
-        if isinstance(datasetTypeOrName, DatasetType):
-            return DatasetTypeName(datasetTypeOrName.name)
-        else:
-            return DatasetTypeName(datasetTypeOrName)
-
     def _clone(
         self,
         *,
@@ -717,9 +563,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         **kwargs: Any,
     ) -> RemoteButler:
         return RemoteButler(
-            server_url=self._server_url,
-            http_client=self._client,
-            access_token=self._access_token,
+            connection=self._connection,
             cache=self._cache,
             options=ButlerInstanceOptions(
                 collections=collections,
@@ -731,68 +575,25 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         )
 
     def __str__(self) -> str:
-        return f"RemoteButler({self._server_url})"
+        return f"RemoteButler({self._connection.server_url})"
 
     def _get_collection_info(
         self, collection_name: str, include_doc: bool = False, include_parents: bool = False
     ) -> GetCollectionInfoResponseModel:
-        response = self._get(
+        response = self._connection.get(
             "collection_info",
             {"name": collection_name, "include_doc": include_doc, "include_parents": include_parents},
         )
-        return self._parse_model(response, GetCollectionInfoResponseModel)
+        return parse_model(response, GetCollectionInfoResponseModel)
 
     def _get_collection_summary(self, collection_name: str) -> CollectionSummary:
-        response = self._get("collection_summary", {"name": collection_name})
-        parsed = self._parse_model(response, GetCollectionSummaryResponseModel)
+        response = self._connection.get("collection_summary", {"name": collection_name})
+        parsed = parse_model(response, GetCollectionSummaryResponseModel)
         return CollectionSummary.from_simple(parsed.summary, self.dimensions)
 
     def _query_collections(self, query: QueryCollectionsRequestModel) -> QueryCollectionsResponseModel:
-        response = self._post("query_collections", query)
-        return self._parse_model(response, QueryCollectionsResponseModel)
-
-
-def _extract_dataset_type(datasetRefOrType: DatasetRef | DatasetType | str) -> DatasetType | None:
-    """Return the DatasetType associated with the argument, or None if the
-    argument is not an object that contains a DatasetType object.
-    """
-    if isinstance(datasetRefOrType, DatasetType):
-        return datasetRefOrType
-    elif isinstance(datasetRefOrType, DatasetRef):
-        return datasetRefOrType.datasetType
-    else:
-        return None
-
-
-def _apply_storage_class_override(
-    ref: DatasetRef,
-    original_dataset_ref_or_type: DatasetRef | DatasetType | str,
-    explicit_storage_class: StorageClass | str | None,
-) -> DatasetRef:
-    """Return a DatasetRef with its storage class overridden to match the
-    StorageClass supplied by the user as input to one of the search functions.
-
-    Parameters
-    ----------
-    ref : `DatasetRef`
-        The ref to which we will apply the StorageClass override.
-    original_dataset_ref_or_type : `DatasetRef` | `DatasetType` | `str`
-        The ref or type that was input to the search, which may contain a
-        storage class override.
-    explicit_storage_class : `StorageClass` | `str` | `None`
-        A storage class that the user explicitly requested as an override.
-    """
-    if explicit_storage_class is not None:
-        return ref.overrideStorageClass(explicit_storage_class)
-
-    # If the caller provided a DatasetRef or DatasetType, they may have
-    # overridden the storage class on it, and we need to propagate that to the
-    # output.
-    dataset_type = _extract_dataset_type(original_dataset_ref_or_type)
-    if dataset_type is not None:
-        return ref.overrideStorageClass(dataset_type.storageClass)
-
-    return ref
+        response = self._connection.post("query_collections", query)
+        return parse_model(response, QueryCollectionsResponseModel)
 
 
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:
@@ -811,17 +612,3 @@ class _RemoteButlerCacheData:
 class RemoteButlerCache(LockedObject[_RemoteButlerCacheData]):
     def __init__(self) -> None:
         super().__init__(_RemoteButlerCacheData())
-
-
-class ButlerServerError(RuntimeError):
-    """Exception returned when there is an error communicating with the Butler
-    server.
-
-    Parameters
-    ----------
-    client_request_id : `str`
-        Request ID to include in the exception message.
-    """
-
-    def __init__(self, client_request_id: str):
-        super().__init__(f"Error while communicating with Butler server.  Request ID: {client_request_id}")
