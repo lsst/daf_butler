@@ -34,6 +34,7 @@ from typing import Any, TextIO, cast
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .._butler import Butler
+from .._butler_collections import ButlerCollections
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
@@ -453,24 +454,6 @@ class HybridButler(Butler):
             source_butler, data_ids, allowed_elements
         )
 
-    def redefine_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        return self._direct_butler.redefine_collection_chain(parent_collection_name, child_collection_names)
-
-    def prepend_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        return self._direct_butler.prepend_collection_chain(parent_collection_name, child_collection_names)
-
-    def extend_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        return self._direct_butler.extend_collection_chain(parent_collection_name, child_collection_names)
-
-    def remove_from_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        return self._direct_butler.remove_from_collection_chain(
-            parent_collection_name, child_collection_names
-        )
+    @property
+    def collection_chains(self) -> ButlerCollections:
+        return self._direct_butler.collection_chains

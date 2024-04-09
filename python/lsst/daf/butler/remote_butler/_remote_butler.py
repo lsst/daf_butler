@@ -44,6 +44,7 @@ from lsst.daf.butler.datastores.fileDatastoreClient import (
 from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .._butler import Butler
+from .._butler_collections import ButlerCollections
 from .._butler_instance_options import ButlerInstanceOptions
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
@@ -147,6 +148,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def isWriteable(self) -> bool:
         # Docstring inherited.
         return False
+
+    @property
+    def collection_chains(self) -> ButlerCollections:
+        """Object with methods for modifying collection chains."""
+        raise NotImplementedError()
 
     @property
     def dimensions(self) -> DimensionUniverse:
@@ -511,26 +517,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def collections(self) -> Sequence[str]:
         # Docstring inherited.
         return self._registry_defaults.collections
-
-    def redefine_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        raise NotImplementedError()
-
-    def prepend_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        raise NotImplementedError()
-
-    def extend_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        raise NotImplementedError()
-
-    def remove_from_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        raise NotImplementedError()
 
     @property
     def run(self) -> str | None:
