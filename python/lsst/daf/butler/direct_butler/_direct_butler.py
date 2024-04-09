@@ -52,24 +52,24 @@ from lsst.utils.iteration import ensure_iterable
 from lsst.utils.logging import VERBOSE, getLogger
 from sqlalchemy.exc import IntegrityError
 
-from ._butler import Butler
-from ._butler_config import ButlerConfig
-from ._butler_instance_options import ButlerInstanceOptions
-from ._dataset_existence import DatasetExistence
-from ._dataset_ref import DatasetRef
-from ._dataset_type import DatasetType
-from ._deferredDatasetHandle import DeferredDatasetHandle
-from ._exceptions import DatasetNotFoundError, DimensionValueError, ValidationError
-from ._limited_butler import LimitedButler
-from ._registry_shim import RegistryShim
-from ._storage_class import StorageClass, StorageClassFactory
-from ._timespan import Timespan
-from .datastore import Datastore, NullDatastore
-from .dimensions import DataCoordinate, Dimension
-from .direct_query_driver import DirectQueryDriver
-from .progress import Progress
-from .queries import Query
-from .registry import (
+from .._butler import Butler
+from .._butler_config import ButlerConfig
+from .._butler_instance_options import ButlerInstanceOptions
+from .._dataset_existence import DatasetExistence
+from .._dataset_ref import DatasetRef
+from .._dataset_type import DatasetType
+from .._deferredDatasetHandle import DeferredDatasetHandle
+from .._exceptions import DatasetNotFoundError, DimensionValueError, ValidationError
+from .._limited_butler import LimitedButler
+from .._registry_shim import RegistryShim
+from .._storage_class import StorageClass, StorageClassFactory
+from .._timespan import Timespan
+from ..datastore import Datastore, NullDatastore
+from ..dimensions import DataCoordinate, Dimension
+from ..direct_query_driver import DirectQueryDriver
+from ..progress import Progress
+from ..queries import Query
+from ..registry import (
     CollectionType,
     ConflictingDefinitionError,
     DataIdError,
@@ -77,19 +77,19 @@ from .registry import (
     RegistryDefaults,
     _RegistryFactory,
 )
-from .registry.sql_registry import SqlRegistry
-from .transfers import RepoExportContext
-from .utils import transactional
+from ..registry.sql_registry import SqlRegistry
+from ..transfers import RepoExportContext
+from ..utils import transactional
 
 if TYPE_CHECKING:
     from lsst.resources import ResourceHandleProtocol
 
-    from ._dataset_ref import DatasetId
-    from ._file_dataset import FileDataset
-    from .datastore import DatasetRefURIs
-    from .dimensions import DataId, DataIdValue, DimensionElement, DimensionRecord, DimensionUniverse
-    from .registry import Registry
-    from .transfers import RepoImportBackend
+    from .._dataset_ref import DatasetId
+    from .._file_dataset import FileDataset
+    from ..datastore import DatasetRefURIs
+    from ..dimensions import DataId, DataIdValue, DimensionElement, DimensionRecord, DimensionUniverse
+    from ..registry import Registry
+    from ..transfers import RepoImportBackend
 
 _LOG = getLogger(__name__)
 
