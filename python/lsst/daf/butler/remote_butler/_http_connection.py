@@ -76,7 +76,7 @@ class RemoteButlerHttpConnection:
         ----------
         path : `str`
             A relative path to an endpoint.
-        model : ``BaseModel``
+        model : `pydantic.BaseModel`
             Pydantic model containing the request body to be sent to the
             server.
 
@@ -107,7 +107,7 @@ class RemoteButlerHttpConnection:
         ----------
         path : `str`
             A relative path to an endpoint.
-        params : `Mapping` [ `str` , `str` | `bool` ]
+        params : `~collections.abc.Mapping` [ `str` , `str` | `bool` ]
             Query parameters included in the request URL.
 
         Returns
