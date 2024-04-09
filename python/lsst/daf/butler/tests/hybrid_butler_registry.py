@@ -85,7 +85,8 @@ class HybridButlerRegistry(Registry):
 
     @defaults.setter
     def defaults(self, value: RegistryDefaults) -> None:
-        raise NotImplementedError()
+        self._direct.defaults = value
+        self._remote.defaults = value
 
     def refresh(self) -> None:
         self._direct.refresh()

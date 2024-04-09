@@ -89,7 +89,7 @@ class RemoteButlerRegistry(Registry):
 
     @defaults.setter
     def defaults(self, value: RegistryDefaults) -> None:
-        raise NotImplementedError()
+        self._butler._registry_defaults = value
 
     def refresh(self) -> None:
         # In theory the server should manage all necessary invalidation of
