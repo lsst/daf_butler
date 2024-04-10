@@ -53,6 +53,7 @@ from ..queries.result_specs import (
     SerializedResultSpec,
 )
 from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTree, SerializedQueryTree
+from ..registry import NoDefaultCollectionError
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from ._remote_butler import RemoteButler
 from .server_models import (
@@ -178,7 +179,10 @@ class RemoteQueryDriver(QueryDriver):
         return result.messages
 
     def get_default_collections(self) -> tuple[str, ...]:
-        return tuple(self._butler.collections)
+        collections = tuple(self._butler.collections)
+        if not collections:
+            raise NoDefaultCollectionError("No collections provided and no default collections.")
+        return collections
 
     def get_dataset_type(self, name: str) -> DatasetType:
         return self._butler.get_dataset_type(name)
