@@ -56,6 +56,8 @@ from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTre
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from ._remote_butler import RemoteButler
 from .server_models import (
+    QueryAnyRequestModel,
+    QueryAnyResponseModel,
     QueryCountRequestModel,
     QueryCountResponseModel,
     QueryExecuteRequestModel,
@@ -155,7 +157,14 @@ class RemoteQueryDriver(QueryDriver):
         return result.count
 
     def any(self, tree: QueryTree, *, execute: bool, exact: bool) -> bool:
-        raise NotImplementedError()
+        request = QueryAnyRequestModel(
+            tree=SerializedQueryTree(tree),
+            exact=exact,
+            execute=execute,
+        )
+        response = self._connection.post("query/any", request)
+        result = parse_model(response, QueryAnyResponseModel)
+        return result.found_rows
 
     def explain_no_results(self, tree: QueryTree, execute: bool) -> Iterable[str]:
         raise NotImplementedError()

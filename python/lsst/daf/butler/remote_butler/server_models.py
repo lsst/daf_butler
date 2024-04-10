@@ -173,3 +173,17 @@ class QueryCountResponseModel(pydantic.BaseModel):
     """Response model for /query/count/."""
 
     count: int
+
+
+class QueryAnyRequestModel(pydantic.BaseModel):
+    """Request model for /query/any/."""
+
+    tree: SerializedQueryTree
+    execute: bool
+    exact: bool
+
+
+class QueryAnyResponseModel(pydantic.BaseModel):
+    """Response model for /query/any/."""
+
+    found_rows: bool

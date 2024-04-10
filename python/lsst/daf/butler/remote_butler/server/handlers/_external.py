@@ -41,6 +41,8 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    QueryAnyRequestModel,
+    QueryAnyResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
     QueryCountRequestModel,
@@ -284,4 +286,19 @@ def query_count(
         spec = request.result_spec.to_result_spec(driver.universe)
         return QueryCountResponseModel(
             count=driver.count(tree, spec, exact=request.exact, discard=request.discard)
+        )
+
+
+@external_router.post(
+    "/v1/query/any",
+    summary="Determine whether any rows would be returned from a query of the Butler database.",
+)
+def query_any(
+    request: QueryAnyRequestModel, factory: Factory = Depends(factory_dependency)
+) -> QueryAnyResponseModel:
+    butler = factory.create_butler()
+    with butler._query_driver() as driver:
+        tree = request.tree.to_query_tree(driver.universe)
+        return QueryAnyResponseModel(
+            found_rows=driver.any(tree, execute=request.execute, exact=request.exact)
         )
