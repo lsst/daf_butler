@@ -39,6 +39,7 @@ from lsst.utils import doImportType
 from lsst.utils.iteration import ensure_iterable
 from lsst.utils.logging import getLogger
 
+from ._butler_collections import ButlerCollections
 from ._butler_config import ButlerConfig, ButlerType
 from ._butler_instance_options import ButlerInstanceOptions
 from ._butler_repo_index import ButlerRepoIndex
@@ -1409,6 +1410,12 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
 
     @property
     @abstractmethod
+    def collection_chains(self) -> ButlerCollections:
+        """Object with methods for modifying collection chains."""
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
     def collections(self) -> Sequence[str]:
         """The collections to search by default, in order
         (`~collections.abc.Sequence` [ `str` ]).
@@ -1733,139 +1740,5 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         """Return a new Butler instance connected to the same repository
         as this one, but overriding ``collections``, ``run``,
         ``inferDefaults``, and default data ID.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def redefine_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        """Replace the contents of a CHAINED collection with new children.
-
-        Parameters
-        ----------
-        parent_collection_name : `str`
-            The name of a CHAINED collection to which we will assign new
-            children.
-        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
-            A child collection name or list of child collection names to be
-            added to the parent.
-
-        Raises
-        ------
-        MissingCollectionError
-            If any of the specified collections do not exist.
-        CollectionTypeError
-            If the parent collection is not a CHAINED collection.
-        CollectionCycleError
-            If this operation would create a collection cycle.
-
-        Notes
-        -----
-        If this function is called within a call to ``Butler.transaction``, it
-        will hold a lock that prevents other processes from modifying the
-        parent collection until the end of the transaction.  Keep these
-        transactions short.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def prepend_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        """Add children to the beginning of a CHAINED collection.
-
-        If any of the children already existed in the chain, they will be moved
-        to the new position at the beginning of the chain.
-
-        Parameters
-        ----------
-        parent_collection_name : `str`
-            The name of a CHAINED collection to which we will add new children.
-        child_collection_names : `Iterable` [ `str ` ] | `str`
-            A child collection name or list of child collection names to be
-            added to the parent.
-
-        Raises
-        ------
-        MissingCollectionError
-            If any of the specified collections do not exist.
-        CollectionTypeError
-            If the parent collection is not a CHAINED collection.
-        CollectionCycleError
-            If this operation would create a collection cycle.
-
-        Notes
-        -----
-        If this function is called within a call to ``Butler.transaction``, it
-        will hold a lock that prevents other processes from modifying the
-        parent collection until the end of the transaction.  Keep these
-        transactions short.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def extend_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        """Add children to the end of a CHAINED collection.
-
-        If any of the children already existed in the chain, they will be moved
-        to the new position at the end of the chain.
-
-        Parameters
-        ----------
-        parent_collection_name : `str`
-            The name of a CHAINED collection to which we will add new children.
-        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
-            A child collection name or list of child collection names to be
-            added to the parent.
-
-        Raises
-        ------
-        MissingCollectionError
-            If any of the specified collections do not exist.
-        CollectionTypeError
-            If the parent collection is not a CHAINED collection.
-        CollectionCycleError
-            If this operation would create a collection cycle.
-
-        Notes
-        -----
-        If this function is called within a call to ``Butler.transaction``, it
-        will hold a lock that prevents other processes from modifying the
-        parent collection until the end of the transaction.  Keep these
-        transactions short.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def remove_from_collection_chain(
-        self, parent_collection_name: str, child_collection_names: str | Iterable[str]
-    ) -> None:
-        """Remove children from a CHAINED collection.
-
-        Parameters
-        ----------
-        parent_collection_name : `str`
-            The name of a CHAINED collection from which we will remove
-            children.
-        child_collection_names : `~collections.abc.Iterable` [ `str ` ] | `str`
-            A child collection name or list of child collection names to be
-            removed from the parent.
-
-        Raises
-        ------
-        MissingCollectionError
-            If any of the specified collections do not exist.
-        CollectionTypeError
-            If the parent collection is not a CHAINED collection.
-
-        Notes
-        -----
-        If this function is called within a call to ``Butler.transaction``, it
-        will hold a lock that prevents other processes from modifying the
-        parent collection until the end of the transaction.  Keep these
-        transactions short.
         """
         raise NotImplementedError()
