@@ -31,7 +31,7 @@ __all__ = ("Timespan",)
 import enum
 import warnings
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeAlias
+from typing import Any, ClassVar, TypeAlias
 
 import astropy.time
 import astropy.utils.exceptions
@@ -48,13 +48,7 @@ except ImportError:
 
 from lsst.utils.classes import cached_getter
 
-from .json import from_json_generic, to_json_generic
 from .time_utils import TimeConverter
-
-if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .dimensions import DimensionUniverse
-    from .registry import Registry
-
 
 _ONE_DAY = astropy.time.TimeDelta("1d", scale="tai")
 
@@ -73,11 +67,6 @@ class _SpecialTimespanBound(enum.Enum):
 
 
 TimespanBound: TypeAlias = astropy.time.Time | _SpecialTimespanBound | None
-
-SerializedTimespan = Annotated[list[int], pydantic.Field(min_length=2, max_length=2)]
-"""JSON-serializable representation of the Timespan class, as a list of two
-integers ``[begin, end]`` in nanoseconds since the epoch.
-"""
 
 
 class Timespan:
@@ -529,55 +518,6 @@ class Timespan:
                 yield Timespan(None, None, _nsec=(self._nsec[0], intersection._nsec[0]))
             if intersection._nsec[1] < self._nsec[1]:
                 yield Timespan(None, None, _nsec=(intersection._nsec[1], self._nsec[1]))
-
-    def to_simple(self, minimal: bool = False) -> SerializedTimespan:
-        """Return simple python type form suitable for serialization.
-
-        Parameters
-        ----------
-        minimal : `bool`, optional
-            Use minimal serialization. Has no effect on for this class.
-
-        Returns
-        -------
-        simple : `list` of `int`
-            The internal span as integer nanoseconds.
-        """
-        # Return the internal nanosecond form rather than astropy ISO string
-        return list(self._nsec)
-
-    @classmethod
-    def from_simple(
-        cls,
-        simple: SerializedTimespan | None,
-        universe: DimensionUniverse | None = None,
-        registry: Registry | None = None,
-    ) -> Timespan | None:
-        """Construct a new object from simplified form.
-
-        Designed to use the data returned from the `to_simple` method.
-
-        Parameters
-        ----------
-        simple : `list` of `int`, or `None`
-            The values returned by `to_simple()`.
-        universe : `DimensionUniverse`, optional
-            Unused.
-        registry : `lsst.daf.butler.Registry`, optional
-            Unused.
-
-        Returns
-        -------
-        result : `Timespan` or `None`
-            Newly-constructed object.
-        """
-        if simple is None:
-            return None
-        nsec1, nsec2 = simple  # for mypy
-        return cls(begin=None, end=None, _nsec=(nsec1, nsec2))
-
-    to_json = to_json_generic
-    from_json: ClassVar = classmethod(from_json_generic)
 
     @classmethod
     def to_yaml(cls, dumper: yaml.Dumper, timespan: Timespan) -> Any:
