@@ -39,6 +39,7 @@ try:
 except ImportError:
     erfa = None
 
+import pydantic
 from lsst.daf.butler import Timespan
 from lsst.daf.butler.time_utils import TimeConverter
 
@@ -261,6 +262,24 @@ class TimespanTestCase(unittest.TestCase):
         json_str = ts1.to_json()
         ts_json = Timespan.from_json(json_str)
         self.assertEqual(ts_json, ts1)
+
+    def test_serialization(self):
+        ts = Timespan(
+            begin=astropy.time.Time("2013-06-17 13:34:45.775000", scale="tai", format="iso"),
+            end=astropy.time.Time("2013-06-17 13:35:17.947000", scale="tai", format="iso"),
+        )
+        adapter = pydantic.TypeAdapter(Timespan)
+        self.assertIn("TAI", adapter.json_schema()["description"])
+        json_roundtripped = adapter.validate_json(adapter.dump_json(ts))
+        self.assertIsInstance(json_roundtripped, Timespan)
+        self.assertEqual(json_roundtripped, ts)
+        python_roundtripped = adapter.validate_python(adapter.dump_python(ts))
+        self.assertIsInstance(json_roundtripped, Timespan)
+        self.assertEqual(python_roundtripped, ts)
+        with self.assertRaises(ValueError):
+            adapter.validate_python(12)
+        with self.assertRaises(ValueError):
+            adapter.validate_json({})
 
     def test_day_obs(self):
         data = (

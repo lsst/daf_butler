@@ -26,10 +26,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = (
-    "SerializedTimespan",
-    "Timespan",
-)
+__all__ = ("Timespan",)
 
 import enum
 import warnings
@@ -39,6 +36,7 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeAlias
 import astropy.time
 import astropy.utils.exceptions
 import pydantic
+import pydantic_core
 import yaml
 
 # As of astropy 4.2, the erfa interface is shipped independently and
@@ -626,6 +624,59 @@ class Timespan:
         else:
             d = loader.construct_mapping(node)
             return Timespan(d["begin"], d["end"])
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _source_type: Any, _handler: pydantic.GetCoreSchemaHandler
+    ) -> pydantic_core.core_schema.CoreSchema:
+        # This is Pydantic's way of declaring a "schema" that expects a
+        # tuple[int, int] and then calls _deserialize.
+        from_tuple_schema = pydantic_core.core_schema.chain_schema(
+            [
+                pydantic_core.core_schema.tuple_positional_schema(
+                    [pydantic_core.core_schema.int_schema(), pydantic_core.core_schema.int_schema()]
+                ),
+                pydantic_core.core_schema.no_info_plain_validator_function(cls._deserialize),
+            ]
+        )
+        return pydantic_core.core_schema.json_or_python_schema(
+            # When reading JSON, do just that.
+            json_schema=from_tuple_schema,
+            # When validating Python, do that only if we don't already have a
+            # Timespan instance.
+            python_schema=pydantic_core.core_schema.union_schema(
+                [pydantic_core.core_schema.is_instance_schema(Timespan), from_tuple_schema]
+            ),
+            # When serializing to JSON, just call the _serialize method.
+            serialization=pydantic_core.core_schema.plain_serializer_function_ser_schema(cls._serialize),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls,
+        _core_schema: pydantic_core.core_schema.CoreSchema,
+        handler: pydantic.json_schema.GetJsonSchemaHandler,
+    ) -> pydantic.json_schema.JsonSchemaValue:
+        # JSON schema is the usual one for `tuple[int, int]` fields...
+        result = handler.resolve_ref_schema(
+            handler(
+                pydantic_core.core_schema.tuple_positional_schema(
+                    [pydantic_core.core_schema.int_schema(), pydantic_core.core_schema.int_schema()]
+                )
+            )
+        )
+        # ...with a custom description.
+        result["description"] = (
+            "A [begin, end) TAI timespan with bounds as integer nanoseconds since 1970-01-01 00:00:00."
+        )
+        return result
+
+    @classmethod
+    def _deserialize(cls, value: tuple[int, int]) -> Timespan:
+        return cls(begin=None, end=None, _nsec=value)
+
+    def _serialize(self) -> tuple[int, int]:
+        return self._nsec
 
 
 # Register Timespan -> YAML conversion method with Dumper class
