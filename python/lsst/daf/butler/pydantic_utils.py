@@ -167,7 +167,9 @@ class DeferredValidation(Generic[_T]):
             call to `validated`, *which will ignore ``**kwargs``*.
         """
         if not self._is_validated:
-            self._data = self._get_wrapped_type_adapter().validate_python(self._data, context=kwargs)
+            self._data = self._get_wrapped_type_adapter().validate_python(
+                self._data, strict=False, context=kwargs
+            )
             self._is_validated = True
         return self._data
 
