@@ -27,13 +27,16 @@
 
 from __future__ import annotations
 
-__all__ = ("DeferredValidation", "get_universe_from_context", "SerializableRegion")
+__all__ = ("DeferredValidation", "get_universe_from_context", "SerializableRegion", "SerializableTime")
 
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Generic, Self, TypeAlias, TypeVar, get_args
 
 import pydantic
+from astropy.time import Time
 from lsst.sphgeom import Region
 from pydantic_core import core_schema
+
+from .time_utils import TimeConverter
 
 if TYPE_CHECKING:
     from .dimensions import DimensionUniverse
@@ -296,4 +299,56 @@ An object annotated with this type is always an `lsst.sphgeom.Region` instance
 in Python, but unlike `lsst.sphgeom.Region` itself it can be used as a type
 in Pydantic models and type adapters, resulting in the field being saved as
 a hex encoding of the sphgeom-encoded bytes.
+"""
+
+
+class _SerializedTimeAnnotation:
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _source_type: Any, _handler: pydantic.GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        # This is Pydantic's way of declaring a "schema" that expects an `int`
+        # and then calls _deserialize.
+        from_int_schema = core_schema.chain_schema(
+            [
+                core_schema.int_schema(),
+                core_schema.no_info_plain_validator_function(cls._deserialize),
+            ]
+        )
+        return core_schema.json_or_python_schema(
+            # When reading JSON, do just that.
+            json_schema=from_int_schema,
+            # When validating Python, do that only if we don't already have a
+            # Time instance.
+            python_schema=core_schema.union_schema([core_schema.is_instance_schema(Time), from_int_schema]),
+            # When serializing to JSON, just call the _serialize method.
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: pydantic.json_schema.GetJsonSchemaHandler
+    ) -> pydantic.json_schema.JsonSchemaValue:
+        # JSON schema is the usual one for `int` fields...
+        result = handler.resolve_ref_schema(handler(core_schema.int_schema()))
+        # ...with a custom description.
+        result["description"] = "A TAI time represented as integer nanoseconds since 1970-01-01 00:00:00."
+        return result
+
+    @staticmethod
+    def _deserialize(value: int) -> Time:
+        return TimeConverter().nsec_to_astropy(value)
+
+    @staticmethod
+    def _serialize(time: Time) -> int:
+        return TimeConverter().astropy_to_nsec(time)
+
+
+SerializableTime: TypeAlias = Annotated[Time, _SerializedTimeAnnotation]
+"""A Pydantic-annotated version of `astropy.time.Time`.
+
+An object annotated with this type is always an `astropy.time.Time` instance
+in Python, but unlike `astropy.time.Time` itself it can be used as a type
+in Pydantic models and type adapters, resulting in the field being saved as
+integer nanoseconds since 1970-01-01 00:00:00.
 """

@@ -30,7 +30,8 @@ from __future__ import annotations
 import unittest
 
 import pydantic
-from lsst.daf.butler.pydantic_utils import DeferredValidation, SerializableRegion
+from astropy.time import Time
+from lsst.daf.butler.pydantic_utils import DeferredValidation, SerializableRegion, SerializableTime
 from lsst.sphgeom import ConvexPolygon, Mq3cPixelization
 
 
@@ -120,6 +121,21 @@ class SerializableExtensionsTestCase(unittest.TestCase):
             adapter.validate_json((b"this is not a region").hex())
         with self.assertRaises(ValueError):
             adapter.validate_json("this is not a hex string")
+
+    def test_time(self) -> None:
+        time = Time("2021-09-09T03:00:00", format="isot", scale="tai")
+        adapter = pydantic.TypeAdapter(SerializableTime)
+        self.assertIn("integer nanoseconds", adapter.json_schema()["description"])
+        json_roundtripped = adapter.validate_json(adapter.dump_json(time))
+        self.assertIsInstance(json_roundtripped, Time)
+        self.assertEqual(json_roundtripped, time)
+        python_roundtripped = adapter.validate_python(adapter.dump_python(time))
+        self.assertIsInstance(json_roundtripped, Time)
+        self.assertEqual(python_roundtripped, time)
+        with self.assertRaises(ValueError):
+            adapter.validate_python("one")
+        with self.assertRaises(ValueError):
+            adapter.validate_json({})
 
 
 if __name__ == "__main__":
