@@ -187,3 +187,16 @@ class QueryAnyResponseModel(pydantic.BaseModel):
     """Response model for /query/any/."""
 
     found_rows: bool
+
+
+class QueryExplainRequestModel(pydantic.BaseModel):
+    """Request model for /query/explain/."""
+
+    tree: SerializedQueryTree
+    execute: bool
+
+
+class QueryExplainResponseModel(pydantic.BaseModel):
+    """Response model for /query/explain/."""
+
+    messages: list[str]

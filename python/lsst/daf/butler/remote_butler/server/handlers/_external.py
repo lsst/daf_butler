@@ -49,6 +49,8 @@ from lsst.daf.butler.remote_butler.server_models import (
     QueryCountResponseModel,
     QueryExecuteRequestModel,
     QueryExecuteResponseModel,
+    QueryExplainRequestModel,
+    QueryExplainResponseModel,
 )
 
 from ...._exceptions import DatasetNotFoundError
@@ -302,3 +304,16 @@ def query_any(
         return QueryAnyResponseModel(
             found_rows=driver.any(tree, execute=request.execute, exact=request.exact)
         )
+
+
+@external_router.post(
+    "/v1/query/explain",
+    summary="Determine whether any rows would be returned from a query of the Butler database.",
+)
+def query_explain(
+    request: QueryExplainRequestModel, factory: Factory = Depends(factory_dependency)
+) -> QueryExplainResponseModel:
+    butler = factory.create_butler()
+    with butler._query_driver() as driver:
+        tree = request.tree.to_query_tree(driver.universe)
+        return QueryExplainResponseModel(messages=driver.explain_no_results(tree, execute=request.execute))

@@ -62,6 +62,8 @@ from .server_models import (
     QueryCountResponseModel,
     QueryExecuteRequestModel,
     QueryExecuteResponseModel,
+    QueryExplainRequestModel,
+    QueryExplainResponseModel,
 )
 
 
@@ -167,7 +169,13 @@ class RemoteQueryDriver(QueryDriver):
         return result.found_rows
 
     def explain_no_results(self, tree: QueryTree, execute: bool) -> Iterable[str]:
-        raise NotImplementedError()
+        request = QueryExplainRequestModel(
+            tree=SerializedQueryTree(tree),
+            execute=execute,
+        )
+        response = self._connection.post("query/explain", request)
+        result = parse_model(response, QueryExplainResponseModel)
+        return result.messages
 
     def get_default_collections(self) -> tuple[str, ...]:
         return tuple(self._butler.collections)
