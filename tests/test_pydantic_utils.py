@@ -30,7 +30,8 @@ from __future__ import annotations
 import unittest
 
 import pydantic
-from lsst.daf.butler.pydantic_utils import DeferredValidation
+from lsst.daf.butler.pydantic_utils import DeferredValidation, SerializableRegion
+from lsst.sphgeom import ConvexPolygon, Mq3cPixelization
 
 
 class Inner(pydantic.BaseModel):
@@ -64,7 +65,7 @@ class OuterWithoutWrapper(pydantic.BaseModel):
 
 
 class DeferredValidationTestCase(unittest.TestCase):
-    """Tests for `lsst.daf.butle.pydanic_utils.DeferredValidation`."""
+    """Tests for `lsst.daf.butler.pydanic_utils.DeferredValidation`."""
 
     def test_json_schema(self) -> None:
         self.assertEqual(
@@ -95,6 +96,30 @@ class DeferredValidationTestCase(unittest.TestCase):
         self.assertEqual(outer2d.inner.validated(override=4).value, 4)
         self.assertIs(outer2c.inner.validated(override=4), outer2c.inner.validated(override=4))  # caching
         self.assertIs(outer2d.inner.validated(override=4), outer2d.inner.validated(override=4))  # caching
+
+
+class SerializableExtensionsTestCase(unittest.TestCase):
+    """Tests for third-party types we add serializable annotations for."""
+
+    def test_region(self) -> None:
+        pixelization = Mq3cPixelization(10)
+        region = pixelization.pixel(12058823)
+        adapter = pydantic.TypeAdapter(SerializableRegion)
+        self.assertEqual(adapter.json_schema()["media"]["binaryEncoding"], "base16")
+        json_roundtripped = adapter.validate_json(adapter.dump_json(region))
+        self.assertIsInstance(json_roundtripped, ConvexPolygon)
+        self.assertEqual(json_roundtripped.getVertices(), region.getVertices())
+        python_roundtripped = adapter.validate_python(adapter.dump_python(region))
+        self.assertIsInstance(json_roundtripped, ConvexPolygon)
+        self.assertEqual(python_roundtripped.getVertices(), region.getVertices())
+        with self.assertRaises(ValueError):
+            adapter.validate_python(12)
+        with self.assertRaises(ValueError):
+            adapter.validate_json({})
+        with self.assertRaises(ValueError):
+            adapter.validate_json((b"this is not a region").hex())
+        with self.assertRaises(ValueError):
+            adapter.validate_json("this is not a hex string")
 
 
 if __name__ == "__main__":

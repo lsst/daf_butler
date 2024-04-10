@@ -27,11 +27,12 @@
 
 from __future__ import annotations
 
-__all__ = ("DeferredValidation", "get_universe_from_context")
+__all__ = ("DeferredValidation", "get_universe_from_context", "SerializableRegion")
 
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Self, TypeVar, get_args
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Generic, Self, TypeAlias, TypeVar, get_args
 
 import pydantic
+from lsst.sphgeom import Region
 from pydantic_core import core_schema
 
 if TYPE_CHECKING:
@@ -243,3 +244,56 @@ class DeferredValidation(Generic[_T]):
         # of the wrapped type.
         json_schema = handler(cls._get_wrapped_type_adapter().core_schema)
         return handler.resolve_ref_schema(json_schema)
+
+
+class _SerializedRegionAnnotation:
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _source_type: Any, _handler: pydantic.GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        # This is Pydantic's way of declaring a "schema" that expects a `str`
+        # and then calls _deserialize.
+        from_str_schema = core_schema.chain_schema(
+            [
+                core_schema.str_schema(),
+                core_schema.no_info_plain_validator_function(cls._deserialize),
+            ]
+        )
+        return core_schema.json_or_python_schema(
+            # When reading JSON, do just that.
+            json_schema=from_str_schema,
+            # When validating Python, do that only if we don't already have a
+            # Region instance.
+            python_schema=core_schema.union_schema([core_schema.is_instance_schema(Region), from_str_schema]),
+            # When serializing to JSON, just call the _serialize method.
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: pydantic.json_schema.GetJsonSchemaHandler
+    ) -> pydantic.json_schema.JsonSchemaValue:
+        # JSON schema is the usual one for `str` fields...
+        result = handler.resolve_ref_schema(handler(core_schema.str_schema()))
+        # ...with a custom description and a note that it's base64-encoded.
+        result["description"] = "A region on the sphere from the lsst.sphgeom package."
+        result["media"] = {"binaryEncoding": "base16", "type": "application/lsst.sphgeom"}
+        return result
+
+    @staticmethod
+    def _deserialize(value: str) -> Region:
+        return Region.decode(bytes.fromhex(value))
+
+    @staticmethod
+    def _serialize(region: Region) -> str:
+        return region.encode().hex()
+
+
+SerializableRegion: TypeAlias = Annotated[Region, _SerializedRegionAnnotation]
+"""A Pydantic-annotated version of `lsst.sphgeom.Region`.
+
+An object annotated with this type is always an `lsst.sphgeom.Region` instance
+in Python, but unlike `lsst.sphgeom.Region` itself it can be used as a type
+in Pydantic models and type adapters, resulting in the field being saved as
+a hex encoding of the sphgeom-encoded bytes.
+"""
