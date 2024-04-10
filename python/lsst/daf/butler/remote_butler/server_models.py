@@ -158,3 +158,18 @@ class QueryExecuteResponseModel(pydantic.BaseModel):
     """Response model for /query/execute/."""
 
     rows: list[SerializedDimensionRecord]
+
+
+class QueryCountRequestModel(pydantic.BaseModel):
+    """Request model for /query/count/."""
+
+    tree: SerializedQueryTree
+    result_spec: SerializedResultSpec
+    exact: bool
+    discard: bool
+
+
+class QueryCountResponseModel(pydantic.BaseModel):
+    """Response model for /query/count/."""
+
+    count: int

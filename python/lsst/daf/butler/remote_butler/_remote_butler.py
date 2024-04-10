@@ -75,8 +75,6 @@ from .server_models import (
     GetFileResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
-    QueryExecuteRequestModel,
-    QueryExecuteResponseModel,
 )
 
 if TYPE_CHECKING:
@@ -534,7 +532,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # Delay import to avoid circular import issue.
         from ._query_driver import RemoteQueryDriver
 
-        driver = RemoteQueryDriver(self)
+        driver = RemoteQueryDriver(self, self._connection)
         with driver:
             query = Query(driver)
             yield query
@@ -603,10 +601,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _query_collections(self, query: QueryCollectionsRequestModel) -> QueryCollectionsResponseModel:
         response = self._connection.post("query_collections", query)
         return parse_model(response, QueryCollectionsResponseModel)
-
-    def _execute_query(self, request: QueryExecuteRequestModel) -> QueryExecuteResponseModel:
-        response = self._connection.post("query/execute", request)
-        return parse_model(response, QueryExecuteResponseModel)
 
 
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:

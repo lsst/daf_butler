@@ -43,6 +43,8 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetFileResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
+    QueryCountRequestModel,
+    QueryCountResponseModel,
     QueryExecuteRequestModel,
     QueryExecuteResponseModel,
 )
@@ -246,7 +248,7 @@ def query_collections(
 
 
 @external_router.post("/v1/query/execute", summary="Query the Butler database and return full results")
-def query(
+def query_execute(
     request: QueryExecuteRequestModel, factory: Factory = Depends(factory_dependency)
 ) -> QueryExecuteResponseModel:
     butler = factory.create_butler()
@@ -267,3 +269,19 @@ def _load_query_pages(driver: QueryDriver, request: QueryExecuteRequestModel) ->
     while page.next_key is not None:
         page = driver.fetch_next_page(page.spec, page.next_key)
         yield page
+
+
+@external_router.post(
+    "/v1/query/count",
+    summary="Query the Butler database and return a count of rows that would be returned.",
+)
+def query_count(
+    request: QueryCountRequestModel, factory: Factory = Depends(factory_dependency)
+) -> QueryCountResponseModel:
+    butler = factory.create_butler()
+    with butler._query_driver() as driver:
+        tree = request.tree.to_query_tree(driver.universe)
+        spec = request.result_spec.to_result_spec(driver.universe)
+        return QueryCountResponseModel(
+            count=driver.count(tree, spec, exact=request.exact, discard=request.discard)
+        )

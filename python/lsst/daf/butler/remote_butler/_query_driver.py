@@ -53,13 +53,20 @@ from ..queries.result_specs import (
     SerializedResultSpec,
 )
 from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTree, SerializedQueryTree
+from ._http_connection import RemoteButlerHttpConnection, parse_model
 from ._remote_butler import RemoteButler
-from .server_models import QueryExecuteRequestModel
+from .server_models import (
+    QueryCountRequestModel,
+    QueryCountResponseModel,
+    QueryExecuteRequestModel,
+    QueryExecuteResponseModel,
+)
 
 
 class RemoteQueryDriver(QueryDriver):
-    def __init__(self, butler: RemoteButler):
+    def __init__(self, butler: RemoteButler, connection: RemoteButlerHttpConnection):
         self._butler = butler
+        self._connection = connection
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         pass
@@ -86,14 +93,15 @@ class RemoteQueryDriver(QueryDriver):
         request = QueryExecuteRequestModel(
             tree=SerializedQueryTree(tree), result_spec=SerializedResultSpec(result_spec)
         )
-        response = self._butler._execute_query(request)
+        response = self._connection.post("query/execute", request)
+        result = parse_model(response, QueryExecuteResponseModel)
         if result_spec.result_type != "dimension_record":
             raise NotImplementedError()
         universe = self.universe
         return DimensionRecordResultPage(
             spec=result_spec,
             next_key=None,
-            rows=[DimensionRecord.from_simple(r, universe=universe) for r in response.rows],
+            rows=[DimensionRecord.from_simple(r, universe=universe) for r in result.rows],
         )
 
     @overload
@@ -136,7 +144,15 @@ class RemoteQueryDriver(QueryDriver):
         exact: bool,
         discard: bool,
     ) -> int:
-        raise NotImplementedError()
+        request = QueryCountRequestModel(
+            tree=SerializedQueryTree(tree),
+            result_spec=SerializedResultSpec(result_spec),
+            exact=exact,
+            discard=discard,
+        )
+        response = self._connection.post("query/count", request)
+        result = parse_model(response, QueryCountResponseModel)
+        return result.count
 
     def any(self, tree: QueryTree, *, execute: bool, exact: bool) -> bool:
         raise NotImplementedError()
