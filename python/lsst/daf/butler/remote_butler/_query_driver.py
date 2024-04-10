@@ -30,12 +30,11 @@ from __future__ import annotations
 __all__ = ("RemoteQueryDriver",)
 
 
-from abc import abstractmethod
 from collections.abc import Iterable
-from typing import overload
+from typing import Any, overload
 
 from .._dataset_type import DatasetType
-from ..dimensions import DataIdValue, DimensionGroup, DimensionUniverse
+from ..dimensions import DataIdValue, DimensionGroup, DimensionRecord, DimensionUniverse
 from ..queries.driver import (
     DataCoordinateResultPage,
     DatasetRefResultPage,
@@ -51,15 +50,23 @@ from ..queries.result_specs import (
     DimensionRecordResultSpec,
     GeneralResultSpec,
     ResultSpec,
+    SerializedResultSpec,
 )
-from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTree
+from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTree, SerializedQueryTree
+from ._remote_butler import RemoteButler
+from .server_models import QueryExecuteRequestModel
 
 
 class RemoteQueryDriver(QueryDriver):
+    def __init__(self, butler: RemoteButler):
+        self._butler = butler
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        pass
+
     @property
-    @abstractmethod
     def universe(self) -> DimensionUniverse:
-        raise NotImplementedError()
+        return self._butler.dimensions
 
     @overload
     def execute(self, result_spec: DataCoordinateResultSpec, tree: QueryTree) -> DataCoordinateResultPage: ...
@@ -75,9 +82,19 @@ class RemoteQueryDriver(QueryDriver):
     @overload
     def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> GeneralResultPage: ...
 
-    @abstractmethod
     def execute(self, result_spec: ResultSpec, tree: QueryTree) -> ResultPage:
-        raise NotImplementedError()
+        request = QueryExecuteRequestModel(
+            tree=SerializedQueryTree(tree), result_spec=SerializedResultSpec(result_spec)
+        )
+        response = self._butler._execute_query(request)
+        if result_spec.result_type != "dimension_record":
+            raise NotImplementedError()
+        universe = self.universe
+        return DimensionRecordResultPage(
+            spec=result_spec,
+            next_key=None,
+            rows=[DimensionRecord.from_simple(r, universe=universe) for r in response.rows],
+        )
 
     @overload
     def fetch_next_page(
@@ -95,11 +112,9 @@ class RemoteQueryDriver(QueryDriver):
     @overload
     def fetch_next_page(self, result_spec: GeneralResultSpec, key: PageKey) -> GeneralResultPage: ...
 
-    @abstractmethod
     def fetch_next_page(self, result_spec: ResultSpec, key: PageKey) -> ResultPage:
         raise NotImplementedError()
 
-    @abstractmethod
     def materialize(
         self,
         tree: QueryTree,
@@ -108,13 +123,11 @@ class RemoteQueryDriver(QueryDriver):
     ) -> MaterializationKey:
         raise NotImplementedError()
 
-    @abstractmethod
     def upload_data_coordinates(
         self, dimensions: DimensionGroup, rows: Iterable[tuple[DataIdValue, ...]]
     ) -> DataCoordinateUploadKey:
         raise NotImplementedError()
 
-    @abstractmethod
     def count(
         self,
         tree: QueryTree,
@@ -125,18 +138,14 @@ class RemoteQueryDriver(QueryDriver):
     ) -> int:
         raise NotImplementedError()
 
-    @abstractmethod
     def any(self, tree: QueryTree, *, execute: bool, exact: bool) -> bool:
         raise NotImplementedError()
 
-    @abstractmethod
     def explain_no_results(self, tree: QueryTree, execute: bool) -> Iterable[str]:
         raise NotImplementedError()
 
-    @abstractmethod
     def get_default_collections(self) -> tuple[str, ...]:
-        raise NotImplementedError()
+        return tuple(self._butler.collections)
 
-    @abstractmethod
     def get_dataset_type(self, name: str) -> DatasetType:
-        raise NotImplementedError()
+        return self._butler.get_dataset_type(name)

@@ -311,3 +311,6 @@ class SerializedQueryTree(DeferredValidation[QueryTree]):
     """A Pydantic-serializable wrapper for `QueryTree` that defers validation
     to the `validated` method, allowing a `.DimensionUniverse` to be provided.
     """
+
+    def to_query_tree(self, universe: DimensionUniverse) -> QueryTree:
+        return self.validated(universe=universe)

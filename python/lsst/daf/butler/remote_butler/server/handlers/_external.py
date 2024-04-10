@@ -28,6 +28,7 @@
 __all__ = ()
 
 import uuid
+from collections.abc import Iterator
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -42,9 +43,12 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetFileResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
+    QueryExecuteRequestModel,
+    QueryExecuteResponseModel,
 )
 
 from ...._exceptions import DatasetNotFoundError
+from ....queries.driver import DimensionRecordResultPage, QueryDriver, ResultPage
 from .._dependencies import factory_dependency
 from .._factory import Factory
 
@@ -239,3 +243,27 @@ def query_collections(
         includeChains=request.include_chains,
     )
     return QueryCollectionsResponseModel(collections=collections)
+
+
+@external_router.post("/v1/query/execute", summary="Query the Butler database and return full results")
+def query(
+    request: QueryExecuteRequestModel, factory: Factory = Depends(factory_dependency)
+) -> QueryExecuteResponseModel:
+    butler = factory.create_butler()
+    with butler._query_driver() as driver:
+        response = QueryExecuteResponseModel(rows=[])
+        for page in _load_query_pages(driver, request):
+            if not isinstance(page, DimensionRecordResultPage):
+                raise NotImplementedError()
+            response.rows.extend(record.to_simple() for record in page.rows)
+        return response
+
+
+def _load_query_pages(driver: QueryDriver, request: QueryExecuteRequestModel) -> Iterator[ResultPage]:
+    tree = request.tree.to_query_tree(driver.universe)
+    spec = request.result_spec.to_result_spec(driver.universe)
+    page = driver.execute(spec, tree)
+    yield page
+    while page.next_key is not None:
+        page = driver.fetch_next_page(page.spec, page.next_key)
+        yield page

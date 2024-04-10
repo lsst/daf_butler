@@ -332,7 +332,7 @@ class HybridButler(Butler):
         return self._registry
 
     def _query(self) -> AbstractContextManager[Query]:
-        return self._direct_butler._query()
+        return self._remote_butler._query()
 
     def _query_data_ids(
         self,

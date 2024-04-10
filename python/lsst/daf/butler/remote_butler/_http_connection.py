@@ -92,7 +92,7 @@ class RemoteButlerHttpConnection:
         ButlerServerError
             If there is an issue communicating with the server.
         """
-        json = model.model_dump_json(exclude_unset=True).encode("utf-8")
+        json = model.model_dump_json().encode("utf-8")
         return self._send_request(
             "POST",
             path,

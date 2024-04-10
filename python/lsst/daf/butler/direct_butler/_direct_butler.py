@@ -2142,13 +2142,17 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     @contextlib.contextmanager
     def _query(self) -> Iterator[Query]:
         # Docstring inherited.
-        driver = DirectQueryDriver(
-            self._registry._db, self.dimensions, self._registry._managers, self._registry.defaults
-        )
-        query = Query(driver)
+        with self._query_driver() as driver:
+            yield Query(driver)
+
+    @contextlib.contextmanager
+    def _query_driver(self) -> Iterator[DirectQueryDriver]:
         with self._caching_context():
+            driver = DirectQueryDriver(
+                self._registry._db, self.dimensions, self._registry._managers, self._registry.defaults
+            )
             with driver:
-                yield query
+                yield driver
 
     def _preload_cache(self) -> None:
         """Immediately load caches that are used for common operations."""

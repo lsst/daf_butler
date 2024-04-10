@@ -44,6 +44,10 @@ from lsst.daf.butler import CollectionType, SerializedDataId, SerializedDatasetR
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 from lsst.daf.butler.registry import SerializedCollectionSummary
 
+from ..dimensions import SerializedDimensionRecord
+from ..queries.result_specs import SerializedResultSpec
+from ..queries.tree import SerializedQueryTree
+
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
 ERROR_STATUS_CODE = 422
 
@@ -141,3 +145,16 @@ class QueryCollectionsResponseModel(pydantic.BaseModel):
 
     collections: list[str]
     """Collection names that match the search."""
+
+
+class QueryExecuteRequestModel(pydantic.BaseModel):
+    """Request model for /query/execute/."""
+
+    tree: SerializedQueryTree
+    result_spec: SerializedResultSpec
+
+
+class QueryExecuteResponseModel(pydantic.BaseModel):
+    """Response model for /query/execute/."""
+
+    rows: list[SerializedDimensionRecord]

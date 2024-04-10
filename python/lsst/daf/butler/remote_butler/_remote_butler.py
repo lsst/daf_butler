@@ -29,8 +29,8 @@ from __future__ import annotations
 
 __all__ = ("RemoteButler",)
 
-from collections.abc import Collection, Iterable, Sequence
-from contextlib import AbstractContextManager
+from collections.abc import Collection, Iterable, Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
@@ -55,6 +55,7 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse
+from ..queries import Query
 from ..registry import (
     CollectionArgType,
     CollectionSummary,
@@ -74,6 +75,8 @@ from .server_models import (
     GetFileResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
+    QueryExecuteRequestModel,
+    QueryExecuteResponseModel,
 )
 
 if TYPE_CHECKING:
@@ -81,7 +84,6 @@ if TYPE_CHECKING:
     from .._limited_butler import LimitedButler
     from .._timespan import Timespan
     from ..dimensions import DataId
-    from ..queries import Query
     from ..transfers import RepoExportContext
 
 from ._http_connection import RemoteButlerHttpConnection, parse_model
@@ -527,9 +529,15 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def registry(self) -> Registry:
         return self._registry
 
-    def _query(self) -> AbstractContextManager[Query]:
-        # Docstring inherited.
-        raise NotImplementedError()
+    @contextmanager
+    def _query(self) -> Iterator[Query]:
+        # Delay import to avoid circular import issue.
+        from ._query_driver import RemoteQueryDriver
+
+        driver = RemoteQueryDriver(self)
+        with driver:
+            query = Query(driver)
+            yield query
 
     def pruneDatasets(
         self,
@@ -595,6 +603,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _query_collections(self, query: QueryCollectionsRequestModel) -> QueryCollectionsResponseModel:
         response = self._connection.post("query_collections", query)
         return parse_model(response, QueryCollectionsResponseModel)
+
+    def _execute_query(self, request: QueryExecuteRequestModel) -> QueryExecuteResponseModel:
+        response = self._connection.post("query/execute", request)
+        return parse_model(response, QueryExecuteResponseModel)
 
 
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:
