@@ -27,14 +27,15 @@
 
 """Specialized Butler exceptions."""
 __all__ = (
+    "ButlerUserError",
     "CalibrationLookupError",
     "CollectionCycleError",
     "CollectionTypeError",
     "DatasetNotFoundError",
     "DimensionNameError",
-    "ButlerUserError",
     "DatasetTypeNotSupportedError",
     "EmptyQueryResultError",
+    "InvalidQueryError",
     "MissingDatasetTypeError",
     "MissingCollectionError",
     "ValidationError",
@@ -115,6 +116,12 @@ class DimensionValueError(ValueError, ButlerUserError):
     error_type = "dimension_value"
 
 
+class InvalidQueryError(ButlerUserError):
+    """Exception raised when a query is not valid."""
+
+    error_type = "invalid_query"
+
+
 class MissingCollectionError(CollectionError, ButlerUserError):
     """Exception raised when an operation attempts to use a collection that
     does not exist.
@@ -179,6 +186,7 @@ _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     DimensionNameError,
     DimensionValueError,
     DatasetNotFoundError,
+    InvalidQueryError,
     MissingCollectionError,
     MissingDatasetTypeError,
     UnknownButlerUserError,

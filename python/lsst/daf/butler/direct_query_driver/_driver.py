@@ -42,6 +42,7 @@ import sqlalchemy
 
 from .. import ddl
 from .._dataset_type import DatasetType
+from .._exceptions import InvalidQueryError
 from ..dimensions import DataIdValue, DimensionGroup, DimensionRecordSet, DimensionUniverse, SkyPixDimension
 from ..name_shrinker import NameShrinker
 from ..queries import tree as qt
@@ -854,7 +855,7 @@ class DirectQueryDriver(QueryDriver):
                 if governor in self._defaults.dataId.dimensions:
                     result.constraint_data_id[governor] = self._defaults.dataId[governor]
                 else:
-                    raise qt.InvalidQueryError(
+                    raise InvalidQueryError(
                         f"Query 'where' expression references a dimension dependent on {governor} without "
                         "constraining it directly."
                     )
@@ -937,7 +938,7 @@ class DirectQueryDriver(QueryDriver):
             # This is really for server-side defensiveness; it's hard to
             # imagine the query getting different dimensions for a dataset
             # type in two calls to the same query driver.
-            raise qt.InvalidQueryError(
+            raise InvalidQueryError(
                 f"Incorrect dimensions {result.dimensions} for dataset {dataset_type_name} "
                 f"in query (vs. {self.get_dataset_type(dataset_type_name).dimensions.as_group()})."
             )

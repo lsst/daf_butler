@@ -35,7 +35,7 @@ import unittest
 from collections.abc import Iterable
 
 import astropy.time
-from lsst.daf.butler import DimensionUniverse, Timespan
+from lsst.daf.butler import DimensionUniverse, InvalidQueryError, Timespan
 from lsst.daf.butler.dimensions import DimensionElement, DimensionGroup
 from lsst.daf.butler.queries import tree as qt
 from lsst.daf.butler.queries.expression_factory import ExpressionFactory
@@ -265,7 +265,7 @@ class OverlapsVisitorTestCase(unittest.TestCase):
             ],
         )
         # A spatial join between dimensions in the same family is an error.
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             self.run_visitor(["patch", "tract"], x.patch.region.overlaps(x.tract.region))
 
     def test_single_unambiguous_spatial_join(self) -> None:
@@ -392,11 +392,11 @@ class OverlapsVisitorTestCase(unittest.TestCase):
         x = ExpressionFactory(self.universe)
         # Trivial predicate.  This is an error, because we cannot generate
         # automatic spatial joins when there are more than two families
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             self.run_visitor(["visit", "patch", "htm7"], qt.Predicate.from_bool(True))
         # Predicate that joins one pair of families but orphans the the other;
         # also an error.
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             self.run_visitor(["visit", "patch", "htm7"], x.visit.region.overlaps(x.htm7.region))
         # A sufficient overlap join predicate has been added; each family is
         # connected to at least one other.
@@ -453,7 +453,7 @@ class OverlapsVisitorTestCase(unittest.TestCase):
         self.assertFalse(visitor.spatial_constraints)
         self.assertFalse(visitor.temporal_dimension_joins)
         # A temporal join between dimensions in the same family is an error.
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             self.run_visitor(["exposure", "visit"], x.exposure.timespan.overlaps(x.visit.timespan))
         # Overlap join with a calibration dataset's validity ranges.
         visitor = self.run_visitor(["exposure"], x.exposure.timespan.overlaps(x["bias"].timespan))

@@ -40,9 +40,10 @@ from typing import Annotated, Literal, TypeAlias, cast
 
 import pydantic
 
+from .._exceptions import InvalidQueryError
 from ..dimensions import DimensionElement, DimensionGroup, DimensionUniverse
 from ..pydantic_utils import DeferredValidation
-from .tree import ColumnSet, DatasetFieldName, InvalidQueryError, OrderExpression, QueryTree
+from .tree import ColumnSet, DatasetFieldName, OrderExpression, QueryTree
 
 
 class ResultSpecBase(pydantic.BaseModel, ABC):

@@ -42,7 +42,8 @@ from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, cast, 
 
 import pydantic
 
-from ._base import InvalidQueryError, QueryTreeBase
+from ..._exceptions import InvalidQueryError
+from ._base import QueryTreeBase
 from ._column_expression import ColumnExpression
 
 if TYPE_CHECKING:

@@ -39,10 +39,11 @@ import astropy.time
 
 from .._butler import Butler
 from .._dataset_type import DatasetType
+from .._exceptions import InvalidQueryError
 from .._timespan import Timespan
 from ..dimensions import DataCoordinate, DimensionRecord
 from ..direct_query_driver import DirectQueryDriver
-from ..queries import DimensionRecordQueryResults, InvalidQueryError
+from ..queries import DimensionRecordQueryResults
 from ..registry import CollectionType, NoDefaultCollectionError, RegistryDefaults
 from ..registry.sql_registry import SqlRegistry
 from ..transfers import YamlRepoImportBackend

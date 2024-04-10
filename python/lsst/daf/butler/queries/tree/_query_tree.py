@@ -42,9 +42,10 @@ from typing import TypeAlias, final
 
 import pydantic
 
+from ..._exceptions import InvalidQueryError
 from ...dimensions import DimensionGroup, DimensionUniverse
 from ...pydantic_utils import DeferredValidation
-from ._base import InvalidQueryError, QueryTreeBase
+from ._base import QueryTreeBase
 from ._column_set import ColumnSet
 from ._predicate import Predicate
 

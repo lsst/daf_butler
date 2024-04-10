@@ -33,9 +33,10 @@ from typing import TYPE_CHECKING, ClassVar, Literal, TypeAlias, TypeVar, Union, 
 
 import pydantic
 
+from ..._exceptions import InvalidQueryError
 from ...column_spec import ColumnType
 from ...dimensions import Dimension, DimensionElement
-from ._base import ColumnExpressionBase, DatasetFieldName, InvalidQueryError
+from ._base import ColumnExpressionBase, DatasetFieldName
 
 if TYPE_CHECKING:
     from ..visitors import ColumnExpressionVisitor

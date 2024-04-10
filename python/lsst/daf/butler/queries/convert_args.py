@@ -36,6 +36,7 @@ import itertools
 from collections.abc import Mapping, Set
 from typing import Any, cast
 
+from .._exceptions import InvalidQueryError
 from ..dimensions import DataCoordinate, DataId, Dimension, DimensionGroup
 from .expression_factory import ExpressionFactory, ExpressionProxy
 from .tree import (
@@ -45,7 +46,6 @@ from .tree import (
     DatasetFieldReference,
     DimensionFieldReference,
     DimensionKeyReference,
-    InvalidQueryError,
     OrderExpression,
     Predicate,
     Reversed,
