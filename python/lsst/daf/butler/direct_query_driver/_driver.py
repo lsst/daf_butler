@@ -360,7 +360,7 @@ class DirectQueryDriver(QueryDriver):
             return False
         if not execute:
             if exact:
-                raise RuntimeError("Cannot obtain exact result for 'any' without executing.")
+                raise InvalidQueryError("Cannot obtain exact result for 'any' without executing.")
             return True
         if builder.postprocessing and exact:
             sql_select = builder.select()

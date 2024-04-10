@@ -143,7 +143,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(results.any(), bool(ids))
         if not doomed:
             self.assertTrue(results.any(exact=False, execute=False))
-            with self.assertRaises(RuntimeError):
+            with self.assertRaisesRegex(InvalidQueryError, "^Cannot obtain exact"):
                 results.any(exact=True, execute=False)
         else:
             self.assertFalse(results.any(exact=False, execute=False))
