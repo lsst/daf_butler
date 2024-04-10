@@ -38,8 +38,8 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeAlias
 
 import astropy.time
 import astropy.utils.exceptions
+import pydantic
 import yaml
-from pydantic import Field
 
 # As of astropy 4.2, the erfa interface is shipped independently and
 # ErfaWarning is no longer an AstropyWarning
@@ -76,7 +76,7 @@ class _SpecialTimespanBound(enum.Enum):
 
 TimespanBound: TypeAlias = astropy.time.Time | _SpecialTimespanBound | None
 
-SerializedTimespan = Annotated[list[int], Field(min_length=2, max_length=2)]
+SerializedTimespan = Annotated[list[int], pydantic.Field(min_length=2, max_length=2)]
 """JSON-serializable representation of the Timespan class, as a list of two
 integers ``[begin, end]`` in nanoseconds since the epoch.
 """
