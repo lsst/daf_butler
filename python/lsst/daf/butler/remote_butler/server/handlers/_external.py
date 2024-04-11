@@ -30,20 +30,10 @@ from __future__ import annotations
 __all__ = ()
 
 import uuid
-from collections.abc import Iterator
-from contextlib import contextmanager
-from typing import Any, NamedTuple
+from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import (
-    Butler,
-    CollectionType,
-    DataCoordinate,
-    DatasetRef,
-    DimensionGroup,
-    SerializedDatasetRef,
-    SerializedDatasetType,
-)
+from lsst.daf.butler import Butler, CollectionType, DatasetRef, SerializedDatasetRef, SerializedDatasetType
 from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
 from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetRequestModel,
@@ -52,21 +42,11 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
-    QueryAnyRequestModel,
-    QueryAnyResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
-    QueryCountRequestModel,
-    QueryCountResponseModel,
-    QueryExecuteRequestModel,
-    QueryExecuteResponseModel,
-    QueryExplainRequestModel,
-    QueryExplainResponseModel,
-    QueryInputs,
 )
 
 from ...._exceptions import DatasetNotFoundError
-from ....queries.driver import DimensionRecordResultPage, QueryDriver, QueryTree, ResultPage, ResultSpec
 from .._dependencies import factory_dependency
 from .._factory import Factory
 
@@ -261,97 +241,3 @@ def query_collections(
         includeChains=request.include_chains,
     )
     return QueryCollectionsResponseModel(collections=collections)
-
-
-@external_router.post("/v1/query/execute", summary="Query the Butler database and return full results")
-def query_execute(
-    request: QueryExecuteRequestModel, factory: Factory = Depends(factory_dependency)
-) -> QueryExecuteResponseModel:
-    with _get_query_context(factory, request.query) as ctx:
-        spec = request.result_spec.to_result_spec(ctx.driver.universe)
-        response = QueryExecuteResponseModel(rows=[])
-        for page in _load_query_pages(ctx.driver, ctx.tree, spec):
-            if not isinstance(page, DimensionRecordResultPage):
-                raise NotImplementedError()
-            response.rows.extend(record.to_simple() for record in page.rows)
-        return response
-
-
-def _load_query_pages(driver: QueryDriver, tree: QueryTree, spec: ResultSpec) -> Iterator[ResultPage]:
-    page = driver.execute(spec, tree)
-    yield page
-    while page.next_key is not None:
-        page = driver.fetch_next_page(page.spec, page.next_key)
-        yield page
-
-
-@external_router.post(
-    "/v1/query/count",
-    summary="Query the Butler database and return a count of rows that would be returned.",
-)
-def query_count(
-    request: QueryCountRequestModel, factory: Factory = Depends(factory_dependency)
-) -> QueryCountResponseModel:
-    with _get_query_context(factory, request.query) as ctx:
-        spec = request.result_spec.to_result_spec(ctx.driver.universe)
-        return QueryCountResponseModel(
-            count=ctx.driver.count(ctx.tree, spec, exact=request.exact, discard=request.discard)
-        )
-
-
-@external_router.post(
-    "/v1/query/any",
-    summary="Determine whether any rows would be returned from a query of the Butler database.",
-)
-def query_any(
-    request: QueryAnyRequestModel, factory: Factory = Depends(factory_dependency)
-) -> QueryAnyResponseModel:
-    with _get_query_context(factory, request.query) as ctx:
-        return QueryAnyResponseModel(
-            found_rows=ctx.driver.any(ctx.tree, execute=request.execute, exact=request.exact)
-        )
-
-
-@external_router.post(
-    "/v1/query/explain",
-    summary="Determine whether any rows would be returned from a query of the Butler database.",
-)
-def query_explain(
-    request: QueryExplainRequestModel, factory: Factory = Depends(factory_dependency)
-) -> QueryExplainResponseModel:
-    with _get_query_context(factory, request.query) as ctx:
-        return QueryExplainResponseModel(
-            messages=ctx.driver.explain_no_results(ctx.tree, execute=request.execute)
-        )
-
-
-@contextmanager
-def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryContext]:
-    butler = factory.create_butler()
-    tree = query.tree.to_query_tree(butler.dimensions)
-
-    with butler._query_driver(
-        default_collections=(),
-        default_data_id=DataCoordinate.from_simple(query.default_data_id, universe=butler.dimensions),
-    ) as driver:
-        for input in query.additional_query_inputs:
-            if input.type == "materialized":
-                driver.materialize(
-                    input.tree.to_query_tree(butler.dimensions),
-                    DimensionGroup.from_simple(input.dimensions, butler.dimensions),
-                    frozenset(input.datasets),
-                    key=input.key,
-                )
-            elif input.type == "upload":
-                driver.upload_data_coordinates(
-                    DimensionGroup.from_simple(input.dimensions, butler.dimensions),
-                    [tuple(r) for r in input.rows],
-                    key=input.key,
-                ),
-
-        yield _QueryContext(driver=driver, tree=tree)
-
-
-class _QueryContext(NamedTuple):
-    driver: QueryDriver
-    tree: QueryTree
