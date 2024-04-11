@@ -133,7 +133,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         if has_postprocessing and not doomed:
             self.assertEqual(results.count(discard=True), len(ids))
             self.assertGreaterEqual(results.count(discard=False, exact=False), len(ids))
-            with self.assertRaises(RuntimeError):
+            with self.assertRaisesRegex(InvalidQueryError, "^Cannot count query rows"):
                 results.count()
         else:
             self.assertEqual(results.count(discard=True), len(ids))

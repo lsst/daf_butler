@@ -340,7 +340,7 @@ class DirectQueryDriver(QueryDriver):
             builder.postprocessing = Postprocessing()
         if builder.postprocessing:
             if not discard:
-                raise RuntimeError("Cannot count query rows exactly without discarding them.")
+                raise InvalidQueryError("Cannot count query rows exactly without discarding them.")
             sql_select = builder.select()
             builder.postprocessing.limit = result_spec.limit
             n = 0
