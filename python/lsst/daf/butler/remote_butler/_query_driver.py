@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 __all__ = ("RemoteQueryDriver",)
 
 
@@ -57,6 +59,9 @@ from ..registry import NoDefaultCollectionError
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from ._remote_butler import RemoteButler
 from .server_models import (
+    AdditionalQueryInput,
+    DataCoordinateUpload,
+    MaterializedQuery,
     QueryAnyRequestModel,
     QueryAnyResponseModel,
     QueryCountRequestModel,
@@ -73,6 +78,7 @@ class RemoteQueryDriver(QueryDriver):
     def __init__(self, butler: RemoteButler, connection: RemoteButlerHttpConnection):
         self._butler = butler
         self._connection = connection
+        self._stored_query_inputs: list[AdditionalQueryInput] = []
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         pass
@@ -135,12 +141,25 @@ class RemoteQueryDriver(QueryDriver):
         dimensions: DimensionGroup,
         datasets: frozenset[str],
     ) -> MaterializationKey:
-        raise NotImplementedError()
+        key = uuid4()
+        self._stored_query_inputs.append(
+            MaterializedQuery(
+                key=key,
+                tree=SerializedQueryTree(tree.model_copy(deep=True)),
+                dimensions=dimensions.to_simple(),
+                datasets=datasets,
+            ),
+        )
+        return key
 
     def upload_data_coordinates(
         self, dimensions: DimensionGroup, rows: Iterable[tuple[DataIdValue, ...]]
     ) -> DataCoordinateUploadKey:
-        raise NotImplementedError()
+        key = uuid4()
+        self._stored_query_inputs.append(
+            DataCoordinateUpload(key=key, dimensions=dimensions.to_simple(), rows=list(rows))
+        )
+        return key
 
     def count(
         self,
@@ -190,5 +209,7 @@ class RemoteQueryDriver(QueryDriver):
 
     def _create_query_input(self, tree: QueryTree) -> QueryInputs:
         return QueryInputs(
-            tree=SerializedQueryTree(tree), default_data_id=self._butler.registry.defaults.dataId.to_simple()
+            tree=SerializedQueryTree(tree),
+            default_data_id=self._butler.registry.defaults.dataId.to_simple(),
+            additional_query_inputs=self._stored_query_inputs,
         )

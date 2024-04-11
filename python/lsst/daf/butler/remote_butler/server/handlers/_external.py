@@ -40,6 +40,7 @@ from lsst.daf.butler import (
     CollectionType,
     DataCoordinate,
     DatasetRef,
+    DimensionGroup,
     SerializedDatasetRef,
     SerializedDatasetType,
 )
@@ -327,11 +328,27 @@ def query_explain(
 @contextmanager
 def _get_query_context(factory: Factory, query: QueryInputs) -> Iterator[_QueryContext]:
     butler = factory.create_butler()
+    tree = query.tree.to_query_tree(butler.dimensions)
+
     with butler._query_driver(
         default_collections=(),
         default_data_id=DataCoordinate.from_simple(query.default_data_id, universe=butler.dimensions),
     ) as driver:
-        tree = query.tree.to_query_tree(butler.dimensions)
+        for input in query.additional_query_inputs:
+            if input.type == "materialized":
+                driver.materialize(
+                    input.tree.to_query_tree(butler.dimensions),
+                    DimensionGroup.from_simple(input.dimensions, butler.dimensions),
+                    frozenset(input.datasets),
+                    key=input.key,
+                )
+            elif input.type == "upload":
+                driver.upload_data_coordinates(
+                    DimensionGroup.from_simple(input.dimensions, butler.dimensions),
+                    [tuple(r) for r in input.rows],
+                    key=input.key,
+                ),
+
         yield _QueryContext(driver=driver, tree=tree)
 
 

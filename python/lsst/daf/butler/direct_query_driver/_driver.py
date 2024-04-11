@@ -266,6 +266,7 @@ class DirectQueryDriver(QueryDriver):
         tree: qt.QueryTree,
         dimensions: DimensionGroup,
         datasets: frozenset[str],
+        key: qt.MaterializationKey | None = None,
     ) -> qt.MaterializationKey:
         # Docstring inherited.
         if self._exit_stack is None:
@@ -287,12 +288,16 @@ class DirectQueryDriver(QueryDriver):
         sql_select = builder.select()
         table = self._exit_stack.enter_context(self.db.temporary_table(builder.make_table_spec()))
         self.db.insert(table, select=sql_select)
-        key = uuid.uuid4()
+        if key is None:
+            key = uuid.uuid4()
         self._materializations[key] = _MaterializationState(table, datasets, builder.postprocessing)
         return key
 
     def upload_data_coordinates(
-        self, dimensions: DimensionGroup, rows: Iterable[tuple[DataIdValue, ...]]
+        self,
+        dimensions: DimensionGroup,
+        rows: Iterable[tuple[DataIdValue, ...]],
+        key: qt.DataCoordinateUploadKey | None = None,
     ) -> qt.DataCoordinateUploadKey:
         # Docstring inherited.
         if self._exit_stack is None:
@@ -319,7 +324,8 @@ class DirectQueryDriver(QueryDriver):
             self.db.insert(from_clause, *dict_rows)
         else:
             from_clause = self.db.constant_rows(table_spec.fields, *dict_rows)
-        key = uuid.uuid4()
+        if key is None:
+            key = uuid.uuid4()
         self._upload_tables[key] = from_clause
         return key
 

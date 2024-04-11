@@ -37,14 +37,17 @@ __all__ = [
     "GetCollectionSummaryResponseModel",
 ]
 
-from typing import NewType
+from typing import Annotated, Literal, NewType, TypeAlias
+from uuid import UUID
 
 import pydantic
 from lsst.daf.butler import (
     CollectionType,
+    DataIdValue,
     SerializedDataCoordinate,
     SerializedDataId,
     SerializedDatasetRef,
+    SerializedDimensionGroup,
     Timespan,
 )
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
@@ -153,9 +156,39 @@ class QueryCollectionsResponseModel(pydantic.BaseModel):
     """Collection names that match the search."""
 
 
+class MaterializedQuery(pydantic.BaseModel):
+    """Captures the parameters from a call to ``QueryDriver.materialize``."""
+
+    type: Literal["materialized"] = "materialized"
+    key: UUID
+    tree: SerializedQueryTree
+    dimensions: SerializedDimensionGroup
+    datasets: list[str]
+
+
+class DataCoordinateUpload(pydantic.BaseModel):
+    """Captures the parameters from a call to
+    ``QueryDriver.upload_data_coordinates``.
+    """
+
+    type: Literal["upload"] = "upload"
+    key: UUID
+    dimensions: SerializedDimensionGroup
+    rows: list[list[DataIdValue]]
+
+
+AdditionalQueryInput: TypeAlias = Annotated[
+    MaterializedQuery | DataCoordinateUpload, pydantic.Discriminator("type")
+]
+"""Information about additional data tables that may be used by a query."""
+
+
 class QueryInputs(pydantic.BaseModel):
+    """Serialized Butler query with additional context needed to execute it."""
+
     tree: SerializedQueryTree
     default_data_id: SerializedDataCoordinate
+    additional_query_inputs: list[AdditionalQueryInput]
 
 
 class QueryExecuteRequestModel(pydantic.BaseModel):
