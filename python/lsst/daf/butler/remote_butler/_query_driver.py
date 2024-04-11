@@ -65,6 +65,7 @@ from .server_models import (
     QueryExecuteResponseModel,
     QueryExplainRequestModel,
     QueryExplainResponseModel,
+    QueryInputs,
 )
 
 
@@ -96,7 +97,7 @@ class RemoteQueryDriver(QueryDriver):
 
     def execute(self, result_spec: ResultSpec, tree: QueryTree) -> ResultPage:
         request = QueryExecuteRequestModel(
-            tree=SerializedQueryTree(tree), result_spec=SerializedResultSpec(result_spec)
+            query=self._create_query_input(tree), result_spec=SerializedResultSpec(result_spec)
         )
         response = self._connection.post("query/execute", request)
         result = parse_model(response, QueryExecuteResponseModel)
@@ -150,7 +151,7 @@ class RemoteQueryDriver(QueryDriver):
         discard: bool,
     ) -> int:
         request = QueryCountRequestModel(
-            tree=SerializedQueryTree(tree),
+            query=self._create_query_input(tree),
             result_spec=SerializedResultSpec(result_spec),
             exact=exact,
             discard=discard,
@@ -161,7 +162,7 @@ class RemoteQueryDriver(QueryDriver):
 
     def any(self, tree: QueryTree, *, execute: bool, exact: bool) -> bool:
         request = QueryAnyRequestModel(
-            tree=SerializedQueryTree(tree),
+            query=self._create_query_input(tree),
             exact=exact,
             execute=execute,
         )
@@ -171,7 +172,7 @@ class RemoteQueryDriver(QueryDriver):
 
     def explain_no_results(self, tree: QueryTree, execute: bool) -> Iterable[str]:
         request = QueryExplainRequestModel(
-            tree=SerializedQueryTree(tree),
+            query=self._create_query_input(tree),
             execute=execute,
         )
         response = self._connection.post("query/explain", request)
@@ -186,3 +187,8 @@ class RemoteQueryDriver(QueryDriver):
 
     def get_dataset_type(self, name: str) -> DatasetType:
         return self._butler.get_dataset_type(name)
+
+    def _create_query_input(self, tree: QueryTree) -> QueryInputs:
+        return QueryInputs(
+            tree=SerializedQueryTree(tree), default_data_id=self._butler.registry.defaults.dataId.to_simple()
+        )

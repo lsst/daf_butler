@@ -41,6 +41,7 @@ from ._collection_summary import CollectionSummary
 from .wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
+    from ..registry import Registry
     from .sql_registry import SqlRegistry
 
 
@@ -103,7 +104,7 @@ class RegistryDefaults:
         args = ", ".join([arg for arg in (collections, run, kwargs) if arg])
         return f"{type(self).__name__}({args})"
 
-    def finish(self, registry: SqlRegistry) -> None:
+    def finish(self, registry: Registry | SqlRegistry) -> None:
         """Validate the defaults struct and standardize its data ID.
 
         This should be called only by a `Registry` instance when the defaults

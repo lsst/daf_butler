@@ -132,16 +132,15 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._connection = connection
         self._cache = cache
 
-        # TODO: RegistryDefaults should have finish() called on it, but this
-        # requires getCollectionSummary() which is not yet implemented
-        self._registry_defaults = RegistryDefaults(
-            options.collections, options.run, options.inferDefaults, **options.kwargs
-        )
-
         # Avoid a circular import by deferring this import.
         from ._registry import RemoteButlerRegistry
 
         self._registry = RemoteButlerRegistry(self)
+
+        self._registry_defaults = RegistryDefaults(
+            options.collections, options.run, options.inferDefaults, **options.kwargs
+        )
+        self._registry_defaults.finish(self._registry)
 
         return self
 

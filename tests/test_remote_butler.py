@@ -40,7 +40,7 @@ from pydantic import ValidationError
 
 try:
     import httpx
-    from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler, RemoteButlerFactory
+    from lsst.daf.butler.remote_butler import ButlerServerError, RemoteButler
 except ImportError:
     # httpx is not available in rubin-env yet, so skip these tests if it's not
     # available
@@ -68,9 +68,8 @@ class RemoteButlerErrorHandlingTests(unittest.TestCase):
     """Test RemoteButler error handling."""
 
     def setUp(self):
-        self.butler = RemoteButlerFactory.create_factory_for_url(
-            "https://doesntmatter"
-        ).create_butler_for_access_token("dontcare")
+        server_instance = self.enterContext(create_test_server(TESTDIR))
+        self.butler = server_instance.remote_butler
         self.mock = self.enterContext(patch.object(self.butler._connection._client, "request"))
 
     def _mock_error_response(self, content: str) -> None:

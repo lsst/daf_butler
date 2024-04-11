@@ -89,6 +89,7 @@ class RemoteButlerRegistry(Registry):
 
     @defaults.setter
     def defaults(self, value: RegistryDefaults) -> None:
+        value.finish(self)
         self._butler._registry_defaults = value
 
     def refresh(self) -> None:
@@ -243,7 +244,8 @@ class RemoteButlerRegistry(Registry):
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
-        raise NotImplementedError()
+        # TODO DM-43845: Replace this stub with a real implementation.
+        return DataCoordinate.makeEmpty(self.dimensions)
 
     def insertDimensionData(
         self,

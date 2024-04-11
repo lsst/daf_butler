@@ -2142,14 +2142,25 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
     @contextlib.contextmanager
     def _query(self) -> Iterator[Query]:
         # Docstring inherited.
-        with self._query_driver() as driver:
+        with self._query_driver(self._registry.defaults.collections, self.registry.defaults.dataId) as driver:
             yield Query(driver)
 
     @contextlib.contextmanager
-    def _query_driver(self) -> Iterator[DirectQueryDriver]:
+    def _query_driver(
+        self,
+        default_collections: Iterable[str],
+        default_data_id: DataCoordinate,
+    ) -> Iterator[DirectQueryDriver]:
+        """Set up a QueryDriver instance for use with this Butler.  Although
+        this is marked as a private method, it is also used by Butler server.
+        """
         with self._caching_context():
             driver = DirectQueryDriver(
-                self._registry._db, self.dimensions, self._registry._managers, self._registry.defaults
+                self._registry._db,
+                self.dimensions,
+                self._registry._managers,
+                default_collections=default_collections,
+                default_data_id=default_data_id,
             )
             with driver:
                 yield driver

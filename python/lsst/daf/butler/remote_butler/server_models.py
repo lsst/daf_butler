@@ -40,7 +40,13 @@ __all__ = [
 from typing import NewType
 
 import pydantic
-from lsst.daf.butler import CollectionType, SerializedDataId, SerializedDatasetRef, Timespan
+from lsst.daf.butler import (
+    CollectionType,
+    SerializedDataCoordinate,
+    SerializedDataId,
+    SerializedDatasetRef,
+    Timespan,
+)
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 from lsst.daf.butler.registry import SerializedCollectionSummary
 
@@ -147,10 +153,15 @@ class QueryCollectionsResponseModel(pydantic.BaseModel):
     """Collection names that match the search."""
 
 
+class QueryInputs(pydantic.BaseModel):
+    tree: SerializedQueryTree
+    default_data_id: SerializedDataCoordinate
+
+
 class QueryExecuteRequestModel(pydantic.BaseModel):
     """Request model for /query/execute/."""
 
-    tree: SerializedQueryTree
+    query: QueryInputs
     result_spec: SerializedResultSpec
 
 
@@ -163,7 +174,7 @@ class QueryExecuteResponseModel(pydantic.BaseModel):
 class QueryCountRequestModel(pydantic.BaseModel):
     """Request model for /query/count/."""
 
-    tree: SerializedQueryTree
+    query: QueryInputs
     result_spec: SerializedResultSpec
     exact: bool
     discard: bool
@@ -178,7 +189,7 @@ class QueryCountResponseModel(pydantic.BaseModel):
 class QueryAnyRequestModel(pydantic.BaseModel):
     """Request model for /query/any/."""
 
-    tree: SerializedQueryTree
+    query: QueryInputs
     execute: bool
     exact: bool
 
@@ -192,7 +203,7 @@ class QueryAnyResponseModel(pydantic.BaseModel):
 class QueryExplainRequestModel(pydantic.BaseModel):
     """Request model for /query/explain/."""
 
-    tree: SerializedQueryTree
+    query: QueryInputs
     execute: bool
 
 

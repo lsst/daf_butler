@@ -43,7 +43,14 @@ import sqlalchemy
 from .. import ddl
 from .._dataset_type import DatasetType
 from .._exceptions import InvalidQueryError
-from ..dimensions import DataIdValue, DimensionGroup, DimensionRecordSet, DimensionUniverse, SkyPixDimension
+from ..dimensions import (
+    DataCoordinate,
+    DataIdValue,
+    DimensionGroup,
+    DimensionRecordSet,
+    DimensionUniverse,
+    SkyPixDimension,
+)
 from ..name_shrinker import NameShrinker
 from ..queries import tree as qt
 from ..queries.driver import (
@@ -62,7 +69,7 @@ from ..queries.result_specs import (
     GeneralResultSpec,
     ResultSpec,
 )
-from ..registry import CollectionSummary, CollectionType, NoDefaultCollectionError, RegistryDefaults
+from ..registry import CollectionSummary, CollectionType, NoDefaultCollectionError
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord
 from ..registry.managers import RegistryManagerInstances
 from ._postprocessing import Postprocessing
@@ -94,9 +101,10 @@ class DirectQueryDriver(QueryDriver):
         Definitions of all dimensions.
     managers : `RegistryManagerInstances`
         Struct of registry manager objects.
-    defaults : `RegistryDefaults`
-        Struct holding the default collection search path and governor
-        dimensions.
+    default_collections : `Sequence` [ `str `]
+        Default collection search path.
+    default_data_id : DataCoordinate,
+        Default governor dimension values.
     raw_page_size : `int`, optional
         Number of database rows to fetch for each result page.  The actual
         number of rows in a page may be smaller due to postprocessing.
@@ -117,7 +125,8 @@ class DirectQueryDriver(QueryDriver):
         db: Database,
         universe: DimensionUniverse,
         managers: RegistryManagerInstances,
-        defaults: RegistryDefaults,
+        default_collections: Iterable[str],
+        default_data_id: DataCoordinate,
         raw_page_size: int = 10000,
         constant_rows_limit: int = 1000,
         postprocessing_filter_factor: int = 10,
@@ -125,7 +134,8 @@ class DirectQueryDriver(QueryDriver):
         self.db = db
         self.managers = managers
         self._universe = universe
-        self._defaults = defaults
+        self._default_collections = tuple(default_collections)
+        self._default_data_id = default_data_id
         self._materializations: dict[qt.MaterializationKey, _MaterializationState] = {}
         self._upload_tables: dict[qt.DataCoordinateUploadKey, sqlalchemy.FromClause] = {}
         self._exit_stack: ExitStack | None = None
@@ -389,9 +399,9 @@ class DirectQueryDriver(QueryDriver):
 
     def get_default_collections(self) -> tuple[str, ...]:
         # Docstring inherited.
-        if not self._defaults.collections:
+        if not self._default_collections:
             raise NoDefaultCollectionError("No collections provided and no default collections.")
-        return tuple(self._defaults.collections)
+        return self._default_collections
 
     def build_query(
         self,
@@ -852,8 +862,8 @@ class DirectQueryDriver(QueryDriver):
         result.predicate.gather_required_columns(where_columns)
         for governor in where_columns.dimensions.governors:
             if governor not in result.constraint_data_id:
-                if governor in self._defaults.dataId.dimensions:
-                    result.constraint_data_id[governor] = self._defaults.dataId[governor]
+                if governor in self._default_data_id.dimensions:
+                    result.constraint_data_id[governor] = self._default_data_id[governor]
                 else:
                     raise InvalidQueryError(
                         f"Query 'where' expression references a dimension dependent on {governor} without "
