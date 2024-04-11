@@ -36,7 +36,6 @@ from typing import Any, ClassVar, TypeAlias
 import astropy.time
 import astropy.utils.exceptions
 import pydantic
-import pydantic_core
 import yaml
 
 # As of astropy 4.2, the erfa interface is shipped independently and
@@ -69,7 +68,7 @@ class _SpecialTimespanBound(enum.Enum):
 TimespanBound: TypeAlias = astropy.time.Time | _SpecialTimespanBound | None
 
 
-class Timespan:
+class Timespan(pydantic.BaseModel):
     """A half-open time interval with nanosecond precision.
 
     Parameters
@@ -183,14 +182,22 @@ class Timespan:
             # here simplifies all other operations (including interactions
             # with TimespanDatabaseRepresentation implementations).
             _nsec = (converter.max_nsec, converter.min_nsec)
-        self._nsec = _nsec
+        super().__init__(nsec=_nsec)
 
-    __slots__ = ("_nsec", "_cached_begin", "_cached_end")
+    nsec: tuple[int, int] = pydantic.Field(frozen=True)
+
+    model_config = pydantic.ConfigDict(
+        json_schema_extra={
+            "description": (
+                "A [begin, end) TAI timespan with bounds as integer nanoseconds since 1970-01-01 00:00:00."
+            )
+        }
+    )
 
     EMPTY: ClassVar[_SpecialTimespanBound] = _SpecialTimespanBound.EMPTY
 
     # YAML tag name for Timespan
-    yaml_tag = "!lsst.daf.butler.Timespan"
+    yaml_tag: ClassVar[str] = "!lsst.daf.butler.Timespan"
 
     @classmethod
     def makeEmpty(cls) -> Timespan:
@@ -281,10 +288,10 @@ class Timespan:
         """
         if self.isEmpty():
             return self.EMPTY
-        elif self._nsec[0] == TimeConverter().min_nsec:
+        elif self.nsec[0] == TimeConverter().min_nsec:
             return None
         else:
-            return TimeConverter().nsec_to_astropy(self._nsec[0])
+            return TimeConverter().nsec_to_astropy(self.nsec[0])
 
     @property
     @cached_getter
@@ -297,14 +304,14 @@ class Timespan:
         """
         if self.isEmpty():
             return self.EMPTY
-        elif self._nsec[1] == TimeConverter().max_nsec:
+        elif self.nsec[1] == TimeConverter().max_nsec:
             return None
         else:
-            return TimeConverter().nsec_to_astropy(self._nsec[1])
+            return TimeConverter().nsec_to_astropy(self.nsec[1])
 
     def isEmpty(self) -> bool:
         """Test whether ``self`` is the empty timespan (`bool`)."""
-        return self._nsec[0] >= self._nsec[1]
+        return self.nsec[0] >= self.nsec[1]
 
     def __str__(self) -> str:
         if self.isEmpty():
@@ -343,15 +350,15 @@ class Timespan:
             return False
         # Correctness of this simple implementation depends on __init__
         # standardizing all empty timespans to a single value.
-        return self._nsec == other._nsec
+        return self.nsec == other.nsec
 
     def __hash__(self) -> int:
         # Correctness of this simple implementation depends on __init__
         # standardizing all empty timespans to a single value.
-        return hash(self._nsec)
+        return hash(self.nsec)
 
     def __reduce__(self) -> tuple:
-        return (Timespan, (None, None, False, self._nsec))
+        return (Timespan, (None, None, False, self.nsec))
 
     def __lt__(self, other: astropy.time.Time | Timespan) -> bool:
         """Test if a Timespan's bounds are strictly less than the given time.
@@ -376,9 +383,9 @@ class Timespan:
         # first term is also false.
         if isinstance(other, astropy.time.Time):
             nsec = TimeConverter().astropy_to_nsec(other)
-            return self._nsec[1] <= nsec and self._nsec[0] < nsec
+            return self.nsec[1] <= nsec and self.nsec[0] < nsec
         else:
-            return self._nsec[1] <= other._nsec[0] and self._nsec[0] < other._nsec[1]
+            return self.nsec[1] <= other.nsec[0] and self.nsec[0] < other.nsec[1]
 
     def __gt__(self, other: astropy.time.Time | Timespan) -> bool:
         """Test if a Timespan's bounds are strictly greater than given time.
@@ -403,9 +410,9 @@ class Timespan:
         # first term is also false.
         if isinstance(other, astropy.time.Time):
             nsec = TimeConverter().astropy_to_nsec(other)
-            return self._nsec[0] > nsec and self._nsec[1] > nsec
+            return self.nsec[0] > nsec and self.nsec[1] > nsec
         else:
-            return self._nsec[0] >= other._nsec[1] and self._nsec[1] > other._nsec[0]
+            return self.nsec[0] >= other.nsec[1] and self.nsec[1] > other.nsec[0]
 
     def overlaps(self, other: Timespan | astropy.time.Time) -> bool:
         """Test if the intersection of this Timespan with another is empty.
@@ -429,7 +436,7 @@ class Timespan:
         """
         if isinstance(other, astropy.time.Time):
             return self.contains(other)
-        return self._nsec[1] > other._nsec[0] and other._nsec[1] > self._nsec[0]
+        return self.nsec[1] > other.nsec[0] and other.nsec[1] > self.nsec[0]
 
     def contains(self, other: astropy.time.Time | Timespan) -> bool:
         """Test if the supplied timespan is within this one.
@@ -462,9 +469,9 @@ class Timespan:
         """
         if isinstance(other, astropy.time.Time):
             nsec = TimeConverter().astropy_to_nsec(other)
-            return self._nsec[0] <= nsec and self._nsec[1] > nsec
+            return self.nsec[0] <= nsec and self.nsec[1] > nsec
         else:
-            return self._nsec[0] <= other._nsec[0] and self._nsec[1] >= other._nsec[1]
+            return self.nsec[0] <= other.nsec[0] and self.nsec[1] >= other.nsec[1]
 
     def intersection(self, *args: Timespan) -> Timespan:
         """Return a new `Timespan` that is contained by all of the given ones.
@@ -481,10 +488,10 @@ class Timespan:
         """
         if not args:
             return self
-        lowers = [self._nsec[0]]
-        lowers.extend(ts._nsec[0] for ts in args)
-        uppers = [self._nsec[1]]
-        uppers.extend(ts._nsec[1] for ts in args)
+        lowers = [self.nsec[0]]
+        lowers.extend(ts.nsec[0] for ts in args)
+        uppers = [self.nsec[1]]
+        uppers.extend(ts.nsec[1] for ts in args)
         nsec = (max(*lowers), min(*uppers))
         return Timespan(begin=None, end=None, _nsec=nsec)
 
@@ -514,10 +521,10 @@ class Timespan:
         elif intersection == self:
             yield from ()
         else:
-            if intersection._nsec[0] > self._nsec[0]:
-                yield Timespan(None, None, _nsec=(self._nsec[0], intersection._nsec[0]))
-            if intersection._nsec[1] < self._nsec[1]:
-                yield Timespan(None, None, _nsec=(intersection._nsec[1], self._nsec[1]))
+            if intersection.nsec[0] > self.nsec[0]:
+                yield Timespan(None, None, _nsec=(self.nsec[0], intersection.nsec[0]))
+            if intersection.nsec[1] < self.nsec[1]:
+                yield Timespan(None, None, _nsec=(intersection.nsec[1], self.nsec[1]))
 
     @classmethod
     def to_yaml(cls, dumper: yaml.Dumper, timespan: Timespan) -> Any:
@@ -565,58 +572,18 @@ class Timespan:
             d = loader.construct_mapping(node)
             return Timespan(d["begin"], d["end"])
 
+    @pydantic.model_validator(mode="before")
     @classmethod
-    def __get_pydantic_core_schema__(
-        cls, _source_type: Any, _handler: pydantic.GetCoreSchemaHandler
-    ) -> pydantic_core.core_schema.CoreSchema:
-        # This is Pydantic's way of declaring a "schema" that expects a
-        # tuple[int, int] and then calls _deserialize.
-        from_tuple_schema = pydantic_core.core_schema.chain_schema(
-            [
-                pydantic_core.core_schema.tuple_positional_schema(
-                    [pydantic_core.core_schema.int_schema(), pydantic_core.core_schema.int_schema()]
-                ),
-                pydantic_core.core_schema.no_info_plain_validator_function(cls._deserialize),
-            ]
-        )
-        return pydantic_core.core_schema.json_or_python_schema(
-            # When reading JSON, do just that.
-            json_schema=from_tuple_schema,
-            # When validating Python, do that only if we don't already have a
-            # Timespan instance.
-            python_schema=pydantic_core.core_schema.union_schema(
-                [pydantic_core.core_schema.is_instance_schema(Timespan), from_tuple_schema]
-            ),
-            # When serializing to JSON, just call the _serialize method.
-            serialization=pydantic_core.core_schema.plain_serializer_function_ser_schema(cls._serialize),
-        )
+    def _validate(cls, value: Any) -> Any:
+        if isinstance(value, Timespan):
+            return value
+        if isinstance(value, dict):
+            return value
+        return {"nsec": value}
 
-    @classmethod
-    def __get_pydantic_json_schema__(
-        cls,
-        _core_schema: pydantic_core.core_schema.CoreSchema,
-        handler: pydantic.json_schema.GetJsonSchemaHandler,
-    ) -> pydantic.json_schema.JsonSchemaValue:
-        # JSON schema is the usual one for `tuple[int, int]` fields...
-        result = handler.resolve_ref_schema(
-            handler(
-                pydantic_core.core_schema.tuple_positional_schema(
-                    [pydantic_core.core_schema.int_schema(), pydantic_core.core_schema.int_schema()]
-                )
-            )
-        )
-        # ...with a custom description.
-        result["description"] = (
-            "A [begin, end) TAI timespan with bounds as integer nanoseconds since 1970-01-01 00:00:00."
-        )
-        return result
-
-    @classmethod
-    def _deserialize(cls, value: tuple[int, int]) -> Timespan:
-        return cls(begin=None, end=None, _nsec=value)
-
+    @pydantic.model_serializer(mode="plain")
     def _serialize(self) -> tuple[int, int]:
-        return self._nsec
+        return self.nsec
 
 
 # Register Timespan -> YAML conversion method with Dumper class

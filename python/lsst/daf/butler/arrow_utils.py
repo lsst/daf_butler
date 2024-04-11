@@ -384,9 +384,7 @@ class _ToArrowTimespan(ToArrow):
 
     def append(self, value: Timespan | None, column: list[pa.StructScalar | None]) -> None:
         # Docstring inherited.
-        column.append(
-            {"begin_nsec": value._nsec[0], "end_nsec": value._nsec[1]} if value is not None else None
-        )
+        column.append({"begin_nsec": value.nsec[0], "end_nsec": value.nsec[1]} if value is not None else None)
 
     def finish(self, column: list[Any]) -> pa.Array:
         # Docstring inherited.

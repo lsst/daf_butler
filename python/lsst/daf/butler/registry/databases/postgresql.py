@@ -374,10 +374,10 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
             return psycopg2.extras.NumericRange(empty=True)
         else:
             converter = time_utils.TimeConverter()
-            assert value._nsec[0] >= converter.min_nsec, "Guaranteed by Timespan.__init__."
-            assert value._nsec[1] <= converter.max_nsec, "Guaranteed by Timespan.__init__."
-            lower = None if value._nsec[0] == converter.min_nsec else value._nsec[0]
-            upper = None if value._nsec[1] == converter.max_nsec else value._nsec[1]
+            assert value.nsec[0] >= converter.min_nsec, "Guaranteed by Timespan.__init__."
+            assert value.nsec[1] <= converter.max_nsec, "Guaranteed by Timespan.__init__."
+            lower = None if value.nsec[0] == converter.min_nsec else value.nsec[0]
+            upper = None if value.nsec[1] == converter.max_nsec else value.nsec[1]
             return psycopg2.extras.NumericRange(lower=lower, upper=upper)
 
     def process_result_value(

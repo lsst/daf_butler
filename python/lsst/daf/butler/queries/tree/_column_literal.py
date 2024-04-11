@@ -284,7 +284,7 @@ class TimespanColumnLiteral(ColumnLiteralBase):
         expression : `TimespanColumnLiteral`
             Literal expression object.
         """
-        return cls.model_construct(begin_nsec=value._nsec[0], end_nsec=value._nsec[1])
+        return cls.model_construct(begin_nsec=value.nsec[0], end_nsec=value.nsec[1])
 
     def __str__(self) -> str:
         return str(self.value)
