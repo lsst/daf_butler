@@ -64,6 +64,7 @@ from ..registry import (
     RegistryDefaults,
 )
 from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._query_driver import RemoteQueryDriver
 from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
 from .server_models import (
     CollectionList,
@@ -528,9 +529,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     @contextmanager
     def _query(self) -> Iterator[Query]:
-        # Delay import to avoid circular import issue.
-        from ._query_driver import RemoteQueryDriver
-
         driver = RemoteQueryDriver(self, self._connection)
         with driver:
             query = Query(driver)

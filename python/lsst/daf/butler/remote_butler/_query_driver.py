@@ -35,6 +35,7 @@ __all__ = ("RemoteQueryDriver",)
 from collections.abc import Iterable
 from typing import Any, overload
 
+from ...butler import Butler
 from .._dataset_type import DatasetType
 from ..dimensions import DataIdValue, DimensionGroup, DimensionRecord, DimensionUniverse
 from ..queries.driver import (
@@ -57,7 +58,6 @@ from ..queries.result_specs import (
 from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTree, SerializedQueryTree
 from ..registry import NoDefaultCollectionError
 from ._http_connection import RemoteButlerHttpConnection, parse_model
-from ._remote_butler import RemoteButler
 from .server_models import (
     AdditionalQueryInput,
     DataCoordinateUpload,
@@ -75,7 +75,17 @@ from .server_models import (
 
 
 class RemoteQueryDriver(QueryDriver):
-    def __init__(self, butler: RemoteButler, connection: RemoteButlerHttpConnection):
+    """Implementation of QueryDriver for client/server Butler.
+
+    Parameters
+    ----------
+    butler : `Butler`
+        Butler instance that will use this QueryDriver.
+    connection : `RemoteButlerHttpConnection`
+        HTTP connection used to send queries to Butler server.
+    """
+
+    def __init__(self, butler: Butler, connection: RemoteButlerHttpConnection):
         self._butler = butler
         self._connection = connection
         self._stored_query_inputs: list[AdditionalQueryInput] = []
