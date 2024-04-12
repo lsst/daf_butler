@@ -30,7 +30,7 @@ from __future__ import annotations
 __all__ = ("DimensionRecord", "SerializedDimensionRecord")
 
 from collections.abc import Hashable
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import lsst.sphgeom
 from lsst.utils.classes import immutable
@@ -178,7 +178,7 @@ class SerializedDimensionRecord(BaseModel):
         cls,
         *,
         definition: str,
-        record: dict[str, None | StrictFloat | StrictStr | StrictBool | StrictInt | Timespan],
+        record: dict[str, Any],
     ) -> SerializedDimensionRecord:
         """Construct a `SerializedDimensionRecord` directly without validators.
 
@@ -204,12 +204,10 @@ class SerializedDimensionRecord(BaseModel):
         """
         # This method requires tuples as values of the mapping, but JSON
         # readers will read things in as lists. Be kind and transparently
-        # transform to tuples
+        # transform to tuples.
         _recItems = {
             k: (
-                v
-                if type(cast(Any, v)) is not list  # noqa: E721
-                else Timespan(begin=None, end=None, _nsec=tuple(v))
+                v if type(v) is not list else Timespan(begin=None, end=None, _nsec=tuple(v))  # noqa: E721
             )  # type: ignore
             for k, v in record.items()
         }
