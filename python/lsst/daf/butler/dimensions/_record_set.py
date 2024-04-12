@@ -307,7 +307,7 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
 
         Returns
         -------
-        intersection : `DimensionRecordSet`
+        union : `DimensionRecordSet`
             A new record set with all elements in either set.
         """
         if self._record_type is not other._record_type:
