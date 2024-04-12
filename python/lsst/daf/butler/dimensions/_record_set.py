@@ -27,10 +27,10 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecordSet", "DimensionRecordFactory")
+__all__ = ("DimensionRecordSet",)
 
-from collections.abc import Collection, Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Never, Protocol, cast, final
+from collections.abc import Collection, Iterable, Iterator, Mapping
+from typing import TYPE_CHECKING, cast, final
 
 from ._coordinate import DataCoordinate, DataIdValue
 from ._records import DimensionRecord
@@ -40,53 +40,9 @@ if TYPE_CHECKING:
     from ._universe import DimensionUniverse
 
 
-class DimensionRecordFactory(Protocol):
-    """Protocol for a callback that can be used to create a dimension record
-    to add to a `DimensionRecordSet` when a search for an existing one fails.
-    """
-
-    def __call__(
-        self, record_class: type[DimensionRecord], required_values: tuple[DataIdValue, ...]
-    ) -> DimensionRecord:
-        """Make a new `DimensionRecord` instance.
-
-        Parameters
-        ----------
-        record_class : `type` [ `DimensionRecord` ]
-            A concrete `DimensionRecord` subclass.
-        required_values : `tuple`
-            Tuple of data ID values, corresponding to
-            ``record_class.definition.required``.
-        """
-        ...  # pragma: no cover
-
-
-def fail_record_lookup(
-    record_class: type[DimensionRecord], required_values: tuple[DataIdValue, ...]
-) -> Never:
-    """Raise `KeyError` to indicate that a `DimensionRecord` could not be
-    found or created.
-
-    This is intended for use as the default value for arguments that take a
-    `DimensionRecordFactory` callback.
-
-    Parameters
-    ----------
-    record_class : `type` [ `DimensionRecord` ]
-        Type of record to create.
-    required_values : `tuple`
-        Tuple of data ID required values that are sufficient to identify a
-        record that exists in the data repository.
-    """
-    raise KeyError(
-        f"No {record_class.definition.name!r} record with data ID "
-        f"{DataCoordinate.from_required_values(record_class.definition.minimal_group, required_values)}."
-    )
-
-
 @final
 class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
-    """A mutable set-like container specialized for `DimensionRecord` objects.
+    """An immutable set-like container for `DimensionRecord` objects.
 
     Parameters
     ----------
@@ -115,8 +71,7 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
     `DimensionRecord` equality is defined in terms of a record's data ID fields
     only, and `DimensionRecordSet` does not generally specify which record
     "wins" when two records with the same data ID interact (e.g. in
-    `intersection`).  The `add` and `update` methods are notable exceptions:
-    they always replace the existing record with the new one.
+    `intersection`).
 
     Dimension records can also be held by `DimensionRecordTable`, which
     provides column-oriented access and Arrow interoperability.
@@ -128,7 +83,7 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
         records: Iterable[DimensionRecord] = (),
         universe: DimensionUniverse | None = None,
         *,
-        _by_required_values: dict[tuple[DataIdValue, ...], DimensionRecord] | None = None,
+        _by_required_values: Mapping[tuple[DataIdValue, ...], DimensionRecord] | None = None,
     ):
         if isinstance(element, str):
             if universe is None:
@@ -136,12 +91,17 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             element = universe[element]
         else:
             universe = element.universe
+        self._record_type = element.RecordClass
+        self._dimensions = element.minimal_group
         if _by_required_values is None:
             _by_required_values = {}
-        self._record_type = element.RecordClass
-        self._by_required_values = _by_required_values
-        self._dimensions = element.minimal_group
-        self.update(records)
+            for record in records:
+                if record.definition != self.element:
+                    raise ValueError(f"Cannot add record {record} to set for {self.element!r}.")
+                _by_required_values[record.dataId.required_values] = record
+        else:
+            assert records == (), "records may not be passed if _by_required_values is."
+        self._by_required_values: Mapping[tuple[DataIdValue, ...], DimensionRecord] = _by_required_values
 
     @property
     def element(self) -> DimensionElement:
@@ -317,25 +277,16 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             )
         return DimensionRecordSet(
             self.element,
-            _by_required_values=self._by_required_values | other._by_required_values,
+            _by_required_values={**self._by_required_values, **other._by_required_values},
         )
 
-    def find(
-        self,
-        data_id: DataCoordinate,
-        or_add: DimensionRecordFactory = fail_record_lookup,
-    ) -> DimensionRecord:
+    def find(self, data_id: DataCoordinate) -> DimensionRecord:
         """Return the record with the given data ID.
 
         Parameters
         ----------
         data_id : `DataCoordinate`
             Data ID to match.
-        or_add : `DimensionRecordFactory`
-            Callback that is invoked if no existing record is found, to create
-            a new record that is added to the set and returned.  The return
-            value of this callback is *not* checked to see if it is a valid
-            dimension record with the right element and data ID.
 
         Returns
         -------
@@ -345,8 +296,7 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
         Raises
         ------
         KeyError
-            Raised if no record with this data ID was found, and no ``or_add``
-            callback was provided.
+            Raised if no record with this data ID was found.
         ValueError
             Raised if the data ID did not have the right dimensions.
         """
@@ -354,22 +304,15 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             raise ValueError(
                 f"data ID {data_id} has incorrect dimensions for dimension records for {self.element!r}."
             )
-        return self.find_with_required_values(data_id.required_values, or_add)
+        return self.find_with_required_values(data_id.required_values)
 
-    def find_with_required_values(
-        self, required_values: tuple[DataIdValue, ...], or_add: DimensionRecordFactory = fail_record_lookup
-    ) -> DimensionRecord:
+    def find_with_required_values(self, required_values: tuple[DataIdValue, ...]) -> DimensionRecord:
         """Return the record whose data ID has the given required values.
 
         Parameters
         ----------
         required_values : `tuple` [ `int` or `str` ]
             Data ID values to match.
-        or_add : `DimensionRecordFactory`
-            Callback that is invoked if no existing record is found, to create
-            a new record that is added to the set and returned.  The return
-            value of this callback is *not* checked to see if it is a valid
-            dimension record with the right element and data ID.
 
         Returns
         -------
@@ -379,108 +322,6 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
         Raises
         ------
         KeyError
-            Raised if no record with these values were found, and no ``or_add``
-            callback was provided.
+            Raised if no record with these values were found.
         """
-        if (result := self._by_required_values.get(required_values)) is None:
-            result = or_add(self._record_type, required_values)
-            self._by_required_values[required_values] = result
-        return result
-
-    def add(self, value: DimensionRecord, replace: bool = True) -> None:
-        """Add a new record to the set.
-
-        Parameters
-        ----------
-        value : `DimensionRecord`
-            Record to add.
-        replace : `bool`, optional
-            If `True` (default) replace any existing record with the same data
-            ID.  If `False` the existing record will be kept.
-
-        Raises
-        ------
-        ValueError
-            Raised if ``value.element != self.element``.
-        """
-        if value.definition != self.element:
-            raise ValueError(
-                f"Cannot add record {value} for {value.definition.name!r} to set for {self.element!r}."
-            )
-        if replace:
-            self._by_required_values[value.dataId.required_values] = value
-        else:
-            self._by_required_values.setdefault(value.dataId.required_values, value)
-
-    def update(self, values: Iterable[DimensionRecord], replace: bool = True) -> None:
-        """Add new records to the set.
-
-        Parameters
-        ----------
-        values : `~collections.abc.Iterable` [ `DimensionRecord` ]
-            Records to add.
-        replace : `bool`, optional
-            If `True` (default) replace any existing records with the same data
-            IDs.  If `False` the existing records will be kept.
-
-        Raises
-        ------
-        ValueError
-            Raised if ``value.element != self.element``.
-        """
-        for value in values:
-            self.add(value, replace=replace)
-
-    def update_from_data_coordinates(self, data_coordinates: Iterable[DataCoordinate]) -> None:
-        """Add records to the set by extracting and deduplicating them from
-        data coordinates.
-
-        Parameters
-        ----------
-        data_coordinates : `~collections.abc.Iterable` [ `DataCoordinate` ]
-            Data coordinates to extract from.  `DataCoordinate.hasRecords` must
-            be `True`.
-        """
-        for data_coordinate in data_coordinates:
-            if record := data_coordinate._record(self.element.name):
-                self._by_required_values[record.dataId.required_values] = record
-
-    def discard(self, value: DimensionRecord | DataCoordinate) -> None:
-        """Remove a record if it exists.
-
-        Parameters
-        ----------
-        value : `DimensionRecord` or `DataCoordinate`
-            Record to remove, or its data ID.
-        """
-        if isinstance(value, DimensionRecord):
-            value = value.dataId
-        if value.dimensions != self._dimensions:
-            raise ValueError(f"{value} has incorrect dimensions for dimension records for {self.element!r}.")
-        self._by_required_values.pop(value.required_values, None)
-
-    def remove(self, value: DimensionRecord | DataCoordinate) -> None:
-        """Remove a record.
-
-        Parameters
-        ----------
-        value : `DimensionRecord` or `DataCoordinate`
-            Record to remove, or its data ID.
-
-        Raises
-        ------
-        KeyError
-            Raised if there is no matching record.
-        """
-        if isinstance(value, DimensionRecord):
-            value = value.dataId
-        if value.dimensions != self._dimensions:
-            raise ValueError(f"{value} has incorrect dimensions for dimension records for {self.element!r}.")
-        del self._by_required_values[value.required_values]
-
-    def pop(self) -> DimensionRecord:
-        """Remove and return an arbitrary record."""
-        return self._by_required_values.popitem()[1]
-
-    def __deepcopy__(self, memo: dict[str, Any]) -> DimensionRecordSet:
-        return DimensionRecordSet(self.element, _by_required_values=self._by_required_values.copy())
+        return self._by_required_values[required_values]

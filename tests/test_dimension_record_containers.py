@@ -25,7 +25,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import copy
 import os
 import unittest
 
@@ -271,98 +270,6 @@ class DimensionRecordContainersTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             set1.find(self.records["visit"][0].dataId)
         self.assertEqual(set1.find_with_required_values(records[0].dataId.required_values), records[0])
-
-    def test_record_set_add(self):
-        """Test DimensionRecordSet.add."""
-        set1 = DimensionRecordSet("patch", self.records["patch"][:2], universe=self.universe)
-        set1.add(self.records["patch"][2])
-        with self.assertRaises(ValueError):
-            set1.add(self.records["visit"][0])
-        self.assertEqual(set1, DimensionRecordSet("patch", self.records["patch"][:3], universe=self.universe))
-        set1.add(self.records["patch"][2])
-        self.assertEqual(list(set1), list(self.records["patch"][:3]))
-
-    def test_record_set_find_or_add(self):
-        """Test DimensionRecordSet.find and find_with_required_values with
-        a 'or_add' callback.
-        """
-        set1 = DimensionRecordSet("patch", self.records["patch"][:2], universe=self.universe)
-        set1.find(self.records["patch"][2].dataId, or_add=lambda _c, _r: self.records["patch"][2])
-        with self.assertRaises(ValueError):
-            set1.find(self.records["visit"][0].dataId, or_add=lambda _c, _r: self.records["visit"][0])
-        self.assertEqual(set1, DimensionRecordSet("patch", self.records["patch"][:3], universe=self.universe))
-
-        set1.find_with_required_values(
-            self.records["patch"][3].dataId.required_values, or_add=lambda _c, _r: self.records["patch"][3]
-        )
-        self.assertEqual(set1, DimensionRecordSet("patch", self.records["patch"][:4], universe=self.universe))
-
-    def test_record_set_update_from_data_coordinates(self):
-        """Test DimensionRecordSet.update_from_data_coordinates."""
-        set1 = DimensionRecordSet("patch", self.records["patch"][:2], universe=self.universe)
-        set1.update_from_data_coordinates(self.data_ids)
-        for data_id in self.data_ids:
-            self.assertIn(data_id.records["patch"], set1)
-
-    def test_record_set_discard(self):
-        """Test DimensionRecordSet.discard."""
-        set1 = DimensionRecordSet("patch", self.records["patch"][:2], universe=self.universe)
-        set2 = copy.deepcopy(set1)
-        # These discards should do nothing.
-        set1.discard(self.records["patch"][2])
-        self.assertEqual(set1, set2)
-        set1.discard(self.records["patch"][2].dataId)
-        self.assertEqual(set1, set2)
-        with self.assertRaises(ValueError):
-            set1.discard(self.records["visit"][0])
-        self.assertEqual(set1, set2)
-        with self.assertRaises(ValueError):
-            set1.discard(self.records["visit"][0].dataId)
-        self.assertEqual(set1, set2)
-        # These ones should remove a record from each set.
-        set1.discard(self.records["patch"][1])
-        set2.discard(self.records["patch"][1].dataId)
-        self.assertEqual(set1, set2)
-        self.assertNotIn(self.records["patch"][1], set1)
-        self.assertNotIn(self.records["patch"][1], set2)
-
-    def test_record_set_remove(self):
-        """Test DimensionRecordSet.remove."""
-        set1 = DimensionRecordSet("patch", self.records["patch"][:2], universe=self.universe)
-        set2 = copy.deepcopy(set1)
-        # These removes should raise with strong exception safety.
-        with self.assertRaises(KeyError):
-            set1.remove(self.records["patch"][2])
-        self.assertEqual(set1, set2)
-        with self.assertRaises(KeyError):
-            set1.remove(self.records["patch"][2].dataId)
-        self.assertEqual(set1, set2)
-        with self.assertRaises(ValueError):
-            set1.remove(self.records["visit"][0])
-        self.assertEqual(set1, set2)
-        with self.assertRaises(ValueError):
-            set1.remove(self.records["visit"][0].dataId)
-        self.assertEqual(set1, set2)
-        # These ones should remove a record from each set.
-        set1.remove(self.records["patch"][1])
-        set2.remove(self.records["patch"][1].dataId)
-        self.assertEqual(set1, set2)
-        self.assertNotIn(self.records["patch"][1], set1)
-        self.assertNotIn(self.records["patch"][1], set2)
-
-    def test_record_set_pop(self):
-        """Test DimensionRecordSet.pop."""
-        set1 = DimensionRecordSet("patch", self.records["patch"][:2], universe=self.universe)
-        set2 = copy.deepcopy(set1)
-        record1 = set1.pop()
-        set2.remove(record1)
-        self.assertNotIn(record1, set1)
-        self.assertEqual(set1, set2)
-        record2 = set1.pop()
-        set2.remove(record2)
-        self.assertNotIn(record2, set1)
-        self.assertEqual(set1, set2)
-        self.assertFalse(set1)
 
 
 if __name__ == "__main__":

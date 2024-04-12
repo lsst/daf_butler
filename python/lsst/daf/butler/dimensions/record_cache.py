@@ -51,10 +51,6 @@ class DimensionRecordCache(Mapping[str, DimensionRecordSet]):
         element name to a `DimensionRecordSet` of all records for that element.
         They keys of the returned `dict` must be exactly the elements in
         ``universe`` for which `DimensionElement.is_cached` is `True`.
-
-    Notes
-    -----
-    The nested `DimensionRecordSet` objects should never be modified in place.
     """
 
     def __init__(self, universe: DimensionUniverse, fetch: Callable[[], dict[str, DimensionRecordSet]]):

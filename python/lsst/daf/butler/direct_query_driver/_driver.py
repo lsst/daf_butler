@@ -42,7 +42,14 @@ import sqlalchemy
 
 from .. import ddl
 from .._dataset_type import DatasetType
-from ..dimensions import DataIdValue, DimensionGroup, DimensionRecordSet, DimensionUniverse, SkyPixDimension
+from ..dimensions import (
+    DataIdValue,
+    DimensionGroup,
+    DimensionRecord,
+    DimensionRecordSet,
+    DimensionUniverse,
+    SkyPixDimension,
+)
 from ..name_shrinker import NameShrinker
 from ..queries import tree as qt
 from ..queries.driver import (
@@ -1168,14 +1175,15 @@ class _Cursor:
             Page object that holds a `DimensionRecord` container.
         """
         result_spec = cast(DimensionRecordResultSpec, self._result_spec)
-        record_set = DimensionRecordSet(result_spec.element)
+        records_by_required_values: dict[tuple[DataIdValue, ...], DimensionRecord] = {}
         record_cls = result_spec.element.RecordClass
         if isinstance(result_spec.element, SkyPixDimension):
             pixelization = result_spec.element.pixelization
             id_qualified_name = qt.ColumnSet.get_qualified_name(result_spec.element.name, None)
             for raw_row in raw_rows:
                 pixel_id = raw_row._mapping[id_qualified_name]
-                record_set.add(record_cls(id=pixel_id, region=pixelization.pixel(pixel_id)))
+                record = record_cls(id=pixel_id, region=pixelization.pixel(pixel_id))
+                records_by_required_values[record.dataId.required_values] = record
         else:
             # Mapping from DimensionRecord attribute name to qualified column
             # name, but as a list of tuples since we'd just iterate over items
@@ -1202,5 +1210,10 @@ class _Cursor:
                 d = {k: m[v] for k, v in column_map}
                 if timespan_qualified_name is not None:
                     d["timespan"] = self._timespan_repr_cls.extract(m, name=timespan_qualified_name)
-                record_set.add(record_cls(**d))
-        return DimensionRecordResultPage(spec=result_spec, next_key=next_key, rows=record_set)
+                record = record_cls(**d)
+                records_by_required_values[record.dataId.required_values] = record
+        return DimensionRecordResultPage(
+            spec=result_spec,
+            next_key=next_key,
+            rows=DimensionRecordSet(result_spec.element, _by_required_values=records_by_required_values),
+        )
