@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("DimensionRecordSet",)
 
+from collections import ChainMap
 from collections.abc import Collection, Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, cast, final
 
@@ -256,7 +257,7 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
             },
         )
 
-    def union(self, other: DimensionRecordSet) -> DimensionRecordSet:
+    def union(self, other: DimensionRecordSet, lazy: bool = False) -> DimensionRecordSet:
         """Return a new set with all records that are either in ``self`` or
         ``other``.
 
@@ -264,6 +265,9 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
         ----------
         other : `DimensionRecordSet`
             Another record set with the same record type.
+        lazy : `bool`, optional
+            If `True`, defer actually computing the union until iteration or
+            lookup.
 
         Returns
         -------
@@ -275,10 +279,16 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
                 "Invalid union between dimension record sets for elements "
                 f"{self.element.name!r} and {other.element.name!r}."
             )
-        return DimensionRecordSet(
-            self.element,
-            _by_required_values={**self._by_required_values, **other._by_required_values},
-        )
+        by_required_values: Mapping[tuple[DataIdValue, ...], DimensionRecord]
+        if lazy:
+            # ChainMap is a MutableMapping that wants MutableMapping args.  But
+            # we're not going to use the mutability and annotate it as just
+            # Mapping to enforce that, so it's okay to give it non-mutable
+            # arguments.
+            by_required_values = ChainMap(self._by_required_values, other._by_required_values)  # type: ignore
+        else:
+            by_required_values = {**self._by_required_values, **other._by_required_values}
+        return DimensionRecordSet(self.element, _by_required_values=by_required_values)
 
     def find(self, data_id: DataCoordinate) -> DimensionRecord:
         """Return the record with the given data ID.
