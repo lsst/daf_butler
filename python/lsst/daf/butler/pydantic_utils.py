@@ -283,49 +283,30 @@ a hex encoding of the sphgeom-encoded bytes.
 """
 
 
-class _SerializedTimeAnnotation:
-    @classmethod
-    def __get_pydantic_core_schema__(
-        cls, _source_type: Any, _handler: pydantic.GetCoreSchemaHandler
-    ) -> core_schema.CoreSchema:
-        # This is Pydantic's way of declaring a "schema" that expects an `int`
-        # and then calls _deserialize.
-        from_int_schema = core_schema.chain_schema(
-            [
-                core_schema.int_schema(),
-                core_schema.no_info_plain_validator_function(cls._deserialize),
-            ]
-        )
-        return core_schema.json_or_python_schema(
-            # When reading JSON, do just that.
-            json_schema=from_int_schema,
-            # When validating Python, do that only if we don't already have a
-            # Time instance.
-            python_schema=core_schema.union_schema([core_schema.is_instance_schema(Time), from_int_schema]),
-            # When serializing to JSON, just call the _serialize method.
-            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize),
-        )
+def _deserialize_time(value: object, handler: pydantic.ValidatorFunctionWrapHandler) -> Region:
+    if isinstance(value, Time):
+        return value
 
-    @classmethod
-    def __get_pydantic_json_schema__(
-        cls, _core_schema: core_schema.CoreSchema, handler: pydantic.json_schema.GetJsonSchemaHandler
-    ) -> pydantic.json_schema.JsonSchemaValue:
-        # JSON schema is the usual one for `int` fields...
-        result = handler.resolve_ref_schema(handler(core_schema.int_schema()))
-        # ...with a custom description.
-        result["description"] = "A TAI time represented as integer nanoseconds since 1970-01-01 00:00:00."
-        return result
-
-    @staticmethod
-    def _deserialize(value: int) -> Time:
-        return TimeConverter().nsec_to_astropy(value)
-
-    @staticmethod
-    def _serialize(time: Time) -> int:
-        return TimeConverter().astropy_to_nsec(time)
+    integer = handler(value)
+    return TimeConverter().nsec_to_astropy(integer)
 
 
-SerializableTime: TypeAlias = Annotated[Time, _SerializedTimeAnnotation]
+def _serialize_time(time: Time) -> int:
+    return TimeConverter().astropy_to_nsec(time)
+
+
+SerializableTime: TypeAlias = Annotated[
+    Time,
+    pydantic.GetPydanticSchema(lambda _, h: h(int)),
+    pydantic.WrapValidator(_deserialize_time),
+    pydantic.PlainSerializer(_serialize_time),
+    pydantic.WithJsonSchema(
+        {
+            "type": "integer",
+            "description": "A TAI time represented as integer nanoseconds since 1970-01-01 00:00:00.",
+        }
+    ),
+]
 """A Pydantic-annotated version of `astropy.time.Time`.
 
 An object annotated with this type is always an `astropy.time.Time` instance
