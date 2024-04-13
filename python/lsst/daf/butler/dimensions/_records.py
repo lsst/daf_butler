@@ -108,7 +108,7 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSe
             field_type = field_type | None  # type: ignore
         members[field.name] = (field_type, ...)
     if definition.temporal:
-        members["timespan"] = (tuple[int, int] | None, ...)  # type: ignore
+        members["timespan"] = (Timespan | None, ...)  # type: ignore
     if definition.spatial:
         members["region"] = (str, ...)
 
@@ -154,7 +154,7 @@ class SerializedDimensionRecord(BaseModel):
     )
 
     # Use strict types to prevent casting
-    record: dict[str, None | StrictBool | StrictInt | StrictFloat | StrictStr | tuple[int, int]] = Field(
+    record: dict[str, None | StrictBool | StrictInt | StrictFloat | StrictStr | Timespan] = Field(
         ...,
         title="Dimension record keys and values.",
         examples=[
@@ -178,7 +178,7 @@ class SerializedDimensionRecord(BaseModel):
         cls,
         *,
         definition: str,
-        record: dict[str, None | StrictFloat | StrictStr | StrictBool | StrictInt | tuple[int, int]],
+        record: dict[str, Any],
     ) -> SerializedDimensionRecord:
         """Construct a `SerializedDimensionRecord` directly without validators.
 
@@ -204,9 +204,12 @@ class SerializedDimensionRecord(BaseModel):
         """
         # This method requires tuples as values of the mapping, but JSON
         # readers will read things in as lists. Be kind and transparently
-        # transform to tuples
+        # transform to tuples.
         _recItems = {
-            k: v if type(v) != list else tuple(v) for k, v in record.items()  # type: ignore # noqa: E721
+            k: (
+                v if type(v) is not list else Timespan(begin=None, end=None, _nsec=tuple(v))  # noqa: E721
+            )  # type: ignore
+            for k, v in record.items()
         }
 
         # Type ignore because the ternary statement seems to confuse mypy
@@ -374,21 +377,17 @@ class DimensionRecord:
             return result
 
         mapping = {name: getattr(self, name) for name in self.__slots__}
-        # If the item in mapping supports simplification update it
         for k, v in mapping.items():
-            try:
-                mapping[k] = v.to_simple(minimal=minimal)
-            except AttributeError:
-                if isinstance(v, lsst.sphgeom.Region):
-                    # YAML serialization specifies the class when it
-                    # doesn't have to. This is partly for explicitness
-                    # and also history. Here use a different approach.
-                    # This code needs to be migrated to sphgeom
-                    mapping[k] = v.encode().hex()
-                if isinstance(v, bytes):
-                    # We actually can't handle serializing out to bytes for
-                    # hash objects, encode it here to a hex string
-                    mapping[k] = v.hex()
+            if isinstance(v, lsst.sphgeom.Region):
+                # YAML serialization specifies the class when it
+                # doesn't have to. This is partly for explicitness
+                # and also history. Here use a different approach.
+                # This code needs to be migrated to sphgeom
+                mapping[k] = v.encode().hex()
+            if isinstance(v, bytes):
+                # We actually can't handle serializing out to bytes for
+                # hash objects, encode it here to a hex string
+                mapping[k] = v.hex()
         definition = self.definition.to_simple(minimal=minimal)
         dimRec = SerializedDimensionRecord(definition=definition, record=mapping)
         if cache is not None:
@@ -454,19 +453,19 @@ class DimensionRecord:
         record_model_cls = _createSimpleRecordSubclass(definition)
         record_model = record_model_cls(**simple.record)
 
-        # Timespan and region have to be converted to native form
-        # for now assume that those keys are special
-        rec = record_model.model_dump()
+        # Region and hash have to be converted to native form; for now assume
+        # that the keys are special.  We make the mapping we need to pass to
+        # the DimensionRecord constructor via getattr, because we don't
+        # model_dump re-disassembling things like Timespans that we've already
+        # assembled.
+        mapping = {k: getattr(record_model, k) for k in definition.schema.names}
 
-        if (ts := "timespan") in rec:
-            rec[ts] = Timespan.from_simple(rec[ts], universe=universe, registry=registry)
-        if (reg := "region") in rec:
-            encoded = bytes.fromhex(rec[reg])
-            rec[reg] = lsst.sphgeom.Region.decode(encoded)
-        if (hsh := "hash") in rec:
-            rec[hsh] = bytes.fromhex(rec[hsh].decode())
+        if "region" in mapping:
+            mapping["region"] = lsst.sphgeom.Region.decode(bytes.fromhex(mapping["region"]))
+        if "hash" in mapping:
+            mapping["hash"] = bytes.fromhex(mapping["hash"].decode())
 
-        dimRec = _reconstructDimensionRecord(definition, rec)
+        dimRec = _reconstructDimensionRecord(definition, mapping)
         if cache is not None:
             cache[key] = dimRec
         return dimRec

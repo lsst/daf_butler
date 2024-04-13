@@ -27,12 +27,16 @@
 
 from __future__ import annotations
 
-__all__ = ("DeferredValidation", "get_universe_from_context")
+__all__ = ("DeferredValidation", "get_universe_from_context", "SerializableRegion", "SerializableTime")
 
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Self, TypeVar, get_args
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Generic, Self, TypeAlias, TypeVar, get_args
 
 import pydantic
+from astropy.time import Time
+from lsst.sphgeom import Region
 from pydantic_core import core_schema
+
+from .time_utils import TimeConverter
 
 if TYPE_CHECKING:
     from .dimensions import DimensionUniverse
@@ -243,3 +247,70 @@ class DeferredValidation(Generic[_T]):
         # of the wrapped type.
         json_schema = handler(cls._get_wrapped_type_adapter().core_schema)
         return handler.resolve_ref_schema(json_schema)
+
+
+def _deserialize_region(value: object, handler: pydantic.ValidatorFunctionWrapHandler) -> Region:
+    if isinstance(value, Region):
+        return value
+
+    string = handler(value)
+    return Region.decode(bytes.fromhex(string))
+
+
+def _serialize_region(region: Region) -> str:
+    return region.encode().hex()
+
+
+SerializableRegion: TypeAlias = Annotated[
+    Region,
+    pydantic.GetPydanticSchema(lambda _, h: h(str)),
+    pydantic.WrapValidator(_deserialize_region),
+    pydantic.PlainSerializer(_serialize_region),
+    pydantic.WithJsonSchema(
+        {
+            "type": "string",
+            "description": "A region on the sphere from the lsst.sphgeom package.",
+            "media": {"binaryEncoding": "base16", "type": "application/lsst.sphgeom"},
+        }
+    ),
+]
+"""A Pydantic-annotated version of `lsst.sphgeom.Region`.
+
+An object annotated with this type is always an `lsst.sphgeom.Region` instance
+in Python, but unlike `lsst.sphgeom.Region` itself it can be used as a type
+in Pydantic models and type adapters, resulting in the field being saved as
+a hex encoding of the sphgeom-encoded bytes.
+"""
+
+
+def _deserialize_time(value: object, handler: pydantic.ValidatorFunctionWrapHandler) -> Region:
+    if isinstance(value, Time):
+        return value
+
+    integer = handler(value)
+    return TimeConverter().nsec_to_astropy(integer)
+
+
+def _serialize_time(time: Time) -> int:
+    return TimeConverter().astropy_to_nsec(time)
+
+
+SerializableTime: TypeAlias = Annotated[
+    Time,
+    pydantic.GetPydanticSchema(lambda _, h: h(int)),
+    pydantic.WrapValidator(_deserialize_time),
+    pydantic.PlainSerializer(_serialize_time),
+    pydantic.WithJsonSchema(
+        {
+            "type": "integer",
+            "description": "A TAI time represented as integer nanoseconds since 1970-01-01 00:00:00.",
+        }
+    ),
+]
+"""A Pydantic-annotated version of `astropy.time.Time`.
+
+An object annotated with this type is always an `astropy.time.Time` instance
+in Python, but unlike `astropy.time.Time` itself it can be used as a type
+in Pydantic models and type adapters, resulting in the field being saved as
+integer nanoseconds since 1970-01-01 00:00:00.
+"""

@@ -30,7 +30,9 @@ from __future__ import annotations
 import unittest
 
 import pydantic
-from lsst.daf.butler.pydantic_utils import DeferredValidation
+from astropy.time import Time
+from lsst.daf.butler.pydantic_utils import DeferredValidation, SerializableRegion, SerializableTime
+from lsst.sphgeom import ConvexPolygon, Mq3cPixelization
 
 
 class Inner(pydantic.BaseModel):
@@ -64,7 +66,7 @@ class OuterWithoutWrapper(pydantic.BaseModel):
 
 
 class DeferredValidationTestCase(unittest.TestCase):
-    """Tests for `lsst.daf.butle.pydanic_utils.DeferredValidation`."""
+    """Tests for `lsst.daf.butler.pydanic_utils.DeferredValidation`."""
 
     def test_json_schema(self) -> None:
         self.assertEqual(
@@ -95,6 +97,45 @@ class DeferredValidationTestCase(unittest.TestCase):
         self.assertEqual(outer2d.inner.validated(override=4).value, 4)
         self.assertIs(outer2c.inner.validated(override=4), outer2c.inner.validated(override=4))  # caching
         self.assertIs(outer2d.inner.validated(override=4), outer2d.inner.validated(override=4))  # caching
+
+
+class SerializableExtensionsTestCase(unittest.TestCase):
+    """Tests for third-party types we add serializable annotations for."""
+
+    def test_region(self) -> None:
+        pixelization = Mq3cPixelization(10)
+        region = pixelization.pixel(12058823)
+        adapter = pydantic.TypeAdapter(SerializableRegion)
+        self.assertEqual(adapter.json_schema()["media"]["binaryEncoding"], "base16")
+        json_roundtripped = adapter.validate_json(adapter.dump_json(region))
+        self.assertIsInstance(json_roundtripped, ConvexPolygon)
+        self.assertEqual(json_roundtripped.getVertices(), region.getVertices())
+        python_roundtripped = adapter.validate_python(adapter.dump_python(region))
+        self.assertIsInstance(json_roundtripped, ConvexPolygon)
+        self.assertEqual(python_roundtripped.getVertices(), region.getVertices())
+        with self.assertRaises(ValueError):
+            adapter.validate_python(12)
+        with self.assertRaises(ValueError):
+            adapter.validate_json({})
+        with self.assertRaises(ValueError):
+            adapter.validate_json((b"this is not a region").hex())
+        with self.assertRaises(ValueError):
+            adapter.validate_json("this is not a hex string")
+
+    def test_time(self) -> None:
+        time = Time("2021-09-09T03:00:00", format="isot", scale="tai")
+        adapter = pydantic.TypeAdapter(SerializableTime)
+        self.assertIn("integer nanoseconds", adapter.json_schema()["description"])
+        json_roundtripped = adapter.validate_json(adapter.dump_json(time))
+        self.assertIsInstance(json_roundtripped, Time)
+        self.assertEqual(json_roundtripped, time)
+        python_roundtripped = adapter.validate_python(adapter.dump_python(time))
+        self.assertIsInstance(json_roundtripped, Time)
+        self.assertEqual(python_roundtripped, time)
+        with self.assertRaises(ValueError):
+            adapter.validate_python("one")
+        with self.assertRaises(ValueError):
+            adapter.validate_json({})
 
 
 if __name__ == "__main__":

@@ -274,7 +274,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 dataset_type_name=normalize_dataset_type_name(datasetRefOrType),
                 collections=self._normalize_collections(collections),
                 data_id=simplify_dataId(dataId, kwargs),
-                timespan=timespan.to_simple() if timespan is not None else None,
+                timespan=timespan,
             )
             response = self._connection.post("get_file_by_data_id", request)
             return parse_model(response, GetFileResponseModel)
@@ -362,7 +362,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         query = FindDatasetRequestModel(
             data_id=simplify_dataId(data_id, kwargs),
             collections=self._normalize_collections(collections),
-            timespan=timespan.to_simple() if timespan is not None else None,
+            timespan=timespan,
             dimension_records=dimension_records,
             datastore_records=datastore_records,
         )

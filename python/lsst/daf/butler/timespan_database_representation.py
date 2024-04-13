@@ -528,8 +528,8 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
             begin_nsec = None
             end_nsec = None
         else:
-            begin_nsec = extent._nsec[0]
-            end_nsec = extent._nsec[1]
+            begin_nsec = extent.nsec[0]
+            end_nsec = extent.nsec[1]
         result[f"{name}_begin"] = begin_nsec
         result[f"{name}_end"] = end_nsec
         return result
@@ -570,7 +570,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         if timespan is None:
             return cls(nsec=(sqlalchemy.sql.null(), sqlalchemy.sql.null()), name=cls.NAME)
         return cls(
-            nsec=(sqlalchemy.sql.literal(timespan._nsec[0]), sqlalchemy.sql.literal(timespan._nsec[1])),
+            nsec=(sqlalchemy.sql.literal(timespan.nsec[0]), sqlalchemy.sql.literal(timespan.nsec[1])),
             name=cls.NAME,
         )
 
