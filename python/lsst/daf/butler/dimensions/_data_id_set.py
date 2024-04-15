@@ -29,24 +29,12 @@ from __future__ import annotations
 
 __all__ = ("DataIdSet",)
 
-import dataclasses
-from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, cast, final
+from collections.abc import Collection, Iterable, Iterator, Mapping, Set
+from typing import cast, final
 
-from ._coordinate import (
-    DataCoordinate,
-    DataIdValue,
-    DimensionElement,
-    _ExpandedTupleDataCoordinate,
-    _FullTupleDataCoordinate,
-    _RequiredTupleDataCoordinate,
-)
+from ._coordinate import DataCoordinate, DataIdValue, _FullTupleDataCoordinate, _RequiredTupleDataCoordinate
 from ._group import DimensionGroup
-from ._records import DimensionRecord
 from ._universe import DimensionUniverse
-
-if TYPE_CHECKING:
-    from ._record_set import DimensionRecordSet
 
 
 class DataIdSet(Collection[DataCoordinate]):
@@ -68,14 +56,6 @@ class DataIdSet(Collection[DataCoordinate]):
         same as whether the data IDs have "full" values; if there are no
         implied dimensions, ``has_implied_values=False`` but  `has_full_values`
         will be `True`.
-    record_lookup_sets : `~collections.abc.Mapping` [ `str`, \
-            `_DimensionRecordLookupSet` ] or `None`, optional
-        A structure containing dimension records to be attached to
-        `DataCoordinate` objects when they are obtained from this set.  This
-        must have all records that are relevant for the data IDs in the set,
-        but it may have other records that are not relevant as well.  If not
-        `None`, the set must have full values, either because
-        ``has_implied_values=True`` or because there are no implied dimensions.
     """
 
     def __init__(
@@ -83,25 +63,14 @@ class DataIdSet(Collection[DataCoordinate]):
         dimensions: DimensionGroup,
         values_mapping: Mapping[tuple[DataIdValue, ...], tuple[DataIdValue, ...]],
         has_implied_values: bool,
-        record_lookup_sets: Mapping[str, _DimensionRecordLookupSet] | None = None,
     ):
         self._dimensions = dimensions
         self._values_mapping = values_mapping
         self._has_implied_values = has_implied_values
-        self._record_lookup_sets = record_lookup_sets
-        assert (
-            self.has_full_values or self._record_lookup_sets is None
-        ), "Cannot have dimension records without full values."
         if self._has_implied_values:
-            if self._record_lookup_sets is not None:
-                self._factory = self._add_implied_with_records_factory
-            else:
-                self._factory = self._add_implied_factory
+            self._factory = self._add_implied_factory
         elif self._dimensions.implied:
-            if self._record_lookup_sets is not None:
-                self._factory = self._nothing_implied_with_records_factory
-            else:
-                self._factory = self._nothing_implied_factory
+            self._factory = self._nothing_implied_factory
         else:
             self._factory = self._required_only_factory
 
@@ -113,46 +82,23 @@ class DataIdSet(Collection[DataCoordinate]):
         *,
         universe: DimensionUniverse | None = None,
         has_full_values: bool = False,
-        has_dimension_records: bool = False,
     ) -> DataIdSet:
         if not isinstance(dimensions, DimensionGroup):
             if universe is None:
                 raise TypeError("'universe' must be provided if 'dimensions' is not a DimensionGroup.")
             dimensions = universe.conform(dimensions)
         values_mapping = {}
-        extracted_records: dict[str, dict[tuple[DataIdValue, ...], DimensionRecord]] | None = None
-        if has_dimension_records:
-            has_full_values = True
-            extracted_records = {element_name: {} for element_name in dimensions.elements}
         for data_id in data_ids:
             if has_full_values:
                 values_mapping[data_id.required_values] = data_id.full_values[len(dimensions.required) :]
-                if extracted_records is not None:
-                    for element_name, records_by_required_value in extracted_records.items():
-                        record = data_id.records[element_name]
-                        if record is not None:
-                            records_by_required_value[record.dataId.required_values] = record
+
             else:
                 values_mapping[data_id.required_values] = ()
             raise NotImplementedError("Extract dimension records here.")
-        record_lookup_sets = None
-        if extracted_records is not None:
-            from ._record_set import DimensionRecordSet
-
-            record_lookup_sets = {
-                element_name: _DimensionRecordLookupSet.build(
-                    dimensions,
-                    DimensionRecordSet(
-                        element_name, universe=dimensions.universe, _by_required_values=records_for_element
-                    ),
-                )
-                for element_name, records_for_element in extracted_records.items()
-            }
         return cls(
             dimensions,
             values_mapping,
             has_implied_values=(has_full_values and bool(dimensions.implied)),
-            record_lookup_sets=record_lookup_sets,
         )
 
     @property
@@ -162,10 +108,6 @@ class DataIdSet(Collection[DataCoordinate]):
     @property
     def has_full_values(self) -> bool:
         return self._has_implied_values or not self._dimensions.implied
-
-    @property
-    def has_dimension_records(self) -> bool:
-        return self._record_lookup_sets is not None
 
     @property
     def required_values(self) -> Set[tuple[DataIdValue, ...]]:
@@ -204,21 +146,6 @@ class DataIdSet(Collection[DataCoordinate]):
             lines.append(f"    {data_id},")
         lines.append("])")
         return "\n".join(lines)
-
-    def compressed(
-        self,
-        drop_implied_values: bool = True,
-        drop_dimension_records: bool = True,
-    ) -> DataIdSet:
-        values_mapping: dict[tuple[DataIdValue, ...], tuple[DataIdValue, ...]]
-        has_implied_values = self._has_implied_values
-        record_lookup_sets = self._record_lookup_sets
-        if drop_implied_values and has_implied_values:
-            values_mapping = dict.fromkeys(self._values_mapping.keys(), ())
-            record_lookup_sets = None
-        if drop_dimension_records and record_lookup_sets is not None:
-            record_lookup_sets = None
-        return DataIdSet(self._dimensions, values_mapping, has_implied_values, record_lookup_sets)
 
     def find(self, data_id: DataCoordinate) -> DataCoordinate:
         return self.find_with_required_values(data_id.required_values)
@@ -324,7 +251,6 @@ class DataIdSet(Collection[DataCoordinate]):
             self._dimensions,
             {k: implied_mapping[k] for k in self._values_mapping.keys() & other._values_mapping.keys()},
             self._has_implied_values or other._has_implied_values,
-            self._record_lookup_sets or other._record_lookup_sets,
         )
 
     def difference(self, other: DataIdSet) -> DataIdSet:
@@ -351,7 +277,6 @@ class DataIdSet(Collection[DataCoordinate]):
             self._dimensions,
             {k: self._values_mapping[k] for k in self.required_values - other.required_values},
             self._has_implied_values,
-            self._record_lookup_sets,
         )
 
     def union(self, other: DataIdSet) -> DataIdSet:
@@ -381,17 +306,10 @@ class DataIdSet(Collection[DataCoordinate]):
         else:
             # Only one operand has implied values; drop them in the result.
             values_mapping = dict.fromkeys(self._values_mapping.keys() | other._values_mapping.keys(), ())
-        record_lookup_sets = None
-        if self._record_lookup_sets is not None and other._record_lookup_sets is not None:
-            record_lookup_sets = {
-                element_name: lookup_set.union(other._record_lookup_sets[element_name])
-                for element_name, lookup_set in self._record_lookup_sets.items()
-            }
         return DataIdSet(
             self._dimensions,
             values_mapping,
             self._has_implied_values and other._has_implied_values,
-            record_lookup_sets,
         )
 
     def project(self, dimensions: DimensionGroup | Iterable[str]) -> DataIdSet:
@@ -426,13 +344,7 @@ class DataIdSet(Collection[DataCoordinate]):
         for original_values in iterable:
             new_values = tuple([original_values[index] for index in index_map])
             values_mapping[new_values[:n_required]] = new_values[n_required:]
-        record_lookup_sets: dict[str, _DimensionRecordLookupSet] | None = None
-        if self._record_lookup_sets is not None and (has_implied_values or not dimensions.implied):
-            record_lookup_sets = {
-                element_name: _DimensionRecordLookupSet.build(dimensions, lookup_set.records)
-                for element_name, lookup_set in self._record_lookup_sets.items()
-            }
-        return DataIdSet(dimensions, values_mapping, has_implied_values, record_lookup_sets)
+        return DataIdSet(dimensions, values_mapping, has_implied_values)
 
     @final
     def _required_only_factory(
@@ -451,53 +363,3 @@ class DataIdSet(Collection[DataCoordinate]):
         self, required_values: tuple[DataIdValue, ...], implied_values: tuple[DataIdValue, ...]
     ) -> DataCoordinate:
         return _FullTupleDataCoordinate(self._dimensions, required_values + implied_values)
-
-    @final
-    def _nothing_implied_with_records_factory(
-        self, required_values: tuple[DataIdValue, ...], implied_values: tuple[DataIdValue, ...]
-    ) -> DataCoordinate:
-        record_lookup_sets = cast(Mapping[str, _DimensionRecordLookupSet], self._record_lookup_sets)
-        return _ExpandedTupleDataCoordinate(
-            self._dimensions,
-            required_values,
-            {
-                element_name: lookup_set[required_values]
-                for element_name, lookup_set in record_lookup_sets.items()
-            },
-        )
-
-    @final
-    def _add_implied_with_records_factory(
-        self, required_values: tuple[DataIdValue, ...], implied_values: tuple[DataIdValue, ...]
-    ) -> DataCoordinate:
-        full_values = required_values + implied_values
-        record_lookup_sets = cast(Mapping[str, _DimensionRecordLookupSet], self._record_lookup_sets)
-        return _ExpandedTupleDataCoordinate(
-            self._dimensions,
-            full_values,
-            {
-                element_name: lookup_set[full_values]
-                for element_name, lookup_set in record_lookup_sets.items()
-            },
-        )
-
-
-@dataclasses.dataclass
-class _DimensionRecordLookupSet:
-    indexer: Sequence[int]
-    records: DimensionRecordSet
-
-    @classmethod
-    def build(cls, dimensions: DimensionGroup, record_set: DimensionRecordSet) -> _DimensionRecordLookupSet:
-        indexer = cls._build_indexer(dimensions, record_set.element)
-        return cls(indexer, record_set)
-
-    @staticmethod
-    def _build_indexer(dimensions: DimensionGroup, element: DimensionElement) -> list[int]:
-        return [dimensions._data_coordinate_indices[d] for d in element.required.names]
-
-    def __getitem__(self, data_id_values: tuple[DataIdValue, ...]) -> DimensionRecord:
-        return self.records.find_with_required_values(tuple([data_id_values[n] for n in self.indexer]))
-
-    def union(self, other: _DimensionRecordLookupSet) -> _DimensionRecordLookupSet:
-        return _DimensionRecordLookupSet(self.indexer, self.records.union(other.records, lazy=True))
