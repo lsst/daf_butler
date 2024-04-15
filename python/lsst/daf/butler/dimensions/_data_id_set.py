@@ -50,6 +50,34 @@ if TYPE_CHECKING:
 
 
 class DataIdSet(Collection[DataCoordinate]):
+    """A set-like collection of `DataCoordinate` objects.
+
+    The constructor is a low-level interface intended primarily for other
+    middleware callers; most users should use `from_data_ids` instead.
+
+    Parameters
+    ----------
+    dimensions : `DimensionGroup`
+        Dimensions of the data IDs in this set.
+    values_mapping : `~collections.abc.Mapping` [ `tuple`, `tuple` ]
+        A mapping from the required values of each data ID to its implied
+        values, if present.
+    has_implied_values : `bool`
+        If `True`, implied values are present.  If `False`, the values of the
+        ``values_mapping`` are empty tuples.  Note that this is not quite the
+        same as whether the data IDs have "full" values; if there are no
+        implied dimensions, ``has_implied_values=False`` but  `has_full_values`
+        will be `True`.
+    record_lookup_sets : `~collections.abc.Mapping` [ `str`, \
+            `_DimensionRecordLookupSet` ] or `None`, optional
+        A structure containing dimension records to be attached to
+        `DataCoordinate` objects when they are obtained from this set.  This
+        must have all records that are relevant for the data IDs in the set,
+        but it may have other records that are not relevant as well.  If not
+        `None`, the set must have full values, either because
+        ``has_implied_values=True`` or because there are no implied dimensions.
+    """
+
     def __init__(
         self,
         dimensions: DimensionGroup,
