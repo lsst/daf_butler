@@ -347,6 +347,19 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
 
 
 class _DataIdMappingAdapter(Mapping[tuple[DataIdValue, ...], tuple[DataIdValue, ...]]):
+    """A mapping adapter for `DimensionRecordSet` that can be used to back a
+    `DataIdSet`.
+
+    The keys of this dictionary are data ID 'required values' tuples and the
+    values are empty tuples (representing 'implied' data ID values, which this
+    adapter does not provide.
+
+    Parameters
+    ----------
+    parent : `DimensionRecordSet`
+        Record set to adapt.
+    """
+
     def __init__(self, parent: DimensionRecordSet) -> None:
         self._parent = parent
 
