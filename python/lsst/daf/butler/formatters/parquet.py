@@ -493,7 +493,7 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     return arrow_table
 
 
-def astropy_to_pandas(astropy_table: atable.Table) -> pd.DataFrame:
+def astropy_to_pandas(astropy_table: atable.Table, index: str | None = None) -> pd.DataFrame:
     """Convert an astropy table to a pandas dataframe via arrow.
 
     By going via arrow we avoid pandas masked column bugs (e.g.
@@ -503,13 +503,22 @@ def astropy_to_pandas(astropy_table: atable.Table) -> pd.DataFrame:
     ----------
     astropy_table : `astropy.Table`
         Input astropy table.
+    index : `str`, optional
+        Name of column to set as index.
 
     Returns
     -------
     dataframe : `pandas.DataFrame`
         Output pandas dataframe.
     """
-    return arrow_to_pandas(astropy_to_arrow(astropy_table))
+    dataframe = arrow_to_pandas(astropy_to_arrow(astropy_table))
+
+    if isinstance(index, str):
+        dataframe = dataframe.set_index(index)
+    elif index:
+        raise RuntimeError("index must be a string or None.")
+
+    return dataframe
 
 
 def _astropy_to_numpy_dict(astropy_table: atable.Table) -> dict[str, np.ndarray]:
