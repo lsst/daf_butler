@@ -36,6 +36,7 @@ __all__ = (
     "pandas_to_arrow",
     "pandas_to_astropy",
     "astropy_to_arrow",
+    "astropy_to_pandas",
     "numpy_to_arrow",
     "numpy_to_astropy",
     "numpy_dict_to_arrow",
@@ -490,6 +491,25 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     arrow_table = pa.Table.from_arrays(arrays, schema=schema)
 
     return arrow_table
+
+
+def astropy_to_pandas(astropy_table: atable.Table) -> pd.DataFrame:
+    """Convert an astropy table to a pandas dataframe via arrow.
+
+    By going via arrow we avoid pandas masked column bugs (e.g.
+    https://github.com/pandas-dev/pandas/issues/58173)
+
+    Parameters
+    ----------
+    astropy_table : `astropy.Table`
+        Input astropy table.
+
+    Returns
+    -------
+    dataframe : `pandas.DataFrame`
+        Output pandas dataframe.
+    """
+    return arrow_to_pandas(astropy_to_arrow(astropy_table))
 
 
 def _astropy_to_numpy_dict(astropy_table: atable.Table) -> dict[str, np.ndarray]:
