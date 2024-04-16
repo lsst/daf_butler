@@ -1,0 +1,1 @@
+Fix an issue preventing dataset types with group dimensions from being put into a Butler repo.
