@@ -29,12 +29,43 @@ from __future__ import annotations
 
 __all__ = ("DataIdSet",)
 
+import dataclasses
 from collections.abc import Collection, Iterable, Iterator, Mapping, Set
 from typing import cast, final
 
-from ._coordinate import DataCoordinate, DataIdValue, _FullTupleDataCoordinate, _RequiredTupleDataCoordinate
+from ._coordinate import (
+    DataCoordinate,
+    DataIdValue,
+    _ExpandedTupleDataCoordinate,
+    _FullTupleDataCoordinate,
+    _RequiredTupleDataCoordinate,
+)
 from ._group import DimensionGroup
+from ._records import DimensionRecord
 from ._universe import DimensionUniverse
+
+
+@dataclasses.dataclass(slots=True)
+class _MappingValue:
+    implied: tuple[DataIdValue, ...] = ()
+    records: tuple[DimensionRecord | None, ...] = ()
+
+    @classmethod
+    def from_data_id(
+        cls,
+        data_id: DataCoordinate,
+        dimensions: DimensionGroup,
+        has_full_values: bool,
+        has_dimension_records: bool,
+    ) -> _MappingValue:
+        assert data_id.dimensions == dimensions
+        implied: tuple[DataIdValue, ...] = ()
+        records: tuple[DimensionRecord | None, ...] = ()
+        if has_full_values:
+            implied = data_id.full_values[len(dimensions.required) :]
+            if has_dimension_records:
+                records = tuple([data_id.records[element_name] for element_name in dimensions.elements])
+        return cls(implied, records)
 
 
 class DataIdSet(Collection[DataCoordinate]):
@@ -47,29 +78,39 @@ class DataIdSet(Collection[DataCoordinate]):
     ----------
     dimensions : `DimensionGroup`
         Dimensions of the data IDs in this set.
-    values_mapping : `~collections.abc.Mapping` [ `tuple`, `tuple` ]
+    mapping : `~collections.abc.Mapping` [ `tuple`, `tuple` ]
         A mapping from the required values of each data ID to its implied
         values, if present.
     has_implied_values : `bool`
-        If `True`, implied values are present.  If `False`, the values of the
-        ``values_mapping`` are empty tuples.  Note that this is not quite the
+        If `True`, implied values are present.  Note that this is not quite the
         same as whether the data IDs have "full" values; if there are no
         implied dimensions, ``has_implied_values=False`` but  `has_full_values`
         will be `True`.
+    has_dimension_records : `bool`
+        If `True`, this container holds all dimension records for all data IDs.
+        This should always be `True` if ``dimensions`` is empty.
     """
 
     def __init__(
         self,
         dimensions: DimensionGroup,
-        values_mapping: Mapping[tuple[DataIdValue, ...], tuple[DataIdValue, ...]],
+        mapping: Mapping[tuple[DataIdValue, ...], _MappingValue],
         has_implied_values: bool,
+        has_dimension_records: bool,
     ):
         self._dimensions = dimensions
-        self._values_mapping = values_mapping
+        self._mapping = mapping
         self._has_implied_values = has_implied_values
-        if self._has_implied_values:
+        self._has_dimension_records = has_dimension_records
+        if self._has_dimension_records:
+            if self._has_implied_values:
+                self._factory = self._add_implied_with_records_factory
+            else:
+                self._factory = self._nothing_implied_with_records_factory
+        elif self._has_implied_values:
             self._factory = self._add_implied_factory
-        elif self._dimensions.implied:
+        elif not self._dimensions.implied:
+            assert self._dimensions, "empty data IDs are considered to have dimension records"
             self._factory = self._nothing_implied_factory
         else:
             self._factory = self._required_only_factory
@@ -82,23 +123,29 @@ class DataIdSet(Collection[DataCoordinate]):
         *,
         universe: DimensionUniverse | None = None,
         has_full_values: bool = False,
+        has_dimension_records: bool = False,
     ) -> DataIdSet:
         if not isinstance(dimensions, DimensionGroup):
             if universe is None:
                 raise TypeError("'universe' must be provided if 'dimensions' is not a DimensionGroup.")
             dimensions = universe.conform(dimensions)
-        values_mapping = {}
+        if not dimensions:
+            has_dimension_records = True
+        if has_dimension_records:
+            has_full_values = True
+        mapping = {}
         for data_id in data_ids:
-            if has_full_values:
-                values_mapping[data_id.required_values] = data_id.full_values[len(dimensions.required) :]
-
-            else:
-                values_mapping[data_id.required_values] = ()
-            raise NotImplementedError("Extract dimension records here.")
+            mapping[data_id.required_values] = _MappingValue.from_data_id(
+                data_id,
+                dimensions,
+                has_full_values=has_full_values,
+                has_dimension_records=has_dimension_records,
+            )
         return cls(
             dimensions,
-            values_mapping,
+            mapping,
             has_implied_values=(has_full_values and bool(dimensions.implied)),
+            has_dimension_records=has_dimension_records,
         )
 
     @property
@@ -110,15 +157,19 @@ class DataIdSet(Collection[DataCoordinate]):
         return self._has_implied_values or not self._dimensions.implied
 
     @property
+    def has_dimension_records(self) -> bool:
+        return self._has_dimension_records
+
+    @property
     def required_values(self) -> Set[tuple[DataIdValue, ...]]:
-        return self._values_mapping.keys()
+        return self._mapping.keys()
 
     def __iter__(self) -> Iterator[DataCoordinate]:
-        for required_values in self.required_values:
-            yield self._factory(required_values, ())
+        for key, value in self._mapping.items():
+            yield self._factory(key, value)
 
     def __len__(self) -> int:
-        return len(self._values_mapping)
+        return len(self._mapping)
 
     def __contains__(self, key: object) -> bool:
         match key:
@@ -127,7 +178,7 @@ class DataIdSet(Collection[DataCoordinate]):
             case {**mapping}:
                 key = DataCoordinate.standardize(
                     cast(dict[str, DataIdValue], mapping), dimensions=self._dimensions
-                )
+                ).required_values
             case _:
                 return False
         return required_values in self.required_values
@@ -135,10 +186,7 @@ class DataIdSet(Collection[DataCoordinate]):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, DataIdSet):
             return False
-        return (
-            self._dimensions is other._dimensions
-            and self._values_mapping.keys() == other._values_mapping.keys()
-        )
+        return self._dimensions is other._dimensions and self._mapping.keys() == other._mapping.keys()
 
     def __repr__(self) -> str:
         lines = [f"DataIdSet({self.dimensions}, ["]
@@ -163,9 +211,7 @@ class DataIdSet(Collection[DataCoordinate]):
         data_id : `DataCoordinate`
             Matching data ID.
         """
-        if required_values not in self._values_mapping:
-            raise KeyError(required_values)
-        return self._factory(required_values, ())
+        return self._factory(required_values, self._mapping[required_values])
 
     def issubset(self, other: DataIdSet) -> bool:
         """Test whether all elements in ``self`` are in ``other``.
@@ -185,7 +231,7 @@ class DataIdSet(Collection[DataCoordinate]):
                 "Invalid comparison between data ID sets with dimensions "
                 f"{self._dimensions} and {other._dimensions}."
             )
-        return self._values_mapping.keys() <= other._values_mapping.keys()
+        return self._mapping.keys() <= other._mapping.keys()
 
     def issuperset(self, other: DataIdSet) -> bool:
         """Test whether all elements in ``other`` are in ``self``.
@@ -205,7 +251,7 @@ class DataIdSet(Collection[DataCoordinate]):
                 "Invalid comparison between data ID sets with dimensions "
                 f"{self._dimensions} and {other._dimensions}."
             )
-        return self._values_mapping.keys() >= other._values_mapping.keys()
+        return self._mapping.keys() >= other._mapping.keys()
 
     def isdisjoint(self, other: DataIdSet) -> bool:
         """Test whether the intersection of ``self`` and ``other`` is empty.
@@ -225,7 +271,7 @@ class DataIdSet(Collection[DataCoordinate]):
                 "Invalid comparison between data ID sets with dimensions "
                 f"{self._dimensions} and {other._dimensions}."
             )
-        return self._values_mapping.keys().isdisjoint(other._values_mapping.keys())
+        return self._mapping.keys().isdisjoint(other._mapping.keys())
 
     def intersection(self, other: DataIdSet) -> DataIdSet:
         """Return a new set with only data IDs that are in both ``self`` and
@@ -239,18 +285,22 @@ class DataIdSet(Collection[DataCoordinate]):
         Returns
         -------
         intersection : `DataIdSet`
-            A new record set with all elements in both sets.
+            A new record set with all elements in both sets.  This will have
+            full values and dimensions records if either operand does.
         """
         if self._dimensions != other._dimensions:
             raise ValueError(
                 "Invalid intersection between data ID sets with dimensions "
                 f"{self._dimensions} and {other._dimensions}."
             )
-        implied_mapping = self._values_mapping if self._has_implied_values else other._values_mapping
+        # Take result's mapping values from whichever argument has more stuff
+        # in its values.
+        value_source = max(self, other, key=DataIdSet._completeness)._mapping
         return DataIdSet(
             self._dimensions,
-            {k: implied_mapping[k] for k in self._values_mapping.keys() & other._values_mapping.keys()},
+            {k: value_source[k] for k in self._mapping.keys() & other._mapping.keys()},
             self._has_implied_values or other._has_implied_values,
+            self._has_dimension_records or other._has_dimension_records,
         )
 
     def difference(self, other: DataIdSet) -> DataIdSet:
@@ -266,7 +316,8 @@ class DataIdSet(Collection[DataCoordinate]):
         -------
         difference : `DataIdSet`
             A new record set with all elements ``self`` that are not in
-            ``other``.
+            ``other``.  This will have full values and dimensions records if
+            ``self`` does.
         """
         if self._dimensions != other._dimensions:
             raise ValueError(
@@ -275,8 +326,9 @@ class DataIdSet(Collection[DataCoordinate]):
             )
         return DataIdSet(
             self._dimensions,
-            {k: self._values_mapping[k] for k in self.required_values - other.required_values},
+            {k: self._mapping[k] for k in self.required_values - other.required_values},
             self._has_implied_values,
+            self._has_dimension_records,
         )
 
     def union(self, other: DataIdSet) -> DataIdSet:
@@ -291,75 +343,91 @@ class DataIdSet(Collection[DataCoordinate]):
         Returns
         -------
         union : `DataIdSet`
-            A new record set with all elements in either set.
+            A new record set with all elements in either set.  This will have
+            full values and dimension records only if both operands do.
         """
         if self._dimensions != other._dimensions:
             raise ValueError(
                 "Invalid union between data ID sets with dimensions "
                 f"{self._dimensions} and {other.dimensions}."
             )
-        if self._has_implied_values == other._has_implied_values:
-            # Both operands have implied values or neither does: mapping union
-            # does exactly what we want (because we assume implied values must
-            # be the same in both operands when the required values are).
-            values_mapping = {**self._values_mapping, **other._values_mapping}
-        else:
-            # Only one operand has implied values; drop them in the result.
-            values_mapping = dict.fromkeys(self._values_mapping.keys() | other._values_mapping.keys(), ())
         return DataIdSet(
             self._dimensions,
-            values_mapping,
+            # This mapping union can lead to mappings with heterogeneously
+            # populated values (e.g. some may have records, while others may
+            # not).  But this is okay because we always rely on the
+            # has_implied_values and has_dimension_values to set minimum
+            # expectations for what's in them.
+            {**self._mapping, **other._mapping},
             self._has_implied_values and other._has_implied_values,
+            self._has_dimension_records and other._has_dimension_records,
         )
 
     def project(self, dimensions: DimensionGroup | Iterable[str]) -> DataIdSet:
         dimensions = self._dimensions.universe.conform(dimensions)
         has_implied_values: bool = False
-        iterable: Iterable[tuple[DataIdValue, ...]]
+        iterable: Iterable[tuple[tuple[DataIdValue, ...], _MappingValue]]
         if self._dimensions.required >= dimensions.names:
-            index_map = [
-                self._dimensions._data_coordinate_indices[k] for k in dimensions.data_coordinate_keys
-            ]
-            iterable = self._values_mapping.keys()
+            indexer = [self._dimensions._data_coordinate_indices[k] for k in dimensions.data_coordinate_keys]
+            iterable = self._mapping.items()
             has_implied_values = bool(dimensions.implied)
         elif self._has_implied_values and self._dimensions.names >= dimensions.names:
-            index_map = [
-                self._dimensions._data_coordinate_indices[k] for k in dimensions.data_coordinate_keys
-            ]
-            iterable = (r + i for r, i in self._values_mapping.items())
+            indexer = [self._dimensions._data_coordinate_indices[k] for k in dimensions.data_coordinate_keys]
+            iterable = ((r + v.implied, v) for r, v in self._mapping.items())
             has_implied_values = bool(dimensions.implied)
         elif self._dimensions.required >= dimensions.required:
-            index_map = [self._dimensions._data_coordinate_indices[k] for k in dimensions.required]
-            iterable = self._values_mapping.keys()
+            indexer = [self._dimensions._data_coordinate_indices[k] for k in dimensions.required]
+            iterable = self._mapping.items()
         elif self._has_implied_values and self._dimensions.names >= dimensions.required:
-            index_map = [self._dimensions._data_coordinate_indices[k] for k in dimensions.required]
-            iterable = (r + i for r, i in self._values_mapping.items())
+            indexer = [self._dimensions._data_coordinate_indices[k] for k in dimensions.required]
+            iterable = ((r + v.implied, v) for r, v in self._mapping.items())
         else:
             raise ValueError(
                 f"Dimensions {dimensions.required} are not a subset of "
                 f"{self._dimensions if self._has_implied_values else self._dimensions.required}."
             )
-        values_mapping: dict[tuple[DataIdValue, ...], tuple[DataIdValue, ...]] = {}
+        record_indexer: list[int] | None = None
+        if ((has_implied_values or not dimensions.implied) and self._has_dimension_records) or not dimensions:
+            current_element_indices = {k: i for i, k in enumerate(self._dimensions.elements)}
+            record_indexer = [current_element_indices[k] for k in dimensions.elements]
+        mapping: dict[tuple[DataIdValue, ...], _MappingValue] = {}
         n_required = len(dimensions.required)
-        for original_values in iterable:
-            new_values = tuple([original_values[index] for index in index_map])
-            values_mapping[new_values[:n_required]] = new_values[n_required:]
-        return DataIdSet(dimensions, values_mapping, has_implied_values)
+        records: tuple[DimensionRecord | None, ...] = ()
+        for full, mapping_value in iterable:
+            new_values = tuple([full[index] for index in indexer])
+            if record_indexer is not None:
+                records = tuple([mapping_value.records[index] for index in record_indexer])
+            mapping[new_values[:n_required]] = _MappingValue(implied=new_values[n_required:], records=records)
+        return DataIdSet(dimensions, mapping, has_implied_values, record_indexer is not None)
 
     @final
-    def _required_only_factory(
-        self, required_values: tuple[DataIdValue, ...], implied_values: tuple[DataIdValue, ...]
-    ) -> DataCoordinate:
-        return _RequiredTupleDataCoordinate(self._dimensions, required_values)
+    def _required_only_factory(self, key: tuple[DataIdValue, ...], value: _MappingValue) -> DataCoordinate:
+        return _RequiredTupleDataCoordinate(self._dimensions, key)
 
     @final
-    def _nothing_implied_factory(
-        self, required_values: tuple[DataIdValue, ...], implied_values: tuple[DataIdValue, ...]
-    ) -> DataCoordinate:
-        return _FullTupleDataCoordinate(self._dimensions, required_values)
+    def _nothing_implied_factory(self, key: tuple[DataIdValue, ...], value: _MappingValue) -> DataCoordinate:
+        return _FullTupleDataCoordinate(self._dimensions, key)
 
     @final
-    def _add_implied_factory(
-        self, required_values: tuple[DataIdValue, ...], implied_values: tuple[DataIdValue, ...]
+    def _add_implied_factory(self, key: tuple[DataIdValue, ...], value: _MappingValue) -> DataCoordinate:
+        return _FullTupleDataCoordinate(self._dimensions, key + value.implied)
+
+    @final
+    def _nothing_implied_with_records_factory(
+        self, key: tuple[DataIdValue, ...], value: _MappingValue
     ) -> DataCoordinate:
-        return _FullTupleDataCoordinate(self._dimensions, required_values + implied_values)
+        return _ExpandedTupleDataCoordinate(
+            self._dimensions, key, dict(zip(self._dimensions.elements, value.records))
+        )
+
+    @final
+    def _add_implied_with_records_factory(
+        self, key: tuple[DataIdValue, ...], value: _MappingValue
+    ) -> DataCoordinate:
+        return _ExpandedTupleDataCoordinate(
+            self._dimensions, key + value.implied, dict(zip(self._dimensions.elements, value.records))
+        )
+
+    @final
+    def _completeness(self) -> int:
+        return self._has_implied_values + self._has_dimension_records

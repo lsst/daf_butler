@@ -31,13 +31,13 @@ __all__ = ("DimensionRecordSet",)
 
 from collections import ChainMap
 from collections.abc import Collection, Iterable, Iterator, KeysView, Mapping
-from typing import TYPE_CHECKING, cast, final
+from typing import TYPE_CHECKING, ClassVar, cast, final
 
 from ._coordinate import DataCoordinate, DataIdValue
 from ._records import DimensionRecord
 
 if TYPE_CHECKING:
-    from ._data_id_set import DataIdSet
+    from ._data_id_set import DataIdSet, _MappingValue
     from ._elements import DimensionElement
     from ._universe import DimensionUniverse
 
@@ -115,7 +115,10 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
         from ._data_id_set import DataIdSet
 
         return DataIdSet(
-            self.element.minimal_group, has_implied_values=False, values_mapping=_DataIdMappingAdapter(self)
+            self.element.minimal_group,
+            _DataIdMappingAdapter(self),
+            has_implied_values=True,
+            has_dimension_records=False,
         )
 
     def __contains__(self, key: object) -> bool:
@@ -346,7 +349,7 @@ class DimensionRecordSet(Collection[DimensionRecord]):  # numpydoc ignore=PR01
         return self._by_required_values[required_values]
 
 
-class _DataIdMappingAdapter(Mapping[tuple[DataIdValue, ...], tuple[DataIdValue, ...]]):
+class _DataIdMappingAdapter(Mapping[tuple[DataIdValue, ...], _MappingValue]):
     """A mapping adapter for `DimensionRecordSet` that can be used to back a
     `DataIdSet`.
 
@@ -363,13 +366,15 @@ class _DataIdMappingAdapter(Mapping[tuple[DataIdValue, ...], tuple[DataIdValue, 
     def __init__(self, parent: DimensionRecordSet) -> None:
         self._parent = parent
 
+    _value: ClassVar[_MappingValue] = _MappingValue()
+
     def __iter__(self) -> Iterator[tuple[DataIdValue, ...]]:
         return iter(self._parent._by_required_values.keys())
 
-    def __getitem__(self, key: tuple[DataIdValue, ...]) -> tuple[DataIdValue, ...]:
+    def __getitem__(self, key: tuple[DataIdValue, ...]) -> _MappingValue:
         if key not in self._parent._by_required_values:
             raise KeyError(key)
-        return ()
+        return self._value
 
     def __len__(self) -> int:
         return len(self._parent._by_required_values)
