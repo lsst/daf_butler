@@ -1102,7 +1102,7 @@ def _arrow_string_to_numpy_dtype(
         # String/bytes length from header.
         strlen = int(schema.metadata[encoded])
     elif numpy_column is not None and len(numpy_column) > 0:
-        strlen = max(len(row) for row in numpy_column)
+        strlen = max([len(row) for row in numpy_column if row])
 
     dtype = f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}"
 
