@@ -417,3 +417,5 @@ storageClasses:
     pytype: lsst.meas.transiNet.modelPackages.formatters.NNModelPackagePayload
   Timespan:
     pytype: lsst.daf.butler.Timespan
+  RegionTimeInfo:
+    pytype: lsst.pipe.base.utils.RegionTimeInfo

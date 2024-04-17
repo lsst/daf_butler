@@ -91,3 +91,4 @@ MetricMeasurementBundle: lsst.daf.butler.formatters.json.JsonFormatter
 MultipleCellCoadd: lsst.cell_coadds.CellCoaddFitsFormatter
 NNModelPackagePayload: lsst.meas.transiNet.modelPackages.NNModelPackageFormatter
 Timespan: lsst.daf.butler.formatters.json.JsonFormatter
+RegionTimeInfo: lsst.daf.butler.formatters.json.JsonFormatter

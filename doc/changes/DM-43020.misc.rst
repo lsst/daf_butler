@@ -1,1 +1,1 @@
-Add storage class for daf.butler.Timespan.
+Add storage classes for daf.butler.Timespan and pipe.base.utils.RegionTimeInfo.
