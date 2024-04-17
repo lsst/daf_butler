@@ -594,7 +594,7 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
     if isinstance(dataframe.columns, pd.MultiIndex):
         raise ValueError("Cannot convert a multi-index dataframe to an astropy table.")
 
-    return Table.from_pandas(dataframe, index=True)
+    return arrow_to_astropy(pandas_to_arrow(dataframe))
 
 
 def _pandas_to_numpy_dict(dataframe: pd.DataFrame) -> dict[str, np.ndarray]:
