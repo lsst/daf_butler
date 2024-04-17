@@ -589,7 +589,6 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
         Converted astropy table.
     """
     import pandas as pd
-    from astropy.table import Table
 
     if isinstance(dataframe.columns, pd.MultiIndex):
         raise ValueError("Cannot convert a multi-index dataframe to an astropy table.")
