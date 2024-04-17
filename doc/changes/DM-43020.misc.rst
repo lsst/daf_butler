@@ -1,0 +1,1 @@
+Add storage class for daf.butler.Timespan.

@@ -415,3 +415,5 @@ storageClasses:
     pytype: lsst.cell_coadds.MultipleCellCoadd
   NNModelPackagePayload:
     pytype: lsst.meas.transiNet.modelPackages.formatters.NNModelPackagePayload
+  Timespan:
+    pytype: lsst.daf.butler.Timespan
