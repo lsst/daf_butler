@@ -96,10 +96,12 @@ try:
         arrow_to_numpy_dict,
         arrow_to_pandas,
         astropy_to_arrow,
+        astropy_to_pandas,
         compute_row_group_size,
         numpy_dict_to_arrow,
         numpy_to_arrow,
         pandas_to_arrow,
+        pandas_to_astropy,
     )
 except ImportError:
     pa = None
@@ -200,6 +202,7 @@ def _makeSingleIndexDataFrame(include_masked=False, include_lists=False):
         df["m2"] = pd.array(np.arange(nrow), dtype=np.float32)
         df["mstrcol"] = pd.array(np.array(["text"] * nrow))
         df.loc[1, ["m1", "m2", "mstrcol"]] = None
+        df.loc[0, "m1"] = 1649900760361600113
 
     if include_lists:
         nrow = len(df)
@@ -273,6 +276,7 @@ def _makeSimpleAstropyTable(include_multidim=False, include_masked=False, includ
         # Masked 64-bit integer.
         arr = np.arange(nrow, dtype="i8")
         arr[mask] = -1
+        arr[0] = 1649900760361600113
         table["m_i8"] = np.ma.masked_array(data=arr, mask=mask, fill_value=-1)
         # Masked 32-bit float.
         arr = np.arange(nrow, dtype="f4")
@@ -555,7 +559,7 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         self.butler.put(df1, self.datasetType, dataId={})
 
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="ArrowAstropy")
-        tab2_df = tab2.to_pandas(index="index")
+        tab2_df = astropy_to_pandas(tab2, index="index")
 
         self.assertTrue(df1.columns.equals(tab2_df.columns))
         for name in tab2_df.columns:
@@ -583,6 +587,23 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # This is an odd duck, it doesn't really round-trip.
         # This test simply checks that it's readable, but definitely not
         # recommended.
+
+    @unittest.skipUnless(atable is not None, "Cannot test writing as astropy without astropy.")
+    def testWriteAstropyTableWithMaskedColsReadAsSingleIndexDataFrame(self):
+        tab1 = _makeSimpleAstropyTable(include_masked=True)
+
+        self.butler.put(tab1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={})
+
+        tab1_df = astropy_to_pandas(tab1)
+        self.assertTrue(tab1_df.equals(tab2))
+
+        tab2_astropy = pandas_to_astropy(tab2)
+        for col in tab1.dtype.names:
+            np.testing.assert_array_equal(tab2_astropy[col], tab1[col])
+            if isinstance(tab1[col], atable.column.MaskedColumn):
+                np.testing.assert_array_equal(tab2_astropy[col].mask, tab1[col].mask)
 
     @unittest.skipUnless(pa is not None, "Cannot test reading as arrow without pyarrow.")
     def testWriteSingleIndexDataFrameReadAsArrowTable(self):
@@ -967,7 +988,7 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
         tab2 = self.butler.get(self.datasetType, dataId={}, storageClass="DataFrame")
 
-        tab1_df = tab1.to_pandas()
+        tab1_df = astropy_to_pandas(tab1)
 
         self.assertTrue(tab1_df.columns.equals(tab2.columns))
         for name in tab2.columns:
@@ -983,6 +1004,18 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
                     self.assertEqual(col1[index], col2[index])
             else:
                 self.assertTrue(col1.equals(col2))
+
+    @unittest.skipUnless(pd is not None, "Cannot test writing as a dataframe without pandas.")
+    def testWriteSingleIndexDataFrameWithMaskedColsReadAsAstropyTable(self):
+        df1, allColumns = _makeSingleIndexDataFrame(include_masked=True)
+
+        self.butler.put(df1, self.datasetType, dataId={})
+
+        tab2 = self.butler.get(self.datasetType, dataId={})
+
+        df1_tab = pandas_to_astropy(df1)
+
+        self._checkAstropyTableEquality(df1_tab, tab2)
 
     @unittest.skipUnless(np is not None, "Cannot test reading as numpy without numpy.")
     def testWriteAstropyReadAsNumpyTable(self):
