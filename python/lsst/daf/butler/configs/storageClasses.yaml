@@ -124,7 +124,7 @@ storageClasses:
     pytype: pandas.core.frame.DataFrame
     converters:
       pyarrow.Table: lsst.daf.butler.formatters.parquet.arrow_to_pandas
-      astropy.table.Table: astropy.table.Table.to_pandas
+      astropy.table.Table: lsst.daf.butler.formatters.parquet.astropy_to_pandas
       numpy.ndarray: pandas.DataFrame.from_records
       dict: pandas.DataFrame.from_records
     delegate: lsst.daf.butler.delegates.dataframe.DataFrameDelegate

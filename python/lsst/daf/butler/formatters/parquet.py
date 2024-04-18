@@ -36,6 +36,7 @@ __all__ = (
     "pandas_to_arrow",
     "pandas_to_astropy",
     "astropy_to_arrow",
+    "astropy_to_pandas",
     "numpy_to_arrow",
     "numpy_to_astropy",
     "numpy_dict_to_arrow",
@@ -492,6 +493,34 @@ def astropy_to_arrow(astropy_table: atable.Table) -> pa.Table:
     return arrow_table
 
 
+def astropy_to_pandas(astropy_table: atable.Table, index: str | None = None) -> pd.DataFrame:
+    """Convert an astropy table to a pandas dataframe via arrow.
+
+    By going via arrow we avoid pandas masked column bugs (e.g.
+    https://github.com/pandas-dev/pandas/issues/58173)
+
+    Parameters
+    ----------
+    astropy_table : `astropy.Table`
+        Input astropy table.
+    index : `str`, optional
+        Name of column to set as index.
+
+    Returns
+    -------
+    dataframe : `pandas.DataFrame`
+        Output pandas dataframe.
+    """
+    dataframe = arrow_to_pandas(astropy_to_arrow(astropy_table))
+
+    if isinstance(index, str):
+        dataframe = dataframe.set_index(index)
+    elif index:
+        raise RuntimeError("index must be a string or None.")
+
+    return dataframe
+
+
 def _astropy_to_numpy_dict(astropy_table: atable.Table) -> dict[str, np.ndarray]:
     """Convert an astropy table to an arrow table.
 
@@ -560,12 +589,11 @@ def pandas_to_astropy(dataframe: pd.DataFrame) -> atable.Table:
         Converted astropy table.
     """
     import pandas as pd
-    from astropy.table import Table
 
     if isinstance(dataframe.columns, pd.MultiIndex):
         raise ValueError("Cannot convert a multi-index dataframe to an astropy table.")
 
-    return Table.from_pandas(dataframe, index=True)
+    return arrow_to_astropy(pandas_to_arrow(dataframe))
 
 
 def _pandas_to_numpy_dict(dataframe: pd.DataFrame) -> dict[str, np.ndarray]:
@@ -1073,7 +1101,7 @@ def _arrow_string_to_numpy_dtype(
         # String/bytes length from header.
         strlen = int(schema.metadata[encoded])
     elif numpy_column is not None and len(numpy_column) > 0:
-        strlen = max(len(row) for row in numpy_column)
+        strlen = max([len(row) for row in numpy_column if row])
 
     dtype = f"U{strlen}" if schema.field(name).type == pa.string() else f"|S{strlen}"
 
