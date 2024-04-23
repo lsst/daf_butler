@@ -1,0 +1,499 @@
+version: 3
+namespace: daf_butler
+skypix:
+  # 'common' is the skypix system and level used to relate all other spatial
+  # dimensions.  Its value is a string formed by concatenating one of the
+  # other keys under the 'skypix' headerin (i.e. the name of a skypix system)
+  # with an integer level (with no zero-padding).
+  common: htm7
+  htm:
+    class: lsst.sphgeom.HtmPixelization
+    max_level: 24
+  healpix:
+    class: lsst.sphgeom.HealpixPixelization
+    max_level: 17
+
+elements:
+  instrument:
+    doc: >
+      An entity that produces observations.  An instrument defines a set of
+      physical_filters and detectors and a numbering system for the exposures
+      and visits that represent observations with it.
+    keys:
+      -
+        name: name
+        type: string
+        length: 16
+    metadata:
+      -
+        name: visit_max
+        type: int
+        doc: >
+          Maximum value for the 'visit' field for visits associated with
+          this instrument (exclusive).
+      -
+        name: visit_system
+        type: int
+        doc: >
+          The preferred visit system for this instrument.
+      -
+        name: exposure_max
+        type: int
+        doc: >
+          Maximum value for the 'exposure' field for exposures associated with
+          this instrument (exclusive).
+      -
+        name: detector_max
+        type: int
+        doc: >
+          Maximum value for the 'detector' field for detectors associated with
+          this instrument (exclusive).
+      -
+        name: class_name
+        type: string
+        length: 64
+        doc: >
+          Full class name of the Instrument class associated with this
+          instrument.
+    governor: true
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage
+
+  band:
+    doc: >
+      A filter that is not associated with a particular instrument.  An
+      abstract filter can be used to relate similar physical filters, and
+      is typically the filter associated with coadds.
+    keys:
+      -
+        name: name
+        type: string
+        length: 32
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
+      nested:
+        cls: lsst.daf.butler.registry.dimensions.query.QueryDimensionRecordStorage
+        view_of: physical_filter
+
+  physical_filter:
+    doc: >
+      A filter associated with a particular instrument.  physical_filters are
+      used to identify datasets that can only be associated with a single
+      observation.
+    keys:
+      -
+        name: name
+        type: string
+        length: 32
+    requires:
+      - instrument
+    implies:
+      - band
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
+      nested:
+        cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  subfilter:
+    doc: >
+      A mathematical division of an band. Subfilters are used to
+      model wavelength-dependent effects such as differential chromatic
+      refraction.
+    keys:
+      -
+        name: id
+        type: int
+    requires:
+      - band
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
+      nested:
+        cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  detector:
+    doc: >
+      A detector associated with a particular instrument (not an observation
+      of that detector; that requires specifying an exposure or visit as
+      well).
+    keys:
+      -
+        name: id
+        type: int
+      -
+        name: full_name
+        type: string
+        length: 32
+    requires: [instrument]
+    metadata:
+      -
+        name: name_in_raft
+        type: string
+        length: 32
+      -
+        name: raft
+        type: string
+        length: 32
+        doc: >
+          A string name for a group of detectors with an instrument-dependent
+          interpretation.
+      -
+        name: purpose
+        type: string
+        length: 32
+        doc: >
+          Role of the detector; typically one of "SCIENCE", "WAVEFRONT",
+          or "GUIDE", though instruments may define additional values.
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
+      nested:
+        cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  visit:
+    doc: >
+      A sequence of observations processed together, comprised of one or
+      more exposures from the same instrument with the same pointing and
+      physical_filter.
+      The visit table contains metadata that is both meaningful only for
+      science exposures and the same for all exposures in a visit.
+    keys:
+      -
+        name: id
+        type: int
+      -
+        name: name
+        type: string
+        length: 64
+    requires: [instrument]
+    implies: [physical_filter]
+    metadata:
+      -
+        name: day_obs
+        type: int
+        doc: >
+          Day of observation as defined by the observatory (YYYYMMDD format).
+          If a visit crosses multiple days this entry will be the earliest
+          day of any of the exposures that make up the visit.
+      - name: seq_num
+        type: int
+        doc: >
+          The sequence number of the first exposure that is part of this visit.
+      -
+        name: exposure_time
+        type: float
+        doc: >
+          The total exposure time of the visit in seconds.  This should
+          be equal to the sum of the exposure_time values for all
+          constituent exposures (i.e. it should not include time between
+          exposures).
+      -
+        name: target_name
+        type: string
+        length: 64
+        doc: Object of interest for this visit or survey field name.
+      -
+        name: observation_reason
+        type: string
+        length: 68
+        doc: >
+          The reason this visit was taken. (e.g. science,
+          filter scan, unknown, various).
+      -
+        name: science_program
+        type: string
+        length: 64
+        doc: Observing program (survey or proposal) identifier.
+      -
+        name: azimuth
+        type: float
+        doc: >
+          Approximate azimuth of the telescope in degrees during the visit.
+          Can only be approximate since it is continually changing during
+          an observation and multiple exposures can be combined from a
+          relatively long period.
+      -
+        name: zenith_angle
+        type: float
+        doc: >
+          Approximate zenith angle in degrees during the visit.
+          Can only be approximate since it is continuously changing during
+          an observation and multiple exposures can be combined from a
+          relatively long period.
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  exposure:
+    doc: >
+      An observation associated with a particular instrument.  All direct
+      observations are identified with an exposure, but derived datasets
+      that may be based on more than one exposure (e.g. multiple snaps) are
+      typically identified with visits instead, even for instruments that
+      don't have multiple exposures per visit.  As a result, instruments
+      that don't have multiple exposures per visit will typically have visit
+      entries that are essentially duplicates of their exposure entries.
+
+      The exposure table contains metadata entries that are relevant for
+      calibration exposures, and does not duplicate entries in visit that
+      would be the same for all exposures within a visit with the exception
+      of the exposure.group entry.
+    keys:
+      -
+        name: id
+        type: int
+      -
+        name: obs_id
+        type: string
+        length: 64
+    requires: [instrument]
+    implies: [physical_filter]
+    metadata:
+      -
+        name: exposure_time
+        type: float
+        doc: Duration of the exposure with shutter open (seconds).
+      -
+        name: dark_time
+        type: float
+        doc: Duration of the exposure with shutter closed (seconds).
+      -
+        name: observation_type
+        type: string
+        length: 16
+        doc: The observation type of this exposure (e.g. dark, bias, science).
+      -
+        name: observation_reason
+        type: string
+        length: 68
+        doc: >
+          The reason this observation was taken. (e.g. science,
+          filter scan, unknown).
+      -
+        name: day_obs
+        type: int
+        doc: >
+          Day of observation as defined by the observatory (YYYYMMDD format).
+      -
+        name: seq_num
+        type: int
+        doc: >
+          Counter for the observation within a larger sequence. Context
+          of the sequence number is observatory specific. Can be
+          a global counter or counter within day_obs.
+      -
+        name: seq_start
+        type: int
+        doc: >
+          Earliest sequence number that might be related to this exposure.
+      -
+        name: seq_end
+        type: int
+        doc: >
+          Oldest sequence number that might be related to this exposure.
+      -
+        name: group_name
+        type: string
+        length: 64
+        doc: >
+          String group identifier associated with this exposure by the
+          acquisition system.
+      -
+        name: group_id
+        type: int
+        doc: >
+          Integer group identifier associated with this exposure by the
+          acquisition system.
+      -
+        name: target_name
+        type: string
+        length: 64
+        doc: Object of interest for this observation or survey field name.
+      -
+        name: science_program
+        type: string
+        length: 64
+        doc: >
+          Observing program (survey, proposal, engineering project)
+          identifier.
+      -
+        name: tracking_ra
+        type: float
+        doc: >
+          Tracking ICRS Right Ascension of boresight in degrees. Can be NULL
+          for observations that are not on sky.
+      -
+        name: tracking_dec
+        type: float
+        doc: >
+          Tracking ICRS Declination of boresight in degrees. Can be NULL for
+          observations that are not on sky.
+      -
+        name: sky_angle
+        type: float
+        doc: >
+          Angle of the instrument focal plane on the sky in degrees. Can
+          be NULL for observations that are not on sky, or for observations
+          where the sky angle changes during the observation.
+      -
+        name: azimuth
+        type: float
+        doc: >
+          Azimuth of the telescope at the start of the exposure in degrees.
+          Can be NULL for observations that are not on sky, or for observations
+          where the azimuth is not relevant.
+      -
+        name: zenith_angle
+        type: float
+        doc: >
+          Angle in degrees from the zenith at the start of the exposure.
+      - name: has_simulated
+        type: bool
+        doc: >
+          True if this exposure has some content that was simulated.
+          This can be if the data itself were simulated or if
+          parts of the header came from simulated systems, such as observations
+          in the lab that are recorded as on-sky.
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  skymap:
+    doc: >
+      A set of tracts and patches that subdivide the sky into rectangular
+      regions with simple projections and intentional overlaps.
+    keys:
+      -
+        name: name
+        type: string
+        length: 64
+      -
+        name: hash
+        type: hash
+        nbytes: 40
+        doc: >
+          A hash of the skymap's parameters.
+    metadata:
+      - name: tract_max
+        type: int
+        doc: >
+          Maximum ID for tracts in this skymap, exclusive.
+      - name: patch_nx_max
+        type: int
+        doc: >
+          Number of patches in the x direction in each tract.
+      - name: patch_ny_max
+        type: int
+        doc: >
+          Number of patches in the y direction in each tract.
+    governor: true
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.governor.BasicGovernorDimensionRecordStorage
+
+  tract:
+    doc: >
+      A large rectangular region mapped to the sky with a single map
+      projection, associated with a particular skymap.
+    keys:
+      -
+        name: id
+        type: int
+    requires: [skymap]
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  patch:
+    doc: >
+      A rectangular region within a tract.
+    keys:
+      -
+        name: id
+        type: int
+    requires: [skymap, tract]
+    metadata:
+      -
+        name: cell_x
+        type: int
+        nullable: false
+        doc: >
+          Which column this patch occupies in the tract's grid of patches.
+      -
+        name: cell_y
+        type: int
+        nullable: false
+        doc: >
+          Which row this patch occupies in the tract's grid of patches.
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  visit_detector_region:
+    doc: >
+      A many-to-many join table that provides region information for
+      visit-detector combinations.
+    requires: [visit, detector]
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  visit_system:
+    doc: >
+      A system of self-consistent visit definitions, within which each
+      exposure should appear at most once.
+
+      A visit may belong to multiple visit systems, if the logical definitions
+      for those systems happen to result in the same set of exposures - the
+      main (and probably only) example is when a single-snap visit is observed,
+      for which both the "one-to-one" visit system and a "group by header metadata" visit
+      system will define the same single-exposure visit.
+    keys:
+      -
+        name: id
+        type: int
+      -
+        name: name
+        type: string
+        length: 32
+    requires: [instrument]
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.caching.CachingDimensionRecordStorage
+      nested:
+        cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  visit_definition:
+    doc: >
+      A many-to-many join table that relates exposures to the visits they
+      belong to.
+    requires: [exposure, visit]
+    always_join: true
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  visit_system_membership:
+    doc: >
+      A many-to-many join table that relates visits to the visit_systems they
+      belong to.
+    requires: [visit, visit_system]
+    always_join: true
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+topology:
+  spatial:
+    observation_regions: [visit_detector_region, visit]
+    skymap_regions: [patch, tract]
+
+  temporal:
+    observation_timespans: [exposure, visit]
+
+packers:
+  visit_detector:
+    fixed: [instrument]
+    dimensions: [instrument, visit, detector]
+    cls: lsst.daf.butler.instrument.ObservationDimensionPacker
+  exposure_detector:
+    fixed: [instrument]
+    dimensions: [instrument, exposure, detector]
+    cls: lsst.daf.butler.instrument.ObservationDimensionPacker
+  tract_patch:
+    fixed: [skymap]
+    dimensions: [skymap, tract, patch]
+    cls: lsst.skymap.packers.SkyMapDimensionPacker
+  tract_patch_band:
+    fixed: [skymap]
+    dimensions: [skymap, tract, patch, band]
+    cls: lsst.skymap.packers.SkyMapDimensionPacker
