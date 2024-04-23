@@ -287,6 +287,10 @@ class Datastore(metaclass=ABCMeta):
         referring to a configuration file.
     bridgeManager : `DatastoreRegistryBridgeManager`
         Object that manages the interface between `Registry` and datastores.
+
+    See Also
+    --------
+    lsst.daf.butler.Butler
     """
 
     defaultConfigFile: ClassVar[str | None] = None

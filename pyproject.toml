@@ -217,6 +217,7 @@ convention = "numpy"
 checks = [
     "all",  # All except the rules listed below.
     "SA01",  # See Also section.
+    "SA04",  # We don't use descriptions with See Also.
     "EX01",  # Example section.
     "SS06",  # Summary can go into second line.
     "GL01",  # Summary text can start on same line as """

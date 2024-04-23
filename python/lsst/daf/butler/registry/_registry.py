@@ -76,6 +76,10 @@ class Registry(ABC):
     All subclasses should store `~lsst.daf.butler.registry.RegistryDefaults` in
     a ``_defaults`` property. No other properties are assumed shared between
     implementations.
+
+    See Also
+    --------
+    lsst.daf.butler.Butler
     """
 
     @abstractmethod
