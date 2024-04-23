@@ -37,12 +37,25 @@ __all__ = [
     "GetCollectionSummaryResponseModel",
 ]
 
-from typing import NewType
+from typing import Annotated, Literal, NewType, TypeAlias
+from uuid import UUID
 
 import pydantic
-from lsst.daf.butler import CollectionType, SerializedDataId, SerializedDatasetRef, Timespan
+from lsst.daf.butler import (
+    CollectionType,
+    DataIdValue,
+    SerializedDataCoordinate,
+    SerializedDataId,
+    SerializedDatasetRef,
+    SerializedDimensionGroup,
+    Timespan,
+)
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 from lsst.daf.butler.registry import SerializedCollectionSummary
+
+from ..dimensions import SerializedDimensionRecord
+from ..queries.result_specs import SerializedResultSpec
+from ..queries.tree import SerializedQueryTree
 
 CLIENT_REQUEST_ID_HEADER_NAME = "X-Butler-Client-Request-Id"
 ERROR_STATUS_CODE = 422
@@ -141,3 +154,93 @@ class QueryCollectionsResponseModel(pydantic.BaseModel):
 
     collections: list[str]
     """Collection names that match the search."""
+
+
+class MaterializedQuery(pydantic.BaseModel):
+    """Captures the parameters from a call to ``QueryDriver.materialize``."""
+
+    type: Literal["materialized"] = "materialized"
+    key: UUID
+    tree: SerializedQueryTree
+    dimensions: SerializedDimensionGroup
+    datasets: list[str]
+
+
+class DataCoordinateUpload(pydantic.BaseModel):
+    """Captures the parameters from a call to
+    ``QueryDriver.upload_data_coordinates``.
+    """
+
+    type: Literal["upload"] = "upload"
+    key: UUID
+    dimensions: SerializedDimensionGroup
+    rows: list[list[DataIdValue]]
+
+
+AdditionalQueryInput: TypeAlias = Annotated[
+    MaterializedQuery | DataCoordinateUpload, pydantic.Discriminator("type")
+]
+"""Information about additional data tables that may be used by a query."""
+
+
+class QueryInputs(pydantic.BaseModel):
+    """Serialized Butler query with additional context needed to execute it."""
+
+    tree: SerializedQueryTree
+    default_data_id: SerializedDataCoordinate
+    additional_query_inputs: list[AdditionalQueryInput]
+
+
+class QueryExecuteRequestModel(pydantic.BaseModel):
+    """Request model for /query/execute/."""
+
+    query: QueryInputs
+    result_spec: SerializedResultSpec
+
+
+class QueryExecuteResponseModel(pydantic.BaseModel):
+    """Response model for /query/execute/."""
+
+    rows: list[SerializedDimensionRecord]
+
+
+class QueryCountRequestModel(pydantic.BaseModel):
+    """Request model for /query/count/."""
+
+    query: QueryInputs
+    result_spec: SerializedResultSpec
+    exact: bool
+    discard: bool
+
+
+class QueryCountResponseModel(pydantic.BaseModel):
+    """Response model for /query/count/."""
+
+    count: int
+
+
+class QueryAnyRequestModel(pydantic.BaseModel):
+    """Request model for /query/any/."""
+
+    query: QueryInputs
+    execute: bool
+    exact: bool
+
+
+class QueryAnyResponseModel(pydantic.BaseModel):
+    """Response model for /query/any/."""
+
+    found_rows: bool
+
+
+class QueryExplainRequestModel(pydantic.BaseModel):
+    """Request model for /query/explain/."""
+
+    query: QueryInputs
+    execute: bool
+
+
+class QueryExplainResponseModel(pydantic.BaseModel):
+    """Response model for /query/explain/."""
+
+    messages: list[str]

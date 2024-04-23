@@ -56,6 +56,7 @@ from lsst.daf.butler import (
     StorageClassFactory,
 )
 from lsst.daf.butler.datastore import DatasetRefURIs
+from lsst.daf.butler.registry import RegistryDefaults
 from lsst.daf.butler.tests import DatastoreMock, addDatasetType
 from lsst.daf.butler.tests.utils import MetricsExample, MetricTestRepo, mock_env
 from lsst.resources import ResourcePath
@@ -191,24 +192,28 @@ class ButlerClientServerTestCase(unittest.TestCase):
         server_url = f"https://test.example/api/butler/repo/{TEST_REPOSITORY_NAME}/"
 
         with patch.object(HttpResourcePath, "read", override_read):
-            # Add access key to environment variables. RemoteButler
-            # instantiation will throw an error if access key is not
-            # available.
-            with mock_env({_EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY: "fake-access-token"}):
-                butler = Butler(
-                    server_url,
-                    collections=["collection1", "collection2"],
-                    run="collection2",
-                )
-            butler_factory = LabeledButlerFactory({"server": server_url})
-            factory_created_butler = butler_factory.create_butler(label="server", access_token="token")
-        self.assertIsInstance(butler, RemoteButler)
-        self.assertIsInstance(factory_created_butler, RemoteButler)
-        self.assertEqual(butler._connection.server_url, server_url)
-        self.assertEqual(factory_created_butler._connection.server_url, server_url)
+            # RegistryDefaults.finish() needs to download the dimension
+            # universe from the server, which will fail because there is no
+            # server here.  So mock it out.
+            with patch.object(RegistryDefaults, "finish"):
+                # Add access key to environment variables. RemoteButler
+                # instantiation will throw an error if access key is not
+                # available.
+                with mock_env({_EXPLICIT_BUTLER_ACCESS_TOKEN_ENVIRONMENT_KEY: "fake-access-token"}):
+                    butler = Butler(
+                        server_url,
+                        collections=["collection1", "collection2"],
+                        run="collection2",
+                    )
+                    self.assertIsInstance(butler, RemoteButler)
+                    self.assertEqual(butler._connection.server_url, server_url)
+                    self.assertEqual(butler.collections, ("collection1", "collection2"))
+                    self.assertEqual(butler.run, "collection2")
 
-        self.assertEqual(butler.collections, ("collection1", "collection2"))
-        self.assertEqual(butler.run, "collection2")
+                butler_factory = LabeledButlerFactory({"server": server_url})
+                factory_created_butler = butler_factory.create_butler(label="server", access_token="token")
+                self.assertIsInstance(factory_created_butler, RemoteButler)
+                self.assertEqual(factory_created_butler._connection.server_url, server_url)
 
     def test_get(self):
         dataset_type = "test_metric_comp"

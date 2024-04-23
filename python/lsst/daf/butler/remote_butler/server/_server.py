@@ -39,6 +39,7 @@ from safir.logging import configure_logging, configure_uvicorn_logging
 from ..._exceptions import ButlerUserError
 from ..server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
 from .handlers._external import external_router
+from .handlers._external_query import query_router
 from .handlers._internal import internal_router
 
 configure_logging(name="lsst.daf.butler.remote_butler.server")
@@ -55,13 +56,14 @@ def create_app() -> FastAPI:
     # factory_dependency().
     repository_placeholder = "{repository}"
     default_api_path = "/api/butler"
-    app.include_router(
-        external_router,
-        prefix=f"{default_api_path}/repo/{repository_placeholder}",
-        # document that 422 responses will include a JSON-formatted error
-        # message, from `butler_exception_handler()` below.
-        responses={422: {"model": ErrorResponseModel}},
-    )
+    for router in (external_router, query_router):
+        app.include_router(
+            router,
+            prefix=f"{default_api_path}/repo/{repository_placeholder}",
+            # document that 422 responses will include a JSON-formatted error
+            # message, from `butler_exception_handler()` below.
+            responses={422: {"model": ErrorResponseModel}},
+        )
     app.include_router(internal_router)
 
     # Any time an exception is returned by a handler, add a log message that

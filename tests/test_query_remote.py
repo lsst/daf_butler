@@ -2,7 +2,7 @@
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (http://www.lsst.org).
+# (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -23,10 +23,42 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from ._base import *
-from ._data_coordinate_query_results import *
-from ._dataset_query_results import *
-from ._dimension_record_query_results import *
-from ._query import *
+"""Tests for DirectButler._query with SQLite.
+"""
+
+from __future__ import annotations
+
+import os
+import unittest
+
+from lsst.daf.butler import Butler
+from lsst.daf.butler.tests.butler_queries import ButlerQueryTests
+
+try:
+    from lsst.daf.butler.tests.server import create_test_server
+except ImportError:
+    create_test_server = None
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class RemoteButlerQueryTests(ButlerQueryTests, unittest.TestCase):
+    """Test query system using client/server butler."""
+
+    data_dir = os.path.join(TESTDIR, "data/registry")
+
+    def make_butler(self, *args: str) -> Butler:
+        server_instance = self.enterContext(create_test_server(TESTDIR))
+        butler = server_instance.hybrid_butler
+
+        for arg in args:
+            self.load_data(butler.registry, arg)
+
+        return butler
+
+
+if __name__ == "__main__":
+    unittest.main()

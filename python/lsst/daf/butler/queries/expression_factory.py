@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 
 from lsst.sphgeom import Region
 
+from .._exceptions import InvalidQueryError
 from ..dimensions import Dimension, DimensionElement, DimensionUniverse
 from . import tree
 
@@ -346,7 +347,7 @@ class DimensionElementProxy(ScalarExpressionProxy):
             return DimensionElementProxy(self._element.dimensions[field])
         try:
             expression = tree.DimensionFieldReference(element=self._element, field=field)
-        except tree.InvalidQueryError:
+        except InvalidQueryError:
             raise AttributeError(field)
         return ResolvedScalarExpressionProxy(expression)
 
@@ -354,7 +355,7 @@ class DimensionElementProxy(ScalarExpressionProxy):
     def region(self) -> RegionProxy:
         try:
             expression = tree.DimensionFieldReference(element=self._element, field="region")
-        except tree.InvalidQueryError:
+        except InvalidQueryError:
             raise AttributeError("region")
         return RegionProxy(expression)
 
@@ -362,7 +363,7 @@ class DimensionElementProxy(ScalarExpressionProxy):
     def timespan(self) -> TimespanProxy:
         try:
             expression = tree.DimensionFieldReference(element=self._element, field="timespan")
-        except tree.InvalidQueryError:
+        except InvalidQueryError:
             raise AttributeError("timespan")
         return TimespanProxy(expression)
 
@@ -410,7 +411,7 @@ class DatasetTypeProxy:
     def timespan(self) -> TimespanProxy:
         try:
             expression = tree.DimensionFieldReference(element=self._element, field="timespan")
-        except tree.InvalidQueryError:
+        except InvalidQueryError:
             raise AttributeError("timespan")
         return TimespanProxy(expression)
 

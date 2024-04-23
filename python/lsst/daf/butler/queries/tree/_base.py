@@ -31,7 +31,6 @@ __all__ = (
     "QueryTreeBase",
     "ColumnExpressionBase",
     "DatasetFieldName",
-    "InvalidQueryError",
     "DATASET_FIELD_NAMES",
 )
 
@@ -62,10 +61,6 @@ _T = TypeVar("_T")
 _L = TypeVar("_L")
 _A = TypeVar("_A")
 _O = TypeVar("_O")
-
-
-class InvalidQueryError(RuntimeError):
-    """Exception raised when a query is not valid."""
 
 
 class QueryTreeBase(pydantic.BaseModel):

@@ -35,6 +35,7 @@ from typing import Any, final
 from lsst.utils.iteration import ensure_iterable
 
 from .._dataset_type import DatasetType
+from .._exceptions import InvalidQueryError
 from .._storage_class import StorageClassFactory
 from ..dimensions import DataCoordinate, DataId, DataIdValue, DimensionGroup
 from ..registry import DatasetTypeError
@@ -46,7 +47,7 @@ from .convert_args import convert_where_args
 from .driver import QueryDriver
 from .expression_factory import ExpressionFactory
 from .result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
-from .tree import DatasetSearch, InvalidQueryError, Predicate, QueryTree, make_identity_query_tree
+from .tree import DatasetSearch, Predicate, QueryTree, make_identity_query_tree
 
 
 @final

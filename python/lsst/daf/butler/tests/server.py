@@ -95,6 +95,20 @@ def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
                 # Override the server's Butler initialization to point at our
                 # test repo
                 server_butler_factory = LabeledButlerFactory({TEST_REPOSITORY_NAME: config_file_path})
+                # DirectButler has a dimension_record_cache object that
+                # maintains a complete set of dimension records for governor
+                # dimensions.  These values change infrequently and are needed
+                # for almost every DirectButler operation, so the complete set
+                # is downloaded the first time a record is needed.
+                #
+                # On the server it would be expensive to do this for every
+                # request's new DirectButler instance, so normally these are
+                # loaded once, the first time a repository is accessed.  This
+                # is a problem for unit tests because they typically manipulate
+                # instrument records etc during setup.  So configure the
+                # factory to disable this preloading and re-fetch the records
+                # as needed.
+                server_butler_factory._preload_direct_butler_cache = False
                 app.dependency_overrides[butler_factory_dependency] = lambda: server_butler_factory
 
                 client = TestClient(app)

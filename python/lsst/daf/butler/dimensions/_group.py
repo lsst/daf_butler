@@ -27,12 +27,12 @@
 
 from __future__ import annotations
 
-__all__ = ["DimensionGroup"]
+__all__ = ("DimensionGroup", "SerializedDimensionGroup")
 
 import itertools
 from collections.abc import Iterable, Iterator, Mapping, Set
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import pydantic
 from lsst.utils.classes import cached_getter, immutable
@@ -526,12 +526,24 @@ class DimensionGroup:  # numpydoc ignore=PR02
         This satisfies the `pydantic.WithInfoPlainValidatorFunction` signature.
         """
         universe = pydantic_utils.get_universe_from_context(info.context)
+        return cls.from_simple(data, universe)
+
+    @classmethod
+    def from_simple(cls, data: SerializedDimensionGroup, universe: DimensionUniverse) -> DimensionGroup:
+        """Create an instance of this class from serialized data.
+
+        Parameters
+        ----------
+        data : `SerializedDimensionGroup`
+            Serialized data from a previous call to ``to_simple``.
+        universe : `DimensionUniverse`
+            Dimension universe in which this dimension group will be defined.
+        """
         return universe.conform(data)
 
-    def _serialize(self) -> list[str]:
-        """Pydantic serializer for `DimensionGroup`.
-
-        This satisfies the `pydantic.PlainSerializerFunction` signature.
+    def to_simple(self) -> SerializedDimensionGroup:
+        """Convert this class to a simple data format suitable for
+        serialization.
         """
         return list(self.names)
 
@@ -555,6 +567,9 @@ class DimensionGroup:  # numpydoc ignore=PR02
             ),
             # When serializing convert it to a `list[str]`.
             serialization=core_schema.plain_serializer_function_ser_schema(
-                cls._serialize, return_schema=list_of_str_schema
+                cls.to_simple, return_schema=list_of_str_schema
             ),
         )
+
+
+SerializedDimensionGroup: TypeAlias = list[str]

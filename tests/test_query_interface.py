@@ -57,6 +57,7 @@ from lsst.daf.butler import (
     DimensionRecord,
     DimensionRecordSet,
     DimensionUniverse,
+    InvalidQueryError,
     MissingDatasetTypeError,
     NamedValueSet,
     NoDefaultCollectionError,
@@ -573,7 +574,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         expr.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["detector"]))
         self.assertEqual(columns.dimension_fields["detector"], {"purpose"})
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             qt.DimensionFieldReference(element=self.universe.dimensions["detector"], field="region")
         self.assertEqual(
             expr.visit(_TestVisitor(dimension_fields={("detector", "purpose"): "science"})), "science"
@@ -615,7 +616,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertEqual(columns.dimension_fields["visit"], {"exposure_time"})
         self.assertEqual(expr.visit(_TestVisitor(dimension_fields={("visit", "exposure_time"): 2.0})), -2.0)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             qt.UnaryExpression(
                 operand=qt.DimensionFieldReference(
                     element=self.universe.dimensions["detector"], field="purpose"
@@ -640,7 +641,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(
             expr.visit(_TestVisitor(dimension_fields={("visit", "timespan"): value})), value.begin
         )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             qt.UnaryExpression(
                 operand=qt.DimensionFieldReference(
                     element=self.universe.dimensions["detector"], field="purpose"
@@ -663,7 +664,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         end = astropy.time.Time("2020-01-01T00:01:00", format="isot", scale="tai")
         value = Timespan(begin, end)
         self.assertEqual(expr.visit(_TestVisitor(dimension_fields={("visit", "timespan"): value})), value.end)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             qt.UnaryExpression(
                 operand=qt.DimensionFieldReference(
                     element=self.universe.dimensions["detector"], field="purpose"
@@ -726,15 +727,15 @@ class ColumnExpressionsTestCase(unittest.TestCase):
                 self.assertEqual(expr.visit(_TestVisitor(dimension_keys={"visit": 5})), value)
 
     def test_binary_expression_validation(self) -> None:
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # No arithmetic operators on strings (we do not interpret + as
             # concatenation).
             self.x.instrument + "suffix"
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Mixed types are not supported, even when they both support the
             # operator.
             self.x.visit.exposure_time + self.x.detector
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # No modulus for floats.
             self.x.visit.exposure_time % 5.0
 
@@ -859,12 +860,12 @@ class ColumnExpressionsTestCase(unittest.TestCase):
 
     def test_invalid_comparison(self) -> None:
         # Mixed type comparisons.
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             self.x.visit > "three"
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             self.x.visit > 3.0
         # Invalid operator for type.
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             self.x["raw"].dataset_id < uuid.uuid4()
 
     def test_is_null(self) -> None:
@@ -905,14 +906,14 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(columns.dimensions, self.universe.conform(["visit", "exposure"]))
         self.assertFalse(columns.dimension_fields["visit"])
         self.assertFalse(columns.dimension_fields["exposure"])
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Regions (and timespans) not allowed in IN expressions, since that
             # suggests topological logic we're not actually doing.  We can't
             # use ExpressionFactory because it prohibits this case with typing.
             pixelization = Mq3cPixelization(10)
             region = pixelization.quad(12058870)
             qt.Predicate.in_container(self.x.unwrap(self.x.visit.region), [qt.make_column_literal(region)])
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Mismatched types.
             self.x.visit.in_iterable([3.5, 2.1])
 
@@ -935,13 +936,13 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         inverted.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertFalse(columns.dimension_fields["visit"])
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Only integer fields allowed.
             self.x.visit.exposure_time.in_range(2, 4)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Step must be positive.
             self.x.visit.in_range(2, 4, -1)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Stop must be >= start.
             self.x.visit.in_range(2, 0)
 
@@ -973,20 +974,20 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         inverted.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["exposure"]))
         self.assertFalse(columns.dimension_fields["exposure"])
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Regions (and timespans) not allowed in IN expressions, since that
             # suggests topological logic we're not actually doing.  We can't
             # use ExpressionFactory because it prohibits this case with typing.
             qt.Predicate.in_query(
                 self.x.unwrap(self.x.visit.region), self.x.unwrap(self.x.tract.region), query._tree
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Mismatched types.
             self.x.exposure.in_query(self.x.visit.exposure_time, query)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Query column requires dimensions that are not in the query.
             self.x.exposure.in_query(self.x.patch, query)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Query column requires dataset type that is not in the query.
             self.x["raw"].dataset_id.in_query(self.x["raw"].dataset_id, query)
 
@@ -1281,7 +1282,7 @@ class QueryTestCase(unittest.TestCase):
             # Adding a constraint on a field for this dataset type should work
             # (this constraint will be present in all downstream tests).
             query = query.where(query.expression_factory["raw"].run == "DummyCam/raw/all")
-            with self.assertRaises(qt.InvalidQueryError):
+            with self.assertRaises(InvalidQueryError):
                 # Adding constraint on a different dataset should not work.
                 query.where(query.expression_factory["refcat"].run == "refcats")
 
@@ -1316,7 +1317,7 @@ class QueryTestCase(unittest.TestCase):
             check_dataset_results(self.raw, ["DummyCam/defaults"], query=query, find_first=True)
 
             # Changing collections at this stage is not allowed.
-            with self.assertRaises(qt.InvalidQueryError):
+            with self.assertRaises(InvalidQueryError):
                 query.datasets("raw", collections=["DummyCam/calib"])
 
             # Changing storage classes is allowed, if they're compatible.
@@ -1365,11 +1366,11 @@ class QueryTestCase(unittest.TestCase):
             )
             # Materializing the query with a dataset that is not in the query
             # is an error.
-            with self.assertRaises(qt.InvalidQueryError):
+            with self.assertRaises(InvalidQueryError):
                 query.materialize(datasets={"refcat"})
             # Materializing the query with dimensions that are not a superset
             # of any materialized dataset dimensions is an error.
-            with self.assertRaises(qt.InvalidQueryError):
+            with self.assertRaises(InvalidQueryError):
                 query.materialize(dimensions=["exposure"], datasets={"raw"})
 
         # Actual logic for test_dataset_joins starts here.
@@ -1403,7 +1404,7 @@ class QueryTestCase(unittest.TestCase):
         with self.assertRaises(TypeError):
             # Bad type for dataset type argument.
             self.query().join_dataset_search(3)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Cannot pass storage class override to join_dataset_search,
             # because we cannot use it there.
             self.query().join_dataset_search(self.raw.overrideStorageClass("ArrowAstropy"))
@@ -1476,10 +1477,10 @@ class QueryTestCase(unittest.TestCase):
             check(results, order_by=[x.patch.cell_x, x.patch.cell_y.desc]),
             ["patch.cell_x", "patch.cell_y DESC"],
         )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Cannot upload empty list of data IDs.
             query.join_data_coordinates([])
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Cannot upload heterogeneous list of data IDs.
             query.join_data_coordinates(
                 [
@@ -1743,17 +1744,17 @@ class QueryTestCase(unittest.TestCase):
         )
         with self.assertRaises(TypeError):
             self.query().data_ids(["visit"]).order_by(3)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             self.query().data_ids(["visit"]).order_by("visit.region")
-        with self.assertRaisesRegex(qt.InvalidQueryError, "Ambiguous"):
+        with self.assertRaisesRegex(InvalidQueryError, "Ambiguous"):
             self.query().data_ids(["visit", "exposure"]).order_by("timespan.begin")
-        with self.assertRaisesRegex(qt.InvalidQueryError, "Unrecognized"):
+        with self.assertRaisesRegex(InvalidQueryError, "Unrecognized"):
             self.query().data_ids(["visit", "exposure"]).order_by("blarg")
-        with self.assertRaisesRegex(qt.InvalidQueryError, "Unrecognized"):
+        with self.assertRaisesRegex(InvalidQueryError, "Unrecognized"):
             self.query().data_ids(["visit", "exposure"]).order_by("visit.horse")
-        with self.assertRaisesRegex(qt.InvalidQueryError, "Unrecognized"):
+        with self.assertRaisesRegex(InvalidQueryError, "Unrecognized"):
             self.query().data_ids(["visit", "exposure"]).order_by("visit.science_program.monkey")
-        with self.assertRaisesRegex(qt.InvalidQueryError, "not valid for datasets"):
+        with self.assertRaisesRegex(InvalidQueryError, "not valid for datasets"):
             self.query().datasets("raw").order_by("raw.seq_num")
 
     def test_invalid_models(self) -> None:
@@ -1761,7 +1762,7 @@ class QueryTestCase(unittest.TestCase):
         constructed via the public Query and *QueryResults interfaces.
         """
         x = ExpressionFactory(self.universe)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # QueryTree dimensions do not cover dataset dimensions.
             qt.QueryTree(
                 dimensions=self.universe.conform(["visit"]),
@@ -1772,26 +1773,26 @@ class QueryTestCase(unittest.TestCase):
                     )
                 },
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # QueryTree dimensions do no cover predicate dimensions.
             qt.QueryTree(
                 dimensions=self.universe.conform(["visit"]),
                 predicate=(x.detector > 5),
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Predicate references a dataset not in the QueryTree.
             qt.QueryTree(
                 dimensions=self.universe.conform(["exposure", "detector"]),
                 predicate=(x["raw"].collection == "bird"),
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # ResultSpec's dimensions are not a subset of the query tree's.
             DimensionRecordQueryResults(
                 _TestQueryDriver(),
                 qt.QueryTree(dimensions=self.universe.conform(["tract"])),
                 qrs.DimensionRecordResultSpec(element=self.universe["detector"]),
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # ResultSpec's datasets are not a subset of the query tree's.
             DatasetRefQueryResults(
                 _TestQueryDriver(),
@@ -1803,7 +1804,7 @@ class QueryTestCase(unittest.TestCase):
                     find_first=True,
                 ),
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # ResultSpec's order_by expression is not related to the dimensions
             # we're returning.
             x = ExpressionFactory(self.universe)
@@ -1814,7 +1815,7 @@ class QueryTestCase(unittest.TestCase):
                     element=self.universe["detector"], order_by=(x.unwrap(x.visit),)
                 ),
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # ResultSpec's order_by expression is not related to the datasets
             # we're returning.
             x = ExpressionFactory(self.universe)
@@ -1854,7 +1855,7 @@ class QueryTestCase(unittest.TestCase):
         b_columns.dataset_fields["bias"].add("timespan")
         b_columns.dataset_fields["bias"].add("dataset_id")
         self.assertEqual(b.get_result_columns(), b_columns)
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # More than one dataset type with find_first
             qrs.GeneralResultSpec(
                 dimensions=self.universe.conform(["detector", "exposure"]),
@@ -1862,7 +1863,7 @@ class QueryTestCase(unittest.TestCase):
                 dataset_fields={"bias": {"dataset_id"}, "raw": {"dataset_id"}},
                 find_first=True,
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # Out-of-bounds dimension fields.
             qrs.GeneralResultSpec(
                 dimensions=self.universe.conform(["detector"]),
@@ -1870,7 +1871,7 @@ class QueryTestCase(unittest.TestCase):
                 dataset_fields={},
                 find_first=False,
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # No fields for dimension element.
             qrs.GeneralResultSpec(
                 dimensions=self.universe.conform(["detector"]),
@@ -1878,7 +1879,7 @@ class QueryTestCase(unittest.TestCase):
                 dataset_fields={},
                 find_first=True,
             )
-        with self.assertRaises(qt.InvalidQueryError):
+        with self.assertRaises(InvalidQueryError):
             # No fields for dataset.
             qrs.GeneralResultSpec(
                 dimensions=self.universe.conform(["detector"]),

@@ -35,6 +35,7 @@ from typing import Generic, Literal, TypeVar, cast
 
 from lsst.sphgeom import Region
 
+from .._exceptions import InvalidQueryError
 from .._topology import TopologicalFamily
 from ..dimensions import DimensionElement, DimensionGroup
 from . import tree
@@ -256,13 +257,13 @@ class OverlapsVisitor(SimplePredicateVisitor):
             # All of the joins we need are already present.
             return []
         if connections.n_subsets > 2:
-            raise tree.InvalidQueryError(
+            raise InvalidQueryError(
                 f"Too many disconnected sets of {kind} families for an automatic "
                 f"join: {connections.subsets()}.  Add explicit {kind} joins to avoid this error."
             )
         a_subset, b_subset = connections.subsets()
         if len(a_subset) > 1 or len(b_subset) > 1:
-            raise tree.InvalidQueryError(
+            raise InvalidQueryError(
                 f"A {kind} join is needed between {a_subset} and {b_subset}, but which join to "
                 "add is ambiguous.  Add an explicit spatial join to avoid this error."
             )
@@ -377,7 +378,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
             `None` if no substitution is needed.
         """
         if a.spatial == b.spatial:
-            raise tree.InvalidQueryError(f"Spatial join between {a} and {b} is not necessary.")
+            raise InvalidQueryError(f"Spatial join between {a} and {b} is not necessary.")
         self._spatial_connections.merge(
             cast(TopologicalFamily, a.spatial), cast(TopologicalFamily, b.spatial)
         )
@@ -438,7 +439,7 @@ class OverlapsVisitor(SimplePredicateVisitor):
             `None` if no substitution is needed.
         """
         if a.temporal == b.temporal:
-            raise tree.InvalidQueryError(f"Temporal join between {a} and {b} is not necessary.")
+            raise InvalidQueryError(f"Temporal join between {a} and {b} is not necessary.")
         self._temporal_connections.merge(
             cast(TopologicalFamily, a.temporal), cast(TopologicalFamily, b.temporal)
         )

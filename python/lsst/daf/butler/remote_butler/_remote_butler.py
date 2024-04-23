@@ -29,8 +29,8 @@ from __future__ import annotations
 
 __all__ = ("RemoteButler",)
 
-from collections.abc import Collection, Iterable, Sequence
-from contextlib import AbstractContextManager
+from collections.abc import Collection, Iterable, Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
@@ -55,6 +55,7 @@ from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse
+from ..queries import Query
 from ..registry import (
     CollectionArgType,
     CollectionSummary,
@@ -63,6 +64,7 @@ from ..registry import (
     RegistryDefaults,
 )
 from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._query_driver import RemoteQueryDriver
 from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
 from .server_models import (
     CollectionList,
@@ -81,7 +83,6 @@ if TYPE_CHECKING:
     from .._limited_butler import LimitedButler
     from .._timespan import Timespan
     from ..dimensions import DataId
-    from ..queries import Query
     from ..transfers import RepoExportContext
 
 from ._http_connection import RemoteButlerHttpConnection, parse_model
@@ -132,16 +133,15 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         self._connection = connection
         self._cache = cache
 
-        # TODO: RegistryDefaults should have finish() called on it, but this
-        # requires getCollectionSummary() which is not yet implemented
-        self._registry_defaults = RegistryDefaults(
-            options.collections, options.run, options.inferDefaults, **options.kwargs
-        )
-
         # Avoid a circular import by deferring this import.
         from ._registry import RemoteButlerRegistry
 
         self._registry = RemoteButlerRegistry(self)
+
+        self._registry_defaults = RegistryDefaults(
+            options.collections, options.run, options.inferDefaults, **options.kwargs
+        )
+        self._registry_defaults.finish(self._registry)
 
         return self
 
@@ -527,9 +527,12 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def registry(self) -> Registry:
         return self._registry
 
-    def _query(self) -> AbstractContextManager[Query]:
-        # Docstring inherited.
-        raise NotImplementedError()
+    @contextmanager
+    def _query(self) -> Iterator[Query]:
+        driver = RemoteQueryDriver(self, self._connection)
+        with driver:
+            query = Query(driver)
+            yield query
 
     def pruneDatasets(
         self,

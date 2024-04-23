@@ -39,10 +39,11 @@ import astropy.time
 
 from .._butler import Butler
 from .._dataset_type import DatasetType
+from .._exceptions import InvalidQueryError
 from .._timespan import Timespan
 from ..dimensions import DataCoordinate, DimensionRecord
 from ..direct_query_driver import DirectQueryDriver
-from ..queries import DimensionRecordQueryResults, InvalidQueryError
+from ..queries import DimensionRecordQueryResults
 from ..registry import CollectionType, NoDefaultCollectionError, RegistryDefaults
 from ..registry.sql_registry import SqlRegistry
 from ..transfers import YamlRepoImportBackend
@@ -132,7 +133,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         if has_postprocessing and not doomed:
             self.assertEqual(results.count(discard=True), len(ids))
             self.assertGreaterEqual(results.count(discard=False, exact=False), len(ids))
-            with self.assertRaises(RuntimeError):
+            with self.assertRaisesRegex(InvalidQueryError, "^Cannot count query rows"):
                 results.count()
         else:
             self.assertEqual(results.count(discard=True), len(ids))
@@ -142,7 +143,7 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         self.assertEqual(results.any(), bool(ids))
         if not doomed:
             self.assertTrue(results.any(exact=False, execute=False))
-            with self.assertRaises(RuntimeError):
+            with self.assertRaisesRegex(InvalidQueryError, "^Cannot obtain exact"):
                 results.any(exact=True, execute=False)
         else:
             self.assertFalse(results.any(exact=False, execute=False))

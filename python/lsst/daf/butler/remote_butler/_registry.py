@@ -89,7 +89,8 @@ class RemoteButlerRegistry(Registry):
 
     @defaults.setter
     def defaults(self, value: RegistryDefaults) -> None:
-        raise NotImplementedError()
+        value.finish(self)
+        self._butler._registry_defaults = value
 
     def refresh(self) -> None:
         # In theory the server should manage all necessary invalidation of
@@ -243,7 +244,8 @@ class RemoteButlerRegistry(Registry):
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
-        raise NotImplementedError()
+        # TODO DM-43845: Replace this stub with a real implementation.
+        return DataCoordinate.makeEmpty(self.dimensions)
 
     def insertDimensionData(
         self,

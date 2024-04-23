@@ -85,7 +85,12 @@ class HybridButlerRegistry(Registry):
 
     @defaults.setter
     def defaults(self, value: RegistryDefaults) -> None:
-        raise NotImplementedError()
+        # TODO DM-43845: This is cheating a little bit -- DirectButler will
+        # call finish() on this RegistryDefaults object, making a default data
+        # ID available to RemoteButler that RemoteButler can't get for itself
+        # yet.
+        self._direct.defaults = value
+        self._remote.defaults = value
 
     def refresh(self) -> None:
         self._direct.refresh()

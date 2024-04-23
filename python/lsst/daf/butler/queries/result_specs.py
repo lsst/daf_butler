@@ -40,8 +40,10 @@ from typing import Annotated, Literal, TypeAlias, cast
 
 import pydantic
 
-from ..dimensions import DimensionElement, DimensionGroup
-from .tree import ColumnSet, DatasetFieldName, InvalidQueryError, OrderExpression, QueryTree
+from .._exceptions import InvalidQueryError
+from ..dimensions import DimensionElement, DimensionGroup, DimensionUniverse
+from ..pydantic_utils import DeferredValidation
+from .tree import ColumnSet, DatasetFieldName, OrderExpression, QueryTree
 
 
 class ResultSpecBase(pydantic.BaseModel, ABC):
@@ -263,3 +265,8 @@ ResultSpec: TypeAlias = Annotated[
     DataCoordinateResultSpec | DimensionRecordResultSpec | DatasetRefResultSpec | GeneralResultSpec,
     pydantic.Field(discriminator="result_type"),
 ]
+
+
+class SerializedResultSpec(DeferredValidation[ResultSpec]):
+    def to_result_spec(self, universe: DimensionUniverse) -> ResultSpec:
+        return self.validated(universe=universe)

@@ -42,8 +42,9 @@ from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, final
 
 import pydantic
 
+from ..._exceptions import InvalidQueryError
 from ...column_spec import ColumnType
-from ._base import ColumnExpressionBase, InvalidQueryError
+from ._base import ColumnExpressionBase
 from ._column_literal import ColumnLiteral
 from ._column_reference import ColumnReference
 from ._column_set import ColumnSet
