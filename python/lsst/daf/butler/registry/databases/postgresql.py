@@ -157,7 +157,15 @@ class PostgresqlDatabase(Database):
     def makeEngine(
         cls, uri: str | sqlalchemy.engine.URL, *, writeable: bool = True
     ) -> sqlalchemy.engine.Engine:
-        return sqlalchemy.engine.create_engine(uri, pool_size=1)
+        return sqlalchemy.engine.create_engine(
+            uri,
+            pool_size=1,
+            # Prevent stale database connections from throwing exeptions, at
+            # the expense of a round trip to the database server each time we
+            # check out a session.  Many services using the Butler operate in
+            # networks connections are frequently dropped.
+            pool_pre_ping=True,
+        )
 
     @classmethod
     def fromEngine(
