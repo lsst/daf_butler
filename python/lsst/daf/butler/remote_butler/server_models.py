@@ -140,6 +140,18 @@ class GetCollectionSummaryResponseModel(pydantic.BaseModel):
     summary: SerializedCollectionSummary
 
 
+class ExpandDataIdRequestModel(pydantic.BaseModel):
+    """Request model for expand_data_id."""
+
+    data_id: SerializedDataId
+
+
+class ExpandDataIdResponseModel(pydantic.BaseModel):
+    """Response model for expand_data_id."""
+
+    data_coordinate: SerializedDataCoordinate
+
+
 class QueryCollectionsRequestModel(pydantic.BaseModel):
     """Request model for query_collections."""
 

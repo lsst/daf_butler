@@ -61,7 +61,8 @@ from ..registry import (
 from ..registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from ..remote_butler import RemoteButler
 from ._collection_args import convert_collection_arg_to_glob_string_list
-from .server_models import QueryCollectionsRequestModel
+from ._http_connection import RemoteButlerHttpConnection, parse_model
+from .server_models import ExpandDataIdRequestModel, ExpandDataIdResponseModel, QueryCollectionsRequestModel
 
 
 class RemoteButlerRegistry(Registry):
@@ -71,10 +72,13 @@ class RemoteButlerRegistry(Registry):
     ----------
     butler : `RemoteButler`
         Butler instance to which this registry delegates operations.
+    connection : `RemoteButlerHttpConnection`
+        HTTP connection to Butler server for looking up data.
     """
 
-    def __init__(self, butler: RemoteButler):
+    def __init__(self, butler: RemoteButler, connection: RemoteButlerHttpConnection):
         self._butler = butler
+        self._connection = connection
 
     def isWriteable(self) -> bool:
         return self._butler.isWriteable()
@@ -244,8 +248,21 @@ class RemoteButlerRegistry(Registry):
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
-        # TODO DM-43845: Replace this stub with a real implementation.
-        return DataCoordinate.makeEmpty(self.dimensions)
+        standardized = DataCoordinate.standardize(
+            dataId,
+            graph=graph,
+            dimensions=dimensions,
+            universe=self.dimensions,
+            defaults=self.defaults.dataId if withDefaults else None,
+            **kwargs,
+        )
+        if standardized.hasRecords():
+            return standardized
+
+        request = ExpandDataIdRequestModel(data_id=standardized.to_simple().dataId)
+        response = self._connection.post("expand_data_id", request)
+        model = parse_model(response, ExpandDataIdResponseModel)
+        return DataCoordinate.from_simple(model.data_coordinate, self.dimensions)
 
     def insertDimensionData(
         self,

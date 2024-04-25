@@ -36,6 +36,8 @@ from fastapi import APIRouter, Depends
 from lsst.daf.butler import Butler, CollectionType, DatasetRef, SerializedDatasetRef, SerializedDatasetType
 from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
 from lsst.daf.butler.remote_butler.server_models import (
+    ExpandDataIdRequestModel,
+    ExpandDataIdResponseModel,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
@@ -149,6 +151,16 @@ def find_dataset(
     )
     serialized_ref = ref.to_simple() if ref else None
     return FindDatasetResponseModel(dataset_ref=serialized_ref)
+
+
+@external_router.post("/v1/expand_data_id", summary="Return full dimension records for a given data ID")
+def expand_data_id(
+    request: ExpandDataIdRequestModel,
+    factory: Factory = Depends(factory_dependency),
+) -> ExpandDataIdResponseModel:
+    butler = factory.create_butler()
+    coordinate = butler.registry.expandDataId(request.data_id)
+    return ExpandDataIdResponseModel(data_coordinate=coordinate.to_simple())
 
 
 @external_router.get(

@@ -136,7 +136,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         # Avoid a circular import by deferring this import.
         from ._registry import RemoteButlerRegistry
 
-        self._registry = RemoteButlerRegistry(self)
+        self._registry = RemoteButlerRegistry(self, self._connection)
 
         self._registry_defaults = RegistryDefaults(
             options.collections, options.run, options.inferDefaults, **options.kwargs

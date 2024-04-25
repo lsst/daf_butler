@@ -222,7 +222,7 @@ class HybridButlerRegistry(Registry):
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
-        return self._direct.expandDataId(
+        return self._remote.expandDataId(
             dataId, dimensions=dimensions, graph=graph, records=records, withDefaults=withDefaults, **kwargs
         )
 
