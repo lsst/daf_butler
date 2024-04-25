@@ -54,7 +54,7 @@ from .._exceptions import DatasetNotFoundError
 from .._storage_class import StorageClass, StorageClassFactory
 from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
-from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse
+from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..queries import Query
 from ..registry import (
     CollectionArgType,
@@ -274,6 +274,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 dataset_type_name=normalize_dataset_type_name(datasetRefOrType),
                 collections=self._normalize_collections(collections),
                 data_id=simplify_dataId(dataId, kwargs),
+                default_data_id=self._serialize_default_data_id(),
                 timespan=timespan,
             )
             response = self._connection.post("get_file_by_data_id", request)
@@ -361,6 +362,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
         query = FindDatasetRequestModel(
             data_id=simplify_dataId(data_id, kwargs),
+            default_data_id=self._serialize_default_data_id(),
             collections=self._normalize_collections(collections),
             timespan=timespan,
             dimension_records=dimension_records,
@@ -598,6 +600,18 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     def _query_collections(self, query: QueryCollectionsRequestModel) -> QueryCollectionsResponseModel:
         response = self._connection.post("query_collections", query)
         return parse_model(response, QueryCollectionsResponseModel)
+
+    def _serialize_default_data_id(self) -> SerializedDataId:
+        """Convert the default data ID to a serializable format."""
+        # In an ideal world, the default data ID would just get combined with
+        # the rest of the data ID on the client side instead of being sent
+        # separately to the server.  Unfortunately, that requires knowledge of
+        # the DatasetType's dimensions which we don't always have available on
+        # the client.  Data ID values can be specified indirectly by "implied"
+        # dimensions, but knowing what things are implied depends on what the
+        # required dimensions are.
+
+        return self._registry_defaults.dataId.to_simple(minimal=True).dataId
 
 
 def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGetPayload:

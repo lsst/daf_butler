@@ -814,15 +814,6 @@ class RemoteSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):
         butler._remote_butler._get_dataset_as_python_object = _mock_get_dataset_as_python_object
         return butler
 
-    def testRegistryDefaults(self):
-        # Registry defaults are not yet fully implemented in RemoteButler.
-        pass
-
-    def testJson(self):
-        # Needs registry defaults functionality that's not yet implemented in
-        # RemoteButler.
-        pass
-
 
 def _mock_get_dataset_as_python_object(
     ref: DatasetRef,
