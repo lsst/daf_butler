@@ -48,7 +48,12 @@ from .._config import Config
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
-from .._exceptions import CalibrationLookupError, DimensionNameError
+from .._exceptions import (
+    CalibrationLookupError,
+    DataIdValueError,
+    DimensionNameError,
+    InconsistentDataIdError,
+)
 from .._named import NamedKeyMapping, NameLookupMapping
 from .._storage_class import StorageClassFactory
 from .._timespan import Timespan
@@ -72,9 +77,7 @@ from ..registry import (
     CollectionType,
     CollectionTypeError,
     ConflictingDefinitionError,
-    DataIdValueError,
     DatasetTypeError,
-    InconsistentDataIdError,
     MissingDatasetTypeError,
     NoDefaultCollectionError,
     OrphanedRecordError,
@@ -1589,7 +1592,7 @@ class SqlRegistry:
                     )
                 if element.defines_relationships:
                     raise InconsistentDataIdError(
-                        f"Could not fetch record for element {element_name} via keys {keys}, ",
+                        f"Could not fetch record for element {element_name} via keys {keys}, "
                         "but it is marked as defining relationships; this means one or more dimensions are "
                         "have inconsistent values.",
                     )

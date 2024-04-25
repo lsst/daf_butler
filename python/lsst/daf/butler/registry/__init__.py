@@ -29,7 +29,9 @@
 # used to be part of registry.
 from .._exceptions import (
     CollectionTypeError,
+    DataIdValueError,
     DimensionNameError,
+    InconsistentDataIdError,
     MissingCollectionError,
     MissingDatasetTypeError,
 )

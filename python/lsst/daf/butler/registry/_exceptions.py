@@ -30,9 +30,7 @@ __all__ = (
     "ArgumentError",
     "CollectionExpressionError",
     "ConflictingDefinitionError",
-    "DataIdValueError",
     "DatasetTypeExpressionError",
-    "InconsistentDataIdError",
     "MissingSpatialOverlapError",
     "NoDefaultCollectionError",
     "OrphanedRecordError",
@@ -42,7 +40,7 @@ __all__ = (
     "UserExpressionSyntaxError",
 )
 
-from .._exceptions_legacy import CollectionError, DataIdError, RegistryError
+from .._exceptions_legacy import CollectionError, RegistryError
 
 
 class ArgumentError(RegistryError):
@@ -51,16 +49,6 @@ class ArgumentError(RegistryError):
 
 class DatasetTypeExpressionError(RegistryError):
     """Exception raised for an incorrect dataset type expression."""
-
-
-class DataIdValueError(DataIdError):
-    """Exception raised when a value specified in a data ID does not exist."""
-
-
-class InconsistentDataIdError(DataIdError):
-    """Exception raised when a data ID contains contradictory key-value pairs,
-    according to dimension relationships.
-    """
 
 
 class CollectionExpressionError(CollectionError):
