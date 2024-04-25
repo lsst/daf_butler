@@ -110,7 +110,7 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> type[SpecificSe
     if definition.temporal:
         members["timespan"] = (Timespan | None, ...)  # type: ignore
     if definition.spatial:
-        members["region"] = (str, ...)
+        members["region"] = (str | None, ...)  # type: ignore
 
     # For the new derived class name need to convert to camel case.
     # so "day_obs" -> "DayObs".
@@ -460,7 +460,7 @@ class DimensionRecord:
         # assembled.
         mapping = {k: getattr(record_model, k) for k in definition.schema.names}
 
-        if "region" in mapping:
+        if mapping.get("region") is not None:
             mapping["region"] = lsst.sphgeom.Region.decode(bytes.fromhex(mapping["region"]))
         if "hash" in mapping:
             mapping["hash"] = bytes.fromhex(mapping["hash"].decode())
