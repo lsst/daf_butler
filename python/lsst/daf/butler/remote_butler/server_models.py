@@ -70,6 +70,10 @@ class FindDatasetRequestModel(pydantic.BaseModel):
     """Request model for find_dataset."""
 
     data_id: SerializedDataId
+    default_data_id: SerializedDataId = pydantic.Field(default_factory=dict)
+    """Data ID values used as a fallback if required values are not specified
+    in ``data_id``.
+    """
     collections: CollectionList
     timespan: Timespan | None
     dimension_records: bool = False
@@ -87,6 +91,10 @@ class GetFileByDataIdRequestModel(pydantic.BaseModel):
 
     dataset_type_name: DatasetTypeName
     data_id: SerializedDataId
+    default_data_id: SerializedDataId = pydantic.Field(default_factory=dict)
+    """Data ID values used as a fallback if required values are not specified
+    in ``data_id``.
+    """
     collections: CollectionList
     timespan: Timespan | None = None
 
@@ -138,6 +146,18 @@ class GetCollectionSummaryResponseModel(pydantic.BaseModel):
     """Response model for get_collection_summary."""
 
     summary: SerializedCollectionSummary
+
+
+class ExpandDataIdRequestModel(pydantic.BaseModel):
+    """Request model for expand_data_id."""
+
+    data_id: SerializedDataId
+
+
+class ExpandDataIdResponseModel(pydantic.BaseModel):
+    """Response model for expand_data_id."""
+
+    data_coordinate: SerializedDataCoordinate
 
 
 class QueryCollectionsRequestModel(pydantic.BaseModel):

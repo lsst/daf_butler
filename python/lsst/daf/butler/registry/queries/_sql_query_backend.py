@@ -37,10 +37,10 @@ from lsst.daf.relation import ColumnError, ColumnExpression, ColumnTag, Join, Pr
 from ..._column_categorization import ColumnCategorization
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._dataset_type import DatasetType
+from ..._exceptions import DataIdValueError
 from ...dimensions import DimensionGroup, DimensionRecordSet, DimensionUniverse
 from ...dimensions.record_cache import DimensionRecordCache
 from .._collection_type import CollectionType
-from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, Database
 from ._query_backend import QueryBackend
 from ._sql_query_context import SqlQueryContext

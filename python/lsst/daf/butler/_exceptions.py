@@ -31,10 +31,12 @@ __all__ = (
     "CalibrationLookupError",
     "CollectionCycleError",
     "CollectionTypeError",
+    "DataIdValueError",
     "DatasetNotFoundError",
     "DimensionNameError",
     "DatasetTypeNotSupportedError",
     "EmptyQueryResultError",
+    "InconsistentDataIdError",
     "InvalidQueryError",
     "MissingDatasetTypeError",
     "MissingCollectionError",
@@ -96,6 +98,12 @@ class CollectionTypeError(CollectionError, ButlerUserError):
     error_type = "collection_type"
 
 
+class DataIdValueError(DataIdError, ButlerUserError):
+    """Exception raised when a value specified in a data ID does not exist."""
+
+    error_type = "data_id_value"
+
+
 class DatasetNotFoundError(LookupError, ButlerUserError):
     """The requested dataset could not be found."""
 
@@ -114,6 +122,14 @@ class DimensionValueError(ValueError, ButlerUserError):
     """Exception raised for issues with dimension values in a data ID."""
 
     error_type = "dimension_value"
+
+
+class InconsistentDataIdError(DataIdError, ButlerUserError):
+    """Exception raised when a data ID contains contradictory key-value pairs,
+    according to dimension relationships.
+    """
+
+    error_type = "inconsistent_data_id"
 
 
 class InvalidQueryError(ButlerUserError):
@@ -185,7 +201,9 @@ _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     CollectionTypeError,
     DimensionNameError,
     DimensionValueError,
+    DataIdValueError,
     DatasetNotFoundError,
+    InconsistentDataIdError,
     InvalidQueryError,
     MissingCollectionError,
     MissingDatasetTypeError,

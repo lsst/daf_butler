@@ -94,6 +94,21 @@ class RegistryDefaults:
         self._infer = infer
         self._kwargs = kwargs
 
+    @staticmethod
+    def from_data_id(data_id: DataCoordinate) -> RegistryDefaults:
+        """Create a RegistryDefaults object with a specified ``dataId`` value
+        and no default collections.
+
+        Parameters
+        ----------
+        data_id : `DataCoordinate`
+            The default data ID value.
+        """
+        defaults = RegistryDefaults(None, None, False)
+        defaults.dataId = data_id
+        defaults._finished = True
+        return defaults
+
     def __repr__(self) -> str:
         collections = f"collections={self.collections!r}" if self.collections else ""
         run = f"run={self.run!r}" if self.run else ""
@@ -168,6 +183,5 @@ class RegistryDefaults:
     dimensions are ever included in defaults.
 
     This attribute may not be accessed before the defaults struct is
-    attached to a `Registry` instance.  It always satisfies both ``hasFull``
-    and ``hasRecords``.
+    attached to a `Registry` instance.  It always satisfies ``hasFull``.
     """

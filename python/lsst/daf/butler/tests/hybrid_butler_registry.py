@@ -85,12 +85,13 @@ class HybridButlerRegistry(Registry):
 
     @defaults.setter
     def defaults(self, value: RegistryDefaults) -> None:
-        # TODO DM-43845: This is cheating a little bit -- DirectButler will
-        # call finish() on this RegistryDefaults object, making a default data
-        # ID available to RemoteButler that RemoteButler can't get for itself
-        # yet.
-        self._direct.defaults = value
+        # Make a copy before assigning the value.
+        # When assigned, it will have finish() called on it -- we don't want to
+        # intermingle the results of that between Remote and Direct, because
+        # that could let the Remote side cheat.
+        copy = RegistryDefaults(value.collections, value.run, value._infer, **value._kwargs)
         self._remote.defaults = value
+        self._direct.defaults = copy
 
     def refresh(self) -> None:
         self._direct.refresh()
@@ -222,7 +223,7 @@ class HybridButlerRegistry(Registry):
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
-        return self._direct.expandDataId(
+        return self._remote.expandDataId(
             dataId, dimensions=dimensions, graph=graph, records=records, withDefaults=withDefaults, **kwargs
         )
 

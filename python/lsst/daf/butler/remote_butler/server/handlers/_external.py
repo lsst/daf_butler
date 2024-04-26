@@ -36,6 +36,8 @@ from fastapi import APIRouter, Depends
 from lsst.daf.butler import Butler, CollectionType, DatasetRef, SerializedDatasetRef, SerializedDatasetType
 from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
 from lsst.daf.butler.remote_butler.server_models import (
+    ExpandDataIdRequestModel,
+    ExpandDataIdResponseModel,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
@@ -47,6 +49,8 @@ from lsst.daf.butler.remote_butler.server_models import (
 )
 
 from ...._exceptions import DatasetNotFoundError
+from ....dimensions import DataCoordinate, SerializedDataId
+from ....registry import RegistryDefaults
 from .._dependencies import factory_dependency
 from .._factory import Factory
 
@@ -139,6 +143,7 @@ def find_dataset(
     factory: Factory = Depends(factory_dependency),
 ) -> FindDatasetResponseModel:
     butler = factory.create_butler()
+    _set_default_data_id(butler, query.default_data_id)
     ref = butler.find_dataset(
         dataset_type,
         query.data_id,
@@ -149,6 +154,16 @@ def find_dataset(
     )
     serialized_ref = ref.to_simple() if ref else None
     return FindDatasetResponseModel(dataset_ref=serialized_ref)
+
+
+@external_router.post("/v1/expand_data_id", summary="Return full dimension records for a given data ID")
+def expand_data_id(
+    request: ExpandDataIdRequestModel,
+    factory: Factory = Depends(factory_dependency),
+) -> ExpandDataIdResponseModel:
+    butler = factory.create_butler()
+    coordinate = butler.registry.expandDataId(request.data_id)
+    return ExpandDataIdResponseModel(data_coordinate=coordinate.to_simple())
 
 
 @external_router.get(
@@ -177,6 +192,7 @@ def get_file_by_data_id(
     factory: Factory = Depends(factory_dependency),
 ) -> GetFileResponseModel:
     butler = factory.create_butler()
+    _set_default_data_id(butler, request.default_data_id)
     ref = butler._findDatasetRef(
         datasetRefOrType=request.dataset_type_name,
         dataId=request.data_id,
@@ -241,3 +257,10 @@ def query_collections(
         includeChains=request.include_chains,
     )
     return QueryCollectionsResponseModel(collections=collections)
+
+
+def _set_default_data_id(butler: Butler, data_id: SerializedDataId) -> None:
+    """Set the default data ID values used for lookups in the given Butler."""
+    butler.registry.defaults = RegistryDefaults.from_data_id(
+        DataCoordinate.standardize(data_id, universe=butler.dimensions)
+    )
