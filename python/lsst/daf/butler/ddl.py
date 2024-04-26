@@ -285,7 +285,7 @@ class GUID(sqlalchemy.TypeDecorator):
         if dialect.name == "postgresql":
             return str(value)
         else:
-            return "%.32x" % value.int
+            return f"{value.int:032x}"
 
     def process_result_value(
         self, value: str | uuid.UUID | None, dialect: sqlalchemy.Dialect
