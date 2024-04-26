@@ -62,7 +62,14 @@ from ..registry.queries import DataCoordinateQueryResults, DatasetQueryResults, 
 from ..remote_butler import RemoteButler
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._http_connection import RemoteButlerHttpConnection, parse_model
-from .server_models import ExpandDataIdRequestModel, ExpandDataIdResponseModel, QueryCollectionsRequestModel
+from .server_models import (
+    ExpandDataIdRequestModel,
+    ExpandDataIdResponseModel,
+    GetCollectionInfoResponseModel,
+    GetCollectionSummaryResponseModel,
+    QueryCollectionsRequestModel,
+    QueryCollectionsResponseModel,
+)
 
 
 class RemoteButlerRegistry(Registry):
@@ -115,7 +122,7 @@ class RemoteButlerRegistry(Registry):
         raise NotImplementedError()
 
     def getCollectionType(self, name: str) -> CollectionType:
-        return self._butler._get_collection_info(name).type
+        return self._get_collection_info(name).type
 
     def registerRun(self, name: str, doc: str | None = None) -> bool:
         raise NotImplementedError()
@@ -124,7 +131,7 @@ class RemoteButlerRegistry(Registry):
         raise NotImplementedError()
 
     def getCollectionChain(self, parent: str) -> Sequence[str]:
-        info = self._butler._get_collection_info(parent)
+        info = self._get_collection_info(parent)
         if info.type is not CollectionType.CHAINED:
             raise CollectionTypeError(f"Collection '{parent}' has type {info.type.name}, not CHAINED.")
         return info.children
@@ -133,19 +140,30 @@ class RemoteButlerRegistry(Registry):
         raise NotImplementedError()
 
     def getCollectionParentChains(self, collection: str) -> set[str]:
-        info = self._butler._get_collection_info(collection, include_parents=True)
+        info = self._get_collection_info(collection, include_parents=True)
         assert info.parents is not None, "Requested list of parents from server, but it did not send them."
         return info.parents
 
     def getCollectionDocumentation(self, collection: str) -> str | None:
-        info = self._butler._get_collection_info(collection, include_doc=True)
+        info = self._get_collection_info(collection, include_doc=True)
         return info.doc
 
     def setCollectionDocumentation(self, collection: str, doc: str | None) -> None:
         raise NotImplementedError()
 
+    def _get_collection_info(
+        self, collection_name: str, include_doc: bool = False, include_parents: bool = False
+    ) -> GetCollectionInfoResponseModel:
+        response = self._connection.get(
+            "collection_info",
+            {"name": collection_name, "include_doc": include_doc, "include_parents": include_parents},
+        )
+        return parse_model(response, GetCollectionInfoResponseModel)
+
     def getCollectionSummary(self, collection: str) -> CollectionSummary:
-        return self._butler._get_collection_summary(collection)
+        response = self._connection.get("collection_summary", {"name": collection})
+        parsed = parse_model(response, GetCollectionSummaryResponseModel)
+        return CollectionSummary.from_simple(parsed.summary, self.dimensions)
 
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         raise NotImplementedError()
@@ -308,7 +326,9 @@ class RemoteButlerRegistry(Registry):
             flatten_chains=flattenChains,
             include_chains=includeChains,
         )
-        return self._butler._query_collections(query).collections
+
+        response = self._connection.post("query_collections", query)
+        return parse_model(response, QueryCollectionsResponseModel).collections
 
     def queryDatasets(
         self,
