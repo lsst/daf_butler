@@ -60,7 +60,10 @@ from ..registry import (
 )
 from ..registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from ..remote_butler import RemoteButler
-from ._collection_args import convert_collection_arg_to_glob_string_list
+from ._collection_args import (
+    convert_collection_arg_to_glob_string_list,
+    convert_dataset_type_arg_to_glob_string_list,
+)
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .server_models import (
     ExpandDataIdRequestModel,
@@ -69,6 +72,8 @@ from .server_models import (
     GetCollectionSummaryResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
+    QueryDatasetTypesRequestModel,
+    QueryDatasetTypesResponseModel,
 )
 
 
@@ -308,7 +313,24 @@ class RemoteButlerRegistry(Registry):
         components: bool = False,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
-        raise NotImplementedError()
+        query = convert_dataset_type_arg_to_glob_string_list(expression)
+        request = QueryDatasetTypesRequestModel(search=query.search)
+        response = self._connection.post("query_dataset_types", request)
+        model = parse_model(response, QueryDatasetTypesResponseModel)
+        if missing is not None:
+            missing.extend(model.missing)
+
+        result = []
+        for dt in model.dataset_types:
+            if dt.name in query.explicit_dataset_types:
+                # Users are permitted to pass in already-existing DatasetType
+                # instances, and we are supposed to preserve their overridden
+                # storage class etc.
+                result.append(query.explicit_dataset_types[dt.name])
+            else:
+                result.append(DatasetType.from_simple(dt, self.dimensions))
+
+        return result
 
     def queryCollections(
         self,

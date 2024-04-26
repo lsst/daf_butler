@@ -28,8 +28,11 @@
 from __future__ import annotations
 
 import re
-from typing import cast
+from typing import NamedTuple, cast
 
+from lsst.utils.iteration import ensure_iterable
+
+from .._dataset_type import DatasetType
 from ..registry import CollectionArgType
 from ..registry.wildcards import CollectionWildcard
 from .server_models import CollectionList
@@ -74,3 +77,55 @@ def convert_collection_arg_to_glob_string_list(arg: CollectionArgType) -> Collec
             if not isinstance(item, str):
                 raise TypeError("RemoteButler only accepts strings and lists of strings as search patterns")
         return CollectionList(cast(list[str], search))
+
+
+class DatasetTypeSearch(NamedTuple):
+    """Information needed to send a dataset type search expression to the
+    server.
+    """
+
+    search: list[str]
+    """List of glob strings to search, suitable for sending to Butler
+    server.
+    """
+    explicit_dataset_types: dict[str, DatasetType]
+    """Mapping from name to `DatasetType` instance for any items the user
+    provided as already-inflated DatasetType instances.
+    """
+
+
+def convert_dataset_type_arg_to_glob_string_list(arg: object) -> DatasetTypeSearch:
+    """Convert the dataset type search expression argument used by some
+    registry methods to a format suitable for sending to Butler server.
+
+    Parameters
+    ----------
+    arg : `typing.Any`
+        Dataset type search pattern in many possible formats.
+
+    Returns
+    -------
+    search_info : `DatasetTypeSearch`
+        Information needed to execute a dataset type search.
+
+    Raises
+    ------
+    TypeError
+        If a search pattern provided by the user cannot be converted to a
+        glob string.
+    """
+    if arg is ...:
+        return DatasetTypeSearch(search=["*"], explicit_dataset_types={})
+
+    search: list[str] = []
+    explicit_dataset_types: dict[str, DatasetType] = {}
+    for item in ensure_iterable(arg):
+        if isinstance(item, DatasetType):
+            search.append(item.name)
+            explicit_dataset_types[item.name] = item
+        elif isinstance(item, str):
+            search.append(item)
+        else:
+            raise TypeError(f"Search patterns must be string or DatasetType, not {str(type(item))}")
+
+    return DatasetTypeSearch(search=search, explicit_dataset_types=explicit_dataset_types)
