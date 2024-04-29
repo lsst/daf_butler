@@ -63,7 +63,7 @@ class RemoteButlerConfigTests(unittest.TestCase):
             Butler({"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "!"}})
 
 
-@unittest.skipIf(RemoteButler is None, "httpx is not installed")
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed")
 class RemoteButlerErrorHandlingTests(unittest.TestCase):
     """Test RemoteButler error handling."""
 
