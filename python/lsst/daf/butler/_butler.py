@@ -1411,7 +1411,11 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
     @property
     @abstractmethod
     def collection_chains(self) -> ButlerCollections:
-        """Object with methods for modifying collection chains."""
+        """Object with methods for modifying collection chains
+        (`~lsst.daf.butler.ButlerCollections`).
+
+        Use of this object is preferred over `registry` wherever possible.
+        """
         raise NotImplementedError()
 
     @property
