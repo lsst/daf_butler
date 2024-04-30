@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 from typing import NamedTuple, cast
 
+from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
 from .._dataset_type import DatasetType
@@ -126,6 +127,6 @@ def convert_dataset_type_arg_to_glob_string_list(arg: object) -> DatasetTypeSear
         elif isinstance(item, str):
             search.append(item)
         else:
-            raise TypeError(f"Search patterns must be string or DatasetType, not {str(type(item))}")
+            raise TypeError(f"Search patterns must be string or DatasetType, not {get_full_type_name(item)}")
 
     return DatasetTypeSearch(search=search, explicit_dataset_types=explicit_dataset_types)
