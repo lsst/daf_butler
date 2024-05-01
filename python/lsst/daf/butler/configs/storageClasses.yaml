@@ -256,7 +256,7 @@ storageClasses:
   BrighterFatterKernel:
     pytype: lsst.ip.isr.BrighterFatterKernel
   MatchingKernel:
-    ptype: lsst.afw.math.Kernel
+    pytype: lsst.afw.math.Kernel
   FilterLabel:
     pytype: lsst.afw.image.FilterLabel
   Exposure:
