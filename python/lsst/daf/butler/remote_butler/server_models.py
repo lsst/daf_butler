@@ -47,6 +47,7 @@ from lsst.daf.butler import (
     SerializedDataCoordinate,
     SerializedDataId,
     SerializedDatasetRef,
+    SerializedDatasetType,
     SerializedDimensionGroup,
     Timespan,
 )
@@ -174,6 +175,23 @@ class QueryCollectionsResponseModel(pydantic.BaseModel):
 
     collections: list[str]
     """Collection names that match the search."""
+
+
+class QueryDatasetTypesRequestModel(pydantic.BaseModel):
+    """Request model for queryDatasetTypes."""
+
+    search: list[str]
+
+
+class QueryDatasetTypesResponseModel(pydantic.BaseModel):
+    """Response model for query_collections."""
+
+    dataset_types: list[SerializedDatasetType]
+    """Dataset types that match the search."""
+    missing: list[str]
+    """Non-wildcard dataset type names included in the search that are not
+    known to the server.
+    """
 
 
 class MaterializedQuery(pydantic.BaseModel):

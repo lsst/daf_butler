@@ -255,7 +255,7 @@ class HybridButlerRegistry(Registry):
         components: bool = False,
         missing: list[str] | None = None,
     ) -> Iterable[DatasetType]:
-        return self._direct.queryDatasetTypes(expression, missing=missing)
+        return self._remote.queryDatasetTypes(expression, missing=missing)
 
     def queryCollections(
         self,

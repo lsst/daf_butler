@@ -271,6 +271,12 @@ class RegistryTests(ABC):
         allTypes = set(registry.queryDatasetTypes())
         self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
 
+        # Test some basic queryDatasetTypes functionality
+        missing: list[str] = []
+        types = registry.queryDatasetTypes(["te*", "notarealdatasettype"], missing=missing)
+        self.assertCountEqual([dt.name for dt in types], ["test", "testNoneTemplate"])
+        self.assertEqual(missing, ["notarealdatasettype"])
+
     def testDimensions(self):
         """Tests for `SqlRegistry.insertDimensionData`,
         `SqlRegistry.syncDimensionData`, and `SqlRegistry.expandDataId`.

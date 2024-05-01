@@ -56,13 +56,7 @@ from .._utilities.locked_object import LockedObject
 from ..datastore import DatasetRefURIs
 from ..dimensions import DataIdValue, DimensionConfig, DimensionUniverse, SerializedDataId
 from ..queries import Query
-from ..registry import (
-    CollectionArgType,
-    CollectionSummary,
-    NoDefaultCollectionError,
-    Registry,
-    RegistryDefaults,
-)
+from ..registry import CollectionArgType, NoDefaultCollectionError, Registry, RegistryDefaults
 from ._collection_args import convert_collection_arg_to_glob_string_list
 from ._query_driver import RemoteQueryDriver
 from ._ref_utils import apply_storage_class_override, normalize_dataset_type_name, simplify_dataId
@@ -70,12 +64,8 @@ from .server_models import (
     CollectionList,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
-    GetCollectionInfoResponseModel,
-    GetCollectionSummaryResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
-    QueryCollectionsRequestModel,
-    QueryCollectionsResponseModel,
 )
 
 if TYPE_CHECKING:
@@ -582,24 +572,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     def __str__(self) -> str:
         return f"RemoteButler({self._connection.server_url})"
-
-    def _get_collection_info(
-        self, collection_name: str, include_doc: bool = False, include_parents: bool = False
-    ) -> GetCollectionInfoResponseModel:
-        response = self._connection.get(
-            "collection_info",
-            {"name": collection_name, "include_doc": include_doc, "include_parents": include_parents},
-        )
-        return parse_model(response, GetCollectionInfoResponseModel)
-
-    def _get_collection_summary(self, collection_name: str) -> CollectionSummary:
-        response = self._connection.get("collection_summary", {"name": collection_name})
-        parsed = parse_model(response, GetCollectionSummaryResponseModel)
-        return CollectionSummary.from_simple(parsed.summary, self.dimensions)
-
-    def _query_collections(self, query: QueryCollectionsRequestModel) -> QueryCollectionsResponseModel:
-        response = self._connection.post("query_collections", query)
-        return parse_model(response, QueryCollectionsResponseModel)
 
     def _serialize_default_data_id(self) -> SerializedDataId:
         """Convert the default data ID to a serializable format."""

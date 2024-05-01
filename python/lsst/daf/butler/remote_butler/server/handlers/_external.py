@@ -46,6 +46,8 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetFileResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
+    QueryDatasetTypesRequestModel,
+    QueryDatasetTypesResponseModel,
 )
 
 from ...._exceptions import DatasetNotFoundError
@@ -257,6 +259,20 @@ def query_collections(
         includeChains=request.include_chains,
     )
     return QueryCollectionsResponseModel(collections=collections)
+
+
+@external_router.post(
+    "/v1/query_dataset_types", summary="Search for dataset types with names that match an expression"
+)
+def query_dataset_types(
+    request: QueryDatasetTypesRequestModel, factory: Factory = Depends(factory_dependency)
+) -> QueryDatasetTypesResponseModel:
+    butler = factory.create_butler()
+    missing: list[str] = []
+    dataset_types = butler.registry.queryDatasetTypes(expression=request.search, missing=missing)
+    return QueryDatasetTypesResponseModel(
+        dataset_types=[dt.to_simple() for dt in dataset_types], missing=missing
+    )
 
 
 def _set_default_data_id(butler: Butler, data_id: SerializedDataId) -> None:
