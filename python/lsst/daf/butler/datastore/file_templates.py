@@ -419,6 +419,11 @@ class FileTemplate:
                 for field_name in field_names.split("|"):  # Treat alternates as equals.
                     subfield = None
                     key = "standard"
+                    if "?" in format_spec:
+                        target = grouped_optional
+                    else:
+                        target = grouped
+
                     if field_name in self.specialFields:
                         key = "special"
                     elif "." in field_name:
@@ -426,14 +431,9 @@ class FileTemplate:
                         subfield = field_name
                         key = "parent"
                         field_name, _ = field_name.split(".")
-
-                    if "?" in format_spec:
-                        target = grouped_optional
-                    else:
-                        target = grouped
-                    target[key].add(field_name)
-                    if subfield is not None:
                         target["subfield"].add(subfield)
+
+                    target[key].add(field_name)
 
         return grouped, grouped_optional
 
