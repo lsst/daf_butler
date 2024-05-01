@@ -36,7 +36,7 @@ import os.path
 import string
 from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from .._config import Config
 from .._config_support import LookupKey, processLookupConfigs
@@ -62,6 +62,15 @@ class FileTemplatesConfig(Config):
     """Configuration information for `FileTemplates`."""
 
     pass
+
+
+class FieldDict(TypedDict):
+    """Dictionary containing the grouped fields from a template."""
+
+    standard: set[str]
+    special: set[str]
+    subfield: set[str]
+    parent: set[str]
 
 
 class FileTemplates:
@@ -385,29 +394,29 @@ class FileTemplate:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{self.template}")'
 
-    def grouped_fields(self) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    def grouped_fields(self) -> tuple[FieldDict, FieldDict]:
         """Return all the fields, grouped by their type.
 
         Returns
         -------
-        grouped : `dict` [ `set` [ `str` ]]
+        grouped : `FieldDict`
             The fields grouped by their type. The keys for this dict are
             ``standard``, ``special``, ``subfield``, and
             ``parent``. If  field ``a.b`` is present, ``a`` will not be
             included in ``standard`` but will be included in ``parent``.
-        grouped_optional : `dict` [ `set` [ `str` ]]
+        grouped_optional : `FieldDict`
             As for ``grouped`` but the optional fields.
         """
         fmt = string.Formatter()
         parts = fmt.parse(self.template)
 
-        grouped: dict[str, set[str]] = {
+        grouped: FieldDict = {
             "standard": set(),
             "special": set(),
             "subfield": set(),
             "parent": set(),
         }
-        grouped_optional: dict[str, set[str]] = {
+        grouped_optional: FieldDict = {
             "standard": set(),
             "special": set(),
             "subfield": set(),
@@ -418,22 +427,23 @@ class FileTemplate:
             if field_names is not None and format_spec is not None:
                 for field_name in field_names.split("|"):  # Treat alternates as equals.
                     subfield = None
-                    key = "standard"
                     if "?" in format_spec:
                         target = grouped_optional
                     else:
                         target = grouped
 
                     if field_name in self.specialFields:
-                        key = "special"
+                        field_set = target["special"]
                     elif "." in field_name:
                         # This needs to be added twice.
                         subfield = field_name
-                        key = "parent"
+                        field_set = target["parent"]
                         field_name, _ = field_name.split(".")
                         target["subfield"].add(subfield)
+                    else:
+                        field_set = target["standard"]
 
-                    target[key].add(field_name)
+                    field_set.add(field_name)
 
         return grouped, grouped_optional
 
