@@ -752,7 +752,7 @@ class SimpleButlerTests(TestCaseMixin):
         self.assertTrue(ref.dataId.hasRecords())
 
         tmplstr = (
-            "{run}/{datasetType}/{visit.name|exposure.obs_id}_"
+            "{run}/{datasetType}/{visit.name|exposure.obs_id|xyz}_"
             "{instrument}_{skypix}_{htm7}_{skypix.id}_{htm7.id}"
         )
         file_template = FileTemplate(tmplstr)

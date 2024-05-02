@@ -43,7 +43,7 @@ from .._config_support import LookupKey, processLookupConfigs
 from .._dataset_ref import DatasetId, DatasetRef
 from .._exceptions import ValidationError
 from .._storage_class import StorageClass
-from ..dimensions import DataCoordinate
+from ..dimensions import DataCoordinate, DimensionGraph, DimensionGroup
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType
@@ -394,8 +394,21 @@ class FileTemplate:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{self.template}")'
 
-    def grouped_fields(self) -> tuple[FieldDict, FieldDict]:
+    def grouped_fields(
+        self, dimensions: DimensionGroup | DimensionGraph | None = None
+    ) -> tuple[FieldDict, FieldDict]:
         """Return all the fields, grouped by their type.
+
+        Parameters
+        ----------
+        dimensions : `lsst.daf.butler.DimensionGroup` or `None`
+            If present, can be used to filter unknown or unused dimensions out
+            of the template when alternates are used. This allows a template to
+            have newer dimensions within it that are not known to an older
+            universe so long as an alternative is given that works with an
+            older universe. If none of the alternates are present in the
+            dimensions the first will be returned. The caller can determine how
+            to handle the situation.
 
         Returns
         -------
@@ -425,13 +438,33 @@ class FileTemplate:
 
         for _, field_names, format_spec, _ in parts:
             if field_names is not None and format_spec is not None:
-                for field_name in field_names.split("|"):  # Treat alternates as equals.
-                    subfield = None
-                    if "?" in format_spec:
-                        target = grouped_optional
-                    else:
-                        target = grouped
+                # Determine which fields are in the dimension universe.
+                given_fields = field_names.split("|")
+                validated_fields: list[str] = []
+                if dimensions is not None:
+                    for field in given_fields:
+                        if "." in field:
+                            field_name, _ = field.split(".")
+                        else:
+                            field_name = field
+                        if field_name in dimensions or field_name in self.specialFields:
+                            # Found one that is in the relevant dimensions
+                            # so stop searching.
+                            validated_fields.append(field)
+                            break
+                if not validated_fields:
+                    # None of them were in the dimensions or we had no
+                    # dimensions. Use all of them below and let the caller work
+                    # it (some of these may be skypix).
+                    validated_fields = given_fields
 
+                if "?" in format_spec:
+                    target = grouped_optional
+                else:
+                    target = grouped
+
+                for field_name in validated_fields:  # Treat alternates as equals.
+                    subfield = None
                     if field_name in self.specialFields:
                         field_set = target["special"]
                     elif "." in field_name:
@@ -694,7 +727,10 @@ class FileTemplate:
         used to compare the available dimensions with those specified in the
         template.
         """
-        grouped_fields, grouped_optionals = self.grouped_fields()
+        # A universe can be used to filter out alternates that are
+        # not known.
+        dimensions = getattr(entity, "dimensions", None)
+        grouped_fields, grouped_optionals = self.grouped_fields(dimensions)
 
         # Check that the template has run
         withSpecials = (
