@@ -167,6 +167,20 @@ class TestFileTemplates(unittest.TestCase):
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("{run}/../{datasetType}_{visit}")
 
+    def testAlternates(self):
+        tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter|day_obs}_{day_obs|physical_filter}"
+        self.assertTemplate(
+            tmplstr,
+            "run2/calexp/00052/Most_Amazing_U_Filter_Ever_20200101",
+            self.makeDatasetRef("calexp"),
+        )
+        tmplstr = "{run}/{datasetType}/{exposure|visit:05d}/{physical_filter|day_obs}_{group|exposure:?}"
+        self.assertTemplate(
+            tmplstr,
+            "run2/calexp/00052/Most_Amazing_U_Filter_Ever",
+            self.makeDatasetRef("calexp"),
+        )
+
     def testRunOrCollectionNeeded(self):
         tmplstr = "{datasetType}/{visit:05d}/{physical_filter}"
         with self.assertRaises(FileTemplateValidationError):

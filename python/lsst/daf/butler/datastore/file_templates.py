@@ -36,7 +36,7 @@ import os.path
 import string
 from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from .._config import Config
 from .._config_support import LookupKey, processLookupConfigs
@@ -62,6 +62,15 @@ class FileTemplatesConfig(Config):
     """Configuration information for `FileTemplates`."""
 
     pass
+
+
+class FieldDict(TypedDict):
+    """Dictionary containing the grouped fields from a template."""
+
+    standard: set[str]
+    special: set[str]
+    subfield: set[str]
+    parent: set[str]
 
 
 class FileTemplates:
@@ -334,6 +343,14 @@ class FileTemplate:
     ``detector.name_in_raft`` would use the name of the detector within the
     raft.
 
+    In some cases the template may want to support multiple options for a
+    single part of the template. For example, you may not want to include
+    ``group`` if ``exposure`` is in the data ID. To handle this situation a
+    ``|`` character can be used to specify multiple data Id keys in the
+    same format specifier. For example ``{exposure.obs_id|group}`` would
+    choose ``exposure.obs_id`` if ``exposure`` is in the data ID but otherwise
+    would use ``group``.
+
     The mini-language is extended to understand a "?" in the format
     specification. This indicates that a field is optional. If that
     Dimension is missing the field, along with the text before the field,
@@ -377,54 +394,56 @@ class FileTemplate:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{self.template}")'
 
-    def grouped_fields(self) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    def grouped_fields(self) -> tuple[FieldDict, FieldDict]:
         """Return all the fields, grouped by their type.
 
         Returns
         -------
-        grouped : `dict` [ `set` [ `str` ]]
+        grouped : `FieldDict`
             The fields grouped by their type. The keys for this dict are
             ``standard``, ``special``, ``subfield``, and
             ``parent``. If  field ``a.b`` is present, ``a`` will not be
             included in ``standard`` but will be included in ``parent``.
-        grouped_optional : `dict` [ `set` [ `str` ]]
+        grouped_optional : `FieldDict`
             As for ``grouped`` but the optional fields.
         """
         fmt = string.Formatter()
         parts = fmt.parse(self.template)
 
-        grouped: dict[str, set[str]] = {
+        grouped: FieldDict = {
             "standard": set(),
             "special": set(),
             "subfield": set(),
             "parent": set(),
         }
-        grouped_optional: dict[str, set[str]] = {
+        grouped_optional: FieldDict = {
             "standard": set(),
             "special": set(),
             "subfield": set(),
             "parent": set(),
         }
 
-        for _, field_name, format_spec, _ in parts:
-            if field_name is not None and format_spec is not None:
-                subfield = None
-                key = "standard"
-                if field_name in self.specialFields:
-                    key = "special"
-                elif "." in field_name:
-                    # This needs to be added twice.
-                    subfield = field_name
-                    key = "parent"
-                    field_name, _ = field_name.split(".")
+        for _, field_names, format_spec, _ in parts:
+            if field_names is not None and format_spec is not None:
+                for field_name in field_names.split("|"):  # Treat alternates as equals.
+                    subfield = None
+                    if "?" in format_spec:
+                        target = grouped_optional
+                    else:
+                        target = grouped
 
-                if "?" in format_spec:
-                    target = grouped_optional
-                else:
-                    target = grouped
-                target[key].add(field_name)
-                if subfield is not None:
-                    target["subfield"].add(subfield)
+                    if field_name in self.specialFields:
+                        field_set = target["special"]
+                    elif "." in field_name:
+                        # This needs to be added twice.
+                        subfield = field_name
+                        field_set = target["parent"]
+                        field_name, _ = field_name.split(".")
+                        target["subfield"].add(subfield)
+                    else:
+                        field_set = target["standard"]
+
+                    field_set.add(field_name)
 
         return grouped, grouped_optional
 
@@ -455,18 +474,18 @@ class FileTemplate:
         parts = fmt.parse(self.template)
 
         names = set()
-        for _, field_name, format_spec, _ in parts:
-            if field_name is not None and format_spec is not None:
+        for _, field_names, format_spec, _ in parts:
+            if field_names is not None and format_spec is not None:
                 if not optionals and "?" in format_spec:
                     continue
+                for field_name in field_names.split("|"):
+                    if not specials and field_name in self.specialFields:
+                        continue
 
-                if not specials and field_name in self.specialFields:
-                    continue
+                    if not subfields and "." in field_name:
+                        field_name, _ = field_name.split(".")
 
-                if not subfields and "." in field_name:
-                    field_name, _ = field_name.split(".")
-
-                names.add(field_name)
+                    names.add(field_name)
 
         return names
 
@@ -522,6 +541,24 @@ class FileTemplate:
         output = ""
 
         for literal, field_name, format_spec, _ in parts:
+            if field_name and "|" in field_name:
+                alternates = field_name.split("|")
+                for alt in alternates:
+                    if "." in alt:
+                        primary, _ = alt.split(".")
+                    else:
+                        primary = alt
+                    # If the alternate is known to this data ID then we use
+                    # it and drop the lower priority fields.
+                    if primary in fields:
+                        field_name = alt
+                        break
+                else:
+                    # None of these were found in the field list. Select the
+                    # first and let downstream code handle whether this
+                    # is optional or not.
+                    field_name = alternates[0]
+
             if field_name == "component":
                 usedComponent = True
 

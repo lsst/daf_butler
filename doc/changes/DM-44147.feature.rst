@@ -1,0 +1,4 @@
+File templates are now allowed to define multiple alternate dimensions within a single field.
+Use the ``|`` separator to specify alternatives.
+For example rather than specifying the ``day_obs`` for both ``visit`` and ``exposure`` they can now be combined as ``{exposure.day_obs|visit.day_obs:?}``.
+This can be useful if you want, say, a ``group`` dimension to be included but not if ``exposure`` is also in the dataId: ``{exposure.obs_id|group}`` would pick the ``exposure`` ``obs_id`` in preference to ``group`` but use ``group`` if no ``exposure`` is defined.
