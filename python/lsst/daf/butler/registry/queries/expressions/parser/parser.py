@@ -2,7 +2,7 @@
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (http://www.lsst.org).
+# (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -23,10 +23,26 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .exprTree import *
-from .parser import *
-from .parserLex import *
-from .parserYacc import *
-from .treeVisitor import *
+from __future__ import annotations
+
+from .exprTree import Node
+from .parserYacc import ParserYacc  # type: ignore
+
+
+def parse_expression(expression: str) -> Node:
+    """Given a Butler query expression string, convert it to a tree form.
+
+    Parameters
+    ----------
+    expression : `str`
+        Query string.
+
+    Returns
+    -------
+    node : `Node`
+        Tree form of expression query.
+    """
+    parser = ParserYacc()
+    return parser.parse(expression)

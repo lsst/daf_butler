@@ -57,7 +57,7 @@ from ..._exceptions import UserExpressionError, UserExpressionSyntaxError
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .check import CheckVisitor
 from .normalForm import NormalForm, NormalFormExpression
-from .parser import Node, ParserYacc, TreeVisitor  # type: ignore
+from .parser import Node, TreeVisitor, parse_expression
 
 # As of astropy 4.2, the erfa interface is shipped independently and
 # ErfaWarning is no longer an AstropyWarning
@@ -131,8 +131,7 @@ def make_string_expression_predicate(
             governor_constraints[dimension] = {cast(str, data_id[dimension])}
         return None, governor_constraints
     try:
-        parser = ParserYacc()
-        tree = parser.parse(string)
+        tree = parse_expression(string)
     except Exception as exc:
         raise UserExpressionSyntaxError(f"Failed to parse user expression {string!r}.") from exc
     if bind is None:
