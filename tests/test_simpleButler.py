@@ -751,10 +751,14 @@ class SimpleButlerTests(TestCaseMixin):
         ref = DatasetRef(dataset_type, dataId, run="test")
         self.assertTrue(ref.dataId.hasRecords())
 
-        tmplstr = "{run}/{datasetType}/{visit.name|exposure.obs_id}_{skypix}_{htm7}_{skypix.id}_{htm7.id}"
+        tmplstr = (
+            "{run}/{datasetType}/{visit.name|exposure.obs_id}_"
+            "{instrument}_{skypix}_{htm7}_{skypix.id}_{htm7.id}"
+        )
         file_template = FileTemplate(tmplstr)
+        file_template.validateTemplate(ref)
         path = file_template.format(ref)
-        self.assertEqual(path, "test/warp/HSCA02713600_12345_12345_12345_12345")
+        self.assertEqual(path, "test/warp/HSCA02713600_HSC_12345_12345_12345_12345")
 
 
 class DirectSimpleButlerTestCase(SimpleButlerTests, unittest.TestCase):

@@ -794,6 +794,8 @@ class FileTemplate:
             except AttributeError:
                 return
 
+        required = grouped_fields["standard"] | grouped_fields["parent"]
+
         # Replace specific skypix dimensions with generic one
         skypix_alias = self._determine_skypix_alias(entity)
         if skypix_alias is not None:
@@ -801,8 +803,12 @@ class FileTemplate:
             maximal.add("skypix")
             minimal.remove(skypix_alias)
             maximal.remove(skypix_alias)
-
-        required = grouped_fields["standard"] | grouped_fields["parent"]
+            if skypix_alias in required:
+                required.remove(skypix_alias)
+                required.add("skypix")
+            if skypix_alias in allfields:
+                allfields.remove(skypix_alias)
+                allfields.add("skypix")
 
         # Calculate any field usage that does not match a dimension
         if not required.issubset(maximal):
