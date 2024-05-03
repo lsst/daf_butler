@@ -62,6 +62,7 @@ from ..._exceptions import (
     CollectionTypeError,
     DataIdValueError,
     InconsistentDataIdError,
+    InvalidQueryError,
     MissingCollectionError,
     MissingDatasetTypeError,
 )
@@ -105,6 +106,22 @@ class RegistryTests(ABC):
     supportsCollectionRegex: bool = True
     """True if the registry class being tested supports regex searches for
     collections."""
+
+    supportsDetailedQueryExplain: bool = True
+    """True if the registry class being tested can generate detailed
+    explanations for queries that return no rows by running additional queries
+    to diagnose the problem.
+    """
+
+    supportsQueryOffset: bool = True
+    """True if the registry class being tested supports the 'offset' parameter
+    to query methods.
+    """
+
+    supportsQueryGovernorValidation: bool = True
+    """True if the registry class being tested validates that values provided
+    by the user for governor dimensions are correct before running queries.
+    """
 
     @classmethod
     @abstractmethod
@@ -2874,7 +2891,7 @@ class RegistryTests(ABC):
             registry.queryDataIds(["detector"], datasets=["nonexistent"], collections=...)
         with self.assertRaises(MissingDatasetTypeError):
             # Dataset type name doesn't match any existing dataset types.
-            registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...)
+            registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...).any()
         for query, snippets in queries_and_snippets:
             self.assertFalse(query.any(execute=False, exact=False))
             self.assertFalse(query.any(execute=True, exact=False))
@@ -2897,30 +2914,32 @@ class RegistryTests(ABC):
 
         # These queries yield no results due to problems that can be identified
         # by cheap follow-up queries, yielding helpful diagnostics.
-        for query, snippets in [
-            (
-                # No records for one of the involved dimensions.
-                registry.queryDataIds(["subfilter"]),
-                ["no rows", "subfilter"],
-            ),
-            (
-                # No records for one of the involved dimensions.
-                registry.queryDimensionRecords("subfilter"),
-                ["no rows", "subfilter"],
-            ),
-        ]:
-            self.assertFalse(query.any(execute=True, exact=False))
-            self.assertFalse(query.any(execute=True, exact=True))
-            self.assertEqual(query.count(exact=True), 0)
-            messages = list(query.explain_no_results())
-            self.assertTrue(messages)
-            # Want all expected snippets to appear in at least one message.
-            self.assertTrue(
-                any(
-                    all(snippet in message for snippet in snippets) for message in query.explain_no_results()
+        if self.supportsDetailedQueryExplain:
+            for query, snippets in [
+                (
+                    # No records for one of the involved dimensions.
+                    registry.queryDataIds(["subfilter"]),
+                    ["no rows", "subfilter"],
                 ),
-                messages,
-            )
+                (
+                    # No records for one of the involved dimensions.
+                    registry.queryDimensionRecords("subfilter"),
+                    ["no rows", "subfilter"],
+                ),
+            ]:
+                self.assertFalse(query.any(execute=True, exact=False))
+                self.assertFalse(query.any(execute=True, exact=True))
+                self.assertEqual(query.count(exact=True), 0)
+                messages = list(query.explain_no_results())
+                self.assertTrue(messages)
+                # Want all expected snippets to appear in at least one message.
+                self.assertTrue(
+                    any(
+                        all(snippet in message for snippet in snippets)
+                        for message in query.explain_no_results()
+                    ),
+                    messages,
+                )
 
         # This query yields four overlaps in the database, but one is filtered
         # out in postprocessing.  The count queries aren't accurate because
@@ -2985,9 +3004,10 @@ class RegistryTests(ABC):
             "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
         )
         self.assertEqual(query6.count(exact=True), 0)
-        messages = query6.explain_no_results()
-        self.assertTrue(messages)
-        self.assertTrue(any("no-purpose" in message for message in messages))
+        if self.supportsDetailedQueryExplain:
+            messages = query6.explain_no_results()
+            self.assertTrue(messages)
+            self.assertTrue(any("no-purpose" in message for message in messages))
 
     def testQueryDataIdsExpressionError(self):
         """Test error checking of 'where' expressions in queryDataIds."""
@@ -3212,18 +3232,19 @@ class RegistryTests(ABC):
             defaults=(None, None, None),
         )
 
-        test_data = (
+        test_data = [
             Test("detector", "detector", (1, 2, 3, 4)),
             Test("detector", "-detector", (4, 3, 2, 1)),
             Test("detector", "raft,-name_in_raft", (2, 1, 4, 3)),
             Test("detector", "-detector.purpose", (4,), limit=(1,)),
-            Test("detector", "-purpose,detector.raft,name_in_raft", (2, 3), limit=(2, 2)),
             Test("visit", "visit", (1, 2)),
             Test("visit", "-visit.id", (2, 1)),
             Test("visit", "zenith_angle", (1, 2)),
             Test("visit", "-visit.name", (2, 1)),
-            Test("visit", "day_obs,-timespan.begin", (2, 1)),
-        )
+            Test("visit", "day_obs,-visit.timespan.begin", (2, 1)),
+        ]
+        if self.supportsQueryOffset:
+            test_data.append(Test("detector", "-purpose,detector.raft,name_in_raft", (2, 3), limit=(2, 2)))
 
         for test in test_data:
             order_by = test.order_by.split(",")
@@ -3235,22 +3256,32 @@ class RegistryTests(ABC):
 
         # errors in a name
         for order_by in ("", "-"):
-            with self.assertRaisesRegex(ValueError, "Empty dimension name in ORDER BY"):
+            with self.assertRaisesRegex(
+                (ValueError, InvalidQueryError),
+                "(Empty dimension name in ORDER BY)|(Unrecognized identifier)",
+            ):
                 list(do_query("detector").order_by(order_by))
 
         for order_by in ("undimension.name", "-undimension.name"):
-            with self.assertRaisesRegex(ValueError, "Element name mismatch: 'undimension'"):
+            with self.assertRaisesRegex(
+                (ValueError, InvalidQueryError),
+                "(Element name mismatch: 'undimension')|(Unrecognized identifier)",
+            ):
                 list(do_query("detector").order_by(order_by))
 
         for order_by in ("attract", "-attract"):
-            with self.assertRaisesRegex(ValueError, "Field 'attract' does not exist in 'detector'."):
+            with self.assertRaisesRegex(
+                (ValueError, InvalidQueryError),
+                "(Field 'attract' does not exist in 'detector'.)|(Unrecognized identifier)",
+            ):
                 list(do_query("detector").order_by(order_by))
 
         for order_by in ("timestamp.begin", "-timestamp.begin"):
             with self.assertRaisesRegex(
-                ValueError,
-                r"Element name mismatch: 'timestamp' instead of 'visit'; "
-                r"perhaps you meant 'timespan.begin'\?",
+                (ValueError, InvalidQueryError),
+                r"(Element name mismatch: 'timestamp' instead of 'visit'; "
+                r"perhaps you meant 'timespan.begin'\?)"
+                r"|(Unrecognized identifier)",
             ):
                 list(do_query("visit").order_by(order_by))
 
@@ -3272,23 +3303,24 @@ class RegistryTests(ABC):
         result = registry.queryDimensionRecords("detector", where="instrument=instr", bind={"instr": "Cam1"})
         self.assertEqual(result.count(), 4)
 
-        with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
-            result = registry.queryDimensionRecords("detector", instrument="NotCam1")
-            result.count()
+        if self.supportsQueryGovernorValidation:
+            with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
+                result = registry.queryDimensionRecords("detector", instrument="NotCam1")
+                result.count()
 
-        with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
-            result = registry.queryDimensionRecords("detector", dataId={"instrument": "NotCam1"})
-            result.count()
+            with self.assertRaisesRegex(DataIdValueError, "dimension instrument"):
+                result = registry.queryDimensionRecords("detector", dataId={"instrument": "NotCam1"})
+                result.count()
 
-        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
-            result = registry.queryDimensionRecords("detector", where="instrument='NotCam1'")
-            result.count()
+            with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
+                result = registry.queryDimensionRecords("detector", where="instrument='NotCam1'")
+                result.count()
 
-        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
-            result = registry.queryDimensionRecords(
-                "detector", where="instrument=instr", bind={"instr": "NotCam1"}
-            )
-            result.count()
+            with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
+                result = registry.queryDimensionRecords(
+                    "detector", where="instrument=instr", bind={"instr": "NotCam1"}
+                )
+                result.count()
 
     def testDatasetConstrainedDimensionRecordQueries(self):
         """Test that queryDimensionRecords works even when given a dataset
@@ -3386,7 +3418,7 @@ class RegistryTests(ABC):
             [
                 record.id
                 for record in registry.queryDimensionRecords("visit", instrument="HSC")
-                .order_by("id")
+                .order_by("visit")
                 .limit(5)
             ],
             [318, 322, 326, 330, 332],

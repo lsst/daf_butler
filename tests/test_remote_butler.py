@@ -134,6 +134,13 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
 
     supportsCollectionRegex = False
 
+    # RemoteButler implements registry.query methods by forwarding to the new
+    # query system, which doesn't have the same diagnostics as the old one
+    # and also does not support query offset.
+    supportsDetailedQueryExplain = False
+    supportsQueryOffset = False
+    supportsQueryGovernorValidation = False
+
     def setUp(self):
         self.server_instance = self.enterContext(create_test_server(TESTDIR))
 
