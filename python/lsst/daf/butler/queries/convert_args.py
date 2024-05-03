@@ -38,6 +38,7 @@ from typing import Any, cast
 
 from .._exceptions import InvalidQueryError
 from ..dimensions import DataCoordinate, DataId, Dimension, DimensionGroup
+from ._expression_strings import convert_expression_string_to_predicate
 from .expression_factory import ExpressionFactory, ExpressionProxy
 from .tree import (
     DATASET_FIELD_NAMES,
@@ -98,7 +99,9 @@ def convert_where_args(
     for arg in args:
         match arg:
             case str():
-                raise NotImplementedError("TODO: plug in registry.queries.expressions.parser")
+                result = result.logical_and(
+                    convert_expression_string_to_predicate(arg, bind=bind, universe=dimensions.universe)
+                )
             case Predicate():
                 result = result.logical_and(arg)
             case DataCoordinate():

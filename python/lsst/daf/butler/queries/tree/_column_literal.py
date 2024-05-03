@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = (
     "ColumnLiteral",
+    "LiteralValue",
     "make_column_literal",
 )
 
