@@ -2892,6 +2892,9 @@ class RegistryTests(ABC):
         with self.assertRaises(MissingDatasetTypeError):
             # Dataset type name doesn't match any existing dataset types.
             registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...).any()
+        with self.assertRaises(DatasetTypeExpressionError):
+            # queryDimensionRecords does not allow dataset type wildcards.
+            registry.queryDimensionRecords("detector", datasets=["f*"], collections=...).any()
         for query, snippets in queries_and_snippets:
             self.assertFalse(query.any(execute=False, exact=False))
             self.assertFalse(query.any(execute=True, exact=False))
@@ -3004,6 +3007,7 @@ class RegistryTests(ABC):
             "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
         )
         self.assertEqual(query6.count(exact=True), 0)
+        self.assertFalse(query6.any())
         if self.supportsDetailedQueryExplain:
             messages = query6.explain_no_results()
             self.assertTrue(messages)
@@ -3301,6 +3305,7 @@ class RegistryTests(ABC):
         result = registry.queryDimensionRecords("detector", where="instrument='Cam1'")
         self.assertEqual(result.count(), 4)
         result = registry.queryDimensionRecords("detector", where="instrument=instr", bind={"instr": "Cam1"})
+        self.assertTrue(result.any())
         self.assertEqual(result.count(), 4)
 
         if self.supportsQueryGovernorValidation:

@@ -36,7 +36,6 @@ from lsst.utils.iteration import ensure_iterable
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
-from .._exceptions import MissingDatasetTypeError
 from .._named import NameLookupMapping
 from .._storage_class import StorageClassFactory
 from .._timespan import Timespan
@@ -56,6 +55,7 @@ from ..registry import (
     CollectionType,
     CollectionTypeError,
     DatasetTypeError,
+    DatasetTypeExpressionError,
     NoDefaultCollectionError,
     Registry,
     RegistryDefaults,
@@ -407,11 +407,6 @@ class RemoteButlerRegistry(Registry):
         if not isinstance(element, DimensionElement):
             element = self.dimensions.elements[element]
 
-        if datasets is ...:
-            raise TypeError(
-                "'...' not permitted for 'datasets'"
-                " -- searching for all dataset types does not constrain the search."
-            )
         dataset_types = self._resolve_dataset_types(datasets)
         if dataset_types and collections is None and not self.defaults.collections:
             raise NoDefaultCollectionError("'collections' must be provided if 'datasets' is provided")
@@ -459,13 +454,17 @@ class RemoteButlerRegistry(Registry):
         if dataset_types is None:
             return []
 
+        if dataset_types is ...:
+            raise TypeError(
+                "'...' not permitted for 'datasets'"
+                " -- searching for all dataset types does not constrain the search."
+            )
+
         wildcard = DatasetTypeWildcard.from_expression(dataset_types)
         if wildcard.patterns:
-            missing: list[str] = []
-            result = self.queryDatasetTypes(dataset_types, missing=missing)
-            if missing:
-                raise MissingDatasetTypeError(f"Dataset types not found: {missing}")
-            return [dt.name for dt in result]
+            raise DatasetTypeExpressionError(
+                "Dataset type wildcard expressions are not supported in this context."
+            )
         else:
             return list(wildcard.values.keys())
 
