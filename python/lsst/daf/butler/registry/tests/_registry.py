@@ -3302,6 +3302,14 @@ class RegistryTests(ABC):
         self.assertEqual(result.count(), 4)
         result = registry.queryDimensionRecords("detector", dataId={"instrument": "Cam1"})
         self.assertEqual(result.count(), 4)
+
+        # Test that values specified in kwargs override those specified in
+        # dataId.
+        result = registry.queryDimensionRecords(
+            "detector", dataId={"instrument": "NotCam1"}, instrument="Cam1"
+        )
+        self.assertEqual(result.count(), 4)
+
         result = registry.queryDimensionRecords("detector", where="instrument='Cam1'")
         self.assertEqual(result.count(), 4)
         result = registry.queryDimensionRecords("detector", where="instrument=instr", bind={"instr": "Cam1"})

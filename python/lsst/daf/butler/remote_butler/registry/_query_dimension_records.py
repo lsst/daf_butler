@@ -126,10 +126,12 @@ class QueryDriverDimensionRecordQueryResults(LegacyDimensionRecordQueryResults):
                 query = query.join_dataset_search(dataset_type, a.collections)
             if a.where:
                 query = query.where(a.where, bind=a.bind)
-            if a.dataId:
-                query = query.where(a.dataId)
-            if a.kwargs:
-                query = query.where(a.kwargs)
+            if a.dataId or a.kwargs:
+                id_list = [a.dataId] if a.dataId else []
+                # dataId and kwargs have to be sent together as part of the
+                # same call to where() so that the kwargs can override values
+                # in the data ID.
+                query = query.where(*id_list, **a.kwargs, bind=None)
 
             result = query.dimension_records(a.element.name).limit(self._limit)
             if self._order_by:
