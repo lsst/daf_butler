@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 if TYPE_CHECKING:
     import astropy.time
 
-    from .exprTree import Node
+    from .exprTree import Node, RangeLiteral
 
 
 T = TypeVar("T")
@@ -93,7 +93,7 @@ class TreeVisitor(Generic[T]):
         """
 
     @abstractmethod
-    def visitRangeLiteral(self, start: int, stop: int, stride: int | None, node: Node) -> T:
+    def visitRangeLiteral(self, start: int, stop: int, stride: int | None, node: RangeLiteral) -> T:
         """Visit RangeLiteral node.
 
         Parameters

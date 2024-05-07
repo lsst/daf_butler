@@ -930,9 +930,10 @@ class DirectQueryDriver(QueryDriver):
             and resolved collection records.
         """
         result = ResolvedDatasetSearch(dataset_type_name, dataset_search.dimensions)
-        for collection_record, collection_summary in self._resolve_collection_path(
-            dataset_search.collections
-        ):
+        collections = self._resolve_collection_path(dataset_search.collections)
+        if not collections:
+            result.messages.append("No datasets can be found because collection list is empty.")
+        for collection_record, collection_summary in collections:
             rejected: bool = False
             if result.name not in collection_summary.dataset_types.names:
                 result.messages.append(

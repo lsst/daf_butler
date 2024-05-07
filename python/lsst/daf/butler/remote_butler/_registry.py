@@ -55,16 +55,23 @@ from ..registry import (
     CollectionType,
     CollectionTypeError,
     DatasetTypeError,
+    DatasetTypeExpressionError,
+    NoDefaultCollectionError,
     Registry,
     RegistryDefaults,
 )
 from ..registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
+from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 from ..remote_butler import RemoteButler
 from ._collection_args import (
     convert_collection_arg_to_glob_string_list,
     convert_dataset_type_arg_to_glob_string_list,
 )
 from ._http_connection import RemoteButlerHttpConnection, parse_model
+from .registry._query_dimension_records import (
+    DimensionRecordsQueryArguments,
+    QueryDriverDimensionRecordQueryResults,
+)
 from .server_models import (
     ExpandDataIdRequestModel,
     ExpandDataIdResponseModel,
@@ -397,7 +404,23 @@ class RemoteButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DimensionRecordQueryResults:
-        raise NotImplementedError()
+        if not isinstance(element, DimensionElement):
+            element = self.dimensions.elements[element]
+
+        dataset_types = self._resolve_dataset_types(datasets)
+        if dataset_types and collections is None and not self.defaults.collections:
+            raise NoDefaultCollectionError("'collections' must be provided if 'datasets' is provided")
+        args = DimensionRecordsQueryArguments(
+            element=element,
+            dataId=dataId,
+            where=where,
+            bind=dict(bind) if bind else None,
+            kwargs=dict(kwargs),
+            dataset_types=dataset_types,
+            collections=self._resolve_collections(collections),
+        )
+
+        return QueryDriverDimensionRecordQueryResults(self._butler._query, args)
 
     def queryDatasetAssociations(
         self,
@@ -416,6 +439,34 @@ class RemoteButlerRegistry(Registry):
     @storageClasses.setter
     def storageClasses(self, value: StorageClassFactory) -> None:
         raise NotImplementedError()
+
+    def _resolve_collections(self, collections: CollectionArgType | None) -> list[str] | None:
+        if collections is None:
+            return list(self.defaults.collections)
+
+        wildcard = CollectionWildcard.from_expression(collections)
+        if wildcard.patterns:
+            return list(self.queryCollections(collections))
+        else:
+            return list(wildcard.strings)
+
+    def _resolve_dataset_types(self, dataset_types: object | None) -> list[str]:
+        if dataset_types is None:
+            return []
+
+        if dataset_types is ...:
+            raise TypeError(
+                "'...' not permitted for 'datasets'"
+                " -- searching for all dataset types does not constrain the search."
+            )
+
+        wildcard = DatasetTypeWildcard.from_expression(dataset_types)
+        if wildcard.patterns:
+            raise DatasetTypeExpressionError(
+                "Dataset type wildcard expressions are not supported in this context."
+            )
+        else:
+            return list(wildcard.values.keys())
 
 
 def _is_component_dataset_type(dataset_type: DatasetType | str) -> bool:

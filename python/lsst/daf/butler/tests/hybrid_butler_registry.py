@@ -333,7 +333,7 @@ class HybridButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DimensionRecordQueryResults:
-        return self._direct.queryDimensionRecords(
+        return self._remote.queryDimensionRecords(
             element,
             dataId=dataId,
             datasets=datasets,

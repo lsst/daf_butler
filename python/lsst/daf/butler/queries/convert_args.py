@@ -32,24 +32,18 @@ __all__ = (
     "convert_order_by_args",
 )
 
-import itertools
 from collections.abc import Mapping, Set
-from typing import Any, cast
+from typing import Any
 
-from .._exceptions import InvalidQueryError
-from ..dimensions import DataCoordinate, DataId, Dimension, DimensionGroup
+from ..dimensions import DataCoordinate, DataId, DimensionGroup
+from ._expression_strings import convert_expression_string_to_predicate
+from ._identifiers import IdentifierContext, interpret_identifier
 from .expression_factory import ExpressionFactory, ExpressionProxy
 from .tree import (
-    DATASET_FIELD_NAMES,
-    ColumnExpression,
-    DatasetFieldName,
-    DatasetFieldReference,
-    DimensionFieldReference,
     DimensionKeyReference,
     OrderExpression,
     Predicate,
     Reversed,
-    UnaryExpression,
     make_column_literal,
     validate_order_expression,
 )
@@ -93,12 +87,15 @@ def convert_where_args(
     args and then kwargs and combined, with later extractions taking
     precedence.
     """
+    context = IdentifierContext(dimensions, datasets, bind)
     result = Predicate.from_bool(True)
     data_id_dict: dict[str, Any] = {}
     for arg in args:
         match arg:
             case str():
-                raise NotImplementedError("TODO: plug in registry.queries.expressions.parser")
+                result = result.logical_and(
+                    convert_expression_string_to_predicate(arg, context=context, universe=dimensions.universe)
+                )
             case Predicate():
                 result = result.logical_and(arg)
             case DataCoordinate():
@@ -141,6 +138,7 @@ def convert_order_by_args(
     expressions : `tuple` [ `OrderExpression`, ... ]
         Standardized expression objects.
     """
+    context = IdentifierContext(dimensions, datasets)
     result: list[OrderExpression] = []
     for arg in args:
         match arg:
@@ -149,7 +147,7 @@ def convert_order_by_args(
                 if arg.startswith("-"):
                     reverse = True
                     arg = arg[1:]
-                arg = interpret_identifier(dimensions, datasets, arg, {})
+                arg = interpret_identifier(context, arg)
                 if reverse:
                     arg = Reversed(operand=arg)
             case ExpressionProxy():
@@ -158,106 +156,3 @@ def convert_order_by_args(
             raise TypeError(f"Unrecognized order-by argument: {arg!r}.")
         result.append(validate_order_expression(arg))
     return tuple(result)
-
-
-def interpret_identifier(
-    dimensions: DimensionGroup, datasets: Set[str], identifier: str, bind: Mapping[str, Any]
-) -> ColumnExpression:
-    """Associate an identifier in a ``where`` or ``order_by`` expression with
-    a query column or bind literal.
-
-    Parameters
-    ----------
-    dimensions : `DimensionGroup`
-        Dimensions already present in the query this filter is being applied
-        to.  Returned expressions may reference dimensions outside this set.
-    datasets : `~collections.abc.Set` [ `str` ]
-        Dataset types already present in the query this filter is being applied
-        to.  Returned expressions may reference datasets outside this set.
-    identifier : `str`
-        String identifier to process.
-    bind : `~collections.abc.Mapping` [ `str`, `object` ]
-        Dictionary of bind literals to match identifiers against first.
-
-    Returns
-    -------
-    expression : `ColumnExpression`
-        Column expression corresponding to the identifier.
-    """
-    if identifier in bind:
-        return make_column_literal(bind[identifier])
-    terms = identifier.split(".")
-    match len(terms):
-        case 1:
-            if identifier in dimensions.universe.dimensions:
-                return DimensionKeyReference.model_construct(
-                    dimension=dimensions.universe.dimensions[identifier]
-                )
-            # This is an unqualified reference to a field of a dimension
-            # element or datasets; this is okay if it's unambiguous.
-            element_matches: set[str] = set()
-            for element_name in dimensions.elements:
-                element = dimensions.universe[element_name]
-                if identifier in element.schema.names:
-                    element_matches.add(element_name)
-            if identifier in DATASET_FIELD_NAMES:
-                dataset_matches = set(datasets)
-            else:
-                dataset_matches = set()
-            if len(element_matches) + len(dataset_matches) > 1:
-                match_str = ", ".join(
-                    f"'{x}.{identifier}'" for x in sorted(itertools.chain(element_matches, dataset_matches))
-                )
-                raise InvalidQueryError(
-                    f"Ambiguous identifier {identifier!r} matches multiple fields: {match_str}."
-                )
-            elif element_matches:
-                element = dimensions.universe[element_matches.pop()]
-                return DimensionFieldReference.model_construct(element=element, field=identifier)
-            elif dataset_matches:
-                return DatasetFieldReference.model_construct(
-                    dataset_type=dataset_matches.pop(), field=cast(DatasetFieldName, identifier)
-                )
-        case 2:
-            first, second = terms
-            if first in dimensions.universe.elements.names:
-                element = dimensions.universe[first]
-                if second in element.schema.dimensions.names:
-                    if isinstance(element, Dimension) and second == element.primary_key.name:
-                        # Identifier is something like "visit.id" which we want
-                        # to interpret the same way as just "visit".
-                        return DimensionKeyReference.model_construct(dimension=element)
-                    else:
-                        # Identifier is something like "visit.instrument",
-                        # which we want to interpret the same way as just
-                        # "instrument".
-                        dimension = dimensions.universe.dimensions[second]
-                        return DimensionKeyReference.model_construct(dimension=dimension)
-                elif second in element.schema.remainder.names:
-                    return DimensionFieldReference.model_construct(element=element, field=second)
-                else:
-                    raise InvalidQueryError(f"Unrecognized field {second!r} for {first}.")
-            elif second in DATASET_FIELD_NAMES:
-                # We just assume the dataset type is okay; it's the job of
-                # higher-level code to complain otherwise.
-                return DatasetFieldReference.model_construct(
-                    dataset_type=first, field=cast(DatasetFieldName, second)
-                )
-            if first == "timespan":
-                base = interpret_identifier(dimensions, datasets, "timespan", bind)
-                if second == "begin":
-                    return UnaryExpression(operand=base, operator="begin_of")
-                if second == "end":
-                    return UnaryExpression(operand=base, operator="end_of")
-            elif first in datasets:
-                raise InvalidQueryError(
-                    f"Identifier {identifier!r} references dataset type {first!r} but field "
-                    f"{second!r} is not valid for datasets."
-                )
-        case 3:
-            base = interpret_identifier(dimensions, datasets, ".".join(terms[:2]), bind)
-            if terms[2] == "begin":
-                return UnaryExpression(operand=base, operator="begin_of")
-            if terms[2] == "end":
-                return UnaryExpression(operand=base, operator="end_of")
-    raise InvalidQueryError(f"Unrecognized identifier {identifier!r}.")
