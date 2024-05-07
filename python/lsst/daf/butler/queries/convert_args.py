@@ -37,7 +37,7 @@ from typing import Any
 
 from ..dimensions import DataCoordinate, DataId, DimensionGroup
 from ._expression_strings import convert_expression_string_to_predicate
-from ._identifiers import interpret_identifier
+from ._identifiers import IdentifierContext, interpret_identifier
 from .expression_factory import ExpressionFactory, ExpressionProxy
 from .tree import (
     DimensionKeyReference,
@@ -87,13 +87,14 @@ def convert_where_args(
     args and then kwargs and combined, with later extractions taking
     precedence.
     """
+    context = IdentifierContext(dimensions, datasets, bind)
     result = Predicate.from_bool(True)
     data_id_dict: dict[str, Any] = {}
     for arg in args:
         match arg:
             case str():
                 result = result.logical_and(
-                    convert_expression_string_to_predicate(arg, bind=bind, universe=dimensions.universe)
+                    convert_expression_string_to_predicate(arg, context=context, universe=dimensions.universe)
                 )
             case Predicate():
                 result = result.logical_and(arg)
@@ -137,6 +138,7 @@ def convert_order_by_args(
     expressions : `tuple` [ `OrderExpression`, ... ]
         Standardized expression objects.
     """
+    context = IdentifierContext(dimensions, datasets)
     result: list[OrderExpression] = []
     for arg in args:
         match arg:
@@ -145,7 +147,7 @@ def convert_order_by_args(
                 if arg.startswith("-"):
                     reverse = True
                     arg = arg[1:]
-                arg = interpret_identifier(dimensions, datasets, arg, {})
+                arg = interpret_identifier(context, arg)
                 if reverse:
                     arg = Reversed(operand=arg)
             case ExpressionProxy():

@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Set
+from collections.abc import Set
 from typing import Literal, NamedTuple, TypeAlias
 
 import astropy.time
@@ -36,18 +36,13 @@ from .._exceptions import InvalidQueryError
 from .._timespan import Timespan
 from ..column_spec import ColumnType
 from ..dimensions import DimensionUniverse
-from ..registry.queries.expressions.categorize import (
-    ExpressionConstant,
-    categorizeConstant,
-    categorizeElementId,
-)
+from ..registry.queries.expressions.categorize import ExpressionConstant, categorizeConstant
 from ..registry.queries.expressions.parser import Node, RangeLiteral, TreeVisitor, parse_expression
+from ._identifiers import IdentifierContext, interpret_identifier
 from .tree import (
     BinaryExpression,
     ColumnExpression,
     ComparisonOperator,
-    DimensionFieldReference,
-    DimensionKeyReference,
     LiteralValue,
     Predicate,
     UnaryExpression,
@@ -58,7 +53,7 @@ BindValue = LiteralValue | list[LiteralValue] | tuple[LiteralValue] | Set[Litera
 
 
 def convert_expression_string_to_predicate(
-    expression: str, *, bind: Mapping[str, BindValue] | None, universe: DimensionUniverse
+    expression: str, *, context: IdentifierContext, universe: DimensionUniverse
 ) -> Predicate:
     """Convert a Butler query expression string to a `Predicate` for use in a
     QueryTree.
@@ -68,9 +63,9 @@ def convert_expression_string_to_predicate(
     expression : `str`
         Butler expression query string, as used by the old query system to
         specify filtering.
-    bind : `~collections.abc.Mapping` [ `str` , `BindValue` ]
-        User-provided key-value pairs that can be referenced by name in the
-        query expression.
+    context : `IdentifierContext`
+        Contextual information that helps determine the meaning of an
+        identifier used in a query.
     universe : `DimensionUniverse`
         Dimension metadata for the Butler database being queried.
 
@@ -79,15 +74,12 @@ def convert_expression_string_to_predicate(
     predicate : `Predicate`
         Predicate corresponding to that filter, for use in `QueryTree`.
     """
-    if bind is None:
-        bind = {}
-
     try:
         tree = parse_expression(expression)
     except Exception as exc:
         raise InvalidQueryError(f"Failed to parse expression '{expression}'") from exc
 
-    converter = _ConversionVisitor(bind, universe)
+    converter = _ConversionVisitor(context, universe)
     predicate = tree.visit(converter)
     assert isinstance(
         predicate, Predicate
@@ -135,9 +127,9 @@ _VisitorResult: TypeAlias = Predicate | _ColExpr | _Null | _RangeLiteral | _Sequ
 
 
 class _ConversionVisitor(TreeVisitor[_VisitorResult]):
-    def __init__(self, bind: Mapping[str, BindValue], universe: DimensionUniverse):
+    def __init__(self, context: IdentifierContext, universe: DimensionUniverse):
         super().__init__()
-        self.bind = bind
+        self.context = context
         self.universe = universe
 
     def visitBinaryOp(
@@ -182,26 +174,26 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
         raise NotImplementedError("IN not supported yet")
 
     def visitIdentifier(self, name: str, node: Node) -> _VisitorResult:
-        if name in self.bind:
-            return _convert_bind_value(self.bind[name])
+        name = name.lower()
 
-        match categorizeConstant(name):
-            case ExpressionConstant.INGEST_DATE:
-                # This is a DatasetFieldReference, but it needs a dataset_type
-                # I don't know how to provide.
-                raise NotImplementedError("INGEST_DATE not supported yet")
-            case ExpressionConstant.NULL:
-                return _Null()
-            case None:
-                pass
-            case _:
-                raise AssertionError("Unhandled expression constant")
+        if name in self.context.bind:
+            value = self.context.bind[name]
+            # Lists of values do not have a direct representation in the new
+            # query system, so we have to handle them separately here.
+            if isinstance(value, list | tuple | Set):
+                literals: list[ColumnExpression] = [make_column_literal(item) for item in value]
+                types = set({item.column_type for item in literals})
+                if len(types) > 1:
+                    raise InvalidQueryError(
+                        f"Mismatched types in bind iterable: {value} has a mix of {types}."
+                    )
+                return _Sequence(literals)
 
-        element, column = categorizeElementId(self.universe, name)
-        if column is not None:
-            return _ColExpr(DimensionFieldReference(element=element, field=column))
-        else:
-            return _ColExpr(DimensionKeyReference(dimension=element))
+        # The other constants are handled in interpret_identifier().
+        if categorizeConstant(name) == ExpressionConstant.NULL:
+            return _Null()
+
+        return _ColExpr(interpret_identifier(self.context, name))
 
     def visitNumericLiteral(self, value: str, node: Node) -> _VisitorResult:
         numeric: int | float
@@ -268,17 +260,6 @@ def _to_timespan_bound(value: _VisitorResult, node: Node) -> astropy.time.Time |
         f'Invalid type in timespan tuple "{node}" '
         '(Note that date/time strings must be preceded by "T" to be recognized).'
     )
-
-
-def _convert_bind_value(value: BindValue) -> _VisitorResult:
-    if isinstance(value, list | tuple | Set):
-        literals: list[ColumnExpression] = [make_column_literal(item) for item in value]
-        types = set({item.column_type for item in literals})
-        if len(types) > 1:
-            raise InvalidQueryError(f"Mismatched types in bind iterable: {value} has a mix of {types}.")
-        return _Sequence(literals)
-
-    return _make_literal(value)
 
 
 def _convert_comparison_operator(value: str) -> ComparisonOperator:

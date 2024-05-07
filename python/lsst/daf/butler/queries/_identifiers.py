@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("interpret_identifier",)
+__all__ = ("interpret_identifier", "IdentifierContext")
 
 import itertools
 from collections.abc import Mapping, Set
@@ -47,30 +47,58 @@ from .tree import (
 )
 
 
-def interpret_identifier(
-    dimensions: DimensionGroup, datasets: Set[str], identifier: str, bind: Mapping[str, Any]
-) -> ColumnExpression:
+class IdentifierContext:  # numpydoc ignore=PR01
+    """Contextual information that helps determine the meaning of an identifier
+    used in a query.
+    """
+
+    dimensions: DimensionGroup
+    """Dimensions already present in the query this filter is being applied
+    to.  Returned expressions may reference dimensions outside this set.
+    """
+    datasets: Set[str]
+    """Dataset types already present in the query this filter is being applied
+    to.  Returned expressions may reference datasets outside this set.
+    """
+    bind: Mapping[str, Any]
+    """Dictionary of bind literals to match identifiers against first."""
+
+    def __init__(
+        self, dimensions: DimensionGroup, datasets: Set[str], bind: Mapping[str, Any] | None = None
+    ) -> None:
+        self.dimensions = dimensions
+        self.datasets = datasets
+        if bind is None:
+            self.bind = {}
+        else:
+            # Make bind names case-insensitive.
+            self.bind = {k.lower(): v for k, v in bind.items()}
+            if len(self.bind.keys()) != len(bind.keys()):
+                raise ValueError(f"Duplicate keys present in bind: {bind.keys()}")
+
+
+def interpret_identifier(context: IdentifierContext, identifier: str) -> ColumnExpression:
     """Associate an identifier in a ``where`` or ``order_by`` expression with
     a query column or bind literal.
 
     Parameters
     ----------
-    dimensions : `DimensionGroup`
-        Dimensions already present in the query this filter is being applied
-        to.  Returned expressions may reference dimensions outside this set.
-    datasets : `~collections.abc.Set` [ `str` ]
-        Dataset types already present in the query this filter is being applied
-        to.  Returned expressions may reference datasets outside this set.
+    context : `IdentifierContext`
+        Information about the query where this identifier is used.
     identifier : `str`
         String identifier to process.
-    bind : `~collections.abc.Mapping` [ `str`, `object` ]
-        Dictionary of bind literals to match identifiers against first.
 
     Returns
     -------
     expression : `ColumnExpression`
         Column expression corresponding to the identifier.
     """
+    dimensions = context.dimensions
+    datasets = context.datasets
+    bind = context.bind
+    # Make identifiers case-insensitive.
+    identifier = identifier.lower()
+
     if identifier in bind:
         return make_column_literal(bind[identifier])
     terms = identifier.split(".")
@@ -131,7 +159,7 @@ def interpret_identifier(
                     dataset_type=first, field=cast(DatasetFieldName, second)
                 )
             if first == "timespan":
-                base = interpret_identifier(dimensions, datasets, "timespan", bind)
+                base = interpret_identifier(context, "timespan")
                 if second == "begin":
                     return UnaryExpression(operand=base, operator="begin_of")
                 if second == "end":
@@ -142,7 +170,7 @@ def interpret_identifier(
                     f"{second!r} is not valid for datasets."
                 )
         case 3:
-            base = interpret_identifier(dimensions, datasets, ".".join(terms[:2]), bind)
+            base = interpret_identifier(context, ".".join(terms[:2]))
             if terms[2] == "begin":
                 return UnaryExpression(operand=base, operator="begin_of")
             if terms[2] == "end":
