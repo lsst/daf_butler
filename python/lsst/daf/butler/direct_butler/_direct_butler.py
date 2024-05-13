@@ -1869,12 +1869,19 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 # on to find additional inconsistent dataset types
                 # might result in additional unwanted dataset types being
                 # registered.
-                if self._registry.registerDatasetType(datasetType):
-                    newly_registered_dataset_types.add(datasetType)
+                try:
+                    if self._registry.registerDatasetType(datasetType):
+                        newly_registered_dataset_types.add(datasetType)
+                except ConflictingDefinitionError:
+                    target_dataset_type = self.get_dataset_type(datasetType.name)
+                    if not target_dataset_type.is_compatible_with(datasetType):
+                        raise
             else:
                 # If the dataset type is missing, let it fail immediately.
                 target_dataset_type = self.get_dataset_type(datasetType.name)
-                if target_dataset_type != datasetType:
+                if target_dataset_type != datasetType and not target_dataset_type.is_compatible_with(
+                    datasetType
+                ):
                     raise ConflictingDefinitionError(
                         "Source butler dataset type differs from definition"
                         f" in target butler: {datasetType} !="
@@ -1948,7 +1955,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     imported_refs = self._registry._importDatasets(refs_to_import)
                 else:
                     imported_refs = refs_to_import
-                assert set(imported_refs) == set(refs_to_import)
+
+                # Check all the UUIDs were imported, ignoring dataset type
+                # storage class differences.
+                imported_uuids = set(ref.id for ref in imported_refs)
+                uuids_to_import = set(ref.id for ref in refs_to_import)
+                assert set(imported_uuids) == set(uuids_to_import)
                 n_imported += len(imported_refs)
 
             assert len(source_refs) == n_imported
