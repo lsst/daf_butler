@@ -28,6 +28,7 @@ from __future__ import annotations
 
 __all__ = (
     "ChainedDatasetQueryResults",
+    "DatabaseDataCoordinateQueryResults",
     "DatabaseDimensionRecordQueryResults",
     "DataCoordinateQueryResults",
     "DatasetQueryResults",
@@ -61,56 +62,10 @@ from ._structs import OrderByClause
 class DataCoordinateQueryResults(DataCoordinateIterable):
     """An enhanced implementation of `DataCoordinateIterable` that represents
     data IDs retrieved from a database query.
-
-    Parameters
-    ----------
-    query : `Query`
-        Query object that backs this class.
-
-    Notes
-    -----
-    The `Query` class now implements essentially all of this class's
-    functionality; "QueryResult" classes like this one now exist only to
-    provide interface backwards compatibility and more specific iterator
-    types.
     """
 
-    def __init__(self, query: Query):
-        self._query = query
-
-    __slots__ = ("_query",)
-
-    def __iter__(self) -> Iterator[DataCoordinate]:
-        return self._query.iter_data_ids()
-
-    def __repr__(self) -> str:
-        return f"<DataCoordinate iterator with dimensions={self.graph}>"
-
-    @property
-    @deprecated(
-        "Deprecated in favor of .dimensions.  Will be removed after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def graph(self) -> DimensionGraph:
-        # Docstring inherited from DataCoordinateIterable.
-        return self._query.dimensions._as_graph()
-
-    @property
-    def dimensions(self) -> DimensionGroup:
-        """The dimensions of the data IDs returned by this query."""
-        return self._query.dimensions
-
-    def hasFull(self) -> bool:
-        # Docstring inherited from DataCoordinateIterable.
-        return True
-
-    def hasRecords(self) -> bool:
-        # Docstring inherited from DataCoordinateIterable.
-        return self._query.has_record_columns is True or not self.dimensions
-
-    @contextmanager
-    def materialize(self) -> Iterator[DataCoordinateQueryResults]:
+    @abstractmethod
+    def materialize(self) -> AbstractContextManager[DataCoordinateQueryResults]:
         """Insert this query's results into a temporary table.
 
         Returns
@@ -135,9 +90,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         explicitly inserted into a temporary table.  See `expanded` and
         `subset` for examples.
         """
-        with self._query.open_context():
-            yield DataCoordinateQueryResults(self._query.materialized())
+        raise NotImplementedError()
 
+    @abstractmethod
     def expanded(self) -> DataCoordinateQueryResults:
         """Return a results object for which `hasRecords` returns `True`.
 
@@ -162,8 +117,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 for dataId in dataIdsWithRecords:
                     ...
         """
-        return DataCoordinateQueryResults(self._query.with_record_columns(defer=True))
+        raise NotImplementedError()
 
+    @abstractmethod
     def subset(
         self,
         dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
@@ -219,15 +175,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 for dataId2 in tempDataIds.subset(dimensions2, unique=True):
                     ...
         """
-        if dimensions is None:
-            dimensions = self.dimensions
-        else:
-            dimensions = self.dimensions.universe.conform(dimensions)
-            if not dimensions.issubset(self.dimensions):
-                raise ValueError(f"{dimensions} is not a subset of {self.dimensions}")
-        query = self._query.projected(dimensions.names, unique=unique, defer=True, drop_postprocessing=True)
-        return DataCoordinateQueryResults(query)
+        raise NotImplementedError()
 
+    @abstractmethod
     def findDatasets(
         self,
         datasetType: DatasetType | str,
@@ -271,20 +221,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         MissingDatasetTypeError
             Raised if the given dataset type is not registered.
         """
-        if components is not False:
-            raise DatasetTypeError(
-                "Dataset component queries are no longer supported by Registry.  Use "
-                "DatasetType methods to obtain components from parent dataset types instead."
-            )
-        resolved_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, explicit_only=True
-        )
-        return ParentDatasetQueryResults(
-            self._query.find_datasets(resolved_dataset_type, collections, find_first=findFirst, defer=True),
-            resolved_dataset_type,
-            [None],
-        )
+        raise NotImplementedError()
 
+    @abstractmethod
     def findRelatedDatasets(
         self,
         datasetType: DatasetType | str,
@@ -335,16 +274,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         MissingDatasetTypeError
             Raised if the given dataset type is not registered.
         """
-        if dimensions is None:
-            dimensions = self.dimensions
-        else:
-            dimensions = self.universe.conform(dimensions)
-        parent_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
-            datasetType, explicit_only=True
-        )
-        query = self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True)
-        return query.iter_data_ids_and_dataset_refs(parent_dataset_type, dimensions)
+        raise NotImplementedError()
 
+    @abstractmethod
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         """Count the number of rows this query would return.
 
@@ -374,8 +306,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         returned, so even with ``exact=True`` it may provide only an upper
         bound on the number of *deduplicated* result rows.
         """
-        return self._query.count(exact=exact, discard=discard)
+        raise NotImplementedError()
 
+    @abstractmethod
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         """Test whether this query returns any results.
 
@@ -397,8 +330,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             `True` if the query would (or might, depending on arguments) yield
             result rows.  `False` if it definitely would not.
         """
-        return self._query.any(execute=execute, exact=exact)
+        raise NotImplementedError()
 
+    @abstractmethod
     def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
@@ -416,7 +350,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             String messages that describe reasons the query might not yield any
             results.
         """
-        return self._query.explain_no_results(execute=execute)
+        raise NotImplementedError()
 
     def order_by(self, *args: str) -> DataCoordinateQueryResults:
         """Make the iterator return ordered results.
@@ -438,9 +372,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         This method modifies the iterator in place and returns the same
         instance to support method chaining.
         """
-        clause = OrderByClause.parse_general(args, self._query.dimensions)
-        self._query = self._query.sorted(clause.terms, defer=True)
-        return self
+        raise NotImplementedError()
 
     def limit(self, limit: int, offset: int | None = 0) -> DataCoordinateQueryResults:
         """Make the iterator return limited number of records.
@@ -466,6 +398,138 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         instance to support method chaining. Normally this method is used
         together with `order_by` method.
         """
+        raise NotImplementedError()
+
+
+class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
+    """An enhanced implementation of `DataCoordinateIterable` that represents
+    data IDs retrieved from a database query.
+
+    Parameters
+    ----------
+    query : `Query`
+        Query object that backs this class.
+
+    Notes
+    -----
+    The `Query` class now implements essentially all of this class's
+    functionality; "QueryResult" classes like this one now exist only to
+    provide interface backwards compatibility and more specific iterator
+    types.
+    """
+
+    def __init__(self, query: Query):
+        self._query = query
+
+    __slots__ = ("_query",)
+
+    def __iter__(self) -> Iterator[DataCoordinate]:
+        return self._query.iter_data_ids()
+
+    def __repr__(self) -> str:
+        return f"<DataCoordinate iterator with dimensions={self.graph}>"
+
+    @property
+    @deprecated(
+        "Deprecated in favor of .dimensions.  Will be removed after v27.",
+        version="v27",
+        category=FutureWarning,
+    )
+    def graph(self) -> DimensionGraph:
+        # Docstring inherited from DataCoordinateIterable.
+        return self._query.dimensions._as_graph()
+
+    @property
+    def dimensions(self) -> DimensionGroup:
+        """The dimensions of the data IDs returned by this query."""
+        return self._query.dimensions
+
+    def hasFull(self) -> bool:
+        # Docstring inherited from DataCoordinateIterable.
+        return True
+
+    def hasRecords(self) -> bool:
+        # Docstring inherited from DataCoordinateIterable.
+        return self._query.has_record_columns is True or not self.dimensions
+
+    @contextmanager
+    def materialize(self) -> Iterator[DataCoordinateQueryResults]:
+        with self._query.open_context():
+            yield DatabaseDataCoordinateQueryResults(self._query.materialized())
+
+    def expanded(self) -> DataCoordinateQueryResults:
+        return DatabaseDataCoordinateQueryResults(self._query.with_record_columns(defer=True))
+
+    def subset(
+        self,
+        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        *,
+        unique: bool = False,
+    ) -> DataCoordinateQueryResults:
+        if dimensions is None:
+            dimensions = self.dimensions
+        else:
+            dimensions = self.dimensions.universe.conform(dimensions)
+            if not dimensions.issubset(self.dimensions):
+                raise ValueError(f"{dimensions} is not a subset of {self.dimensions}")
+        query = self._query.projected(dimensions.names, unique=unique, defer=True, drop_postprocessing=True)
+        return DatabaseDataCoordinateQueryResults(query)
+
+    def findDatasets(
+        self,
+        datasetType: DatasetType | str,
+        collections: Any,
+        *,
+        findFirst: bool = True,
+        components: bool = False,
+    ) -> ParentDatasetQueryResults:
+        if components is not False:
+            raise DatasetTypeError(
+                "Dataset component queries are no longer supported by Registry.  Use "
+                "DatasetType methods to obtain components from parent dataset types instead."
+            )
+        resolved_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, explicit_only=True
+        )
+        return ParentDatasetQueryResults(
+            self._query.find_datasets(resolved_dataset_type, collections, find_first=findFirst, defer=True),
+            resolved_dataset_type,
+            [None],
+        )
+
+    def findRelatedDatasets(
+        self,
+        datasetType: DatasetType | str,
+        collections: Any,
+        *,
+        findFirst: bool = True,
+        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+    ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
+        if dimensions is None:
+            dimensions = self.dimensions
+        else:
+            dimensions = self.universe.conform(dimensions)
+        parent_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
+            datasetType, explicit_only=True
+        )
+        query = self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True)
+        return query.iter_data_ids_and_dataset_refs(parent_dataset_type, dimensions)
+
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
+        return self._query.count(exact=exact, discard=discard)
+
+    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
+        return self._query.any(execute=execute, exact=exact)
+
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
+        return self._query.explain_no_results(execute=execute)
+
+    def order_by(self, *args: str) -> DataCoordinateQueryResults:
+        clause = OrderByClause.parse_general(args, self._query.dimensions)
+        self._query = self._query.sorted(clause.terms, defer=True)
+        return self
+
+    def limit(self, limit: int, offset: int | None = 0) -> DataCoordinateQueryResults:
         if offset is None:
             offset = 0
         self._query = self._query.sliced(offset, offset + limit, defer=True)
@@ -702,7 +766,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         The returned object is not in general `zip`-iterable with ``self``;
         it may be in a different order or have (or not have) duplicates.
         """
-        return DataCoordinateQueryResults(self._query.projected(defer=True))
+        return DatabaseDataCoordinateQueryResults(self._query.projected(defer=True))
 
     @deprecated("Deprecated, will be removed after v27.", version="v27", category=FutureWarning)
     def withComponents(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
