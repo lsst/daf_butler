@@ -27,37 +27,18 @@
 
 from __future__ import annotations
 
-import dataclasses
-from collections.abc import Callable, Iterable, Iterator
-from contextlib import AbstractContextManager, contextmanager
-from typing import Any, TypeAlias
+from collections.abc import Iterator
 
-from ...dimensions import DataId, DataIdValue, DimensionElement, DimensionRecord
+from ...dimensions import DimensionElement, DimensionRecord
 from ...queries import DimensionRecordQueryResults, Query
 from ...registry.queries import DimensionRecordQueryResults as LegacyDimensionRecordQueryResults
-
-QueryFactory: TypeAlias = Callable[[], AbstractContextManager[Query]]
-"""Function signature matching the interface of ``Butler._query``.  Returns a
-context manager that can be used to obtain a `Query` instance.
-"""
+from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin, QueryFactory
 
 
-@dataclasses.dataclass(frozen=True)
-class DimensionRecordsQueryArguments:
-    """Simplified version of the function arguments passed to
-    ``Registry.queryDimensionRecords``.
-    """
-
-    element: DimensionElement
-    dataId: DataId | None
-    dataset_types: list[str]
-    collections: list[str] | None
-    where: str
-    bind: dict[str, Any] | None
-    kwargs: dict[str, DataIdValue]
-
-
-class QueryDriverDimensionRecordQueryResults(LegacyDimensionRecordQueryResults):
+class QueryDriverDimensionRecordQueryResults(
+    LegacyQueryResultsMixin[DimensionRecordQueryResults, LegacyDimensionRecordQueryResults],
+    LegacyDimensionRecordQueryResults,
+):
     """Implementation of the legacy ``DimensionRecordQueryResults`` interface
     using the new query system.
 
@@ -65,24 +46,23 @@ class QueryDriverDimensionRecordQueryResults(LegacyDimensionRecordQueryResults):
     ----------
     query_factory : `QueryFactory`
         Function that can be called to access the new query system.
-    args : `DimensionRecordsQueryArguments`
+    element : `DimensionElement`
+        The dimension element to obtain records for.
+    args : `CommonQueryArguments`
         User-facing arguments forwarded from
         ``registry.queryDimensionRecords``.
     """
 
     def __init__(
-        self,
-        query_factory: QueryFactory,
-        args: DimensionRecordsQueryArguments,
+        self, query_factory: QueryFactory, element: DimensionElement, args: CommonQueryArguments
     ) -> None:
-        self._query_factory = query_factory
-        self._args = args
-        self._limit: int | None = None
-        self._order_by: list[str] = []
+        LegacyQueryResultsMixin.__init__(self, query_factory, args)
+        LegacyDimensionRecordQueryResults.__init__(self)
+        self._element = element
 
     @property
     def element(self) -> DimensionElement:
-        return self._args.element
+        return self._element
 
     def __iter__(self) -> Iterator[DimensionRecord]:
         with self._build_query() as result:
@@ -94,46 +74,5 @@ class QueryDriverDimensionRecordQueryResults(LegacyDimensionRecordQueryResults):
     def run(self) -> LegacyDimensionRecordQueryResults:
         return self
 
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        with self._build_query() as result:
-            return result.count(exact=exact, discard=discard)
-
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        with self._build_query() as result:
-            return result.any(execute=execute, exact=exact)
-
-    def order_by(self, *args: str) -> LegacyDimensionRecordQueryResults:
-        self._order_by.extend(args)
-        return self
-
-    def limit(self, limit: int, offset: int | None = 0) -> LegacyDimensionRecordQueryResults:
-        if offset is not None and offset != 0:
-            raise NotImplementedError("Offset is no longer supported.")
-
-        self._limit = limit
-
-        return self
-
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        with self._build_query() as result:
-            return result.explain_no_results(execute=execute)
-
-    @contextmanager
-    def _build_query(self) -> Iterator[DimensionRecordQueryResults]:
-        with self._query_factory() as query:
-            a = self._args
-            for dataset_type in a.dataset_types:
-                query = query.join_dataset_search(dataset_type, a.collections)
-            if a.where:
-                query = query.where(a.where, bind=a.bind)
-            if a.dataId or a.kwargs:
-                id_list = [a.dataId] if a.dataId else []
-                # dataId and kwargs have to be sent together as part of the
-                # same call to where() so that the kwargs can override values
-                # in the data ID.
-                query = query.where(*id_list, **a.kwargs, bind=None)
-
-            result = query.dimension_records(a.element.name).limit(self._limit)
-            if self._order_by:
-                result = result.order_by(*self._order_by)
-            yield result
+    def _build_result(self, query: Query) -> DimensionRecordQueryResults:
+        return query.dimension_records(self._element.name)
