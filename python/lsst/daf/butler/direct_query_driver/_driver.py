@@ -1158,6 +1158,8 @@ class _Cursor:
             match self._result_spec:
                 case DimensionRecordResultSpec():
                     return self._convert_dimension_record_results(postprocessed_rows, next_key)
+                case DataCoordinateResultSpec():
+                    return _convert_data_coordinate_results(self._result_spec, postprocessed_rows, next_key)
                 case _:
                     raise NotImplementedError("TODO")
         except:  # noqa: E722
@@ -1222,3 +1224,33 @@ class _Cursor:
                     d["timespan"] = self._timespan_repr_cls.extract(m, name=timespan_qualified_name)
                 record_set.add(record_cls(**d))
         return DimensionRecordResultPage(spec=result_spec, next_key=next_key, rows=record_set)
+
+
+def _convert_data_coordinate_results(
+    spec: DataCoordinateResultSpec,
+    raw_rows: Iterable[sqlalchemy.Row],
+    next_key: PageKey | None,
+) -> DataCoordinateResultPage:
+    """Convert a raw SQL result iterable into a page of `DataCoordinate`
+    query results.
+
+    Parameters
+    ----------
+    spec : `DataCoordinateResultSpec`
+        Specification for the output values.
+    raw_rows : `~collections.abc.Iterable` [ `sqlalchemy.Row` ]
+        Iterable of SQLAlchemy rows, with `Postprocessing` filters already
+        applied.
+    next_key : `PageKey` or `None`
+        Key for the next page to add into the returned page object.
+
+    Returns
+    -------
+    result_page : `DataCoordinateResultPage`
+        Page object that holds a `DataCoordinate` container.
+    """
+    rows = [
+        DataCoordinate.standardize(cast(Mapping, row._mapping), dimensions=spec.dimensions)
+        for row in raw_rows
+    ]
+    return DataCoordinateResultPage(spec=spec, rows=rows, next_key=next_key)

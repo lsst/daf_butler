@@ -176,6 +176,24 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records(results.order_by("detector").limit(2), [1, 2], ordered=True)
             self.check_detector_records(results.where(_x.detector.raft == "B", instrument="Cam1"), [3, 4])
 
+    def test_simple_data_coordinate_query(self) -> None:
+        butler = self.make_butler("base.yaml")
+        with butler._query() as query:
+            _x = query.expression_factory
+
+            # Test empty query
+            self.assertCountEqual(query.data_ids([]), [DataCoordinate.makeEmpty(butler.dimensions)])
+
+            # Test query for a single dimension
+            results = query.data_ids(["detector"])
+            expected_detectors = [1, 2, 3, 4]
+            universe = butler.dimensions
+            expected_coordinates = [
+                DataCoordinate.standardize({"instrument": "Cam1", "detector": x}, universe=universe)
+                for x in expected_detectors
+            ]
+            self.assertCountEqual(list(results), expected_coordinates)
+
     def test_implied_union_record_query(self) -> None:
         """Test queries for a dimension ('band') that uses "implied union"
         storage, in which its values are the union of the values for it in a
