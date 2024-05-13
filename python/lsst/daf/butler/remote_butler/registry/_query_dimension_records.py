@@ -36,7 +36,7 @@ from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin, QueryF
 
 
 class QueryDriverDimensionRecordQueryResults(
-    LegacyQueryResultsMixin[DimensionRecordQueryResults, LegacyDimensionRecordQueryResults],
+    LegacyQueryResultsMixin[DimensionRecordQueryResults],
     LegacyDimensionRecordQueryResults,
 ):
     """Implementation of the legacy ``DimensionRecordQueryResults`` interface

@@ -28,12 +28,14 @@
 from __future__ import annotations
 
 import dataclasses
+from abc import abstractmethod
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, contextmanager
-from typing import Any, Generic, TypeAlias, TypeVar, cast
+from typing import Any, Generic, Self, TypeAlias, TypeVar
 
 from ...dimensions import DataId
 from ...queries import Query, QueryResultsBase
+from ...registry.queries import QueryResultsBase as LegacyQueryResultsBase
 
 QueryFactory: TypeAlias = Callable[[], AbstractContextManager[Query]]
 """Function signature matching the interface of ``Butler._query``.  Returns a
@@ -55,17 +57,10 @@ class CommonQueryArguments:
     kwargs: dict[str, int | str]
 
 
-_NewQueryT = TypeVar("_NewQueryT", bound=QueryResultsBase)
-"""The result type in the new query system equivalent to the legacy result
-class being implemented.
-"""
-_LegacyQueryT = TypeVar("_LegacyQueryT")
-"""The result class in the old query system that we are being mixed in to.
-Used for typing return values that are notionally `typing.Self`.
-"""
+_T = TypeVar("_T", bound=QueryResultsBase)
 
 
-class LegacyQueryResultsMixin(Generic[_NewQueryT, _LegacyQueryT]):
+class LegacyQueryResultsMixin(Generic[_T], LegacyQueryResultsBase):
     """Implements common methods for the various ``QueryResults`` classes in
     the legacy query system by forwarding to the new query system.
 
@@ -96,24 +91,24 @@ class LegacyQueryResultsMixin(Generic[_NewQueryT, _LegacyQueryT]):
         with self._build_query() as result:
             return result.any(execute=execute, exact=exact)
 
-    def order_by(self, *args: str) -> _LegacyQueryT:
+    def order_by(self, *args: str) -> Self:
         self._order_by.extend(args)
-        return cast(_LegacyQueryT, self)
+        return self
 
-    def limit(self, limit: int, offset: int | None = 0) -> _LegacyQueryT:
+    def limit(self, limit: int, offset: int | None = 0) -> Self:
         if offset is not None and offset != 0:
             raise NotImplementedError("Offset is no longer supported.")
 
         self._limit = limit
 
-        return cast(_LegacyQueryT, self)
+        return self
 
     def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         with self._build_query() as result:
             return result.explain_no_results(execute=execute)
 
     @contextmanager
-    def _build_query(self) -> Iterator[_NewQueryT]:
+    def _build_query(self) -> Iterator[_T]:
         with self._query_factory() as query:
             a = self._args
             for dataset_type in a.dataset_types:
@@ -134,5 +129,6 @@ class LegacyQueryResultsMixin(Generic[_NewQueryT, _LegacyQueryT]):
                 result = result.where(*id_list, **a.kwargs, bind=None)
             yield result
 
-    def _build_result(self, query: Query) -> _NewQueryT:
+    @abstractmethod
+    def _build_result(self, query: Query) -> _T:
         raise NotImplementedError("Subclasses must implement _build_result")

@@ -34,13 +34,14 @@ __all__ = (
     "DatasetQueryResults",
     "DimensionRecordQueryResults",
     "ParentDatasetQueryResults",
+    "QueryResultsBase",
 )
 
 import itertools
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
-from typing import Any
+from typing import Any, Self
 
 from deprecated.sphinx import deprecated
 
@@ -59,7 +60,133 @@ from ._query import Query
 from ._structs import OrderByClause
 
 
-class DataCoordinateQueryResults(DataCoordinateIterable):
+class QueryResultsBase:
+    @abstractmethod
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
+        """Count the number of rows this query would return.
+
+        Parameters
+        ----------
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed to account for that filtering in the count.  If `False`, the
+            result may be an upper bound.
+        discard : `bool`, optional
+            If `True`, compute the exact count even if it would require running
+            the full query and then throwing away the result rows after
+            counting them.  If `False`, this is an error, as the user would
+            usually be better off executing the query first to fetch its rows
+            into a new query (or passing ``exact=False``).  Ignored if
+            ``exact=False``.
+
+        Returns
+        -------
+        count : `int`
+            The number of rows the query would return, or an upper bound if
+            ``exact=False``.
+
+        Notes
+        -----
+        This counts the number of rows returned, not the number of unique rows
+        returned, so even with ``exact=True`` it may provide only an upper
+        bound on the number of *deduplicated* result rows.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
+        """Test whether this query returns any results.
+
+        Parameters
+        ----------
+        execute : `bool`, optional
+            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
+            determined prior to execution that the query would return no rows.
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed, until at least one result row is found.  If `False`, the
+            returned result does not account for post-query filtering, and
+            hence may be `True` even when all result rows would be filtered
+            out.
+
+        Returns
+        -------
+        any : `bool`
+            `True` if the query would (or might, depending on arguments) yield
+            result rows.  `False` if it definitely would not.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
+        """Return human-readable messages that may help explain why the query
+        yields no results.
+
+        Parameters
+        ----------
+        execute : `bool`, optional
+            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
+            of aspects of the tree to more precisely determine where rows were
+            filtered out.
+
+        Returns
+        -------
+        messages : `~collections.abc.Iterable` [ `str` ]
+            String messages that describe reasons the query might not yield any
+            results.
+        """
+        raise NotImplementedError()
+
+    def order_by(self, *args: str) -> Self:
+        """Make the iterator return ordered results.
+
+        Parameters
+        ----------
+        *args : `str`
+            Names of the columns/dimensions to use for ordering. Column name
+            can be prefixed with minus (``-``) to use descending ordering.
+
+        Returns
+        -------
+        result : `typing.Self`
+            Returns ``self`` instance which is updated to return ordered
+            result.
+
+        Notes
+        -----
+        This method modifies the iterator in place and returns the same
+        instance to support method chaining.
+        """
+        raise NotImplementedError()
+
+    def limit(self, limit: int, offset: int | None = 0) -> Self:
+        """Make the iterator return limited number of records.
+
+        Parameters
+        ----------
+        limit : `int`
+            Upper limit on the number of returned records.
+        offset : `int` or `None`, optional
+            The number of records to skip before returning at most ``limit``
+            records.  `None` is interpreted the same as zero for backwards
+            compatibility.
+
+        Returns
+        -------
+        result : `typing.Self`
+            Returns ``self`` instance which is updated to return limited set
+            of records.
+
+        Notes
+        -----
+        This method modifies the iterator in place and returns the same
+        instance to support method chaining. Normally this method is used
+        together with `order_by` method.
+        """
+        raise NotImplementedError()
+
+
+class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
     """An enhanced implementation of `DataCoordinateIterable` that represents
     data IDs retrieved from a database query.
     """
@@ -276,130 +403,6 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        """Count the number of rows this query would return.
-
-        Parameters
-        ----------
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed to account for that filtering in the count.  If `False`, the
-            result may be an upper bound.
-        discard : `bool`, optional
-            If `True`, compute the exact count even if it would require running
-            the full query and then throwing away the result rows after
-            counting them.  If `False`, this is an error, as the user would
-            usually be better off executing the query first to fetch its rows
-            into a new query (or passing ``exact=False``).  Ignored if
-            ``exact=False``.
-
-        Returns
-        -------
-        count : `int`
-            The number of rows the query would return, or an upper bound if
-            ``exact=False``.
-
-        Notes
-        -----
-        This counts the number of rows returned, not the number of unique rows
-        returned, so even with ``exact=True`` it may provide only an upper
-        bound on the number of *deduplicated* result rows.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        """Test whether this query returns any results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
-            determined prior to execution that the query would return no rows.
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed, until at least one result row is found.  If `False`, the
-            returned result does not account for post-query filtering, and
-            hence may be `True` even when all result rows would be filtered
-            out.
-
-        Returns
-        -------
-        any : `bool`
-            `True` if the query would (or might, depending on arguments) yield
-            result rows.  `False` if it definitely would not.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        """Return human-readable messages that may help explain why the query
-        yields no results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
-            of aspects of the tree to more precisely determine where rows were
-            filtered out.
-
-        Returns
-        -------
-        messages : `~collections.abc.Iterable` [ `str` ]
-            String messages that describe reasons the query might not yield any
-            results.
-        """
-        raise NotImplementedError()
-
-    def order_by(self, *args: str) -> DataCoordinateQueryResults:
-        """Make the iterator return ordered results.
-
-        Parameters
-        ----------
-        *args : `str`
-            Names of the columns/dimensions to use for ordering. Column name
-            can be prefixed with minus (``-``) to use descending ordering.
-
-        Returns
-        -------
-        result : `DataCoordinateQueryResults`
-            Returns ``self`` instance which is updated to return ordered
-            result.
-
-        Notes
-        -----
-        This method modifies the iterator in place and returns the same
-        instance to support method chaining.
-        """
-        raise NotImplementedError()
-
-    def limit(self, limit: int, offset: int | None = 0) -> DataCoordinateQueryResults:
-        """Make the iterator return limited number of records.
-
-        Parameters
-        ----------
-        limit : `int`
-            Upper limit on the number of returned records.
-        offset : `int` or `None`, optional
-            The number of records to skip before returning at most ``limit``
-            records.  `None` is interpreted the same as zero for backwards
-            compatibility.
-
-        Returns
-        -------
-        result : `DataCoordinateQueryResults`
-            Returns ``self`` instance which is updated to return limited set
-            of records.
-
-        Notes
-        -----
-        This method modifies the iterator in place and returns the same
-        instance to support method chaining. Normally this method is used
-        together with `order_by` method.
-        """
-        raise NotImplementedError()
-
 
 class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
     """An enhanced implementation of `DataCoordinateIterable` that represents
@@ -524,12 +527,12 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
     def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         return self._query.explain_no_results(execute=execute)
 
-    def order_by(self, *args: str) -> DataCoordinateQueryResults:
+    def order_by(self, *args: str) -> Self:
         clause = OrderByClause.parse_general(args, self._query.dimensions)
         self._query = self._query.sorted(clause.terms, defer=True)
         return self
 
-    def limit(self, limit: int, offset: int | None = 0) -> DataCoordinateQueryResults:
+    def limit(self, limit: int, offset: int | None = 0) -> Self:
         if offset is None:
             offset = 0
         self._query = self._query.sliced(offset, offset + limit, defer=True)
@@ -857,7 +860,7 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
         return result
 
 
-class DimensionRecordQueryResults(Iterable[DimensionRecord]):
+class DimensionRecordQueryResults(QueryResultsBase, Iterable[DimensionRecord]):
     """An interface for objects that represent the results of queries for
     dimension records.
     """
@@ -869,131 +872,6 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
 
     @abstractmethod
     def run(self) -> DimensionRecordQueryResults:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        """Count the number of rows this query would return.
-
-        Parameters
-        ----------
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed to account for that filtering in the count.  If `False`, the
-            result may be an upper bound.
-        discard : `bool`, optional
-            If `True`, compute the exact count even if it would require running
-            the full query and then throwing away the result rows after
-            counting them.  If `False`, this is an error, as the user would
-            usually be better off executing the query first to fetch its rows
-            into a new query (or passing ``exact=False``).  Ignored if
-            ``exact=False``.
-
-        Returns
-        -------
-        count : `int`
-            The number of rows the query would return, or an upper bound if
-            ``exact=False``.
-
-        Notes
-        -----
-        This counts the number of rows returned, not the number of unique rows
-        returned, so even with ``exact=True`` it may provide only an upper
-        bound on the number of *deduplicated* result rows.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
-        """Test whether this query returns any results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
-            determined prior to execution that the query would return no rows.
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed, until at least one result row is found.  If `False`, the
-            returned result does not account for post-query filtering, and
-            hence may be `True` even when all result rows would be filtered
-            out.
-
-        Returns
-        -------
-        any : `bool`
-            `True` if the query would (or might, depending on arguments) yield
-            result rows.  `False` if it definitely would not.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def order_by(self, *args: str) -> DimensionRecordQueryResults:
-        """Make the iterator return ordered result.
-
-        Parameters
-        ----------
-        *args : `str`
-            Names of the columns/dimensions to use for ordering. Column name
-            can be prefixed with minus (``-``) to use descending ordering.
-
-        Returns
-        -------
-        result : `DimensionRecordQueryResults`
-            Returns ``self`` instance which is updated to return ordered
-            result.
-
-        Notes
-        -----
-        This method can modify the iterator in place and return the same
-        instance.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def limit(self, limit: int, offset: int | None = 0) -> DimensionRecordQueryResults:
-        """Make the iterator return limited number of records.
-
-        Parameters
-        ----------
-        limit : `int`
-            Upper limit on the number of returned records.
-        offset : `int` or `None`
-            The number of records to skip before returning at most ``limit``
-            records.  `None` is interpreted the same as zero for backwards
-            compatibility.
-
-        Returns
-        -------
-        result : `DimensionRecordQueryResults`
-            Returns ``self`` instance which is updated to return limited set of
-            records.
-
-        Notes
-        -----
-        This method can modify the iterator in place and return the same
-        instance. Normally this method is used together with `order_by` method.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        """Return human-readable messages that may help explain why the query
-        yields no results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
-            of aspects of the tree to more precisely determine where rows were
-            filtered out.
-
-        Returns
-        -------
-        messages : `~collections.abc.Iterable` [ `str` ]
-            String messages that describe reasons the query might not yield any
-            results.
-        """
         raise NotImplementedError()
 
 
@@ -1037,13 +915,13 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
         # Docstring inherited from base class.
         return self._query.any(execute=execute, exact=exact)
 
-    def order_by(self, *args: str) -> DimensionRecordQueryResults:
+    def order_by(self, *args: str) -> Self:
         # Docstring inherited from base class.
         clause = OrderByClause.parse_element(args, self._element)
         self._query = self._query.sorted(clause.terms, defer=True)
         return self
 
-    def limit(self, limit: int, offset: int | None = 0) -> DimensionRecordQueryResults:
+    def limit(self, limit: int, offset: int | None = 0) -> Self:
         # Docstring inherited from base class.
         if offset is None:
             offset = 0
