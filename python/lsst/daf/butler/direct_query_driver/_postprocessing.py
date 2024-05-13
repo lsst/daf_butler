@@ -180,6 +180,7 @@ class Postprocessing:
         """
         if not (self or self.check_validity_match_count):
             yield from rows
+            return
         if self._limit == 0:
             return
         joins = [
