@@ -1873,14 +1873,31 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     if self._registry.registerDatasetType(datasetType):
                         newly_registered_dataset_types.add(datasetType)
                 except ConflictingDefinitionError:
+                    # Be safe and require that conversions be bidirectional
+                    # when there are storage class mismatches. This is because
+                    # get() will have to support conversion from source to
+                    # target python type (the source formatter will be
+                    # returning source python type) but there also is an
+                    # expectation that people will want to be able to get() in
+                    # the target using the source python type, which will not
+                    # require conversion for transferred datasets but might
+                    # for target-native types. Additionally, butler.get does
+                    # not know that the formatter will return the wrong
+                    # python type and so will always check that the conversion
+                    # works even though it won't need it.
                     target_dataset_type = self.get_dataset_type(datasetType.name)
-                    if not target_dataset_type.is_compatible_with(datasetType):
+                    if not (
+                        target_dataset_type.is_compatible_with(datasetType)
+                        and datasetType.is_compatible_with(target_dataset_type)
+                    ):
                         raise
             else:
                 # If the dataset type is missing, let it fail immediately.
                 target_dataset_type = self.get_dataset_type(datasetType.name)
-                if target_dataset_type != datasetType and not target_dataset_type.is_compatible_with(
-                    datasetType
+                if target_dataset_type != datasetType and not (
+                    # Both conversion directions are currently required.
+                    target_dataset_type.is_compatible_with(datasetType)
+                    and datasetType.is_compatible_with(target_dataset_type)
                 ):
                     raise ConflictingDefinitionError(
                         "Source butler dataset type differs from definition"

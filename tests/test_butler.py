@@ -2743,11 +2743,25 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 self.assertEqual(new_metric, old_metric)
 
                 # Try again without implicit storage class conversion
-                # triggered by using the source ref.
+                # triggered by using the source ref. This will do conversion
+                # since the formatter will be returning the source python type.
                 target_ref = self.target_butler.get_dataset(ref.id)
                 if target_ref.datasetType.storageClass != ref.datasetType.storageClass:
                     new_metric = self.target_butler.get(target_ref)
                     self.assertNotEqual(type(new_metric), type(old_metric))
+
+                    # Remove the dataset from the target and put it again
+                    # as if it was the right type all along for this butler.
+                    self.target_butler.pruneDatasets(
+                        [target_ref], unstore=True, purge=True, disassociate=True
+                    )
+                    self.target_butler.put(new_metric, target_ref)
+                    new_new_metric = self.target_butler.get(target_ref)
+                    new_old_metric = self.target_butler.get(
+                        target_ref, storageClass=ref.datasetType.storageClass
+                    )
+                    self.assertEqual(new_new_metric, new_metric)
+                    self.assertEqual(new_old_metric, old_metric)
 
         # Now prune run2 collection and create instead a CHAINED collection.
         # This should block the transfer.
