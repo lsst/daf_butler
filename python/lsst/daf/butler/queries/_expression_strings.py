@@ -143,7 +143,7 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
                 return lhs.logical_and(rhs)
 
             # Handle comparison operators.
-            case [("=" | "!=" | "<" | ">" | "<=" | ">="), _ColExpr() as lhs, _ColExpr() as rhs]:
+            case [("=" | "!=" | "<" | ">" | "<=" | ">=" | "OVERLAPS"), _ColExpr() as lhs, _ColExpr() as rhs]:
                 return Predicate.compare(
                     a=lhs.value, b=rhs.value, operator=_convert_comparison_operator(operator)
                 )
