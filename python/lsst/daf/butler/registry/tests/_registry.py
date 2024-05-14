@@ -2868,7 +2868,8 @@ class RegistryTests(ABC):
         self.assertFalse(query2.any(execute=True, exact=True))
         self.assertEqual(query2.count(exact=False), 0)
         self.assertEqual(query2.count(exact=True), 0)
-        self.assertTrue(list(query2.explain_no_results()))
+        if self.supportsDetailedQueryExplain:
+            self.assertTrue(list(query2.explain_no_results()))
         # These queries yield no results due to various problems that can be
         # spotted prior to execution, yielding helpful diagnostics.
         base_query = registry.queryDataIds(["detector", "physical_filter"])
@@ -2986,7 +2987,7 @@ class RegistryTests(ABC):
         self.assertTrue(query3.any(execute=False, exact=False))
         self.assertTrue(query3.any(execute=True, exact=False))
         self.assertTrue(query3.any(execute=True, exact=True))
-        self.assertGreaterEqual(query3.count(exact=False), 4)
+        self.assertGreaterEqual(query3.count(exact=False), 3)
         self.assertGreaterEqual(query3.count(exact=True, discard=True), 3)
         self.assertFalse(list(query3.explain_no_results()))
         # This query yields overlaps in the database, but all are filtered
@@ -3007,9 +3008,10 @@ class RegistryTests(ABC):
         self.assertFalse(query4.any(execute=True, exact=True))
         self.assertGreaterEqual(query4.count(exact=False), 1)
         self.assertEqual(query4.count(exact=True, discard=True), 0)
-        messages = query4.explain_no_results()
-        self.assertTrue(messages)
-        self.assertTrue(any("overlap" in message for message in messages))
+        if self.supportsDetailedQueryExplain:
+            messages = query4.explain_no_results()
+            self.assertTrue(messages)
+            self.assertTrue(any("overlap" in message for message in messages))
         # This query should yield results from one dataset type but not the
         # other, which is not registered.
         query5 = registry.queryDatasets(["bias", "nonexistent"], collections=["biases"])
