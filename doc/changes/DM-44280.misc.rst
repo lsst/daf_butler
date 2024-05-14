@@ -1,0 +1,3 @@
+``Butler.transfer_from()`` has been modified to allow there to be a dataset type mismatch between the source butler and the target butler.
+For this to work it is required that converters are registered for both directions such that the source python type can be converted to the target python type and the target python type can be converted to the source python type.
+Without supporting bidirectional conversions there will be problems with inconsistencies in the behavior of ``butler.get()`` for transferred datasets and those that were stored natively.
