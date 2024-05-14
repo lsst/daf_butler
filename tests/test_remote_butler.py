@@ -141,6 +141,11 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
     supportsQueryOffset = False
     supportsQueryGovernorValidation = False
 
+    # Jim decided to drop these expressions from the new query system -- they
+    # can be written less ambiguously by writing e.g. ``time <
+    # timespan.begin`` instead of ``time < timespan``.
+    supportsExtendedTimeQueryOperators = False
+
     def setUp(self):
         self.server_instance = self.enterContext(create_test_server(TESTDIR))
 

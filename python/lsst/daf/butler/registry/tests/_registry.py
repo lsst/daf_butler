@@ -133,6 +133,12 @@ class RegistryTests(ABC):
     duplicates anymore.)
     """
 
+    supportsExtendedTimeQueryOperators: bool = True
+    """True if the registry class being tested supports ``<`` and ``>``
+    operators in expression strings for comparisons of `Timespan` vs
+    `Timespan`, or `Timespan` vs `Time`.
+    """
+
     @classmethod
     @abstractmethod
     def getDataDir(cls) -> str:
@@ -2739,23 +2745,26 @@ class RegistryTests(ABC):
         # t2 is exactly at the start of i2, but ends are exclusive, so these
         # should not include i2.
         self.assertEqual(ids[i1:i2], query("(t1, t2) OVERLAPS visit.timespan"))
-        self.assertEqual(ids[:i2], query("visit.timespan < (t2, t4)"))
+        if self.supportsExtendedTimeQueryOperators:
+            self.assertEqual(ids[:i2], query("visit.timespan < (t2, t4)"))
         # t3 is in the middle of i3, so this should include i3.
         self.assertEqual(ids[i2 : i3 + 1], query("visit.timespan OVERLAPS ts23"))
         # This one should not include t3 by the same reasoning.
-        self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (t1, t3)"))
+        if self.supportsExtendedTimeQueryOperators:
+            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (t1, t3)"))
         # t4 is exactly at the end of i4, so this should include i4.
         self.assertEqual(ids[i3 : i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', t4)"))
         # i4's upper bound of t4 is exclusive so this should not include t4.
         self.assertEqual(ids[i4 + 1 :], query("visit.timespan OVERLAPS (t4, NULL)"))
 
         # Now some timespan vs. time scalar queries.
-        self.assertEqual(ids[:i2], query("visit.timespan < t2"))
-        self.assertEqual(ids[:i2], query("t2 > visit.timespan"))
-        self.assertEqual(ids[i3 + 1 :], query("visit.timespan > t3"))
-        self.assertEqual(ids[i3 + 1 :], query("t3 < visit.timespan"))
         self.assertEqual(ids[i3 : i3 + 1], query("visit.timespan OVERLAPS t3"))
         self.assertEqual(ids[i3 : i3 + 1], query(f"T'{t3.tai.isot}' OVERLAPS visit.timespan"))
+        if self.supportsExtendedTimeQueryOperators:
+            self.assertEqual(ids[:i2], query("visit.timespan < t2"))
+            self.assertEqual(ids[:i2], query("t2 > visit.timespan"))
+            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > t3"))
+            self.assertEqual(ids[i3 + 1 :], query("t3 < visit.timespan"))
 
         # Empty timespans should not overlap anything.
         self.assertEqual([], query("visit.timespan OVERLAPS (t3, t2)"))
