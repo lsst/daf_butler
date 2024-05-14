@@ -39,10 +39,11 @@ import unittest
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
+from typing import TypeVar
 
 import astropy.time
 import sqlalchemy
@@ -85,6 +86,8 @@ from .._registry import Registry
 from ..interfaces import ButlerAttributeExistsError
 from ..sql_registry import SqlRegistry
 
+_T = TypeVar("_T")
+
 
 class RegistryTests(ABC):
     """Generic tests for the `SqlRegistry` class that can be subclassed to
@@ -121,6 +124,13 @@ class RegistryTests(ABC):
     supportsQueryGovernorValidation: bool = True
     """True if the registry class being tested validates that values provided
     by the user for governor dimensions are correct before running queries.
+    """
+
+    sometimesHasDuplicateQueryRows: bool = False
+    """True if the registry class being tested unintentionally returns
+    duplicate copies of rows in query results.  (The old query system had this
+    as a "known problem" -- the new query system is not supposed to return
+    duplicates anymore.)
     """
 
     @classmethod
@@ -199,6 +209,17 @@ class RegistryTests(ABC):
             self.assertTrue(results.any())
         else:
             self.assertFalse(results.any())
+
+    def _maybeDeduplicate(self, items: Iterable[_T]) -> tuple[_T]:
+        """If the registry class being tested has a known issue where query
+        rows are sometimes duplicated, return a deduplicated version of the
+        input as a tuple.  If the class does not have this duplication issue,
+        convert the input to a tuple without deduplicating it.
+        """
+        if not self.sometimesHasDuplicateQueryRows:
+            return tuple(items)
+
+        return tuple({k: True for k in items})
 
     def testOpaque(self):
         """Tests for `SqlRegistry.registerOpaqueTable`,
@@ -3043,32 +3064,21 @@ class RegistryTests(ABC):
             defaults=(None, None, None),
         )
 
-        test_data = (
-            Test("tract,visit", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
-            Test("-tract,visit", "tract,visit", ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))),
-            Test("tract,-visit", "tract,visit", ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))),
-            Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2), (0, 2), (0, 1), (0, 1))),
-            Test(
-                "tract.id,visit.id",
-                "tract,visit",
-                ((0, 1), (0, 1), (0, 2)),
-                limit=(3,),
-            ),
-            Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2)), limit=(3,)),
-            Test("tract,visit", "tract,visit", ((0, 2), (1, 2), (1, 2)), limit=(3, 3)),
-            Test("-tract,-visit", "tract,visit", ((0, 1),), limit=(3, 5)),
-            Test(
-                "tract,visit.exposure_time", "tract,visit", ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))
-            ),
-            Test(
-                "-tract,-visit.exposure_time", "tract,visit", ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))
-            ),
-            Test("tract,-exposure_time", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
-            Test("tract,visit.name", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
+        test_data = [
+            Test("tract,visit", "tract,visit", ((0, 1), (0, 2), (1, 2))),
+            Test("-tract,visit", "tract,visit", ((1, 2), (0, 1), (0, 2))),
+            Test("tract,-visit", "tract,visit", ((0, 2), (0, 1), (1, 2))),
+            Test("-tract,-visit", "tract,visit", ((1, 2), (0, 2), (0, 1))),
+            Test("tract.id,visit.id", "tract,visit", ((0, 1),), limit=(1,)),
+            Test("-tract,-visit", "tract,visit", ((1, 2),), limit=(1,)),
+            Test("tract,visit.exposure_time", "tract,visit", ((0, 2), (0, 1), (1, 2))),
+            Test("-tract,-visit.exposure_time", "tract,visit", ((1, 2), (0, 1), (0, 2))),
+            Test("tract,-exposure_time", "tract,visit", ((0, 1), (0, 2), (1, 2))),
+            Test("tract,visit.name", "tract,visit", ((0, 1), (0, 2), (1, 2))),
             Test(
                 "tract,-visit.timespan.begin,visit.timespan.end",
                 "tract,visit",
-                ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2)),
+                ((0, 2), (0, 1), (1, 2)),
             ),
             Test("visit.day_obs,exposure.day_obs", "visit,exposure", ()),
             Test("visit.timespan.begin,-exposure.timespan.begin", "visit,exposure", ()),
@@ -3093,24 +3103,32 @@ class RegistryTests(ABC):
                 datasets="flat",
                 collections="imported_r",
             ),
-        )
+        ]
+        if self.supportsQueryOffset:
+            test_data.extend(
+                [
+                    Test("tract,visit", "tract,visit", ((0, 2), (1, 2)), limit=(2, 3)),
+                    Test("-tract,-visit", "tract,visit", ((0, 1),), limit=(3, 5)),
+                ]
+            )
 
         for test in test_data:
-            order_by = test.order_by.split(",")
-            keys = test.keys.split(",")
-            query = do_query(keys, test.datasets, test.collections).order_by(*order_by)
-            if test.limit is not None:
-                query = query.limit(*test.limit)
-            dataIds = tuple(tuple(dataId[k] for k in keys) for dataId in query)
-            self.assertEqual(dataIds, test.result)
+            with self.subTest(test=test):
+                order_by = test.order_by.split(",")
+                keys = test.keys.split(",")
+                query = do_query(keys, test.datasets, test.collections).order_by(*order_by)
+                if test.limit is not None:
+                    query = query.limit(*test.limit)
+                dataIds = self._maybeDeduplicate(tuple(dataId[k] for k in keys) for dataId in query)
+                self.assertEqual(dataIds, test.result)
 
-            # and materialize
-            query = do_query(keys).order_by(*order_by)
-            if test.limit is not None:
-                query = query.limit(*test.limit)
-            with self.assertRaises(RelationalAlgebraError):
-                with query.materialize():
-                    pass
+                # and materialize
+                query = do_query(keys).order_by(*order_by)
+                if test.limit is not None:
+                    query = query.limit(*test.limit)
+                with self.assertRaises(RelationalAlgebraError):
+                    with query.materialize():
+                        pass
 
         # errors in a name
         for order_by in ("", "-"):
