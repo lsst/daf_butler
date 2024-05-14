@@ -182,7 +182,10 @@ class OverlapsVisitor(SimplePredicateVisitor):
     ) -> tree.Predicate | None:
         # Docstring inherited.
         if operator == "overlaps":
-            if a.column_type == "region":
+            if tree.is_one_timespan_and_one_datetime(a, b):
+                # Can be transformed directly without special handling here.
+                return None
+            elif a.column_type == "region":
                 return self.visit_spatial_overlap(a, b, flags)
             elif b.column_type == "timespan":
                 return self.visit_temporal_overlap(a, b, flags)

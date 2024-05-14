@@ -138,8 +138,16 @@ class SqlColumnVisitor(
     ) -> sqlalchemy.ColumnElement[bool]:
         # Docstring inherited.
         if operator == "overlaps":
-            assert a.column_type == "timespan", "Spatial overlaps should be transformed away by now."
-            return self.expect_timespan(a).overlaps(self.expect_timespan(b))
+            if values := qt.is_one_timespan_and_one_datetime(a, b):
+                return self.expect_timespan(values.timespan).contains(self.expect_scalar(values.datetime))
+            elif a.column_type == "timespan" and b.column_type == "timespan":
+                return self.expect_timespan(a).overlaps(self.expect_timespan(b))
+            else:
+                # Spatial overlaps should be transformed away by now.
+                raise AssertionError(
+                    f"Unexpected types {a.column_type},{b.column_type} in overlaps operator."
+                )
+
         lhs = self.expect_scalar(a)
         rhs = self.expect_scalar(b)
         match operator:

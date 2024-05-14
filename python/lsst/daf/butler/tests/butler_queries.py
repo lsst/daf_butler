@@ -747,6 +747,45 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 [
                     record.id
                     for record in query.where(
+                        # Datetime equal to the "begin" of the timespan.
+                        _x.visit.timespan.overlaps(
+                            astropy.time.Time("2021-09-09T03:00:00", format="isot", scale="tai")
+                        )
+                    ).dimension_records("visit")
+                ],
+                # Timespan begin bound is inclusive, so the record should
+                # match.
+                [1],
+            )
+            self.assertCountEqual(
+                [
+                    record.id
+                    for record in query.where(
+                        # Datetime equal to the "end" of the timespan.
+                        _x.visit.timespan.overlaps(
+                            astropy.time.Time("2021-09-09T03:01:00", format="isot", scale="tai")
+                        )
+                    ).dimension_records("visit")
+                ],
+                # Timespan end bound is exclusive, so we should get no records.
+                [],
+            )
+            self.assertCountEqual(
+                [
+                    record.id
+                    for record in query.where(
+                        # In the middle of the timespan.
+                        _x.visit.timespan.overlaps(
+                            astropy.time.Time("2021-09-09T03:02:30", format="isot", scale="tai")
+                        )
+                    ).dimension_records("visit")
+                ],
+                [2],
+            )
+            self.assertCountEqual(
+                [
+                    record.id
+                    for record in query.where(
                         _x.visit.timespan.overlaps(
                             Timespan(
                                 begin=astropy.time.Time("2021-09-09T03:02:30", format="isot", scale="tai"),

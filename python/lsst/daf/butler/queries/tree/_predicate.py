@@ -44,7 +44,7 @@ import pydantic
 
 from ..._exceptions import InvalidQueryError
 from ._base import QueryTreeBase
-from ._column_expression import ColumnExpression
+from ._column_expression import ColumnExpression, is_one_timespan_and_one_datetime
 
 if TYPE_CHECKING:
     from ..visitors import PredicateVisitFlags, PredicateVisitor
@@ -460,22 +460,28 @@ class Comparison(PredicateLeafBase):
 
     @pydantic.model_validator(mode="after")
     def _validate_column_types(self) -> Comparison:
-        if self.a.column_type != self.b.column_type:
+        if self.operator == "overlaps" and is_one_timespan_and_one_datetime(self.a, self.b):
+            # Special case for datetime overlaps timespan, which is currently
+            # the only mixed-type comparison allowed.
+            pass
+        elif self.a.column_type == self.b.column_type:
+            match (self.operator, self.a.column_type):
+                case ("==" | "!=", _):
+                    pass
+                case ("<" | ">" | ">=" | "<=", "int" | "string" | "float" | "datetime"):
+                    pass
+                case ("overlaps", "region" | "timespan"):
+                    pass
+                case _:
+                    raise InvalidQueryError(
+                        f"Invalid column type {self.a.column_type} for operator {self.operator!r}."
+                    )
+        else:
             raise InvalidQueryError(
                 f"Column types for comparison {self} do not agree "
                 f"({self.a.column_type}, {self.b.column_type})."
             )
-        match (self.operator, self.a.column_type):
-            case ("==" | "!=", _):
-                pass
-            case ("<" | ">" | ">=" | "<=", "int" | "string" | "float" | "datetime"):
-                pass
-            case ("overlaps", "region" | "timespan"):
-                pass
-            case _:
-                raise InvalidQueryError(
-                    f"Invalid column type {self.a.column_type} for operator {self.operator!r}."
-                )
+
         return self
 
 

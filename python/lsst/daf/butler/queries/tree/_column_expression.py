@@ -35,10 +35,11 @@ __all__ = (
     "Reversed",
     "UnaryOperator",
     "BinaryOperator",
+    "is_one_timespan_and_one_datetime",
     "validate_order_expression",
 )
 
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, TypeVar, final
+from typing import TYPE_CHECKING, Annotated, Literal, NamedTuple, TypeAlias, TypeVar, final
 
 import pydantic
 
@@ -248,3 +249,28 @@ OrderExpression: TypeAlias = Annotated[
     pydantic.Field(discriminator="expression_type"),
     pydantic.AfterValidator(validate_order_expression),
 ]
+
+
+class TimespanAndDatetime(NamedTuple):
+    timespan: ColumnExpression
+    datetime: ColumnExpression
+
+
+def is_one_timespan_and_one_datetime(
+    a: ColumnExpression, b: ColumnExpression
+) -> TimespanAndDatetime | None:  # numpydoc ignore=PR01
+    """Check whether the two columns ``a`` and `b`` include one datetime column
+    and one timespan column.
+
+    Returns
+    -------
+    which_is_which : `TimespanAndDatetime` | None
+        An object telling which column is the datetime and which is the
+        timespan, or `None` if the types were not as expected.
+    """
+    if a.column_type == "timespan" and b.column_type == "datetime":
+        return TimespanAndDatetime(a, b)
+    elif a.column_type == "datetime" and b.column_type == "timespan":
+        return TimespanAndDatetime(b, a)
+    else:
+        return None
