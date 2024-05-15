@@ -71,11 +71,11 @@ class QueryDriverDataCoordinateQueryResults(
     @property
     def dimensions(self) -> DimensionGroup:
         """The dimensions of the data IDs returned by this query."""
-        if self._dimensions is not None:
-            return self._dimensions
+        if self._dimensions is None:
+            with self._build_query() as results:
+                self._dimensions = results.dimensions
 
-        with self._build_query() as results:
-            return results.dimensions
+        return self._dimensions
 
     def hasFull(self) -> bool:
         return True
@@ -103,7 +103,16 @@ class QueryDriverDataCoordinateQueryResults(
         *,
         unique: bool = False,
     ) -> LegacyDataCoordinateQueryResults:
-        raise NotImplementedError()
+        # 'unique' parameter is intentionally ignored -- all data ID queries
+        # using the new query system are automatically de-duplicated.
+
+        if dimensions is None:
+            return self
+
+        dimensions = self.dimensions.universe.conform(dimensions)
+        if not dimensions.issubset(self.dimensions):
+            raise ValueError(f"{dimensions} is not a subset of {self.dimensions}")
+        return QueryDriverDataCoordinateQueryResults(self._query_factory, dimensions, self._args)
 
     def findDatasets(
         self,

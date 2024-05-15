@@ -422,8 +422,11 @@ class _HybridDataCoordinateQueryResults:
         dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
         *,
         unique: bool = False,
-    ) -> DataCoordinateQueryResults:
-        return self._direct.subset(dimensions, unique=unique)
+    ) -> _HybridDataCoordinateQueryResults:
+        return _HybridDataCoordinateQueryResults(
+            direct=self._direct.subset(dimensions, unique=unique),
+            remote=self._remote.subset(dimensions, unique=unique),
+        )
 
     def findDatasets(
         self,
