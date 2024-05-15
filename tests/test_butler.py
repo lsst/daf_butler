@@ -2450,6 +2450,25 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Test disassembly.
         self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
 
+    def testTransferDifferingStorageClasses(self) -> None:
+        """Test transfers when the source butler dataset type has a different
+        but compatible storage class.
+        """
+        self.create_butlers()
+
+        self.assertButlerTransfers(storageClassNameTarget="MetricsConversion")
+
+    def testTransferDifferingStorageClassesDisassembly(self) -> None:
+        """Test transfers when the source butler dataset type has a different
+        but compatible storage class and where the source butler has
+        disassembled.
+        """
+        self.create_butlers()
+
+        self.assertButlerTransfers(
+            storageClassName="StructuredComposite", storageClassNameTarget="MetricsConversion"
+        )
+
     def testAbsoluteURITransferDirect(self) -> None:
         """Test transfer using an absolute URI."""
         self._absolute_transfer("auto")
@@ -2489,9 +2508,19 @@ class PosixDatastoreTransfers(unittest.TestCase):
             else:
                 self.assertNotEqual(uri, temp)
 
-    def assertButlerTransfers(self, purge: bool = False, storageClassName: str = "StructuredData") -> None:
+    def assertButlerTransfers(
+        self,
+        purge: bool = False,
+        storageClassName: str = "StructuredData",
+        storageClassNameTarget: str | None = None,
+    ) -> None:
         """Test that a run can be transferred to another butler."""
         storageClass = self.storageClassFactory.getStorageClass(storageClassName)
+        if storageClassNameTarget is not None:
+            storageClassTarget = self.storageClassFactory.getStorageClass(storageClassNameTarget)
+        else:
+            storageClassTarget = storageClass
+
         datasetTypeName = "random_data"
 
         # Test will create 3 collections and we will want to transfer
@@ -2645,6 +2674,14 @@ class PosixDatastoreTransfers(unittest.TestCase):
             self.target_butler.transfer_from(self.source_butler, source_refs, register_dataset_types=True)
         self.assertIn("dimension", str(cm.exception))
 
+        # The dry run test requires dataset types to exist. If we have
+        # been given distinct storage classes for the target we have
+        # to redefine at least one of the dataset types in the target butler.
+        if storageClass != storageClassTarget:
+            self.target_butler.registry.removeDatasetType(datasetTypeNames[0])
+            datasetType = DatasetType(datasetTypeNames[0], dimensions, storageClassTarget)
+            self.target_butler.registry.registerDatasetType(datasetType)
+
         # The failed transfer above leaves registry in an inconsistent
         # state because the run is created but then rolled back without
         # the collection cache being cleared. For now force a refresh.
@@ -2704,6 +2741,27 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 new_metric = self.target_butler.get(ref)
                 old_metric = self.source_butler.get(ref)
                 self.assertEqual(new_metric, old_metric)
+
+                # Try again without implicit storage class conversion
+                # triggered by using the source ref. This will do conversion
+                # since the formatter will be returning the source python type.
+                target_ref = self.target_butler.get_dataset(ref.id)
+                if target_ref.datasetType.storageClass != ref.datasetType.storageClass:
+                    new_metric = self.target_butler.get(target_ref)
+                    self.assertNotEqual(type(new_metric), type(old_metric))
+
+                    # Remove the dataset from the target and put it again
+                    # as if it was the right type all along for this butler.
+                    self.target_butler.pruneDatasets(
+                        [target_ref], unstore=True, purge=True, disassociate=True
+                    )
+                    self.target_butler.put(new_metric, target_ref)
+                    new_new_metric = self.target_butler.get(target_ref)
+                    new_old_metric = self.target_butler.get(
+                        target_ref, storageClass=ref.datasetType.storageClass
+                    )
+                    self.assertEqual(new_new_metric, new_metric)
+                    self.assertEqual(new_old_metric, old_metric)
 
         # Now prune run2 collection and create instead a CHAINED collection.
         # This should block the transfer.

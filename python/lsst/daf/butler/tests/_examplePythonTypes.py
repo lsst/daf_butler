@@ -274,6 +274,22 @@ class MetricsExample:
         assert isinstance(exportDict["output"], dict | types.NoneType)
         return cls(exportDict["summary"], exportDict["output"], data)
 
+    @classmethod
+    def from_model(cls, model: MetricsExampleModel) -> MetricsExample:
+        """Create metrics from Pydantic model.
+
+        Parameters
+        ----------
+        model : `MetricsExampleModel`
+            Source model.
+
+        Returns
+        -------
+        newobject : `MetricsExample`
+            New `MetricsExample` object.
+        """
+        return cls(model.summary, model.output, model.data)
+
 
 class MetricsExampleModel(BaseModel):
     """A variant of `MetricsExample` based on model."""

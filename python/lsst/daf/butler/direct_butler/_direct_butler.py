@@ -1869,17 +1869,67 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 # on to find additional inconsistent dataset types
                 # might result in additional unwanted dataset types being
                 # registered.
-                if self._registry.registerDatasetType(datasetType):
-                    newly_registered_dataset_types.add(datasetType)
+                try:
+                    if self._registry.registerDatasetType(datasetType):
+                        newly_registered_dataset_types.add(datasetType)
+                except ConflictingDefinitionError as e:
+                    # Be safe and require that conversions be bidirectional
+                    # when there are storage class mismatches. This is because
+                    # get() will have to support conversion from source to
+                    # target python type (the source formatter will be
+                    # returning source python type) but there also is an
+                    # expectation that people will want to be able to get() in
+                    # the target using the source python type, which will not
+                    # require conversion for transferred datasets but might
+                    # for target-native types. Additionally, butler.get does
+                    # not know that the formatter will return the wrong
+                    # python type and so will always check that the conversion
+                    # works even though it won't need it.
+                    target_dataset_type = self.get_dataset_type(datasetType.name)
+                    target_compatible_with_source = target_dataset_type.is_compatible_with(datasetType)
+                    source_compatible_with_target = datasetType.is_compatible_with(target_dataset_type)
+                    if not (target_compatible_with_source and source_compatible_with_target):
+                        if target_compatible_with_source:
+                            e.add_note(
+                                "Target dataset type storage class is compatible with source "
+                                "but the reverse is not true."
+                            )
+                        elif source_compatible_with_target:
+                            e.add_note(
+                                "Source dataset type storage class is compatible with target "
+                                "but the reverse is not true."
+                            )
+                        else:
+                            e.add_note("If storage classes differ, please register converters.")
+                        raise
             else:
                 # If the dataset type is missing, let it fail immediately.
                 target_dataset_type = self.get_dataset_type(datasetType.name)
                 if target_dataset_type != datasetType:
-                    raise ConflictingDefinitionError(
-                        "Source butler dataset type differs from definition"
-                        f" in target butler: {datasetType} !="
-                        f" {target_dataset_type}"
-                    )
+                    target_compatible_with_source = target_dataset_type.is_compatible_with(datasetType)
+                    source_compatible_with_target = datasetType.is_compatible_with(target_dataset_type)
+                    # Both conversion directions are currently required.
+                    if not (target_compatible_with_source and source_compatible_with_target):
+                        msg = ""
+                        if target_compatible_with_source:
+                            msg = (
+                                "Target storage class is compatible with the source storage class "
+                                "but the reverse is not true."
+                            )
+                        elif source_compatible_with_target:
+                            msg = (
+                                "Source storage class is compatible with the target storage class"
+                                " but the reverse is not true."
+                            )
+                        else:
+                            msg = "If storage classes differ register converters."
+                        if msg:
+                            msg = f"({msg})"
+                        raise ConflictingDefinitionError(
+                            "Source butler dataset type differs from definition"
+                            f" in target butler: {datasetType} !="
+                            f" {target_dataset_type} {msg}"
+                        )
         if newly_registered_dataset_types:
             # We may have registered some even if there were inconsistencies
             # but should let people know (or else remove them again).
@@ -1948,7 +1998,12 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                     imported_refs = self._registry._importDatasets(refs_to_import)
                 else:
                     imported_refs = refs_to_import
-                assert set(imported_refs) == set(refs_to_import)
+
+                # Check all the UUIDs were imported, ignoring dataset type
+                # storage class differences.
+                imported_uuids = set(ref.id for ref in imported_refs)
+                uuids_to_import = set(ref.id for ref in refs_to_import)
+                assert set(imported_uuids) == set(uuids_to_import)
                 n_imported += len(imported_refs)
 
             assert len(source_refs) == n_imported

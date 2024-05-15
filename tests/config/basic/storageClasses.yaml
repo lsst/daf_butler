@@ -35,6 +35,8 @@ storageClasses:
       summary: StructuredDataDictYaml
       output: StructuredDataDictYaml
       data: StructuredDataListYaml
+    converters:
+      lsst.daf.butler.tests.MetricsExampleModel: lsst.daf.butler.tests.MetricsExample.from_model
   StructuredDataJson:
     inheritsFrom: StructuredData
   StructuredDataPickle:
