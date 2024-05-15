@@ -845,7 +845,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         storageClass = ref.datasetType.storageClass
         try:
             formatter = self.formatterFactory.getFormatter(
-                ref, FileDescriptor(location, storageClass=storageClass), ref.dataId
+                ref,
+                FileDescriptor(location, storageClass=storageClass, component=ref.component),
+                dataId=ref.dataId,
+                ref=ref,
+                cache_manager=self.cacheManager,
             )
         except KeyError as e:
             raise DatasetTypeNotSupportedError(

@@ -128,8 +128,10 @@ def generate_datastore_get_information(
                 readStorageClass=readStorageClass,
                 storageClass=writeStorageClass,
                 parameters=parameters,
+                component=storedFileInfo.component,
             ),
-            ref.dataId,
+            dataId=ref.dataId,
+            ref=ref,
         )
 
         formatterParams, notFormatterParams = formatter.segregateParameters()
@@ -482,8 +484,10 @@ def get_dataset_as_python_object_from_get_info(
                 readStorageClass=refStorageClass,
                 storageClass=writeStorageClass,
                 parameters=parameters,
+                component=forwardedComponent,
             ),
-            ref.dataId,
+            dataId=ref.dataId,
+            ref=ref,
         )
 
         # The assembler can not receive any parameter requests for a

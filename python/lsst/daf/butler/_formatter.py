@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Formatter", "FormatterFactory", "FormatterParameter")
+__all__ = ("Formatter", "FormatterV2", "FormatterFactory", "FormatterParameter")
 
 import contextlib
 import copy
@@ -37,6 +37,8 @@ from collections.abc import Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
 
 from lsst.utils.introspection import get_full_type_name
+from lsst.utils.timer import time_this
+from lsst.resources import ResourcePath
 
 from ._config import Config
 from ._config_support import LookupKey, processLookupConfigs
@@ -44,6 +46,7 @@ from ._file_descriptor import FileDescriptor
 from ._location import Location
 from .dimensions import DimensionUniverse
 from .mapping_factory import MappingFactory
+from .datastore.cache_manager import DatastoreDisabledCacheManager
 
 log = logging.getLogger(__name__)
 
@@ -52,9 +55,454 @@ if TYPE_CHECKING:
     from ._dataset_type import DatasetType
     from ._storage_class import StorageClass
     from .dimensions import DataCoordinate
+    from .datastore.cache_manager import AbstractDatastoreCacheManager
 
     # Define a new special type for functions that take "entity"
     Entity: TypeAlias = DatasetType | DatasetRef | StorageClass | str
+
+
+class FormatterV2(metaclass=ABCMeta):
+    """Interface for reading and writing datasets using URIs.
+
+    The formatters are associated with a particular `StorageClass`.
+
+    Parameters
+    ----------
+    fileDescriptor : `FileDescriptor`, optional
+        Identifies the file to read or write, and the associated storage
+        classes and parameter information.  Its value can be `None` if the
+        caller will never call `Formatter.read` or `Formatter.write`.
+    ref: `DatasetRef`
+        The dataset associated with this formatter. Should not be a component
+        dataset ref.
+    writeParameters : `dict`, optional
+        Any parameters to be hard-coded into this instance to control how
+        the dataset is serialized.
+    writeRecipes : `dict`, optional
+        Detailed write Recipes indexed by recipe name.
+
+    Notes
+    -----
+    All Formatter subclasses should share the base class's constructor
+    signature.
+    """
+
+    unsupported_parameters: ClassVar[Set[str] | None] = frozenset()
+    """Set of read parameters not understood by this `Formatter`. An empty set
+    means all parameters are supported.  `None` indicates that no parameters
+    are supported. These param (`frozenset`).
+    """
+
+    supported_write_parameters: ClassVar[Set[str] | None] = None
+    """Parameters understood by this formatter that can be used to control
+    how a dataset is serialized. `None` indicates that no parameters are
+    supported."""
+
+    supported_extensions: ClassVar[Set[str]] = frozenset()
+    """Set of all extensions supported by this formatter.
+
+    Only expected to be populated by Formatters that write files. Any extension
+    assigned to the ``extension`` property will be automatically included in
+    the list of supported extensions."""
+
+    nbytes_read_threshold: int = 0
+    """Size of a file below which an attempt will be made to read the file
+    directly into memory for parsing. Set to 0 if bytes can not be parsed
+    directly by this formatter."""
+
+    def __init__(
+        self,
+        file_descriptor: FileDescriptor,
+        *,
+        ref: DatasetRef,
+        write_parameters: dict[str, Any] | None = None,
+        write_recipes: dict[str, Any] | None = None,
+        # Compatibility parameters. Unused in v2.
+        **kwargs,
+    ):
+        if not isinstance(file_descriptor, FileDescriptor):
+            raise TypeError("File descriptor must be a FileDescriptor")
+
+        self._file_descriptor = file_descriptor
+
+        if ref.isComponent():
+            # Raise or convert to composite ref?
+            raise ValueError(f"Provided ref must not be a component ref (got {ref})")
+        self._dataset_ref = ref
+
+        # Check that the write parameters are allowed
+        if write_parameters:
+            if self.supported_write_parameters is None:
+                raise ValueError(
+                    f"This formatter does not accept any write parameters. Got: {', '.join(write_parameters)}"
+                )
+            else:
+                given = set(write_parameters)
+                unknown = given - self.supported_write_parameters
+                if unknown:
+                    s = "s" if len(unknown) != 1 else ""
+                    unknownStr = ", ".join(f"'{u}'" for u in unknown)
+                    raise ValueError(f"This formatter does not accept parameter{s} {unknownStr}")
+
+        self._write_parameters = write_parameters
+        self._write_recipes = self.validate_write_recipes(write_recipes)
+
+    def __str__(self) -> str:
+        return f"{self.name()}@{self.file_descriptor.location.uri}"
+
+    def __repr__(self) -> str:
+        return f"{self.name()}({self.file_descriptor!r})"
+
+    @property
+    def file_descriptor(self) -> FileDescriptor:
+        """File descriptor associated with this formatter (`FileDescriptor`).
+
+        Read-only property.
+        """
+        return self._file_descriptor
+
+    @property
+    def data_id(self) -> DataCoordinate:
+        """Return Data ID associated with this formatter (`DataCoordinate`)."""
+        return self._dataset_ref.dataId
+
+    @property
+    def dataset_ref(self) -> DatasetRef:
+        """Return Dataset Ref associated with this formatter (`DatasetRef`)."""
+        return self._dataset_ref
+
+    @property
+    def write_parameters(self) -> Mapping[str, Any]:
+        """Parameters to use when writing out datasets."""
+        if self._write_parameters is not None:
+            return self._write_parameters
+        return {}
+
+    @property
+    def write_recipes(self) -> Mapping[str, Any]:
+        """Detailed write Recipes indexed by recipe name."""
+        if self._write_recipes is not None:
+            return self._write_recipes
+        return {}
+
+    @classmethod
+    def validate_write_recipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+        """Validate supplied recipes for this formatter.
+
+        The recipes are supplemented with default values where appropriate.
+
+        Parameters
+        ----------
+        recipes : `dict`
+            Recipes to validate.
+
+        Returns
+        -------
+        validated : `dict`
+            Validated recipes.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if validation fails. The default implementation raises
+            if any recipes are given.
+        """
+        if recipes:
+            raise RuntimeError(f"This formatter does not understand these write recipes: {recipes}")
+        return recipes
+
+    @classmethod
+    def name(cls) -> str:
+        """Return the fully qualified name of the formatter.
+
+        Returns
+        -------
+        name : `str`
+            Fully-qualified name of formatter class.
+        """
+        return get_full_type_name(cls)
+
+    def _is_disassembled(self) -> bool:
+        """Return `True` if this formatter is looking at a disassembled
+        component.
+        """
+        return self.file_descriptor.component is not None
+
+    def _check_resource_size(self, uri: ResourcePath, recorded_size: int, resource_size: int) -> None:
+        """Compare the recorded size with the resource size."""
+        if recorded_size >= 0 and resource_size != recorded_size:
+            raise RuntimeError(
+                "Integrity failure in Datastore. "
+                f"Size of file {uri} ({resource_size}) "
+                f"does not match size recorded in registry of {recorded_size}"
+            )
+
+    def _get_cache_ref(self) -> DatasetRef:
+        """Get the `DatasetRef` to use for cache look ups.
+
+        Returns
+        -------
+        ref : `lsst.daf.butler.DatasetRef`
+            The dataset ref to use when looking in the cache.
+            For single-file dataset this will be the dataset ref directly.
+            If this is disassembled we need the component and the component
+             will be in the `FileDescriptor`.
+        """
+        if self.file_descriptor.component is None:
+            cache_ref = self.dataset_ref
+        else:
+            cache_ref = self.dataset_ref.makeComponentRef(self.file_descriptor.component)
+        return cache_ref
+
+    def read(
+        self,
+        component: str | None = None,
+        expected_size: int = -1,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> Any:
+        """Read a Dataset.
+
+        Parameters
+        ----------
+        component : `str`, optional
+            Component to read from the file. Only used if the `StorageClass`
+            for reading differed from the `StorageClass` used to write the
+            file.
+        expected_size : `int`, optional
+            If known the expected size of the resource to read. This can be
+            used for verification or to decide whether to do a direct read or a
+            file download. ``-1`` indicates the file size is not known.
+        cache_manager: `AbstractDatastoreCacheManager`
+            A cache manager to use to allow a formatter to cache a remote file
+            locally or read a cached file that is already local.
+
+        Returns
+        -------
+        in_memory_dataset : `object`
+            The requested Dataset.
+
+        Notes
+        -----
+        The base class implementation will either download the resource to a
+        local file system and call `read_local_file`, or read the bytes
+        directly and pass the bytes to `read_from_bytes`.
+
+        Subclasses can use the URI directly if parameters and component
+        selection will make that more efficient, else punt to the parent
+        method.
+
+        There are multiple cases that must be handled for reading:
+
+        For a single file:
+
+        * No component requested, read the whole file.
+        * Component requested, optionally read the component efficiently,
+          else read the whole file and extract the component.
+        * Derived component requested, read whole file or read relevant
+          component and derive.
+
+        Disassembled Composite:
+
+        * The file to read here is the component. Formatter only knows about
+          one file. Should be no component specified but the FileDescriptor
+          will know which component.
+        * A derived component. The file to read is a component but not the
+          specified component. The caching needs the component from which
+          it's derived.
+        """
+        # Should we check the size with file_uri.size() if expected size is -1?
+        # Do we give a choice here at all and allow a formatter to say one
+        # or the other? Should the cache be checked (if a put is followed
+        # by a get it might still be in the cache).
+        if expected_size > 0 and expected_size < self.nbytes_read_threshold:
+            return self.read_from_cached_bytes(component, expected_size, cache_manager=cache_manager)
+
+        return self.read_from_cached_local_file(component, expected_size, cache_manager=cache_manager)
+
+    def read_from_cached_bytes(
+        self,
+        component: str | None = None,
+        expected_size: int = -1,
+        *,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> Any:
+        """Read from bytes, checking for possible presence in local cache.
+
+        Parameters
+        ----------
+        component : `str`, optional
+            Component to read from the file. Only used if the `StorageClass`
+            for reading differed from the `StorageClass` used to write the
+            file.
+        expected_size : `int`, optional
+            If known the expected size of the resource to read. This can be
+            used for verification or to decide whether to do a direct read or a
+            file download. ``-1`` indicates the file size is not known.
+        cache_manager: `AbstractDatastoreCacheManager`
+            A cache manager to use to allow a formatter to cache a remote file
+            locally or read a cached file that is already local.
+
+        Returns
+        -------
+        in_memory_dataset : `object`
+            The requested Dataset.
+
+        Notes
+        -----
+        Calls `read_from_bytes` but will first check the datastore cache
+        in case the file is present and reading that in preference. This
+        method will not cache a remote dataset and assumes that any size
+        checks have been performed before calling this method.
+        """
+        if cache_manager is None:
+            cache_manager = DatastoreDisabledCacheManager(None, None)
+
+        uri = self.file_descriptor.location.uri
+        cache_ref = self._get_cache_ref()
+
+        with cache_manager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
+            if cached_file is not None:
+                desired_uri = cached_file
+                msg = f" (cached version of {uri})"
+            else:
+                desired_uri = uri
+                msg = ""
+
+            with time_this(log, msg="Reading bytes from %s%s", args=(desired_uri, msg)):
+                serialized_dataset = desired_uri.read()
+                self._check_resource_size(uri, expected_size, len(serialized_dataset))
+
+            # The component for log messages is either the component requested
+            # explicitly or the component from the file descriptor.
+            if component is not None:
+                log_component = component
+            else:
+                log_component = self.file_descriptor.component
+
+            log.debug(
+                "Deserializing %s from %d bytes from location %s with formatter %s",
+                f"component {log_component}" if log_component else "",
+                len(serialized_dataset),
+                uri,
+                self.name(),
+            )
+
+            return self.read_from_bytes(serialized_dataset)
+
+    def read_from_cached_local_file(
+        self,
+        component: str | None = None,
+        expected_size: int = -1,
+        *,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> Any:
+        """Read a dataset ensuring that a local file is used, checking the
+        cache for it.
+
+        Parameters
+        ----------
+        component : `str`, optional
+            Component to read from the file. Only used if the `StorageClass`
+            for reading differed from the `StorageClass` used to write the
+            file.
+        expected_size : `int`, optional
+            If known the expected size of the resource to read. This can be
+            used for verification or to decide whether to do a direct read or a
+            file download. ``-1`` indicates the file size is not known.
+        cache_manager: `AbstractDatastoreCacheManager`
+            A cache manager to use to allow a formatter to cache a remote file
+            locally or read a cached file that is already local.
+
+        Returns
+        -------
+        in_memory_dataset : `object`
+            The requested Dataset.
+
+        Notes
+        -----
+        The file will be downloaded and cached if it is a remote resource.
+        The file contents will be read using `read_local_file`.
+        """
+        if cache_manager is None:
+            cache_manager = DatastoreDisabledCacheManager(None, None)
+
+        uri = self.file_descriptor.location.uri
+
+        # Need to have something we can look up in the cache.
+        cache_ref = self._get_cache_ref()
+
+        # Have to update the Location associated with the formatter
+        # because formatter.read does not allow an override.
+        # This could be improved.
+        msg = ""
+
+        # The component for log messages is either the component requested
+        # explicitly or the component from the file descriptor.
+        if component is not None:
+            log_component = component
+        else:
+            log_component = self.file_descriptor.component
+
+        # Ensure we have a local file.
+        with cache_manager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
+            if cached_file is not None:
+                msg = f"(via cache read of remote file {uri})"
+                uri = cached_file
+
+            with uri.as_local() as local_uri:
+                self._check_resource_size(self.file_descriptor.location.uri, expected_size, local_uri.size())
+                can_be_cached = False
+                if uri != local_uri:
+                    # URI was remote and file was downloaded
+                    cache_msg = ""
+
+                    if cache_manager.should_be_cached(cache_ref):
+                        # In this scenario we want to ask if the downloaded
+                        # file should be cached but we should not cache
+                        # it until after we've used it (to ensure it can't
+                        # be expired whilst we are using it).
+                        can_be_cached = True
+
+                        # Say that it is "likely" to be cached because
+                        # if the formatter read fails we will not be
+                        # caching this file.
+                        cache_msg = " and likely cached"
+
+                    msg = f"(via download to local file{cache_msg})"
+
+                log.debug(
+                    "Reading%s from location %s %s with formatter %s",
+                    f" component {log_component}" if log_component else "",
+                    uri,
+                    msg,
+                    self.name(),
+                )
+
+                with time_this(
+                    log,
+                    msg="Reading%s from location %s %s with formatter %s",
+                    args=(
+                        f" component {log_component}" if log_component else "",
+                        uri,
+                        msg,
+                        self.name(),
+                    ),
+                ):
+                    result = self.read_local_file(local_uri)
+
+                # File was read successfully so can move to cache
+                if can_be_cached:
+                    cache_manager.move_to_cache(local_uri, cache_ref)
+
+        return result
+
+    def read_local_file(self, local_file: ResourcePath, component: str | None = None) -> Any:
+        """Read a dataset from a local file system."""
+        raise NotImplementedError("This formatter does not know how to read a local file.")
+
+    def read_from_bytes(self, serialized_bytes: bytes, component: str | None = None) -> Any:
+        """Read a dataset from a byte stream."""
+        raise NotImplementedError("This formatter does not know how to convert bytes to a Python type.")
 
 
 class Formatter(metaclass=ABCMeta):
@@ -103,13 +551,17 @@ class Formatter(metaclass=ABCMeta):
     def __init__(
         self,
         fileDescriptor: FileDescriptor,
-        dataId: DataCoordinate,
+        *,
+        dataId: DataCoordinate | None = None,
         writeParameters: dict[str, Any] | None = None,
         writeRecipes: dict[str, Any] | None = None,
+        # Allow FormatterV2 parameters to be dropped.
+        **kwargs,
     ):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
-        assert dataId is not None, "dataId is now required for formatter initialization"
+        if dataId is not None:
+            raise RuntimeError("dataId is now required for formatter initialization")
         self._fileDescriptor = fileDescriptor
         self._dataId = dataId
 
@@ -798,4 +1250,4 @@ class FormatterFactory:
 
 
 # Type to use when allowing a Formatter or its class name
-FormatterParameter = str | type[Formatter] | Formatter
+FormatterParameter: TypeAlias = str | type[Formatter] | Formatter
