@@ -39,12 +39,21 @@ import os
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, DimensionGroup, StorageClass
+from lsst.daf.butler import (
+    DataCoordinate,
+    DatasetRef,
+    DatasetType,
+    DimensionGroup,
+    FormatterNotImplementedError,
+    StorageClass,
+)
 from lsst.daf.butler.datastore import Datastore
 from lsst.daf.butler.formatters.yaml import YamlFormatter
+from lsst.resources import ResourcePath
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetId
+    from lsst.daf.butler.datastore.cache_manager import AbstractDatastoreCacheManager
 
 
 class DatasetTestHelper:
@@ -181,37 +190,50 @@ class DatastoreTestHelper:
 class BadWriteFormatter(YamlFormatter):
     """A formatter that never works but does leave a file behind."""
 
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        raise NotImplementedError("This formatter can not read anything")
+    can_read_from_uri = False
+    can_read_from_local_file = False
+    can_read_from_stream = False
 
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        """Write an empty file and then raise an exception."""
-        with open(self.fileDescriptor.location.path, "wb"):
-            pass
-        raise RuntimeError("Did not succeed in writing file")
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+        raise FormatterNotImplementedError("This formatter can not read anything")
+
+    def write_direct(
+        self,
+        in_memory_dataset: Any,
+        uri: ResourcePath,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> bool:
+        uri.write(b"")
+        raise RuntimeError("Did not succeed in writing file.")
 
 
 class BadNoWriteFormatter(BadWriteFormatter):
     """A formatter that always fails without writing anything."""
 
-    def _writeFile(self, inMemoryDataset: Any) -> None:
+    def write_direct(
+        self,
+        in_memory_dataset: Any,
+        uri: ResourcePath,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> bool:
         raise RuntimeError("Did not writing anything at all")
 
 
 class MultiDetectorFormatter(YamlFormatter):
     """A formatter that requires a detector to be specified in the dataID."""
 
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        raise NotImplementedError("Can not write")
+    can_read_from_uri = True
 
-    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
-        data = super()._fromBytes(serializedDataset)
-        if self.dataId is None:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+        if self.data_id is None:
             raise RuntimeError("This formatter requires a dataId")
-        if "detector" not in self.dataId:
+        if "detector" not in self.data_id:
             raise RuntimeError("This formatter requires detector to be present in dataId")
-        key = f"detector{self.dataId['detector']}"
-        assert pytype is not None
-        if key in data:
-            return pytype(data[key])
-        raise RuntimeError(f"Could not find '{key}' in data file")
+
+        key = f"detector{self.data_id['detector']}"
+
+        data = super().read_from_uri(uri, component)
+        if key not in data:
+            raise RuntimeError(f"Could not find '{key}' in data file.")
+
+        return data[key]

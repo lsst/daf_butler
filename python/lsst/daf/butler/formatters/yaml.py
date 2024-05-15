@@ -34,11 +34,87 @@ import dataclasses
 from typing import Any
 
 import yaml
+from lsst.resources import ResourcePath
 
 from .file import FileFormatter
+from .typeless import TypelessFormatter
 
 
-class YamlFormatter(FileFormatter):
+class YamlFormatter(TypelessFormatter):
+    """Read and write YAML files."""
+
+    default_extension = ".yaml"
+    unsupported_parameters = None
+    supported_write_parameters = frozenset({"unsafe_dump"})
+    can_read_from_uri = True
+
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+        # Can not use ResourcePath.open()
+        data = yaml.safe_load(uri.read())
+        return data
+
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
+        """Write the in memory dataset to a bytestring.
+
+        Will look for `_asdict()` method to aid YAML serialization, following
+        the approach of the ``simplejson`` module.  Additionally, can attempt
+        to detect `pydantic.BaseModel`.
+
+        The `dict` will be passed to the relevant constructor on read if
+        not explicitly handled by Pyyaml.
+
+        Parameters
+        ----------
+        in_memory_dataset : `object`
+            Object to serialize.
+
+        Returns
+        -------
+        serialized_dataset : `bytes`
+            YAML string encoded to bytes.
+
+        Raises
+        ------
+        Exception
+            The object could not be serialized.
+
+        Notes
+        -----
+        `~yaml.SafeDumper` is used when generating the YAML serialization.
+        This will fail for data structures that have complex python classes
+        without a registered YAML representer.
+        """
+        converted = False
+        if hasattr(in_memory_dataset, "model_dump") and hasattr(in_memory_dataset, "model_dump_json"):
+            # Pydantic v2-like model if both model_dump() and model_dump_json()
+            # exist.
+            with contextlib.suppress(Exception):
+                in_memory_dataset = in_memory_dataset.model_dump()
+                converted = True
+
+        if not converted and hasattr(in_memory_dataset, "dict") and hasattr(in_memory_dataset, "json"):
+            # Pydantic v1-like model if both dict() and json() exist.
+            with contextlib.suppress(Exception):
+                in_memory_dataset = in_memory_dataset.dict()
+                converted = True
+
+        if not converted:
+            if dataclasses.is_dataclass(in_memory_dataset) and not isinstance(in_memory_dataset, type):
+                in_memory_dataset = dataclasses.asdict(in_memory_dataset)  # type: ignore
+            elif hasattr(in_memory_dataset, "_asdict"):
+                in_memory_dataset = in_memory_dataset._asdict()
+
+        unsafe_dump = self.write_parameters.get("unsafe_dump", False)
+        # Now that Python always uses an order dict, do not sort keys
+        # on write so that order can be preserved on read.
+        if unsafe_dump:
+            serialized = yaml.dump(in_memory_dataset, sort_keys=False)
+        else:
+            serialized = yaml.safe_dump(in_memory_dataset, sort_keys=False)
+        return serialized.encode()
+
+
+class YamlFormatterV1(FileFormatter):
     """Formatter implementation for YAML files."""
 
     extension = ".yaml"
