@@ -69,6 +69,7 @@ from ._collection_args import (
 )
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .registry._query_common import CommonQueryArguments
+from .registry._query_data_coordinates import QueryDriverDataCoordinateQueryResults
 from .registry._query_dimension_records import QueryDriverDimensionRecordQueryResults
 from .server_models import (
     ExpandDataIdRequestModel,
@@ -387,7 +388,12 @@ class RemoteButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateQueryResults:
-        raise NotImplementedError()
+        if dimensions is not None:
+            dimensions = self.dimensions.conform(dimensions)
+        args = self._convert_common_query_arguments(
+            dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
+        )
+        return QueryDriverDataCoordinateQueryResults(self._butler._query, dimensions, args)
 
     def queryDimensionRecords(
         self,

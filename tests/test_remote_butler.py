@@ -186,6 +186,22 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
         # Tests a non-public API that isn't relevant on the client side.
         pass
 
+    def testQueryDataIdsGovernorExceptions(self):
+        # The new query system doesn't throw exceptions for invalid governor
+        # data IDs in queries -- instead it returns zero rows.  So this set of
+        # tests is not applicable to RemoteButler.
+        pass
+
+    def test_query_projection_drop_postprocessing(self):
+        # Tests a query system implementation detail that isn't relevant to
+        # RemoteButler.
+        pass
+
+    @unittest.expectedFailure
+    def test_skypix_constraint_queries(self) -> None:
+        # TODO DM-44362
+        return super().test_skypix_constraint_queries()
+
 
 if __name__ == "__main__":
     unittest.main()

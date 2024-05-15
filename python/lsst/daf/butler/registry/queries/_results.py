@@ -61,6 +61,10 @@ from ._structs import OrderByClause
 
 
 class QueryResultsBase:
+    """Abstract base class defining functions used by several of the other
+    QueryResults classes.
+    """
+
     @abstractmethod
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         """Count the number of rows this query would return.
@@ -137,6 +141,7 @@ class QueryResultsBase:
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def order_by(self, *args: str) -> Self:
         """Make the iterator return ordered results.
 
@@ -159,6 +164,7 @@ class QueryResultsBase:
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def limit(self, limit: int, offset: int | None = 0) -> Self:
         """Make the iterator return limited number of records.
 

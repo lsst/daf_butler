@@ -179,8 +179,6 @@ class ButlerQueryTests(ABC, TestCaseMixin):
     def test_simple_data_coordinate_query(self) -> None:
         butler = self.make_butler("base.yaml")
         with butler._query() as query:
-            _x = query.expression_factory
-
             # Test empty query
             self.assertCountEqual(query.data_ids([]), [DataCoordinate.makeEmpty(butler.dimensions)])
 
