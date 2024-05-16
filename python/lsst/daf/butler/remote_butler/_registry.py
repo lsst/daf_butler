@@ -388,8 +388,7 @@ class RemoteButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateQueryResults:
-        if dimensions is not None:
-            dimensions = self.dimensions.conform(dimensions)
+        dimensions = self.dimensions.conform(dimensions)
         args = self._convert_common_query_arguments(
             dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
         )

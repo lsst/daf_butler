@@ -59,7 +59,7 @@ class QueryDriverDataCoordinateQueryResults(
     """
 
     def __init__(
-        self, query_factory: QueryFactory, dimensions: DimensionGroup | None, args: CommonQueryArguments
+        self, query_factory: QueryFactory, dimensions: DimensionGroup, args: CommonQueryArguments
     ) -> None:
         LegacyQueryResultsMixin.__init__(self, query_factory, args)
         LegacyDataCoordinateQueryResults.__init__(self)
@@ -70,11 +70,6 @@ class QueryDriverDataCoordinateQueryResults(
 
     @property
     def dimensions(self) -> DimensionGroup:
-        """The dimensions of the data IDs returned by this query."""
-        if self._dimensions is None:
-            with self._build_query() as results:
-                self._dimensions = results.dimensions
-
         return self._dimensions
 
     def hasFull(self) -> bool:
