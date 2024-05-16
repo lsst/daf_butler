@@ -2363,11 +2363,15 @@ class PosixDatastoreTransfers(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.storageClassFactory = StorageClassFactory()
-        cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def setUp(self) -> None:
         self.root = makeTestTempDir(TESTDIR)
         self.config = Config(self.configFile)
+
+        # Some tests cause convertors to be replaced so ensure
+        # the storage class factory is reset each time.
+        self.storageClassFactory.reset()
+        self.storageClassFactory.addFromConfig(self.configFile)
 
     def tearDown(self) -> None:
         removeTestTempDir(self.root)
