@@ -226,6 +226,7 @@ class DirectQueryDriver(QueryDriver):
             name_shrinker=builder.joiner.name_shrinker,
             postprocessing=builder.postprocessing,
             raw_page_size=raw_page_size,
+            column_order=builder.columns.get_column_order(),
         )
         result_page = cursor.next()
         if result_page.next_key is not None:
@@ -1094,6 +1095,9 @@ class _Cursor:
     raw_page_size : `int`
         Maximum number of SQL result rows to return in each page, before
         postprocessing.
+    column_order : `ColumnOrder`
+        Definition of the columns available in the rows returned by the SQL
+        query.
     """
 
     def __init__(
@@ -1104,6 +1108,7 @@ class _Cursor:
         name_shrinker: NameShrinker | None,
         postprocessing: Postprocessing,
         raw_page_size: int,
+        column_order: qt.ColumnOrder,
     ):
         self._result_spec = result_spec
         self._name_shrinker = name_shrinker
@@ -1111,6 +1116,7 @@ class _Cursor:
         self._postprocessing = postprocessing
         self._timespan_repr_cls = db.getTimespanRepresentation()
         self._context = db.query(sql, execution_options=dict(yield_per=raw_page_size))
+        self._column_order = column_order
         cursor = self._context.__enter__()
         try:
             self._iterator = cursor.partitions()
@@ -1159,7 +1165,7 @@ class _Cursor:
                 case DimensionRecordResultSpec():
                     return self._convert_dimension_record_results(postprocessed_rows, next_key)
                 case DataCoordinateResultSpec():
-                    return _convert_data_coordinate_results(self._result_spec, postprocessed_rows, next_key)
+                    return self._convert_data_coordinate_results(postprocessed_rows, next_key)
                 case _:
                     raise NotImplementedError("TODO")
         except:  # noqa: E722
@@ -1225,32 +1231,42 @@ class _Cursor:
                 record_set.add(record_cls(**d))
         return DimensionRecordResultPage(spec=result_spec, next_key=next_key, rows=record_set)
 
+    def _convert_data_coordinate_results(
+        self,
+        raw_rows: Iterable[sqlalchemy.Row],
+        next_key: PageKey | None,
+    ) -> DataCoordinateResultPage:
+        """Convert a raw SQL result iterable into a page of `DataCoordinate`
+        query results.
 
-def _convert_data_coordinate_results(
-    spec: DataCoordinateResultSpec,
-    raw_rows: Iterable[sqlalchemy.Row],
-    next_key: PageKey | None,
-) -> DataCoordinateResultPage:
-    """Convert a raw SQL result iterable into a page of `DataCoordinate`
-    query results.
+        Parameters
+        ----------
+        spec : `DataCoordinateResultSpec`
+            Specification for the output values.
+        raw_rows : `~collections.abc.Iterable` [ `sqlalchemy.Row` ]
+            Iterable of SQLAlchemy rows, with `Postprocessing` filters already
+            applied.
+        next_key : `PageKey` or `None`
+            Key for the next page to add into the returned page object.
 
-    Parameters
-    ----------
-    spec : `DataCoordinateResultSpec`
-        Specification for the output values.
-    raw_rows : `~collections.abc.Iterable` [ `sqlalchemy.Row` ]
-        Iterable of SQLAlchemy rows, with `Postprocessing` filters already
-        applied.
-    next_key : `PageKey` or `None`
-        Key for the next page to add into the returned page object.
+        Returns
+        -------
+        result_page : `DataCoordinateResultPage`
+            Page object that holds a `DataCoordinate` container.
+        """
+        spec = self._result_spec
+        assert isinstance(spec, DataCoordinateResultSpec)
 
-    Returns
-    -------
-    result_page : `DataCoordinateResultPage`
-        Page object that holds a `DataCoordinate` container.
-    """
-    rows = [
-        DataCoordinate.standardize(cast(Mapping, row._mapping), dimensions=spec.dimensions)
-        for row in raw_rows
-    ]
-    return DataCoordinateResultPage(spec=spec, rows=rows, next_key=next_key)
+        dimensions = spec.dimensions
+        column_order = self._column_order
+        assert (
+            list(dimensions.data_coordinate_keys) == column_order.dimension_key_names
+        ), "Dimension keys in result row should be in same order as those specified by the result spec"
+
+        rows = [
+            DataCoordinate.from_full_values(
+                dimensions, tuple(column_order.extract_dimension_key_columns(row))
+            )
+            for row in raw_rows
+        ]
+        return DataCoordinateResultPage(spec=spec, rows=rows, next_key=next_key)
