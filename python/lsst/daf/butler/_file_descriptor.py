@@ -56,7 +56,7 @@ class FileDescriptor:
         Additional parameters that can be used for reading and writing.
     """
 
-    __slots__ = ("location", "storageClass", "_readStorageClass", "parameters")
+    __slots__ = ("location", "storageClass", "_readStorageClass", "parameters", "component")
 
     def __init__(
         self,

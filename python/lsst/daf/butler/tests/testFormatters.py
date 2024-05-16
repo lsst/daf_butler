@@ -73,7 +73,7 @@ class FormatterTest(Formatter):
         raise NotImplementedError("Type does not support writing")
 
     @staticmethod
-    def validateWriteRecipes(recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    def validate_write_recipes(recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
         if not recipes:
             return recipes
         for recipeName in recipes:
@@ -102,7 +102,7 @@ class LenientYamlFormatter(YamlFormatter):
     extension = ".yaml"
 
     @classmethod
-    def validateExtension(cls, location: Location) -> None:
+    def validate_extension(cls, location: Location) -> None:
         return
 
 

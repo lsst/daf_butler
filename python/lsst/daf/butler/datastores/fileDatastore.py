@@ -48,6 +48,7 @@ from lsst.daf.butler import (
     FileDataset,
     FileDescriptor,
     Formatter,
+    FormatterV2,
     FormatterFactory,
     Location,
     LocationFactory,
@@ -846,10 +847,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         try:
             formatter = self.formatterFactory.getFormatter(
                 ref,
-                FileDescriptor(location, storageClass=storageClass, component=ref.component),
+                FileDescriptor(location, storageClass=storageClass, component=ref.datasetType.component()),
                 dataId=ref.dataId,
                 ref=ref,
-                cache_manager=self.cacheManager,
             )
         except KeyError as e:
             raise DatasetTypeNotSupportedError(
@@ -1126,7 +1126,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             else:
                 assert isinstance(dataset.formatter, type | str)
                 formatter_class = get_class_of(dataset.formatter)
-                if not issubclass(formatter_class, Formatter):
+                if not issubclass(formatter_class, Formatter | FormatterV2):
                     raise TypeError(f"Requested formatter {dataset.formatter} is not a Formatter class.")
                 dataset.formatter = formatter_class
             dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
@@ -1179,7 +1179,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         self,
         srcUri: ResourcePath,
         ref: DatasetRef,
-        formatter: Formatter | type[Formatter] | None = None,
+        formatter: Formatter | FormatterV2 | type[Formatter | FormatterV2] | None = None,
     ) -> Location:
         """Given a source URI and a DatasetRef, determine the name the
         dataset will have inside datastore.
@@ -1215,7 +1215,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
 
         # Ask the formatter to validate this extension
         if formatter is not None:
-            formatter.validateExtension(location)
+            formatter.validate_extension(location)
 
         return location
 
