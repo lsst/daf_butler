@@ -39,7 +39,7 @@ from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
 
-from .._formatter import Formatter, FormatterParameter
+from .._formatter import Formatter, FormatterParameter, FormatterV2
 from .._location import Location, LocationFactory
 from .._storage_class import StorageClass, StorageClassFactory
 
@@ -187,7 +187,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     Parameters
     ----------
-    formatter : `Formatter` or `str`
+    formatter : `Formatter` or `FormatterV2` or `str`
         The formatter to use for this dataset.
     path : `str`
         Path to the artifact associated with this dataset.
@@ -222,8 +222,8 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         if isinstance(formatter, str):
             # We trust that this string refers to a Formatter
             formatterStr = formatter
-        elif isinstance(formatter, Formatter) or (
-            inspect.isclass(formatter) and issubclass(formatter, Formatter)
+        elif isinstance(formatter, Formatter | FormatterV2) or (
+            inspect.isclass(formatter) and issubclass(formatter, Formatter | FormatterV2)
         ):
             formatterStr = formatter.name()
         else:

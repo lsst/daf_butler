@@ -35,11 +35,13 @@ import unittest
 from lsst.daf.butler import (
     Config,
     DataCoordinate,
+    DatasetRef,
     DatasetType,
     DimensionUniverse,
     FileDescriptor,
     Formatter,
     FormatterFactory,
+    FormatterV2,
     Location,
     StorageClass,
 )
@@ -72,9 +74,9 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         or Formatter class.
         """
         if inspect.isclass(formatter):
-            self.assertTrue(issubclass(formatter, Formatter), f"Is {formatter} a Formatter")
+            self.assertTrue(issubclass(formatter, Formatter | FormatterV2), f"Is {formatter} a Formatter")
         else:
-            self.assertIsInstance(formatter, Formatter)
+            self.assertIsInstance(formatter, Formatter | FormatterV2)
 
     def testFormatter(self):
         """Check basic parameter exceptions"""
@@ -87,13 +89,10 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
             DoNothingFormatter()
 
         with self.assertRaises(ValueError):
-            DoNothingFormatter(self.fileDescriptor, dataId=self.dataId, writeParameters={"param1": 0})
+            DoNothingFormatter(self.fileDescriptor, dataId=self.dataId, write_parameters={"param1": 0})
 
         with self.assertRaises(RuntimeError):
-            DoNothingFormatter(self.fileDescriptor, dataID=self.dataId, writeRecipes={"label": "value"})
-
-        with self.assertRaises(NotImplementedError):
-            f.makeUpdatedLocation(Location("a", "b"))
+            DoNothingFormatter(self.fileDescriptor, dataID=self.dataId, write_recipes={"label": "value"})
 
         with self.assertRaises(NotImplementedError):
             f.write("str")
@@ -160,17 +159,18 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         sc = StorageClass(storageClassName, dict, None)
 
         datasetType = DatasetType("calexp", self.universe.empty, sc)
+        ref = DatasetRef(datasetType, self.dataId, "test")
 
         # Store using an instance
         self.factory.registerFormatter(sc, formatterTypeName)
 
         # Retrieve using the class
-        f = self.factory.getFormatter(sc, self.fileDescriptor, dataId=self.dataId)
+        f = self.factory.getFormatter(sc, self.fileDescriptor, dataId=self.dataId, ref=ref)
         self.assertIsFormatter(f)
-        self.assertEqual(f.fileDescriptor, self.fileDescriptor)
+        self.assertEqual(f.file_descriptor, self.fileDescriptor)
 
         # Retrieve using the DatasetType
-        f2 = self.factory.getFormatter(datasetType, self.fileDescriptor, dataId=self.dataId)
+        f2 = self.factory.getFormatter(datasetType, self.fileDescriptor, dataId=self.dataId, ref=ref)
         self.assertIsFormatter(f2)
         self.assertEqual(f.name(), f2.name())
 
@@ -248,35 +248,39 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
             {"instrument": "DummyNotHSC", **constant_dataId},
         )
         lookup, refParam_fmt, kwargs = self.factory.getFormatterClassWithMatch(refParam)
-        self.assertIn("writeParameters", kwargs)
+        self.assertIn("write_parameters", kwargs)
         expected = {"max": 5, "min": 2, "comment": "Additional commentary", "recipe": "recipe1"}
-        self.assertEqual(kwargs["writeParameters"], expected)
+        self.assertEqual(kwargs["write_parameters"], expected)
         self.assertIn("FormatterTest", refParam_fmt.name())
 
-        f = self.factory.getFormatter(refParam, self.fileDescriptor, dataId=self.dataId)
+        f = self.factory.getFormatter(refParam, self.fileDescriptor, dataId=self.dataId, ref=refParam)
         self.assertEqual(f.writeParameters, expected)
 
         f = self.factory.getFormatter(
-            refParam, self.fileDescriptor, dataId=self.dataId, writeParameters={"min": 22, "extra": 50}
+            refParam, self.fileDescriptor, dataId=self.dataId, write_parameters={"min": 22, "extra": 50}
         )
         self.assertEqual(
-            f.writeParameters,
+            f.write_parameters,
             {"max": 5, "min": 22, "comment": "Additional commentary", "extra": 50, "recipe": "recipe1"},
         )
 
-        self.assertIn("recipe1", f.writeRecipes)
-        self.assertEqual(f.writeParameters["recipe"], "recipe1")
+        self.assertIn("recipe1", f.write_recipes)
+        self.assertEqual(f.write_parameters["recipe"], "recipe1")
 
         with self.assertRaises(ValueError):
             # "new" is not allowed as a write parameter
             self.factory.getFormatter(
-                refParam, self.fileDescriptor, dataId=self.dataId, writeParameters={"new": 1}
+                refParam, self.fileDescriptor, dataId=self.dataId, write_parameters={"new": 1}, ref=refParam
             )
 
         with self.assertRaises(RuntimeError):
             # "mode" is a required recipe parameter
             self.factory.getFormatter(
-                refParam, self.fileDescriptor, dataId=self.dataId, writeRecipes={"recipe3": {"notmode": 1}}
+                refParam,
+                self.fileDescriptor,
+                dataId=self.dataId,
+                write_recipes={"recipe3": {"notmode": 1}},
+                ref=refParam,
             )
 
 

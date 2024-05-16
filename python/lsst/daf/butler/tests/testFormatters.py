@@ -112,11 +112,7 @@ class MetricsExampleFormatter(Formatter):
     """
 
     supportedExtensions = frozenset({".yaml", ".json"})
-
-    @property
-    def extension(self) -> str:
-        """Always write yaml by default."""
-        return ".yaml"
+    extension = ".yaml"
 
     def read(self, component: str | None = None) -> Any:
         """Read data from a file.

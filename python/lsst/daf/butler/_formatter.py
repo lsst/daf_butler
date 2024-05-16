@@ -43,15 +43,15 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
 
+from lsst.resources import ResourcePath
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.timer import time_this
-from lsst.resources import ResourcePath
 
 from ._config import Config
 from ._config_support import LookupKey, processLookupConfigs
 from ._file_descriptor import FileDescriptor
 from ._location import Location
-from .dimensions import DimensionUniverse
+from .dimensions import DataCoordinate, DimensionUniverse
 from .mapping_factory import MappingFactory
 
 log = logging.getLogger(__name__)
@@ -60,7 +60,6 @@ if TYPE_CHECKING:
     from ._dataset_ref import DatasetRef
     from ._dataset_type import DatasetType
     from ._storage_class import StorageClass
-    from .dimensions import DataCoordinate
     from .datastore.cache_manager import AbstractDatastoreCacheManager
 
     # Define a new special type for functions that take "entity"
@@ -80,24 +79,27 @@ class FormatterV2(metaclass=ABCMeta):
 
     Parameters
     ----------
-    fileDescriptor : `FileDescriptor`, optional
+    file_descriptor : `FileDescriptor`, optional
         Identifies the file to read or write, and the associated storage
         classes and parameter information.  Its value can be `None` if the
         caller will never call `Formatter.read` or `Formatter.write`.
-    ref: `DatasetRef`
+    ref : `DatasetRef`
         The dataset associated with this formatter. Should not be a component
         dataset ref.
-    writeParameters : `dict`, optional
+    write_parameters : `dict`, optional
         Any parameters to be hard-coded into this instance to control how
         the dataset is serialized.
-    writeRecipes : `dict`, optional
+    write_recipes : `dict`, optional
         Detailed write Recipes indexed by recipe name.
-
-    Notes
-    -----
-    All Formatter subclasses should share the base class's constructor
-    signature.
+    **kwargs
+        Additional arguments that will be ignored but allow for
+        `Formatter` V1 parameters to be given.
     """
+
+    allow_remote_file_read: bool = False
+    """If `True` default implementation will call user-provided
+    `read_from_cached_uri` method first before falling back to attempting
+    a local file read."""
 
     unsupported_parameters: ClassVar[Set[str] | None] = frozenset()
     """Set of read parameters not understood by this `Formatter`. An empty set
@@ -110,14 +112,21 @@ class FormatterV2(metaclass=ABCMeta):
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
 
+    default_extension: str | None = None
+    """Default extension to use when writing a file.
+
+    Can be `None` if the extension is determined dynamically. Use the
+    `get_write_extension` property to get the actual extension to use.
+    """
+
     supported_extensions: ClassVar[Set[str]] = frozenset()
     """Set of all extensions supported by this formatter.
 
-    Only expected to be populated by Formatters that write files. Any extension
-    assigned to the ``extension`` property will be automatically included in
-    the list of supported extensions."""
+    Any extension assigned to the ``default_extension`` property will be
+    automatically included in the list of supported extensions.
+    """
 
-    nbytes_read_threshold: int = 0
+    nbytes_read_threshold: int = 10_000_000
     """Size of a file below which an attempt will be made to read the file
     directly into memory for parsing. Set to 0 if bytes can not be parsed
     directly by this formatter."""
@@ -130,7 +139,7 @@ class FormatterV2(metaclass=ABCMeta):
         write_parameters: Mapping[str, Any] | None = None,
         write_recipes: Mapping[str, Any] | None = None,
         # Compatibility parameters. Unused in v2.
-        **kwargs : Any,
+        **kwargs: Any,
     ):
         if not isinstance(file_descriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
@@ -196,6 +205,12 @@ class FormatterV2(metaclass=ABCMeta):
         if self._write_recipes is not None:
             return self._write_recipes
         return {}
+
+    def get_write_extension(self) -> str:
+        """Extension to use when writing a file."""
+        default_extension = self.default_extension
+        extension = default_extension if default_extension is not None else ""
+        return extension
 
     @classmethod
     def validate_write_recipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
@@ -284,7 +299,7 @@ class FormatterV2(metaclass=ABCMeta):
             If known the expected size of the resource to read. This can be
             used for verification or to decide whether to do a direct read or a
             file download. ``-1`` indicates the file size is not known.
-        cache_manager: `AbstractDatastoreCacheManager`
+        cache_manager : `AbstractDatastoreCacheManager`
             A cache manager to use to allow a formatter to cache a remote file
             locally or read a cached file that is already local.
 
@@ -322,6 +337,12 @@ class FormatterV2(metaclass=ABCMeta):
           specified component. The caching needs the component from which
           it's derived.
         """
+        if self.allow_remote_file_read:
+            # In case someone set the flag incorrectly, if this is not
+            # implemented fall back to the other methods.
+            with contextlib.suppress(NotImplementedError):
+                return self.read_from_cached_uri(component, expected_size, cache_manager=cache_manager)
+
         # Should we check the size with file_uri.size() if expected size is -1?
         # Do we give a choice here at all and allow a formatter to say one
         # or the other? Should the cache be checked (if a put is followed
@@ -353,9 +374,9 @@ class FormatterV2(metaclass=ABCMeta):
             If known the expected size of the resource to read. This can be
             used for verification or to decide whether to do a direct read or a
             file download. ``-1`` indicates the file size is not known.
-        cache_manager: `AbstractDatastoreCacheManager`
-            A cache manager to use to allow a formatter to cache a remote file
-            locally or read a cached file that is already local.
+        cache_manager : `AbstractDatastoreCacheManager`
+            A cache manager to use to allow a formatter to check if there is
+            a copy of the file in the local cache.
 
         Returns
         -------
@@ -404,6 +425,86 @@ class FormatterV2(metaclass=ABCMeta):
 
             return self.read_from_bytes(serialized_dataset, component=component)
 
+    def read_from_cached_uri(
+        self,
+        component: str | None = None,
+        expected_size: int = -1,
+        *,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> Any:
+        """Read from arbitrary URI, checking for possible presence in local
+         cache.
+
+        Parameters
+        ----------
+        component : `str`, optional
+            Component to read from the file. Only used if the `StorageClass`
+            for reading differed from the `StorageClass` used to write the
+            file.
+        expected_size : `int`, optional
+            If known the expected size of the resource to read. This can be
+            ``-1`` indicates the file size is not known.
+        cache_manager : `AbstractDatastoreCacheManager`
+            A cache manager to use to allow a formatter to check if there is
+            a copy of the file in the local cache.
+
+        Returns
+        -------
+        in_memory_dataset : `object`
+            The requested Dataset.
+
+        Notes
+        -----
+        Calls `read_from_file` but will first check the datastore cache
+        in case the file is present and reads that in preference. This
+        method will not cache a remote dataset and will only do a size
+        check for local files.
+        """
+        if cache_manager is None:
+            # Circular import avoidance.
+            from .datastore.cache_manager import DatastoreDisabledCacheManager
+
+            cache_manager = DatastoreDisabledCacheManager(None, None)
+
+        uri = self.file_descriptor.location.uri
+        cache_ref = self._get_cache_ref()
+
+        # Have to update the Location associated with the formatter
+        # because formatter.read does not allow an override.
+        # This could be improved.
+        msg = ""
+
+        # The component for log messages is either the component requested
+        # explicitly or the component from the file descriptor.
+        log_component = component if component is not None else self.file_descriptor.component
+
+        with cache_manager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
+            if cached_file is not None:
+                desired_uri = cached_file
+                msg = f" (cached version of {uri})"
+            else:
+                desired_uri = uri
+                msg = ""
+
+            if desired_uri.isLocal:
+                # Do not spend the time doing a slow size() call to a remote
+                # resource.
+                self._check_resource_size(desired_uri, expected_size, desired_uri.size())
+
+            with time_this(
+                log,
+                msg="Reading%s from location %s %s with formatter %s",
+                args=(
+                    f" component {log_component}" if log_component else "",
+                    uri,
+                    msg,
+                    self.name(),
+                ),
+            ):
+                result = self.read_cached_file(desired_uri, component=component)
+
+        return result
+
     def read_from_cached_local_file(
         self,
         component: str | None = None,
@@ -424,7 +525,7 @@ class FormatterV2(metaclass=ABCMeta):
             If known the expected size of the resource to read. This can be
             used for verification or to decide whether to do a direct read or a
             file download. ``-1`` indicates the file size is not known.
-        cache_manager: `AbstractDatastoreCacheManager`
+        cache_manager : `AbstractDatastoreCacheManager`
             A cache manager to use to allow a formatter to cache a remote file
             locally or read a cached file that is already local.
 
@@ -511,24 +612,251 @@ class FormatterV2(metaclass=ABCMeta):
 
         return result
 
+    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+        """Read a dataset from a, possibly cached, URI.
+
+        Parameters
+        ----------
+        uri : `lsst.resources.ResourcePath`
+            URI to use to read the dataset. This URI can be local or remote
+            and can refer to the actual resource or to a locally cached file.
+        component : `str` or `None`, optional
+            The component to be read from the dataset.
+
+        Returns
+        -------
+        in_memory_dataset : `typing.Any`
+            The Python object read from the resource.
+
+        Notes
+        -----
+        This method is only called if the class property
+        ``allow_remote_file_read`` is set to `True`.
+        """
+        raise NotImplementedError("This formatter does not know how to read a file.")
+
     def read_local_file(self, local_uri: ResourcePath, component: str | None = None) -> Any:
-        """Read a dataset from a local file system."""
+        """Read a dataset from a local file system.
+
+        Parameters
+        ----------
+        local_uri : `lsst.resources.ResourcePath`
+            URI to use to read the dataset. This URI is guaranteed to be
+            a local file.
+        component : `str` or `None`, optional
+            The component to be read from the dataset.
+
+        Returns
+        -------
+        in_memory_dataset : `typing.Any`
+            The Python object read from the resource.
+
+        Notes
+        -----
+        This method will only be called if `read_cached_file` was not called
+        or if `read_from_bytes` was called successfully.
+        """
         raise NotImplementedError("This formatter does not know how to read a local file.")
 
     def read_from_bytes(self, serialized_bytes: bytes, component: str | None = None) -> Any:
-        """Read a dataset from a byte stream."""
+        """Read a dataset from a byte stream.
+
+        Parameters
+        ----------
+        serialized_bytes : `bytes`
+            Contents of the serialized file.
+        component : `str` or `None`, optional
+            The component to be read from the dataset.
+
+        Returns
+        -------
+        in_memory_dataset : `typing.Any`
+            The Python object read from the resource.
+
+        Notes
+        -----
+        This method will only be called if `read_cached_file` was not called.
+        Additionally, in the default implementation of the `read` method,
+        this method will only be called if the expected size of the resource
+        is known and it is less than the class property
+        ``nbytes_read_threshold``.
+        """
         raise NotImplementedError("This formatter does not know how to convert bytes to a Python type.")
 
-    @abstractmethod
-    def write(self, in_memory_dataset: Any) -> None:
+    def write(
+        self,
+        in_memory_dataset: Any,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> None:
         """Write a Dataset.
 
         Parameters
         ----------
         in_memory_dataset : `object`
             The Dataset to serialize.
+        cache_manager : `AbstractDatastoreCacheManager`
+            A cache manager to use to allow a formatter to cache the written
+            file.
         """
-        raise NotImplementedError("Type does not support writing")
+        # Ensure we are using the correct file extension.
+        uri = self.file_descriptor.location.uri.updatedExtension(self.get_write_extension())
+
+        written = self.write_direct(in_memory_dataset, uri, cache_manager)
+        if not written:
+            self.write_locally_then_move(in_memory_dataset, uri, cache_manager)
+
+    def write_direct(
+        self,
+        in_memory_dataset: Any,
+        uri: ResourcePath,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> bool:
+        """Serialize and write directly to final location.
+
+        Parameters
+        ----------
+        in_memory_dataset : `object`
+            The Dataset to serialize.
+        uri : `lsst.resources.ResourcePath`
+            URI to use when writing the serialized dataset.
+        cache_manager : `AbstractDatastoreCacheManager`
+            A cache manager to use to allow a formatter to cache the written
+            file.
+
+        Returns
+        -------
+        written : `bool`
+            Flag to indicate whether the direct write did happen.
+
+        Notes
+        -----
+        If the dataset should be cached or is local the file will not be
+        written. Local URIs should be written to temporary file name and then
+        renamed to allow atomic writes. That path is handled by
+        `write_locally_then_move`.
+        """
+        if cache_manager is None:
+            # Circular import avoidance.
+            from .datastore.cache_manager import DatastoreDisabledCacheManager
+
+            cache_manager = DatastoreDisabledCacheManager(None, None)
+
+        # For remote URIs some datasets can be serialized directly
+        # to bytes and sent to the remote datastore without writing a
+        # file. If the dataset is intended to be saved to the cache
+        # a file is always written and direct write to the remote
+        # datastore is bypassed.
+        data_written = False
+        if not uri.isLocal and not cache_manager.should_be_cached(self._get_cache_ref()):
+            # Remote URI that is not cached so can write directly.
+            try:
+                serialized_dataset = self.to_bytes(in_memory_dataset)
+            except NotImplementedError:
+                # Fallback to the file writing option.
+                pass
+            except Exception as e:
+                e.add_note(
+                    f"Failed to serialize dataset {self.dataset_ref} of "
+                    f"type {get_full_type_name(in_memory_dataset)} to bytes."
+                )
+                raise
+            else:
+                log.debug("Writing bytes directly to %s", uri)
+                uri.write(serialized_dataset, overwrite=True)
+                log.debug("Successfully wrote bytes directly to %s", uri)
+                data_written = True
+        return data_written
+
+    def write_locally_then_move(
+        self,
+        in_memory_dataset: Any,
+        uri: ResourcePath,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> None:
+        """Write file to file system and then move to final location.
+
+        Parameters
+        ----------
+        in_memory_dataset : `object`
+            The Dataset to serialize.
+        uri : `lsst.resources.ResourcePath`
+            URI to use when writing the serialized dataset.
+        cache_manager : `AbstractDatastoreCacheManager`
+            A cache manager to use to allow a formatter to cache the written
+            file.
+        """
+        if cache_manager is None:
+            # Circular import avoidance.
+            from .datastore.cache_manager import DatastoreDisabledCacheManager
+
+            cache_manager = DatastoreDisabledCacheManager(None, None)
+
+        # Always write to a temporary even if
+        # using a local file system -- that gives us atomic writes.
+        # If a process is killed as the file is being written we do not
+        # want it to remain in the correct place but in corrupt state.
+        # For local files write to the output directory not temporary dir.
+        prefix = uri.dirname() if uri.isLocal else None
+        with ResourcePath.temporary_uri(suffix=uri.getExtension(), prefix=prefix) as temporary_uri:
+            # Need to configure the formatter to write to a different
+            # location and that needs us to overwrite internals
+            log.debug("Writing dataset to temporary location at %s", temporary_uri)
+            try:
+                self.write_local_file(in_memory_dataset, temporary_uri)
+            except Exception as e:
+                e.add_note(
+                    f"Failed to serialize dataset {self.dataset_ref} of type"
+                    f" {type(in_memory_dataset)} to "
+                    f"temporary location {temporary_uri}"
+                )
+                raise
+
+            # Use move for a local file since that becomes an efficient
+            # os.rename. For remote resources we use copy to allow the
+            # file to be cached afterwards.
+            transfer = "move" if uri.isLocal else "copy"
+
+            uri.transfer_from(temporary_uri, transfer=transfer, overwrite=True)
+
+            if transfer == "copy":
+                # Cache if required
+                cache_manager.move_to_cache(temporary_uri, self._get_cache_ref())
+
+        log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
+
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        """Serialize the in-memory dataset to a local file.
+
+        Parameters
+        ----------
+        in_memory_dataset : `object`
+            The Python object to serialize.
+        uri : `ResourcePath`
+            The URI to use when writing the file.
+
+        Notes
+        -----
+        By default this method will attempt to call `to_bytes` and then
+        write these bytes to the file.
+        """
+        uri.write(self.to_bytes(in_memory_dataset))
+
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
+        """Serialize the in-memory dataset to bytes.
+
+        Parameters
+        ----------
+        in_memory_dataset : `object`
+            The Python object to serialize.
+
+        Returns
+        -------
+        serialized_dataset : `bytes`
+            Bytes representing the serialized dataset.
+        """
+        raise NotImplementedError(
+            f"This formatter can not convert {get_full_type_name(in_memory_dataset)} directly to bytes."
+        )
 
     def make_updated_location(self, location: Location) -> Location:
         """Return a new `Location` updated with this formatter's extension.
@@ -548,23 +876,10 @@ class FormatterV2(metaclass=ABCMeta):
         NotImplementedError
             Raised if there is no ``extension`` attribute associated with
             this formatter.
-
-        Notes
-        -----
-        This method is available to all Formatters but might not be
-        implemented by all formatters. It requires that a formatter set
-        an ``extension`` attribute containing the file extension used when
-        writing files.  If ``extension`` is `None` the supplied file will
-        not be updated. Not all formatters write files so this is not
-        defined in the base class.
         """
         location = location.clone()
-        try:
-            # We are deliberately allowing extension to be undefined by
-            # default in the base class and mypy complains.
-            location.updateExtension(self.extension)  # type:ignore
-        except AttributeError:
-            raise NotImplementedError("No file extension registered with this formatter") from None
+        # If the extension is "" the extension will be removed.
+        location.updateExtension(self.get_write_extension())
         return location
 
     @classmethod
@@ -578,28 +893,11 @@ class FormatterV2(metaclass=ABCMeta):
 
         Raises
         ------
-        NotImplementedError
-            Raised if file extensions are a concept not understood by this
-            formatter.
         ValueError
             Raised if the formatter does not understand this extension.
-
-        Notes
-        -----
-        This method is available to all Formatters but might not be
-        implemented by all formatters. It requires that a formatter set
-        an ``extension`` attribute containing the file extension used when
-        writing files.  If ``extension`` is `None` only the set of supported
-        extensions will be examined.
         """
         supported = set(cls.supported_extensions)
-
-        try:
-            # We are deliberately allowing extension to be undefined by
-            # default in the base class and mypy complains.
-            default = cls.extension  # type: ignore
-        except AttributeError:
-            raise NotImplementedError("No file extension registered with this formatter") from None
+        default = cls.default_extension  # type: ignore
 
         # If extension is implemented as an instance property it won't return
         # a string when called as a class property. Assume that
@@ -701,12 +999,21 @@ class Formatter(metaclass=ABCMeta):
         the dataset is serialized.
     writeRecipes : `dict`, optional
         Detailed write Recipes indexed by recipe name.
+    **kwargs
+        Additional parameters that can allow parameters
+        from `FormatterV2` to be provided.
 
     Notes
     -----
     All Formatter subclasses should share the base class's constructor
     signature.
     """
+
+    # Now assuming that Formatter v1 can only refer to files so can add
+    # this property for compatibility with v2.
+    extension: str | None = None
+    """Default file extension to use for writing files. None means that no
+    modifications will be made to the supplied file extension. (`str`)"""
 
     unsupportedParameters: ClassVar[Set[str] | None] = frozenset()
     """Set of read parameters not understood by this `Formatter`. An empty set
@@ -738,10 +1045,19 @@ class Formatter(metaclass=ABCMeta):
     ):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
+        self._fileDescriptor = fileDescriptor
+
         if dataId is None:
             raise RuntimeError("dataId is now required for formatter initialization")
-        self._fileDescriptor = fileDescriptor
+        if not isinstance(dataId, DataCoordinate):
+            raise TypeError(f"DataId is required to be a DataCoordinate but got {type(dataId)}.")
         self._dataId = dataId
+
+        # V2 compatibility.
+        if writeParameters is None:
+            writeParameters = kwargs.get("write_parameters")
+        if writeRecipes is None:
+            writeRecipes = kwargs.get("write_recipes")
 
         # Check that the write parameters are allowed
         if writeParameters:
@@ -794,7 +1110,7 @@ class Formatter(metaclass=ABCMeta):
         return {}
 
     @classmethod
-    def validate_write_recipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    def validateWriteRecipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
         """Validate supplied recipes for this formatter.
 
         The recipes are supplemented with default values where appropriate.
@@ -818,6 +1134,10 @@ class Formatter(metaclass=ABCMeta):
         if recipes:
             raise RuntimeError(f"This formatter does not understand these writeRecipes: {recipes}")
         return recipes
+
+    @classmethod
+    def validate_write_recipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+        return cls.validateWriteRecipes(recipes)
 
     @classmethod
     def name(cls) -> str:
@@ -1054,7 +1374,7 @@ class Formatter(metaclass=ABCMeta):
             Path within datastore that would be associated with the location
             stored in this `Formatter`.
         """
-        updated = self.makeUpdatedLocation(self.fileDescriptor.location)
+        updated = self.make_updated_location(self.fileDescriptor.location)
         return updated.pathInStore.path
 
     def segregate_parameters(self, parameters: dict[str, Any] | None = None) -> tuple[dict, dict]:
@@ -1102,7 +1422,6 @@ class Formatter(metaclass=ABCMeta):
         return supported, unsupported
 
     # Support classic V1 interface.
-    validateWriteRecipes = validate_write_recipes
     makeUpdatedLocation = make_updated_location
     validateExtension = validate_extension
     segregateParameters = segregate_parameters
@@ -1184,7 +1503,7 @@ class FormatterFactory:
 
         - formatter: The python type to be used as the formatter class.
         - parameters: A further dict to be passed directly to the
-            ``writeParameters`` Formatter constructor to seed it.
+            ``write_parameters`` Formatter constructor to seed it.
             These parameters are validated at instance creation and not at
             configuration.
 
@@ -1235,7 +1554,7 @@ class FormatterFactory:
         ``recipe`` write parameter that will refer to a recipe name in
         the ``write_recipes`` component.  The `Formatter` will be constructed
         in the `FormatterFactory` with all the relevant recipes and
-        will not attempt to filter by looking at ``writeParameters`` in
+        will not attempt to filter by looking at ``write_parameters`` in
         advance.  See the specific formatter documentation for details on
         acceptable recipe options.
         """
@@ -1289,10 +1608,10 @@ class FormatterFactory:
 
             kwargs: dict[str, Any] = {}
             if writeParameters:
-                kwargs["writeParameters"] = writeParameters
+                kwargs["write_parameters"] = writeParameters
 
             if formatter in writeRecipes:
-                kwargs["writeRecipes"] = writeRecipes[formatter]
+                kwargs["write_recipes"] = writeRecipes[formatter]
 
             self.registerFormatter(key, formatter, **kwargs)
 
@@ -1306,7 +1625,9 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterClassWithMatch(self, entity: Entity) -> tuple[LookupKey, type[Formatter], dict[str, Any]]:
+    def getFormatterClassWithMatch(
+        self, entity: Entity
+    ) -> tuple[LookupKey, type[Formatter | FormatterV2], dict[str, Any]]:
         """Get the matching formatter class along with the registry key.
 
         Parameters
@@ -1358,7 +1679,9 @@ class FormatterFactory:
         _, formatter, _ = self.getFormatterClassWithMatch(entity)
         return formatter
 
-    def getFormatterWithMatch(self, entity: Entity, *args: Any, **kwargs: Any) -> tuple[LookupKey, Formatter]:
+    def getFormatterWithMatch(
+        self, entity: Entity, *args: Any, **kwargs: Any
+    ) -> tuple[LookupKey, Formatter | FormatterV2]:
         """Get a new formatter instance along with the matching registry key.
 
         Parameters
@@ -1392,7 +1715,7 @@ class FormatterFactory:
 
         return matchKey, formatter
 
-    def getFormatter(self, entity: Entity, *args: Any, **kwargs: Any) -> Formatter:
+    def getFormatter(self, entity: Entity, *args: Any, **kwargs: Any) -> Formatter | FormatterV2:
         """Get a new formatter instance.
 
         Parameters
@@ -1455,6 +1778,26 @@ class FormatterV1inV2(FormatterV2):
     """An implementation of a V2 formatter that provides a compatibility
     interface for V1 formatters.
 
+    Parameters
+    ----------
+    file_descriptor : `FileDescriptor`, optional
+        Identifies the file to read or write, and the associated storage
+        classes and parameter information.  Its value can be `None` if the
+        caller will never call `Formatter.read` or `Formatter.write`.
+    ref : `DatasetRef`
+        The dataset associated with this formatter. Should not be a component
+        dataset ref.
+    formatter : `Formatter`
+        A version 1 `Formatter` instance. The V2 formatter layer forwards calls
+        to this formatter.
+    write_parameters : `dict`, optional
+        Any parameters to be hard-coded into this instance to control how
+        the dataset is serialized.
+    write_recipes : `dict`, optional
+        Detailed write Recipes indexed by recipe name.
+    **kwargs
+        Additional arguments that will be ignored but allow for
+        `Formatter` V1 parameters to be given.
     """
 
     def __init__(
@@ -1468,37 +1811,50 @@ class FormatterV1inV2(FormatterV2):
         # Compatibility parameters. Unused in v2.
         **kwargs: Any,
     ):
+        if not isinstance(formatter, Formatter):
+            raise TypeError(f"Formatter parameter was not a V1 formatter (was {type(formatter)})")
+
+        # Replace the class property with instance values from this
+        # V1 formatter so that the V2 __init__ will be able to validate.
+        self.supported_write_parameters = formatter.supportedWriteParameters  # type: ignore
+        self._formatter = formatter
+
         super().__init__(
             file_descriptor, ref=ref, write_parameters=write_parameters, write_recipes=write_recipes
         )
-        if not isinstance(formatter, Formatter):
-            raise TypeError(f"Formatter parameter was not a V1 formatter (was {type(formatter)})")
-        self._formatter = formatter
+
+    def get_write_extension(self) -> str:
+        ext = self._formatter.extension
+        return ext if ext is not None else ""
+
+    def segregate_parameters(self, parameters: dict[str, Any] | None = None) -> tuple[dict, dict]:
+        return self._formatter.segregate_parameters(parameters)
+
+    def validate_write_recipes(  # type: ignore
+        self,
+        recipes: Mapping[str, Any] | None,
+    ) -> Mapping[str, Any] | None:
+        # This should be a class method but a class method can not work
+        # for a dynamic shim. Luckily the shim is only used as an instance.
+        return self._formatter.validate_write_recipes(recipes)
 
     def read_local_file(self, local_uri: ResourcePath, component: str | None = None) -> Any:
         # Need to temporarily override the location since the V1 formatter
         # will not know anything about this local file.
         location = Location(*local_uri.split())
-        print("In read local file", get_full_type_name(self._formatter), self.file_descriptor)
         with self._formatter._updateLocation(location):
             result = self._formatter.read(component=component)
-        print("Got result: ", get_full_type_name(result))
         return result
 
     def read_from_bytes(self, serialized_bytes: bytes, component: str | None = None) -> Any:
-        print("In read from bytes: ", component)
         return self._formatter.fromBytes(serialized_bytes, component=component)
 
-    def write(self, in_memory_dataset: Any) -> None:
-        """Write a Dataset.
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
+        return self._formatter.toBytes(in_memory_dataset)
 
-        Parameters
-        ----------
-        in_memory_dataset : `object`
-            The Dataset to store.
-        """
-        print("***************** Writing V1 -> V2")
-        self._formatter.write(in_memory_dataset)
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        with self._formatter._updateLocation(Location(None, uri)):
+            self._formatter.write(in_memory_dataset)
 
 
 # Type to use when allowing a Formatter or its class name

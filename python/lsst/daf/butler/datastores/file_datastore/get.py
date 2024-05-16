@@ -39,10 +39,10 @@ from typing import Any, TypeAlias
 from lsst.daf.butler import (
     DatasetRef,
     FileDescriptor,
+    FileIntegrityError,
     Formatter,
     FormatterV1inV2,
     FormatterV2,
-    FileIntegrityError,
     Location,
     StorageClass,
 )
@@ -142,7 +142,7 @@ def generate_datastore_get_information(
             ref=ref,
         )
 
-        formatterParams, notFormatterParams = formatter.segregateParameters()
+        formatterParams, notFormatterParams = formatter.segregate_parameters()
 
         # Of the remaining parameters, extract the ones supported by
         # this StorageClass (for components not all will be handled)

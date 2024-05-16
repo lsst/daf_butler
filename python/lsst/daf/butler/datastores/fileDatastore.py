@@ -48,8 +48,9 @@ from lsst.daf.butler import (
     FileDataset,
     FileDescriptor,
     Formatter,
-    FormatterV2,
     FormatterFactory,
+    FormatterV1inV2,
+    FormatterV2,
     Location,
     LocationFactory,
     Progress,
@@ -95,11 +96,12 @@ from lsst.daf.butler.registry.interfaces import (
 from lsst.daf.butler.repo_relocation import replaceRoot
 from lsst.daf.butler.utils import transactional
 from lsst.resources import ResourcePath, ResourcePathExpression
-from lsst.utils.introspection import get_class_of
+from lsst.utils.introspection import get_class_of, get_full_type_name
 from lsst.utils.iteration import chunk_iterable
 
 # For VERBOSE logging usage.
 from lsst.utils.logging import VERBOSE, getLogger
+from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
 
 if TYPE_CHECKING:
@@ -702,7 +704,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # See if the ref is a composite that should be disassembled
         doDisassembly = self.composites.shouldBeDisassembled(ref)
 
-        all_info: list[tuple[Location, Formatter, StorageClass, str | None]] = []
+        all_info: list[tuple[Location, Formatter | FormatterV2, StorageClass, str | None]] = []
 
         if doDisassembly:
             for component, componentStorage in ref.datasetType.storageClass.components.items():
@@ -787,7 +789,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             parameters=parameters,
         )
 
-    def _prepare_for_put(self, inMemoryDataset: Any, ref: DatasetRef) -> tuple[Location, Formatter]:
+    def _prepare_for_put(
+        self, inMemoryDataset: Any, ref: DatasetRef
+    ) -> tuple[Location, Formatter | FormatterV2]:
         """Check the arguments for ``put`` and obtain formatter and
         location.
 
@@ -815,7 +819,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         self._validate_put_parameters(inMemoryDataset, ref)
         return self._determine_put_formatter_location(ref)
 
-    def _determine_put_formatter_location(self, ref: DatasetRef) -> tuple[Location, Formatter]:
+    def _determine_put_formatter_location(self, ref: DatasetRef) -> tuple[Location, Formatter | FormatterV2]:
         """Calculate the formatter and output location to use for put.
 
         Parameters
@@ -857,7 +861,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             ) from e
 
         # Now that we know the formatter, update the location
-        location = formatter.makeUpdatedLocation(location)
+        location = formatter.make_updated_location(location)
 
         return location, formatter
 
@@ -980,7 +984,7 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         path: ResourcePathExpression,
         ref: DatasetRef,
         *,
-        formatter: Formatter | type[Formatter],
+        formatter: Formatter | FormatterV2 | type[Formatter | FormatterV2],
         transfer: str | None = None,
         record_validation_info: bool = True,
     ) -> StoredFileInfo:
@@ -1264,64 +1268,29 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # something fails below
         self._transaction.registerUndo("artifactWrite", _removeFileExists, uri)
 
-        data_written = False
+        # Need to record the specified formatter but if this is a V1 formatter
+        # we need to convert it to a V2 compatible shim to do the write.
+        if not isinstance(formatter, Formatter):
+            formatter_compat = formatter
+        else:
+            formatter_compat = FormatterV1inV2(
+                formatter.file_descriptor,
+                ref=ref,
+                formatter=formatter,
+                write_parameters=formatter.write_parameters,
+                write_recipes=formatter.write_recipes,
+            )
 
-        # For remote URIs some datasets can be serialized directly
-        # to bytes and sent to the remote datastore without writing a
-        # file. If the dataset is intended to be saved to the cache
-        # a file is always written and direct write to the remote
-        # datastore is bypassed.
-        if not uri.isLocal and not self.cacheManager.should_be_cached(ref):
-            # Remote URI that is not cached so can write directly.
+        assert isinstance(formatter_compat, FormatterV2)
+
+        with time_this(log, msg="Writing dataset %s with formatter %s", args=(ref, formatter.name())):
             try:
-                serializedDataset = formatter.toBytes(inMemoryDataset)
-            except NotImplementedError:
-                # Fallback to the file writing option.
-                pass
+                formatter_compat.write(inMemoryDataset, cache_manager=self.cacheManager)
             except Exception as e:
                 raise RuntimeError(
-                    f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to bytes."
+                    f"Failed to serialize dataset {ref} of type {get_full_type_name(inMemoryDataset)} "
+                    f"using formatter {formatter.name()}."
                 ) from e
-            else:
-                log.debug("Writing bytes directly to %s", uri)
-                uri.write(serializedDataset, overwrite=True)
-                log.debug("Successfully wrote bytes directly to %s", uri)
-                data_written = True
-
-        if not data_written:
-            # Did not write the bytes directly to object store so instead
-            # write to temporary file. Always write to a temporary even if
-            # using a local file system -- that gives us atomic writes.
-            # If a process is killed as the file is being written we do not
-            # want it to remain in the correct place but in corrupt state.
-            # For local files write to the output directory not temporary dir.
-            prefix = uri.dirname() if uri.isLocal else None
-            with ResourcePath.temporary_uri(suffix=uri.getExtension(), prefix=prefix) as temporary_uri:
-                # Need to configure the formatter to write to a different
-                # location and that needs us to overwrite internals
-                log.debug("Writing dataset to temporary location at %s", temporary_uri)
-                with formatter._updateLocation(Location(None, temporary_uri)):
-                    try:
-                        formatter.write(inMemoryDataset)
-                    except Exception as e:
-                        raise RuntimeError(
-                            f"Failed to serialize dataset {ref} of type"
-                            f" {type(inMemoryDataset)} to "
-                            f"temporary location {temporary_uri}"
-                        ) from e
-
-                # Use move for a local file since that becomes an efficient
-                # os.rename. For remote resources we use copy to allow the
-                # file to be cached afterwards.
-                transfer = "move" if uri.isLocal else "copy"
-
-                uri.transfer_from(temporary_uri, transfer=transfer, overwrite=True)
-
-                if transfer == "copy":
-                    # Cache if required
-                    self.cacheManager.move_to_cache(temporary_uri, ref)
-
-            log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
 
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(uri, ref, formatter=formatter)

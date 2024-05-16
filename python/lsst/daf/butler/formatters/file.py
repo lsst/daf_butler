@@ -44,10 +44,6 @@ if TYPE_CHECKING:
 class FileFormatter(Formatter):
     """Interface for reading and writing files on a POSIX file system."""
 
-    extension: str | None = None
-    """Default file extension to use for writing files. None means that no
-    modifications will be made to the supplied file extension. (`str`)"""
-
     @abstractmethod
     def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         """Read a file from the path in the correct format.
