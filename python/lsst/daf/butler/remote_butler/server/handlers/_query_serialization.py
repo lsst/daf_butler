@@ -29,8 +29,19 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from ....queries.driver import DataCoordinateResultPage, DimensionRecordResultPage, ResultPage, ResultSpec
-from ...server_models import DataCoordinateResultModel, DimensionRecordsResultModel, QueryExecuteResultData
+from ....queries.driver import (
+    DataCoordinateResultPage,
+    DatasetRefResultPage,
+    DimensionRecordResultPage,
+    ResultPage,
+    ResultSpec,
+)
+from ...server_models import (
+    DataCoordinateResultModel,
+    DatasetRefResultModel,
+    DimensionRecordsResultModel,
+    QueryExecuteResultData,
+)
 
 
 def convert_query_pages(spec: ResultSpec, pages: Iterator[ResultPage]) -> QueryExecuteResultData:
@@ -49,6 +60,8 @@ def convert_query_pages(spec: ResultSpec, pages: Iterator[ResultPage]) -> QueryE
             return _convert_dimension_record_pages(pages)
         case "data_coordinate":
             return _convert_data_coordinate_pages(pages)
+        case "dataset_ref":
+            return _convert_dataset_ref_pages(pages)
         case _:
             raise NotImplementedError(f"Unhandled query result type {spec.result_type}")
 
@@ -66,4 +79,12 @@ def _convert_data_coordinate_pages(pages: Iterator[ResultPage]) -> DataCoordinat
     for page in pages:
         assert isinstance(page, DataCoordinateResultPage)
         response.rows.extend(coordinate.to_simple() for coordinate in page.rows)
+    return response
+
+
+def _convert_dataset_ref_pages(pages: Iterator[ResultPage]) -> DatasetRefResultModel:
+    response = DatasetRefResultModel(rows=[])
+    for page in pages:
+        assert isinstance(page, DatasetRefResultPage)
+        response.rows.extend(ref.to_simple() for ref in page.rows)
     return response

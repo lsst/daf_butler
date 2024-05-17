@@ -59,10 +59,6 @@ class RemoteButlerQueryTests(ButlerQueryTests, unittest.TestCase):
 
         return butler
 
-    @unittest.expectedFailure
-    def test_simple_dataset_query(self) -> None:
-        return super().test_simple_dataset_query()
-
 
 if __name__ == "__main__":
     unittest.main()
