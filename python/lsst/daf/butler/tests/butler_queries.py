@@ -34,6 +34,7 @@ import unittest
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
 from typing import ClassVar
+from uuid import UUID
 
 import astropy.time
 
@@ -191,6 +192,19 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 for x in expected_detectors
             ]
             self.assertCountEqual(list(results), expected_coordinates)
+
+    def test_simple_dataset_query(self) -> None:
+        butler = self.make_butler("base.yaml", "datasets.yaml")
+        with butler._query() as query:
+            refs = list(query.datasets("bias", "imported_g").order_by("detector"))
+            self.assertEqual(len(refs), 3)
+            self.assertEqual(refs[0].id, UUID("e15ab039-bc8b-4135-87c5-90902a7c0b22"))
+            self.assertEqual(refs[1].id, UUID("51352db4-a47a-447c-b12d-a50b206b17cd"))
+            for detector, ref in enumerate(refs, 1):
+                self.assertEqual(ref.datasetType.name, "bias")
+                self.assertEqual(ref.dataId["instrument"], "Cam1")
+                self.assertEqual(ref.dataId["detector"], detector)
+                self.assertEqual(ref.run, "imported_g")
 
     def test_implied_union_record_query(self) -> None:
         """Test queries for a dimension ('band') that uses "implied union"

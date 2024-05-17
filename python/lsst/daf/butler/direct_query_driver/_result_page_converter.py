@@ -33,10 +33,18 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy
 
+from .._dataset_ref import DatasetRef
+from .._dataset_type import DatasetType
 from ..dimensions import DataCoordinate, DimensionGroup, DimensionRecordSet, SkyPixDimension
 from ..queries import tree as qt
-from ..queries.driver import DataCoordinateResultPage, DimensionRecordResultPage, PageKey, ResultPage
-from ..queries.result_specs import DataCoordinateResultSpec, DimensionRecordResultSpec
+from ..queries.driver import (
+    DataCoordinateResultPage,
+    DatasetRefResultPage,
+    DimensionRecordResultPage,
+    PageKey,
+    ResultPage,
+)
+from ..queries.result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
 
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
@@ -129,10 +137,43 @@ class DataCoordinateResultPageConverter(ResultPageConverter):  # numpydoc ignore
         raw_rows: Iterable[sqlalchemy.Row],
         next_key: PageKey | None,
     ) -> DataCoordinateResultPage:
-
         convert = self._converter.convert
         rows = [convert(row) for row in raw_rows]
         return DataCoordinateResultPage(spec=self._spec, rows=rows, next_key=next_key)
+
+
+class DatasetRefResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
+    """Convert raw SQL result iterables into pages of `DatasetRef` query
+    results.
+    """
+
+    def __init__(
+        self, spec: DatasetRefResultSpec, dataset_type: DatasetType, column_order: qt.ColumnOrder
+    ) -> None:
+        self._spec = spec
+        self._dataset_type = dataset_type
+        self._data_coordinate_converter = _DataCoordinateRowConverter(spec.dimensions, column_order)
+        self._column_order = column_order
+
+    def convert(
+        self,
+        raw_rows: Iterable[sqlalchemy.Row],
+        next_key: PageKey | None,
+    ) -> DatasetRefResultPage:
+        run_column = qt.ColumnSet.get_qualified_name(self._spec.dataset_type_name, "run")
+        dataset_id_column = qt.ColumnSet.get_qualified_name(self._spec.dataset_type_name, "dataset_id")
+        rows = [
+            DatasetRef(
+                datasetType=self._dataset_type,
+                dataId=self._data_coordinate_converter.convert(row),
+                run=row._mapping[run_column],
+                id=row._mapping[dataset_id_column],
+                conform=False,
+            )
+            for row in raw_rows
+        ]
+
+        return DatasetRefResultPage(spec=self._spec, rows=rows, next_key=next_key)
 
 
 class _DataCoordinateRowConverter:
