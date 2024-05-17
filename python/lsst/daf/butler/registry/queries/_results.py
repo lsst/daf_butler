@@ -30,6 +30,7 @@ __all__ = (
     "ChainedDatasetQueryResults",
     "DatabaseDataCoordinateQueryResults",
     "DatabaseDimensionRecordQueryResults",
+    "DatabaseParentDatasetQueryResults",
     "DataCoordinateQueryResults",
     "DatasetQueryResults",
     "DimensionRecordQueryResults",
@@ -506,7 +507,7 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         resolved_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
             datasetType, explicit_only=True
         )
-        return ParentDatasetQueryResults(
+        return DatabaseParentDatasetQueryResults(
             self._query.find_datasets(resolved_dataset_type, collections, find_first=findFirst, defer=True),
             resolved_dataset_type,
         )
@@ -568,7 +569,7 @@ class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
         raise NotImplementedError()
 
     @abstractmethod
-    def materialize(self) -> AbstractContextManager[DatasetQueryResults]:
+    def materialize(self) -> AbstractContextManager[Self]:
         """Insert this query's results into a temporary table.
 
         Returns
@@ -584,7 +585,7 @@ class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
         raise NotImplementedError()
 
     @abstractmethod
-    def expanded(self) -> DatasetQueryResults:
+    def expanded(self) -> Self:
         """Return a `DatasetQueryResults` for which `DataCoordinate.hasRecords`
         returns `True` for all data IDs in returned `DatasetRef` objects.
 
@@ -616,6 +617,32 @@ class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
 
 
 class ParentDatasetQueryResults(DatasetQueryResults):
+    """An object that represents results from a query for datasets with a
+    single parent `DatasetType`.
+    """
+
+    @property
+    @abstractmethod
+    def parentDatasetType(self) -> DatasetType:
+        """The parent dataset type for all datasets in this iterable
+        (`DatasetType`).
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def dataIds(self) -> DataCoordinateQueryResults:
+        """A lazy-evaluation object representing a query for just the data
+        IDs of the datasets that would be returned by this query
+        (`DataCoordinateQueryResults`).
+
+        The returned object is not in general `zip`-iterable with ``self``;
+        it may be in a different order or have (or not have) duplicates.
+        """
+        raise NotImplementedError()
+
+
+class DatabaseParentDatasetQueryResults(ParentDatasetQueryResults):
     """An object that represents results from a query for datasets with a
     single parent `DatasetType`.
 
@@ -655,32 +682,26 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         yield self
 
     @contextmanager
-    def materialize(self) -> Iterator[ParentDatasetQueryResults]:
+    def materialize(self) -> Iterator[DatabaseParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         with self._query.open_context():
-            yield ParentDatasetQueryResults(self._query.materialized(), self._dataset_type)
+            yield DatabaseParentDatasetQueryResults(self._query.materialized(), self._dataset_type)
 
     @property
     def parentDatasetType(self) -> DatasetType:
-        """The parent dataset type for all datasets in this iterable
-        (`DatasetType`).
-        """
+        # Docstring inherited.
         return self._dataset_type
 
     @property
     def dataIds(self) -> DataCoordinateQueryResults:
-        """A lazy-evaluation object representing a query for just the data
-        IDs of the datasets that would be returned by this query
-        (`DataCoordinateQueryResults`).
-
-        The returned object is not in general `zip`-iterable with ``self``;
-        it may be in a different order or have (or not have) duplicates.
-        """
+        # Docstring inherited.
         return DatabaseDataCoordinateQueryResults(self._query.projected(defer=True))
 
-    def expanded(self) -> ParentDatasetQueryResults:
+    def expanded(self) -> DatabaseParentDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
-        return ParentDatasetQueryResults(self._query.with_record_columns(defer=True), self._dataset_type)
+        return DatabaseParentDatasetQueryResults(
+            self._query.with_record_columns(defer=True), self._dataset_type
+        )
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.

@@ -2131,7 +2131,7 @@ class SqlRegistry:
                 resolved_dataset_type, collection_wildcard, isResult=True, findFirst=findFirst
             )
             query = builder.finish()
-            parent_results.append(queries.ParentDatasetQueryResults(query, resolved_dataset_type))
+            parent_results.append(queries.DatabaseParentDatasetQueryResults(query, resolved_dataset_type))
         if not parent_results:
             doomed_by.extend(
                 f"No registered dataset type matching {t!r} found, so no matching datasets can "
