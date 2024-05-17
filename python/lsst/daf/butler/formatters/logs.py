@@ -29,12 +29,49 @@ __all__ = ("ButlerLogRecordsFormatter",)
 
 from typing import Any
 
+from lsst.daf.butler import FormatterV2
 from lsst.daf.butler.logging import ButlerLogRecords
+from lsst.resources import ResourcePath
 
 from .json import JsonFormatter
 
 
-class ButlerLogRecordsFormatter(JsonFormatter):
+class ButlerLogRecordsFormatter(FormatterV2):
+    """Read and write log records in JSON format.
+
+    This is a naive implementation that treats everything as a pydantic.
+    model.  In the future this may be changed to be able to read
+    `ButlerLogRecord` one at time from the file and return a subset
+    of records given some filtering parameters.
+    """
+
+    # Log files can be large and ResourcePath.open() does not support
+    # readline() or __iter__ in all cases and ButlerLogRecords.from_stream
+    # does not use `.read()` for chunking. Therefore must use local file.
+    allow_remote_file_read = False
+
+    default_extension = ".json"
+    supported_extensions = frozenset({".log"})
+
+    def _get_read_pytype(self) -> type[ButlerLogRecords]:
+        """Get the Python type to allow for subclasses."""
+        pytype = self.file_descriptor.storageClass.pytype
+        if not issubclass(pytype, ButlerLogRecords):
+            raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
+        return pytype
+
+    def read_local_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+        # ResourcePath open() cannot do a per-line read.
+        return self._get_read_pytype().from_file(uri.ospath)
+
+    def read_from_bytes(self, serialized_bytes: bytes, component: str | None = None) -> Any:
+        return self._get_read_pytype().from_raw(serialized_bytes)
+
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
+        return in_memory_dataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()
+
+
+class ButlerLogRecordsFormatterV1(JsonFormatter):
     """Read and write log records in JSON format.
 
     This is a naive implementation that treats everything as a pydantic.

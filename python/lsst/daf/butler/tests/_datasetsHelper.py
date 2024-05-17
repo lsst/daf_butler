@@ -42,9 +42,11 @@ from typing import TYPE_CHECKING, Any
 from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, DimensionGroup, StorageClass
 from lsst.daf.butler.datastore import Datastore
 from lsst.daf.butler.formatters.yaml import YamlFormatter
+from lsst.resources import ResourcePath
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetId, Dimension, DimensionGraph
+    from lsst.daf.butler.datastore.cache_manager import AbstractDatastoreCacheManager
 
 
 class DatasetTestHelper:
@@ -182,6 +184,21 @@ class DatastoreTestHelper:
 class BadWriteFormatter(YamlFormatter):
     """A formatter that never works but does leave a file behind."""
 
+    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+        raise NotImplementedError("This formatter can not read anything")
+
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
+        raise NotImplementedError("This formatter can not serialize to bytes.")
+
+    def write_direct(
+        self,
+        in_memory_dataset: Any,
+        uri: ResourcePath,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> bool:
+        uri.write(b"")
+        raise RuntimeError("Did not succeed in writing file.")
+
     def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
         raise NotImplementedError("This formatter can not read anything")
 
@@ -198,9 +215,31 @@ class BadNoWriteFormatter(BadWriteFormatter):
     def _writeFile(self, inMemoryDataset: Any) -> None:
         raise RuntimeError("Did not writing anything at all")
 
+    def write_direct(
+        self,
+        in_memory_dataset: Any,
+        uri: ResourcePath,
+        cache_manager: AbstractDatastoreCacheManager | None = None,
+    ) -> bool:
+        raise RuntimeError("Did not writing anything at all")
+
 
 class MultiDetectorFormatter(YamlFormatter):
     """A formatter that requires a detector to be specified in the dataID."""
+
+    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+        if self.data_id is None:
+            raise RuntimeError("This formatter requires a dataId")
+        if "detector" not in self.data_id:
+            raise RuntimeError("This formatter requires detector to be present in dataId")
+
+        key = f"detector{self.data_id['detector']}"
+
+        data = super().read_cached_file(uri, component)
+        if key not in data:
+            raise RuntimeError(f"Could not find '{key}' in data file.")
+
+        return data[key]
 
     def _writeFile(self, inMemoryDataset: Any) -> None:
         raise NotImplementedError("Can not write")
