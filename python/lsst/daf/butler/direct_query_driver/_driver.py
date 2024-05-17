@@ -34,6 +34,7 @@ __all__ = ("DirectQueryDriver",)
 import dataclasses
 import logging
 import sys
+from abc import abstractmethod
 from collections.abc import Iterable, Mapping, Set
 from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast, overload
@@ -51,7 +52,6 @@ from ..dimensions import (
     DimensionUniverse,
     SkyPixDimension,
 )
-from ..name_shrinker import NameShrinker
 from ..queries import tree as qt
 from ..queries.driver import (
     DataCoordinateResultPage,
@@ -222,11 +222,9 @@ class DirectQueryDriver(QueryDriver):
         cursor = _Cursor(
             self.db,
             sql_select,
-            result_spec=result_spec,
-            name_shrinker=builder.joiner.name_shrinker,
             postprocessing=builder.postprocessing,
             raw_page_size=raw_page_size,
-            column_order=builder.columns.get_column_order(),
+            page_converter=self._create_result_page_converter(result_spec, builder),
         )
         result_page = cursor.next()
         if result_page.next_key is not None:
@@ -234,6 +232,15 @@ class DirectQueryDriver(QueryDriver):
             # fetch_next_page.
             self._cursors[result_page.next_key] = cursor
         return result_page
+
+    def _create_result_page_converter(self, spec: ResultSpec, builder: QueryBuilder) -> ResultPageConverter:
+        match spec:
+            case DimensionRecordResultSpec():
+                return DimensionRecordResultConverter(spec, self.db)
+            case DataCoordinateResultSpec():
+                return DataCoordinateResultConverter(spec, builder.columns.get_column_order())
+            case _:
+                raise NotImplementedError(f"Result type '{spec.result_type}' not yet implemented")
 
     @overload
     def fetch_next_page(
@@ -1085,38 +1092,27 @@ class _Cursor:
         Database to run the query against.
     sql : `sqlalchemy.Executable`
         SQL query to execute.
-    result : `ResultSpec`
-        Specification of the result type.
-    name_shrinker : `NameShrinker` or `None`
-        Object that was used to shrink dataset column names to fit within the
-        database identifier limit.
     postprocessing : `Postprocessing`
         Post-query filtering and checks to perform.
     raw_page_size : `int`
         Maximum number of SQL result rows to return in each page, before
         postprocessing.
-    column_order : `ColumnOrder`
-        Definition of the columns available in the rows returned by the SQL
-        query.
+    page_converter : `ResultPageConverter`
+        Object for converting raw SQL result rows into ResultPage instances.
     """
 
     def __init__(
         self,
         db: Database,
         sql: sqlalchemy.Executable,
-        result_spec: ResultSpec,
-        name_shrinker: NameShrinker | None,
         postprocessing: Postprocessing,
         raw_page_size: int,
-        column_order: qt.ColumnOrder,
+        page_converter: ResultPageConverter,
     ):
-        self._result_spec = result_spec
-        self._name_shrinker = name_shrinker
         self._raw_page_size = raw_page_size
         self._postprocessing = postprocessing
-        self._timespan_repr_cls = db.getTimespanRepresentation()
         self._context = db.query(sql, execution_options=dict(yield_per=raw_page_size))
-        self._column_order = column_order
+        self._page_converter = page_converter
         cursor = self._context.__enter__()
         try:
             self._iterator = cursor.partitions()
@@ -1161,21 +1157,25 @@ class _Cursor:
                 self.close()
 
             postprocessed_rows = self._postprocessing.apply(raw_page)
-            match self._result_spec:
-                case DimensionRecordResultSpec():
-                    return self._convert_dimension_record_results(postprocessed_rows, next_key)
-                case DataCoordinateResultSpec():
-                    return self._convert_data_coordinate_results(postprocessed_rows, next_key)
-                case _:
-                    raise NotImplementedError("TODO")
+            return self._page_converter.convert(postprocessed_rows, next_key)
         except:  # noqa: E722
             self._context.__exit__(*sys.exc_info())
             raise
 
-    def _convert_dimension_record_results(
-        self,
-        raw_rows: Iterable[sqlalchemy.Row],
-        next_key: PageKey | None,
+
+class ResultPageConverter:
+    @abstractmethod
+    def convert(self, raw_rows: Iterable[sqlalchemy.Row], next_key: PageKey | None) -> ResultPage:
+        raise NotImplementedError()
+
+
+class DimensionRecordResultConverter(ResultPageConverter):
+    def __init__(self, spec: DimensionRecordResultSpec, db: Database) -> None:
+        self._result_spec = spec
+        self._timespan_repr_cls = db.getTimespanRepresentation()
+
+    def convert(
+        self, raw_rows: Iterable[sqlalchemy.Row], next_key: PageKey | None
     ) -> DimensionRecordResultPage:
         """Convert a raw SQL result iterable into a page of `DimensionRecord`
         query results.
@@ -1193,7 +1193,7 @@ class _Cursor:
         result_page : `DimensionRecordResultPage`
             Page object that holds a `DimensionRecord` container.
         """
-        result_spec = cast(DimensionRecordResultSpec, self._result_spec)
+        result_spec = self._result_spec
         record_set = DimensionRecordSet(result_spec.element)
         record_cls = result_spec.element.RecordClass
         if isinstance(result_spec.element, SkyPixDimension):
@@ -1231,7 +1231,13 @@ class _Cursor:
                 record_set.add(record_cls(**d))
         return DimensionRecordResultPage(spec=result_spec, next_key=next_key, rows=record_set)
 
-    def _convert_data_coordinate_results(
+
+class DataCoordinateResultConverter(ResultPageConverter):
+    def __init__(self, spec: DataCoordinateResultSpec, column_order: qt.ColumnOrder) -> None:
+        self._spec = spec
+        self._converter = _DataCoordinateRowConverter(spec.dimensions, column_order)
+
+    def convert(
         self,
         raw_rows: Iterable[sqlalchemy.Row],
         next_key: PageKey | None,
@@ -1252,18 +1258,14 @@ class _Cursor:
         result_page : `DataCoordinateResultPage`
             Page object that holds a `DataCoordinate` container.
         """
-        spec = self._result_spec
-        assert isinstance(spec, DataCoordinateResultSpec)
-
-        converter = _DataCoordinateConverter(spec.dimensions, self._column_order)
-
-        rows = [converter.convert(row) for row in raw_rows]
-        return DataCoordinateResultPage(spec=spec, rows=rows, next_key=next_key)
+        convert = self._converter.convert
+        rows = [convert(row) for row in raw_rows]
+        return DataCoordinateResultPage(spec=self._spec, rows=rows, next_key=next_key)
 
 
-class _DataCoordinateConverter:
-    """Helper for converting raw SQL result rows into DataCoordinate
-    instances.
+class _DataCoordinateRowConverter:
+    """Helper for converting a raw SQL result row into a DataCoordinate
+    instance.
     """
 
     def __init__(self, dimensions: DimensionGroup, column_order: qt.ColumnOrder):
