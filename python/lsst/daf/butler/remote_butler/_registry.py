@@ -68,10 +68,9 @@ from ._collection_args import (
     convert_dataset_type_arg_to_glob_string_list,
 )
 from ._http_connection import RemoteButlerHttpConnection, parse_model
-from .registry._query_dimension_records import (
-    DimensionRecordsQueryArguments,
-    QueryDriverDimensionRecordQueryResults,
-)
+from .registry._query_common import CommonQueryArguments
+from .registry._query_data_coordinates import QueryDriverDataCoordinateQueryResults
+from .registry._query_dimension_records import QueryDriverDimensionRecordQueryResults
 from .server_models import (
     ExpandDataIdRequestModel,
     ExpandDataIdResponseModel,
@@ -389,7 +388,11 @@ class RemoteButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateQueryResults:
-        raise NotImplementedError()
+        dimensions = self.dimensions.conform(dimensions)
+        args = self._convert_common_query_arguments(
+            dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
+        )
+        return QueryDriverDataCoordinateQueryResults(self._butler._query, dimensions, args)
 
     def queryDimensionRecords(
         self,
@@ -407,11 +410,26 @@ class RemoteButlerRegistry(Registry):
         if not isinstance(element, DimensionElement):
             element = self.dimensions.elements[element]
 
+        args = self._convert_common_query_arguments(
+            dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
+        )
+
+        return QueryDriverDimensionRecordQueryResults(self._butler._query, element, args)
+
+    def _convert_common_query_arguments(
+        self,
+        *,
+        dataId: DataId | None = None,
+        datasets: object | None = None,
+        collections: CollectionArgType | None = None,
+        where: str = "",
+        bind: Mapping[str, Any] | None = None,
+        kwargs: dict[str, int | str],
+    ) -> CommonQueryArguments:
         dataset_types = self._resolve_dataset_types(datasets)
         if dataset_types and collections is None and not self.defaults.collections:
             raise NoDefaultCollectionError("'collections' must be provided if 'datasets' is provided")
-        args = DimensionRecordsQueryArguments(
-            element=element,
+        return CommonQueryArguments(
             dataId=dataId,
             where=where,
             bind=dict(bind) if bind else None,
@@ -419,8 +437,6 @@ class RemoteButlerRegistry(Registry):
             dataset_types=dataset_types,
             collections=self._resolve_collections(collections),
         )
-
-        return QueryDriverDimensionRecordQueryResults(self._butler._query, args)
 
     def queryDatasetAssociations(
         self,

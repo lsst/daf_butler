@@ -143,7 +143,7 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
                 return lhs.logical_and(rhs)
 
             # Handle comparison operators.
-            case [("=" | "!=" | "<" | ">" | "<=" | ">="), _ColExpr() as lhs, _ColExpr() as rhs]:
+            case [("=" | "!=" | "<" | ">" | "<=" | ">=" | "OVERLAPS"), _ColExpr() as lhs, _ColExpr() as rhs]:
                 return Predicate.compare(
                     a=lhs.value, b=rhs.value, operator=_convert_comparison_operator(operator)
                 )
@@ -171,7 +171,12 @@ class _ConversionVisitor(TreeVisitor[_VisitorResult]):
     def visitIsIn(
         self, lhs: _VisitorResult, values: list[_VisitorResult], not_in: bool, node: Node
     ) -> _VisitorResult:
-        raise NotImplementedError("IN not supported yet")
+        assert isinstance(lhs, _ColExpr), "LHS of IN guaranteed to be scalar by parser."
+        predicates = [_convert_in_clause_to_predicate(lhs.value, rhs, node) for rhs in values]
+        result = Predicate.from_bool(False).logical_or(*predicates)
+        if not_in:
+            result = result.logical_not()
+        return result
 
     def visitIdentifier(self, name: str, node: Node) -> _VisitorResult:
         name = name.lower()
@@ -275,3 +280,26 @@ def _convert_comparison_operator(value: str) -> ComparisonOperator:
             return op
         case _:
             raise AssertionError(f"Unhandled comparison operator {value}")
+
+
+def _convert_in_clause_to_predicate(lhs: ColumnExpression, rhs: _VisitorResult, node: Node) -> Predicate:
+    """Convert ``lhs IN rhs`` expression to an equivalent ``Predicate``
+    value.
+    """
+    match rhs:
+        case _Sequence():
+            return Predicate.in_container(lhs, rhs.value)
+        case _RangeLiteral():
+            stride = rhs.value.stride
+            if stride is None:
+                stride = 1
+            # Expression strings use inclusive ranges, but Predicate uses
+            # ranges that exclude the stop value.
+            stop = rhs.value.stop + 1
+            return Predicate.in_range(lhs, rhs.value.start, stop, stride)
+        case _ColExpr():
+            return Predicate.compare(lhs, "==", rhs.value)
+        case _Null():
+            return Predicate.is_null(lhs)
+        case _:
+            raise InvalidQueryError(f"Invalid IN expression: '{node!s}")

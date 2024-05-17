@@ -39,10 +39,11 @@ import unittest
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
+from typing import TypeVar
 
 import astropy.time
 import sqlalchemy
@@ -85,6 +86,8 @@ from .._registry import Registry
 from ..interfaces import ButlerAttributeExistsError
 from ..sql_registry import SqlRegistry
 
+_T = TypeVar("_T")
+
 
 class RegistryTests(ABC):
     """Generic tests for the `SqlRegistry` class that can be subclassed to
@@ -121,6 +124,19 @@ class RegistryTests(ABC):
     supportsQueryGovernorValidation: bool = True
     """True if the registry class being tested validates that values provided
     by the user for governor dimensions are correct before running queries.
+    """
+
+    sometimesHasDuplicateQueryRows: bool = False
+    """True if the registry class being tested unintentionally returns
+    duplicate copies of rows in query results.  (The old query system had this
+    as a "known problem" -- the new query system is not supposed to return
+    duplicates anymore.)
+    """
+
+    supportsExtendedTimeQueryOperators: bool = True
+    """True if the registry class being tested supports ``<`` and ``>``
+    operators in expression strings for comparisons of `Timespan` vs
+    `Timespan`, or `Timespan` vs `Time`.
     """
 
     @classmethod
@@ -199,6 +215,17 @@ class RegistryTests(ABC):
             self.assertTrue(results.any())
         else:
             self.assertFalse(results.any())
+
+    def _maybeDeduplicate(self, items: Iterable[_T]) -> tuple[_T]:
+        """If the registry class being tested has a known issue where query
+        rows are sometimes duplicated, return a deduplicated version of the
+        input as a tuple.  If the class does not have this duplication issue,
+        convert the input to a tuple without deduplicating it.
+        """
+        if not self.sometimesHasDuplicateQueryRows:
+            return tuple(items)
+
+        return tuple({k: True for k in items})
 
     def testOpaque(self):
         """Tests for `SqlRegistry.registerOpaqueTable`,
@@ -2718,23 +2745,26 @@ class RegistryTests(ABC):
         # t2 is exactly at the start of i2, but ends are exclusive, so these
         # should not include i2.
         self.assertEqual(ids[i1:i2], query("(t1, t2) OVERLAPS visit.timespan"))
-        self.assertEqual(ids[:i2], query("visit.timespan < (t2, t4)"))
+        if self.supportsExtendedTimeQueryOperators:
+            self.assertEqual(ids[:i2], query("visit.timespan < (t2, t4)"))
         # t3 is in the middle of i3, so this should include i3.
         self.assertEqual(ids[i2 : i3 + 1], query("visit.timespan OVERLAPS ts23"))
         # This one should not include t3 by the same reasoning.
-        self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (t1, t3)"))
+        if self.supportsExtendedTimeQueryOperators:
+            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (t1, t3)"))
         # t4 is exactly at the end of i4, so this should include i4.
         self.assertEqual(ids[i3 : i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', t4)"))
         # i4's upper bound of t4 is exclusive so this should not include t4.
         self.assertEqual(ids[i4 + 1 :], query("visit.timespan OVERLAPS (t4, NULL)"))
 
         # Now some timespan vs. time scalar queries.
-        self.assertEqual(ids[:i2], query("visit.timespan < t2"))
-        self.assertEqual(ids[:i2], query("t2 > visit.timespan"))
-        self.assertEqual(ids[i3 + 1 :], query("visit.timespan > t3"))
-        self.assertEqual(ids[i3 + 1 :], query("t3 < visit.timespan"))
         self.assertEqual(ids[i3 : i3 + 1], query("visit.timespan OVERLAPS t3"))
         self.assertEqual(ids[i3 : i3 + 1], query(f"T'{t3.tai.isot}' OVERLAPS visit.timespan"))
+        if self.supportsExtendedTimeQueryOperators:
+            self.assertEqual(ids[:i2], query("visit.timespan < t2"))
+            self.assertEqual(ids[:i2], query("t2 > visit.timespan"))
+            self.assertEqual(ids[i3 + 1 :], query("visit.timespan > t3"))
+            self.assertEqual(ids[i3 + 1 :], query("t3 < visit.timespan"))
 
         # Empty timespans should not overlap anything.
         self.assertEqual([], query("visit.timespan OVERLAPS (t3, t2)"))
@@ -2847,7 +2877,8 @@ class RegistryTests(ABC):
         self.assertFalse(query2.any(execute=True, exact=True))
         self.assertEqual(query2.count(exact=False), 0)
         self.assertEqual(query2.count(exact=True), 0)
-        self.assertTrue(list(query2.explain_no_results()))
+        if self.supportsDetailedQueryExplain:
+            self.assertTrue(list(query2.explain_no_results()))
         # These queries yield no results due to various problems that can be
         # spotted prior to execution, yielding helpful diagnostics.
         base_query = registry.queryDataIds(["detector", "physical_filter"])
@@ -2965,7 +2996,7 @@ class RegistryTests(ABC):
         self.assertTrue(query3.any(execute=False, exact=False))
         self.assertTrue(query3.any(execute=True, exact=False))
         self.assertTrue(query3.any(execute=True, exact=True))
-        self.assertGreaterEqual(query3.count(exact=False), 4)
+        self.assertGreaterEqual(query3.count(exact=False), 3)
         self.assertGreaterEqual(query3.count(exact=True, discard=True), 3)
         self.assertFalse(list(query3.explain_no_results()))
         # This query yields overlaps in the database, but all are filtered
@@ -2986,9 +3017,10 @@ class RegistryTests(ABC):
         self.assertFalse(query4.any(execute=True, exact=True))
         self.assertGreaterEqual(query4.count(exact=False), 1)
         self.assertEqual(query4.count(exact=True, discard=True), 0)
-        messages = query4.explain_no_results()
-        self.assertTrue(messages)
-        self.assertTrue(any("overlap" in message for message in messages))
+        if self.supportsDetailedQueryExplain:
+            messages = query4.explain_no_results()
+            self.assertTrue(messages)
+            self.assertTrue(any("overlap" in message for message in messages))
         # This query should yield results from one dataset type but not the
         # other, which is not registered.
         query5 = registry.queryDatasets(["bias", "nonexistent"], collections=["biases"])
@@ -3043,32 +3075,21 @@ class RegistryTests(ABC):
             defaults=(None, None, None),
         )
 
-        test_data = (
-            Test("tract,visit", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
-            Test("-tract,visit", "tract,visit", ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))),
-            Test("tract,-visit", "tract,visit", ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))),
-            Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2), (0, 2), (0, 1), (0, 1))),
-            Test(
-                "tract.id,visit.id",
-                "tract,visit",
-                ((0, 1), (0, 1), (0, 2)),
-                limit=(3,),
-            ),
-            Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2)), limit=(3,)),
-            Test("tract,visit", "tract,visit", ((0, 2), (1, 2), (1, 2)), limit=(3, 3)),
-            Test("-tract,-visit", "tract,visit", ((0, 1),), limit=(3, 5)),
-            Test(
-                "tract,visit.exposure_time", "tract,visit", ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))
-            ),
-            Test(
-                "-tract,-visit.exposure_time", "tract,visit", ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))
-            ),
-            Test("tract,-exposure_time", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
-            Test("tract,visit.name", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
+        test_data = [
+            Test("tract,visit", "tract,visit", ((0, 1), (0, 2), (1, 2))),
+            Test("-tract,visit", "tract,visit", ((1, 2), (0, 1), (0, 2))),
+            Test("tract,-visit", "tract,visit", ((0, 2), (0, 1), (1, 2))),
+            Test("-tract,-visit", "tract,visit", ((1, 2), (0, 2), (0, 1))),
+            Test("tract.id,visit.id", "tract,visit", ((0, 1),), limit=(1,)),
+            Test("-tract,-visit", "tract,visit", ((1, 2),), limit=(1,)),
+            Test("tract,visit.exposure_time", "tract,visit", ((0, 2), (0, 1), (1, 2))),
+            Test("-tract,-visit.exposure_time", "tract,visit", ((1, 2), (0, 1), (0, 2))),
+            Test("tract,-exposure_time", "tract,visit", ((0, 1), (0, 2), (1, 2))),
+            Test("tract,visit.name", "tract,visit", ((0, 1), (0, 2), (1, 2))),
             Test(
                 "tract,-visit.timespan.begin,visit.timespan.end",
                 "tract,visit",
-                ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2)),
+                ((0, 2), (0, 1), (1, 2)),
             ),
             Test("visit.day_obs,exposure.day_obs", "visit,exposure", ()),
             Test("visit.timespan.begin,-exposure.timespan.begin", "visit,exposure", ()),
@@ -3093,24 +3114,32 @@ class RegistryTests(ABC):
                 datasets="flat",
                 collections="imported_r",
             ),
-        )
+        ]
+        if self.supportsQueryOffset:
+            test_data.extend(
+                [
+                    Test("tract,visit", "tract,visit", ((0, 2), (1, 2)), limit=(2, 3)),
+                    Test("-tract,-visit", "tract,visit", ((0, 1),), limit=(3, 5)),
+                ]
+            )
 
         for test in test_data:
-            order_by = test.order_by.split(",")
-            keys = test.keys.split(",")
-            query = do_query(keys, test.datasets, test.collections).order_by(*order_by)
-            if test.limit is not None:
-                query = query.limit(*test.limit)
-            dataIds = tuple(tuple(dataId[k] for k in keys) for dataId in query)
-            self.assertEqual(dataIds, test.result)
+            with self.subTest(test=test):
+                order_by = test.order_by.split(",")
+                keys = test.keys.split(",")
+                query = do_query(keys, test.datasets, test.collections).order_by(*order_by)
+                if test.limit is not None:
+                    query = query.limit(*test.limit)
+                dataIds = self._maybeDeduplicate(tuple(dataId[k] for k in keys) for dataId in query)
+                self.assertEqual(dataIds, test.result)
 
-            # and materialize
-            query = do_query(keys).order_by(*order_by)
-            if test.limit is not None:
-                query = query.limit(*test.limit)
-            with self.assertRaises(RelationalAlgebraError):
-                with query.materialize():
-                    pass
+                # and materialize
+                query = do_query(keys).order_by(*order_by)
+                if test.limit is not None:
+                    query = query.limit(*test.limit)
+                with self.assertRaises(RelationalAlgebraError):
+                    with query.materialize():
+                        pass
 
         # errors in a name
         for order_by in ("", "-"):

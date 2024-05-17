@@ -47,9 +47,10 @@ from lsst.daf.butler.remote_butler.server_models import (
     QueryInputs,
 )
 
-from ....queries.driver import DimensionRecordResultPage, QueryDriver, QueryTree, ResultPage, ResultSpec
+from ....queries.driver import QueryDriver, QueryTree, ResultPage, ResultSpec
 from .._dependencies import factory_dependency
 from .._factory import Factory
+from ._query_serialization import convert_query_pages
 
 query_router = APIRouter()
 
@@ -60,12 +61,8 @@ def query_execute(
 ) -> QueryExecuteResponseModel:
     with _get_query_context(factory, request.query) as ctx:
         spec = request.result_spec.to_result_spec(ctx.driver.universe)
-        response = QueryExecuteResponseModel(rows=[])
-        for page in _load_query_pages(ctx.driver, ctx.tree, spec):
-            if not isinstance(page, DimensionRecordResultPage):
-                raise NotImplementedError()
-            response.rows.extend(record.to_simple() for record in page.rows)
-        return response
+        pages = _load_query_pages(ctx.driver, ctx.tree, spec)
+        return QueryExecuteResponseModel(result=convert_query_pages(spec, pages))
 
 
 def _load_query_pages(driver: QueryDriver, tree: QueryTree, spec: ResultSpec) -> Iterator[ResultPage]:

@@ -236,10 +236,33 @@ class QueryExecuteRequestModel(pydantic.BaseModel):
     result_spec: SerializedResultSpec
 
 
-class QueryExecuteResponseModel(pydantic.BaseModel):
-    """Response model for /query/execute/."""
+class DataCoordinateResultModel(pydantic.BaseModel):
+    """Result model for /query/execute/ when user requested DataCoordinate
+    results.
+    """
 
+    type: Literal["data_coordinate"] = "data_coordinate"
+    rows: list[SerializedDataCoordinate]
+
+
+class DimensionRecordsResultModel(pydantic.BaseModel):
+    """Result model for /query/execute/ when user requested DimensionRecord
+    results.
+    """
+
+    type: Literal["dimension_record"] = "dimension_record"
     rows: list[SerializedDimensionRecord]
+
+
+QueryExecuteResultData: TypeAlias = DataCoordinateResultModel | DimensionRecordsResultModel
+
+
+class QueryExecuteResponseModel(pydantic.BaseModel):
+    """Response model for /query/execute/. Results may be in several different
+    formats depending what the user requested.
+    """
+
+    result: QueryExecuteResultData
 
 
 class QueryCountRequestModel(pydantic.BaseModel):

@@ -37,7 +37,7 @@ from typing import Any, overload
 
 from ...butler import Butler
 from .._dataset_type import DatasetType
-from ..dimensions import DataIdValue, DimensionGroup, DimensionRecord, DimensionUniverse
+from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionRecord, DimensionUniverse
 from ..queries.driver import (
     DataCoordinateResultPage,
     DatasetRefResultPage,
@@ -116,15 +116,24 @@ class RemoteQueryDriver(QueryDriver):
             query=self._create_query_input(tree), result_spec=SerializedResultSpec(result_spec)
         )
         response = self._connection.post("query/execute", request)
-        result = parse_model(response, QueryExecuteResponseModel)
-        if result_spec.result_type != "dimension_record":
-            raise NotImplementedError()
+        result = parse_model(response, QueryExecuteResponseModel).result
         universe = self.universe
-        return DimensionRecordResultPage(
-            spec=result_spec,
-            next_key=None,
-            rows=[DimensionRecord.from_simple(r, universe=universe) for r in result.rows],
-        )
+        if result_spec.result_type == "dimension_record":
+            assert result.type == "dimension_record"
+            return DimensionRecordResultPage(
+                spec=result_spec,
+                next_key=None,
+                rows=[DimensionRecord.from_simple(r, universe) for r in result.rows],
+            )
+        elif result_spec.result_type == "data_coordinate":
+            assert result.type == "data_coordinate"
+            return DataCoordinateResultPage(
+                spec=result_spec,
+                next_key=None,
+                rows=[DataCoordinate.from_simple(r, universe) for r in result.rows],
+            )
+        else:
+            raise NotImplementedError(f"Unhandled result type {result_spec.result_type}")
 
     @overload
     def fetch_next_page(

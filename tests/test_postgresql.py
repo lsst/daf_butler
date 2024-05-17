@@ -232,6 +232,8 @@ class PostgresqlRegistryTests(RegistryTests):
     work subclasses have to have this class first in the bases list.
     """
 
+    sometimesHasDuplicateQueryRows = True
+
     @classmethod
     def setUpClass(cls):
         cls.root = makeTestTempDir(TESTDIR)

@@ -176,6 +176,22 @@ class ButlerQueryTests(ABC, TestCaseMixin):
             self.check_detector_records(results.order_by("detector").limit(2), [1, 2], ordered=True)
             self.check_detector_records(results.where(_x.detector.raft == "B", instrument="Cam1"), [3, 4])
 
+    def test_simple_data_coordinate_query(self) -> None:
+        butler = self.make_butler("base.yaml")
+        with butler._query() as query:
+            # Test empty query
+            self.assertCountEqual(query.data_ids([]), [DataCoordinate.makeEmpty(butler.dimensions)])
+
+            # Test query for a single dimension
+            results = query.data_ids(["detector"])
+            expected_detectors = [1, 2, 3, 4]
+            universe = butler.dimensions
+            expected_coordinates = [
+                DataCoordinate.standardize({"instrument": "Cam1", "detector": x}, universe=universe)
+                for x in expected_detectors
+            ]
+            self.assertCountEqual(list(results), expected_coordinates)
+
     def test_implied_union_record_query(self) -> None:
         """Test queries for a dimension ('band') that uses "implied union"
         storage, in which its values are the union of the values for it in a
@@ -724,6 +740,45 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 query.where(_x.detector == 1, _x.detector == 2).dimension_records("detector"),
                 [],
                 messages=["'where' expression requires both detector=2 and detector=1."],
+            )
+            self.assertCountEqual(
+                [
+                    record.id
+                    for record in query.where(
+                        # Datetime equal to the "begin" of the timespan.
+                        _x.visit.timespan.overlaps(
+                            astropy.time.Time("2021-09-09T03:00:00", format="isot", scale="tai")
+                        )
+                    ).dimension_records("visit")
+                ],
+                # Timespan begin bound is inclusive, so the record should
+                # match.
+                [1],
+            )
+            self.assertCountEqual(
+                [
+                    record.id
+                    for record in query.where(
+                        # Datetime equal to the "end" of the timespan.
+                        _x.visit.timespan.overlaps(
+                            astropy.time.Time("2021-09-09T03:01:00", format="isot", scale="tai")
+                        )
+                    ).dimension_records("visit")
+                ],
+                # Timespan end bound is exclusive, so we should get no records.
+                [],
+            )
+            self.assertCountEqual(
+                [
+                    record.id
+                    for record in query.where(
+                        # In the middle of the timespan.
+                        _x.visit.timespan.overlaps(
+                            astropy.time.Time("2021-09-09T03:02:30", format="isot", scale="tai")
+                        )
+                    ).dimension_records("visit")
+                ],
+                [2],
             )
             self.assertCountEqual(
                 [

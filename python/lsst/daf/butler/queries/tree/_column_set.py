@@ -27,12 +27,13 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnSet",)
+__all__ = ("ColumnSet", "ColumnOrder", "ResultColumn")
 
-from collections.abc import Iterable, Iterator, Mapping, Set
+from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
+from typing import NamedTuple
 
 from ... import column_spec
-from ...dimensions import DimensionGroup
+from ...dimensions import DataIdValue, DimensionGroup
 from ...nonempty_mapping import NonemptyMapping
 
 
@@ -245,24 +246,34 @@ class ColumnSet:
         """Restore all removed dimension key columns."""
         self._removed_dimension_keys.clear()
 
-    def __iter__(self) -> Iterator[tuple[str, str | None]]:
+    def __iter__(self) -> Iterator[ResultColumn]:
+        yield from self.get_column_order().columns()
+
+    def get_column_order(self) -> ColumnOrder:
+        dimension_names: list[ResultColumn] = []
         for dimension_name in self._dimensions.data_coordinate_keys:
             if dimension_name not in self._removed_dimension_keys:
-                yield dimension_name, None
+                dimension_names.append(ResultColumn(dimension_name, None))
+
         # We iterate over DimensionElements and their DimensionRecord columns
         # in order to make sure that's predictable.  We might want to extract
         # these query results positionally in some contexts.
+        dimension_elements: list[ResultColumn] = []
         for element_name in self._dimensions.elements:
             element = self._dimensions.universe[element_name]
             fields_for_element = self._dimension_fields[element_name]
             for spec in element.schema.remainder:
                 if spec.name in fields_for_element:
-                    yield element_name, spec.name
+                    dimension_elements.append(ResultColumn(element_name, spec.name))
+
         # We sort dataset types and their fields lexicographically just to keep
         # our queries from having any dependence on set-iteration order.
+        dataset_fields: list[ResultColumn] = []
         for dataset_type in sorted(self._dataset_fields):
             for field in sorted(self._dataset_fields[dataset_type]):
-                yield dataset_type, field
+                dataset_fields.append(ResultColumn(dataset_type, field))
+
+        return ColumnOrder(dimension_names, dimension_elements, dataset_fields)
 
     def is_timespan(self, logical_table: str, field: str | None) -> bool:
         """Test whether the given column is a timespan.
@@ -353,3 +364,64 @@ class ColumnSet:
             return self._dimensions.names
         else:
             return self._dimensions.names - self._removed_dimension_keys
+
+
+class ResultColumn(NamedTuple):
+    """Defines a column that can be output from a query."""
+
+    logical_table: str
+    """Dimension element name or dataset type name."""
+
+    field: str | None
+    """Column associated with the dimension element or dataset type, or `None`
+    if it is a dimension key column."""
+
+
+class ColumnOrder:
+    """Defines the position of columns within a result row and provides helper
+    methods for accessing subsets of columns in a row.
+
+    Parameters
+    ----------
+    dimension_keys : `~collections.abc.Iterable` [ `ResultColumn` ]
+        Columns corresponding to dimension primary keys.
+    dimension_elements : `~collections.abc.Iterable` [ `ResultColumn` ]
+        Columns corresponding to DimensionElements and their DimensionRecord
+        columns.
+    dataset_fields : `~collections.abc.Iterable` [ `ResultColumn` ]
+        Columns corresponding to dataset types and their fields.
+    """
+
+    def __init__(
+        self,
+        dimension_keys: Iterable[ResultColumn],
+        dimension_elements: Iterable[ResultColumn],
+        dataset_fields: Iterable[ResultColumn],
+    ):
+        self._dimension_keys = tuple(dimension_keys)
+        self._dimension_elements = tuple(dimension_elements)
+        self._dataset_fields = tuple(dataset_fields)
+
+    def columns(self) -> Iterator[ResultColumn]:
+        # When editing this method, take care to update the other methods on
+        # this object to correspond to the new order.
+        yield from self._dimension_keys
+        yield from self._dimension_elements
+        yield from self._dataset_fields
+
+    @property
+    def dimension_key_names(self) -> list[str]:
+        """Return the names of the dimension key columns included in result
+        rows, in the order they appear in the row.
+        """
+        return [column.logical_table for column in self._dimension_keys]
+
+    def extract_dimension_key_columns(self, row: Sequence[DataIdValue]) -> Sequence[DataIdValue]:
+        """Given a full result row, return just the dimension key columns.
+
+        Parameters
+        ----------
+        row : `Sequence` [ `DataIdValue` ]
+            A row output by the SQL query associated with these columns.
+        """
+        return row[: len(self._dimension_keys)]

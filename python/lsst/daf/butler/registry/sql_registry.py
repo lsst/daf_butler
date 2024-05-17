@@ -2283,7 +2283,7 @@ class SqlRegistry:
             builder.joinDataset(datasetType, collection_wildcard, isResult=False)
         query = builder.finish()
 
-        return queries.DataCoordinateQueryResults(query)
+        return queries.DatabaseDataCoordinateQueryResults(query)
 
     def queryDimensionRecords(
         self,
