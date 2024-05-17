@@ -60,9 +60,9 @@ from ._query import Query
 from ._structs import OrderByClause
 
 
-class QueryResultsBase:
-    """Abstract base class defining functions used by several of the other
-    QueryResults classes.
+class LimitedQueryResultsBase:
+    """Abstract base class defining functions that are shared by all of the
+    other QueryResults classes.
     """
 
     @abstractmethod
@@ -140,6 +140,12 @@ class QueryResultsBase:
             results.
         """
         raise NotImplementedError()
+
+
+class QueryResultsBase(LimitedQueryResultsBase):
+    """Abstract base class defining functions shared by several of the other
+    QueryResults classes.
+    """
 
     @abstractmethod
     def order_by(self, *args: str) -> Self:
@@ -545,7 +551,7 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         return self
 
 
-class DatasetQueryResults(Iterable[DatasetRef]):
+class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
     """An interface for objects that represent the results of queries for
     datasets.
     """
@@ -595,87 +601,6 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         As with `DataCoordinateQueryResults.expanded`, it may be more efficient
         to call `materialize` before expanding data IDs for very large result
         sets.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        """Count the number of rows this query would return.
-
-        Parameters
-        ----------
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed to account for that filtering in the count.  If `False`, the
-            result may be an upper bound.
-        discard : `bool`, optional
-            If `True`, compute the exact count even if it would require running
-            the full query and then throwing away the result rows after
-            counting them.  If `False`, this is an error, as the user would
-            usually be better off executing the query first to fetch its rows
-            into a new query (or passing ``exact=False``).  Ignored if
-            ``exact=False``.
-
-        Returns
-        -------
-        count : `int`
-            The number of rows the query would return, or an upper bound if
-            ``exact=False``.
-
-        Notes
-        -----
-        This counts the number of rows returned, not the number of unique rows
-        returned, so even with ``exact=True`` it may provide only an upper
-        bound on the number of *deduplicated* result rows.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def any(
-        self,
-        *,
-        execute: bool = True,
-        exact: bool = True,
-    ) -> bool:
-        """Test whether this query returns any results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
-            determined prior to execution that the query would return no rows.
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed, until at least one result row is found.  If `False`, the
-            returned result does not account for post-query filtering, and
-            hence may be `True` even when all result rows would be filtered
-            out.
-
-        Returns
-        -------
-        any : `bool`
-            `True` if the query would (or might, depending on arguments) yield
-            result rows.  `False` if it definitely would not.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        """Return human-readable messages that may help explain why the query
-        yields no results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
-            of aspects of the tree to more precisely determine where rows were
-            filtered out.
-
-        Returns
-        -------
-        messages : `~collections.abc.Iterable` [ `str` ]
-            String messages that describe reasons the query might not yield any
-            results.
         """
         raise NotImplementedError()
 
