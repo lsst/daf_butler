@@ -34,7 +34,6 @@ __all__ = ("DirectQueryDriver",)
 import dataclasses
 import logging
 import sys
-from abc import abstractmethod
 from collections.abc import Iterable, Mapping, Set
 from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast, overload
@@ -44,14 +43,7 @@ import sqlalchemy
 from .. import ddl
 from .._dataset_type import DatasetType
 from .._exceptions import InvalidQueryError
-from ..dimensions import (
-    DataCoordinate,
-    DataIdValue,
-    DimensionGroup,
-    DimensionRecordSet,
-    DimensionUniverse,
-    SkyPixDimension,
-)
+from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionUniverse
 from ..queries import tree as qt
 from ..queries.driver import (
     DataCoordinateResultPage,
@@ -80,6 +72,11 @@ from ._query_plan import (
     QueryPlan,
     QueryProjectionPlan,
     ResolvedDatasetSearch,
+)
+from ._result_page_converter import (
+    DataCoordinateResultPageConverter,
+    DimensionRecordResultPageConverter,
+    ResultPageConverter,
 )
 from ._sql_column_visitor import SqlColumnVisitor
 
@@ -236,9 +233,9 @@ class DirectQueryDriver(QueryDriver):
     def _create_result_page_converter(self, spec: ResultSpec, builder: QueryBuilder) -> ResultPageConverter:
         match spec:
             case DimensionRecordResultSpec():
-                return DimensionRecordResultConverter(spec, self.db)
+                return DimensionRecordResultPageConverter(spec, self.db)
             case DataCoordinateResultSpec():
-                return DataCoordinateResultConverter(spec, builder.columns.get_column_order())
+                return DataCoordinateResultPageConverter(spec, builder.columns.get_column_order())
             case _:
                 raise NotImplementedError(f"Result type '{spec.result_type}' not yet implemented")
 
@@ -1161,122 +1158,3 @@ class _Cursor:
         except:  # noqa: E722
             self._context.__exit__(*sys.exc_info())
             raise
-
-
-class ResultPageConverter:
-    @abstractmethod
-    def convert(self, raw_rows: Iterable[sqlalchemy.Row], next_key: PageKey | None) -> ResultPage:
-        raise NotImplementedError()
-
-
-class DimensionRecordResultConverter(ResultPageConverter):
-    def __init__(self, spec: DimensionRecordResultSpec, db: Database) -> None:
-        self._result_spec = spec
-        self._timespan_repr_cls = db.getTimespanRepresentation()
-
-    def convert(
-        self, raw_rows: Iterable[sqlalchemy.Row], next_key: PageKey | None
-    ) -> DimensionRecordResultPage:
-        """Convert a raw SQL result iterable into a page of `DimensionRecord`
-        query results.
-
-        Parameters
-        ----------
-        raw_rows : `~collections.abc.Iterable` [ `sqlalchemy.Row` ]
-            Iterable of SQLAlchemy rows, with `Postprocessing` filters already
-            applied.
-        next_key : `PageKey` or `None`
-            Key for the next page to add into the returned page object.
-
-        Returns
-        -------
-        result_page : `DimensionRecordResultPage`
-            Page object that holds a `DimensionRecord` container.
-        """
-        result_spec = self._result_spec
-        record_set = DimensionRecordSet(result_spec.element)
-        record_cls = result_spec.element.RecordClass
-        if isinstance(result_spec.element, SkyPixDimension):
-            pixelization = result_spec.element.pixelization
-            id_qualified_name = qt.ColumnSet.get_qualified_name(result_spec.element.name, None)
-            for raw_row in raw_rows:
-                pixel_id = raw_row._mapping[id_qualified_name]
-                record_set.add(record_cls(id=pixel_id, region=pixelization.pixel(pixel_id)))
-        else:
-            # Mapping from DimensionRecord attribute name to qualified column
-            # name, but as a list of tuples since we'd just iterate over items
-            # anyway.
-            column_map = list(
-                zip(
-                    result_spec.element.schema.dimensions.names,
-                    result_spec.element.dimensions.names,
-                )
-            )
-            for field in result_spec.element.schema.remainder.names:
-                if field != "timespan":
-                    column_map.append(
-                        (field, qt.ColumnSet.get_qualified_name(result_spec.element.name, field))
-                    )
-            if result_spec.element.temporal:
-                timespan_qualified_name = qt.ColumnSet.get_qualified_name(
-                    result_spec.element.name, "timespan"
-                )
-            else:
-                timespan_qualified_name = None
-            for raw_row in raw_rows:
-                m = raw_row._mapping
-                d = {k: m[v] for k, v in column_map}
-                if timespan_qualified_name is not None:
-                    d["timespan"] = self._timespan_repr_cls.extract(m, name=timespan_qualified_name)
-                record_set.add(record_cls(**d))
-        return DimensionRecordResultPage(spec=result_spec, next_key=next_key, rows=record_set)
-
-
-class DataCoordinateResultConverter(ResultPageConverter):
-    def __init__(self, spec: DataCoordinateResultSpec, column_order: qt.ColumnOrder) -> None:
-        self._spec = spec
-        self._converter = _DataCoordinateRowConverter(spec.dimensions, column_order)
-
-    def convert(
-        self,
-        raw_rows: Iterable[sqlalchemy.Row],
-        next_key: PageKey | None,
-    ) -> DataCoordinateResultPage:
-        """Convert a raw SQL result iterable into a page of `DataCoordinate`
-        query results.
-
-        Parameters
-        ----------
-        raw_rows : `~collections.abc.Iterable` [ `sqlalchemy.Row` ]
-            Iterable of SQLAlchemy rows, with `Postprocessing` filters already
-            applied.
-        next_key : `PageKey` or `None`
-            Key for the next page to add into the returned page object.
-
-        Returns
-        -------
-        result_page : `DataCoordinateResultPage`
-            Page object that holds a `DataCoordinate` container.
-        """
-        convert = self._converter.convert
-        rows = [convert(row) for row in raw_rows]
-        return DataCoordinateResultPage(spec=self._spec, rows=rows, next_key=next_key)
-
-
-class _DataCoordinateRowConverter:
-    """Helper for converting a raw SQL result row into a DataCoordinate
-    instance.
-    """
-
-    def __init__(self, dimensions: DimensionGroup, column_order: qt.ColumnOrder):
-        assert (
-            list(dimensions.data_coordinate_keys) == column_order.dimension_key_names
-        ), "Dimension keys in result row should be in same order as those specified by the result spec"
-
-        self._dimensions = dimensions
-        self._column_order = column_order
-
-    def convert(self, row: sqlalchemy.Row) -> DataCoordinate:
-        return DataCoordinate.from_full_values(
-            self._dimensions, tuple(self._column_order.extract_dimension_key_columns(row))
-        )
