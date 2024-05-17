@@ -509,7 +509,6 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         return ParentDatasetQueryResults(
             self._query.find_datasets(resolved_dataset_type, collections, find_first=findFirst, defer=True),
             resolved_dataset_type,
-            [None],
         )
 
     def findRelatedDatasets(
@@ -564,8 +563,7 @@ class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
         -------
         iter : `~collections.abc.Iterator` [ `ParentDatasetQueryResults` ]
             An iterator over `DatasetQueryResults` instances that are each
-            responsible for a single parent dataset type (either just that
-            dataset type, one or more of its component dataset types, or both).
+            responsible for a single parent dataset type.
         """
         raise NotImplementedError()
 
@@ -613,17 +611,8 @@ class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
         directly from queries.
         """
         for parent_results in self.byParentDatasetType():
-            for component in parent_results._components:
-                dataset_type = parent_results.parentDatasetType
-                if component is not None:
-                    dataset_type = dataset_type.makeComponentDatasetType(component)
-                if tuple(parent_results._components) == (component,):
-                    # Usual case, and in the future (after component support
-                    # has been fully removed) the only case.
-                    yield dataset_type, parent_results
-                else:
-                    # General case that emits a deprecation warning.
-                    yield (dataset_type, parent_results.withComponents((component,)))
+            dataset_type = parent_results.parentDatasetType
+            yield dataset_type, parent_results
 
 
 class ParentDatasetQueryResults(DatasetQueryResults):
@@ -636,9 +625,6 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         Low-level query object that backs these results.
     dataset_type : `DatasetType`
         Parent dataset type for all datasets returned by this query.
-    components : `~collections.abc.Sequence` [ `str` or `None` ], optional
-        Names of components to include in iteration.  `None` may be included
-        (at most once) to include the parent dataset type.
 
     Notes
     -----
@@ -652,27 +638,17 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         self,
         query: Query,
         dataset_type: DatasetType,
-        components: Sequence[str | None] = (None,),
     ):
         self._query = query
         self._dataset_type = dataset_type
-        self._components = components
 
-    __slots__ = ("_query", "_dataset_type", "_components")
+    __slots__ = ("_query", "_dataset_type")
 
     def __iter__(self) -> Iterator[DatasetRef]:
-        return self._query.iter_dataset_refs(self._dataset_type, self._components)
+        return self._query.iter_dataset_refs(self._dataset_type)
 
     def __repr__(self) -> str:
-        return f"<DatasetRef iterator for [components of] {self._dataset_type.name}>"
-
-    @property
-    @deprecated("Deprecated, will be removed after v27.", version="v27", category=FutureWarning)
-    def components(self) -> Sequence[str | None]:
-        """The components of the parent dataset type included in these results
-        (`~collections.abc.Sequence` [ `str` or `None` ]).
-        """
-        return self._components
+        return f"<DatasetRef iterator for {self._dataset_type.name}>"
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
@@ -682,7 +658,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
     def materialize(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         with self._query.open_context():
-            yield ParentDatasetQueryResults(self._query.materialized(), self._dataset_type, self._components)
+            yield ParentDatasetQueryResults(self._query.materialized(), self._dataset_type)
 
     @property
     def parentDatasetType(self) -> DatasetType:
@@ -702,28 +678,13 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         """
         return DatabaseDataCoordinateQueryResults(self._query.projected(defer=True))
 
-    @deprecated("Deprecated, will be removed after v27.", version="v27", category=FutureWarning)
-    def withComponents(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
-        """Return a new query results object for the same parent datasets but
-        different components.
-
-        Parameters
-        ----------
-        components :  `~collections.abc.Sequence` [ `str` or `None` ]
-            Names of components to include in iteration.  `None` may be
-            included (at most once) to include the parent dataset type.
-        """
-        return ParentDatasetQueryResults(self._query, self._dataset_type, components)
-
     def expanded(self) -> ParentDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
-        return ParentDatasetQueryResults(
-            self._query.with_record_columns(defer=True), self._dataset_type, self._components
-        )
+        return ParentDatasetQueryResults(self._query.with_record_columns(defer=True), self._dataset_type)
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
-        return len(self._components) * self._query.count(exact=exact, discard=discard)
+        return self._query.count(exact=exact, discard=discard)
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         # Docstring inherited.
