@@ -1241,8 +1241,6 @@ class _Cursor:
 
         Parameters
         ----------
-        spec : `DataCoordinateResultSpec`
-            Specification for the output values.
         raw_rows : `~collections.abc.Iterable` [ `sqlalchemy.Row` ]
             Iterable of SQLAlchemy rows, with `Postprocessing` filters already
             applied.
@@ -1257,16 +1255,26 @@ class _Cursor:
         spec = self._result_spec
         assert isinstance(spec, DataCoordinateResultSpec)
 
-        dimensions = spec.dimensions
-        column_order = self._column_order
+        converter = _DataCoordinateConverter(spec.dimensions, self._column_order)
+
+        rows = [converter.convert(row) for row in raw_rows]
+        return DataCoordinateResultPage(spec=spec, rows=rows, next_key=next_key)
+
+
+class _DataCoordinateConverter:
+    """Helper for converting raw SQL result rows into DataCoordinate
+    instances.
+    """
+
+    def __init__(self, dimensions: DimensionGroup, column_order: qt.ColumnOrder):
         assert (
             list(dimensions.data_coordinate_keys) == column_order.dimension_key_names
         ), "Dimension keys in result row should be in same order as those specified by the result spec"
 
-        rows = [
-            DataCoordinate.from_full_values(
-                dimensions, tuple(column_order.extract_dimension_key_columns(row))
-            )
-            for row in raw_rows
-        ]
-        return DataCoordinateResultPage(spec=spec, rows=rows, next_key=next_key)
+        self._dimensions = dimensions
+        self._column_order = column_order
+
+    def convert(self, row: sqlalchemy.Row) -> DataCoordinate:
+        return DataCoordinate.from_full_values(
+            self._dimensions, tuple(self._column_order.extract_dimension_key_columns(row))
+        )
