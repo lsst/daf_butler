@@ -190,12 +190,27 @@ class MappingFactory:
         # Supplied keyword args must overwrite registry defaults
         # We want this overwriting to happen recursively since we expect
         # some of these keyword arguments to be dicts.
-        # Simplest to use Config for this
+        # Simplest to use Config for this but have to be careful for top-level
+        # objects that look like Mappings but aren't (eg DataCoordinate) so
+        # only merge keys that appear in both kwargs.
         merged_kwargs: dict[str, Any] = {}
         if kwargs and registry_kwargs:
-            config_kwargs = Config(registry_kwargs)
-            config_kwargs.update(kwargs)
-            merged_kwargs = config_kwargs.toDict()
+            kwargs_keys = set(kwargs.keys())
+            registry_keys = set(registry_kwargs.keys())
+            common_keys = kwargs_keys & registry_keys
+            if common_keys:
+                config_kwargs = Config({k: registry_kwargs[k] for k in common_keys})
+                config_kwargs.update({k: kwargs[k] for k in common_keys})
+                merged_kwargs = config_kwargs.toDict()
+
+                if kwargs_only := kwargs_keys - common_keys:
+                    merged_kwargs.update({k: kwargs[k] for k in kwargs_only})
+                if registry_only := registry_keys - common_keys:
+                    merged_kwargs.update({k: registry_kwargs[k] for k in registry_only})
+            else:
+                # Distinct in each.
+                merged_kwargs = kwargs
+                merged_kwargs.update(registry_kwargs)
         elif registry_kwargs:
             merged_kwargs = registry_kwargs
         elif kwargs:
