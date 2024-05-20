@@ -683,8 +683,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 # Avoid a join to the collection table to get the name by using
                 # a CASE statement.  The SQL will be a bit more verbose but
                 # more efficient.
-                fields_provided["collection"] = sqlalchemy.case(
-                    {record.key: record.name for record in collections}, value=collection_col
+                fields_provided["collection"] = _create_case_expression_for_collections(
+                    collections, collection_col
                 )
         # Add more column definitions, starting with the data ID.
         sql_projection.joiner.extract_dimensions(self.datasetType.dimensions.required.names)
@@ -707,9 +707,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             elif run_collections_only:
                 # Once again we can avoid joining to the collection table by
                 # adding a CASE statement.
-                fields_provided["run"] = sqlalchemy.case(
-                    {record.key: record.name for record in collections},
-                    value=self._static.dataset.c[self._runKeyColumn],
+                fields_provided["run"] = _create_case_expression_for_collections(
+                    collections, self._static.dataset.c[self._runKeyColumn]
                 )
                 need_static_table = True
             else:
@@ -1062,3 +1061,36 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     f"has ID {row.dataset_id} in existing collection {existing_collection!r} "
                     f"but ID {row.new_dataset_id} in new collection {new_collection!r}."
                 )
+
+
+def _create_case_expression_for_collections(
+    collections: Iterable[CollectionRecord], id_column: sqlalchemy.ColumnElement
+) -> sqlalchemy.Case | sqlalchemy.Null:
+    """Return a SQLAlchemy Case expression that converts collection IDs to
+    collection names for the given set of collections.
+
+    Parameters
+    ----------
+    collections : `~collections.abc.Iterable` [ `CollectionRecord` ]
+        List of collections to include in conversion table.  This should be an
+        exhaustive list of collections that could appear in `id_column`.
+    id_column : `sqlalchemy.ColumnElement`
+        The column containing the collection ID that we want to convert to a
+        collection name.
+    """
+    mapping = {record.key: record.name for record in collections}
+    if not mapping:
+        # SQLAlchemy does not correctly handle an empty mapping in case() -- it
+        # crashes when trying to compile the expression with an
+        # "AttributeError('NoneType' object has no attribute 'dialect_impl')"
+        # when trying to access the 'type' property of the Case object.  If you
+        # explicitly specify a type via type_coerce it instead generates
+        # invalid SQL syntax.
+        #
+        # We can end up with empty mappings here in certain "doomed query" edge
+        # cases, e.g.  we start with a list of valid collections but they are
+        # all filtered out by higher-level code on the basis of collection
+        # summaries.
+        return sqlalchemy.null()
+
+    return sqlalchemy.case(mapping, value=id_column)
