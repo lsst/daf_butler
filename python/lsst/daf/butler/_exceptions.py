@@ -79,7 +79,16 @@ class ButlerUserError(Exception):
 
 
 class CalibrationLookupError(LookupError, ButlerUserError):
-    """Exception raised for failures to look up a calibration dataset."""
+    """Exception raised for failures to look up a calibration dataset.
+
+    For a find-first query involving a calibration dataset to work, either the
+    query's result rows need to include a temporal dimension or needs to be
+    constrained temporally, such that each result row corresponds to a unique
+    calibration dataset.  This exception can be raised if those dimensions or
+    constraint are missing, or if a temporal dimension timespan overlaps
+    multiple validity ranges (e.g. the recommended bias changes in the middle
+    of an exposure).
+    """
 
     error_type = "calibration_lookup"
 

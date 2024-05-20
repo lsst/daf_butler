@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, ClassVar
 import sqlalchemy
 from lsst.sphgeom import DISJOINT, Region
 
-from ..queries import ValidityRangeMatchError
+from .._exceptions import CalibrationLookupError
 from ..queries import tree as qt
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ class Postprocessing:
     """If `True`, result rows will include a special column that counts the
     number of matching datasets in each collection for each data ID, and
     postprocessing should check that the value of this column is one for
-    every row (and raise `.queries.ValidityRangeMatchError` if it is not).
+    every row (and raise `CalibrationLookupError` if it is not).
     """
 
     @property
@@ -202,7 +202,7 @@ class Postprocessing:
             ):
                 continue
             if self.check_validity_match_count and m[self.VALIDITY_MATCH_COUNT] > 1:
-                raise ValidityRangeMatchError(
+                raise CalibrationLookupError(
                     "Ambiguous calibration validity range match. This usually means a temporal join or "
                     "'where' needs to be added, but it could also mean that multiple validity ranges "
                     "overlap a single output data ID."
