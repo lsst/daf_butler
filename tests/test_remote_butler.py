@@ -202,11 +202,6 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
         # TODO DM-44362
         return super().test_skypix_constraint_queries()
 
-    @unittest.expectedFailure
-    def testIngestTimeQuery(self):
-        # TODO DM-44414
-        return super().testIngestTimeQuery()
-
 
 if __name__ == "__main__":
     unittest.main()

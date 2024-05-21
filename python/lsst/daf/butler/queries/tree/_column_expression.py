@@ -35,6 +35,7 @@ __all__ = (
     "Reversed",
     "UnaryOperator",
     "BinaryOperator",
+    "is_one_datetime_and_one_ingest_date",
     "is_one_timespan_and_one_datetime",
     "validate_order_expression",
 )
@@ -239,7 +240,7 @@ def validate_order_expression(expression: _ColumnExpression | Reversed) -> _Colu
     InvalidQueryError
         Raised if this expression is not one that can be used for sorting.
     """
-    if expression.column_type not in ("int", "string", "float", "datetime"):
+    if expression.column_type not in ("int", "string", "float", "datetime", "ingest_date"):
         raise InvalidQueryError(f"Column type {expression.column_type} of {expression} is not ordered.")
     return expression
 
@@ -274,3 +275,14 @@ def is_one_timespan_and_one_datetime(
         return TimespanAndDatetime(b, a)
     else:
         return None
+
+
+def is_one_datetime_and_one_ingest_date(
+    a: ColumnExpression, b: ColumnExpression
+) -> bool:  # numpydoc ignore=PR01
+    """Return `True` if the two columns ``a`` and `b`` include one datetime
+    column and one ingest_date column.
+    """
+    return (a.column_type == "datetime" and b.column_type == "ingest_date") or (
+        a.column_type == "ingest_date" and b.column_type == "datetime"
+    )

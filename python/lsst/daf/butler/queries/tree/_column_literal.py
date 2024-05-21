@@ -33,6 +33,7 @@ __all__ = (
     "make_column_literal",
 )
 
+import datetime
 import uuid
 import warnings
 from base64 import b64decode, b64encode
@@ -47,7 +48,9 @@ from ..._timespan import Timespan
 from ...time_utils import TimeConverter
 from ._base import ColumnLiteralBase
 
-LiteralValue: TypeAlias = int | str | float | bytes | uuid.UUID | astropy.time.Time | Timespan | Region
+LiteralValue: TypeAlias = (
+    int | str | float | bytes | uuid.UUID | astropy.time.Time | datetime.datetime | Timespan | Region
+)
 
 
 @final
@@ -367,6 +370,8 @@ def make_column_literal(value: LiteralValue) -> ColumnLiteral:
             return HashColumnLiteral.from_value(value)
         case astropy.time.Time():
             return DateTimeColumnLiteral.from_value(value)
+        case datetime.date():
+            return DateTimeColumnLiteral.from_value(astropy.time.Time(value))
         case Timespan():
             return TimespanColumnLiteral.from_value(value)
         case Region():

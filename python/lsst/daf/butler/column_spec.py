@@ -56,7 +56,26 @@ from ._timespan import Timespan
 from .name_shrinker import NameShrinker
 
 ColumnType: TypeAlias = Literal[
-    "int", "string", "hash", "float", "datetime", "bool", "uuid", "timespan", "region"
+    "int",
+    "string",
+    "hash",
+    "float",
+    "datetime",
+    "bool",
+    "uuid",
+    "timespan",
+    "region",
+    # The ingest_date column in the datasets table can be one of two column
+    # types:
+    # 1. TIMESTAMP column (which is not used anywhere else in the DB)
+    # 2. Integer nanoseconds TAI (same as "datetime" column type)
+    # Which it is depends on the database schema in use for the "datasets"
+    # manager.  (v1 is TIMESTAMP, v2 is integer).  See makeStaticTableSpecs in
+    # lsst.daf.butler.registry.datasets.byDimensions.tables.
+    #
+    # We don't know which it is until we go to resolve the query against
+    # a database, so it has to be its own data type.
+    "ingest_date",
 ]
 
 
