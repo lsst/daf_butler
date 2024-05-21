@@ -553,7 +553,13 @@ def pandas_to_arrow(dataframe: pd.DataFrame, default_length: int = 10) -> pa.Tab
     arrow_table : `pyarrow.Table`
         Converted arrow table.
     """
-    arrow_table = pa.Table.from_pandas(dataframe)
+    try:
+        arrow_table = pa.Table.from_pandas(dataframe)
+    except pa.ArrowInvalid as e:
+        msg = "; ".join(e.args)
+        msg += "; This is usually because the column is mixed type or has uneven length rows."
+        e.add_note(msg)
+        raise
 
     # Update the metadata
     md = arrow_table.schema.metadata
@@ -1243,7 +1249,14 @@ def _numpy_dtype_to_arrow_types(dtype: np.dtype) -> list[Any]:
                 prod(dt.shape),
             )
         else:
-            arrow_type = pa.from_numpy_dtype(dt.type)
+            try:
+                arrow_type = pa.from_numpy_dtype(dt.type)
+            except pa.ArrowNotImplementedError as e:
+                msg = f"Could not serialize column {name} (type {str(dt)}) to Parquet."
+                if dt == np.dtype("O"):
+                    msg += " This is usually because the column is mixed type or has uneven length rows."
+                e.add_note(msg)
+                raise
         type_list.append((name, arrow_type))
 
     return type_list

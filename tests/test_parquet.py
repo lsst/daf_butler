@@ -718,12 +718,30 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # This test simply checks that it's readable, but definitely not
         # recommended.
 
+    def testBadDataFrameColumnParquet(self):
+        df1, allColumns = _makeSingleIndexDataFrame()
+
+        # Make a column with mixed type.
+        bad_col1 = [0.0] * len(df1)
+        bad_col1[1] = 0.0 * units.nJy
+        bad_df = df1.copy()
+        bad_df["bad_col1"] = bad_col1
+
+        # At the moment we cannot check that the correct note is added
+        # to the exception, but that will be possible in the future.
+        with self.assertRaises(RuntimeError):
+            self.butler.put(bad_df, self.datasetType, dataId={})
+
 
 @unittest.skipUnless(pd is not None, "Cannot test InMemoryDataFrameDelegate without pandas.")
 class InMemoryDataFrameDelegateTestCase(ParquetFormatterDataFrameTestCase):
     """Tests for InMemoryDatastore, using DataFrameDelegate."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+
+    def testBadDataFrameColumnParquet(self):
+        # This test does not raise for an in-memory datastore.
+        pass
 
     def testWriteMultiIndexDataFrameReadAsAstropyTable(self):
         df1 = _makeMultiIndexDataFrame()
@@ -1056,6 +1074,29 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
         self._checkAstropyTableEquality(tab1, tab2_astropy, skip_units=True)
 
+    def testBadAstropyColumnParquet(self):
+        tab1 = _makeSimpleAstropyTable()
+
+        # Make a column with mixed type.
+        bad_col1 = [0.0] * len(tab1)
+        bad_col1[1] = 0.0 * units.nJy
+        bad_tab = tab1.copy()
+        bad_tab["bad_col1"] = bad_col1
+
+        # At the moment we cannot check that the correct note is added
+        # to the exception, but that will be possible in the future.
+        with self.assertRaises(RuntimeError):
+            self.butler.put(bad_tab, self.datasetType, dataId={})
+
+        # Make a column with ragged size.
+        bad_col2 = [[0]] * len(tab1)
+        bad_col2[1] = [0, 0]
+        bad_tab = tab1.copy()
+        bad_tab["bad_col2"] = bad_col2
+
+        with self.assertRaises(RuntimeError):
+            self.butler.put(bad_tab, self.datasetType, dataId={})
+
     def _checkAstropyTableEquality(self, table1, table2, skip_units=False, has_bigendian=False):
         """Check if two astropy tables have the same columns/values.
 
@@ -1107,6 +1148,10 @@ class InMemoryArrowAstropyDelegateTestCase(ParquetFormatterArrowAstropyTestCase)
 
     def testAstropyParquet(self):
         # This test does not work with an inMemoryDatastore.
+        pass
+
+    def testBadAstropyColumnParquet(self):
+        # This test does not raise for an in-memory datastore.
         pass
 
     def testBadInput(self):
@@ -1331,6 +1376,33 @@ class ParquetFormatterArrowNumpyTestCase(unittest.TestCase):
 
         self._checkNumpyTableEquality(tab1, tab2_numpy)
 
+    def testBadNumpyColumnParquet(self):
+        tab1 = _makeSimpleAstropyTable()
+
+        # Make a column with mixed type.
+        bad_col1 = [0.0] * len(tab1)
+        bad_col1[1] = 0.0 * units.nJy
+        bad_tab = tab1.copy()
+        bad_tab["bad_col1"] = bad_col1
+
+        bad_tab_np = bad_tab.as_array()
+
+        # At the moment we cannot check that the correct note is added
+        # to the exception, but that will be possible in the future.
+        with self.assertRaises(RuntimeError):
+            self.butler.put(bad_tab_np, self.datasetType, dataId={})
+
+        # Make a column with ragged size.
+        bad_col2 = [[0]] * len(tab1)
+        bad_col2[1] = [0, 0]
+        bad_tab = tab1.copy()
+        bad_tab["bad_col2"] = bad_col2
+
+        bad_tab_np = bad_tab.as_array()
+
+        with self.assertRaises(RuntimeError):
+            self.butler.put(bad_tab_np, self.datasetType, dataId={})
+
     def _checkNumpyTableEquality(self, table1, table2, has_bigendian=False):
         """Check if two numpy tables have the same columns/values
 
@@ -1355,6 +1427,10 @@ class InMemoryArrowNumpyDelegateTestCase(ParquetFormatterArrowNumpyTestCase):
     """Tests for InMemoryDatastore, using ArrowNumpyDelegate."""
 
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+
+    def testBadNumpyColumnParquet(self):
+        # This test does not raise for an in-memory datastore.
+        pass
 
     def testBadInput(self):
         tab1 = _makeSimpleNumpyTable()
@@ -1860,6 +1936,10 @@ class ParquetFormatterArrowNumpyDictTestCase(unittest.TestCase):
         dict3 = {"a": [0] * 5, "b": np.zeros(5)}
         with self.assertRaises(RuntimeError):
             self.butler.put(dict3, self.datasetType, dataId={})
+
+        dict4 = {"a": np.zeros(4), "b": np.zeros(4, dtype="O")}
+        with self.assertRaises(RuntimeError):
+            self.butler.put(dict4, self.datasetType, dataId={})
 
     def _checkNumpyDictEquality(self, dict1, dict2):
         """Check if two numpy dicts have the same columns/values.
