@@ -203,11 +203,6 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
         return super().test_skypix_constraint_queries()
 
     @unittest.expectedFailure
-    def testStorageClassPropagation(self):
-        # TODO DM-44414
-        return super().testStorageClassPropagation()
-
-    @unittest.expectedFailure
     def testIngestTimeQuery(self):
         # TODO DM-44414
         return super().testIngestTimeQuery()

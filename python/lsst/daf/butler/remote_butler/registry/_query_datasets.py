@@ -91,11 +91,18 @@ class QueryDriverDatasetRefQueryResults(
         return query.datasets(self._dataset_type, self._args.collections, find_first=self._find_first)
 
     def __iter__(self) -> Iterator[DatasetRef]:
+        # We have to eagerly fetch the results to prevent
+        # leaking the resources associated with QueryDriver.
+        return iter(list(self._iterate_rows()))
+
+    def _iterate_rows(self) -> Iterator[DatasetRef]:
         with self._build_query() as result:
-            # We have to eagerly fetch the results to prevent
-            # leaking the resources associated with QueryDriver.
-            records = list(result)
-        return iter(records)
+            target_storage_class = self._dataset_type.storageClass
+            for ref in result:
+                if ref.datasetType.storageClass != target_storage_class:
+                    yield ref.overrideStorageClass(target_storage_class)
+                else:
+                    yield ref
 
     @property
     def parentDatasetType(self) -> DatasetType:
