@@ -233,6 +233,7 @@ class PostgresqlRegistryTests(RegistryTests):
     """
 
     sometimesHasDuplicateQueryRows = True
+    supportsCalibrationCollectionInFindFirst = False
 
     @classmethod
     def setUpClass(cls):

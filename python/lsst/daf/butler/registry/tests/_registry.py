@@ -60,6 +60,7 @@ from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
 from ..._exceptions import (
+    CalibrationLookupError,
     CollectionTypeError,
     DataIdValueError,
     InconsistentDataIdError,
@@ -137,6 +138,13 @@ class RegistryTests(ABC):
     """True if the registry class being tested supports ``<`` and ``>``
     operators in expression strings for comparisons of `Timespan` vs
     `Timespan`, or `Timespan` vs `Time`.
+    """
+
+    supportsCalibrationCollectionInFindFirst: bool = True
+    """True if the registry class being tested supports searching in
+    calibration collections in queryDatasets(findFirst=True).
+    (The old query system would ignore/"skip" calibration collections in these
+    searches.  The new one is able to search in these collections.)
     """
 
     @classmethod
@@ -2629,9 +2637,17 @@ class RegistryTests(ABC):
         datasets = list(registry.queryDatasets("bias", collections=...))
         self.assertGreater(len(datasets), 0)
 
-        # few tests with findFirst
-        datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
-        self.assertGreater(len(datasets), 0)
+        if self.supportsCalibrationCollectionInFindFirst:
+            # New query system correctly determines that this search is
+            # ambiguous, because there are multiple datasets with the same
+            # {instrument=Cam1, detector=2} data ID in the calibration
+            # collection at the beginning of the chain.
+            with self.assertRaises(CalibrationLookupError):
+                datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
+        else:
+            # Old query system ignores calibration collection entirely.
+            datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
+            self.assertGreater(len(datasets), 0)
 
     def testIngestTimeQuery(self):
         registry = self.makeRegistry()
