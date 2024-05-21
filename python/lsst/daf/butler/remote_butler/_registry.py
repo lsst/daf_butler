@@ -60,7 +60,12 @@ from ..registry import (
     Registry,
     RegistryDefaults,
 )
-from ..registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
+from ..registry.queries import (
+    ChainedDatasetQueryResults,
+    DataCoordinateQueryResults,
+    DatasetQueryResults,
+    DimensionRecordQueryResults,
+)
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 from ..remote_butler import RemoteButler
 from ._collection_args import (
@@ -70,6 +75,7 @@ from ._collection_args import (
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .registry._query_common import CommonQueryArguments
 from .registry._query_data_coordinates import QueryDriverDataCoordinateQueryResults
+from .registry._query_datasets import QueryDriverDatasetRefQueryResults
 from .registry._query_dimension_records import QueryDriverDimensionRecordQueryResults
 from .server_models import (
     ExpandDataIdRequestModel,
@@ -372,7 +378,51 @@ class RemoteButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DatasetQueryResults:
-        raise NotImplementedError()
+        doomed_by: list[str] = []
+        dimension_group = self.dimensions.conform(dimensions) if dimensions is not None else None
+        args = self._convert_common_query_arguments(
+            dataId=dataId,
+            where=where,
+            bind=bind,
+            kwargs=kwargs,
+            datasets=None,
+            collections=collections,
+            doomed_by=doomed_by,
+        )
+
+        missing_dataset_types: list[str] = []
+        dataset_types = list(self.queryDatasetTypes(datasetType, missing=missing_dataset_types))
+        if missing_dataset_types:
+            doomed_by.extend(f"Dataset type {name} is not registered." for name in missing_dataset_types)
+
+        if not args.collections:
+            doomed_by.append("No datasets can be found because collection list is empty.")
+
+        if len(dataset_types) == 0:
+            doomed_by.extend(
+                [
+                    f"No registered dataset type matching {t!r} found, so no matching datasets can "
+                    "exist in any collection."
+                    for t in ensure_iterable(datasetType)
+                ]
+            )
+            return ChainedDatasetQueryResults([], doomed_by=doomed_by)
+
+        query_results = [
+            QueryDriverDatasetRefQueryResults(
+                self._butler._query,
+                args,
+                dataset_type=dt,
+                find_first=findFirst,
+                extra_dimensions=dimension_group,
+                doomed_by=doomed_by,
+            )
+            for dt in dataset_types
+        ]
+        if len(query_results) == 1:
+            return query_results[0]
+        else:
+            return ChainedDatasetQueryResults(query_results)
 
     def queryDataIds(
         self,
@@ -425,6 +475,7 @@ class RemoteButlerRegistry(Registry):
         where: str = "",
         bind: Mapping[str, Any] | None = None,
         kwargs: dict[str, int | str],
+        doomed_by: list[str] | None = None,
     ) -> CommonQueryArguments:
         dataset_types = self._resolve_dataset_types(datasets)
         if dataset_types and collections is None and not self.defaults.collections:
@@ -435,7 +486,7 @@ class RemoteButlerRegistry(Registry):
             bind=dict(bind) if bind else None,
             kwargs=dict(kwargs),
             dataset_types=dataset_types,
-            collections=self._resolve_collections(collections),
+            collections=self._resolve_collections(collections, doomed_by),
         )
 
     def queryDatasetAssociations(
@@ -456,13 +507,18 @@ class RemoteButlerRegistry(Registry):
     def storageClasses(self, value: StorageClassFactory) -> None:
         raise NotImplementedError()
 
-    def _resolve_collections(self, collections: CollectionArgType | None) -> list[str] | None:
+    def _resolve_collections(
+        self, collections: CollectionArgType | None, doomed_by: list[str] | None = None
+    ) -> list[str] | None:
         if collections is None:
             return list(self.defaults.collections)
 
         wildcard = CollectionWildcard.from_expression(collections)
         if wildcard.patterns:
-            return list(self.queryCollections(collections))
+            result = list(self.queryCollections(collections))
+            if not result and doomed_by is not None:
+                doomed_by.append(f"No collections found matching expression {wildcard}")
+            return result
         else:
             return list(wildcard.strings)
 

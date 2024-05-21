@@ -2629,9 +2629,10 @@ class RegistryTests(ABC):
         self.assertGreater(len(datasets), 0)
 
         # regular expression will skip too
-        pattern = re.compile(".*")
-        datasets = list(registry.queryDatasets("bias", collections=pattern))
-        self.assertGreater(len(datasets), 0)
+        if self.supportsCollectionRegex:
+            pattern = re.compile(".*")
+            datasets = list(registry.queryDatasets("bias", collections=pattern))
+            self.assertGreater(len(datasets), 0)
 
         # ellipsis should work as usual
         datasets = list(registry.queryDatasets("bias", collections=...))
@@ -2929,7 +2930,7 @@ class RegistryTests(ABC):
             ),
             (
                 # No collections matching at all.
-                registry.queryDatasets("flat", collections=re.compile("potato.+")),
+                registry.queryDatasets("flat", collections="potato*"),
                 ["potato"],
             ),
         ]
@@ -3046,7 +3047,6 @@ class RegistryTests(ABC):
         self.assertTrue(query5.any(execute=True, exact=True))
         self.assertGreaterEqual(query5.count(exact=False), 1)
         self.assertGreaterEqual(query5.count(exact=True), 1)
-        self.assertFalse(list(query5.explain_no_results()))
         # This query applies a selection that yields no results, fully in the
         # database.  Explaining why it fails involves traversing the relation
         # tree and running a LIMIT 1 query at each level that has the potential

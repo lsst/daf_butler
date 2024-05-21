@@ -288,16 +288,32 @@ class HybridButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DatasetQueryResults:
-        return self._direct.queryDatasets(
-            datasetType,
-            collections=collections,
-            dimensions=dimensions,
-            dataId=dataId,
-            where=where,
-            findFirst=findFirst,
-            bind=bind,
-            check=check,
-            **kwargs,
+        return cast(
+            DatasetQueryResults,
+            _HybridDatasetQueryResults(
+                direct=self._direct.queryDatasets(
+                    datasetType,
+                    collections=collections,
+                    dimensions=dimensions,
+                    dataId=dataId,
+                    where=where,
+                    findFirst=findFirst,
+                    bind=bind,
+                    check=check,
+                    **kwargs,
+                ),
+                remote=self._remote.queryDatasets(
+                    datasetType,
+                    collections=collections,
+                    dimensions=dimensions,
+                    dataId=dataId,
+                    where=where,
+                    findFirst=findFirst,
+                    bind=bind,
+                    check=check,
+                    **kwargs,
+                ),
+            ),
         )
 
     def queryDataIds(
@@ -449,3 +465,22 @@ class _HybridDataCoordinateQueryResults:
         return self._direct.findRelatedDatasets(
             datasetType, collections, findFirst=findFirst, dimensions=dimensions
         )
+
+
+class _HybridDatasetQueryResults:
+    """Shim DatasetQueryResults so that DirectButler can
+    provide a few methods that aren't implemented yet.
+    """
+
+    def __init__(self, *, direct: DatasetQueryResults, remote: DatasetQueryResults) -> None:
+        self._direct = direct
+        self._remote = remote
+
+    def __getattr__(self, name: str) -> Any:
+        if name in ("materialize", "expanded"):
+            return getattr(self._direct, name)
+        else:
+            return getattr(self._remote, name)
+
+    def __iter__(self) -> Iterator[DatasetRef]:
+        return iter(self._remote)
