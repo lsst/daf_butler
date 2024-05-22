@@ -1861,11 +1861,14 @@ class Database(ABC):
             connection = self._engine.connect()
         else:
             connection = self._session_connection
-        # TODO: SelectBase is not good for execute(), but it used everywhere,
-        # e.g. in daf_relation. We should switch to Executable at some point.
-        result = connection.execute(cast(sqlalchemy.sql.expression.Executable, sql), *args, **kwargs)
         try:
-            yield result
+            # TODO: SelectBase is not good for execute(), but it used
+            # everywhere, e.g. in daf_relation. We should switch to Executable
+            # at some point.
+            with connection.execute(
+                cast(sqlalchemy.sql.expression.Executable, sql), *args, **kwargs
+            ) as result:
+                yield result
         finally:
             if connection is not self._session_connection:
                 connection.close()

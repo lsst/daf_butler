@@ -98,20 +98,6 @@ class DirectButlerPostgreSQLTests(ButlerQueryTests, unittest.TestCase):
             storageClasses=StorageClassFactory(),
         )
 
-    # TODO (DM-43697): these tests fail due to something going awry with cursor
-    # and temporary table lifetime management; PostgreSQL says we can't drop
-    # temp tables because there are still active queries against them.  The
-    # logic looks fine but is obfuscated by the many levels of competing
-    # context managers in the Database class, so we'll punt this to DM-43697.
-
-    @unittest.expectedFailure
-    def test_data_coordinate_upload_force_temp_table(self) -> None:
-        super().test_data_coordinate_upload_force_temp_table()
-
-    @unittest.expectedFailure
-    def test_materialization(self) -> None:
-        return super().test_materialization()
-
 
 if __name__ == "__main__":
     unittest.main()
