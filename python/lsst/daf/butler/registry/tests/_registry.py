@@ -1555,6 +1555,11 @@ class RegistryTests(ABC):
             ],
         )
 
+        with self.assertRaises(TypeError):
+            # Collection wildcards not allowed in find-first searches because
+            # they do not guarantee the ordering of collections.
+            registry.queryDatasets("bias", collections="imported_*", findFirst=True)
+
     def testQueryResults(self):
         """Test querying for data IDs and then manipulating the QueryResults
         object returned to perform other queries.

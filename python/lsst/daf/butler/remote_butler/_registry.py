@@ -380,6 +380,15 @@ class RemoteButlerRegistry(Registry):
     ) -> DatasetQueryResults:
         doomed_by: list[str] = []
         dimension_group = self.dimensions.conform(dimensions) if dimensions is not None else None
+
+        if findFirst and collections is not None:
+            wildcard = CollectionWildcard.from_expression(collections)
+            if wildcard.patterns:
+                raise TypeError(
+                    "Collection search patterns not allowed in findFirst search, "
+                    "because collections must be in a specific order."
+                )
+
         args = self._convert_common_query_arguments(
             dataId=dataId,
             where=where,
@@ -390,13 +399,13 @@ class RemoteButlerRegistry(Registry):
             doomed_by=doomed_by,
         )
 
+        if not args.collections:
+            doomed_by.append("No datasets can be found because collection list is empty.")
+
         missing_dataset_types: list[str] = []
         dataset_types = list(self.queryDatasetTypes(datasetType, missing=missing_dataset_types))
         if missing_dataset_types:
             doomed_by.extend(f"Dataset type {name} is not registered." for name in missing_dataset_types)
-
-        if not args.collections:
-            doomed_by.append("No datasets can be found because collection list is empty.")
 
         if len(dataset_types) == 0:
             doomed_by.extend(
