@@ -2666,16 +2666,16 @@ class RegistryTests(ABC):
         len0 = len(datasets)
         self.assertGreater(len0, 0)
 
-        where = "ingest_date > T'2000-01-01'"
-        datasets = list(registry.queryDatasets(..., collections=..., where=where))
-        len1 = len(datasets)
-        self.assertEqual(len0, len1)
+        for where in ("ingest_date > T'2000-01-01'", "T'2000-01-01' < ingest_date"):
+            datasets = list(registry.queryDatasets(..., collections=..., where=where))
+            len1 = len(datasets)
+            self.assertEqual(len0, len1)
 
         # no one will ever use this piece of software in 30 years
-        where = "ingest_date > T'2050-01-01'"
-        datasets = list(registry.queryDatasets(..., collections=..., where=where))
-        len2 = len(datasets)
-        self.assertEqual(len2, 0)
+        for where in ("ingest_date > T'2050-01-01'", "T'2050-01-01' < ingest_date"):
+            datasets = list(registry.queryDatasets(..., collections=..., where=where))
+            len2 = len(datasets)
+            self.assertEqual(len2, 0)
 
         # Check more exact timing to make sure there is no 37 seconds offset
         # (after fixing DM-30124). SQLite time precision is 1 second, make
