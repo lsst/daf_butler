@@ -1560,6 +1560,44 @@ class RegistryTests(ABC):
             # they do not guarantee the ordering of collections.
             registry.queryDatasets("bias", collections="imported_*", findFirst=True)
 
+    def testQueryDatasetsExtraDimensions(self):
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Bias dataset type does not include physical filter.  By adding
+        # "physical_filter" to dimensions, we are effectively searching here
+        # for bias datasets with an instrument that has a specific filter
+        # available, even though that filter has nothing to do with the bias
+        # datasets we are finding.
+        self.assertEqual(
+            0,
+            registry.queryDatasets(
+                "bias",
+                collections=...,
+                dimensions=["physical_filter"],
+                dataId={
+                    "instrument": "Cam1",
+                    "band": "not_a_real_band",
+                },
+            ).count(),
+        )
+        self.assertEqual(
+            6,
+            len(
+                set(
+                    registry.queryDatasets(
+                        "bias",
+                        collections=...,
+                        dimensions=["physical_filter"],
+                        dataId={
+                            "instrument": "Cam1",
+                            "band": "r",
+                        },
+                    )
+                )
+            ),
+        )
+
     def testQueryResults(self):
         """Test querying for data IDs and then manipulating the QueryResults
         object returned to perform other queries.
