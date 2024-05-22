@@ -2651,10 +2651,18 @@ class RegistryTests(ABC):
         registry.registerCollection(chain, type=CollectionType.CHAINED)
         registry.setCollectionChain(chain, coll_list)
 
-        # explicit list will raise if findFirst=True or there are temporal
-        # dimensions
-        with self.assertRaises(NotImplementedError):
-            registry.queryDatasets("bias", collections=coll_list, findFirst=True)
+        # explicit list will raise if findFirst=True.
+        # For old query system, this is because it couldn't handle find-first
+        # lookups in calibration collections.
+        # For new query system, it's because it correctly determines that the
+        # lookup is ambiguous due to multiple datasets with the same data ID
+        # in the calibration collection.
+        exception_type = (
+            CalibrationLookupError if self.supportsCalibrationCollectionInFindFirst else NotImplementedError
+        )
+        with self.assertRaises(exception_type):
+            list(registry.queryDatasets("bias", collections=coll_list, findFirst=True))
+        # explicit list will raise if there are temporal dimensions
         with self.assertRaises(NotImplementedError):
             registry.queryDataIds(
                 ["instrument", "detector", "exposure"], datasets="bias", collections=coll_list

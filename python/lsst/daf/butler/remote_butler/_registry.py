@@ -381,6 +381,8 @@ class RemoteButlerRegistry(Registry):
         doomed_by: list[str] = []
         dimension_group = self.dimensions.conform(dimensions) if dimensions is not None else None
 
+        if collections is None and not self.defaults.collections:
+            raise NoDefaultCollectionError("No collections provided, and no default collections set")
         if findFirst and collections is not None:
             wildcard = CollectionWildcard.from_expression(collections)
             if wildcard.patterns:
