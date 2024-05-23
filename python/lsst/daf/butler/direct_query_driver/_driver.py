@@ -161,10 +161,12 @@ class DirectQueryDriver(QueryDriver):
         assert self._exit_stack is not None
         self._materializations.clear()
         self._upload_tables.clear()
-        while self._cursors:
-            _, cursor = self._cursors.popitem()
-            cursor.close(exc_type, exc_value, traceback)
+        # Transfer open cursors' close methods to exit stack, this will help
+        # with the cleanup in case a cursor raises an exceptions on close.
+        for cursor in self._cursors.values():
+            self._exit_stack.push(cursor.close)
         self._exit_stack.__exit__(exc_type, exc_value, traceback)
+        self._cursors = {}
         self._exit_stack = None
 
     @property
