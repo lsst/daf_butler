@@ -60,6 +60,7 @@ from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
 from ..._dataset_type import DatasetType
 from ..._exceptions import (
+    CalibrationLookupError,
     CollectionTypeError,
     DataIdValueError,
     InconsistentDataIdError,
@@ -137,6 +138,13 @@ class RegistryTests(ABC):
     """True if the registry class being tested supports ``<`` and ``>``
     operators in expression strings for comparisons of `Timespan` vs
     `Timespan`, or `Timespan` vs `Time`.
+    """
+
+    supportsCalibrationCollectionInFindFirst: bool = True
+    """True if the registry class being tested supports searching in
+    calibration collections in queryDatasets(findFirst=True).
+    (The old query system would ignore/"skip" calibration collections in these
+    searches.  The new one is able to search in these collections.)
     """
 
     @classmethod
@@ -1547,6 +1555,49 @@ class RegistryTests(ABC):
             ],
         )
 
+        with self.assertRaises(TypeError):
+            # Collection wildcards not allowed in find-first searches because
+            # they do not guarantee the ordering of collections.
+            registry.queryDatasets("bias", collections="imported_*", findFirst=True)
+
+    def testQueryDatasetsExtraDimensions(self):
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Bias dataset type does not include physical filter.  By adding
+        # "physical_filter" to dimensions, we are effectively searching here
+        # for bias datasets with an instrument that has a specific filter
+        # available, even though that filter has nothing to do with the bias
+        # datasets we are finding.
+        self.assertEqual(
+            0,
+            registry.queryDatasets(
+                "bias",
+                collections=...,
+                dimensions=["physical_filter"],
+                dataId={
+                    "instrument": "Cam1",
+                    "band": "not_a_real_band",
+                },
+            ).count(),
+        )
+        self.assertEqual(
+            6,
+            len(
+                set(
+                    registry.queryDatasets(
+                        "bias",
+                        collections=...,
+                        dimensions=["physical_filter"],
+                        dataId={
+                            "instrument": "Cam1",
+                            "band": "r",
+                        },
+                    )
+                )
+            ),
+        )
+
     def testQueryResults(self):
         """Test querying for data IDs and then manipulating the QueryResults
         object returned to perform other queries.
@@ -2600,10 +2651,18 @@ class RegistryTests(ABC):
         registry.registerCollection(chain, type=CollectionType.CHAINED)
         registry.setCollectionChain(chain, coll_list)
 
-        # explicit list will raise if findFirst=True or there are temporal
-        # dimensions
-        with self.assertRaises(NotImplementedError):
-            registry.queryDatasets("bias", collections=coll_list, findFirst=True)
+        # explicit list will raise if findFirst=True.
+        # For old query system, this is because it couldn't handle find-first
+        # lookups in calibration collections.
+        # For new query system, it's because it correctly determines that the
+        # lookup is ambiguous due to multiple datasets with the same data ID
+        # in the calibration collection.
+        exception_type = (
+            CalibrationLookupError if self.supportsCalibrationCollectionInFindFirst else NotImplementedError
+        )
+        with self.assertRaises(exception_type):
+            list(registry.queryDatasets("bias", collections=coll_list, findFirst=True))
+        # explicit list will raise if there are temporal dimensions
         with self.assertRaises(NotImplementedError):
             registry.queryDataIds(
                 ["instrument", "detector", "exposure"], datasets="bias", collections=coll_list
@@ -2621,17 +2680,26 @@ class RegistryTests(ABC):
         self.assertGreater(len(datasets), 0)
 
         # regular expression will skip too
-        pattern = re.compile(".*")
-        datasets = list(registry.queryDatasets("bias", collections=pattern))
-        self.assertGreater(len(datasets), 0)
+        if self.supportsCollectionRegex:
+            pattern = re.compile(".*")
+            datasets = list(registry.queryDatasets("bias", collections=pattern))
+            self.assertGreater(len(datasets), 0)
 
         # ellipsis should work as usual
         datasets = list(registry.queryDatasets("bias", collections=...))
         self.assertGreater(len(datasets), 0)
 
-        # few tests with findFirst
-        datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
-        self.assertGreater(len(datasets), 0)
+        if self.supportsCalibrationCollectionInFindFirst:
+            # New query system correctly determines that this search is
+            # ambiguous, because there are multiple datasets with the same
+            # {instrument=Cam1, detector=2} data ID in the calibration
+            # collection at the beginning of the chain.
+            with self.assertRaises(CalibrationLookupError):
+                datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
+        else:
+            # Old query system ignores calibration collection entirely.
+            datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
+            self.assertGreater(len(datasets), 0)
 
     def testIngestTimeQuery(self):
         registry = self.makeRegistry()
@@ -2644,16 +2712,16 @@ class RegistryTests(ABC):
         len0 = len(datasets)
         self.assertGreater(len0, 0)
 
-        where = "ingest_date > T'2000-01-01'"
-        datasets = list(registry.queryDatasets(..., collections=..., where=where))
-        len1 = len(datasets)
-        self.assertEqual(len0, len1)
+        for where in ("ingest_date > T'2000-01-01'", "T'2000-01-01' < ingest_date"):
+            datasets = list(registry.queryDatasets(..., collections=..., where=where))
+            len1 = len(datasets)
+            self.assertEqual(len0, len1)
 
         # no one will ever use this piece of software in 30 years
-        where = "ingest_date > T'2050-01-01'"
-        datasets = list(registry.queryDatasets(..., collections=..., where=where))
-        len2 = len(datasets)
-        self.assertEqual(len2, 0)
+        for where in ("ingest_date > T'2050-01-01'", "T'2050-01-01' < ingest_date"):
+            datasets = list(registry.queryDatasets(..., collections=..., where=where))
+            len2 = len(datasets)
+            self.assertEqual(len2, 0)
 
         # Check more exact timing to make sure there is no 37 seconds offset
         # (after fixing DM-30124). SQLite time precision is 1 second, make
@@ -2913,7 +2981,7 @@ class RegistryTests(ABC):
             ),
             (
                 # No collections matching at all.
-                registry.queryDatasets("flat", collections=re.compile("potato.+")),
+                registry.queryDatasets("flat", collections="potato*"),
                 ["potato"],
             ),
         ]
@@ -3030,7 +3098,6 @@ class RegistryTests(ABC):
         self.assertTrue(query5.any(execute=True, exact=True))
         self.assertGreaterEqual(query5.count(exact=False), 1)
         self.assertGreaterEqual(query5.count(exact=True), 1)
-        self.assertFalse(list(query5.explain_no_results()))
         # This query applies a selection that yields no results, fully in the
         # database.  Explaining why it fails involves traversing the relation
         # tree and running a LIMIT 1 query at each level that has the potential

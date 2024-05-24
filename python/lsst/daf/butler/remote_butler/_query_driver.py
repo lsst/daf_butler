@@ -36,6 +36,7 @@ from collections.abc import Iterable
 from typing import Any, overload
 
 from ...butler import Butler
+from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
 from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionRecord, DimensionUniverse
 from ..queries.driver import (
@@ -131,6 +132,13 @@ class RemoteQueryDriver(QueryDriver):
                 spec=result_spec,
                 next_key=None,
                 rows=[DataCoordinate.from_simple(r, universe) for r in result.rows],
+            )
+        elif result_spec.result_type == "dataset_ref":
+            assert result.type == "dataset_ref"
+            return DatasetRefResultPage(
+                spec=result_spec,
+                next_key=None,
+                rows=[DatasetRef.from_simple(r, universe) for r in result.rows],
             )
         else:
             raise NotImplementedError(f"Unhandled result type {result_spec.result_type}")

@@ -141,7 +141,8 @@ class DatasetFieldReference(ColumnExpressionBase):
             case "dataset_id":
                 return "uuid"
             case "ingest_date":
-                return "datetime"
+                # See comment at definition of `ColumnType` type alias.
+                return "ingest_date"
             case "run":
                 return "string"
             case "collection":

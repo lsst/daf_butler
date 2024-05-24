@@ -30,6 +30,7 @@ __all__ = (
     "ChainedDatasetQueryResults",
     "DatabaseDataCoordinateQueryResults",
     "DatabaseDimensionRecordQueryResults",
+    "DatabaseParentDatasetQueryResults",
     "DataCoordinateQueryResults",
     "DatasetQueryResults",
     "DimensionRecordQueryResults",
@@ -60,9 +61,9 @@ from ._query import Query
 from ._structs import OrderByClause
 
 
-class QueryResultsBase:
-    """Abstract base class defining functions used by several of the other
-    QueryResults classes.
+class LimitedQueryResultsBase:
+    """Abstract base class defining functions that are shared by all of the
+    other QueryResults classes.
     """
 
     @abstractmethod
@@ -140,6 +141,12 @@ class QueryResultsBase:
             results.
         """
         raise NotImplementedError()
+
+
+class QueryResultsBase(LimitedQueryResultsBase):
+    """Abstract base class defining functions shared by several of the other
+    QueryResults classes.
+    """
 
     @abstractmethod
     def order_by(self, *args: str) -> Self:
@@ -500,10 +507,9 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         resolved_dataset_type = self._query.backend.resolve_single_dataset_type_wildcard(
             datasetType, explicit_only=True
         )
-        return ParentDatasetQueryResults(
+        return DatabaseParentDatasetQueryResults(
             self._query.find_datasets(resolved_dataset_type, collections, find_first=findFirst, defer=True),
             resolved_dataset_type,
-            [None],
         )
 
     def findRelatedDatasets(
@@ -545,7 +551,7 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         return self
 
 
-class DatasetQueryResults(Iterable[DatasetRef]):
+class DatasetQueryResults(LimitedQueryResultsBase, Iterable[DatasetRef]):
     """An interface for objects that represent the results of queries for
     datasets.
     """
@@ -558,13 +564,12 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         -------
         iter : `~collections.abc.Iterator` [ `ParentDatasetQueryResults` ]
             An iterator over `DatasetQueryResults` instances that are each
-            responsible for a single parent dataset type (either just that
-            dataset type, one or more of its component dataset types, or both).
+            responsible for a single parent dataset type.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def materialize(self) -> AbstractContextManager[DatasetQueryResults]:
+    def materialize(self) -> AbstractContextManager[Self]:
         """Insert this query's results into a temporary table.
 
         Returns
@@ -580,7 +585,7 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         raise NotImplementedError()
 
     @abstractmethod
-    def expanded(self) -> DatasetQueryResults:
+    def expanded(self) -> Self:
         """Return a `DatasetQueryResults` for which `DataCoordinate.hasRecords`
         returns `True` for all data IDs in returned `DatasetRef` objects.
 
@@ -598,87 +603,6 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def count(self, *, exact: bool = True, discard: bool = False) -> int:
-        """Count the number of rows this query would return.
-
-        Parameters
-        ----------
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed to account for that filtering in the count.  If `False`, the
-            result may be an upper bound.
-        discard : `bool`, optional
-            If `True`, compute the exact count even if it would require running
-            the full query and then throwing away the result rows after
-            counting them.  If `False`, this is an error, as the user would
-            usually be better off executing the query first to fetch its rows
-            into a new query (or passing ``exact=False``).  Ignored if
-            ``exact=False``.
-
-        Returns
-        -------
-        count : `int`
-            The number of rows the query would return, or an upper bound if
-            ``exact=False``.
-
-        Notes
-        -----
-        This counts the number of rows returned, not the number of unique rows
-        returned, so even with ``exact=True`` it may provide only an upper
-        bound on the number of *deduplicated* result rows.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def any(
-        self,
-        *,
-        execute: bool = True,
-        exact: bool = True,
-    ) -> bool:
-        """Test whether this query returns any results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
-            determined prior to execution that the query would return no rows.
-        exact : `bool`, optional
-            If `True`, run the full query and perform post-query filtering if
-            needed, until at least one result row is found.  If `False`, the
-            returned result does not account for post-query filtering, and
-            hence may be `True` even when all result rows would be filtered
-            out.
-
-        Returns
-        -------
-        any : `bool`
-            `True` if the query would (or might, depending on arguments) yield
-            result rows.  `False` if it definitely would not.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
-        """Return human-readable messages that may help explain why the query
-        yields no results.
-
-        Parameters
-        ----------
-        execute : `bool`, optional
-            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
-            of aspects of the tree to more precisely determine where rows were
-            filtered out.
-
-        Returns
-        -------
-        messages : `~collections.abc.Iterable` [ `str` ]
-            String messages that describe reasons the query might not yield any
-            results.
-        """
-        raise NotImplementedError()
-
     def _iter_by_dataset_type(self) -> Iterator[tuple[DatasetType, Iterable[DatasetRef]]]:
         """Group results by dataset type.
 
@@ -688,20 +612,37 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         directly from queries.
         """
         for parent_results in self.byParentDatasetType():
-            for component in parent_results._components:
-                dataset_type = parent_results.parentDatasetType
-                if component is not None:
-                    dataset_type = dataset_type.makeComponentDatasetType(component)
-                if tuple(parent_results._components) == (component,):
-                    # Usual case, and in the future (after component support
-                    # has been fully removed) the only case.
-                    yield dataset_type, parent_results
-                else:
-                    # General case that emits a deprecation warning.
-                    yield (dataset_type, parent_results.withComponents((component,)))
+            dataset_type = parent_results.parentDatasetType
+            yield dataset_type, parent_results
 
 
 class ParentDatasetQueryResults(DatasetQueryResults):
+    """An object that represents results from a query for datasets with a
+    single parent `DatasetType`.
+    """
+
+    @property
+    @abstractmethod
+    def parentDatasetType(self) -> DatasetType:
+        """The parent dataset type for all datasets in this iterable
+        (`DatasetType`).
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def dataIds(self) -> DataCoordinateQueryResults:
+        """A lazy-evaluation object representing a query for just the data
+        IDs of the datasets that would be returned by this query
+        (`DataCoordinateQueryResults`).
+
+        The returned object is not in general `zip`-iterable with ``self``;
+        it may be in a different order or have (or not have) duplicates.
+        """
+        raise NotImplementedError()
+
+
+class DatabaseParentDatasetQueryResults(ParentDatasetQueryResults):
     """An object that represents results from a query for datasets with a
     single parent `DatasetType`.
 
@@ -711,9 +652,6 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         Low-level query object that backs these results.
     dataset_type : `DatasetType`
         Parent dataset type for all datasets returned by this query.
-    components : `~collections.abc.Sequence` [ `str` or `None` ], optional
-        Names of components to include in iteration.  `None` may be included
-        (at most once) to include the parent dataset type.
 
     Notes
     -----
@@ -727,78 +665,47 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         self,
         query: Query,
         dataset_type: DatasetType,
-        components: Sequence[str | None] = (None,),
     ):
         self._query = query
         self._dataset_type = dataset_type
-        self._components = components
 
-    __slots__ = ("_query", "_dataset_type", "_components")
+    __slots__ = ("_query", "_dataset_type")
 
     def __iter__(self) -> Iterator[DatasetRef]:
-        return self._query.iter_dataset_refs(self._dataset_type, self._components)
+        return self._query.iter_dataset_refs(self._dataset_type)
 
     def __repr__(self) -> str:
-        return f"<DatasetRef iterator for [components of] {self._dataset_type.name}>"
-
-    @property
-    @deprecated("Deprecated, will be removed after v27.", version="v27", category=FutureWarning)
-    def components(self) -> Sequence[str | None]:
-        """The components of the parent dataset type included in these results
-        (`~collections.abc.Sequence` [ `str` or `None` ]).
-        """
-        return self._components
+        return f"<DatasetRef iterator for {self._dataset_type.name}>"
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         yield self
 
     @contextmanager
-    def materialize(self) -> Iterator[ParentDatasetQueryResults]:
+    def materialize(self) -> Iterator[DatabaseParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         with self._query.open_context():
-            yield ParentDatasetQueryResults(self._query.materialized(), self._dataset_type, self._components)
+            yield DatabaseParentDatasetQueryResults(self._query.materialized(), self._dataset_type)
 
     @property
     def parentDatasetType(self) -> DatasetType:
-        """The parent dataset type for all datasets in this iterable
-        (`DatasetType`).
-        """
+        # Docstring inherited.
         return self._dataset_type
 
     @property
     def dataIds(self) -> DataCoordinateQueryResults:
-        """A lazy-evaluation object representing a query for just the data
-        IDs of the datasets that would be returned by this query
-        (`DataCoordinateQueryResults`).
-
-        The returned object is not in general `zip`-iterable with ``self``;
-        it may be in a different order or have (or not have) duplicates.
-        """
+        # Docstring inherited.
         return DatabaseDataCoordinateQueryResults(self._query.projected(defer=True))
 
-    @deprecated("Deprecated, will be removed after v27.", version="v27", category=FutureWarning)
-    def withComponents(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
-        """Return a new query results object for the same parent datasets but
-        different components.
-
-        Parameters
-        ----------
-        components :  `~collections.abc.Sequence` [ `str` or `None` ]
-            Names of components to include in iteration.  `None` may be
-            included (at most once) to include the parent dataset type.
-        """
-        return ParentDatasetQueryResults(self._query, self._dataset_type, components)
-
-    def expanded(self) -> ParentDatasetQueryResults:
+    def expanded(self) -> DatabaseParentDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
-        return ParentDatasetQueryResults(
-            self._query.with_record_columns(defer=True), self._dataset_type, self._components
+        return DatabaseParentDatasetQueryResults(
+            self._query.with_record_columns(defer=True), self._dataset_type
         )
 
     def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
-        return len(self._components) * self._query.count(exact=exact, discard=discard)
+        return self._query.count(exact=exact, discard=discard)
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         # Docstring inherited.

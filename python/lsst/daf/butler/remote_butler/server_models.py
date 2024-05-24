@@ -254,7 +254,18 @@ class DimensionRecordsResultModel(pydantic.BaseModel):
     rows: list[SerializedDimensionRecord]
 
 
-QueryExecuteResultData: TypeAlias = DataCoordinateResultModel | DimensionRecordsResultModel
+class DatasetRefResultModel(pydantic.BaseModel):
+    """Result model for /query/execute/ when user requested DatasetRef
+    results.
+    """
+
+    type: Literal["dataset_ref"] = "dataset_ref"
+    rows: list[SerializedDatasetRef]
+
+
+QueryExecuteResultData: TypeAlias = (
+    DataCoordinateResultModel | DimensionRecordsResultModel | DatasetRefResultModel
+)
 
 
 class QueryExecuteResponseModel(pydantic.BaseModel):

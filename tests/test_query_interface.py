@@ -596,7 +596,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         )
         self.assertEqual(qt.DatasetFieldReference(dataset_type="raw", field="run").column_type, "string")
         self.assertEqual(
-            qt.DatasetFieldReference(dataset_type="raw", field="ingest_date").column_type, "datetime"
+            qt.DatasetFieldReference(dataset_type="raw", field="ingest_date").column_type, "ingest_date"
         )
         self.assertEqual(
             qt.DatasetFieldReference(dataset_type="raw", field="timespan").column_type, "timespan"

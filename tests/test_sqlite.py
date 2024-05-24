@@ -194,6 +194,7 @@ class SqliteFileRegistryTests(RegistryTests):
     """
 
     sometimesHasDuplicateQueryRows = True
+    supportsCalibrationCollectionInFindFirst = False
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
@@ -258,6 +259,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
     """Tests for `Registry` backed by a SQLite in-memory database."""
 
     sometimesHasDuplicateQueryRows = True
+    supportsCalibrationCollectionInFindFirst = False
 
     @classmethod
     def getDataDir(cls) -> str:

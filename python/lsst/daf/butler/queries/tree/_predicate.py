@@ -44,7 +44,11 @@ import pydantic
 
 from ..._exceptions import InvalidQueryError
 from ._base import QueryTreeBase
-from ._column_expression import ColumnExpression, is_one_timespan_and_one_datetime
+from ._column_expression import (
+    ColumnExpression,
+    is_one_datetime_and_one_ingest_date,
+    is_one_timespan_and_one_datetime,
+)
 
 if TYPE_CHECKING:
     from ..visitors import PredicateVisitFlags, PredicateVisitor
@@ -461,10 +465,16 @@ class Comparison(PredicateLeafBase):
     @pydantic.model_validator(mode="after")
     def _validate_column_types(self) -> Comparison:
         if self.operator == "overlaps" and is_one_timespan_and_one_datetime(self.a, self.b):
-            # Special case for datetime overlaps timespan, which is currently
-            # the only mixed-type comparison allowed.
+            # Allow mixed-type comparison of datetime overlaps timespan.
             pass
+        elif is_one_datetime_and_one_ingest_date(self.a, self.b):
+            if self.operator in ("==", "!=", "<", ">", ">=", "<="):
+                # ingest_date might be one of two different column types
+                # (integer TAI nanoseconds like "datetime", or TIMESTAMP), but
+                # either one can be compared with a "datetime" column.
+                pass
         elif self.a.column_type == self.b.column_type:
+            # Most operators require matching column types.
             match (self.operator, self.a.column_type):
                 case ("==" | "!=", _):
                     pass

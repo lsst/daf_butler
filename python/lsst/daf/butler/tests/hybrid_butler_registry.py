@@ -288,7 +288,7 @@ class HybridButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DatasetQueryResults:
-        return self._direct.queryDatasets(
+        return self._remote.queryDatasets(
             datasetType,
             collections=collections,
             dimensions=dimensions,

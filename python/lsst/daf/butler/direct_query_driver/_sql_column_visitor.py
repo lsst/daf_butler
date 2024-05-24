@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 import sqlalchemy
 
 from .. import ddl
+from .._exceptions import InvalidQueryError
 from ..queries import tree as qt
 from ..queries.visitors import ColumnExpressionVisitor, PredicateVisitFlags, PredicateVisitor
 from ..timespan_database_representation import TimespanDatabaseRepresentation
@@ -150,6 +151,14 @@ class SqlColumnVisitor(
 
         lhs = self.expect_scalar(a)
         rhs = self.expect_scalar(b)
+        # Special case to handle awkward situation where ingest_date is not
+        # always the same type as other datetime columns.
+        if qt.is_one_datetime_and_one_ingest_date(a, b):
+            if a.column_type == "datetime":
+                lhs = self._convert_datetime_to_ingest_date(a)
+            elif b.column_type == "datetime":
+                rhs = self._convert_datetime_to_ingest_date(b)
+
         match operator:
             case "==":
                 return lhs == rhs
@@ -268,6 +277,25 @@ class SqlColumnVisitor(
         result = expression.visit(self)
         assert isinstance(result, sqlalchemy.ColumnElement)
         return result
+
+    def _convert_datetime_to_ingest_date(self, expression: qt.ColumnExpression) -> sqlalchemy.ColumnElement:
+        assert expression.column_type == "datetime"
+        if self._driver.managers.datasets.ingest_date_dtype() == sqlalchemy.TIMESTAMP:
+            # Datasets manager v1 schema has "datasets" table's "ingest_date"
+            # column as TIMESTAMP, but the rest of the database schema and
+            # query system uses integer TAI nanoseconds.  So we have to convert
+            # the nanoseconds value to a timestamp.
+            # Note that this loses precision.
+            if expression.expression_type != "datetime":
+                # Conversion between TAI and UTC can't be done in the database,
+                # so we are only able to handle literal values here.
+                raise InvalidQueryError("Only literal date-time values can be compared with ingest date.")
+
+            return sqlalchemy.literal(expression.value.utc.to_datetime())
+        else:
+            # For v2 schema, ingest_date uses TAI nanoseconds like everything
+            # else, so no conversion is required.
+            return self.expect_scalar(expression)
 
     def expect_timespan(self, expression: qt.ColumnExpression) -> TimespanDatabaseRepresentation:
         result = expression.visit(self)
