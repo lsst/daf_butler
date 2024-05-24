@@ -32,7 +32,7 @@ __all__ = ("ButlerSqlEngine",)
 
 import dataclasses
 from collections.abc import Iterable, Set
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import astropy.time
 import sqlalchemy
@@ -41,9 +41,11 @@ from lsst.daf.relation import ColumnTag, Relation, Sort, UnaryOperation, UnaryOp
 from ..._column_tags import is_timespan_column
 from ..._column_type_info import ColumnTypeInfo, LogicalColumn
 from ..._timespan import Timespan
-from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .find_first_dataset import FindFirstDataset
+
+if TYPE_CHECKING:
+    from ...name_shrinker import NameShrinker
 
 
 @dataclasses.dataclass(repr=False, eq=False, kw_only=True)
