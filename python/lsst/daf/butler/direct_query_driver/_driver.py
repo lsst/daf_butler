@@ -241,7 +241,10 @@ class DirectQueryDriver(QueryDriver):
                 return DataCoordinateResultPageConverter(spec, builder.columns.get_column_order())
             case DatasetRefResultSpec():
                 return DatasetRefResultPageConverter(
-                    spec, self.get_dataset_type(spec.dataset_type_name), builder.columns.get_column_order()
+                    spec,
+                    self.get_dataset_type(spec.dataset_type_name),
+                    builder.columns.get_column_order(),
+                    name_shrinker=self.db.name_shrinker,
                 )
             case _:
                 raise NotImplementedError(f"Result type '{spec.result_type}' not yet implemented")

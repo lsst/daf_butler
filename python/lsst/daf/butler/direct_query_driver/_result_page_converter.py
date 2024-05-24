@@ -47,6 +47,7 @@ from ..queries.driver import (
 from ..queries.result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
 
 if TYPE_CHECKING:
+    from ..name_shrinker import NameShrinker
     from ..registry.interfaces import Database
 
 
@@ -148,20 +149,29 @@ class DatasetRefResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR0
     """
 
     def __init__(
-        self, spec: DatasetRefResultSpec, dataset_type: DatasetType, column_order: qt.ColumnOrder
+        self,
+        spec: DatasetRefResultSpec,
+        dataset_type: DatasetType,
+        column_order: qt.ColumnOrder,
+        name_shrinker: NameShrinker,
     ) -> None:
         self._spec = spec
         self._dataset_type = dataset_type
         self._data_coordinate_converter = _DataCoordinateRowConverter(spec.dimensions, column_order)
         self._column_order = column_order
+        self._name_shrinker = name_shrinker
 
     def convert(
         self,
         raw_rows: Iterable[sqlalchemy.Row],
         next_key: PageKey | None,
     ) -> DatasetRefResultPage:
-        run_column = qt.ColumnSet.get_qualified_name(self._spec.dataset_type_name, "run")
-        dataset_id_column = qt.ColumnSet.get_qualified_name(self._spec.dataset_type_name, "dataset_id")
+        run_column = self._name_shrinker.shrink(
+            qt.ColumnSet.get_qualified_name(self._spec.dataset_type_name, "run")
+        )
+        dataset_id_column = self._name_shrinker.shrink(
+            qt.ColumnSet.get_qualified_name(self._spec.dataset_type_name, "dataset_id")
+        )
         rows = [
             DatasetRef(
                 datasetType=self._dataset_type,
