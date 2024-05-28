@@ -44,6 +44,7 @@ from ..dimensions import (
     DimensionRecordSet,
     SkyPixDimension,
 )
+from ..dimensions.record_cache import DimensionRecordCache
 from ..queries import tree as qt
 from ..queries.driver import (
     DataCoordinateResultPage,
@@ -88,6 +89,7 @@ class ResultPageConverterContext:
 
     db: Database
     column_order: qt.ColumnOrder
+    dimension_record_cache: DimensionRecordCache
 
 
 class DimensionRecordResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
@@ -95,7 +97,7 @@ class DimensionRecordResultPageConverter(ResultPageConverter):  # numpydoc ignor
 
     def __init__(self, spec: DimensionRecordResultSpec, ctx: ResultPageConverterContext) -> None:
         self._result_spec = spec
-        self._converter = _create_dimension_record_row_converter(spec.element, ctx)
+        self._converter = _create_dimension_record_row_converter(spec.element, ctx, use_cache=False)
 
     def convert(
         self, raw_rows: Iterable[sqlalchemy.Row], next_key: PageKey | None
@@ -107,9 +109,11 @@ class DimensionRecordResultPageConverter(ResultPageConverter):  # numpydoc ignor
 
 
 def _create_dimension_record_row_converter(
-    element: DimensionElement, ctx: ResultPageConverterContext
+    element: DimensionElement, ctx: ResultPageConverterContext, *, use_cache: bool = True
 ) -> _DimensionRecordRowConverter:
-    if isinstance(element, SkyPixDimension):
+    if use_cache and element.is_cached:
+        return _CachedDimensionRecordRowConverter(element, ctx.dimension_record_cache)
+    elif isinstance(element, SkyPixDimension):
         return _SkypixDimensionRecordRowConverter(element)
     else:
         return _NormalDimensionRecordRowConverter(element, ctx.db)
@@ -176,6 +180,24 @@ class _SkypixDimensionRecordRowConverter(_DimensionRecordRowConverter):
     def convert(self, row: sqlalchemy.Row) -> DimensionRecord:
         pixel_id = row._mapping[self._id_qualified_name]
         return self._record_cls(id=pixel_id, region=self._pixelization.pixel(pixel_id))
+
+
+class _CachedDimensionRecordRowConverter(_DimensionRecordRowConverter):
+    """Helper for converting result row into a DimensionRecord instance for
+    "cached" dimensions.  These are dimensions with few records, used by
+    many/all dataset types.  For these dimensions, a complete cache of records
+    is stored client-side instead of re-fetching them from the DB constantly.
+    """
+
+    def __init__(self, element: DimensionElement, cache: DimensionRecordCache) -> None:
+        self._element = element
+        self._cache = cache
+        self._key_columns = [qt.ColumnSet.get_qualified_name(name, None) for name in element.required.names]
+
+    def convert(self, row: sqlalchemy.Row) -> DimensionRecord:
+        mapping = row._mapping
+        values = tuple(mapping[key] for key in self._key_columns)
+        return self._cache[self._element.name].find_with_required_values(values)
 
 
 class DataCoordinateResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01

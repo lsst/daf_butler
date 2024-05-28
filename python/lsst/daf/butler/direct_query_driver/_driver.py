@@ -44,6 +44,7 @@ from .. import ddl
 from .._dataset_type import DatasetType
 from .._exceptions import InvalidQueryError
 from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionUniverse
+from ..dimensions.record_cache import DimensionRecordCache
 from ..queries import tree as qt
 from ..queries.driver import (
     DataCoordinateResultPage,
@@ -100,6 +101,9 @@ class DirectQueryDriver(QueryDriver):
         Definitions of all dimensions.
     managers : `RegistryManagerInstances`
         Struct of registry manager objects.
+    dimension_record_cache : `DimensionRecordCache`
+        Cache of dimension records for infrequently-changing, commonly-used
+        dimensions.
     default_collections : `Sequence` [ `str `]
         Default collection search path.
     default_data_id : DataCoordinate,
@@ -124,6 +128,7 @@ class DirectQueryDriver(QueryDriver):
         db: Database,
         universe: DimensionUniverse,
         managers: RegistryManagerInstances,
+        dimension_record_cache: DimensionRecordCache,
         default_collections: Iterable[str],
         default_data_id: DataCoordinate,
         raw_page_size: int = 10000,
@@ -132,6 +137,7 @@ class DirectQueryDriver(QueryDriver):
     ):
         self.db = db
         self.managers = managers
+        self._dimension_record_cache = dimension_record_cache
         self._universe = universe
         self._default_collections = tuple(default_collections)
         self._default_data_id = default_data_id
@@ -235,7 +241,11 @@ class DirectQueryDriver(QueryDriver):
         return result_page
 
     def _create_result_page_converter(self, spec: ResultSpec, builder: QueryBuilder) -> ResultPageConverter:
-        context = ResultPageConverterContext(db=self.db, column_order=builder.columns.get_column_order())
+        context = ResultPageConverterContext(
+            db=self.db,
+            column_order=builder.columns.get_column_order(),
+            dimension_record_cache=self._dimension_record_cache,
+        )
         match spec:
             case DimensionRecordResultSpec():
                 return DimensionRecordResultPageConverter(spec, context)

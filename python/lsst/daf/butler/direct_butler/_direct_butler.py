@@ -2214,6 +2214,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                 self._registry._db,
                 self.dimensions,
                 self._registry._managers,
+                self._registry.dimension_record_cache,
                 default_collections=default_collections,
                 default_data_id=default_data_id,
             )

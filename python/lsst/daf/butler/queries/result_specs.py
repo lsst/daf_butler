@@ -129,8 +129,7 @@ class DataCoordinateResultSpec(ResultSpecBase):
         if self.include_dimension_records:
             for element_name in self.dimensions.elements:
                 element = self.dimensions.universe[element_name]
-                # TODO DM-44501: Re-enable dimension record cache
-                if element not in self.dimensions.universe.skypix_dimensions:
+                if not element.is_cached and element not in self.dimensions.universe.skypix_dimensions:
                     result.dimension_fields[element_name].update(element.schema.remainder.names)
         return result
 
