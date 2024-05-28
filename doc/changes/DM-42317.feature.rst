@@ -1,1 +1,0 @@
-"Cloned" Butler instances returned from ``Butler(butler=otherButler)`` and ``LabeledButlerFactory`` no longer share internal state with their parent instance.  This makes it safe to use the new instance concurrently with the original in separate threads.  It is still unsafe to use a single ``Butler`` instance concurrently from multiple threads.

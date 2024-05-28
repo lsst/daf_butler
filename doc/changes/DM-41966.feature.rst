@@ -1,4 +1,0 @@
-* Added new API ``Butler.transfer_dimension_records_from()`` to copy dimension records out of some refs and add them to the target butler.
-* This and ``Butler.transfer_from()`` now copy related dimension records as well as the records associated directly with the refs.
-  For example, if visit is being transferred additional records such as visit_definition will also be copied.
-  This requires a full Butler and not a limited Butler (such as the one backed by a quantum graph).
