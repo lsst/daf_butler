@@ -1,4 +1,0 @@
-* Released ``DimensionUniverse`` version 6
-  * ``group`` and ``day_obs`` are now true dimensions.
-  * ``exposure`` now implies both ``group`` and ``day_obs``, and ``visit`` implies ``day_obs``.
-* Exported YAML files using universe version 1 and newer can be imported and converted to universe version 6.

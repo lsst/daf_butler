@@ -1,1 +1,0 @@
-butler query-collections --chains=TABLE now lists children in search order, not alphabetical order.

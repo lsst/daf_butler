@@ -1,2 +1,0 @@
-Added ``can_see_sky`` metadata field to ``exposure`` dimension record (dimension universe v7).
-This field can indicate whether the detector received photons from the sky taking into account the camera shutter and the dome and telescope alignment.

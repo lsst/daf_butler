@@ -1,3 +1,164 @@
+Butler 27.0.0 2024-05-28
+========================
+
+Now supports Python 3.12.
+
+New Features
+------------
+
+- Updated the open-source license to allow for the code to be distributed with either GPLv3 or BSD 3-clause license. (`DM-37231 <https://jira.lsstcorp.org/browse/DM-37231>`_)
+- Added new storage class and formatter for ``NNModelPackagePayload`` -- an interface between butler and pretrained neural networks, currently implemented in pytorch. (`DM-38454 <https://jira.lsstcorp.org/browse/DM-38454>`_)
+- Improved support for finding calibrations and spatially-joined datasets as follow-ups to data ID queries. (`DM-38498 <https://jira.lsstcorp.org/browse/DM-38498>`_)
+- Added a storage class and associated formatter for the Spectractor ``FitParameters`` class, which holds the fitted ``LIBRADTRAN`` atmospheric parameters. (`DM-38745 <https://jira.lsstcorp.org/browse/DM-38745>`_)
+- Added support for serialization and deserialization of Arrow schemas via Parquet, and added support for translation of ``doc`` and ``units`` to/from arrow/astropy schemas. (`DM-40582 <https://jira.lsstcorp.org/browse/DM-40582>`_)
+- Added ``DimensionElement.schema`` as a less SQL-oriented way to inspect the fields of a ``DimensionRecord``.
+
+  Also added two high-level containers (``DimensionRecordSet`` and ``DimensionRecordTable``) for ``DimensionRecord`` objects, but these should be considered experimental and unstable until they are used in public ``Butler`` APIs. (`DM-41113 <https://jira.lsstcorp.org/browse/DM-41113>`_)
+- Added new ``Butler`` APIs migrated from registry: ``Butler.get_dataset_type()``, ``Butler.get_dataset()``, and ``Butler.find_dataset()``. (`DM-41365 <https://jira.lsstcorp.org/browse/DM-41365>`_)
+- Butler server can now be configured to use a ``ChainedDatastore``. (`DM-41880 <https://jira.lsstcorp.org/browse/DM-41880>`_)
+- * Added new API ``Butler.transfer_dimension_records_from()`` to copy dimension records out of some refs and add them to the target butler.
+  * This and ``Butler.transfer_from()`` now copy related dimension records as well as the records associated directly with the refs.
+    For example, if ``visit`` is being transferred additional records such as ``visit_definition`` will also be copied.
+    This requires a full Butler and not a limited Butler (such as the one backed by a quantum graph). (`DM-41966 <https://jira.lsstcorp.org/browse/DM-41966>`_)
+- Added ``LabeledButlerFactory``, a factory class for constructing Butler instances.  This is intended for use in long-lived services that need to be able to create a Butler instance for each incoming client request. (`DM-42188 <https://jira.lsstcorp.org/browse/DM-42188>`_)
+- Added a new optional dependency set ``remote``, which can be used to install the dependencies required by the client half of Butler client/server. (`DM-42190 <https://jira.lsstcorp.org/browse/DM-42190>`_)
+- "Cloned" Butler instances returned from ``Butler(butler=otherButler)`` and ``LabeledButlerFactory`` no longer share internal state with their parent instance.  This makes it safe to use the new instance concurrently with the original in separate threads.  It is still unsafe to use a single ``Butler`` instance concurrently from multiple threads. (`DM-42317 <https://jira.lsstcorp.org/browse/DM-42317>`_)
+- * Released ``DimensionUniverse`` version 6
+    * ``group`` and ``day_obs`` are now true dimensions.
+    * ``exposure`` now implies both ``group`` and ``day_obs``, and ``visit`` implies ``day_obs``.
+  * Exported YAML files using universe version 1 and newer can be imported and converted to universe version 6. (`DM-42636 <https://jira.lsstcorp.org/browse/DM-42636>`_)
+- The Butler repository index can now be configured by a new environment variable ``$DAF_BUTLER_REPOSITORIES``, which contains the configuration directly instead of requiring lookup via a URI. (`DM-42660 <https://jira.lsstcorp.org/browse/DM-42660>`_)
+- Added ``can_see_sky`` metadata field to ``exposure`` dimension record (dimension universe v7).
+  This field can indicate whether the detector received photons from the sky taking into account the camera shutter and the dome and telescope alignment. (`DM-43101 <https://jira.lsstcorp.org/browse/DM-43101>`_)
+- Added additional collection chain methods to the ``Butler.collection_chains`` interface: ``extend_chain``, ``remove_from_chain``, and ``redefine_chain``.  These methods are all "atomic" functions that can safely be used concurrently from multiple processes. (`DM-43315 <https://jira.lsstcorp.org/browse/DM-43315>`_)
+- Added a ``timespan`` parameter to ``Butler.get()`` (for direct and remote butler).
+  This parameter can be used to specify an explicit time for calibration selection without requiring a temporal coordinate be included in the data ID.
+  Additionally, if no time span is specified and no time span can be found in the data ID a default full-range time span will be used for calibration selection.
+  This allows a calibration to be selected if there is only one matching calibration in the collection. (`DM-43499 <https://jira.lsstcorp.org/browse/DM-43499>`_)
+- Added a new method ``Butler.collection_chains.prepend_chain``.  This allows you to insert collections at the beginning of a chain. It is an "atomic" operation that can be safely used concurrently from multiple processes. (`DM-43671 <https://jira.lsstcorp.org/browse/DM-43671>`_)
+- Added ``MatchingKernel`` storage class for persisting the PSF-matching kernel from image differencing. (`DM-43736 <https://jira.lsstcorp.org/browse/DM-43736>`_)
+- Made ``Timespan`` a Pydantic model and added a ``SerializableRegion`` type alias that allows ``lsst.sphgeom.Region`` to be used directly as a Pydantic model field. (`DM-43769 <https://jira.lsstcorp.org/browse/DM-43769>`_)
+
+
+API Changes
+-----------
+
+- Deprecated most public APIs that use ``Dimension`` or ``DimensionElement`` objects.
+
+  This implements `RFC-834 <https://jira.lsstcorp.org/browse/RFC-834>`_, deprecating the ``DimensionGraph`` class (in favor of the new, similar ``DimensionGroup``) and a large number of ``DataCoordinate`` methods and attributes, including its `collections.abc.Mapping` interface.
+
+  This includes:
+
+  - use ``DataCoordinate.dimensions`` instead of ``DataCoordinate.graph`` (likewise for arguments to ``DataCoordinate.standardize``);
+  - use ``dict(DataCoordinate.required)`` as a drop-in replacement for ``DataCoordinate.byName()``, but consider whether you want ``DataCoordinate.required`` (a `~collections.abc.Mapping` view rather than a `dict`) or ``DataCoordinate.mapping`` (a `~collections.abc.Mapping` with all *available* key-value pairs, not just the required ones);
+  - also use ``DataCoordinate.mapping`` or ``DataCoordinate.required`` instead of treating ``DataCoordinate`` itself as a `~collections.abc.Mapping`, *except* square-bracket indexing, which is still very much supported;
+  - use ``DataCoordinate.dimensions.required.names`` or ``DataCoordinate.required.keys()`` as a drop-in replacement for ``DataCoordinate.keys().names`` or ``DataCoordinate.names``, but consider whether you actually want ``DataCoordinate.dimensions.names`` or ``DataCoordinate.mapping.keys`` instead.
+
+  ``DimensionGroup`` is almost identical to ``DimensionGraph``, but it and its subset attributes are not directly iterable (since those iterate over ``Dimension`` and ``DimensionElement`` objects); use the ``.names`` attribute to iterate over names instead (just as names could be iterated over in ``DimensionGraph``).
+
+  ``DimensionGraph`` is still used in some ``lsst.daf.butler`` APIs (most prominently ``DatasetType.dimensions``) that may be accessed without deprecation warnings being emitted, but iterating over that object or its subset attributes *will* yield deprecation warnings.
+  And ``DimensionGraph`` is still accepted along with ``DimensionGroup`` without warning in most public APIs.
+  When ``DimensionGraph`` is removed, methods and properties that return ``DimensionGraph`` will start returning ``DimensionGroup`` instead.
+
+  Rare code (mostly in downstream middleware packages) that does need access to ``Dimension`` or ``DimensionElement`` objects should obtain them directly from the ``DimensionUniverse``.
+  For the pattern of checking whether a dimension is a skypix level, test whether its name is in ``DimensionUniverse.skypix_dimensions`` or ``DimensionGroup.skypix`` instead of obtaining a ``Dimension`` instance and calling ``isinstance(dimension, SkyPixDimension)``. (`DM-34340 <https://jira.lsstcorp.org/browse/DM-34340>`_)
+- Added new ``transfer_option_no_short`` that creates the ``--transfer`` option without the associated ``-t`` alias. (`DM-35599 <https://jira.lsstcorp.org/browse/DM-35599>`_)
+- - ``Butler`` class became an abstract base class, original ``Butler`` was renamed to ``DirectButler``.
+  - Clients that need an access to ``DirectButler`` class will have to import it from ``lsst.daf.butler.direct_butler``.
+  - ``Butler.from_config(...)`` should be used to make ``Butler`` instances. ``Butler(...)`` still works and is identical to ``Butler.from_config(...)``, but will generate ``mypy`` errors. (`DM-41116 <https://jira.lsstcorp.org/browse/DM-41116>`_)
+- ``SqlRegistry`` does not inherit now from ``Registry`` or any other interface, and has been moved to ``registry.sql_registry`` module. (`DM-41235 <https://jira.lsstcorp.org/browse/DM-41235>`_)
+- Added ``Butler._query`` context manager which will support building of the complex queries for data in Butler.
+  For now ``Butler._query`` provides access to just three convenience methods similar to query methods in ``Registry``.
+  This new API should be considered experimental and potentially unstable, its use should be limited to downstream middleware code for now. (`DM-41761 <https://jira.lsstcorp.org/browse/DM-41761>`_)
+- * Added ``dry_run`` parameter to ``Butler.transfer_from`` to allow the transfer to run without doing the transfer. (`DM-42306 <https://jira.lsstcorp.org/browse/DM-42306>`_)
+- The ``Datastore`` base class was changed so that subclasses are no longer
+  required to have the same constructor parameters as the base class.
+  Subclasses are now required to implement ``_create_from_config`` for creating an instance
+  from the ``Datastore.fromConfig`` static method, and ``clone`` for creating a
+  copy of an existing instance. (`DM-42317 <https://jira.lsstcorp.org/browse/DM-42317>`_)
+- Added ``Timespan.from_day_obs()`` to construct a 24-hour time span from an observing day specified as a YYYYMMDD integer. (`DM-42636 <https://jira.lsstcorp.org/browse/DM-42636>`_)
+
+
+Bug Fixes
+---------
+
+- Fixed QuantumGraph-load breakage introduced on `DM-41043 <https://jira.lsstcorp.org/browse/DM-41043>`_. (`DM-41164 <https://jira.lsstcorp.org/browse/DM-41164>`_)
+- ``DirectButler.transfer_from`` no longer requires expanded dataset refs under certain circumstances.
+  However, providing expanded refs in advance is still recommended for efficiency. (`DM-41165 <https://jira.lsstcorp.org/browse/DM-41165>`_)
+- Fixed caching in ``DatasetRef`` deserialization that caused the serialized storage class to be ignored.
+
+  This caused intermittent failures when running pipelines that use multiple storage classes for the same dataset type. (`DM-41562 <https://jira.lsstcorp.org/browse/DM-41562>`_)
+- Stopped accepting and ignoring unrecognized keyword arguments in ``DimensionRecord`` constructors.
+
+  Passing an invalid field to a ``DimensionRecord`` now raises `TypeError`.
+
+  This also prevents ``DimensionRecord`` construction from reinterpreting ``timespan=None`` as ``timespan=Timespan(None, None)``. (`DM-41724 <https://jira.lsstcorp.org/browse/DM-41724>`_)
+- Enabled collection-information caching in several contexts, especially during dataset query result iteration.
+
+  This fixed a performance- and database-load regression introduced on `DM-41117 <https://jira.lsstcorp.org/browse/DM-41117>`_, in which we emitted many redundant queries for collection information. (`DM-42216 <https://jira.lsstcorp.org/browse/DM-42216>`_)
+- Fixed miscellaneous thread-safety issues in ``DimensionUniverse``, ``DimensionGroup``, and ``StorageClassFactory``. (`DM-42317 <https://jira.lsstcorp.org/browse/DM-42317>`_)
+- ``butler query-collections --chains=TABLE`` now lists children in search order, not alphabetical order. (`DM-42605 <https://jira.lsstcorp.org/browse/DM-42605>`_)
+- Fixed problem with serialization of ``exposure`` dimension records with Pydantic v2. (`DM-42812 <https://jira.lsstcorp.org/browse/DM-42812>`_)
+- ``Butler.exists`` now throws a ``NoDefaultCollectionError`` when attempting to query for a ``DataId`` without specifying any collections to search.  Previously it would return `False`, hiding the user error. (`DM-42945 <https://jira.lsstcorp.org/browse/DM-42945>`_)
+- Reading masked parquet columns into astropy Tables now uses appropriate
+  fill values.  In addition, floating point columns will be filled with ``NaN``
+  instead of using a masked column.  This fixes discrepancies when accessing
+  masked columns with ``.filled()`` or ``not``. (`DM-43187 <https://jira.lsstcorp.org/browse/DM-43187>`_)
+- Reverted/fixed part of `DM-43187 <https://jira.lsstcorp.org/browse/DM-43187>`_.
+  Now masked floating point columns will retain their masked status on read.
+  The underlying array value and fill value are still ``NaN`` for consistency when using ``filled()`` or ``not`` for these masked
+  columns. (`DM-43570 <https://jira.lsstcorp.org/browse/DM-43570>`_)
+- The ``flatten`` flag for the ``butler collection-chain`` CLI command now works as documented: it only flattens the specified children instead of flattening the entire collection chain.
+
+  ``registry.setCollectionChain`` will no longer throw unique constraint violation exceptions when there are concurrent calls to this function. Instead, all calls will succeed and the last write will win. As a side-effect of this change, if calls to ``setCollectionChain`` occur within an explicit call to ``Butler.transaction``, other processes attempting to modify the same chain will block until the transaction completes. (`DM-43671 <https://jira.lsstcorp.org/browse/DM-43671>`_)
+- Fixed an issue where ``registry.setCollectionChain`` would raise a `KeyError` when assigning to a collection that was present in the collection cache. (`DM-43750 <https://jira.lsstcorp.org/browse/DM-43750>`_)
+
+
+Performance Enhancement
+-----------------------
+
+- ``FileDatastore.knows()`` no longer requires database I/O if its input ``DatasetRef`` has datastore records attached. (`DM-41880 <https://jira.lsstcorp.org/browse/DM-41880>`_)
+- Made significant performance enhancements when transferring hundreds of thousands of datasets.
+
+  * Datastore now declares to ``ResourcePath`` when a resource is known to be a file.
+  * Sped up file template validation.
+  * Only request dimension metadata for template formatting if that metadata is needed.
+  * Sped up cloning of ``Location`` instances.
+  * No longer merge formatter ``kwargs`` unless there is something to merge.
+  * Declared when a file location is trusted to be within the datastore. (`DM-42306 <https://jira.lsstcorp.org/browse/DM-42306>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Reorganized internal subpackages, renamed modules, and adjusted symbol lifting.
+
+  This included moving some symbols that we had always intended to be private
+  (or public only to other middleware packages) that were not clearly marked as such
+  (e.g., with leading underscores) before. (`DM-41043 <https://jira.lsstcorp.org/browse/DM-41043>`_)
+- Dropped support for Pydantic 1.x. (`DM-42302 <https://jira.lsstcorp.org/browse/DM-42302>`_)
+- Created Dimension Universe 5 which increases the size of the instrument name field in the ``instrument`` dimension from 16 to 32 characters. (`DM-42896 <https://jira.lsstcorp.org/browse/DM-42896>`_)
+
+
+An API Removal or Deprecation
+-----------------------------
+
+- * Removed dataset type component query support from all Registry methods.
+    The main ``Registry.query*`` methods now warn if a ``components`` parameter is given and raise if it has a value other than `False`.
+    The components parameters will be removed completely after v27.
+  * Removed ``CollectionSearch`` class.
+    A simple `tuple` is now used for this. (`DM-36303 <https://jira.lsstcorp.org/browse/DM-36303>`_)
+- Removed various already-deprecated factory methods for ``DimensionPacker`` objects and their support code, as well as the concrete ``ObservationDimensionPacker``.
+
+  While ``daf_butler`` still defines the ``DimensionPacker`` abstract interface, all construction logic has moved to downstream packages. (`DM-38687 <https://jira.lsstcorp.org/browse/DM-38687>`_)
+- * Removed ``Butler.datastore`` property. The datastore can no longer be accessed directly.
+  * Removed ``Butler.datasetExists`` (and the "direct" variant). Please use ``Butler.exists()`` and ``Butler.stored()`` instead.
+  * Removed ``Butler.getDirect`` and related APIs. ``Butler.get()`` et al now use the ``DatasetRef`` directly if one is given.
+  * Removed the ``run`` and ``ideGenerationMode`` parameters from ``Butler.ingest()``. They were no longer being used.
+  * Removed the ``--reuse-ids`` option for the ``butler import`` command-line. This option was no longer used now that UUIDs are used throughout.
+  * Removed the ``reconsitutedDimension`` parameter from ``Quantum.from_simple``. (`DM-40150 <https://jira.lsstcorp.org/browse/DM-40150>`_)
+
+
 Butler v26.0.0 2023-09-22
 =========================
 
