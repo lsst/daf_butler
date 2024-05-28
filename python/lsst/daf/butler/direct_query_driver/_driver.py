@@ -78,6 +78,7 @@ from ._result_page_converter import (
     DatasetRefResultPageConverter,
     DimensionRecordResultPageConverter,
     ResultPageConverter,
+    ResultPageConverterContext,
 )
 from ._sql_column_visitor import SqlColumnVisitor
 
@@ -234,17 +235,15 @@ class DirectQueryDriver(QueryDriver):
         return result_page
 
     def _create_result_page_converter(self, spec: ResultSpec, builder: QueryBuilder) -> ResultPageConverter:
+        context = ResultPageConverterContext(db=self.db, column_order=builder.columns.get_column_order())
         match spec:
             case DimensionRecordResultSpec():
-                return DimensionRecordResultPageConverter(spec, self.db)
+                return DimensionRecordResultPageConverter(spec, context)
             case DataCoordinateResultSpec():
-                return DataCoordinateResultPageConverter(spec, builder.columns.get_column_order())
+                return DataCoordinateResultPageConverter(spec, context)
             case DatasetRefResultSpec():
                 return DatasetRefResultPageConverter(
-                    spec,
-                    self.get_dataset_type(spec.dataset_type_name),
-                    builder.columns.get_column_order(),
-                    name_shrinker=self.db.name_shrinker,
+                    spec, self.get_dataset_type(spec.dataset_type_name), context
                 )
             case _:
                 raise NotImplementedError(f"Result type '{spec.result_type}' not yet implemented")

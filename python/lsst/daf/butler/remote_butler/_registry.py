@@ -453,7 +453,9 @@ class RemoteButlerRegistry(Registry):
         args = self._convert_common_query_arguments(
             dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
         )
-        return QueryDriverDataCoordinateQueryResults(self._butler._query, dimensions, args)
+        return QueryDriverDataCoordinateQueryResults(
+            self._butler._query, dimensions=dimensions, expanded=False, args=args
+        )
 
     def queryDimensionRecords(
         self,
