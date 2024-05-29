@@ -239,7 +239,7 @@ class DatasetRefResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR0
         self._spec = spec
         self._dataset_type = dataset_type
         self._data_coordinate_converter = _DataCoordinateRowConverter(
-            spec.dimensions, ctx, include_dimension_records=False
+            spec.dimensions, ctx, include_dimension_records=spec.include_dimension_records
         )
         self._column_order = ctx.column_order
         self._name_shrinker = ctx.db.name_shrinker

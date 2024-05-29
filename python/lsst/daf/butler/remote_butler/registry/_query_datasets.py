@@ -66,6 +66,9 @@ class QueryDriverDatasetRefQueryResults(
     doomed_by : `list` [ `str` ]
         List of messages explaining reasons why this query might not return
         any results.
+    expanded : `bool`
+        `True` if the query will generate "expanded" DatasetRefs that include
+        dimension records associated with the data IDs.
     """
 
     def __init__(
@@ -77,6 +80,7 @@ class QueryDriverDatasetRefQueryResults(
         find_first: bool,
         extra_dimensions: DimensionGroup | None,
         doomed_by: list[str],
+        expanded: bool,
     ) -> None:
         LegacyQueryResultsMixin.__init__(self, query_factory, args)
         ParentDatasetQueryResults.__init__(self)
@@ -84,11 +88,16 @@ class QueryDriverDatasetRefQueryResults(
         self._find_first = find_first
         self._extra_dimensions = extra_dimensions
         self._doomed_by = doomed_by
+        self._expanded = expanded
 
     def _build_result(self, query: Query) -> DatasetRefQueryResults:
         if self._extra_dimensions:
             query = query.join_dimensions(self._extra_dimensions)
-        return query.datasets(self._dataset_type, self._args.collections, find_first=self._find_first)
+        results = query.datasets(self._dataset_type, self._args.collections, find_first=self._find_first)
+        if self._expanded:
+            return results.with_dimension_records()
+        else:
+            return results
 
     def __iter__(self) -> Iterator[DatasetRef]:
         # We have to eagerly fetch the results to prevent
@@ -119,7 +128,15 @@ class QueryDriverDatasetRefQueryResults(
         raise NotImplementedError()
 
     def expanded(self) -> QueryDriverDatasetRefQueryResults:
-        raise NotImplementedError()
+        return QueryDriverDatasetRefQueryResults(
+            self._query_factory,
+            self._args,
+            dataset_type=self._dataset_type,
+            find_first=self._find_first,
+            extra_dimensions=self._extra_dimensions,
+            doomed_by=self._doomed_by,
+            expanded=True,
+        )
 
     def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         messages = list(super().explain_no_results(execute))

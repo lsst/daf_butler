@@ -427,6 +427,7 @@ class RemoteButlerRegistry(Registry):
                 find_first=findFirst,
                 extra_dimensions=dimension_group,
                 doomed_by=doomed_by,
+                expanded=False,
             )
             for dt in dataset_types
         ]

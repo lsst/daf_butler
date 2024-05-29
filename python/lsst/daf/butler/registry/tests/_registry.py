@@ -3951,10 +3951,13 @@ class RegistryTests(ABC):
         )
 
     def test_expanded_data_id_queries(self) -> None:
-        """Tests for basic functionality of expanded() on queryDataIds."""
+        """Tests for basic functionality of expanded() on queryDataIds and
+        queryDatasets.
+        """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "spatial.yaml")
+        self.loadData(registry, "datasets.yaml")
 
         result_obj = (
             registry.queryDataIds(["visit"], where="instrument = 'Cam1' and (visit.id = 1 or visit.id = 2)")
@@ -3990,3 +3993,32 @@ class RegistryTests(ABC):
             registry.queryDataIds("detector", dataId={"instrument": "Cam1", "detector": 5}).expanded()
         )
         self.assertIsNone(detectors[0].records["detector"].purpose)
+
+        datasets = list(
+            registry.queryDatasets(
+                "flat", collections="imported_g", where="instrument = 'Cam1' and detector <= 3"
+            ).expanded()
+        )
+        datasets.sort(key=lambda ref: ref.dataId["detector"])
+        self.assertEqual(len(datasets), 2)
+        self.assertEqual(datasets[0].id, uuid.UUID("60c8a65c-7290-4c38-b1de-e3b1cdcf872d"))
+        self.assertEqual(datasets[1].id, uuid.UUID("84239e7f-c41f-46d5-97b9-a27976b98ceb"))
+        # All of the dimensions for flat are "cached" dimensions.
+        self.assertEqual(datasets[0].dataId.records["detector"].full_name, "Ab")
+        self.assertEqual(datasets[1].dataId.records["detector"].full_name, "Ba")
+        self.assertEqual(datasets[0].dataId.records["instrument"].visit_system, 1)
+
+        # None of the datasets in the test data include any uncached
+        # dimensions, so we have to set one up.
+        registry.registerDatasetType(DatasetType("test", ["visit"], "int", universe=registry.dimensions))
+        registry.insertDatasets("test", [{"instrument": "Cam1", "visit": 1}], run="imported_g")
+        ref = list(registry.queryDatasets("test", collections="imported_g").expanded())[0]
+        self.assertEqual(ref.dataId.records["visit"].zenith_angle, 5.0)
+        self.assertEqual(ref.dataId.records["physical_filter"].band, "g")
+        self.assertEqual(
+            ref.dataId.timespan,
+            Timespan(
+                begin=astropy.time.Time("2021-09-09 03:00:00.000000000", scale="tai"),
+                end=astropy.time.Time("2021-09-09 03:01:00.000000000", scale="tai"),
+            ),
+        )
