@@ -44,7 +44,6 @@ from sqlalchemy import sql
 
 from ..._named import NamedValueAbstractSet
 from ..._timespan import Timespan
-from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ..interfaces import Database
 
@@ -138,7 +137,6 @@ class PostgresqlDatabase(Database):
         self._writeable = writeable
         self.dbname = dbname
         self._pg_version = pg_version
-        self._shrinker = NameShrinker(self.dialect.max_identifier_length)
 
     def clone(self) -> PostgresqlDatabase:
         clone = self.__new__(type(self))
@@ -294,10 +292,10 @@ class PostgresqlDatabase(Database):
         return f"PostgreSQL@{self.dbname}:{self.namespace}"
 
     def shrinkDatabaseEntityName(self, original: str) -> str:
-        return self._shrinker.shrink(original)
+        return self.name_shrinker.shrink(original)
 
     def expandDatabaseEntityName(self, shrunk: str) -> str:
-        return self._shrinker.expand(shrunk)
+        return self.name_shrinker.expand(shrunk)
 
     def _convertExclusionConstraintSpec(
         self,

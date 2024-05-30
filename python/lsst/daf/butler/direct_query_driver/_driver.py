@@ -161,10 +161,12 @@ class DirectQueryDriver(QueryDriver):
         assert self._exit_stack is not None
         self._materializations.clear()
         self._upload_tables.clear()
-        while self._cursors:
-            _, cursor = self._cursors.popitem()
-            cursor.close(exc_type, exc_value, traceback)
+        # Transfer open cursors' close methods to exit stack, this will help
+        # with the cleanup in case a cursor raises an exceptions on close.
+        for cursor in self._cursors.values():
+            self._exit_stack.push(cursor.close)
         self._exit_stack.__exit__(exc_type, exc_value, traceback)
+        self._cursors = {}
         self._exit_stack = None
 
     @property
@@ -239,7 +241,10 @@ class DirectQueryDriver(QueryDriver):
                 return DataCoordinateResultPageConverter(spec, builder.columns.get_column_order())
             case DatasetRefResultSpec():
                 return DatasetRefResultPageConverter(
-                    spec, self.get_dataset_type(spec.dataset_type_name), builder.columns.get_column_order()
+                    spec,
+                    self.get_dataset_type(spec.dataset_type_name),
+                    builder.columns.get_column_order(),
+                    name_shrinker=self.db.name_shrinker,
                 )
             case _:
                 raise NotImplementedError(f"Result type '{spec.result_type}' not yet implemented")

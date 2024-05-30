@@ -50,6 +50,7 @@ import astropy.time
 import sqlalchemy
 
 from ..._named import NamedValueAbstractSet
+from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._exceptions import ConflictingDefinitionError
 
@@ -272,6 +273,7 @@ class Database(ABC):
         metadata: sqlalchemy.schema.MetaData | None = None,
     ):
         self.origin = origin
+        self.name_shrinker = NameShrinker(engine.dialect.max_identifier_length)
         self.namespace = namespace
         self._engine = engine
         self._session_connection: sqlalchemy.engine.Connection | None = None
@@ -1861,11 +1863,14 @@ class Database(ABC):
             connection = self._engine.connect()
         else:
             connection = self._session_connection
-        # TODO: SelectBase is not good for execute(), but it used everywhere,
-        # e.g. in daf_relation. We should switch to Executable at some point.
-        result = connection.execute(cast(sqlalchemy.sql.expression.Executable, sql), *args, **kwargs)
         try:
-            yield result
+            # TODO: SelectBase is not good for execute(), but it used
+            # everywhere, e.g. in daf_relation. We should switch to Executable
+            # at some point.
+            with connection.execute(
+                cast(sqlalchemy.sql.expression.Executable, sql), *args, **kwargs
+            ) as result:
+                yield result
         finally:
             if connection is not self._session_connection:
                 connection.close()
@@ -1976,4 +1981,9 @@ class Database(ABC):
     namespace: str | None
     """The schema or namespace this database instance is associated with
     (`str` or `None`).
+    """
+
+    name_shrinker: NameShrinker
+    """An object that can be used to shrink field names to fit within the
+    identifier limit of the database engine (`NameShrinker`).
     """

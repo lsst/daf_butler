@@ -55,7 +55,6 @@ from lsst.daf.relation import (
 
 from ..._column_tags import is_timespan_column
 from ..._column_type_info import ColumnTypeInfo, LogicalColumn
-from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ._query_context import QueryContext
 from .butler_sql_engine import ButlerSqlEngine
@@ -86,9 +85,7 @@ class SqlQueryContext(QueryContext):
         row_chunk_size: int = 1000,
     ):
         super().__init__()
-        self.sql_engine = ButlerSqlEngine(
-            column_types=column_types, name_shrinker=NameShrinker(db.dialect.max_identifier_length)
-        )
+        self.sql_engine = ButlerSqlEngine(column_types=column_types, name_shrinker=db.name_shrinker)
         self._row_chunk_size = max(row_chunk_size, db.get_constant_rows_max())
         self._db = db
         self._exit_stack: ExitStack | None = None

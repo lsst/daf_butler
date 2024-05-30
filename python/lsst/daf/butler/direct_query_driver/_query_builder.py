@@ -37,7 +37,6 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import sqlalchemy
 
 from .. import ddl
-from ..name_shrinker import NameShrinker
 from ..nonempty_mapping import NonemptyMapping
 from ..queries import tree as qt
 from ._postprocessing import Postprocessing
@@ -137,15 +136,13 @@ class QueryBuilder:
             SQLAlchemy SELECT statement.
         """
         assert not (self.distinct and self.group_by), "At most one of distinct and group_by can be set."
-        if self.joiner.name_shrinker is None:
-            self.joiner.name_shrinker = self.joiner._make_name_shrinker()
         sql_columns: list[sqlalchemy.ColumnElement[Any]] = []
         for logical_table, field in self.columns:
             name = self.columns.get_qualified_name(logical_table, field)
             if field is None:
                 sql_columns.append(self.joiner.dimension_keys[logical_table][0].label(name))
             else:
-                name = self.joiner.name_shrinker.shrink(name)
+                name = self.joiner.db.name_shrinker.shrink(name)
                 if self.columns.is_timespan(logical_table, field):
                     sql_columns.extend(self.joiner.timespans[logical_table].flatten(name))
                 else:
@@ -154,7 +151,7 @@ class QueryBuilder:
             for element in self.postprocessing.iter_missing(self.columns):
                 sql_columns.append(
                     self.joiner.fields[element.name]["region"].label(
-                        self.joiner.name_shrinker.shrink(
+                        self.joiner.db.name_shrinker.shrink(
                             self.columns.get_qualified_name(element.name, "region")
                         )
                     )
@@ -218,9 +215,9 @@ class QueryBuilder:
         """
         if force or self.distinct or self.group_by:
             sql_from_clause = self.select().cte() if cte else self.select().subquery()
-            return QueryJoiner(
-                self.joiner.db, sql_from_clause, name_shrinker=self.joiner.name_shrinker
-            ).extract_columns(self.columns, self.postprocessing, special=self.joiner.special.keys())
+            return QueryJoiner(self.joiner.db, sql_from_clause).extract_columns(
+                self.columns, self.postprocessing, special=self.joiner.special.keys()
+            )
         return self.joiner
 
     def nested(self, cte: bool = False, force: bool = False) -> QueryBuilder:
@@ -273,7 +270,6 @@ class QueryBuilder:
         return QueryJoiner(
             self.joiner.db,
             from_clause=select0.union(*other_selects).subquery(),
-            name_shrinker=self.joiner.name_shrinker,
         ).extract_columns(self.columns, self.postprocessing)
 
     def make_table_spec(self) -> ddl.TableSpec:
@@ -287,12 +283,10 @@ class QueryBuilder:
             those from `postprocessing` and `QueryJoiner.special`).
         """
         assert not self.joiner.special, "special columns not supported in make_table_spec"
-        if self.joiner.name_shrinker is None:
-            self.joiner.name_shrinker = self.joiner._make_name_shrinker()
         results = ddl.TableSpec(
             [
                 self.columns.get_column_spec(logical_table, field).to_sql_spec(
-                    name_shrinker=self.joiner.name_shrinker
+                    name_shrinker=self.joiner.db.name_shrinker
                 )
                 for logical_table, field in self.columns
             ]
@@ -301,7 +295,7 @@ class QueryBuilder:
             for element in self.postprocessing.iter_missing(self.columns):
                 results.fields.add(
                     ddl.FieldSpec.for_region(
-                        self.joiner.name_shrinker.shrink(
+                        self.joiner.db.name_shrinker.shrink(
                             self.columns.get_qualified_name(element.name, "region")
                         )
                     )
@@ -369,17 +363,6 @@ class QueryJoiner:
     included in raw SQL results.
     """
 
-    name_shrinker: NameShrinker | None = None
-    """An object that can be used to shrink field names to fit within the
-    identifier limit of the database engine.
-
-    This is important for PostgreSQL (which has a 64-character limit) and
-    dataset fields, since dataset type names are used to qualify those and they
-    can be quite long.  `DimensionUniverse` guarantees at construction that
-    dimension names and fully-qualified dimension fields do not exceed this
-    limit.
-    """
-
     def extract_dimensions(self, dimensions: Iterable[str], **kwargs: str) -> QueryJoiner:
         """Add dimension key columns from `from_clause` into `dimension_keys`.
 
@@ -431,14 +414,12 @@ class QueryJoiner:
             method chaining.
         """
         assert self.from_clause is not None, "Cannot extract columns with no FROM clause."
-        if self.name_shrinker is None:
-            self.name_shrinker = self._make_name_shrinker()
         for logical_table, field in columns:
             name = columns.get_qualified_name(logical_table, field)
             if field is None:
                 self.dimension_keys[logical_table].append(self.from_clause.columns[name])
             else:
-                name = self.name_shrinker.shrink(name)
+                name = self.db.name_shrinker.shrink(name)
                 if columns.is_timespan(logical_table, field):
                     self.timespans[logical_table] = self.db.getTimespanRepresentation().from_columns(
                         self.from_clause.columns, name
@@ -448,7 +429,7 @@ class QueryJoiner:
         if postprocessing is not None:
             for element in postprocessing.iter_missing(columns):
                 self.fields[element.name]["region"] = self.from_clause.columns[
-                    self.name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
+                    self.db.name_shrinker.shrink(columns.get_qualified_name(element.name, "region"))
                 ]
             if postprocessing.check_validity_match_count:
                 self.special[postprocessing.VALIDITY_MATCH_COUNT] = self.from_clause.columns[
@@ -504,11 +485,6 @@ class QueryJoiner:
         self.timespans.update(other.timespans)
         self.special.update(other.special)
         self.where_terms += other.where_terms
-        if other.name_shrinker:
-            if self.name_shrinker is not None:
-                self.name_shrinker.update(other.name_shrinker)
-            else:
-                self.name_shrinker = other.name_shrinker
         return self
 
     def where(self, *args: sqlalchemy.ColumnElement[bool]) -> QueryJoiner:
@@ -566,6 +542,3 @@ class QueryJoiner:
             distinct=distinct,
             group_by=group_by,
         )
-
-    def _make_name_shrinker(self) -> NameShrinker:
-        return NameShrinker(self.db.dialect.max_identifier_length, 6)

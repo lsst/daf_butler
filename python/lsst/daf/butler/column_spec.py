@@ -44,7 +44,7 @@ __all__ = (
 import textwrap
 import uuid
 from abc import ABC, abstractmethod
-from typing import Annotated, Any, ClassVar, Literal, TypeAlias, Union, final
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, TypeAlias, Union, final
 
 import astropy.time
 import pyarrow as pa
@@ -53,7 +53,9 @@ from lsst.sphgeom import Region
 
 from . import arrow_utils, ddl
 from ._timespan import Timespan
-from .name_shrinker import NameShrinker
+
+if TYPE_CHECKING:
+    from .name_shrinker import NameShrinker
 
 ColumnType: TypeAlias = Literal[
     "int",
