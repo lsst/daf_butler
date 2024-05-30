@@ -127,10 +127,7 @@ class DataCoordinateResultSpec(ResultSpecBase):
         # Docstring inherited.
         result = ColumnSet(self.dimensions)
         if self.include_dimension_records:
-            for element_name in self.dimensions.elements:
-                element = self.dimensions.universe[element_name]
-                if not element.is_cached and element not in self.dimensions.universe.skypix_dimensions:
-                    result.dimension_fields[element_name].update(element.schema.remainder.names)
+            _add_dimension_records_to_column_set(self.dimensions, result)
         return result
 
 
@@ -192,10 +189,7 @@ class DatasetRefResultSpec(ResultSpecBase):
         result = ColumnSet(self.dimensions)
         result.dataset_fields[self.dataset_type_name].update({"dataset_id", "run"})
         if self.include_dimension_records:
-            for element_name in self.dimensions.elements:
-                element = self.dimensions.universe[element_name]
-                if not element.is_cached and element not in self.dimensions.universe.skypix_dimensions:
-                    result.dimension_fields[element_name].update(element.schema.remainder.names)
+            _add_dimension_records_to_column_set(self.dimensions, result)
         return result
 
 
@@ -270,3 +264,13 @@ ResultSpec: TypeAlias = Annotated[
 class SerializedResultSpec(DeferredValidation[ResultSpec]):
     def to_result_spec(self, universe: DimensionUniverse) -> ResultSpec:
         return self.validated(universe=universe)
+
+
+def _add_dimension_records_to_column_set(dimensions: DimensionGroup, column_set: ColumnSet) -> None:
+    """Add extra columns for generating 'expanded' data IDs that include
+    dimension records.
+    """
+    for element_name in dimensions.elements:
+        element = dimensions.universe[element_name]
+        if not element.is_cached and element not in dimensions.universe.skypix_dimensions:
+            column_set.dimension_fields[element_name].update(element.schema.remainder.names)

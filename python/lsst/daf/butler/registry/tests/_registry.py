@@ -2837,6 +2837,26 @@ class RegistryTests(ABC):
         # Empty timespans should not overlap anything.
         self.assertEqual([], query("visit.timespan OVERLAPS (t3, t2)"))
 
+        # Make sure that expanded data IDs include the timespans.
+        results = list(
+            registry.queryDataIds(["exposure"], dataId={"instrument": "HSC", "exposure": 903342}).expanded()
+        )
+        self.assertEqual(len(results), 1)
+        exposure_time = Timespan(
+            astropy.time.Time("2013-06-17 13:34:45.775000000", scale="tai"),
+            astropy.time.Time("2013-06-17 13:35:17.947000000", scale="tai"),
+        )
+        self.assertEqual(results[0].timespan, exposure_time)
+        exposure_record = results[0].records["exposure"]
+        assert exposure_record is not None
+        self.assertEqual(exposure_record.timespan, exposure_time)
+        day_obs_record = results[0].records["day_obs"]
+        assert day_obs_record is not None
+        self.assertEqual(day_obs_record.id, 20130617)
+        # day_obs can have a start/end timespan associated with it, but the
+        # ones in this set of data don't.
+        self.assertEqual(day_obs_record.timespan, None)
+
     def testCollectionSummaries(self):
         """Test recording and retrieval of collection summaries."""
         self.maxDiff = None
@@ -3928,4 +3948,77 @@ class RegistryTests(ABC):
                 (registry.expandDataId(skymap="SkyMap1", tract=0, patch=3), pvi2),
                 (registry.expandDataId(skymap="SkyMap1", tract=0, patch=4), pvi3),
             },
+        )
+
+    def test_expanded_data_id_queries(self) -> None:
+        """Tests for basic functionality of expanded() on queryDataIds and
+        queryDatasets.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "spatial.yaml")
+        self.loadData(registry, "datasets.yaml")
+
+        result_obj = (
+            registry.queryDataIds(["visit"], where="instrument = 'Cam1' and (visit.id = 1 or visit.id = 2)")
+            .expanded()
+            .order_by("visit.id")
+        )
+        self.assertTrue(result_obj.hasRecords())
+        visits = list(result_obj)
+        self.assertEqual(len(visits), 2)
+
+        self.assertEqual(visits[0]["visit"], 1)
+        self.assertEqual(visits[1]["visit"], 2)
+        self.assertEqual(visits[0].records["visit"].exposure_time, 60.0)
+        self.assertEqual(visits[1].records["visit"].exposure_time, 45.0)
+        # physical_filter is a "cacheable" dimension, so its records are loaded
+        # from local cache rather than being part of the DB rows.
+        self.assertEqual(visits[0].records["physical_filter"].band, "g")
+        self.assertEqual(visits[1].records["physical_filter"].band, "r")
+
+        # Make sure that we can fetch nulls in dimension records
+        registry.insertDimensionData(
+            "detector",
+            {
+                "instrument": "Cam1",
+                "id": 5,
+                "raft": "Z",
+                "name_in_raft": "z",
+                "full_name": "Zz",
+                "purpose": None,
+            },
+        )
+        detectors = list(
+            registry.queryDataIds("detector", dataId={"instrument": "Cam1", "detector": 5}).expanded()
+        )
+        self.assertIsNone(detectors[0].records["detector"].purpose)
+
+        datasets = list(
+            registry.queryDatasets(
+                "flat", collections="imported_g", where="instrument = 'Cam1' and detector <= 3"
+            ).expanded()
+        )
+        datasets.sort(key=lambda ref: ref.dataId["detector"])
+        self.assertEqual(len(datasets), 2)
+        self.assertEqual(datasets[0].id, uuid.UUID("60c8a65c-7290-4c38-b1de-e3b1cdcf872d"))
+        self.assertEqual(datasets[1].id, uuid.UUID("84239e7f-c41f-46d5-97b9-a27976b98ceb"))
+        # All of the dimensions for flat are "cached" dimensions.
+        self.assertEqual(datasets[0].dataId.records["detector"].full_name, "Ab")
+        self.assertEqual(datasets[1].dataId.records["detector"].full_name, "Ba")
+        self.assertEqual(datasets[0].dataId.records["instrument"].visit_system, 1)
+
+        # None of the datasets in the test data include any uncached
+        # dimensions, so we have to set one up.
+        registry.registerDatasetType(DatasetType("test", ["visit"], "int", universe=registry.dimensions))
+        registry.insertDatasets("test", [{"instrument": "Cam1", "visit": 1}], run="imported_g")
+        ref = list(registry.queryDatasets("test", collections="imported_g").expanded())[0]
+        self.assertEqual(ref.dataId.records["visit"].zenith_angle, 5.0)
+        self.assertEqual(ref.dataId.records["physical_filter"].band, "g")
+        self.assertEqual(
+            ref.dataId.timespan,
+            Timespan(
+                begin=astropy.time.Time("2021-09-09 03:00:00.000000000", scale="tai"),
+                end=astropy.time.Time("2021-09-09 03:01:00.000000000", scale="tai"),
+            ),
         )

@@ -29,13 +29,22 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import sqlalchemy
 
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
-from ..dimensions import DataCoordinate, DimensionGroup, DimensionRecordSet, SkyPixDimension
+from ..dimensions import (
+    DataCoordinate,
+    DimensionElement,
+    DimensionGroup,
+    DimensionRecord,
+    DimensionRecordSet,
+    SkyPixDimension,
+)
+from ..dimensions.record_cache import DimensionRecordCache
 from ..queries import tree as qt
 from ..queries.driver import (
     DataCoordinateResultPage,
@@ -47,7 +56,6 @@ from ..queries.driver import (
 from ..queries.result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
 
 if TYPE_CHECKING:
-    from ..name_shrinker import NameShrinker
     from ..registry.interfaces import Database
 
 
@@ -75,53 +83,121 @@ class ResultPageConverter:
         raise NotImplementedError()
 
 
+@dataclass(frozen=True)
+class ResultPageConverterContext:
+    """Parameters used by all result page converters."""
+
+    db: Database
+    column_order: qt.ColumnOrder
+    dimension_record_cache: DimensionRecordCache
+
+
 class DimensionRecordResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
     """Converts raw SQL rows into pages of `DimensionRecord` query results."""
 
-    def __init__(self, spec: DimensionRecordResultSpec, db: Database) -> None:
+    def __init__(self, spec: DimensionRecordResultSpec, ctx: ResultPageConverterContext) -> None:
         self._result_spec = spec
-        self._timespan_repr_cls = db.getTimespanRepresentation()
+        self._converter = _create_dimension_record_row_converter(spec.element, ctx, use_cache=False)
 
     def convert(
         self, raw_rows: Iterable[sqlalchemy.Row], next_key: PageKey | None
     ) -> DimensionRecordResultPage:
-        result_spec = self._result_spec
-        record_set = DimensionRecordSet(result_spec.element)
-        record_cls = result_spec.element.RecordClass
-        if isinstance(result_spec.element, SkyPixDimension):
-            pixelization = result_spec.element.pixelization
-            id_qualified_name = qt.ColumnSet.get_qualified_name(result_spec.element.name, None)
-            for raw_row in raw_rows:
-                pixel_id = raw_row._mapping[id_qualified_name]
-                record_set.add(record_cls(id=pixel_id, region=pixelization.pixel(pixel_id)))
-        else:
-            # Mapping from DimensionRecord attribute name to qualified column
-            # name, but as a list of tuples since we'd just iterate over items
-            # anyway.
-            column_map = list(
-                zip(
-                    result_spec.element.schema.dimensions.names,
-                    result_spec.element.dimensions.names,
-                )
+        record_set = DimensionRecordSet(self._result_spec.element)
+        for raw_row in raw_rows:
+            record_set.add(self._converter.convert(raw_row))
+        return DimensionRecordResultPage(spec=self._result_spec, next_key=next_key, rows=record_set)
+
+
+def _create_dimension_record_row_converter(
+    element: DimensionElement, ctx: ResultPageConverterContext, *, use_cache: bool = True
+) -> _DimensionRecordRowConverter:
+    if use_cache and element.is_cached:
+        return _CachedDimensionRecordRowConverter(element, ctx.dimension_record_cache)
+    elif isinstance(element, SkyPixDimension):
+        return _SkypixDimensionRecordRowConverter(element)
+    else:
+        return _NormalDimensionRecordRowConverter(element, ctx.db)
+
+
+class _DimensionRecordRowConverter:
+    """Interface definition for helper objects that convert a result row into a
+    DimensionRecord instance.
+    """
+
+    @abstractmethod
+    def convert(self, row: sqlalchemy.Row) -> DimensionRecord:
+        raise NotImplementedError()
+
+
+class _NormalDimensionRecordRowConverter(_DimensionRecordRowConverter):
+    """Helper for converting result row into a DimensionRecord instance for
+    typical dimensions (all non-skypix dimensions).
+    """
+
+    def __init__(self, element: DimensionElement, db: Database) -> None:
+        self._db = db
+        self._element = element
+        self._record_cls = self._element.RecordClass
+
+        # Mapping from DimensionRecord attribute name to qualified column
+        # name, but as a list of tuples since we'd just iterate over items
+        # anyway.
+        column_map = list(
+            zip(
+                element.schema.dimensions.names,
+                element.dimensions.names,
             )
-            for field in result_spec.element.schema.remainder.names:
-                if field != "timespan":
-                    column_map.append(
-                        (field, qt.ColumnSet.get_qualified_name(result_spec.element.name, field))
-                    )
-            if result_spec.element.temporal:
-                timespan_qualified_name = qt.ColumnSet.get_qualified_name(
-                    result_spec.element.name, "timespan"
-                )
-            else:
-                timespan_qualified_name = None
-            for raw_row in raw_rows:
-                m = raw_row._mapping
-                d = {k: m[v] for k, v in column_map}
-                if timespan_qualified_name is not None:
-                    d["timespan"] = self._timespan_repr_cls.extract(m, name=timespan_qualified_name)
-                record_set.add(record_cls(**d))
-        return DimensionRecordResultPage(spec=result_spec, next_key=next_key, rows=record_set)
+        )
+        for field in element.schema.remainder.names:
+            if field != "timespan":
+                column_map.append((field, qt.ColumnSet.get_qualified_name(element.name, field)))
+        self._column_map = column_map
+
+        self._timespan_qualified_name: str | None = None
+        if element.temporal:
+            self._timespan_qualified_name = qt.ColumnSet.get_qualified_name(element.name, "timespan")
+
+    def convert(self, row: sqlalchemy.Row) -> DimensionRecord:
+        m = row._mapping
+        d = {k: m[v] for k, v in self._column_map}
+        if self._timespan_qualified_name is not None:
+            d["timespan"] = self._db.getTimespanRepresentation().extract(
+                m, name=self._timespan_qualified_name
+            )
+        return self._record_cls(**d)
+
+
+class _SkypixDimensionRecordRowConverter(_DimensionRecordRowConverter):
+    """Helper for converting result row into a DimensionRecord instance for
+    skypix dimensions.
+    """
+
+    def __init__(self, element: SkyPixDimension):
+        self._pixelization = element.pixelization
+        self._id_qualified_name = qt.ColumnSet.get_qualified_name(element.name, None)
+        self._record_cls = element.RecordClass
+
+    def convert(self, row: sqlalchemy.Row) -> DimensionRecord:
+        pixel_id = row._mapping[self._id_qualified_name]
+        return self._record_cls(id=pixel_id, region=self._pixelization.pixel(pixel_id))
+
+
+class _CachedDimensionRecordRowConverter(_DimensionRecordRowConverter):
+    """Helper for converting result row into a DimensionRecord instance for
+    "cached" dimensions.  These are dimensions with few records, used by
+    many/all dataset types.  For these dimensions, a complete cache of records
+    is stored client-side instead of re-fetching them from the DB constantly.
+    """
+
+    def __init__(self, element: DimensionElement, cache: DimensionRecordCache) -> None:
+        self._element = element
+        self._cache = cache
+        self._key_columns = [qt.ColumnSet.get_qualified_name(name, None) for name in element.required.names]
+
+    def convert(self, row: sqlalchemy.Row) -> DimensionRecord:
+        mapping = row._mapping
+        values = tuple(mapping[key] for key in self._key_columns)
+        return self._cache[self._element.name].find_with_required_values(values)
 
 
 class DataCoordinateResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
@@ -129,9 +205,15 @@ class DataCoordinateResultPageConverter(ResultPageConverter):  # numpydoc ignore
     query results.
     """
 
-    def __init__(self, spec: DataCoordinateResultSpec, column_order: qt.ColumnOrder) -> None:
+    def __init__(
+        self,
+        spec: DataCoordinateResultSpec,
+        ctx: ResultPageConverterContext,
+    ) -> None:
         self._spec = spec
-        self._converter = _DataCoordinateRowConverter(spec.dimensions, column_order)
+        self._converter = _DataCoordinateRowConverter(
+            spec.dimensions, ctx, include_dimension_records=spec.include_dimension_records
+        )
 
     def convert(
         self,
@@ -152,14 +234,15 @@ class DatasetRefResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR0
         self,
         spec: DatasetRefResultSpec,
         dataset_type: DatasetType,
-        column_order: qt.ColumnOrder,
-        name_shrinker: NameShrinker,
+        ctx: ResultPageConverterContext,
     ) -> None:
         self._spec = spec
         self._dataset_type = dataset_type
-        self._data_coordinate_converter = _DataCoordinateRowConverter(spec.dimensions, column_order)
-        self._column_order = column_order
-        self._name_shrinker = name_shrinker
+        self._data_coordinate_converter = _DataCoordinateRowConverter(
+            spec.dimensions, ctx, include_dimension_records=spec.include_dimension_records
+        )
+        self._column_order = ctx.column_order
+        self._name_shrinker = ctx.db.name_shrinker
 
     def convert(
         self,
@@ -191,15 +274,46 @@ class _DataCoordinateRowConverter:
     instance.
     """
 
-    def __init__(self, dimensions: DimensionGroup, column_order: qt.ColumnOrder):
+    def __init__(
+        self,
+        dimensions: DimensionGroup,
+        ctx: ResultPageConverterContext,
+        include_dimension_records: bool,
+    ):
         assert (
-            list(dimensions.data_coordinate_keys) == column_order.dimension_key_names
+            list(dimensions.data_coordinate_keys) == ctx.column_order.dimension_key_names
         ), "Dimension keys in result row should be in same order as those specified by the result spec"
 
         self._dimensions = dimensions
-        self._column_order = column_order
+        self._column_order = ctx.column_order
+        self._dimension_record_converter = None
+        if include_dimension_records:
+            self._dimension_record_converter = _DimensionGroupRecordRowConverter(dimensions, ctx)
 
     def convert(self, row: sqlalchemy.Row) -> DataCoordinate:
-        return DataCoordinate.from_full_values(
+        coordinate = DataCoordinate.from_full_values(
             self._dimensions, tuple(self._column_order.extract_dimension_key_columns(row))
         )
+
+        if self._dimension_record_converter is None:
+            return coordinate
+        else:
+            return coordinate.expanded(self._dimension_record_converter.convert(row))
+
+
+class _DimensionGroupRecordRowConverter:  # numpydoc ignore=PR01
+    """Helper for pulling out all the DimensionRecords in a raw SQL result
+    row.
+    """
+
+    def __init__(self, dimensions: DimensionGroup, ctx: ResultPageConverterContext) -> None:
+        self._record_converters = {
+            name: _create_dimension_record_row_converter(dimensions.universe[name], ctx)
+            for name in dimensions.elements
+        }
+
+    def convert(self, row: sqlalchemy.Row) -> dict[str, DimensionRecord]:  # numpydoc ignore=PR01
+        """Return a mapping from dimension name to dimension records for all
+        the dimensions in the database row.
+        """
+        return {name: converter.convert(row) for name, converter in self._record_converters.items()}

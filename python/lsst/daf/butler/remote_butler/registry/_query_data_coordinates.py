@@ -53,20 +53,32 @@ class QueryDriverDataCoordinateQueryResults(
         Function that can be called to access the new query system.
     dimensions : `DimensionGroup` | `None`
         Dimensions of the data IDs to yield from the query.
+    expanded : bool
+        `True` if the query will also fetch dimension records associated with
+        the data IDs.
     args : `CommonQueryArguments`
         User-facing arguments forwarded from
         ``registry.queryDimensionRecords``.
     """
 
     def __init__(
-        self, query_factory: QueryFactory, dimensions: DimensionGroup, args: CommonQueryArguments
+        self,
+        query_factory: QueryFactory,
+        dimensions: DimensionGroup,
+        expanded: bool,
+        args: CommonQueryArguments,
     ) -> None:
         LegacyQueryResultsMixin.__init__(self, query_factory, args)
         LegacyDataCoordinateQueryResults.__init__(self)
         self._dimensions = dimensions
+        self._expanded = expanded
 
     def _build_result(self, query: Query) -> DataCoordinateQueryResults:
-        return query.data_ids(self._dimensions)
+        results = query.data_ids(self._dimensions)
+        if self._expanded:
+            return results.with_dimension_records()
+        else:
+            return results
 
     @property
     def dimensions(self) -> DimensionGroup:
@@ -76,7 +88,7 @@ class QueryDriverDataCoordinateQueryResults(
         return True
 
     def hasRecords(self) -> bool:
-        return False
+        return self._expanded
 
     def __iter__(self) -> Iterator[DataCoordinate]:
         with self._build_query() as result:
@@ -90,7 +102,7 @@ class QueryDriverDataCoordinateQueryResults(
         raise NotImplementedError()
 
     def expanded(self) -> LegacyDataCoordinateQueryResults:
-        raise NotImplementedError()
+        return QueryDriverDataCoordinateQueryResults(self._query_factory, self._dimensions, True, self._args)
 
     def subset(
         self,
@@ -107,7 +119,9 @@ class QueryDriverDataCoordinateQueryResults(
         dimensions = self.dimensions.universe.conform(dimensions)
         if not dimensions.issubset(self.dimensions):
             raise ValueError(f"{dimensions} is not a subset of {self.dimensions}")
-        return QueryDriverDataCoordinateQueryResults(self._query_factory, dimensions, self._args)
+        return QueryDriverDataCoordinateQueryResults(
+            self._query_factory, dimensions, self._expanded, self._args
+        )
 
     def findDatasets(
         self,

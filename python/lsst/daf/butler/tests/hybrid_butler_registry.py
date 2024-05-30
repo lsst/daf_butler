@@ -414,8 +414,10 @@ class _HybridDataCoordinateQueryResults:
     def materialize(self) -> contextlib.AbstractContextManager[DataCoordinateQueryResults]:
         return self._direct.materialize()
 
-    def expanded(self) -> DataCoordinateQueryResults:
-        return self._direct.expanded()
+    def expanded(self) -> _HybridDataCoordinateQueryResults:
+        return _HybridDataCoordinateQueryResults(
+            remote=self._remote.expanded(), direct=self._direct.expanded()
+        )
 
     def subset(
         self,
