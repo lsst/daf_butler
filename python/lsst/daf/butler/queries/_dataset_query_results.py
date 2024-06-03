@@ -72,10 +72,7 @@ class DatasetRefQueryResults(QueryResultsBase):
         self._spec = spec
 
     def __iter__(self) -> Iterator[DatasetRef]:
-        page = self._driver.execute(self._spec, self._tree)
-        yield from page.rows
-        while page.next_key is not None:
-            page = self._driver.fetch_next_page(self._spec, page.next_key)
+        for page in self._driver.execute(self._spec, self._tree):
             yield from page.rows
 
     @property

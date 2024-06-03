@@ -34,7 +34,7 @@ __all__ = ("DirectQueryDriver",)
 import dataclasses
 import logging
 import sys
-from collections.abc import Iterable, Mapping, Set
+from collections.abc import Iterable, Iterator, Mapping, Set
 from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, cast, overload
 
@@ -51,7 +51,6 @@ from ..queries.driver import (
     DatasetRefResultPage,
     DimensionRecordResultPage,
     GeneralResultPage,
-    PageKey,
     QueryDriver,
     ResultPage,
 )
@@ -147,7 +146,7 @@ class DirectQueryDriver(QueryDriver):
         self._raw_page_size = raw_page_size
         self._postprocessing_filter_factor = postprocessing_filter_factor
         self._constant_rows_limit = constant_rows_limit
-        self._cursors: dict[PageKey, _Cursor] = {}
+        self._cursors: set[_Cursor] = set()
 
     def __enter__(self) -> None:
         self._exit_stack = ExitStack()
@@ -170,10 +169,10 @@ class DirectQueryDriver(QueryDriver):
         self._upload_tables.clear()
         # Transfer open cursors' close methods to exit stack, this will help
         # with the cleanup in case a cursor raises an exceptions on close.
-        for cursor in self._cursors.values():
+        for cursor in self._cursors:
             self._exit_stack.push(cursor.close)
         self._exit_stack.__exit__(exc_type, exc_value, traceback)
-        self._cursors = {}
+        self._cursors = set()
         self._exit_stack = None
 
     @property
@@ -183,20 +182,22 @@ class DirectQueryDriver(QueryDriver):
     @overload
     def execute(
         self, result_spec: DataCoordinateResultSpec, tree: qt.QueryTree
-    ) -> DataCoordinateResultPage: ...
+    ) -> Iterator[DataCoordinateResultPage]: ...
 
     @overload
     def execute(
         self, result_spec: DimensionRecordResultSpec, tree: qt.QueryTree
-    ) -> DimensionRecordResultPage: ...
+    ) -> Iterator[DimensionRecordResultPage]: ...
 
     @overload
-    def execute(self, result_spec: DatasetRefResultSpec, tree: qt.QueryTree) -> DatasetRefResultPage: ...
+    def execute(
+        self, result_spec: DatasetRefResultSpec, tree: qt.QueryTree
+    ) -> Iterator[DatasetRefResultPage]: ...
 
     @overload
-    def execute(self, result_spec: GeneralResultSpec, tree: qt.QueryTree) -> GeneralResultPage: ...
+    def execute(self, result_spec: GeneralResultSpec, tree: qt.QueryTree) -> Iterator[GeneralResultPage]: ...
 
-    def execute(self, result_spec: ResultSpec, tree: qt.QueryTree) -> ResultPage:
+    def execute(self, result_spec: ResultSpec, tree: qt.QueryTree) -> Iterator[ResultPage]:
         # Docstring inherited.
         if self._exit_stack is None:
             raise RuntimeError("QueryDriver context must be entered before queries can be executed.")
@@ -233,12 +234,25 @@ class DirectQueryDriver(QueryDriver):
             raw_page_size=raw_page_size,
             page_converter=self._create_result_page_converter(result_spec, builder),
         )
-        result_page = cursor.next()
-        if result_page.next_key is not None:
-            # Cursor has not been exhausted; add it to the driver for use by
-            # fetch_next_page.
-            self._cursors[result_page.next_key] = cursor
-        return result_page
+        # Since this function isn't a context manager and the caller could stop
+        # iterating before we retrieve all the results, we have to track open
+        # cursors to ensure we can close them as part of higher-level cleanup.
+        self._cursors.add(cursor)
+
+        # Return the iterator as a separate function, so that all the code
+        # above runs immediately instead of later when we first read from the
+        # iterator.  This ensures that any exceptions that are triggered during
+        # set-up for this query occur immediately.
+        return self._read_results(cursor)
+
+    def _read_results(self, cursor: _Cursor) -> Iterator[ResultPage]:
+        """Read out all of the result pages from the database."""
+        try:
+            while (result_page := cursor.next()) is not None:
+                yield result_page
+        finally:
+            self._cursors.discard(cursor)
+            cursor.close()
 
     def _create_result_page_converter(self, spec: ResultSpec, builder: QueryBuilder) -> ResultPageConverter:
         context = ResultPageConverterContext(
@@ -257,33 +271,6 @@ class DirectQueryDriver(QueryDriver):
                 )
             case _:
                 raise NotImplementedError(f"Result type '{spec.result_type}' not yet implemented")
-
-    @overload
-    def fetch_next_page(
-        self, result_spec: DataCoordinateResultSpec, key: PageKey
-    ) -> DataCoordinateResultPage: ...
-
-    @overload
-    def fetch_next_page(
-        self, result_spec: DimensionRecordResultSpec, key: PageKey
-    ) -> DimensionRecordResultPage: ...
-
-    @overload
-    def fetch_next_page(self, result_spec: DatasetRefResultSpec, key: PageKey) -> DatasetRefResultPage: ...
-
-    @overload
-    def fetch_next_page(self, result_spec: GeneralResultSpec, key: PageKey) -> GeneralResultPage: ...
-
-    def fetch_next_page(self, result_spec: ResultSpec, key: PageKey) -> ResultPage:
-        # Docstring inherited.
-        try:
-            cursor = self._cursors.pop(key)
-        except KeyError:
-            raise RuntimeError("Cannot continue query result iteration after the query context has closed.")
-        result_page = cursor.next()
-        if result_page.next_key is not None:
-            self._cursors[result_page.next_key] = cursor
-        return result_page
 
     def materialize(
         self,
@@ -1129,11 +1116,12 @@ class _Cursor:
         self._postprocessing = postprocessing
         self._context = db.query(sql, execution_options=dict(yield_per=raw_page_size))
         self._page_converter = page_converter
+        self._closed = False
         cursor = self._context.__enter__()
         try:
             self._iterator = cursor.partitions()
         except:  # noqa: E722
-            self._context.__exit__(*sys.exc_info())
+            self.close(*sys.exc_info())
             raise
 
     def close(self, exc_type: Any = None, exc_value: Any = None, traceback: Any = None) -> None:
@@ -1151,29 +1139,27 @@ class _Cursor:
             Traceback as obtained from `sys.exc_info`, or `None` if there was
             no error.
         """
-        self._context.__exit__(exc_type, exc_value, traceback)
+        if not self._closed:
+            self._context.__exit__(exc_type, exc_value, traceback)
+            self._closed = True
 
-    def next(self) -> ResultPage:
+    def next(self) -> ResultPage | None:
         """Return the next result page from this query.
 
         When there are no more results after this result page, the `next_page`
         attribute of the returned object is `None` and the cursor will be
         closed.  The cursor is also closed if this method raises an exception.
         """
+        if self._closed:
+            raise RuntimeError("Cannot continue query result iteration: cursor has been closed")
         try:
-            raw_page = next(self._iterator, tuple())
-            if len(raw_page) == self._raw_page_size:
-                # There's some chance we got unlucky and this page exactly
-                # finishes off the query, and we won't know the next page does
-                # not exist until we try to fetch it.  But that's better than
-                # always fetching the next page up front.
-                next_key = uuid.uuid4()
-            else:
-                next_key = None
+            raw_page = next(self._iterator, None)
+            if raw_page is None:
                 self.close()
+                return None
 
             postprocessed_rows = self._postprocessing.apply(raw_page)
-            return self._page_converter.convert(postprocessed_rows, next_key)
+            return self._page_converter.convert(postprocessed_rows)
         except:  # noqa: E722
-            self._context.__exit__(*sys.exc_info())
+            self.close(*sys.exc_info())
             raise

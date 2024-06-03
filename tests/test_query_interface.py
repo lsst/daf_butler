@@ -335,7 +335,6 @@ class _TestQueryDriver(qd.QueryDriver):
         self._dataset_types = dataset_types or {}
         self._executions: list[tuple[qrs.ResultSpec, qt.QueryTree]] = []
         self._result_rows = result_rows
-        self._result_iters: dict[qd.PageKey, tuple[Iterable[Any], Iterator[Iterable[Any]]]] = {}
 
     @property
     def universe(self) -> DimensionUniverse:
@@ -347,34 +346,21 @@ class _TestQueryDriver(qd.QueryDriver):
     def __exit__(self, *args: Any, **kwargs: Any) -> None:
         pass
 
-    def execute(self, result_spec: qrs.ResultSpec, tree: qt.QueryTree) -> qd.ResultPage:
-        if self._result_rows is not None:
-            iterator = iter(self._result_rows)
-            current_rows = next(iterator, ())
-            return self._make_next_page(result_spec, current_rows, iterator)
-        raise _TestQueryExecution(result_spec, tree, self)
+    def execute(self, result_spec: qrs.ResultSpec, tree: qt.QueryTree) -> Iterator[qd.ResultPage]:
+        if self._result_rows is None:
+            raise _TestQueryExecution(result_spec, tree, self)
 
-    def fetch_next_page(self, result_spec: qrs.ResultSpec, key: qd.PageKey) -> qd.ResultPage:
-        if self._result_rows is not None:
-            return self._make_next_page(result_spec, *self._result_iters.pop(key))
-        raise AssertionError("Test query driver not initialized for actual results.")
+        for rows in self._result_rows:
+            yield self._make_next_page(result_spec, rows)
 
-    def _make_next_page(
-        self, result_spec: qrs.ResultSpec, current_rows: Iterable[Any], iterator: Iterator[Iterable[Any]]
-    ) -> qd.ResultPage:
-        next_rows = list(next(iterator, ()))
-        if not next_rows:
-            next_key = None
-        else:
-            next_key = uuid.uuid4()
-            self._result_iters[next_key] = (next_rows, iterator)
+    def _make_next_page(self, result_spec: qrs.ResultSpec, current_rows: Iterable[Any]) -> qd.ResultPage:
         match result_spec:
             case qrs.DataCoordinateResultSpec():
-                return qd.DataCoordinateResultPage(spec=result_spec, next_key=next_key, rows=current_rows)
+                return qd.DataCoordinateResultPage(spec=result_spec, rows=current_rows)
             case qrs.DimensionRecordResultSpec():
-                return qd.DimensionRecordResultPage(spec=result_spec, next_key=next_key, rows=current_rows)
+                return qd.DimensionRecordResultPage(spec=result_spec, rows=current_rows)
             case qrs.DatasetRefResultSpec():
-                return qd.DatasetRefResultPage(spec=result_spec, next_key=next_key, rows=current_rows)
+                return qd.DatasetRefResultPage(spec=result_spec, rows=current_rows)
             case _:
                 raise NotImplementedError("Other query types not yet supported.")
 

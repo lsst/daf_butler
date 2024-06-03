@@ -47,7 +47,7 @@ from lsst.daf.butler.remote_butler.server_models import (
     QueryInputs,
 )
 
-from ....queries.driver import QueryDriver, QueryTree, ResultPage, ResultSpec
+from ....queries.driver import QueryDriver, QueryTree
 from .._dependencies import factory_dependency
 from .._factory import Factory
 from ._query_serialization import convert_query_pages
@@ -61,16 +61,8 @@ def query_execute(
 ) -> QueryExecuteResponseModel:
     with _get_query_context(factory, request.query) as ctx:
         spec = request.result_spec.to_result_spec(ctx.driver.universe)
-        pages = _load_query_pages(ctx.driver, ctx.tree, spec)
+        pages = ctx.driver.execute(spec, ctx.tree)
         return QueryExecuteResponseModel(result=convert_query_pages(spec, pages))
-
-
-def _load_query_pages(driver: QueryDriver, tree: QueryTree, spec: ResultSpec) -> Iterator[ResultPage]:
-    page = driver.execute(spec, tree)
-    yield page
-    while page.next_key is not None:
-        page = driver.fetch_next_page(page.spec, page.next_key)
-        yield page
 
 
 @query_router.post(

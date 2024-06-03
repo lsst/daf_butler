@@ -50,7 +50,6 @@ from ..queries.driver import (
     DataCoordinateResultPage,
     DatasetRefResultPage,
     DimensionRecordResultPage,
-    PageKey,
     ResultPage,
 )
 from ..queries.result_specs import DataCoordinateResultSpec, DatasetRefResultSpec, DimensionRecordResultSpec
@@ -63,7 +62,7 @@ class ResultPageConverter:
     """Interface for raw SQL result row conversion to `ResultPage`."""
 
     @abstractmethod
-    def convert(self, raw_rows: Iterable[sqlalchemy.Row], next_key: PageKey | None) -> ResultPage:
+    def convert(self, raw_rows: Iterable[sqlalchemy.Row]) -> ResultPage:
         """Convert raw SQL result rows into a `ResultPage` object containing
         high-level `Butler` types.
 
@@ -72,8 +71,6 @@ class ResultPageConverter:
         raw_rows : `~collections.abc.Iterable` [ `sqlalchemy.Row` ]
             Iterable of SQLAlchemy rows, with `Postprocessing` filters already
             applied.
-        next_key : `PageKey` or `None`
-            Key for the next page to add into the returned page object.
 
         Returns
         -------
@@ -99,13 +96,11 @@ class DimensionRecordResultPageConverter(ResultPageConverter):  # numpydoc ignor
         self._result_spec = spec
         self._converter = _create_dimension_record_row_converter(spec.element, ctx, use_cache=False)
 
-    def convert(
-        self, raw_rows: Iterable[sqlalchemy.Row], next_key: PageKey | None
-    ) -> DimensionRecordResultPage:
+    def convert(self, raw_rows: Iterable[sqlalchemy.Row]) -> DimensionRecordResultPage:
         record_set = DimensionRecordSet(self._result_spec.element)
         for raw_row in raw_rows:
             record_set.add(self._converter.convert(raw_row))
-        return DimensionRecordResultPage(spec=self._result_spec, next_key=next_key, rows=record_set)
+        return DimensionRecordResultPage(spec=self._result_spec, rows=record_set)
 
 
 def _create_dimension_record_row_converter(
@@ -218,11 +213,10 @@ class DataCoordinateResultPageConverter(ResultPageConverter):  # numpydoc ignore
     def convert(
         self,
         raw_rows: Iterable[sqlalchemy.Row],
-        next_key: PageKey | None,
     ) -> DataCoordinateResultPage:
         convert = self._converter.convert
         rows = [convert(row) for row in raw_rows]
-        return DataCoordinateResultPage(spec=self._spec, rows=rows, next_key=next_key)
+        return DataCoordinateResultPage(spec=self._spec, rows=rows)
 
 
 class DatasetRefResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR01
@@ -247,7 +241,6 @@ class DatasetRefResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR0
     def convert(
         self,
         raw_rows: Iterable[sqlalchemy.Row],
-        next_key: PageKey | None,
     ) -> DatasetRefResultPage:
         run_column = self._name_shrinker.shrink(
             qt.ColumnSet.get_qualified_name(self._spec.dataset_type_name, "run")
@@ -266,7 +259,7 @@ class DatasetRefResultPageConverter(ResultPageConverter):  # numpydoc ignore=PR0
             for row in raw_rows
         ]
 
-        return DatasetRefResultPage(spec=self._spec, rows=rows, next_key=next_key)
+        return DatasetRefResultPage(spec=self._spec, rows=rows)
 
 
 class _DataCoordinateRowConverter:

@@ -32,7 +32,7 @@ from uuid import uuid4
 __all__ = ("RemoteQueryDriver",)
 
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from typing import Any, overload
 
 from ...butler import Butler
@@ -44,7 +44,6 @@ from ..queries.driver import (
     DatasetRefResultPage,
     DimensionRecordResultPage,
     GeneralResultPage,
-    PageKey,
     QueryDriver,
     ResultPage,
 )
@@ -99,20 +98,24 @@ class RemoteQueryDriver(QueryDriver):
         return self._butler.dimensions
 
     @overload
-    def execute(self, result_spec: DataCoordinateResultSpec, tree: QueryTree) -> DataCoordinateResultPage: ...
+    def execute(
+        self, result_spec: DataCoordinateResultSpec, tree: QueryTree
+    ) -> Iterator[DataCoordinateResultPage]: ...
 
     @overload
     def execute(
         self, result_spec: DimensionRecordResultSpec, tree: QueryTree
-    ) -> DimensionRecordResultPage: ...
+    ) -> Iterator[DimensionRecordResultPage]: ...
 
     @overload
-    def execute(self, result_spec: DatasetRefResultSpec, tree: QueryTree) -> DatasetRefResultPage: ...
+    def execute(
+        self, result_spec: DatasetRefResultSpec, tree: QueryTree
+    ) -> Iterator[DatasetRefResultPage]: ...
 
     @overload
-    def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> GeneralResultPage: ...
+    def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> Iterator[GeneralResultPage]: ...
 
-    def execute(self, result_spec: ResultSpec, tree: QueryTree) -> ResultPage:
+    def execute(self, result_spec: ResultSpec, tree: QueryTree) -> Iterator[ResultPage]:
         request = QueryExecuteRequestModel(
             query=self._create_query_input(tree), result_spec=SerializedResultSpec(result_spec)
         )
@@ -121,46 +124,24 @@ class RemoteQueryDriver(QueryDriver):
         universe = self.universe
         if result_spec.result_type == "dimension_record":
             assert result.type == "dimension_record"
-            return DimensionRecordResultPage(
+            yield DimensionRecordResultPage(
                 spec=result_spec,
-                next_key=None,
                 rows=[DimensionRecord.from_simple(r, universe) for r in result.rows],
             )
         elif result_spec.result_type == "data_coordinate":
             assert result.type == "data_coordinate"
-            return DataCoordinateResultPage(
+            yield DataCoordinateResultPage(
                 spec=result_spec,
-                next_key=None,
                 rows=[DataCoordinate.from_simple(r, universe) for r in result.rows],
             )
         elif result_spec.result_type == "dataset_ref":
             assert result.type == "dataset_ref"
-            return DatasetRefResultPage(
+            yield DatasetRefResultPage(
                 spec=result_spec,
-                next_key=None,
                 rows=[DatasetRef.from_simple(r, universe) for r in result.rows],
             )
         else:
             raise NotImplementedError(f"Unhandled result type {result_spec.result_type}")
-
-    @overload
-    def fetch_next_page(
-        self, result_spec: DataCoordinateResultSpec, key: PageKey
-    ) -> DataCoordinateResultPage: ...
-
-    @overload
-    def fetch_next_page(
-        self, result_spec: DimensionRecordResultSpec, key: PageKey
-    ) -> DimensionRecordResultPage: ...
-
-    @overload
-    def fetch_next_page(self, result_spec: DatasetRefResultSpec, key: PageKey) -> DatasetRefResultPage: ...
-
-    @overload
-    def fetch_next_page(self, result_spec: GeneralResultSpec, key: PageKey) -> GeneralResultPage: ...
-
-    def fetch_next_page(self, result_spec: ResultSpec, key: PageKey) -> ResultPage:
-        raise NotImplementedError()
 
     def materialize(
         self,
