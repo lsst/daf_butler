@@ -4022,3 +4022,30 @@ class RegistryTests(ABC):
                 end=astropy.time.Time("2021-09-09 03:01:00.000000000", scale="tai"),
             ),
         )
+
+    def test_collection_summary(self) -> None:
+        """Test for collection summary methods."""
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+
+        # Add one more dataset type, just for its existence to trigger a bug
+        # in `associate` (DM-44311).
+        registry.registerDatasetType(DatasetType("test", ["visit"], "int", universe=registry.dimensions))
+
+        # Check for what has been imported.
+        summary = registry.getCollectionSummary("imported_g")
+        self.assertEqual(summary.dataset_types.names, {"bias", "flat"})
+        self.assertEqual(summary.governors, {"instrument": {"Cam1"}})
+
+        # Make a tagged collection and associate some datasets.
+        tagged_coll = "tagged"
+        registry.registerCollection(tagged_coll, CollectionType.TAGGED)
+        refsets = registry.queryDatasets(..., collections=["imported_g"]).byParentDatasetType()
+        for refs in refsets:
+            registry.associate(tagged_coll, refs)
+
+        # Summary has to have the same dataset types.
+        summary = registry.getCollectionSummary(tagged_coll)
+        self.assertEqual(summary.dataset_types.names, {"bias", "flat"})
+        self.assertEqual(summary.governors, {"instrument": {"Cam1"}})
