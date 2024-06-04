@@ -124,6 +124,15 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def refresh_collection_summaries(self) -> None:
+        """Refresh content of the collection summary tables in the database.
+
+        This method can be run to cleanup the contents of the summary tables
+        after removing datasets from collections.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def caching_context(self) -> contextlib.AbstractContextManager[None]:
         """Context manager that enables caching."""
         raise NotImplementedError()

@@ -786,6 +786,44 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             tuple(row[dimension] for dimension in self.datasetType.dimensions.required.names),
         )
 
+    def refresh_collection_summaries(self) -> None:
+        """Make sure that dataset type collection summaries for this dataset
+        type are consistent with the contents of the dataset tables.
+        """
+        with self._db.transaction():
+            # The main issue here is consistency in the presence of concurrent
+            # updates (using default READ COMMITTED isolation). Regular clients
+            # only add to summary tables, and we want to avoid deleting what
+            # other concurrent transactions may add while we are in this
+            # transaction. This ordering of operations should guarantee it:
+            #  - read collections for this dataset type from summary tables,
+            #  - read collections for this dataset type from dataset tables
+            #    (both tags and calibs),
+            #  - whatever is in the first set but not in the second can be
+            #    dropped from summary tables.
+            summary_collection_ids = set(self._summaries.get_collection_ids(self._dataset_type_id))
+
+            # Query datasets tables for associated collections.
+            column_name = self._collections.getCollectionForeignKeyName()
+            query: sqlalchemy.sql.expression.SelectBase = (
+                sqlalchemy.select(self._tags.columns[column_name])
+                .where(self._tags.columns.dataset_type_id == self._dataset_type_id)
+                .distinct()
+            )
+            if (calibs := self._calibs) is not None:
+                query2 = (
+                    sqlalchemy.select(calibs.columns[column_name])
+                    .where(calibs.columns.dataset_type_id == self._dataset_type_id)
+                    .distinct()
+                )
+                query = sqlalchemy.sql.expression.union(query, query2)
+
+            with self._db.query(query) as result:
+                collection_ids = set(result.scalars())
+
+            collections_to_delete = summary_collection_ids - collection_ids
+            self._summaries.delete_collections(self._dataset_type_id, collections_to_delete)
+
 
 class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     """Implementation of ByDimensionsDatasetRecordStorage which uses UUID for
