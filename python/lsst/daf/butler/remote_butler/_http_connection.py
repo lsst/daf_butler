@@ -39,8 +39,8 @@ import httpx
 from lsst.daf.butler import __version__
 from pydantic import BaseModel, ValidationError
 
-from .._exceptions import create_butler_user_error
 from ._authentication import get_authentication_headers
+from ._errors import deserialize_butler_user_error
 from .server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
 
 _AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=BaseModel)
@@ -233,7 +233,7 @@ class RemoteButlerHttpConnection:
             # client.
             model = _try_to_parse_model(response, ErrorResponseModel)
             if model is not None:
-                exc = create_butler_user_error(model.error_type, model.detail)
+                exc = deserialize_butler_user_error(model)
                 exc.add_note(f"Client request ID: {request_id}")
                 raise exc
             # If model is None, server sent an expected error code, but

@@ -35,6 +35,8 @@ __all__ = ("RemoteQueryDriver",)
 from collections.abc import Iterable, Iterator
 from typing import Any, overload
 
+from pydantic import TypeAdapter
+
 from ...butler import Butler
 from .._dataset_ref import DatasetRef
 from .._dataset_type import DatasetType
@@ -57,6 +59,7 @@ from ..queries.result_specs import (
 )
 from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTree, SerializedQueryTree
 from ..registry import NoDefaultCollectionError
+from ._errors import deserialize_butler_user_error
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .server_models import (
     AdditionalQueryInput,
@@ -67,11 +70,13 @@ from .server_models import (
     QueryCountRequestModel,
     QueryCountResponseModel,
     QueryExecuteRequestModel,
-    QueryExecuteResponseModel,
+    QueryExecuteResultData,
     QueryExplainRequestModel,
     QueryExplainResponseModel,
     QueryInputs,
 )
+
+_QueryResultTypeAdapter = TypeAdapter(QueryExecuteResultData)
 
 
 class RemoteQueryDriver(QueryDriver):
@@ -119,29 +124,12 @@ class RemoteQueryDriver(QueryDriver):
         request = QueryExecuteRequestModel(
             query=self._create_query_input(tree), result_spec=SerializedResultSpec(result_spec)
         )
-        response = self._connection.post("query/execute", request)
-        result = parse_model(response, QueryExecuteResponseModel).result
         universe = self.universe
-        if result_spec.result_type == "dimension_record":
-            assert result.type == "dimension_record"
-            yield DimensionRecordResultPage(
-                spec=result_spec,
-                rows=[DimensionRecord.from_simple(r, universe) for r in result.rows],
-            )
-        elif result_spec.result_type == "data_coordinate":
-            assert result.type == "data_coordinate"
-            yield DataCoordinateResultPage(
-                spec=result_spec,
-                rows=[DataCoordinate.from_simple(r, universe) for r in result.rows],
-            )
-        elif result_spec.result_type == "dataset_ref":
-            assert result.type == "dataset_ref"
-            yield DatasetRefResultPage(
-                spec=result_spec,
-                rows=[DatasetRef.from_simple(r, universe) for r in result.rows],
-            )
-        else:
-            raise NotImplementedError(f"Unhandled result type {result_spec.result_type}")
+        with self._connection.post_with_stream_response("query/execute", request) as response:
+            # There is one result page JSON object per line of the response.
+            for line in response.iter_lines():
+                result_chunk = _QueryResultTypeAdapter.validate_json(line)
+                yield _convert_query_result_page(result_spec, result_chunk, universe)
 
     def materialize(
         self,
@@ -221,3 +209,32 @@ class RemoteQueryDriver(QueryDriver):
             default_data_id=self._butler.registry.defaults.dataId.to_simple(),
             additional_query_inputs=self._stored_query_inputs,
         )
+
+
+def _convert_query_result_page(
+    result_spec: ResultSpec, result: QueryExecuteResultData, universe: DimensionUniverse
+) -> ResultPage:
+    if result.type == "error":
+        # A server-side exception occurred part-way through generating results.
+        raise deserialize_butler_user_error(result.error)
+
+    if result_spec.result_type == "dimension_record":
+        assert result.type == "dimension_record"
+        return DimensionRecordResultPage(
+            spec=result_spec,
+            rows=[DimensionRecord.from_simple(r, universe) for r in result.rows],
+        )
+    elif result_spec.result_type == "data_coordinate":
+        assert result.type == "data_coordinate"
+        return DataCoordinateResultPage(
+            spec=result_spec,
+            rows=[DataCoordinate.from_simple(r, universe) for r in result.rows],
+        )
+    elif result_spec.result_type == "dataset_ref":
+        assert result.type == "dataset_ref"
+        return DatasetRefResultPage(
+            spec=result_spec,
+            rows=[DatasetRef.from_simple(r, universe) for r in result.rows],
+        )
+    else:
+        raise NotImplementedError(f"Unhandled result type {result_spec.result_type}")

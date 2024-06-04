@@ -37,6 +37,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from safir.logging import configure_logging, configure_uvicorn_logging
 
 from ..._exceptions import ButlerUserError
+from .._errors import serialize_butler_user_error
 from ..server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
 from .handlers._external import external_router
 from .handlers._external_query import query_router
@@ -94,7 +95,7 @@ def create_app() -> FastAPI:
     # user-facing Butler errors.
     @app.exception_handler(ButlerUserError)
     async def butler_exception_handler(request: Request, exc: ButlerUserError) -> Response:
-        error = ErrorResponseModel(error_type=exc.error_type, detail=str(exc))
+        error = serialize_butler_user_error(exc)
         return Response(
             media_type="application/json",
             status_code=ERROR_STATUS_CODE,
