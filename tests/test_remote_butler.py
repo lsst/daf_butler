@@ -70,7 +70,7 @@ class RemoteButlerErrorHandlingTests(unittest.TestCase):
     def setUp(self):
         server_instance = self.enterContext(create_test_server(TESTDIR))
         self.butler = server_instance.remote_butler
-        self.mock = self.enterContext(patch.object(self.butler._connection._client, "request"))
+        self.mock = self.enterContext(patch.object(self.butler._connection._client, "send"))
 
     def _mock_error_response(self, content: str) -> None:
         self.mock.return_value = httpx.Response(
