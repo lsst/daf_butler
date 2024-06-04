@@ -33,8 +33,10 @@ __all__ = ("RemoteQueryDriver",)
 
 
 from collections.abc import Iterable, Iterator
-from typing import Any, overload
+from contextlib import ExitStack
+from typing import Any, Literal, overload
 
+import httpx
 from pydantic import TypeAdapter
 
 from ...butler import Butler
@@ -94,9 +96,19 @@ class RemoteQueryDriver(QueryDriver):
         self._butler = butler
         self._connection = connection
         self._stored_query_inputs: list[AdditionalQueryInput] = []
+        self._pending_queries: set[httpx.Response] = set()
+        self._closed = False
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        pass
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> Literal[False]:
+        self._closed = True
+        # Clean up any queries that the user didn't finish iterating. The exit
+        # stack helps handle any exceptions that may be thrown during cleanup.
+        stack = ExitStack().__enter__()
+        for pending in self._pending_queries:
+            stack.callback(pending.close)
+        self._pending_queries = set()
+        stack.__exit__(exc_type, exc_value, traceback)
+        return False
 
     @property
     def universe(self) -> DimensionUniverse:
@@ -121,15 +133,27 @@ class RemoteQueryDriver(QueryDriver):
     def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> Iterator[GeneralResultPage]: ...
 
     def execute(self, result_spec: ResultSpec, tree: QueryTree) -> Iterator[ResultPage]:
+        if self._closed:
+            raise RuntimeError("Cannot execute query: query context has been closed")
+
         request = QueryExecuteRequestModel(
             query=self._create_query_input(tree), result_spec=SerializedResultSpec(result_spec)
         )
         universe = self.universe
         with self._connection.post_with_stream_response("query/execute", request) as response:
-            # There is one result page JSON object per line of the response.
-            for line in response.iter_lines():
-                result_chunk = _QueryResultTypeAdapter.validate_json(line)
-                yield _convert_query_result_page(result_spec, result_chunk, universe)
+            self._pending_queries.add(response)
+            try:
+                # There is one result page JSON object per line of the
+                # response.
+                for line in response.iter_lines():
+                    result_chunk = _QueryResultTypeAdapter.validate_json(line)
+                    yield _convert_query_result_page(result_spec, result_chunk, universe)
+                    if self._closed:
+                        raise RuntimeError(
+                            "Cannot continue query result iteration: query context has been closed"
+                        )
+            finally:
+                self._pending_queries.discard(response)
 
     def materialize(
         self,
