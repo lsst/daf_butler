@@ -101,6 +101,9 @@ class HybridButlerRegistry(Registry):
     def refresh(self) -> None:
         self._direct.refresh()
 
+    def refresh_collection_summaries(self) -> None:
+        self._direct.refresh_collection_summaries()
+
     def caching_context(self) -> contextlib.AbstractContextManager[None]:
         return self._direct.caching_context()
 

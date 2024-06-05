@@ -125,6 +125,10 @@ class RemoteButlerRegistry(Registry):
         # state.
         pass
 
+    def refresh_collection_summaries(self) -> None:
+        # Docstring inherited from a base class.
+        raise NotImplementedError()
+
     def caching_context(self) -> contextlib.AbstractContextManager[None]:
         raise NotImplementedError()
 

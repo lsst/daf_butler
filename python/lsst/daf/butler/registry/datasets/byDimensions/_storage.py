@@ -157,12 +157,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         summary = CollectionSummary()
         for dataset in summary.add_datasets_generator(datasets):
             rows.append(dict(protoRow, dataset_id=dataset.id, **dataset.dataId.required))
-        # Update the summary tables for this collection in case this is the
-        # first time this dataset type or these governor values will be
-        # inserted there.
-        self._summaries.update(collection, [self._dataset_type_id], summary)
-        # Update the tag table itself.
-        self._db.replace(self._tags, *rows)
+        if rows:
+            # Update the summary tables for this collection in case this is the
+            # first time this dataset type or these governor values will be
+            # inserted there.
+            self._summaries.update(collection, [self._dataset_type_id], summary)
+            # Update the tag table itself.
+            self._db.replace(self._tags, *rows)
 
     def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
@@ -236,6 +237,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             rows.append(row)
             if dataIds is not None:
                 dataIds.add(dataset.dataId)
+        if not rows:
+            # Just in case an empty dataset collection is provided we want to
+            # avoid adding dataset type to summary tables.
+            return
         # Update the summary tables for this collection in case this is the
         # first time this dataset type or these governor values will be
         # inserted there.
@@ -781,6 +786,44 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             tuple(row[dimension] for dimension in self.datasetType.dimensions.required.names),
         )
 
+    def refresh_collection_summaries(self) -> None:
+        """Make sure that dataset type collection summaries for this dataset
+        type are consistent with the contents of the dataset tables.
+        """
+        with self._db.transaction():
+            # The main issue here is consistency in the presence of concurrent
+            # updates (using default READ COMMITTED isolation). Regular clients
+            # only add to summary tables, and we want to avoid deleting what
+            # other concurrent transactions may add while we are in this
+            # transaction. This ordering of operations should guarantee it:
+            #  - read collections for this dataset type from summary tables,
+            #  - read collections for this dataset type from dataset tables
+            #    (both tags and calibs),
+            #  - whatever is in the first set but not in the second can be
+            #    dropped from summary tables.
+            summary_collection_ids = set(self._summaries.get_collection_ids(self._dataset_type_id))
+
+            # Query datasets tables for associated collections.
+            column_name = self._collections.getCollectionForeignKeyName()
+            query: sqlalchemy.sql.expression.SelectBase = (
+                sqlalchemy.select(self._tags.columns[column_name])
+                .where(self._tags.columns.dataset_type_id == self._dataset_type_id)
+                .distinct()
+            )
+            if (calibs := self._calibs) is not None:
+                query2 = (
+                    sqlalchemy.select(calibs.columns[column_name])
+                    .where(calibs.columns.dataset_type_id == self._dataset_type_id)
+                    .distinct()
+                )
+                query = sqlalchemy.sql.expression.union(query, query2)
+
+            with self._db.query(query) as result:
+                collection_ids = set(result.scalars())
+
+            collections_to_delete = summary_collection_ids - collection_ids
+            self._summaries.delete_collections(self._dataset_type_id, collections_to_delete)
+
 
 class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     """Implementation of ByDimensionsDatasetRecordStorage which uses UUID for
@@ -825,6 +868,10 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     "ingest_date": timestamp,
                 }
             )
+        if not rows:
+            # Just in case an empty collection is provided we want to avoid
+            # adding dataset type to summary tables.
+            return
 
         with self._db.transaction():
             # Insert into the static dataset table.
@@ -875,6 +922,11 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         summary = CollectionSummary()
         for dataset in summary.add_datasets_generator(datasets):
             dataIds[dataset.id] = dataset.dataId
+
+        if not dataIds:
+            # Just in case an empty collection is provided we want to avoid
+            # adding dataset type to summary tables.
+            return
 
         # We'll insert all new rows into a temporary table
         tableSpec = makeTagTableSpec(self.datasetType, type(self._collections), ddl.GUID, constraints=False)

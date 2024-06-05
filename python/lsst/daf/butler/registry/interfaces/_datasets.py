@@ -344,6 +344,12 @@ class DatasetRecordStorage(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def refresh_collection_summaries(self) -> None:
+        """Make sure that collection summaries for this dataset type are
+        consistent with the contents of the dataset tables.
+        """
+
     datasetType: DatasetType
     """Dataset type whose records this object manages (`DatasetType`).
     """

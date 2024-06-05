@@ -339,6 +339,16 @@ class SqlRegistry:
         with self._db.transaction():
             self._managers.refresh()
 
+    def refresh_collection_summaries(self) -> None:
+        """Refresh content of the collection summary tables in the database.
+
+        This only cleans dataset type summaries, we may want to add cleanup of
+        governor summaries later.
+        """
+        for dataset_type in self.queryDatasetTypes():
+            if storage := self._managers.datasets.find(dataset_type.name):
+                storage.refresh_collection_summaries()
+
     def caching_context(self) -> contextlib.AbstractContextManager[None]:
         """Return context manager that enables caching.
 

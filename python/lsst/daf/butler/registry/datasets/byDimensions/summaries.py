@@ -36,6 +36,7 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Generic, TypeVar
 
 import sqlalchemy
+from lsst.utils.iteration import chunk_iterable
 
 from ...._dataset_type import DatasetType
 from ...._named import NamedKeyDict, NamedKeyMapping
@@ -410,3 +411,46 @@ class CollectionSummaryManager:
             self._caching_context.collection_summaries.update(summaries)
 
         return summaries
+
+    def get_collection_ids(self, dataset_type_id: int) -> Iterable[str] | Iterable[int]:
+        """Get collection IDs for a given dataset type ID.
+
+        Parameters
+        ----------
+        dataset_type_id : `int`
+            Integer ID for the dataset type.
+
+        Returns
+        -------
+        collection_ids : `~collections.abc.Iterable`
+            Collection IDs (ints or strings) associated with the dataset type.
+        """
+        query = sqlalchemy.select(self._tables.datasetType.columns[self._collectionKeyName])
+        query = query.where(self._tables.datasetType.columns.dataset_type_id == dataset_type_id)
+        with self._db.query(query) as result:
+            return list(result.scalars())
+
+    def delete_collections(self, dataset_type_id: int, collection_ids: Iterable) -> None:
+        """Delete collection from summaries for a given dataset type.
+
+        Parameters
+        ----------
+        dataset_type_id : `int`
+            Integer ID for the dataset type.
+        collection_ids : `~collections.abc.Iterable`
+            Collection IDs (integer or string) to remove from summaries for
+            this dataset type.
+
+        Notes
+        -----
+        This method should only be called inside the transaction context of
+        another operation that selects collection information.
+        """
+        for collections_chunk in chunk_iterable(collection_ids, 1000):
+            to_delete = [
+                {"dataset_type_id": dataset_type_id, self._collectionKeyName: collection_id}
+                for collection_id in collections_chunk
+            ]
+            self._db.delete(
+                self._tables.datasetType, ["dataset_type_id", self._collectionKeyName], *to_delete
+            )
