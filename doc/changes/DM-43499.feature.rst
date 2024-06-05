@@ -1,4 +1,0 @@
-Added a ``timespan`` parameter to ``Butler.get()`` (for direct and remote butler).
-This parameter can be used to specify an explicit time for calibration selection without requiring a temporal coordinate be included in the data ID.
-Additionally, if no timespan is specified and no timespan can be found in the data ID a default full-range time span will be used for calibration selection.
-This allows a calibration to be selected if there is only one matching calibration in the collection.
