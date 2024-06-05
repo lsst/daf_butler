@@ -4069,7 +4069,7 @@ class RegistryTests(ABC):
         registry.refresh_collection_summaries()
         summary = registry.getCollectionSummary(tagged_coll)
         self.assertFalse(summary.dataset_types.names)
-        # We do not clean governor summaries yet, but beacuse how the query is
+        # We do not clean governor summaries yet, but because how the query is
         # run, it returns empty governors when collection is missing from
         # summaries.
         self.assertFalse(summary.governors)
