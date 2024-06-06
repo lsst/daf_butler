@@ -1,1 +1,0 @@
-Fixed miscellaneous thread-safety issues in DimensionUniverse, DimensionGroup, and StorageClassFactory.

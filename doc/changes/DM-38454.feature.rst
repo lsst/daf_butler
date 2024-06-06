@@ -1,1 +1,0 @@
-Added new storageClass and formatter for NNModelPackagePayload -- an interface between butler and pretrained neural networks, currently implemented in pytorch.

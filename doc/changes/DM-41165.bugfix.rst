@@ -1,2 +1,0 @@
-DirectButler.transfer_from no longer requires expanded dataset refs under certain circumstances.
-However, providing expanded refs in advance is still recommended for efficiency.

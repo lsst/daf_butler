@@ -1,1 +1,0 @@
-Added ``Timespan.from_day_obs()`` to construct a 24-hour time span from an observing day specified as a YYYYMMDD integer.

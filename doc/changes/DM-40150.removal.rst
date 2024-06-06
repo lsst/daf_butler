@@ -1,6 +1,0 @@
-* Removed ``Butler.datastore`` property. The datastore can no longer be accessed directly.
-* Removed ``Butler.datasetExists`` (and the "direct" variant). Please use ``Butler.exists()`` and ``Butler.stored()`` instead.
-* Removed ``Butler.getDirect`` and related APIs. ``Butler.get()`` et al now use the ``DatasetRef`` directly if one is given.
-* Removed the ``run`` and ``ideGenerationMode`` parameters from ``Butler.ingest()``. They were no longer being used.
-* Removed the ``--reuse-ids`` option for the ``butler import`` command-line. This option was no longer used now that UUIDs are used throughout.
-* Removed the ``reconsitutedDimension`` parameter from ``Quantum.from_simple``.
