@@ -341,7 +341,9 @@ class FormatterV2(metaclass=ABCMeta):
             # In case someone set the flag incorrectly, if this is not
             # implemented fall back to the other methods.
             with contextlib.suppress(NotImplementedError):
-                return self.read_from_cached_uri(component, expected_size, cache_manager=cache_manager)
+                return self.read_from_possibly_cached_uri(
+                    component, expected_size, cache_manager=cache_manager
+                )
 
         # Should we check the size with file_uri.size() if expected size is -1?
         # Do we give a choice here at all and allow a formatter to say one
@@ -351,11 +353,15 @@ class FormatterV2(metaclass=ABCMeta):
             # If this method is not implemented, fall back to using a file.
             # V1 formatters in emulation won't set the read threshold.
             with contextlib.suppress(NotImplementedError):
-                return self.read_from_cached_bytes(component, expected_size, cache_manager=cache_manager)
+                return self.read_from_possibly_cached_bytes(
+                    component, expected_size, cache_manager=cache_manager
+                )
 
-        return self.read_from_cached_local_file(component, expected_size, cache_manager=cache_manager)
+        return self.read_from_possibly_cached_local_file(
+            component, expected_size, cache_manager=cache_manager
+        )
 
-    def read_from_cached_bytes(
+    def read_from_possibly_cached_bytes(
         self,
         component: str | None = None,
         expected_size: int = -1,
@@ -425,7 +431,7 @@ class FormatterV2(metaclass=ABCMeta):
 
             return self.read_from_bytes(serialized_dataset, component=component)
 
-    def read_from_cached_uri(
+    def read_from_possibly_cached_uri(
         self,
         component: str | None = None,
         expected_size: int = -1,
@@ -501,11 +507,11 @@ class FormatterV2(metaclass=ABCMeta):
                     self.name(),
                 ),
             ):
-                result = self.read_cached_file(desired_uri, component=component)
+                result = self.read_direct_file(desired_uri, component=component)
 
         return result
 
-    def read_from_cached_local_file(
+    def read_from_possibly_cached_local_file(
         self,
         component: str | None = None,
         expected_size: int = -1,
@@ -612,8 +618,8 @@ class FormatterV2(metaclass=ABCMeta):
 
         return result
 
-    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
-        """Read a dataset from a, possibly cached, URI.
+    def read_direct_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+        """Read a dataset from a URI that can be local or remote.
 
         Parameters
         ----------
@@ -632,6 +638,10 @@ class FormatterV2(metaclass=ABCMeta):
         -----
         This method is only called if the class property
         ``allow_remote_file_read`` is set to `True`.
+
+        It is possible that a cached local file will be given to this method
+        even if it was originally a remote URI. This can happen if the write
+        resulted in the file being added to the local cache.
         """
         raise NotImplementedError("This formatter does not know how to read a file.")
 
@@ -730,10 +740,14 @@ class FormatterV2(metaclass=ABCMeta):
 
         Notes
         -----
+        This method will call `to_bytes` to serialize the in memory dataset
+        and then will call the `~lsst.resources.ResourcePath.write` method
+        directly.
+
         If the dataset should be cached or is local the file will not be
-        written. Local URIs should be written to temporary file name and then
-        renamed to allow atomic writes. That path is handled by
-        `write_locally_then_move`.
+        written and the method will return `False`. This is because local URIs
+        should be written to a temporary file name and then renamed to allow
+        atomic writes. That path is handled by `write_locally_then_move`.
         """
         if cache_manager is None:
             # Circular import avoidance.
