@@ -45,7 +45,6 @@ class PackagesFormatterV2(FormatterV2):
       options are ``yaml``, ``json``, and ``pickle``.
     """
 
-    allow_remote_file_read = True
     supported_write_parameters = frozenset({"format"})
     supported_extensions = frozenset({".yaml", ".pickle", ".pkl", ".json"})
 
@@ -57,7 +56,7 @@ class PackagesFormatterV2(FormatterV2):
             raise RuntimeError(f"Requested file format '{format}' is not supported for Packages")
         return ext
 
-    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
         # Read the full file using the class associated with the
         # storage class it was originally written with.
         # Read the bytes directly from resource. These are not going to be

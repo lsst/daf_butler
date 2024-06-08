@@ -43,12 +43,14 @@ class ButlerLogRecordsFormatter(FormatterV2):
     model.  In the future this may be changed to be able to read
     `ButlerLogRecord` one at time from the file and return a subset
     of records given some filtering parameters.
-    """
 
-    # Log files can be large and ResourcePath.open() does not support
-    # readline() or __iter__ in all cases and ButlerLogRecords.from_stream
-    # does not use `.read()` for chunking. Therefore must use local file.
-    allow_remote_file_read = False
+    Notes
+    -----
+    Log files can be large and ResourcePath.open() does not support
+    ``readline()`` or ``__iter__`` in all cases and
+    ``ButlerLogRecords.from_stream`` does not use `.read()` for chunking.
+    Therefore must use local file.
+    """
 
     default_extension = ".json"
     supported_extensions = frozenset({".log"})
@@ -60,7 +62,7 @@ class ButlerLogRecordsFormatter(FormatterV2):
             raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
         return pytype
 
-    def read_local_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_local_file(self, uri: ResourcePath, component: str | None = None) -> Any:
         # ResourcePath open() cannot do a per-line read.
         return self._get_read_pytype().from_file(uri.ospath)
 

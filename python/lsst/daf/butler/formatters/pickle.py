@@ -45,11 +45,10 @@ class PickleFormatter(TypelessFormatter):
     files.
     """
 
-    allow_remote_file_read = True
     default_extension = ".pickle"
     unsupported_parameters = None
 
-    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
         # Read the pickle file directly from the resource into memory.
         try:
             data = pickle.loads(uri.read())

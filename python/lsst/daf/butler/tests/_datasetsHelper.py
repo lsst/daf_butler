@@ -39,7 +39,14 @@ import os
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, DimensionGroup, StorageClass
+from lsst.daf.butler import (
+    DataCoordinate,
+    DatasetRef,
+    DatasetType,
+    DimensionGroup,
+    FormatterNotImplementedError,
+    StorageClass,
+)
 from lsst.daf.butler.datastore import Datastore
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.resources import ResourcePath
@@ -184,11 +191,11 @@ class DatastoreTestHelper:
 class BadWriteFormatter(YamlFormatter):
     """A formatter that never works but does leave a file behind."""
 
-    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
-        raise NotImplementedError("This formatter can not read anything")
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+        raise FormatterNotImplementedError("This formatter can not read anything")
 
     def to_bytes(self, in_memory_dataset: Any) -> bytes:
-        raise NotImplementedError("This formatter can not serialize to bytes.")
+        raise FormatterNotImplementedError("This formatter can not serialize to bytes.")
 
     def write_direct(
         self,
@@ -199,21 +206,9 @@ class BadWriteFormatter(YamlFormatter):
         uri.write(b"")
         raise RuntimeError("Did not succeed in writing file.")
 
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        raise NotImplementedError("This formatter can not read anything")
-
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        """Write an empty file and then raise an exception."""
-        with open(self.fileDescriptor.location.path, "wb"):
-            pass
-        raise RuntimeError("Did not succeed in writing file")
-
 
 class BadNoWriteFormatter(BadWriteFormatter):
     """A formatter that always fails without writing anything."""
-
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        raise RuntimeError("Did not writing anything at all")
 
     def write_direct(
         self,
@@ -227,7 +222,7 @@ class BadNoWriteFormatter(BadWriteFormatter):
 class MultiDetectorFormatter(YamlFormatter):
     """A formatter that requires a detector to be specified in the dataID."""
 
-    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
         if self.data_id is None:
             raise RuntimeError("This formatter requires a dataId")
         if "detector" not in self.data_id:
@@ -235,23 +230,8 @@ class MultiDetectorFormatter(YamlFormatter):
 
         key = f"detector{self.data_id['detector']}"
 
-        data = super().read_cached_file(uri, component)
+        data = super().read_from_uri(uri, component)
         if key not in data:
             raise RuntimeError(f"Could not find '{key}' in data file.")
 
         return data[key]
-
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        raise NotImplementedError("Can not write")
-
-    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
-        data = super()._fromBytes(serializedDataset)
-        if self.dataId is None:
-            raise RuntimeError("This formatter requires a dataId")
-        if "detector" not in self.dataId:
-            raise RuntimeError("This formatter requires detector to be present in dataId")
-        key = f"detector{self.dataId['detector']}"
-        assert pytype is not None
-        if key in data:
-            return pytype(data[key])
-        raise RuntimeError(f"Could not find '{key}' in data file")

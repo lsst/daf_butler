@@ -43,12 +43,11 @@ from .typeless import TypelessFormatter
 class YamlFormatter(TypelessFormatter):
     """Read and write YAML files."""
 
-    allow_remote_file_read = True
     default_extension = ".yaml"
     unsupported_parameters = None
     supported_write_parameters = frozenset({"unsafe_dump"})
 
-    def read_cached_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
         # Can not use ResourcePath.open()
         data = yaml.safe_load(uri.read())
         return data
@@ -86,7 +85,7 @@ class YamlFormatter(TypelessFormatter):
         """
         converted = False
         if hasattr(in_memory_dataset, "model_dump") and hasattr(in_memory_dataset, "model_dump_json"):
-            # Pydantic v2-like model if both model_dump() and model_json()
+            # Pydantic v2-like model if both model_dump() and model_dump_json()
             # exist.
             with contextlib.suppress(Exception):
                 in_memory_dataset = in_memory_dataset.model_dump()
@@ -105,10 +104,12 @@ class YamlFormatter(TypelessFormatter):
                 in_memory_dataset = in_memory_dataset._asdict()
 
         unsafe_dump = self.write_parameters.get("unsafe_dump", False)
+        # Now that Python always uses an order dict, do not sort keys
+        # on write so that order can be preserved on read.
         if unsafe_dump:
-            serialized = yaml.dump(in_memory_dataset)
+            serialized = yaml.dump(in_memory_dataset, sort_keys=False)
         else:
-            serialized = yaml.safe_dump(in_memory_dataset)
+            serialized = yaml.safe_dump(in_memory_dataset, sort_keys=False)
         return serialized.encode()
 
 
