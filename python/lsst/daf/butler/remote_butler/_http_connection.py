@@ -29,7 +29,9 @@ from __future__ import annotations
 
 __all__ = ("RemoteButlerHttpConnection", "parse_model")
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import TypeVar
 from uuid import uuid4
 
@@ -37,8 +39,8 @@ import httpx
 from lsst.daf.butler import __version__
 from pydantic import BaseModel, ValidationError
 
-from .._exceptions import create_butler_user_error
 from ._authentication import get_authentication_headers
+from ._errors import deserialize_butler_user_error
 from .server_models import CLIENT_REQUEST_ID_HEADER_NAME, ERROR_STATUS_CODE, ErrorResponseModel
 
 _AnyPydanticModel = TypeVar("_AnyPydanticModel", bound=BaseModel)
@@ -92,8 +94,40 @@ class RemoteButlerHttpConnection:
         ButlerServerError
             If there is an issue communicating with the server.
         """
+        request = self._build_post_request(path, model)
+        return self._send_request(request)
+
+    @contextmanager
+    def post_with_stream_response(self, path: str, model: BaseModel) -> Iterator[httpx.Response]:
+        """Send a POST request to the Butler server.
+
+        Parameters
+        ----------
+        path : `str`
+            A relative path to an endpoint.
+        model : `pydantic.BaseModel`
+            Pydantic model containing the request body to be sent to the
+            server.
+
+        Returns
+        -------
+        response: `~httpx.Response`
+            The response from the server.
+
+        Raises
+        ------
+        ButlerUserError
+            If the server explicitly returned a user-facing error response.
+        ButlerServerError
+            If there is an issue communicating with the server.
+        """
+        request = self._build_post_request(path, model)
+        with self._send_request_with_stream_response(request) as response:
+            yield response
+
+    def _build_post_request(self, path: str, model: BaseModel) -> _Request:
         json = model.model_dump_json().encode("utf-8")
-        return self._send_request(
+        return self._build_request(
             "POST",
             path,
             content=json,
@@ -122,7 +156,8 @@ class RemoteButlerHttpConnection:
         ButlerServerError
             If there is an issue communicating with the server.
         """
-        return self._send_request("GET", path, params=params)
+        request = self._build_request("GET", path, params=params)
+        return self._send_request(request)
 
     def _get_url(self, path: str, version: str = "v1") -> str:
         """Form the complete path to an endpoint on the server.
@@ -142,7 +177,7 @@ class RemoteButlerHttpConnection:
         slash = "" if self.server_url.endswith("/") else "/"
         return f"{self.server_url}{slash}{version}/{path}"
 
-    def _send_request(
+    def _build_request(
         self,
         method: str,
         path: str,
@@ -150,13 +185,7 @@ class RemoteButlerHttpConnection:
         content: bytes | None = None,
         params: Mapping[str, str | bool] | None = None,
         headers: Mapping[str, str] | None = None,
-    ) -> httpx.Response:
-        """Send an HTTP request to the Butler server with authentication
-        headers and a request ID.
-
-        If the server returns a user-facing error detail, raises an exception
-        with the message as a subclass of ButlerUserError.
-        """
+    ) -> _Request:
         url = self._get_url(path)
 
         request_id = str(uuid4())
@@ -165,27 +194,54 @@ class RemoteButlerHttpConnection:
         if headers is not None:
             request_headers.update(headers)
 
-        try:
-            response = self._client.request(
+        return _Request(
+            request=self._client.build_request(
                 method, url, content=content, params=params, headers=request_headers
-            )
+            ),
+            request_id=request_id,
+        )
 
-            if response.status_code == ERROR_STATUS_CODE:
-                # Raise an exception that the server has forwarded to the
-                # client.
-                model = _try_to_parse_model(response, ErrorResponseModel)
-                if model is not None:
-                    exc = create_butler_user_error(model.error_type, model.detail)
-                    exc.add_note(f"Client request ID: {request_id}")
-                    raise exc
-                # If model is None, server sent an expected error code, but the
-                # body wasn't in the expected JSON format.  This likely means
-                # some HTTP thing between us and the server is misbehaving.
+    def _send_request(self, request: _Request) -> httpx.Response:
+        """Send an HTTP request to the Butler server with authentication
+        headers and a request ID.
 
-            response.raise_for_status()
+        If the server returns a user-facing error detail, raises an exception
+        with the message as a subclass of ButlerUserError.
+        """
+        try:
+            response = self._client.send(request.request)
+            self._handle_http_status(response, request.request_id)
             return response
         except httpx.HTTPError as e:
-            raise ButlerServerError(request_id) from e
+            raise ButlerServerError(request.request_id) from e
+
+    @contextmanager
+    def _send_request_with_stream_response(self, request: _Request) -> Iterator[httpx.Response]:
+        try:
+            response = self._client.send(request.request, stream=True)
+            try:
+                self._handle_http_status(response, request.request_id)
+                yield response
+            finally:
+                response.close()
+        except httpx.HTTPError as e:
+            raise ButlerServerError(request.request_id) from e
+
+    def _handle_http_status(self, response: httpx.Response, request_id: str) -> None:
+        if response.status_code == ERROR_STATUS_CODE:
+            # Raise an exception that the server has forwarded to the
+            # client.
+            model = _try_to_parse_model(response, ErrorResponseModel)
+            if model is not None:
+                exc = deserialize_butler_user_error(model)
+                exc.add_note(f"Client request ID: {request_id}")
+                raise exc
+            # If model is None, server sent an expected error code, but
+            # the body wasn't in the expected JSON format.  This likely
+            # means some HTTP thing between us and the server is
+            # misbehaving.
+
+        response.raise_for_status()
 
 
 def parse_model(response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel:
@@ -203,7 +259,7 @@ def parse_model(response: httpx.Response, model: type[_AnyPydanticModel]) -> _An
     response_model : ``pydantic.BaseModel``
         An instance of the Pydantic model class loaded from the response body.
     """
-    return model.model_validate_json(response.content)
+    return model.model_validate_json(response.read())
 
 
 def _try_to_parse_model(response: httpx.Response, model: type[_AnyPydanticModel]) -> _AnyPydanticModel | None:
@@ -229,3 +285,9 @@ class ButlerServerError(RuntimeError):
 
     def __init__(self, client_request_id: str):
         super().__init__(f"Error while communicating with Butler server.  Request ID: {client_request_id}")
+
+
+@dataclass(frozen=True)
+class _Request:
+    request: httpx.Request
+    request_id: str

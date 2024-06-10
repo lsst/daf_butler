@@ -32,8 +32,12 @@ from uuid import uuid4
 __all__ = ("RemoteQueryDriver",)
 
 
-from collections.abc import Iterable
-from typing import Any, overload
+from collections.abc import Iterable, Iterator
+from contextlib import ExitStack
+from typing import Any, Literal, overload
+
+import httpx
+from pydantic import TypeAdapter
 
 from ...butler import Butler
 from .._dataset_ref import DatasetRef
@@ -44,7 +48,6 @@ from ..queries.driver import (
     DatasetRefResultPage,
     DimensionRecordResultPage,
     GeneralResultPage,
-    PageKey,
     QueryDriver,
     ResultPage,
 )
@@ -58,6 +61,7 @@ from ..queries.result_specs import (
 )
 from ..queries.tree import DataCoordinateUploadKey, MaterializationKey, QueryTree, SerializedQueryTree
 from ..registry import NoDefaultCollectionError
+from ._errors import deserialize_butler_user_error
 from ._http_connection import RemoteButlerHttpConnection, parse_model
 from .server_models import (
     AdditionalQueryInput,
@@ -68,11 +72,13 @@ from .server_models import (
     QueryCountRequestModel,
     QueryCountResponseModel,
     QueryExecuteRequestModel,
-    QueryExecuteResponseModel,
+    QueryExecuteResultData,
     QueryExplainRequestModel,
     QueryExplainResponseModel,
     QueryInputs,
 )
+
+_QueryResultTypeAdapter = TypeAdapter(QueryExecuteResultData)
 
 
 class RemoteQueryDriver(QueryDriver):
@@ -90,77 +96,64 @@ class RemoteQueryDriver(QueryDriver):
         self._butler = butler
         self._connection = connection
         self._stored_query_inputs: list[AdditionalQueryInput] = []
+        self._pending_queries: set[httpx.Response] = set()
+        self._closed = False
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        pass
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> Literal[False]:
+        self._closed = True
+        # Clean up any queries that the user didn't finish iterating. The exit
+        # stack helps handle any exceptions that may be thrown during cleanup.
+        stack = ExitStack().__enter__()
+        for pending in self._pending_queries:
+            stack.callback(pending.close)
+        self._pending_queries = set()
+        stack.__exit__(exc_type, exc_value, traceback)
+        return False
 
     @property
     def universe(self) -> DimensionUniverse:
         return self._butler.dimensions
 
     @overload
-    def execute(self, result_spec: DataCoordinateResultSpec, tree: QueryTree) -> DataCoordinateResultPage: ...
+    def execute(
+        self, result_spec: DataCoordinateResultSpec, tree: QueryTree
+    ) -> Iterator[DataCoordinateResultPage]: ...
 
     @overload
     def execute(
         self, result_spec: DimensionRecordResultSpec, tree: QueryTree
-    ) -> DimensionRecordResultPage: ...
+    ) -> Iterator[DimensionRecordResultPage]: ...
 
     @overload
-    def execute(self, result_spec: DatasetRefResultSpec, tree: QueryTree) -> DatasetRefResultPage: ...
+    def execute(
+        self, result_spec: DatasetRefResultSpec, tree: QueryTree
+    ) -> Iterator[DatasetRefResultPage]: ...
 
     @overload
-    def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> GeneralResultPage: ...
+    def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> Iterator[GeneralResultPage]: ...
 
-    def execute(self, result_spec: ResultSpec, tree: QueryTree) -> ResultPage:
+    def execute(self, result_spec: ResultSpec, tree: QueryTree) -> Iterator[ResultPage]:
+        if self._closed:
+            raise RuntimeError("Cannot execute query: query context has been closed")
+
         request = QueryExecuteRequestModel(
             query=self._create_query_input(tree), result_spec=SerializedResultSpec(result_spec)
         )
-        response = self._connection.post("query/execute", request)
-        result = parse_model(response, QueryExecuteResponseModel).result
         universe = self.universe
-        if result_spec.result_type == "dimension_record":
-            assert result.type == "dimension_record"
-            return DimensionRecordResultPage(
-                spec=result_spec,
-                next_key=None,
-                rows=[DimensionRecord.from_simple(r, universe) for r in result.rows],
-            )
-        elif result_spec.result_type == "data_coordinate":
-            assert result.type == "data_coordinate"
-            return DataCoordinateResultPage(
-                spec=result_spec,
-                next_key=None,
-                rows=[DataCoordinate.from_simple(r, universe) for r in result.rows],
-            )
-        elif result_spec.result_type == "dataset_ref":
-            assert result.type == "dataset_ref"
-            return DatasetRefResultPage(
-                spec=result_spec,
-                next_key=None,
-                rows=[DatasetRef.from_simple(r, universe) for r in result.rows],
-            )
-        else:
-            raise NotImplementedError(f"Unhandled result type {result_spec.result_type}")
-
-    @overload
-    def fetch_next_page(
-        self, result_spec: DataCoordinateResultSpec, key: PageKey
-    ) -> DataCoordinateResultPage: ...
-
-    @overload
-    def fetch_next_page(
-        self, result_spec: DimensionRecordResultSpec, key: PageKey
-    ) -> DimensionRecordResultPage: ...
-
-    @overload
-    def fetch_next_page(self, result_spec: DatasetRefResultSpec, key: PageKey) -> DatasetRefResultPage: ...
-
-    @overload
-    def fetch_next_page(self, result_spec: GeneralResultSpec, key: PageKey) -> GeneralResultPage: ...
-
-    def fetch_next_page(self, result_spec: ResultSpec, key: PageKey) -> ResultPage:
-        raise NotImplementedError()
+        with self._connection.post_with_stream_response("query/execute", request) as response:
+            self._pending_queries.add(response)
+            try:
+                # There is one result page JSON object per line of the
+                # response.
+                for line in response.iter_lines():
+                    result_chunk = _QueryResultTypeAdapter.validate_json(line)
+                    yield _convert_query_result_page(result_spec, result_chunk, universe)
+                    if self._closed:
+                        raise RuntimeError(
+                            "Cannot continue query result iteration: query context has been closed"
+                        )
+            finally:
+                self._pending_queries.discard(response)
 
     def materialize(
         self,
@@ -240,3 +233,32 @@ class RemoteQueryDriver(QueryDriver):
             default_data_id=self._butler.registry.defaults.dataId.to_simple(),
             additional_query_inputs=self._stored_query_inputs,
         )
+
+
+def _convert_query_result_page(
+    result_spec: ResultSpec, result: QueryExecuteResultData, universe: DimensionUniverse
+) -> ResultPage:
+    if result.type == "error":
+        # A server-side exception occurred part-way through generating results.
+        raise deserialize_butler_user_error(result.error)
+
+    if result_spec.result_type == "dimension_record":
+        assert result.type == "dimension_record"
+        return DimensionRecordResultPage(
+            spec=result_spec,
+            rows=[DimensionRecord.from_simple(r, universe) for r in result.rows],
+        )
+    elif result_spec.result_type == "data_coordinate":
+        assert result.type == "data_coordinate"
+        return DataCoordinateResultPage(
+            spec=result_spec,
+            rows=[DataCoordinate.from_simple(r, universe) for r in result.rows],
+        )
+    elif result_spec.result_type == "dataset_ref":
+        assert result.type == "dataset_ref"
+        return DatasetRefResultPage(
+            spec=result_spec,
+            rows=[DatasetRef.from_simple(r, universe) for r in result.rows],
+        )
+    else:
+        raise NotImplementedError(f"Unhandled result type {result_spec.result_type}")

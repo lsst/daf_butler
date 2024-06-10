@@ -263,17 +263,26 @@ class DatasetRefResultModel(pydantic.BaseModel):
     rows: list[SerializedDatasetRef]
 
 
-QueryExecuteResultData: TypeAlias = (
-    DataCoordinateResultModel | DimensionRecordsResultModel | DatasetRefResultModel
-)
+class QueryErrorResultModel(pydantic.BaseModel):
+    """Result model for /query/execute when an error occurs part-way through
+    returning rows.
 
-
-class QueryExecuteResponseModel(pydantic.BaseModel):
-    """Response model for /query/execute/. Results may be in several different
-    formats depending what the user requested.
+    Because we are streaming results, the HTTP status code has already been
+    sent before the error occurs.  So this provides a way to signal an error
+    in-band with the results.
     """
 
-    result: QueryExecuteResultData
+    # (One example of this type of error is a CalibrationLookupError returned
+    # by query row postprocessing.)
+
+    type: Literal["error"] = "error"
+    error: ErrorResponseModel
+
+
+QueryExecuteResultData: TypeAlias = Annotated[
+    DataCoordinateResultModel | DimensionRecordsResultModel | DatasetRefResultModel | QueryErrorResultModel,
+    pydantic.Field(discriminator="type"),
+]
 
 
 class QueryCountRequestModel(pydantic.BaseModel):

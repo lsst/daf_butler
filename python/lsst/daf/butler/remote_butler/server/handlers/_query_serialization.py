@@ -27,8 +27,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
+from ...._exceptions import ButlerUserError
 from ....queries.driver import (
     DataCoordinateResultPage,
     DatasetRefResultPage,
@@ -36,15 +37,35 @@ from ....queries.driver import (
     ResultPage,
     ResultSpec,
 )
+from ..._errors import serialize_butler_user_error
 from ...server_models import (
     DataCoordinateResultModel,
     DatasetRefResultModel,
     DimensionRecordsResultModel,
+    QueryErrorResultModel,
     QueryExecuteResultData,
 )
 
 
-def convert_query_pages(spec: ResultSpec, pages: Iterator[ResultPage]) -> QueryExecuteResultData:
+def serialize_query_pages(
+    spec: ResultSpec, pages: Iterable[ResultPage]
+) -> Iterator[str]:  # numpydoc ignore=PR01
+    """Serialize result pages to pages of result data in JSON format. The
+    output contains one page object per line, as newline-delimited JSON records
+    in the "JSON Lines" format (https://jsonlines.org/).
+    """
+    try:
+        for page in pages:
+            yield _convert_query_page(spec, page).model_dump_json()
+            yield "\n"
+    except ButlerUserError as e:
+        # If a user-facing error occurs, serialize it and send it to the
+        # client.
+        yield QueryErrorResultModel(error=serialize_butler_user_error(e)).model_dump_json()
+        yield "\n"
+
+
+def _convert_query_page(spec: ResultSpec, page: ResultPage) -> QueryExecuteResultData:
     """Convert pages of result data from the query system to a serializable
     format.
 
@@ -52,39 +73,18 @@ def convert_query_pages(spec: ResultSpec, pages: Iterator[ResultPage]) -> QueryE
     ----------
     spec : `ResultSpec`
         Definition of the output format for the results.
-    pages : `~collections.abc.Iterator` [ `ResultPage` ]
-        Raw pages of data from the query driver.
+    pages : `ResultPage`
+        Raw page of data from the query driver.
     """
     match spec.result_type:
         case "dimension_record":
-            return _convert_dimension_record_pages(pages)
+            assert isinstance(page, DimensionRecordResultPage)
+            return DimensionRecordsResultModel(rows=[record.to_simple() for record in page.rows])
         case "data_coordinate":
-            return _convert_data_coordinate_pages(pages)
+            assert isinstance(page, DataCoordinateResultPage)
+            return DataCoordinateResultModel(rows=[coordinate.to_simple() for coordinate in page.rows])
         case "dataset_ref":
-            return _convert_dataset_ref_pages(pages)
+            assert isinstance(page, DatasetRefResultPage)
+            return DatasetRefResultModel(rows=[ref.to_simple() for ref in page.rows])
         case _:
             raise NotImplementedError(f"Unhandled query result type {spec.result_type}")
-
-
-def _convert_dimension_record_pages(pages: Iterator[ResultPage]) -> DimensionRecordsResultModel:
-    response = DimensionRecordsResultModel(rows=[])
-    for page in pages:
-        assert isinstance(page, DimensionRecordResultPage)
-        response.rows.extend(record.to_simple() for record in page.rows)
-    return response
-
-
-def _convert_data_coordinate_pages(pages: Iterator[ResultPage]) -> DataCoordinateResultModel:
-    response = DataCoordinateResultModel(rows=[])
-    for page in pages:
-        assert isinstance(page, DataCoordinateResultPage)
-        response.rows.extend(coordinate.to_simple() for coordinate in page.rows)
-    return response
-
-
-def _convert_dataset_ref_pages(pages: Iterator[ResultPage]) -> DatasetRefResultModel:
-    response = DatasetRefResultModel(rows=[])
-    for page in pages:
-        assert isinstance(page, DatasetRefResultPage)
-        response.rows.extend(ref.to_simple() for ref in page.rows)
-    return response

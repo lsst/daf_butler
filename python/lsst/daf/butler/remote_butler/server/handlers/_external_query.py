@@ -29,11 +29,13 @@ from __future__ import annotations
 
 __all__ = ("query_router",)
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Iterable, Iterator
+from contextlib import ExitStack, contextmanager
 from typing import NamedTuple
 
 from fastapi import APIRouter, Depends
+from fastapi.concurrency import contextmanager_in_threadpool, iterate_in_threadpool
+from fastapi.responses import StreamingResponse
 from lsst.daf.butler import DataCoordinate, DimensionGroup
 from lsst.daf.butler.remote_butler.server_models import (
     QueryAnyRequestModel,
@@ -41,7 +43,6 @@ from lsst.daf.butler.remote_butler.server_models import (
     QueryCountRequestModel,
     QueryCountResponseModel,
     QueryExecuteRequestModel,
-    QueryExecuteResponseModel,
     QueryExplainRequestModel,
     QueryExplainResponseModel,
     QueryInputs,
@@ -50,7 +51,7 @@ from lsst.daf.butler.remote_butler.server_models import (
 from ....queries.driver import QueryDriver, QueryTree, ResultPage, ResultSpec
 from .._dependencies import factory_dependency
 from .._factory import Factory
-from ._query_serialization import convert_query_pages
+from ._query_serialization import serialize_query_pages
 
 query_router = APIRouter()
 
@@ -58,19 +59,55 @@ query_router = APIRouter()
 @query_router.post("/v1/query/execute", summary="Query the Butler database and return full results")
 def query_execute(
     request: QueryExecuteRequestModel, factory: Factory = Depends(factory_dependency)
-) -> QueryExecuteResponseModel:
-    with _get_query_context(factory, request.query) as ctx:
+) -> StreamingResponse:
+    # Managing the lifetime of the query context object is a little tricky.  We
+    # need to enter the context here, so that we can immediately deal with any
+    # exceptions raised by query set-up.  We eventually transfer control to an
+    # iterator consumed by FastAPI's StreamingResponse handler, which will
+    # start iterating after this function returns.  So we use this ExitStack
+    # instance to hand over the context manager to the iterator.
+    with ExitStack() as exit_stack:
+        ctx = exit_stack.enter_context(_get_query_context(factory, request.query))
         spec = request.result_spec.to_result_spec(ctx.driver.universe)
-        pages = _load_query_pages(ctx.driver, ctx.tree, spec)
-        return QueryExecuteResponseModel(result=convert_query_pages(spec, pages))
+        response_pages = ctx.driver.execute(spec, ctx.tree)
+
+        # We write the response incrementally, one page at a time, as
+        # newline-separated chunks of JSON.  This allows clients to start
+        # reading results earlier and prevents the server from exhausting
+        # all its memory buffering rows from large queries.
+        output_generator = _stream_query_pages(
+            # Transfer control of the context manager to
+            # _stream_query_pages.
+            exit_stack.pop_all(),
+            spec,
+            response_pages,
+        )
+        return StreamingResponse(output_generator, media_type="application/jsonlines")
+
+    # Mypy thinks that ExitStack might swallow an exception.
+    assert False, "This line is unreachable."
 
 
-def _load_query_pages(driver: QueryDriver, tree: QueryTree, spec: ResultSpec) -> Iterator[ResultPage]:
-    page = driver.execute(spec, tree)
-    yield page
-    while page.next_key is not None:
-        page = driver.fetch_next_page(page.spec, page.next_key)
-        yield page
+async def _stream_query_pages(
+    exit_stack: ExitStack, spec: ResultSpec, pages: Iterable[ResultPage]
+) -> AsyncIterator[str]:
+    # Instead of declaring this as a sync generator with 'def', it's async to
+    # give us more control over the lifetime of exit_stack.  StreamingResponse
+    # ensures that this async generator is cancelled if the client
+    # disconnects or another error occurs, ensuring that clean-up logic runs.
+    #
+    # If it was sync, it would get wrapped in an async function internal to
+    # FastAPI that does not guarantee that the generator is fully iterated or
+    # closed.
+    # (There is an example in the FastAPI docs showing StreamingResponse with a
+    # sync generator with a context manager, but after reading the FastAPI
+    # source code I believe that for sync generators it will leak the context
+    # manager if the client disconnects, and that it would be
+    # difficult/impossible for them to fix this in the general case within
+    # FastAPI.)
+    async with contextmanager_in_threadpool(exit_stack):
+        async for chunk in iterate_in_threadpool(serialize_query_pages(spec, pages)):
+            yield chunk
 
 
 @query_router.post(

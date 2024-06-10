@@ -703,17 +703,16 @@ class ButlerQueryTests(ABC, TestCaseMixin):
 
     def test_direct_driver_paging(self) -> None:
         """Test queries for dimension records that require multiple pages (by
-        making the threshold for making a a temporary table tiny).
+        making the page size tiny for DirectQueryDriver).
 
-        This test assumes a DirectQueryDriver and is automatically skipped when
-        some other driver is found.
+        For RemoteQueryDriver, we can't manipulate the page size so this just
+        checks that the driver context manager logic is executing.
         """
         butler = self.make_butler("base.yaml")
         # Basic test where pages should be transparent.
         with butler._query() as query:
-            if not isinstance(query._driver, DirectQueryDriver):
-                raise unittest.SkipTest("Test requires meddling with DirectQueryDriver internals.")
-            query._driver._raw_page_size = 2
+            if isinstance(query._driver, DirectQueryDriver):
+                query._driver._raw_page_size = 2
             self.check_detector_records(
                 query.dimension_records("detector"),
                 [1, 2, 3, 4],
@@ -721,8 +720,8 @@ class ButlerQueryTests(ABC, TestCaseMixin):
         # Test that it's an error to continue query iteration after closing the
         # context manager.
         with butler._query() as query:
-            assert isinstance(query._driver, DirectQueryDriver)
-            query._driver._raw_page_size = 2
+            if isinstance(query._driver, DirectQueryDriver):
+                query._driver._raw_page_size = 2
             iterator = iter(query.dimension_records("detector"))
             next(iterator)
         with self.assertRaisesRegex(RuntimeError, "Cannot continue query result iteration"):

@@ -29,7 +29,6 @@ from __future__ import annotations
 
 __all__ = (
     "QueryDriver",
-    "PageKey",
     "ResultPage",
     "DataCoordinateResultPage",
     "DimensionRecordResultPage",
@@ -38,9 +37,8 @@ __all__ = (
 )
 
 import dataclasses
-import uuid
 from abc import abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from contextlib import AbstractContextManager
 from typing import Any, TypeAlias, Union, overload
 
@@ -64,9 +62,6 @@ from .result_specs import (
 )
 from .tree import DataCoordinateUploadKey, MaterializationKey, QueryTree
 
-PageKey: TypeAlias = uuid.UUID
-
-
 # The Page types below could become Pydantic models instead of dataclasses if
 # that makes them more directly usable by RemoteButler (at least once we have
 # Pydantic-friendly containers for all of them).  We may want to add a
@@ -78,7 +73,6 @@ class DataCoordinateResultPage:
     """A single page of results from a data coordinate query."""
 
     spec: DataCoordinateResultSpec
-    next_key: PageKey | None
 
     # TODO: On DM-41114 this will become a custom container that normalizes out
     # attached DimensionRecords and is Pydantic-friendly.
@@ -90,7 +84,6 @@ class DimensionRecordResultPage:
     """A single page of results from a dimension record query."""
 
     spec: DimensionRecordResultSpec
-    next_key: PageKey | None
     rows: Iterable[DimensionRecord]
 
     def as_table(self) -> DimensionRecordTable:
@@ -111,7 +104,6 @@ class DatasetRefResultPage:
     """A single page of results from a dataset query."""
 
     spec: DatasetRefResultSpec
-    next_key: PageKey | None
 
     # TODO: On DM-41115 this will become a custom container that normalizes out
     # attached DimensionRecords and is Pydantic-friendly.
@@ -123,7 +115,6 @@ class GeneralResultPage:
     """A single page of results from a general query."""
 
     spec: GeneralResultSpec
-    next_key: PageKey | None
 
     # Raw tabular data, with columns in the same order as spec.columns.
     rows: list[tuple[Any, ...]]
@@ -166,21 +157,25 @@ class QueryDriver(AbstractContextManager[None]):
         raise NotImplementedError()
 
     @overload
-    def execute(self, result_spec: DataCoordinateResultSpec, tree: QueryTree) -> DataCoordinateResultPage: ...
+    def execute(
+        self, result_spec: DataCoordinateResultSpec, tree: QueryTree
+    ) -> Iterator[DataCoordinateResultPage]: ...
 
     @overload
     def execute(
         self, result_spec: DimensionRecordResultSpec, tree: QueryTree
-    ) -> DimensionRecordResultPage: ...
+    ) -> Iterator[DimensionRecordResultPage]: ...
 
     @overload
-    def execute(self, result_spec: DatasetRefResultSpec, tree: QueryTree) -> DatasetRefResultPage: ...
+    def execute(
+        self, result_spec: DatasetRefResultSpec, tree: QueryTree
+    ) -> Iterator[DatasetRefResultPage]: ...
 
     @overload
-    def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> GeneralResultPage: ...
+    def execute(self, result_spec: GeneralResultSpec, tree: QueryTree) -> Iterator[GeneralResultPage]: ...
 
     @abstractmethod
-    def execute(self, result_spec: ResultSpec, tree: QueryTree) -> ResultPage:
+    def execute(self, result_spec: ResultSpec, tree: QueryTree) -> Iterator[ResultPage]:
         """Execute a query and return the first result page.
 
         Parameters
@@ -194,64 +189,12 @@ class QueryDriver(AbstractContextManager[None]):
         tree : `QueryTree`
             Query tree to evaluate.
 
-        Returns
-        -------
-        first_page : `ResultPage`
+        Yields
+        ------
+        page : `ResultPage`
             A page whose type corresponds to the type of ``result_spec``, with
-            at least the initial rows from the query.  This should have an
-            empty ``rows`` attribute if the query returned no results, and a
-            ``next_key`` attribute that is not `None` if there were more
-            results than could be returned in a single page.
+            rows from the query.
         """
-        raise NotImplementedError()
-
-    @overload
-    def fetch_next_page(
-        self, result_spec: DataCoordinateResultSpec, key: PageKey
-    ) -> DataCoordinateResultPage: ...
-
-    @overload
-    def fetch_next_page(
-        self, result_spec: DimensionRecordResultSpec, key: PageKey
-    ) -> DimensionRecordResultPage: ...
-
-    @overload
-    def fetch_next_page(self, result_spec: DatasetRefResultSpec, key: PageKey) -> DatasetRefResultPage: ...
-
-    @overload
-    def fetch_next_page(self, result_spec: GeneralResultSpec, key: PageKey) -> GeneralResultPage: ...
-
-    @abstractmethod
-    def fetch_next_page(self, result_spec: ResultSpec, key: PageKey) -> ResultPage:
-        """Fetch the next page of results from an already-executed query.
-
-        Parameters
-        ----------
-        result_spec : `ResultSpec`
-            The kind of results the user wants from the query.  This must be
-            identical to the ``result_spec`` passed to `execute`, but
-            implementations are not *required* to check this.
-        key : `PageKey`
-            Key included in the previous page from this query.  This key may
-            become unusable or even be reused after this call.
-
-        Returns
-        -------
-        next_page : `ResultPage`
-            The next page of query results.
-        """
-        # We can put off dealing with pagination initially by just making an
-        # implementation of this method raise.
-        #
-        # In RemoteButler I expect this to work by having the call to execute
-        # continue to write Parquet files (or whatever) to some location until
-        # its cursor is exhausted, and then delete those files as they are
-        # fetched (or, failing that, when receiving a signal from
-        # ``__exit__``).
-        #
-        # In DirectButler I expect to have a dict[PageKey, Cursor], fetch a
-        # blocks of rows from it, and just reuse the page key for the next page
-        # until the cursor is exactly.
         raise NotImplementedError()
 
     @abstractmethod
