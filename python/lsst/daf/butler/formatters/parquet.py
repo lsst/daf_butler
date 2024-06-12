@@ -75,6 +75,7 @@ class ParquetFormatter(FormatterV2):
     """
 
     default_extension = ".parq"
+    can_read_from_local_file = True
 
     def read_from_local_file(self, uri: ResourcePath, component: str | None = None) -> Any:
         # Docstring inherited from Formatter.read.

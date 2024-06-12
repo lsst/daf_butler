@@ -191,11 +191,12 @@ class DatastoreTestHelper:
 class BadWriteFormatter(YamlFormatter):
     """A formatter that never works but does leave a file behind."""
 
+    can_read_from_uri = False
+    can_read_from_local_file = False
+    can_read_from_stream = False
+
     def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
         raise FormatterNotImplementedError("This formatter can not read anything")
-
-    def to_bytes(self, in_memory_dataset: Any) -> bytes:
-        raise FormatterNotImplementedError("This formatter can not serialize to bytes.")
 
     def write_direct(
         self,
@@ -221,6 +222,8 @@ class BadNoWriteFormatter(BadWriteFormatter):
 
 class MultiDetectorFormatter(YamlFormatter):
     """A formatter that requires a detector to be specified in the dataID."""
+
+    can_read_from_uri = True
 
     def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
         if self.data_id is None:

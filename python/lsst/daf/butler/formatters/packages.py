@@ -47,6 +47,7 @@ class PackagesFormatterV2(FormatterV2):
 
     supported_write_parameters = frozenset({"format"})
     supported_extensions = frozenset({".yaml", ".pickle", ".pkl", ".json"})
+    can_read_from_uri = True
 
     def get_write_extension(self) -> str:
         # Default to YAML but allow configuration via write parameter

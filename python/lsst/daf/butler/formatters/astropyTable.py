@@ -45,6 +45,7 @@ class AstropyTableFormatter(FormatterV2):
 
     supported_write_parameters = frozenset({"format"})
     supported_extensions = frozenset({".ecsv"})
+    can_read_from_local_file = True
 
     def get_write_extension(self) -> str:
         # Default to ECSV but allow configuration via write parameter

@@ -54,6 +54,7 @@ class ButlerLogRecordsFormatter(FormatterV2):
 
     default_extension = ".json"
     supported_extensions = frozenset({".log"})
+    can_read_from_local_file = True
 
     def _get_read_pytype(self) -> type[ButlerLogRecords]:
         """Get the Python type to allow for subclasses."""
@@ -63,11 +64,10 @@ class ButlerLogRecordsFormatter(FormatterV2):
         return pytype
 
     def read_from_local_file(self, uri: ResourcePath, component: str | None = None) -> Any:
-        # ResourcePath open() cannot do a per-line read.
+        # ResourcePath open() cannot do a per-line read so can not use
+        # `read_from_stream` and `read_from_uri` does not give any advantage
+        # over pre-downloading the whole file (which can be very large).
         return self._get_read_pytype().from_file(uri.ospath)
-
-    def read_from_bytes(self, serialized_bytes: bytes, component: str | None = None) -> Any:
-        return self._get_read_pytype().from_raw(serialized_bytes)
 
     def to_bytes(self, in_memory_dataset: Any) -> bytes:
         return in_memory_dataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()

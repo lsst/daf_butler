@@ -46,6 +46,7 @@ class YamlFormatter(TypelessFormatter):
     default_extension = ".yaml"
     unsupported_parameters = None
     supported_write_parameters = frozenset({"unsafe_dump"})
+    can_read_from_uri = True
 
     def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
         # Can not use ResourcePath.open()

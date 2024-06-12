@@ -47,6 +47,7 @@ class PickleFormatter(TypelessFormatter):
 
     default_extension = ".pickle"
     unsupported_parameters = None
+    can_read_from_uri = True
 
     def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
         # Read the pickle file directly from the resource into memory.
