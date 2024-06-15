@@ -467,6 +467,21 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 [253954, 253955],
             )
 
+    def test_spatial_constraint_queries(self) -> None:
+        """Test queries in which one spatial dimension in the constraint (data
+        ID or ``where`` string) constrains a different spatial dimension in the
+        query result columns.
+        """
+        butler = self.make_butler("hsc-rc2-subset.yaml")
+        with butler._query() as query:
+            self.assertEqual(
+                [(9813, 72)],
+                [
+                    (data_id["tract"], data_id["patch"])
+                    for data_id in query.data_ids(["patch"]).where({"instrument": "HSC", "visit": 318})
+                ],
+            )
+
     def test_data_coordinate_upload(self) -> None:
         """Test queries for dimension records with a data coordinate upload."""
         butler = self.make_butler("base.yaml", "spatial.yaml")

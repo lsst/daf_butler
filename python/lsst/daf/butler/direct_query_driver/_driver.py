@@ -545,7 +545,9 @@ class DirectQueryDriver(QueryDriver):
             # that happens, we want to apply an aggregate function to them that
             # computes the union of the regions that are grouped together.
             for element in builder.postprocessing.iter_missing(projection_plan.columns):
-                if element.name not in projection_plan.columns.dimensions.elements:
+                if element.name in projection_plan.columns.dimensions.elements:
+                    projection_plan.region_non_aggregates.append(element)
+                else:
                     projection_plan.region_aggregates.append(element)
 
         # The joins-stage query also needs to include all columns needed by the
@@ -686,6 +688,11 @@ class DirectQueryDriver(QueryDriver):
         # automatically unique over these 'derived_fields'.  We just remember
         # these as pairs of (logical_table, field) for now.
         derived_fields: list[tuple[str, str]] = []
+        # The region associated with dimension keys returned by the query are
+        # derived fields, since there is only one region associated with each
+        # dimension key value.
+        for element in plan.region_non_aggregates:
+            derived_fields.append((element.name, "region"))
         # All dimension record fields are derived fields.
         for element_name, fields_for_element in plan.columns.dimension_fields.items():
             for element_field in fields_for_element:

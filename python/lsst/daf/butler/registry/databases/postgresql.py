@@ -394,8 +394,12 @@ class PostgresqlDatabase(Database):
         return self._pg_version >= (16, 0)
 
     def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:
-        # Docstring inherited.x
-        return sqlalchemy.func.any_value(column)
+        # Docstring inherited
+
+        # The cast is required to prevent sqlalchemy from forgetting the type
+        # of the initial column. Without the cast, for example, Base64Region
+        # would become a String column in the output.
+        return sqlalchemy.cast(sqlalchemy.func.any_value(column), column.type)
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
