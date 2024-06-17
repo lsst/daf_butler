@@ -27,75 +27,45 @@
 
 from __future__ import annotations
 
-import gc
 import itertools
 import os
-import secrets
 import unittest
 import warnings
 from contextlib import contextmanager
 
 import astropy.time
-
-try:
-    # It's possible but silly to have testing.postgresql installed without
-    # having the postgresql server installed (because then nothing in
-    # testing.postgresql would work), so we use the presence of that module
-    # to test whether we can expect the server to be available.
-    import testing.postgresql
-except ImportError:
-    testing = None
-
 import sqlalchemy
 from lsst.daf.butler import Timespan, ddl
 from lsst.daf.butler.registry import _RegistryFactory
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
+from lsst.daf.butler.tests.postgresql import setup_postgres_test_db
 
 try:
     from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType
 except ImportError:
-    testing = None
+    PostgresqlDatabase = None
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
-from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def _startServer(root):
-    """Start a PostgreSQL server and create a database within it, returning
-    an object encapsulating both.
-    """
-    server = testing.postgresql.Postgresql(base_dir=root)
-    engine = sqlalchemy.engine.create_engine(server.url())
-    with engine.begin() as connection:
-        connection.execute(sqlalchemy.text("CREATE EXTENSION btree_gist;"))
-    return server
-
-
-@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
+@unittest.skipUnless(PostgresqlDatabase is not None, "Couldn't load PostgresqlDatabase")
 class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
     """Test a postgres Registry."""
 
     @classmethod
     def setUpClass(cls):
-        cls.root = makeTestTempDir(TESTDIR)
-        cls.server = _startServer(cls.root)
-
-    @classmethod
-    def tearDownClass(cls):
-        # Clean up any lingering SQLAlchemy engines/connections
-        # so they're closed before we shut down the server.
-        gc.collect()
-        cls.server.stop()
-        removeTestTempDir(cls.root)
+        super().setUpClass()
+        cls.postgres = cls.enterClassContext(setup_postgres_test_db())
 
     def makeEmptyDatabase(self, origin: int = 0) -> PostgresqlDatabase:
-        namespace = f"namespace_{secrets.token_hex(8).lower()}"
-        return PostgresqlDatabase.fromUri(origin=origin, uri=self.server.url(), namespace=namespace)
+        return PostgresqlDatabase.fromUri(
+            origin=origin, uri=self.postgres.url, namespace=self.postgres.generate_namespace_name()
+        )
 
     def getNewConnection(self, database: PostgresqlDatabase, *, writeable: bool) -> PostgresqlDatabase:
         return PostgresqlDatabase.fromUri(
-            origin=database.origin, uri=self.server.url(), namespace=database.namespace, writeable=writeable
+            origin=database.origin, uri=self.postgres.url, namespace=database.namespace, writeable=writeable
         )
 
     @contextmanager
@@ -221,7 +191,6 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         self.assertEqual(pyResults, dbResults)
 
 
-@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresqlRegistryTests(RegistryTests):
     """Tests for `Registry` backed by a PostgreSQL database.
 
@@ -237,33 +206,20 @@ class PostgresqlRegistryTests(RegistryTests):
 
     @classmethod
     def setUpClass(cls):
-        cls.root = makeTestTempDir(TESTDIR)
-        cls.server = _startServer(cls.root)
-
-    @classmethod
-    def tearDownClass(cls):
-        # Clean up any lingering SQLAlchemy engines/connections
-        # so they're closed before we shut down the server.
-        gc.collect()
-        cls.server.stop()
-        removeTestTempDir(cls.root)
+        super().setUpClass()
+        cls.postgres = cls.enterClassContext(setup_postgres_test_db())
 
     @classmethod
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
     def makeRegistry(self, share_repo_with: SqlRegistry | None = None) -> SqlRegistry:
-        if share_repo_with is None:
-            namespace = f"namespace_{secrets.token_hex(8).lower()}"
-        else:
-            namespace = share_repo_with._db.namespace
         config = self.makeRegistryConfig()
-        config["db"] = self.server.url()
-        config["namespace"] = namespace
-        if share_repo_with is None:
-            return _RegistryFactory(config).create_from_config()
-        else:
+        self.postgres.patch_registry_config(config)
+        if share_repo_with:
+            config["namespace"] = share_repo_with._db.namespace
             return _RegistryFactory(config).from_config()
+        return _RegistryFactory(config).create_from_config()
 
 
 class PostgresqlRegistryNameKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):
