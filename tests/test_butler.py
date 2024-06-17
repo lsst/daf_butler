@@ -100,7 +100,7 @@ from lsst.daf.butler.registry import (
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
-from lsst.daf.butler.tests.postgresql import setup_postgres_test_db
+from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
@@ -2804,12 +2804,14 @@ class NullDatastoreTestCase(unittest.TestCase):
 
 
 @unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
-class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
+class ButlerServerTests(FileDatastoreButlerTests):
     """Test RemoteButler and Butler server."""
 
     configFile = None
     predictionSupported = False
     trustModeSupported = False
+
+    postgres: TemporaryPostgresInstance | None
 
     def setUp(self):
         self.server_instance = self.enterContext(create_test_server(TESTDIR))
@@ -2870,6 +2872,27 @@ class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
         # The Butler server instance is configured with different file naming
         # templates than this test is expecting.
         pass
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class ButlerServerSqliteTests(ButlerServerTests, unittest.TestCase):
+    """Tests for RemoteButler's registry shim, with a SQLite DB backing the
+    server.
+    """
+
+    postgres = None
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class ButlerServerPostgresTests(ButlerServerTests, unittest.TestCase):
+    """Tests for RemoteButler's registry shim, with a Postgres DB backing the
+    server.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.postgres = cls.enterClassContext(setup_postgres_test_db())
+        super().setUpClass()
 
 
 def setup_module(module: types.ModuleType) -> None:
