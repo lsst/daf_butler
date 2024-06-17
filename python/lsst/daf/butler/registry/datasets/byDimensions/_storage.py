@@ -702,6 +702,11 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # tags/calibs table.  The things we might need to get from the static
         # dataset table are the run key and the ingest date.
         need_static_table = False
+        need_collection_table = False
+        # Ingest date can only come from the static table.
+        if "ingest_date" in fields:
+            fields_provided["ingest_date"] = self._static.dataset.c.ingest_date
+            need_static_table = True
         if "run" in fields:
             if len(collections) == 1 and run_collections_only:
                 # If we are searching exactly one RUN collection, we
@@ -720,18 +725,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 # Here we can't avoid a join to the collection table, because
                 # we might find a dataset via something other than its RUN
                 # collection.
-                (
-                    fields_provided["run"],
-                    sql_projection.joiner.from_clause,
-                ) = self._collections.lookup_name_sql(
-                    self._static.dataset.c[self._runKeyColumn],
-                    sql_projection.joiner.from_clause,
-                )
+                #
+                # We have to defer adding the join until after we have joined
+                # in the static dataset table, because the ON clause involves
+                # the run collection from the static dataset table.  Postgres
+                # cares about the join ordering (though SQLite does not.)
+                need_collection_table = True
                 need_static_table = True
-        # Ingest date can only come from the static table.
-        if "ingest_date" in fields:
-            fields_provided["ingest_date"] = self._static.dataset.c.ingest_date
-            need_static_table = True
         if need_static_table:
             # If we need the static table, join it in via dataset_id.  We don't
             # use QueryJoiner.join because we're joining on dataset ID, not
@@ -744,6 +744,17 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # clause, but my guess is that that's a good idea IFF it's in the
             # foreign key, and right now it isn't.
             sql_projection.joiner.where(self._static.dataset.c.dataset_type_id == self._dataset_type_id)
+        if need_collection_table:
+            # Join the collection table to look up the RUN collection name
+            # associated with the dataset.
+            (
+                fields_provided["run"],
+                sql_projection.joiner.from_clause,
+            ) = self._collections.lookup_name_sql(
+                self._static.dataset.c[self._runKeyColumn],
+                sql_projection.joiner.from_clause,
+            )
+
         sql_projection.distinct = (
             # If there are multiple collections, this subquery might have
             # non-unique rows.
