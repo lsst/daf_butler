@@ -105,3 +105,12 @@ class TemporaryPostgresInstance:  # numpydoc ignore=PR01
         from multiple tests.
         """
         return f"namespace_{secrets.token_hex(8).lower()}"
+
+    def server_major_version(self) -> int:
+        """Return the major version number of the Postgres server (e.g. 13 or
+        16).
+        """
+        from ..registry.databases.postgresql import get_postgres_server_version
+
+        with self.begin() as connection:
+            return get_postgres_server_version(connection)[0]

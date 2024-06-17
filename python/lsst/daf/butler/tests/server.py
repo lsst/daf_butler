@@ -14,6 +14,7 @@ from lsst.resources.s3utils import clean_test_environment_for_s3, getS3Client
 
 from ..direct_butler import DirectButler
 from .hybrid_butler import HybridButler
+from .postgresql import TemporaryPostgresInstance
 from .server_utils import add_auth_header_check_middleware
 
 try:
@@ -59,7 +60,9 @@ class TestServerInstance:
 
 
 @contextmanager
-def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
+def create_test_server(
+    test_directory: str, *, postgres: TemporaryPostgresInstance | None = None
+) -> Iterator[TestServerInstance]:
     """Create a temporary Butler server instance for testing.
 
     Parameters
@@ -67,6 +70,10 @@ def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
     test_directory : `str`
         Path to the ``tests/`` directory at the root of the repository,
         containing Butler test configuration files.
+    postgres : `TemporaryPostgresInstance` | `None`
+        If provided, the Butler server will use this postgres database
+        instance.  If no postgres instance is specified, the server will use a
+        a SQLite database.
 
     Returns
     -------
@@ -85,8 +92,12 @@ def create_test_server(test_directory: str) -> Iterator[TestServerInstance]:
             for bucket in ["mutable-bucket", "immutable-bucket"]:
                 getS3Client().create_bucket(Bucket=bucket)
 
+            config = Config(base_config_path)
+            if postgres is not None:
+                postgres.patch_butler_config(config)
+
             with TemporaryDirectory() as root:
-                Butler.makeRepo(root, config=Config(base_config_path), forceConfigRoot=False)
+                Butler.makeRepo(root, config=config, forceConfigRoot=False)
                 config_file_path = os.path.join(root, "butler.yaml")
 
                 app = create_app()
