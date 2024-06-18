@@ -207,21 +207,6 @@ class QueryProjectionPlan:
     one resolved collection.
     """
 
-    region_aggregates: list[DimensionElement] = dataclasses.field(default_factory=list)
-    """Dimension elements with spatial regions that must be aggregated by the
-    projection, since their dimension keys are being dropped.
-
-    This can only be non-empty if `needs_dimension_distinct` is `True`.
-    """
-
-    region_non_aggregates: list[DimensionElement] = dataclasses.field(default_factory=list)
-    """Dimension elements with spatial regions whose dimension keys are
-    included in the projection.  There is exactly one region corresponding to
-    each dimension key value, so these do not need to be aggregated.
-
-    This can only be non-empty if `needs_dimension_distinct` is `True`.
-    """
-
 
 @dataclasses.dataclass
 class QueryFindFirstPlan:
