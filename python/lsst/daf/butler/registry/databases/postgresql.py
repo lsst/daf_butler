@@ -47,8 +47,6 @@ from ..._timespan import Timespan
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from ..interfaces import Database
 
-_SERVER_VERSION_REGEX = re.compile(r"(?P<major>\d+)\.(?P<minor>\d+)")
-
 
 class PostgresqlDatabase(Database):
     """An implementation of the `Database` interface for PostgreSQL.
@@ -106,11 +104,8 @@ class PostgresqlDatabase(Database):
                     "`CREATE EXTENSION btree_gist;` in a database before a butler client for it is "
                     " initialized."
                 )
-            raw_pg_version = connection.execute(sqlalchemy.text("SHOW server_version")).scalar()
-            if raw_pg_version is not None and (m := _SERVER_VERSION_REGEX.search(raw_pg_version)):
-                pg_version = (int(m.group("major")), int(m.group("minor")))
-            else:
-                raise RuntimeError("Failed to get PostgreSQL server version.")
+
+            pg_version = get_postgres_server_version(connection)
         self._init(
             engine=engine,
             origin=origin,
@@ -394,8 +389,12 @@ class PostgresqlDatabase(Database):
         return self._pg_version >= (16, 0)
 
     def apply_any_aggregate(self, column: sqlalchemy.ColumnElement[Any]) -> sqlalchemy.ColumnElement[Any]:
-        # Docstring inherited.x
-        return sqlalchemy.func.any_value(column)
+        # Docstring inherited
+
+        # The cast is required to prevent sqlalchemy from forgetting the type
+        # of the initial column. Without the cast, for example, Base64Region
+        # would become a String column in the output.
+        return sqlalchemy.cast(sqlalchemy.func.any_value(column), column.type)
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
@@ -602,3 +601,15 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
     ) -> TimespanDatabaseRepresentation:
         # Docstring inherited.
         return _RangeTimespanRepresentation(func(self.column), self.name)
+
+
+def get_postgres_server_version(connection: sqlalchemy.Connection) -> tuple[int, int]:  # numpydoc ignore=PR01
+    """Return the postgres DB server version as a tuple
+    (major version, minor version).
+    """
+    raw_pg_version = connection.execute(sqlalchemy.text("SHOW server_version")).scalar()
+    _SERVER_VERSION_REGEX = re.compile(r"(?P<major>\d+)\.(?P<minor>\d+)")
+    if raw_pg_version is not None and (m := _SERVER_VERSION_REGEX.search(raw_pg_version)):
+        return (int(m.group("major")), int(m.group("minor")))
+    else:
+        raise RuntimeError("Failed to get PostgreSQL server version.")

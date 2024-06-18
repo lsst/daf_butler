@@ -467,6 +467,39 @@ class ButlerQueryTests(ABC, TestCaseMixin):
                 [253954, 253955],
             )
 
+    def test_spatial_constraint_queries(self) -> None:
+        """Test queries in which one spatial dimension in the constraint (data
+        ID or ``where`` string) constrains a different spatial dimension in the
+        query result columns.
+        """
+        butler = self.make_butler("hsc-rc2-subset.yaml")
+        with butler._query() as query:
+            # This tests the case where the 'patch' region is needed for
+            # postprocessing, to compare against the visit region, but is not
+            # needed in the resulting data ID.
+            self.assertEqual(
+                [(9813, 72)],
+                [
+                    (data_id["tract"], data_id["patch"])
+                    for data_id in query.data_ids(["patch"]).where({"instrument": "HSC", "visit": 318})
+                ],
+            )
+
+            # This tests the case where the 'patch' region is needed in
+            # postprocessing AND is also returned in the result rows.
+            region_hex = (
+                "70cc2b4a68b7ecebbf32d931ecb816df3fffe573df5ab9a93f6d2ac3c7faf9ebbf39dad585e2e6de3fa"
+                "88934c311b9a93f55833497bef8ebbf15b3fe207ce5de3fae43c0300f6eab3f3e8709597bebebbf77d66"
+                "efa5115df3f05874a255d6eab3f"
+            )
+            self.assertEqual(
+                [(9813, 72, region_hex)],
+                [
+                    (record.tract, record.id, record.region.encode().hex())
+                    for record in query.dimension_records("patch").where({"instrument": "HSC", "visit": 318})
+                ],
+            )
+
     def test_data_coordinate_upload(self) -> None:
         """Test queries for dimension records with a data coordinate upload."""
         butler = self.make_butler("base.yaml", "spatial.yaml")

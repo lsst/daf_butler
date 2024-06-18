@@ -35,6 +35,7 @@ from lsst.daf.butler.datastores.file_datastore.retrieve_artifacts import (
     determine_destination_for_retrieved_artifact,
 )
 from lsst.daf.butler.registry.tests import RegistryTests
+from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.resources import ResourcePath
 from pydantic import ValidationError
 
@@ -128,8 +129,7 @@ class RemoteButlerMiscTests(unittest.TestCase):
         )
 
 
-@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
-class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
+class RemoteButlerRegistryTests(RegistryTests):
     """Tests for RemoteButler's `Registry` shim."""
 
     supportsCollectionRegex = False
@@ -146,8 +146,10 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
     # timespan.begin`` instead of ``time < timespan``.
     supportsExtendedTimeQueryOperators = False
 
+    postgres: TemporaryPostgresInstance | None
+
     def setUp(self):
-        self.server_instance = self.enterContext(create_test_server(TESTDIR))
+        self.server_instance = self.enterContext(create_test_server(TESTDIR, postgres=self.postgres))
 
     @classmethod
     def getDataDir(cls) -> str:
@@ -201,6 +203,38 @@ class RemoteButlerRegistryTests(RegistryTests, unittest.TestCase):
     def test_skypix_constraint_queries(self) -> None:
         # TODO DM-44362
         return super().test_skypix_constraint_queries()
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class RemoteButlerSqliteRegistryTests(RemoteButlerRegistryTests, unittest.TestCase):
+    """Tests for RemoteButler's registry shim, with a SQLite DB backing the
+    server.
+    """
+
+    postgres = None
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class RemoteButlerPostgresRegistryTests(RemoteButlerRegistryTests, unittest.TestCase):
+    """Tests for RemoteButler's registry shim, with a Postgres DB backing the
+    server.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.postgres = cls.enterClassContext(setup_postgres_test_db())
+        super().setUpClass()
+
+    @unittest.expectedFailure
+    def testQueryDataIdsOrderBy(self):
+        # TODO DM-44868: order_by sometimes causes invalid SQL to be generated
+        return super().testQueryDataIdsOrderBy()
+
+    def testSkipCalibs(self):
+        if self.postgres.server_major_version() < 16:
+            # TODO DM-44875: This test currently fails for older Postgres.
+            self.skipTest("TODO DM-44875")
+        return super().testSkipCalibs()
 
 
 if __name__ == "__main__":

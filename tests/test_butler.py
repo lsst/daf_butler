@@ -29,7 +29,6 @@
 """
 from __future__ import annotations
 
-import gc
 import json
 import logging
 import os
@@ -67,17 +66,7 @@ try:
 except ImportError:
     create_test_server = None
 
-try:
-    # It's possible but silly to have testing.postgresql installed without
-    # having the postgresql server installed (because then nothing in
-    # testing.postgresql would work), so we use the presence of that module
-    # to test whether we can expect the server to be available.
-    import testing.postgresql  # type: ignore[import]
-except ImportError:
-    testing = None
-
 import astropy.time
-import sqlalchemy
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,
@@ -111,6 +100,7 @@ from lsst.daf.butler.registry import (
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.repo_relocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
+from lsst.daf.butler.tests.postgresql import TemporaryPostgresInstance, setup_postgres_test_db
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath
 from lsst.utils import doImportType
@@ -2070,7 +2060,6 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
             butler.get(datasetTypeName, dataId=dataId)
 
 
-@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler using Postgres"""
 
@@ -2080,37 +2069,17 @@ class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.Te
     datastoreStr = ["/tmp"]
     datastoreName = [f"FileDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "PostgreSQL@test"
-    postgresql: Any
-
-    @staticmethod
-    def _handler(postgresql: Any) -> None:
-        engine = sqlalchemy.engine.create_engine(postgresql.url())
-        with engine.begin() as connection:
-            connection.execute(sqlalchemy.text("CREATE EXTENSION btree_gist;"))
 
     @classmethod
     def setUpClass(cls) -> None:
-        # Create the postgres test server.
-        cls.postgresql = testing.postgresql.PostgresqlFactory(
-            cache_initialized_db=True, on_initialized=cls._handler
-        )
+        cls.postgresql = cls.enterClassContext(setup_postgres_test_db())
         super().setUpClass()
 
-    @classmethod
-    def tearDownClass(cls) -> None:
-        # Clean up any lingering SQLAlchemy engines/connections
-        # so they're closed before we shut down the server.
-        gc.collect()
-        cls.postgresql.clear_cache()
-        super().tearDownClass()
-
     def setUp(self) -> None:
-        self.server = self.postgresql()
-
         # Need to add a registry section to the config.
         self._temp_config = False
         config = Config(self.configFile)
-        config["registry", "db"] = self.server.url()
+        self.postgresql.patch_butler_config(config)
         with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as fh:
             config.dump(fh)
             self.configFile = fh.name
@@ -2118,7 +2087,6 @@ class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.Te
         super().setUp()
 
     def tearDown(self) -> None:
-        self.server.stop()
         if self._temp_config and os.path.exists(self.configFile):
             os.remove(self.configFile)
         super().tearDown()
@@ -2129,7 +2097,6 @@ class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.Te
         raise unittest.SkipTest("Postgres config is not compatible with this test.")
 
 
-@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class ClonedPostgresPosixDatastoreButlerTestCase(PostgresPosixDatastoreButlerTestCase, unittest.TestCase):
     """Test that Butler with a Postgres registry still works after cloning."""
 
@@ -2837,12 +2804,14 @@ class NullDatastoreTestCase(unittest.TestCase):
 
 
 @unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
-class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
+class ButlerServerTests(FileDatastoreButlerTests):
     """Test RemoteButler and Butler server."""
 
     configFile = None
     predictionSupported = False
     trustModeSupported = False
+
+    postgres: TemporaryPostgresInstance | None
 
     def setUp(self):
         self.server_instance = self.enterContext(create_test_server(TESTDIR))
@@ -2903,6 +2872,27 @@ class ButlerServerTests(FileDatastoreButlerTests, unittest.TestCase):
         # The Butler server instance is configured with different file naming
         # templates than this test is expecting.
         pass
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class ButlerServerSqliteTests(ButlerServerTests, unittest.TestCase):
+    """Tests for RemoteButler's registry shim, with a SQLite DB backing the
+    server.
+    """
+
+    postgres = None
+
+
+@unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
+class ButlerServerPostgresTests(ButlerServerTests, unittest.TestCase):
+    """Tests for RemoteButler's registry shim, with a Postgres DB backing the
+    server.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.postgres = cls.enterClassContext(setup_postgres_test_db())
+        super().setUpClass()
 
 
 def setup_module(module: types.ModuleType) -> None:

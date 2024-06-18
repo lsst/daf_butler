@@ -539,14 +539,6 @@ class DirectQueryDriver(QueryDriver):
         for dataset_type, fields_for_dataset in projection_plan.columns.dataset_fields.items():
             if len(joins_plan.datasets[dataset_type].collection_records) > 1:
                 fields_for_dataset.add("collection_key")
-        if projection_plan:
-            # If there's a projection and we're doing postprocessing, we might
-            # be collapsing the dimensions of the postprocessing regions.  When
-            # that happens, we want to apply an aggregate function to them that
-            # computes the union of the regions that are grouped together.
-            for element in builder.postprocessing.iter_missing(projection_plan.columns):
-                if element.name not in projection_plan.columns.dimensions.elements:
-                    projection_plan.region_aggregates.append(element)
 
         # The joins-stage query also needs to include all columns needed by the
         # downstream projection query.  Note that this:
@@ -661,6 +653,13 @@ class DirectQueryDriver(QueryDriver):
         unique_keys: list[sqlalchemy.ColumnElement[Any]] = [
             builder.joiner.dimension_keys[k][0] for k in plan.columns.dimensions.data_coordinate_keys
         ]
+
+        # Many of our fields derive their uniqueness from the unique_key
+        # fields: if rows are uniqe over the 'unique_key' fields, then they're
+        # automatically unique over these 'derived_fields'.  We just remember
+        # these as pairs of (logical_table, field) for now.
+        derived_fields: list[tuple[str, str]] = []
+
         # There are two reasons we might need an aggregate function:
         # - to make sure temporal constraints and joins have resulted in at
         #   most one validity range match for each data ID and collection,
@@ -676,16 +675,24 @@ class DirectQueryDriver(QueryDriver):
                 sqlalchemy.func.count().label(builder.postprocessing.VALIDITY_MATCH_COUNT)
             )
             have_aggregates = True
-        for element in plan.region_aggregates:
-            builder.joiner.fields[element.name]["region"] = ddl.Base64Region.union_aggregate(
-                builder.joiner.fields[element.name]["region"]
-            )
-            have_aggregates = True
-        # Many of our fields derive their uniqueness from the unique_key
-        # fields: if rows are uniqe over the 'unique_key' fields, then they're
-        # automatically unique over these 'derived_fields'.  We just remember
-        # these as pairs of (logical_table, field) for now.
-        derived_fields: list[tuple[str, str]] = []
+
+        for element in builder.postprocessing.iter_missing(plan.columns):
+            if element.name in plan.columns.dimensions.elements:
+                # The region associated with dimension keys returned by the
+                # query are derived fields, since there is only one region
+                # associated with each dimension key value.
+                derived_fields.append((element.name, "region"))
+            else:
+                # If there's a projection and we're doing postprocessing, we
+                # might be collapsing the dimensions of the postprocessing
+                # regions.  When that happens, we want to apply an aggregate
+                # function to them that computes the union of the regions that
+                # are grouped together.
+                builder.joiner.fields[element.name]["region"] = ddl.Base64Region.union_aggregate(
+                    builder.joiner.fields[element.name]["region"]
+                )
+                have_aggregates = True
+
         # All dimension record fields are derived fields.
         for element_name, fields_for_element in plan.columns.dimension_fields.items():
             for element_field in fields_for_element:

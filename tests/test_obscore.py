@@ -25,7 +25,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import gc
 import os
 import tempfile
 import unittest
@@ -52,13 +51,9 @@ from lsst.daf.butler.registry.obscore import (
 )
 from lsst.daf.butler.registry.obscore._schema import _STATIC_COLUMNS
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
+from lsst.daf.butler.tests.postgresql import setup_postgres_test_db
 from lsst.daf.butler.tests.utils import TestCaseMixin, makeTestTempDir, removeTestTempDir
 from lsst.sphgeom import Box, ConvexPolygon, LonLat, UnitVector3d
-
-try:
-    import testing.postgresql  # type: ignore
-except ImportError:
-    testing = None
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -535,50 +530,28 @@ class ClonedSqliteObscoreTest(SQLiteObsCoreTest, unittest.TestCase):
         return original.copy()
 
 
-@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresObsCoreTest(ObsCoreTests, unittest.TestCase):
     """Unit test for obscore with PostgreSQL backend."""
 
     @classmethod
-    def _handler(cls, postgresql):
-        engine = sqlalchemy.engine.create_engine(postgresql.url())
-        with engine.begin() as connection:
-            connection.execute(sqlalchemy.text("CREATE EXTENSION btree_gist;"))
-
-    @classmethod
     def setUpClass(cls):
         # Create the postgres test server.
-        cls.postgresql = testing.postgresql.PostgresqlFactory(
-            cache_initialized_db=True, on_initialized=cls._handler
-        )
+        cls.postgresql = cls.enterClassContext(setup_postgres_test_db())
         super().setUpClass()
-
-    @classmethod
-    def tearDownClass(cls):
-        # Clean up any lingering SQLAlchemy engines/connections
-        # so they're closed before we shut down the server.
-        gc.collect()
-        cls.postgresql.clear_cache()
-        super().tearDownClass()
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        self.server = self.postgresql()
-        self.count = 0
 
     def tearDown(self):
         removeTestTempDir(self.root)
-        self.server = self.postgresql()
 
     def make_registry_config(
         self, collections: list[str] | None = None, collection_type: str | None = None
     ) -> RegistryConfig:
         # docstring inherited from a base class
-        self.count += 1
         config = RegistryConfig()
-        config["db"] = self.server.url()
-        # Use unique namespace for each instance, some tests may use sub-tests.
-        config["namespace"] = f"namespace{self.count}"
+        self.postgresql.patch_registry_config(config)
+
         config["managers", "obscore"] = {
             "cls": "lsst.daf.butler.registry.obscore.ObsCoreLiveTableManager",
             "config": self.make_obscore_config(collections, collection_type),
@@ -586,15 +559,13 @@ class PostgresObsCoreTest(ObsCoreTests, unittest.TestCase):
         return config
 
 
-@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresPgSphereObsCoreTest(PostgresObsCoreTest):
     """Unit test for obscore with PostgreSQL backend and pgsphere plugin."""
 
     @classmethod
-    def _handler(cls, postgresql):
-        super()._handler(postgresql)
-        engine = sqlalchemy.engine.create_engine(postgresql.url())
-        with engine.begin() as connection:
+    def setUpClass(cls):
+        super().setUpClass()
+        with cls.postgresql.begin() as connection:
             try:
                 connection.execute(sqlalchemy.text("CREATE EXTENSION pg_sphere"))
             except sqlalchemy.exc.DatabaseError as exc:

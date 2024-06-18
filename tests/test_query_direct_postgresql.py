@@ -30,42 +30,19 @@
 
 from __future__ import annotations
 
-import gc
 import os
-import secrets
 import unittest
 
-try:
-    # It's possible but silly to have testing.postgresql installed without
-    # having the postgresql server installed (because then nothing in
-    # testing.postgresql would work), so we use the presence of that module
-    # to test whether we can expect the server to be available.
-    import testing.postgresql
-except ImportError:
-    testing = None
-import sqlalchemy
 from lsst.daf.butler import Butler, ButlerConfig, StorageClassFactory
 from lsst.daf.butler.datastore import NullDatastore
 from lsst.daf.butler.direct_butler import DirectButler
 from lsst.daf.butler.registry.sql_registry import SqlRegistry
 from lsst.daf.butler.tests.butler_queries import ButlerQueryTests
-from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+from lsst.daf.butler.tests.postgresql import setup_postgres_test_db
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def _start_server(root):
-    """Start a PostgreSQL server and create a database within it, returning
-    an object encapsulating both.
-    """
-    server = testing.postgresql.Postgresql(base_dir=root)
-    engine = sqlalchemy.create_engine(server.url())
-    with engine.begin() as connection:
-        connection.execute(sqlalchemy.text("CREATE EXTENSION btree_gist;"))
-    return server
-
-
-@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class DirectButlerPostgreSQLTests(ButlerQueryTests, unittest.TestCase):
     """Tests for DirectButler._query with PostgreSQL."""
 
@@ -73,21 +50,11 @@ class DirectButlerPostgreSQLTests(ButlerQueryTests, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.root = makeTestTempDir(TESTDIR)
-        cls.server = _start_server(cls.root)
-
-    @classmethod
-    def tearDownClass(cls):
-        # Clean up any lingering SQLAlchemy engines/connections
-        # so they're closed before we shut down the server.
-        gc.collect()
-        cls.server.stop()
-        removeTestTempDir(cls.root)
+        cls.postgres = cls.enterClassContext(setup_postgres_test_db())
 
     def make_butler(self, *args: str) -> Butler:
         config = ButlerConfig()
-        config[".registry.db"] = self.server.url()
-        config[".registry.namespace"] = f"namespace_{secrets.token_hex(8).lower()}"
+        self.postgres.patch_butler_config(config)
         registry = SqlRegistry.createFromConfig(config)
         for arg in args:
             self.load_data(registry, arg)
