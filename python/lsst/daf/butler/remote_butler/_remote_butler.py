@@ -322,15 +322,11 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         dimension_records: bool = False,
         datastore_records: bool = False,
     ) -> DatasetRef | None:
+        # datastore_records is intentionally ignored.  It is an optimization
+        # flag that only applies to DirectButler.
         id = uuid.UUID(str(id))
         path = f"dataset/{str(id)}"
-        params: dict[str, str | bool] = {
-            "dimension_records": dimension_records,
-            "datastore_records": datastore_records,
-        }
-        if datastore_records:
-            raise ValueError("Datastore records can not yet be returned in client/server butler.")
-        response = self._connection.get(path, params=params)
+        response = self._connection.get(path, params={"dimension_records": bool(dimension_records)})
         if response.json() is None:
             return None
         ref = DatasetRef.from_simple(parse_model(response, SerializedDatasetRef), universe=self.dimensions)

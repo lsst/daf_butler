@@ -118,16 +118,11 @@ def get_dataset_type(
 def get_dataset(
     id: uuid.UUID,
     dimension_records: bool = False,
-    datastore_records: bool = False,
     factory: Factory = Depends(factory_dependency),
 ) -> SerializedDatasetRef | None:
     # Return a single dataset reference.
     butler = factory.create_butler()
-    ref = butler.get_dataset(
-        id,
-        dimension_records=dimension_records,
-        datastore_records=datastore_records,
-    )
+    ref = butler.get_dataset(id, dimension_records=dimension_records)
     if ref is not None:
         return ref.to_simple()
     # This could raise a 404 since id is not found. The standard implementation
