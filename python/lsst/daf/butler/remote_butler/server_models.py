@@ -102,7 +102,7 @@ class GetUniverseResponseModel(pydantic.BaseModel):
 class GetFileByDataIdRequestModel(pydantic.BaseModel):
     """Request model for ``get_file_by_data_id``."""
 
-    dataset_type_name: DatasetTypeName
+    dataset_type: DatasetTypeName
     data_id: SerializedDataId
     default_data_id: SerializedDataId = pydantic.Field(default_factory=dict)
     """Data ID values used as a fallback if required values are not specified

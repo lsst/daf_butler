@@ -184,7 +184,7 @@ def get_file_by_data_id(
     butler = factory.create_butler()
     _set_default_data_id(butler, request.default_data_id)
     ref = butler._findDatasetRef(
-        datasetRefOrType=request.dataset_type_name,
+        datasetRefOrType=request.dataset_type,
         dataId=request.data_id,
         collections=request.collections,
         datastore_records=True,

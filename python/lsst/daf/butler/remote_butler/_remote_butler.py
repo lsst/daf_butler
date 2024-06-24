@@ -265,7 +265,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return self._get_file_info_for_ref(datasetRefOrType)
         else:
             request = GetFileByDataIdRequestModel(
-                dataset_type_name=normalize_dataset_type_name(datasetRefOrType),
+                dataset_type=normalize_dataset_type_name(datasetRefOrType),
                 collections=self._normalize_collections(collections),
                 data_id=simplify_dataId(dataId, kwargs),
                 default_data_id=self._serialize_default_data_id(),
