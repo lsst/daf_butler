@@ -48,7 +48,7 @@ from .._butler_collections import ButlerCollections
 from .._butler_instance_options import ButlerInstanceOptions
 from .._dataset_existence import DatasetExistence
 from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
-from .._dataset_type import DatasetType, SerializedDatasetType
+from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._exceptions import DatasetNotFoundError
 from .._storage_class import StorageClass, StorageClassFactory
@@ -64,6 +64,7 @@ from .server_models import (
     CollectionList,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
+    GetDatasetTypeResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
 )
@@ -307,7 +308,8 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
 
     def get_dataset_type(self, name: str) -> DatasetType:
         response = self._connection.get("dataset_type", {"name": name})
-        return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
+        model = parse_model(response, GetDatasetTypeResponseModel)
+        return DatasetType.from_simple(model.dataset_type, universe=self.dimensions)
 
     def get_dataset(
         self,

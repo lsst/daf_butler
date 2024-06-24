@@ -33,7 +33,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import Butler, CollectionType, DatasetRef, SerializedDatasetRef, SerializedDatasetType
+from lsst.daf.butler import Butler, CollectionType, DatasetRef, SerializedDatasetRef
 from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
 from lsst.daf.butler.remote_butler.server_models import (
     ExpandDataIdRequestModel,
@@ -42,6 +42,7 @@ from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
     GetCollectionSummaryResponseModel,
+    GetDatasetTypeResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
     QueryCollectionsRequestModel,
@@ -93,13 +94,14 @@ def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> di
 @external_router.get(
     "/v1/dataset_type",
     summary="Retrieve this dataset type definition.",
-    response_model=SerializedDatasetType,
 )
-def get_dataset_type(name: str, factory: Factory = Depends(factory_dependency)) -> SerializedDatasetType:
+def get_dataset_type(
+    name: str, factory: Factory = Depends(factory_dependency)
+) -> GetDatasetTypeResponseModel:
     # Return the dataset type.
     butler = factory.create_butler()
     datasetType = butler.get_dataset_type(name)
-    return datasetType.to_simple()
+    return GetDatasetTypeResponseModel(dataset_type=datasetType.to_simple())
 
 
 @external_router.get(

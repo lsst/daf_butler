@@ -87,6 +87,12 @@ class FindDatasetResponseModel(pydantic.BaseModel):
     dataset_ref: SerializedDatasetRef | None
 
 
+class GetDatasetTypeResponseModel(pydantic.BaseModel):
+    """Response model for dataset_type."""
+
+    dataset_type: SerializedDatasetType
+
+
 class GetFileByDataIdRequestModel(pydantic.BaseModel):
     """Request model for ``get_file_by_data_id``."""
 
