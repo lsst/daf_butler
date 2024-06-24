@@ -161,7 +161,7 @@ class DimensionConfig(ConfigSubset):
 
         Returns
         -------
-        model : `SerializedUniverseConfig`
+        model : `SerializedDimensionConfig`
             Serializable Pydantic version of this configuration.
         """
         return SerializedDimensionConfig.model_validate(self.toDict())
