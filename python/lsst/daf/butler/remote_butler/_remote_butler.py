@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("RemoteButler",)
 
+import uuid
 from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
@@ -321,7 +322,8 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         dimension_records: bool = False,
         datastore_records: bool = False,
     ) -> DatasetRef | None:
-        path = f"dataset/{id}"
+        id = uuid.UUID(str(id))
+        path = f"dataset/{str(id)}"
         params: dict[str, str | bool] = {
             "dimension_records": dimension_records,
             "datastore_records": datastore_records,
