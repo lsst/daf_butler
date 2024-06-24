@@ -193,6 +193,7 @@ class QueryDatasetTypesRequestModel(pydantic.BaseModel):
     """Request model for queryDatasetTypes."""
 
     search: list[str]
+    """List of glob patterns to match against the name of the dataset types."""
 
 
 class QueryDatasetTypesResponseModel(pydantic.BaseModel):
