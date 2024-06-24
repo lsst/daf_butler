@@ -70,6 +70,7 @@ DatasetTypeName = NewType("DatasetTypeName", str)
 class FindDatasetRequestModel(pydantic.BaseModel):
     """Request model for find_dataset."""
 
+    dataset_type: DatasetTypeName
     data_id: SerializedDataId
     default_data_id: SerializedDataId = pydantic.Field(default_factory=dict)
     """Data ID values used as a fallback if required values are not specified

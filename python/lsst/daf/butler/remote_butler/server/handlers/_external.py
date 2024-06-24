@@ -124,18 +124,17 @@ def get_dataset(
 
 
 @external_router.post(
-    "/v1/find_dataset/{dataset_type}",
+    "/v1/find_dataset",
     summary="Retrieve this dataset definition from collection, dataset type, and dataId",
 )
 def find_dataset(
-    dataset_type: str,
     query: FindDatasetRequestModel,
     factory: Factory = Depends(factory_dependency),
 ) -> FindDatasetResponseModel:
     butler = factory.create_butler()
     _set_default_data_id(butler, query.default_data_id)
     ref = butler.find_dataset(
-        dataset_type,
+        query.dataset_type,
         query.data_id,
         collections=query.collections,
         timespan=query.timespan,

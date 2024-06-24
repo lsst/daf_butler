@@ -351,6 +351,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             raise ValueError("Datastore records can not yet be returned in client/server butler.")
 
         query = FindDatasetRequestModel(
+            dataset_type=normalize_dataset_type_name(dataset_type),
             data_id=simplify_dataId(data_id, kwargs),
             default_data_id=self._serialize_default_data_id(),
             collections=self._normalize_collections(collections),
@@ -359,9 +360,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             datastore_records=datastore_records,
         )
 
-        dataset_type_name = normalize_dataset_type_name(dataset_type)
-        path = f"find_dataset/{dataset_type_name}"
-        response = self._connection.post(path, query)
+        response = self._connection.post("find_dataset", query)
 
         model = parse_model(response, FindDatasetResponseModel)
         if model.dataset_ref is None:
