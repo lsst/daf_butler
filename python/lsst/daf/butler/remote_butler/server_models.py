@@ -82,7 +82,7 @@ class FindDatasetRequestModel(pydantic.BaseModel):
 
 
 class FindDatasetResponseModel(pydantic.BaseModel):
-    """Response model for find_dataset."""
+    """Response model for ``find_dataset`` and ``get_dataset``."""
 
     dataset_ref: SerializedDatasetRef | None
 

@@ -33,7 +33,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import Butler, CollectionType, DatasetRef, SerializedDatasetRef
+from lsst.daf.butler import Butler, CollectionType, DatasetRef
 from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
 from lsst.daf.butler.remote_butler.server_models import (
     ExpandDataIdRequestModel,
@@ -110,24 +110,17 @@ def get_dataset_type(
 @external_router.get(
     "/v1/dataset/{id}",
     summary="Retrieve this dataset definition.",
-    response_model=SerializedDatasetRef | None,
-    response_model_exclude_unset=True,
-    response_model_exclude_defaults=True,
-    response_model_exclude_none=True,
 )
 def get_dataset(
     id: uuid.UUID,
     dimension_records: bool = False,
     factory: Factory = Depends(factory_dependency),
-) -> SerializedDatasetRef | None:
+) -> FindDatasetResponseModel:
     # Return a single dataset reference.
     butler = factory.create_butler()
     ref = butler.get_dataset(id, dimension_records=dimension_records)
-    if ref is not None:
-        return ref.to_simple()
-    # This could raise a 404 since id is not found. The standard implementation
-    # get_dataset method returns without error so follow that example here.
-    return ref
+    serialized_ref = ref.to_simple() if ref else None
+    return FindDatasetResponseModel(dataset_ref=serialized_ref)
 
 
 @external_router.post(

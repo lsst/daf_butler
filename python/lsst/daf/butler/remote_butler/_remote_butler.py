@@ -48,7 +48,7 @@ from .._butler import Butler
 from .._butler_collections import ButlerCollections
 from .._butler_instance_options import ButlerInstanceOptions
 from .._dataset_existence import DatasetExistence
-from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
+from .._dataset_ref import DatasetId, DatasetRef
 from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._exceptions import DatasetNotFoundError
@@ -327,9 +327,10 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         id = uuid.UUID(str(id))
         path = f"dataset/{str(id)}"
         response = self._connection.get(path, params={"dimension_records": bool(dimension_records)})
-        if response.json() is None:
+        model = parse_model(response, FindDatasetResponseModel)
+        if model.dataset_ref is None:
             return None
-        ref = DatasetRef.from_simple(parse_model(response, SerializedDatasetRef), universe=self.dimensions)
+        ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         if storage_class is not None:
             ref = ref.overrideStorageClass(storage_class)
         return ref
