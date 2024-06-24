@@ -45,6 +45,7 @@ from lsst.daf.butler.remote_butler.server_models import (
     GetDatasetTypeResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    GetUniverseResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
     QueryDatasetTypesRequestModel,
@@ -84,11 +85,13 @@ async def get_client_config() -> dict[str, Any]:
     return {"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "<butlerRoot>"}}
 
 
-@external_router.get("/v1/universe", response_model=dict[str, Any])
-def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> dict[str, Any]:
+@external_router.get("/v1/universe")
+def get_dimension_universe(
+    factory: Factory = Depends(factory_dependency),
+) -> GetUniverseResponseModel:
     # Allow remote client to get dimensions definition.
     butler = factory.create_butler()
-    return butler.dimensions.dimensionConfig.toDict()
+    return GetUniverseResponseModel(universe=butler.dimensions.dimensionConfig.to_simple())
 
 
 @external_router.get(

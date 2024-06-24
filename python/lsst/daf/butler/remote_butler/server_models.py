@@ -54,7 +54,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 from lsst.daf.butler.registry import SerializedCollectionSummary
 
-from ..dimensions import SerializedDimensionRecord
+from ..dimensions import SerializedDimensionConfig, SerializedDimensionRecord
 from ..queries.result_specs import SerializedResultSpec
 from ..queries.tree import SerializedQueryTree
 
@@ -88,9 +88,15 @@ class FindDatasetResponseModel(pydantic.BaseModel):
 
 
 class GetDatasetTypeResponseModel(pydantic.BaseModel):
-    """Response model for dataset_type."""
+    """Response model for ``dataset_type``."""
 
     dataset_type: SerializedDatasetType
+
+
+class GetUniverseResponseModel(pydantic.BaseModel):
+    """Response model for ``universe``."""
+
+    universe: SerializedDimensionConfig
 
 
 class GetFileByDataIdRequestModel(pydantic.BaseModel):

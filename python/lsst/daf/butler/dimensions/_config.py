@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionConfig",)
+__all__ = ("DimensionConfig", "SerializedDimensionConfig")
 
 import textwrap
 from collections.abc import Mapping, Sequence, Set
@@ -156,6 +156,32 @@ class DimensionConfig(ConfigSubset):
         externalConfig = type(self)(file, validate=False)
         self.update(externalConfig)
 
+    def to_simple(self) -> SerializedDimensionConfig:
+        """Convert this configuration to a serializable Pydantic model.
+
+        Returns
+        -------
+        model : `SerializedUniverseConfig`
+            Serializable Pydantic version of this configuration.
+        """
+        return SerializedDimensionConfig.model_validate(self.toDict())
+
+    @staticmethod
+    def from_simple(simple: SerializedDimensionConfig) -> DimensionConfig:
+        """Load the configuration from a serialized version.
+
+        Parameters
+        ----------
+        simple : `SerializedDimensionConfig`
+            Serialized configuration to be loaded.
+
+        Returns
+        -------
+        config : `DimensionConfig`
+            Dimension configuration.
+        """
+        return DimensionConfig(simple.model_dump())
+
     def makeBuilder(self) -> DimensionConstructionBuilder:
         """Construct a `DimensionConstructionBuilder`.
 
@@ -168,7 +194,7 @@ class DimensionConfig(ConfigSubset):
             configuration.  The `~DimensionConstructionBuilder.finish` method
             will not have been called.
         """
-        validated = _UniverseConfig.model_validate(self.toDict())
+        validated = self.to_simple()
         builder = DimensionConstructionBuilder(
             validated.version,
             validated.skypix.common,
@@ -626,7 +652,7 @@ class _ElementConfig(pydantic.BaseModel, DimensionConstructionVisitor):
 
 
 @final
-class _UniverseConfig(pydantic.BaseModel):
+class SerializedDimensionConfig(pydantic.BaseModel):
     """Configuration that describes a complete dimension data model."""
 
     version: int = pydantic.Field(

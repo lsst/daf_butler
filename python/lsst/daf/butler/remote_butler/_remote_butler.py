@@ -67,6 +67,7 @@ from .server_models import (
     GetDatasetTypeResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    GetUniverseResponseModel,
 )
 
 if TYPE_CHECKING:
@@ -153,8 +154,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 return cache.dimensions
 
         response = self._connection.get("universe")
+        model = parse_model(response, GetUniverseResponseModel)
 
-        config = DimensionConfig.fromString(response.text, format="json")
+        config = DimensionConfig.from_simple(model.universe)
         universe = DimensionUniverse(config)
         with self._cache.access() as cache:
             if cache.dimensions is None:
