@@ -91,19 +91,14 @@ def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> di
 
 
 @external_router.get(
-    "/v1/dataset_type/{dataset_type_name}",
+    "/v1/dataset_type",
     summary="Retrieve this dataset type definition.",
     response_model=SerializedDatasetType,
-    response_model_exclude_unset=True,
-    response_model_exclude_defaults=True,
-    response_model_exclude_none=True,
 )
-def get_dataset_type(
-    dataset_type_name: str, factory: Factory = Depends(factory_dependency)
-) -> SerializedDatasetType:
+def get_dataset_type(name: str, factory: Factory = Depends(factory_dependency)) -> SerializedDatasetType:
     # Return the dataset type.
     butler = factory.create_butler()
-    datasetType = butler.get_dataset_type(dataset_type_name)
+    datasetType = butler.get_dataset_type(name)
     return datasetType.to_simple()
 
 

@@ -306,10 +306,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return DatasetRefURIs(componentURIs=components)
 
     def get_dataset_type(self, name: str) -> DatasetType:
-        # In future implementation this should directly access the cache
-        # and only go to the server if the dataset type is not known.
-        path = f"dataset_type/{name}"
-        response = self._connection.get(path)
+        response = self._connection.get("dataset_type", {"name": name})
         return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
 
     def get_dataset(

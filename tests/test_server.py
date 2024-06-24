@@ -348,7 +348,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
         # functionality -- in a real deployment, the authentication headers are
         # handled by GafaelfawrIngress, not our app.
         with self.assertRaises(UnhandledServerError) as cm:
-            self.client.get("/v1/dataset_type/int")
+            self.client.get("/v1/dataset_type?name=int")
         self.assertEqual(cm.exception.__cause__.status_code, 401)
 
     def test_exception_logging(self):
@@ -373,7 +373,7 @@ class ButlerClientServerTestCase(unittest.TestCase):
 
             mock_logger_dep.return_value = get_logger()
             client.get(
-                "/api/butler/repo/something/v1/dataset_type/int",
+                "/api/butler/repo/something/v1/dataset_type?name=int",
                 headers={"X-Auth-Request-User": "user-name", "X-Butler-Client-Request-Id": "request-id"},
             )
             mock_logger_dep.assert_called_once()
