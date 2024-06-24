@@ -79,7 +79,6 @@ class FindDatasetRequestModel(pydantic.BaseModel):
     collections: CollectionList
     timespan: Timespan | None
     dimension_records: bool = False
-    datastore_records: bool = False
 
 
 class FindDatasetResponseModel(pydantic.BaseModel):

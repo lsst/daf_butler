@@ -347,8 +347,8 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
-        if datastore_records:
-            raise ValueError("Datastore records can not yet be returned in client/server butler.")
+        # datastore_records is intentionally ignored.  It is an optimization
+        # flag that only applies to DirectButler.
 
         query = FindDatasetRequestModel(
             dataset_type=normalize_dataset_type_name(dataset_type),
@@ -357,7 +357,6 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             collections=self._normalize_collections(collections),
             timespan=timespan,
             dimension_records=dimension_records,
-            datastore_records=datastore_records,
         )
 
         response = self._connection.post("find_dataset", query)

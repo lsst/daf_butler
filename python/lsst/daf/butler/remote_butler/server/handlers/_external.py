@@ -139,7 +139,6 @@ def find_dataset(
         collections=query.collections,
         timespan=query.timespan,
         dimension_records=query.dimension_records,
-        datastore_records=query.datastore_records,
     )
     serialized_ref = ref.to_simple() if ref else None
     return FindDatasetResponseModel(dataset_ref=serialized_ref)
