@@ -275,7 +275,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return parse_model(response, GetFileResponseModel)
 
     def _get_file_info_for_ref(self, ref: DatasetRef) -> GetFileResponseModel:
-        response = self._connection.get(f"get_file/{ref.id}")
+        response = self._connection.get(f"get_file/{_to_uuid_string(ref.id)}")
         return parse_model(response, GetFileResponseModel)
 
     def getURIs(
@@ -324,8 +324,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
     ) -> DatasetRef | None:
         # datastore_records is intentionally ignored.  It is an optimization
         # flag that only applies to DirectButler.
-        id = uuid.UUID(str(id))
-        path = f"dataset/{str(id)}"
+        path = f"dataset/{_to_uuid_string(id)}"
         response = self._connection.get(path, params={"dimension_records": bool(dimension_records)})
         model = parse_model(response, FindDatasetResponseModel)
         if model.dataset_ref is None:
@@ -590,6 +589,13 @@ def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGe
         raise DatasetNotFoundError(f"Dataset is known, but artifact is not available. (datasetId='{ref.id}')")
 
     return get_file_response.artifact
+
+
+def _to_uuid_string(id: uuid.UUID | str) -> str:
+    """Convert a UUID, or string parseable as a UUID, into a string formatted
+    like '1481269e-4c8d-4696-bcca-d1b4c9005d06'
+    """
+    return str(uuid.UUID(str(id)))
 
 
 @dataclass
