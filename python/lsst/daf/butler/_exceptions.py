@@ -161,6 +161,14 @@ class MissingDatasetTypeError(DatasetTypeError, KeyError, ButlerUserError):
     error_type = "missing_dataset_type"
 
 
+class UnimplementedQueryError(NotImplementedError, ButlerUserError):
+    """Exception raised when the query system does not support the query
+    specified by the user.
+    """
+
+    error_type = "unimplemented_query"
+
+
 class DatasetTypeNotSupportedError(RuntimeError):
     """A `DatasetType` is not handled by this routine.
 
@@ -216,6 +224,7 @@ _USER_ERROR_TYPES: tuple[type[ButlerUserError], ...] = (
     InvalidQueryError,
     MissingCollectionError,
     MissingDatasetTypeError,
+    UnimplementedQueryError,
     UnknownButlerUserError,
 )
 _USER_ERROR_MAPPING = {e.error_type: e for e in _USER_ERROR_TYPES}

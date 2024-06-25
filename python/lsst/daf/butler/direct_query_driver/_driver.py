@@ -42,7 +42,7 @@ import sqlalchemy
 
 from .. import ddl
 from .._dataset_type import DatasetType
-from .._exceptions import InvalidQueryError
+from .._exceptions import InvalidQueryError, UnimplementedQueryError
 from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionUniverse
 from ..dimensions.record_cache import DimensionRecordCache
 from ..queries import tree as qt
@@ -270,7 +270,7 @@ class DirectQueryDriver(QueryDriver):
                     spec, self.get_dataset_type(spec.dataset_type_name), context
                 )
             case _:
-                raise NotImplementedError(f"Result type '{spec.result_type}' not yet implemented")
+                raise UnimplementedQueryError(f"Result type '{spec.result_type}' not yet implemented")
 
     def materialize(
         self,
@@ -706,6 +706,8 @@ class DirectQueryDriver(QueryDriver):
         # it depends on the kinds of collection(s) we're searching and whether
         # it's a find-first query.
         for dataset_type, fields_for_dataset in plan.columns.dataset_fields.items():
+            is_calibration_search = plan.datasets[dataset_type].is_calibration_search
+            is_find_first_search = dataset_type == plan.find_first_dataset
             for dataset_field in fields_for_dataset:
                 if dataset_field == "collection_key":
                     # If the collection_key field is present, it's needed for
@@ -715,11 +717,11 @@ class DirectQueryDriver(QueryDriver):
                         unique_keys.append(builder.joiner.fields[dataset_type]["collection_key"])
                     else:
                         derived_fields.append((dataset_type, "collection_key"))
-                elif dataset_field == "timespan" and plan.datasets[dataset_type].is_calibration_search:
+                elif dataset_field == "timespan" and is_calibration_search:
                     # If we're doing a non-find-first query against a
                     # CALIBRATION collection, the timespan is also a unique
                     # key...
-                    if dataset_type == plan.find_first_dataset:
+                    if is_find_first_search:
                         # ...unless we're doing a find-first search on this
                         # dataset, in which case we need to use ANY_VALUE on
                         # the timespan and check that _VALIDITY_MATCH_COUNT
@@ -728,7 +730,7 @@ class DirectQueryDriver(QueryDriver):
                         # collection that survived the base query's WHERE
                         # clauses and JOINs.
                         if not self.db.has_any_aggregate:
-                            raise NotImplementedError(
+                            raise UnimplementedQueryError(
                                 f"Cannot generate query that returns {dataset_type}.timespan after a "
                                 "find-first search, because this a database does not support the ANY_VALUE "
                                 "aggregate function (or equivalent)."
@@ -738,6 +740,26 @@ class DirectQueryDriver(QueryDriver):
                         ].apply_any_aggregate(self.db.apply_any_aggregate)
                     else:
                         unique_keys.extend(builder.joiner.timespans[dataset_type].flatten())
+                elif (
+                    dataset_field == "dataset_id"
+                    and is_calibration_search
+                    and is_find_first_search
+                    and not self.db.has_any_aggregate
+                ):
+                    # As with the timespans above, for a find-first search in a
+                    # calibration collection there may be multiple matching
+                    # datasets, and we have to check in post-processing using
+                    # _VALIDITY_MATCH_COUNT to make sure there is only one
+                    # dataset to avoid ambiguity in the lookup.
+                    #
+                    # If there is no support for ANY_VALUE, dataset_id ends up
+                    # in GROUP BY which prevents _VALIDITY_MATCH_COUNT from
+                    # working.
+                    raise UnimplementedQueryError(
+                        f"Cannot generate query that returns {dataset_type}.dataset_id after a "
+                        "find-first search, because this a database does not support the ANY_VALUE "
+                        "aggregate function (or equivalent)."
+                    )
                 else:
                     # Other dataset fields derive their uniqueness from key
                     # fields.
