@@ -54,7 +54,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.datastores.fileDatastoreClient import FileDatastoreGetPayload
 from lsst.daf.butler.registry import SerializedCollectionSummary
 
-from ..dimensions import SerializedDimensionRecord
+from ..dimensions import SerializedDimensionConfig, SerializedDimensionRecord
 from ..queries.result_specs import SerializedResultSpec
 from ..queries.tree import SerializedQueryTree
 
@@ -70,6 +70,7 @@ DatasetTypeName = NewType("DatasetTypeName", str)
 class FindDatasetRequestModel(pydantic.BaseModel):
     """Request model for find_dataset."""
 
+    dataset_type: DatasetTypeName
     data_id: SerializedDataId
     default_data_id: SerializedDataId = pydantic.Field(default_factory=dict)
     """Data ID values used as a fallback if required values are not specified
@@ -78,19 +79,30 @@ class FindDatasetRequestModel(pydantic.BaseModel):
     collections: CollectionList
     timespan: Timespan | None
     dimension_records: bool = False
-    datastore_records: bool = False
 
 
 class FindDatasetResponseModel(pydantic.BaseModel):
-    """Response model for find_dataset."""
+    """Response model for ``find_dataset`` and ``get_dataset``."""
 
     dataset_ref: SerializedDatasetRef | None
+
+
+class GetDatasetTypeResponseModel(pydantic.BaseModel):
+    """Response model for ``dataset_type``."""
+
+    dataset_type: SerializedDatasetType
+
+
+class GetUniverseResponseModel(pydantic.BaseModel):
+    """Response model for ``universe``."""
+
+    universe: SerializedDimensionConfig
 
 
 class GetFileByDataIdRequestModel(pydantic.BaseModel):
     """Request model for ``get_file_by_data_id``."""
 
-    dataset_type_name: DatasetTypeName
+    dataset_type: DatasetTypeName
     data_id: SerializedDataId
     default_data_id: SerializedDataId = pydantic.Field(default_factory=dict)
     """Data ID values used as a fallback if required values are not specified
@@ -181,6 +193,7 @@ class QueryDatasetTypesRequestModel(pydantic.BaseModel):
     """Request model for queryDatasetTypes."""
 
     search: list[str]
+    """List of glob patterns to match against the name of the dataset types."""
 
 
 class QueryDatasetTypesResponseModel(pydantic.BaseModel):

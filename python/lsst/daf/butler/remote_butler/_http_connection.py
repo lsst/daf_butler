@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("RemoteButlerHttpConnection", "parse_model")
 
+import urllib.parse
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -285,6 +286,13 @@ class ButlerServerError(RuntimeError):
 
     def __init__(self, client_request_id: str):
         super().__init__(f"Error while communicating with Butler server.  Request ID: {client_request_id}")
+
+
+def quote_path_variable(path: str) -> str:  # numpydoc ignore=PR01
+    """URL encode a string to make it suitable for inserting as a segment of
+    the path part of a URL.
+    """
+    return urllib.parse.quote(path, safe="")
 
 
 @dataclass(frozen=True)

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 __all__ = ("RemoteButler",)
 
+import uuid
 from collections.abc import Collection, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
@@ -47,8 +48,8 @@ from .._butler import Butler
 from .._butler_collections import ButlerCollections
 from .._butler_instance_options import ButlerInstanceOptions
 from .._dataset_existence import DatasetExistence
-from .._dataset_ref import DatasetId, DatasetRef, SerializedDatasetRef
-from .._dataset_type import DatasetType, SerializedDatasetType
+from .._dataset_ref import DatasetId, DatasetRef
+from .._dataset_type import DatasetType
 from .._deferredDatasetHandle import DeferredDatasetHandle
 from .._exceptions import DatasetNotFoundError
 from .._storage_class import StorageClass, StorageClassFactory
@@ -64,8 +65,10 @@ from .server_models import (
     CollectionList,
     FindDatasetRequestModel,
     FindDatasetResponseModel,
+    GetDatasetTypeResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    GetUniverseResponseModel,
 )
 
 if TYPE_CHECKING:
@@ -75,7 +78,7 @@ if TYPE_CHECKING:
     from ..dimensions import DataId
     from ..transfers import RepoExportContext
 
-from ._http_connection import RemoteButlerHttpConnection, parse_model
+from ._http_connection import RemoteButlerHttpConnection, parse_model, quote_path_variable
 
 
 class RemoteButler(Butler):  # numpydoc ignore=PR02
@@ -152,8 +155,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
                 return cache.dimensions
 
         response = self._connection.get("universe")
+        model = parse_model(response, GetUniverseResponseModel)
 
-        config = DimensionConfig.fromString(response.text, format="json")
+        config = DimensionConfig.from_simple(model.universe)
         universe = DimensionUniverse(config)
         with self._cache.access() as cache:
             if cache.dimensions is None:
@@ -261,7 +265,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return self._get_file_info_for_ref(datasetRefOrType)
         else:
             request = GetFileByDataIdRequestModel(
-                dataset_type_name=normalize_dataset_type_name(datasetRefOrType),
+                dataset_type=normalize_dataset_type_name(datasetRefOrType),
                 collections=self._normalize_collections(collections),
                 data_id=simplify_dataId(dataId, kwargs),
                 default_data_id=self._serialize_default_data_id(),
@@ -271,7 +275,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return parse_model(response, GetFileResponseModel)
 
     def _get_file_info_for_ref(self, ref: DatasetRef) -> GetFileResponseModel:
-        response = self._connection.get(f"get_file/{ref.id}")
+        response = self._connection.get(f"get_file/{_to_uuid_string(ref.id)}")
         return parse_model(response, GetFileResponseModel)
 
     def getURIs(
@@ -306,11 +310,9 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return DatasetRefURIs(componentURIs=components)
 
     def get_dataset_type(self, name: str) -> DatasetType:
-        # In future implementation this should directly access the cache
-        # and only go to the server if the dataset type is not known.
-        path = f"dataset_type/{name}"
-        response = self._connection.get(path)
-        return DatasetType.from_simple(SerializedDatasetType(**response.json()), universe=self.dimensions)
+        response = self._connection.get(f"dataset_type/{quote_path_variable(name)}")
+        model = parse_model(response, GetDatasetTypeResponseModel)
+        return DatasetType.from_simple(model.dataset_type, universe=self.dimensions)
 
     def get_dataset(
         self,
@@ -320,17 +322,14 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         dimension_records: bool = False,
         datastore_records: bool = False,
     ) -> DatasetRef | None:
-        path = f"dataset/{id}"
-        params: dict[str, str | bool] = {
-            "dimension_records": dimension_records,
-            "datastore_records": datastore_records,
-        }
-        if datastore_records:
-            raise ValueError("Datastore records can not yet be returned in client/server butler.")
-        response = self._connection.get(path, params=params)
-        if response.json() is None:
+        # datastore_records is intentionally ignored.  It is an optimization
+        # flag that only applies to DirectButler.
+        path = f"dataset/{_to_uuid_string(id)}"
+        response = self._connection.get(path, params={"dimension_records": bool(dimension_records)})
+        model = parse_model(response, FindDatasetResponseModel)
+        if model.dataset_ref is None:
             return None
-        ref = DatasetRef.from_simple(parse_model(response, SerializedDatasetRef), universe=self.dimensions)
+        ref = DatasetRef.from_simple(model.dataset_ref, universe=self.dimensions)
         if storage_class is not None:
             ref = ref.overrideStorageClass(storage_class)
         return ref
@@ -347,21 +346,19 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         datastore_records: bool = False,
         **kwargs: Any,
     ) -> DatasetRef | None:
-        if datastore_records:
-            raise ValueError("Datastore records can not yet be returned in client/server butler.")
+        # datastore_records is intentionally ignored.  It is an optimization
+        # flag that only applies to DirectButler.
 
         query = FindDatasetRequestModel(
+            dataset_type=normalize_dataset_type_name(dataset_type),
             data_id=simplify_dataId(data_id, kwargs),
             default_data_id=self._serialize_default_data_id(),
             collections=self._normalize_collections(collections),
             timespan=timespan,
             dimension_records=dimension_records,
-            datastore_records=datastore_records,
         )
 
-        dataset_type_name = normalize_dataset_type_name(dataset_type)
-        path = f"find_dataset/{dataset_type_name}"
-        response = self._connection.post(path, query)
+        response = self._connection.post("find_dataset", query)
 
         model = parse_model(response, FindDatasetResponseModel)
         if model.dataset_ref is None:
@@ -592,6 +589,13 @@ def _to_file_payload(get_file_response: GetFileResponseModel) -> FileDatastoreGe
         raise DatasetNotFoundError(f"Dataset is known, but artifact is not available. (datasetId='{ref.id}')")
 
     return get_file_response.artifact
+
+
+def _to_uuid_string(id: uuid.UUID | str) -> str:
+    """Convert a UUID, or string parseable as a UUID, into a string formatted
+    like '1481269e-4c8d-4696-bcca-d1b4c9005d06'
+    """
+    return str(uuid.UUID(str(id)))
 
 
 @dataclass

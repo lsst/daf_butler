@@ -33,7 +33,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from lsst.daf.butler import Butler, CollectionType, DatasetRef, SerializedDatasetRef, SerializedDatasetType
+from lsst.daf.butler import Butler, CollectionType, DatasetRef
 from lsst.daf.butler.registry.interfaces import ChainedCollectionRecord
 from lsst.daf.butler.remote_butler.server_models import (
     ExpandDataIdRequestModel,
@@ -42,8 +42,10 @@ from lsst.daf.butler.remote_butler.server_models import (
     FindDatasetResponseModel,
     GetCollectionInfoResponseModel,
     GetCollectionSummaryResponseModel,
+    GetDatasetTypeResponseModel,
     GetFileByDataIdRequestModel,
     GetFileResponseModel,
+    GetUniverseResponseModel,
     QueryCollectionsRequestModel,
     QueryCollectionsResponseModel,
     QueryDatasetTypesRequestModel,
@@ -83,76 +85,60 @@ async def get_client_config() -> dict[str, Any]:
     return {"cls": "lsst.daf.butler.remote_butler.RemoteButler", "remote_butler": {"url": "<butlerRoot>"}}
 
 
-@external_router.get("/v1/universe", response_model=dict[str, Any])
-def get_dimension_universe(factory: Factory = Depends(factory_dependency)) -> dict[str, Any]:
+@external_router.get("/v1/universe")
+def get_dimension_universe(
+    factory: Factory = Depends(factory_dependency),
+) -> GetUniverseResponseModel:
     # Allow remote client to get dimensions definition.
     butler = factory.create_butler()
-    return butler.dimensions.dimensionConfig.toDict()
+    return GetUniverseResponseModel(universe=butler.dimensions.dimensionConfig.to_simple())
 
 
 @external_router.get(
-    "/v1/dataset_type/{dataset_type_name}",
+    "/v1/dataset_type/{name}",
     summary="Retrieve this dataset type definition.",
-    response_model=SerializedDatasetType,
-    response_model_exclude_unset=True,
-    response_model_exclude_defaults=True,
-    response_model_exclude_none=True,
 )
 def get_dataset_type(
-    dataset_type_name: str, factory: Factory = Depends(factory_dependency)
-) -> SerializedDatasetType:
+    name: str, factory: Factory = Depends(factory_dependency)
+) -> GetDatasetTypeResponseModel:
     # Return the dataset type.
     butler = factory.create_butler()
-    datasetType = butler.get_dataset_type(dataset_type_name)
-    return datasetType.to_simple()
+    datasetType = butler.get_dataset_type(name)
+    return GetDatasetTypeResponseModel(dataset_type=datasetType.to_simple())
 
 
 @external_router.get(
     "/v1/dataset/{id}",
     summary="Retrieve this dataset definition.",
-    response_model=SerializedDatasetRef | None,
-    response_model_exclude_unset=True,
-    response_model_exclude_defaults=True,
-    response_model_exclude_none=True,
 )
 def get_dataset(
     id: uuid.UUID,
     dimension_records: bool = False,
-    datastore_records: bool = False,
     factory: Factory = Depends(factory_dependency),
-) -> SerializedDatasetRef | None:
+) -> FindDatasetResponseModel:
     # Return a single dataset reference.
     butler = factory.create_butler()
-    ref = butler.get_dataset(
-        id,
-        dimension_records=dimension_records,
-        datastore_records=datastore_records,
-    )
-    if ref is not None:
-        return ref.to_simple()
-    # This could raise a 404 since id is not found. The standard implementation
-    # get_dataset method returns without error so follow that example here.
-    return ref
+    ref = butler.get_dataset(id, dimension_records=dimension_records)
+    serialized_ref = ref.to_simple() if ref else None
+    return FindDatasetResponseModel(dataset_ref=serialized_ref)
 
 
 @external_router.post(
-    "/v1/find_dataset/{dataset_type}",
+    "/v1/find_dataset",
     summary="Retrieve this dataset definition from collection, dataset type, and dataId",
 )
 def find_dataset(
-    dataset_type: str,
     query: FindDatasetRequestModel,
     factory: Factory = Depends(factory_dependency),
 ) -> FindDatasetResponseModel:
     butler = factory.create_butler()
     _set_default_data_id(butler, query.default_data_id)
     ref = butler.find_dataset(
-        dataset_type,
+        query.dataset_type,
         query.data_id,
         collections=query.collections,
         timespan=query.timespan,
         dimension_records=query.dimension_records,
-        datastore_records=query.datastore_records,
     )
     serialized_ref = ref.to_simple() if ref else None
     return FindDatasetResponseModel(dataset_ref=serialized_ref)
@@ -196,7 +182,7 @@ def get_file_by_data_id(
     butler = factory.create_butler()
     _set_default_data_id(butler, request.default_data_id)
     ref = butler._findDatasetRef(
-        datasetRefOrType=request.dataset_type_name,
+        datasetRefOrType=request.dataset_type,
         dataId=request.data_id,
         collections=request.collections,
         datastore_records=True,
