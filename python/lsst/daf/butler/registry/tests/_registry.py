@@ -67,6 +67,7 @@ from ..._exceptions import (
     InvalidQueryError,
     MissingCollectionError,
     MissingDatasetTypeError,
+    UnimplementedQueryError,
 )
 from ..._exceptions_legacy import DatasetTypeError
 from ..._storage_class import StorageClass
@@ -2701,9 +2702,14 @@ class RegistryTests(ABC):
             with self.assertRaises(CalibrationLookupError):
                 datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
         else:
-            # Old query system ignores calibration collection entirely.
-            datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
-            self.assertGreater(len(datasets), 0)
+            try:
+                # Old query system ignores calibration collection entirely.
+                datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
+                self.assertGreater(len(datasets), 0)
+            except UnimplementedQueryError:
+                # New query system, on Postgres < 16, is unable to handle this
+                # case.
+                pass
 
     def testIngestTimeQuery(self):
         registry = self.makeRegistry()

@@ -220,16 +220,19 @@ class RemoteButlerPostgresRegistryTests(RemoteButlerRegistryTests, unittest.Test
     server.
     """
 
+    postgres: TemporaryPostgresInstance
+
     @classmethod
     def setUpClass(cls):
         cls.postgres = cls.enterClassContext(setup_postgres_test_db())
         super().setUpClass()
 
-    def testSkipCalibs(self):
-        if self.postgres.server_major_version() < 16:
-            # TODO DM-44875: This test currently fails for older Postgres.
-            self.skipTest("TODO DM-44875")
-        return super().testSkipCalibs()
+    @property
+    def supportsCalibrationCollectionInFindFirst(self) -> bool:
+        # Find-first searches in calibration collections require the ANY_VALUE
+        # aggregate function, which is only supported starting from Postgres
+        # 16.
+        return self.postgres.server_major_version() >= 16
 
 
 if __name__ == "__main__":
