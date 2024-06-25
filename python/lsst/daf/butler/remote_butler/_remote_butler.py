@@ -78,7 +78,7 @@ if TYPE_CHECKING:
     from ..dimensions import DataId
     from ..transfers import RepoExportContext
 
-from ._http_connection import RemoteButlerHttpConnection, parse_model
+from ._http_connection import RemoteButlerHttpConnection, parse_model, quote_path_variable
 
 
 class RemoteButler(Butler):  # numpydoc ignore=PR02
@@ -310,7 +310,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
             return DatasetRefURIs(componentURIs=components)
 
     def get_dataset_type(self, name: str) -> DatasetType:
-        response = self._connection.get("dataset_type", {"name": name})
+        response = self._connection.get(f"dataset_type/{quote_path_variable(name)}")
         model = parse_model(response, GetDatasetTypeResponseModel)
         return DatasetType.from_simple(model.dataset_type, universe=self.dimensions)
 

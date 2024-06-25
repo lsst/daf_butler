@@ -95,7 +95,7 @@ def get_dimension_universe(
 
 
 @external_router.get(
-    "/v1/dataset_type",
+    "/v1/dataset_type/{name}",
     summary="Retrieve this dataset type definition.",
 )
 def get_dataset_type(
