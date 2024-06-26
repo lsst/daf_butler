@@ -43,7 +43,7 @@ import sqlalchemy
 from .. import ddl
 from .._dataset_type import DatasetType
 from .._exceptions import InvalidQueryError
-from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionUniverse
+from ..dimensions import DataCoordinate, DataIdValue, DimensionGroup, DimensionUniverse, SkyPixDimension
 from ..dimensions.record_cache import DimensionRecordCache
 from ..queries import tree as qt
 from ..queries.driver import (
@@ -80,6 +80,7 @@ from ._result_page_converter import (
     ResultPageConverter,
     ResultPageConverterContext,
 )
+from ._skypix_visitor import SkyPixRewriteVisitor
 from ._sql_column_visitor import SqlColumnVisitor
 
 if TYPE_CHECKING:
@@ -484,7 +485,7 @@ class DirectQueryDriver(QueryDriver):
             Column expressions to sort by.
         find_first_dataset : `str` or `None`, optional
             Name of a dataset type for which only one result row for each data
-            ID should be returned, with the colletions searched in order.
+            ID should be returned, with the collections searched in order.
 
         Returns
         -------
@@ -874,6 +875,18 @@ class DirectQueryDriver(QueryDriver):
             potentially included, with the remainder still present in
             `QueryJoinPlans.predicate`.
         """
+        skypix_visitor = SkyPixRewriteVisitor(tree.dimensions.universe)
+        if predicate := tree.predicate.visit(skypix_visitor):
+            # Rewritten predicate, we also want to update tree dimensions to
+            # remove non-common skypix dimensions.
+            dimensions = tree.dimensions
+            common_skypix = tree.dimensions.universe.commonSkyPix
+            if dimensions.skypix - {common_skypix.name}:
+                names = dimensions.names - tree.dimensions.skypix
+                names |= {common_skypix.name}
+                dimensions = DimensionGroup(dimensions.universe, names)
+            tree = tree.model_copy(update=dict(predicate=predicate, dimensions=dimensions))
+
         # Delegate to the dimensions manager to rewrite the predicate and start
         # a QueryBuilder to cover any spatial overlap joins or constraints.
         # We'll return that QueryBuilder at the end.
@@ -886,6 +899,17 @@ class DirectQueryDriver(QueryDriver):
             tree.get_joined_dimension_groups(),
         )
         result = QueryJoinsPlan(predicate=predicate, columns=builder.columns)
+
+        # Add spatial constraints from SkyPix visitor for every spatial
+        # dimension.
+        if skypix_visitor.region_constraints:
+            for element_name in tree.dimensions.elements:
+                element = tree.dimensions.universe[element_name]
+                if element.spatial and not isinstance(element, SkyPixDimension):
+                    builder.postprocessing.spatial_where_filtering.extend(
+                        (element, region) for region in skypix_visitor.region_constraints
+                    )
+
         # Add columns required by postprocessing.
         builder.postprocessing.gather_columns_required(result.columns)
         # We also check that the predicate doesn't reference any dimensions
