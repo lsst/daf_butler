@@ -36,7 +36,7 @@ from lsst.resources import ResourcePath
 from lsst.utils.packages import Packages
 
 
-class PackagesFormatterV2(FormatterV2):
+class PackagesFormatter(FormatterV2):
     """Interface for reading and writing `~lsst.utils.packages.Packages`.
 
     This formatter supports write parameters:
@@ -89,7 +89,7 @@ class PackagesFormatterV2(FormatterV2):
         return in_memory_dataset.toBytes(format)
 
 
-class PackagesFormatter(FileFormatter):
+class PackagesFormatterV1(FileFormatter):
     """Interface for reading and writing `~lsst.utils.packages.Packages`.
 
     This formatter supports write parameters:
