@@ -180,7 +180,7 @@ class YamlFormatter(FileFormatter):
 
         unsafe_dump = self.writeParameters.get("unsafe_dump", False)
         if unsafe_dump:
-            serialized = yaml.dump(inMemoryDataset)
+            serialized = yaml.dump(inMemoryDataset, sort_keys=False)
         else:
-            serialized = yaml.safe_dump(inMemoryDataset)
+            serialized = yaml.safe_dump(inMemoryDataset, sort_keys=False)
         return serialized.encode()
