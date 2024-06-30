@@ -168,6 +168,7 @@ filter query results based on that property of datasets.
 
 Registry methods accepting user expressions also accept a ``bind`` parameter, which is a mapping from identifier name to its corresponding value.
 Identifiers appearing in user expressions will be replaced with the corresponding value from this mapping.
+Choose bind identifiers that are distinct and not the same as a dimension or dimension attribute name.
 Using the ``bind`` parameter is encouraged when possible to simplify rendering of the query strings.
 A partial example of comparing two approaches, without and with ``bind``:
 
