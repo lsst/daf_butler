@@ -180,7 +180,15 @@ class DimensionConfig(ConfigSubset):
         config : `DimensionConfig`
             Dimension configuration.
         """
-        return DimensionConfig(simple.model_dump())
+        return DimensionConfig(
+            simple.model_dump(
+                # Some of the fields in Pydantic model config have aliases
+                # (e.g. remapping 'class_' to 'class').  Pydantic ignores these
+                # in model_dump() by default, so we have to add by_alias to
+                # make sure that we end up with the right names in the dict.
+                by_alias=True
+            )
+        )
 
     def makeBuilder(self) -> DimensionConstructionBuilder:
         """Construct a `DimensionConstructionBuilder`.
