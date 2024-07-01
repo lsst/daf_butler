@@ -25,6 +25,9 @@ authors:
 - family-names: Schellart
   given-names: Pim
   orcid: "https://orcid.org/0000-0002-8324-0880"
+- family-names: Irving
+  given-names: David H.
+  orcid: "https://orcid.org/0009-0005-9099-4970"
 title: "lsst-daf-butler: Abstracted Data Access of Astronomical Data"
 repository-code: "https://github.com/lsst/daf_butler"
 identifiers:
