@@ -35,7 +35,7 @@ import itertools
 import logging
 import time
 import warnings
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import DatasetRef, DatasetTypeNotSupportedError, FileDataset
@@ -1229,3 +1229,8 @@ class ChainedDatastore(Datastore):
         for datastore in self.datastores:
             tables.update(datastore.get_opaque_table_definitions())
         return tables
+
+    def set_retrieve_dataset_type_method(self, method: Callable[[str], DatasetType | None] | None) -> None:
+        # Docstring inherited from the base class.
+        for datastore in self.datastores:
+            datastore.set_retrieve_dataset_type_method(method)
