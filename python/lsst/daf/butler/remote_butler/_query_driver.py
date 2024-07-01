@@ -78,7 +78,7 @@ from .server_models import (
     QueryInputs,
 )
 
-_QueryResultTypeAdapter = TypeAdapter(QueryExecuteResultData)
+_QueryResultTypeAdapter = TypeAdapter[QueryExecuteResultData](QueryExecuteResultData)
 
 
 class RemoteQueryDriver(QueryDriver):
