@@ -34,10 +34,35 @@ __all__ = ("PickleFormatter",)
 import pickle
 from typing import Any
 
+from lsst.resources import ResourcePath
+
 from .file import FileFormatter
+from .typeless import TypelessFormatter
 
 
-class PickleFormatter(FileFormatter):
+class PickleFormatter(TypelessFormatter):
+    """Interface for reading and writing Python objects to and from pickle
+    files.
+    """
+
+    default_extension = ".pickle"
+    unsupported_parameters = None
+    can_read_from_uri = True
+
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+        # Read the pickle file directly from the resource into memory.
+        try:
+            data = pickle.loads(uri.read())
+        except pickle.PicklingError:
+            data = None
+
+        return data
+
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
+        return pickle.dumps(in_memory_dataset, protocol=-1)
+
+
+class PickleFormatterX(FileFormatter):
     """Interface for reading and writing Python objects to and from pickle
     files.
     """

@@ -30,11 +30,66 @@ __all__ = ("PackagesFormatter",)
 import os.path
 from typing import Any
 
+from lsst.daf.butler import FormatterV2
 from lsst.daf.butler.formatters.file import FileFormatter
+from lsst.resources import ResourcePath
 from lsst.utils.packages import Packages
 
 
-class PackagesFormatter(FileFormatter):
+class PackagesFormatter(FormatterV2):
+    """Interface for reading and writing `~lsst.utils.packages.Packages`.
+
+    This formatter supports write parameters:
+
+    * ``format``: The file format to use to write the package data. Allowed
+      options are ``yaml``, ``json``, and ``pickle``.
+    """
+
+    supported_write_parameters = frozenset({"format"})
+    supported_extensions = frozenset({".yaml", ".pickle", ".pkl", ".json"})
+    can_read_from_uri = True
+
+    def get_write_extension(self) -> str:
+        # Default to YAML but allow configuration via write parameter
+        format = self.write_parameters.get("format", "yaml")
+        ext = "." + format
+        if ext not in self.supported_extensions:
+            raise RuntimeError(f"Requested file format '{format}' is not supported for Packages")
+        return ext
+
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+        # Read the full file using the class associated with the
+        # storage class it was originally written with.
+        # Read the bytes directly from resource. These are not going to be
+        # large.
+        pytype = self.file_descriptor.storageClass.pytype
+        assert issubclass(pytype, Packages)  # for mypy
+        format = uri.getExtension().lstrip(".")  # .yaml -> yaml
+        return pytype.fromBytes(uri.read(), format)
+
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
+        """Write the in memory dataset to a bytestring.
+
+        Parameters
+        ----------
+        in_memory_dataset : `object`
+            Object to serialize.
+
+        Returns
+        -------
+        serializedDataset : `bytes`
+            YAML string encoded to bytes.
+
+        Raises
+        ------
+        Exception
+            The object could not be serialized.
+        """
+        format = self.get_write_extension().lstrip(".")
+        return in_memory_dataset.toBytes(format)
+
+
+class PackagesFormatterV1(FileFormatter):
     """Interface for reading and writing `~lsst.utils.packages.Packages`.
 
     This formatter supports write parameters:

@@ -30,10 +30,42 @@ __all__ = ("AstropyTableFormatter",)
 import os.path
 from typing import Any
 
+import astropy.table
+from lsst.daf.butler import FormatterV2
+from lsst.resources import ResourcePath
+
 from .file import FileFormatter
 
 
-class AstropyTableFormatter(FileFormatter):
+class AstropyTableFormatter(FormatterV2):
+    """Read and write `astropy.table.Table` objects.
+
+    Currently assumes only local file reads are possible.
+    """
+
+    supported_write_parameters = frozenset({"format"})
+    supported_extensions = frozenset({".ecsv"})
+    can_read_from_local_file = True
+
+    def get_write_extension(self) -> str:
+        # Default to ECSV but allow configuration via write parameter
+        format = self.write_parameters.get("format", "ecsv")
+        if format == "ecsv":
+            return ".ecsv"
+        # Other supported formats can be added here
+        raise RuntimeError(f"Requested file format '{format}' is not supported for Table")
+
+    def read_from_local_file(self, local_uri: ResourcePath, component: str | None = None) -> Any:
+        pytype = self.file_descriptor.storageClass.pytype
+        if not issubclass(pytype, astropy.table.Table):
+            raise TypeError(f"Python type {pytype} does not seem to be a astropy Table type")
+        return pytype.read(local_uri.ospath)  # type: ignore
+
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        in_memory_dataset.write(uri.ospath)
+
+
+class AstropyTableFormatterV1(FileFormatter):
     """Interface for reading and writing astropy.Table objects
     in either ECSV or FITS format.
     """

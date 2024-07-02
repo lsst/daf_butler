@@ -49,22 +49,27 @@ class FileDescriptor:
         Storage class associated with reading the file. Defines the
         Python type that the in memory Dataset will have. Will default
         to the ``storageClass`` if not specified.
+    component : `str` or `None`
+        Component associated with this file. Will only be set for disassembled
+        composites. Will be `None` for standard composites.
     parameters : `dict`, optional
         Additional parameters that can be used for reading and writing.
     """
 
-    __slots__ = ("location", "storageClass", "_readStorageClass", "parameters")
+    __slots__ = ("location", "storageClass", "_readStorageClass", "parameters", "component")
 
     def __init__(
         self,
         location: Location,
         storageClass: StorageClass,
         readStorageClass: StorageClass | None = None,
+        component: str | None = None,
         parameters: Mapping[str, Any] | None = None,
     ):
         self.location = location
         self._readStorageClass = readStorageClass
         self.storageClass = storageClass
+        self.component = component
         self.parameters = dict(parameters) if parameters is not None else None
 
     def __repr__(self) -> str:
@@ -73,6 +78,8 @@ class FileDescriptor:
             optionals["readStorageClass"] = self._readStorageClass
         if self.parameters:
             optionals["parameters"] = self.parameters
+        if self.component:
+            optionals["component"] = self.component
 
         # order is preserved in the dict
         options = ", ".join(f"{k}={v!r}" for k, v in optionals.items())

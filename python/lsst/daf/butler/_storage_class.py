@@ -489,6 +489,14 @@ class StorageClass:
             # Identical storage classes are compatible.
             return True
 
+        msg = False
+        choice = ("StructuredData", "MetricsConversion")
+        if other.name in choice and self.name in choice:
+            msg = True
+
+        if msg:
+            print("***** STORAGE CLASSES OF INTEREST: ", self, other)
+
         # It may be that the storage class being compared is not
         # available because the python type can't be imported. In that
         # case conversion must be impossible.
@@ -507,9 +515,17 @@ class StorageClass:
             # Storage classes have different names but the same python type.
             return True
 
+        if msg:
+            print(f"TRYING CANDIDATES TO CONVERT {other} -> {self}")
         for candidate_type in self._get_converters_by_type():
+            if msg:
+                print("TRYING CANDIDATED: ", candidate_type)
             if issubclass(other_pytype, candidate_type):
+                if msg:
+                    print("AND IT MATCHED")
                 return True
+        if msg:
+            print("FAILED TO FIND CONVERSION. BAFFLING")
         return False
 
     def coerce_type(self, incorrect: Any) -> Any:

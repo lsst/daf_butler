@@ -29,8 +29,10 @@ from __future__ import annotations
 
 __all__ = ("SqlColumnVisitor",)
 
+import warnings
 from typing import TYPE_CHECKING, Any
 
+import erfa
 import sqlalchemy
 
 from .. import ddl
@@ -291,7 +293,12 @@ class SqlColumnVisitor(
                 # so we are only able to handle literal values here.
                 raise InvalidQueryError("Only literal date-time values can be compared with ingest date.")
 
-            return sqlalchemy.literal(expression.value.utc.to_datetime())
+            # The conversion from TAI to UTC can trigger a warning for dates
+            # in the future so catch those warnings.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=erfa.ErfaWarning)
+                dt = expression.value.utc.to_datetime()
+            return sqlalchemy.literal(dt)
         else:
             # For v2 schema, ingest_date uses TAI nanoseconds like everything
             # else, so no conversion is required.

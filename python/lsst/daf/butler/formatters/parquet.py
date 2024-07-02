@@ -56,7 +56,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from lsst.daf.butler import Formatter
+from lsst.daf.butler import FormatterV2
+from lsst.resources import ResourcePath
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
@@ -68,20 +69,21 @@ if TYPE_CHECKING:
 TARGET_ROW_GROUP_BYTES = 1_000_000_000
 
 
-class ParquetFormatter(Formatter):
+class ParquetFormatter(FormatterV2):
     """Interface for reading and writing Arrow Table objects to and from
     Parquet files.
     """
 
-    extension = ".parq"
+    default_extension = ".parq"
+    can_read_from_local_file = True
 
-    def read(self, component: str | None = None) -> Any:
+    def read_from_local_file(self, uri: ResourcePath, component: str | None = None) -> Any:
         # Docstring inherited from Formatter.read.
-        schema = pq.read_schema(self.fileDescriptor.location.path)
+        schema = pq.read_schema(uri.ospath)
 
         schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
 
-        if component in ("columns", "schema") or self.fileDescriptor.readStorageClass.name in schema_names:
+        if component in ("columns", "schema") or self.file_descriptor.readStorageClass.name in schema_names:
             # The schema will be translated to column format
             # depending on the input type.
             return schema
@@ -91,7 +93,7 @@ class ParquetFormatter(Formatter):
                 return int(schema.metadata[b"lsst::arrow::rowcount"])
 
             temp_table = pq.read_table(
-                self.fileDescriptor.location.path,
+                uri.ospath,
                 columns=[schema.names[0]],
                 use_threads=False,
                 use_pandas_metadata=False,
@@ -100,8 +102,8 @@ class ParquetFormatter(Formatter):
             return len(temp_table[schema.names[0]])
 
         par_columns = None
-        if self.fileDescriptor.parameters:
-            par_columns = self.fileDescriptor.parameters.pop("columns", None)
+        if self.file_descriptor.parameters:
+            par_columns = self.file_descriptor.parameters.pop("columns", None)
             if par_columns:
                 has_pandas_multi_index = False
                 if b"pandas" in schema.metadata:
@@ -125,14 +127,14 @@ class ParquetFormatter(Formatter):
                         par_columns,
                     )
 
-            if len(self.fileDescriptor.parameters):
+            if len(self.file_descriptor.parameters):
                 raise ValueError(
-                    f"Unsupported parameters {self.fileDescriptor.parameters} in ArrowTable read."
+                    f"Unsupported parameters {self.file_descriptor.parameters} in ArrowTable read."
                 )
 
         metadata = schema.metadata if schema.metadata is not None else {}
         arrow_table = pq.read_table(
-            self.fileDescriptor.location.path,
+            uri.ospath,
             columns=par_columns,
             use_threads=False,
             use_pandas_metadata=(b"pandas" in metadata),
@@ -140,50 +142,48 @@ class ParquetFormatter(Formatter):
 
         return arrow_table
 
-    def write(self, inMemoryDataset: Any) -> None:
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
         import numpy as np
         from astropy.table import Table as astropyTable
 
-        location = self.makeUpdatedLocation(self.fileDescriptor.location)
-
         arrow_table = None
-        if isinstance(inMemoryDataset, pa.Table):
+        if isinstance(in_memory_dataset, pa.Table):
             # This will be the most likely match.
-            arrow_table = inMemoryDataset
-        elif isinstance(inMemoryDataset, astropyTable):
-            arrow_table = astropy_to_arrow(inMemoryDataset)
-        elif isinstance(inMemoryDataset, np.ndarray):
-            arrow_table = numpy_to_arrow(inMemoryDataset)
-        elif isinstance(inMemoryDataset, dict):
+            arrow_table = in_memory_dataset
+        elif isinstance(in_memory_dataset, astropyTable):
+            arrow_table = astropy_to_arrow(in_memory_dataset)
+        elif isinstance(in_memory_dataset, np.ndarray):
+            arrow_table = numpy_to_arrow(in_memory_dataset)
+        elif isinstance(in_memory_dataset, dict):
             try:
-                arrow_table = numpy_dict_to_arrow(inMemoryDataset)
+                arrow_table = numpy_dict_to_arrow(in_memory_dataset)
             except (TypeError, AttributeError) as e:
                 raise ValueError(
                     "Input dict for inMemoryDataset does not appear to be a dict of numpy arrays."
                 ) from e
-        elif isinstance(inMemoryDataset, pa.Schema):
-            pq.write_metadata(inMemoryDataset, location.path)
+        elif isinstance(in_memory_dataset, pa.Schema):
+            pq.write_metadata(in_memory_dataset, uri.ospath)
             return
         else:
-            if hasattr(inMemoryDataset, "to_parquet"):
+            if hasattr(in_memory_dataset, "to_parquet"):
                 # This may be a pandas DataFrame
                 try:
                     import pandas as pd
                 except ImportError:
                     pd = None
 
-                if pd is not None and isinstance(inMemoryDataset, pd.DataFrame):
-                    arrow_table = pandas_to_arrow(inMemoryDataset)
+                if pd is not None and isinstance(in_memory_dataset, pd.DataFrame):
+                    arrow_table = pandas_to_arrow(in_memory_dataset)
 
         if arrow_table is None:
             raise ValueError(
-                f"Unsupported type {get_full_type_name(inMemoryDataset)} of "
+                f"Unsupported type {get_full_type_name(in_memory_dataset)} of "
                 "inMemoryDataset for ParquetFormatter."
             )
 
         row_group_size = compute_row_group_size(arrow_table.schema)
 
-        pq.write_table(arrow_table, location.path, row_group_size=row_group_size)
+        pq.write_table(arrow_table, uri.ospath, row_group_size=row_group_size)
 
 
 def arrow_to_pandas(arrow_table: pa.Table) -> pd.DataFrame:
