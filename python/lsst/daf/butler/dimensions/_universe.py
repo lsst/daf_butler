@@ -90,6 +90,10 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         ``version`` is provided and an instance with that version already
         exists.  Should not have had `~DimensionConstructionBuilder.finish`
         called; this will be called if needed by `DimensionUniverse`.
+    use_cache : `bool`, optional
+        If `True` or not provided, cache `DimensionUniverse` instances globally
+        to avoid creating more than one `DimensionUniverse` instance for a
+        given configuration.
     """
 
     _instances: ClassVar[ThreadSafeCache[tuple[int, str], DimensionUniverse]] = ThreadSafeCache()
@@ -105,6 +109,7 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         version: int | None = None,
         namespace: str | None = None,
         builder: DimensionConstructionBuilder | None = None,
+        use_cache: bool = True,
     ) -> DimensionUniverse:
         # Try to get a version first, to look for existing instances; try to
         # do as little work as possible at this stage.
@@ -127,9 +132,10 @@ class DimensionUniverse:  # numpydoc ignore=PR02
             namespace = _DEFAULT_NAMESPACE
 
         # See if an equivalent instance already exists.
-        self: DimensionUniverse | None = cls._instances.get((version, namespace))
-        if self is not None:
-            return self
+        if use_cache:
+            existing_instance = cls._instances.get((version, namespace))
+            if existing_instance is not None:
+                return existing_instance
 
         # Ensure we have a builder, building one from config if necessary.
         if builder is None:
@@ -141,7 +147,7 @@ class DimensionUniverse:  # numpydoc ignore=PR02
 
         # Create the universe instance and create core attributes, mostly
         # copying from builder.
-        self = object.__new__(cls)
+        self: DimensionUniverse = object.__new__(cls)
         assert self is not None
         self._cached_groups = ThreadSafeCache()
         self._dimensions = builder.dimensions
@@ -180,7 +186,10 @@ class DimensionUniverse:  # numpydoc ignore=PR02
             if element.populated_by is not None:
                 self._populates[element.populated_by.name].add(element)
 
-        return cls._instances.set_or_get((self._version, self._namespace), self)
+        if use_cache:
+            return cls._instances.set_or_get((self._version, self._namespace), self)
+        else:
+            return self
 
     @property
     def version(self) -> int:
