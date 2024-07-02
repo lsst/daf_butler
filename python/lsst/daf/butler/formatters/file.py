@@ -35,7 +35,7 @@ import dataclasses
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import Formatter
+from lsst.daf.butler import Formatter, FormatterNotImplementedError
 
 if TYPE_CHECKING:
     from lsst.daf.butler import StorageClass
@@ -244,7 +244,7 @@ class FileFormatter(Formatter):
         ValueError
             Component requested but this file does not seem to be a concrete
             composite.
-        NotImplementedError
+        FormatterNotImplementedError
             Formatter does not implement a method to read from files.
         """
         # Read the file naively
@@ -282,11 +282,11 @@ class FileFormatter(Formatter):
 
         Raises
         ------
-        NotImplementedError
+        FormatterNotImplementedError
             Formatter does not support reading from bytes.
         """
         if not hasattr(self, "_fromBytes"):
-            raise NotImplementedError("Type does not support reading from bytes.")
+            raise FormatterNotImplementedError("Type does not support reading from bytes.")
 
         data = self._fromBytes(serializedDataset, self.fileDescriptor.storageClass.pytype)
 
@@ -339,10 +339,10 @@ class FileFormatter(Formatter):
 
         Raises
         ------
-        NotImplementedError
+        FormatterNotImplementedError
             Formatter does not support reading from bytes.
         """
         if not hasattr(self, "_toBytes"):
-            raise NotImplementedError("Type does not support reading from bytes.")
+            raise FormatterNotImplementedError("Type does not support reading from bytes.")
 
         return self._toBytes(inMemoryDataset)
