@@ -51,6 +51,7 @@ from lsst.daf.butler.tests.testFormatters import (
     MultipleExtensionsFormatter,
     SingleExtensionFormatter,
 )
+from lsst.resources import ResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -282,6 +283,58 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
                 write_recipes={"recipe3": {"notmode": 1}},
                 ref=refParam,
             )
+
+
+class ZipFormatterTestCase(unittest.TestCase):
+    """Test that files can be read from Zip files via formatter V2."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.zip_file = ResourcePath(os.path.join(TESTDIR, "data", "formatter_tests.zip"))
+
+        # Need a dataset ref but it can be empty.
+        universe = DimensionUniverse()
+        sc = StorageClass("Test", dict, None)
+        datasetType = DatasetType("test", universe.empty, sc)
+        cls.ref = DatasetRef(datasetType, DataCoordinate.make_empty(universe), "test_run")
+
+    def _make_formatter(self, storage_type, formatter_type, path_in_zip) -> Formatter:
+        storageClass = StorageClass("Something", storage_type)
+        uri = self.zip_file.replace(fragment=f"zip-path={path_in_zip}")
+        descriptor = FileDescriptor(Location(None, uri), storageClass)
+        formatter = formatter_type(descriptor, ref=self.ref)
+        return formatter
+
+    def test_packages(self):
+        from lsst.daf.butler.formatters.packages import PackagesFormatter
+        from lsst.utils.packages import Packages
+
+        formatter = self._make_formatter(Packages, PackagesFormatter, "formatter_tests/packages.yaml")
+        packages = formatter.read()
+        self.assertIsInstance(packages, Packages)
+        self.assertEqual(packages["python"], "3.11.8")
+
+    def test_metrics(self):
+        from lsst.daf.butler.tests import MetricsExample
+        from lsst.daf.butler.tests.testFormatters import MetricsExampleFormatter
+
+        formatter = self._make_formatter(
+            MetricsExample, MetricsExampleFormatter, "formatter_tests/metrics.yaml"
+        )
+        metrics = formatter.read()
+        self.assertIsInstance(metrics, MetricsExample)
+        self.assertEqual(metrics.summary["key"], 1)
+
+    def test_logs(self):
+        from lsst.daf.butler.formatters.logs import ButlerLogRecordsFormatter
+        from lsst.daf.butler.logging import ButlerLogRecords
+
+        formatter = self._make_formatter(
+            ButlerLogRecords, ButlerLogRecordsFormatter, "formatter_tests/logs.json"
+        )
+        logs = formatter.read()
+        self.assertIsInstance(logs, ButlerLogRecords)
+        self.assertEqual(len(logs), 39)
 
 
 if __name__ == "__main__":

@@ -40,6 +40,8 @@ __all__ = (
 import contextlib
 import copy
 import logging
+import os
+import zipfile
 from abc import ABCMeta, abstractmethod
 from collections.abc import Iterator, Mapping, Set
 from typing import TYPE_CHECKING, Any, BinaryIO, ClassVar, TypeAlias
@@ -387,6 +389,42 @@ class FormatterV2(metaclass=ABCMeta):
             Raised if no implementations were found that could read this
             resource.
         """
+        # If the file to read is a ZIP file with a fragment requesting
+        # a file within the ZIP file, it is no longer possible to use the
+        # direct read from URI option.
+        uri = self.file_descriptor.location.uri
+        if uri.getExtension() == ".zip" and uri.fragment and uri.fragment.startswith("zip-path="):
+            # Preference to use URIs with "file.zip#zip-path=thing.json"
+            # rather than "file.zip#thing.json"
+            _, path_in_zip = uri.fragment.split("=")
+
+            # Open the Zip file using ResourcePath.
+            with uri.open("rb") as fd:
+                with zipfile.ZipFile(fd) as zf:
+                    if self.can_read_from_stream:
+                        zip_fd = zf.open(path_in_zip)
+                        try:
+                            in_memory_dataset = self.read_from_stream(zip_fd, component)
+                        except Exception:
+                            zip_fd.close()
+                            raise
+                        return in_memory_dataset
+
+                    # For now for both URI and local file options we retrieve
+                    # the bytes to a temporary local and use that.
+                    _, suffix = os.path.splitext(path_in_zip)
+                    with ResourcePath.temporary_uri(suffix=suffix) as tmp_uri:
+                        tmp_uri.write(zf.read(path_in_zip))
+
+                        if self.can_read_from_local_file:
+                            return self.read_from_local_file(tmp_uri, component)
+                        if self.can_read_from_uri:
+                            return self.read_from_uri(tmp_uri, component)
+
+            raise FormatterNotImplementedError(
+                f"Formatter {self.name()} could not read the file using any method."
+            )
+
         # First see if the formatter can support direct remote read from
         # a URI. We allow FormatterNotImplementedError to be raised by
         # the formatter in case the formatter wishes to defer to the
