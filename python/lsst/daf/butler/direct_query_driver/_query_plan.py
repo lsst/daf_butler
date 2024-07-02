@@ -168,9 +168,9 @@ class QueryProjectionPlan:
     """A struct describing the "projection" stage of a butler query.
 
     This struct evaluates to `True` in boolean contexts if either
-    `needs_dimension_distinct` or `needs_dataset_distict` are `True`.  In other
-    cases the projection is effectively a no-op, because the "joins"-stage rows
-    are already unique.
+    `needs_dimension_distinct` or `needs_dataset_distinct` are `True`.  In
+    other cases the projection is effectively a no-op, because the
+    "joins"-stage rows are already unique.
 
     See `QueryPlan` and `QueryPlan.projection` for additional information.
     """
@@ -237,19 +237,19 @@ class QueryPlan:
     postprocessing in three stages, with each corresponding to an attributes of
     this class and a method of `DirectQueryDriver`
 
-    - In the `joins` stage (`~DirectQueryButler.apply_query_joins`), we define
+    - In the `joins` stage (`~DirectQueryDriver.apply_query_joins`), we define
       the main SQL FROM and WHERE clauses, by joining all tables needed to
       bring in any columns, or constrain the keys of its rows.
 
-    - In the `projection` stage (`~DirectQueryButler.apply_query_projection`),
+    - In the `projection` stage (`~DirectQueryDriver.apply_query_projection`),
       we select only the columns needed for the query's result rows (including
-      columns needed only postprocessing and ORDER BY, as well those needed by
-      the objects returned to users).  If the result rows are not naturally
+      columns needed only by postprocessing and ORDER BY, as well those needed
+      by the objects returned to users).  If the result rows are not naturally
       unique given what went into the query in the "joins" stage, the
       projection involves a SELECT DISTINCT [ON] or GROUP BY to make them
       unique, and in a few rare cases uses aggregate functions with GROUP BY.
 
-    - In the `find_first` stage (`~DirectQueryButler.apply_query_find_first`),
+    - In the `find_first` stage (`~DirectQueryDriver.apply_query_find_first`),
       we use a window function (PARTITION BY) subquery to find only the first
       dataset in the collection search path for each data ID.  This stage does
       nothing if there is no find-first dataset search, or if the search is
@@ -259,8 +259,9 @@ class QueryPlan:
     via `DirectQueryDriver.analyze_query`, which also returns an initial
     `QueryBuilder`.  After this point the plans are considered frozen, and the
     nested plan attributes are then passed to each of the corresponding
-    `DirectQuery` along with the builder, which is mutated (and occasionally
-    replaced) into the complete SQL/postprocessing form of the query.
+    `DirectQueryDriver` methods along with the builder, which is mutated (and
+    occasionally replaced) into the complete SQL/postprocessing form of the
+    query.
     """
 
     joins: QueryJoinsPlan

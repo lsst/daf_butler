@@ -497,7 +497,7 @@ class DimensionGroup:  # numpydoc ignore=PR02
     """
 
     skypix: SortedSequenceSet
-    """A true `~collections.abc.Set` of all skypix dimension names in the "
+    """A true `~collections.abc.Set` of all skypix dimension names in the
     group.
     """
 
