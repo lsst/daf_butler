@@ -225,11 +225,6 @@ class RemoteButlerPostgresRegistryTests(RemoteButlerRegistryTests, unittest.Test
         cls.postgres = cls.enterClassContext(setup_postgres_test_db())
         super().setUpClass()
 
-    @unittest.expectedFailure
-    def testQueryDataIdsOrderBy(self):
-        # TODO DM-44868: order_by sometimes causes invalid SQL to be generated
-        return super().testQueryDataIdsOrderBy()
-
     def testSkipCalibs(self):
         if self.postgres.server_major_version() < 16:
             # TODO DM-44875: This test currently fails for older Postgres.

@@ -459,7 +459,7 @@ class DirectQueryDriver(QueryDriver):
         # construction do.
         plan, builder = self.analyze_query(tree, final_columns, order_by, find_first_dataset)
         self.apply_query_joins(plan.joins, builder.joiner)
-        self.apply_query_projection(plan.projection, builder)
+        self.apply_query_projection(plan.projection, builder, order_by)
         builder = self.apply_query_find_first(plan.find_first, builder)
         builder.columns = plan.final_columns
         return plan, builder
@@ -627,7 +627,9 @@ class DirectQueryDriver(QueryDriver):
         # Add the WHERE clause to the joiner.
         joiner.where(plan.predicate.visit(SqlColumnVisitor(joiner, self)))
 
-    def apply_query_projection(self, plan: QueryProjectionPlan, builder: QueryBuilder) -> None:
+    def apply_query_projection(
+        self, plan: QueryProjectionPlan, builder: QueryBuilder, order_by: Iterable[qt.OrderExpression]
+    ) -> None:
         """Modify `QueryBuilder` to reflect the "projection" stage of query
         construction, which can involve a GROUP BY or DISTINCT [ON] clause
         that enforces uniqueness.
@@ -640,6 +642,9 @@ class DirectQueryDriver(QueryDriver):
             Builder object that will be modified in place.  Expected to be
             initialized by `analyze_query` and further modified by
             `apply_query_joins`.
+        order_by : `~collections.abc.Iterable` [ \
+              `.queries.tree.OrderExpression` ]
+            Order by clause associated with the query.
         """
         builder.columns = plan.columns
         if not plan and not builder.postprocessing.check_validity_match_count:
@@ -740,7 +745,12 @@ class DirectQueryDriver(QueryDriver):
         if not have_aggregates and not derived_fields:
             # SELECT DISTINCT is sufficient.
             builder.distinct = True
-        elif not have_aggregates and self.db.has_distinct_on:
+        # With DISTINCT ON, Postgres requires that the leftmost parts of the
+        # ORDER BY match the DISTINCT ON expressions.  It's somewhat tricky to
+        # enforce that, so instead we just don't use DISTINCT ON if ORDER BY is
+        # present. There may be an optimization opportunity by relaxing this
+        # restriction.
+        elif not have_aggregates and self.db.has_distinct_on and len(list(order_by)) == 0:
             # SELECT DISTINCT ON is sufficient and supported by this database.
             builder.distinct = unique_keys
         else:
