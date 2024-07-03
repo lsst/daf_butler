@@ -236,9 +236,14 @@ def _read_artifact_into_memory(
         # Allow them to propagate up.
         raise
     except Exception as e:
+        # For clarity, include any notes that may have been added by the
+        # formatter to this new exception.
+        notes = "\n".join(getattr(e, "__notes__", []))
+        if notes:
+            notes = "\n" + notes
         raise ValueError(
             f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-            f" ({ref.datasetType.name} from {uri}): {e}"
+            f" ({ref.datasetType.name} from {uri}): {e}{notes}"
         ) from e
 
     return post_process_get(
