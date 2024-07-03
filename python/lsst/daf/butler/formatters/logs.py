@@ -33,8 +33,6 @@ from lsst.daf.butler import FormatterV2
 from lsst.daf.butler.logging import ButlerLogRecords
 from lsst.resources import ResourcePath
 
-from .json import JsonFormatter
-
 
 class ButlerLogRecordsFormatter(FormatterV2):
     """Read and write log records in JSON format.
@@ -71,87 +69,3 @@ class ButlerLogRecordsFormatter(FormatterV2):
 
     def to_bytes(self, in_memory_dataset: Any) -> bytes:
         return in_memory_dataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()
-
-
-class ButlerLogRecordsFormatterV1(JsonFormatter):
-    """Read and write log records in JSON format.
-
-    This is a naive implementation that treats everything as a pydantic.
-    model.  In the future this may be changed to be able to read
-    `ButlerLogRecord` one at time from the file and return a subset
-    of records given some filtering parameters.
-    """
-
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        """Read a file from the path in JSON format.
-
-        Parameters
-        ----------
-        path : `str`
-            Path to use to open JSON format file.
-        pytype : `class`, optional
-            Python type being read. Should be a `ButlerLogRecords` or
-            subclass.
-
-        Returns
-        -------
-        data : `object`
-            Data as Python object read from JSON file.
-
-        Notes
-        -----
-        Can read two forms of JSON log file. It can read a full JSON
-        document created from `ButlerLogRecords`, or a stream of standalone
-        JSON documents with a log record per line.
-        """
-        if pytype is None:
-            pytype = ButlerLogRecords
-        elif not issubclass(pytype, ButlerLogRecords):
-            raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
-
-        return pytype.from_file(path)
-
-    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
-        """Read the bytes object as a python object.
-
-        Parameters
-        ----------
-        serializedDataset : `bytes`
-            Bytes object to unserialize.
-        pytype : `class`, optional
-            Python type being read. Should be a `ButlerLogRecords` or
-            subclass.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            The requested data as a Python object or None if the string could
-            not be read.
-        """
-        # Duplicates some of the logic from ButlerLogRecords.from_file
-        if pytype is None:
-            pytype = ButlerLogRecords
-        elif not issubclass(pytype, ButlerLogRecords):
-            raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
-
-        return pytype.from_raw(serializedDataset)
-
-    def _toBytes(self, inMemoryDataset: Any) -> bytes:
-        """Write the in memory dataset to a bytestring.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to serialize
-
-        Returns
-        -------
-        serializedDataset : `bytes`
-            bytes representing the serialized dataset.
-
-        Raises
-        ------
-        Exception
-            The object could not be serialized.
-        """
-        return inMemoryDataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()

@@ -36,8 +36,6 @@ from typing import Any
 from lsst.daf.butler import FormatterV2
 from lsst.resources import ResourcePath
 
-from .file import FileFormatter
-
 
 class MatplotlibFormatter(FormatterV2):
     """Format matplotlib figures.
@@ -54,18 +52,3 @@ class MatplotlibFormatter(FormatterV2):
         # with ResourcePath handles then it may be possible to do direct
         # writes. Alternatively, implement with BytesIO and do direct put.
         in_memory_dataset.savefig(uri.ospath)
-
-
-class MatplotlibFormatterV1(FileFormatter):
-    """Interface for writing matplotlib figures."""
-
-    extension = ".png"
-    """Matplotlib figures are always written in PNG format."""
-
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        # docstring inherited from FileFormatter._readFile
-        raise NotImplementedError(f"matplotlib figures cannot be read by the butler; path is {path}")
-
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        # docstring inherited from FileFormatter._writeFile
-        inMemoryDataset.savefig(self.fileDescriptor.location.path)

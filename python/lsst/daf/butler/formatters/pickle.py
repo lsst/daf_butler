@@ -36,7 +36,6 @@ from typing import Any
 
 from lsst.resources import ResourcePath
 
-from .file import FileFormatter
 from .typeless import TypelessFormatter
 
 
@@ -60,97 +59,3 @@ class PickleFormatter(TypelessFormatter):
 
     def to_bytes(self, in_memory_dataset: Any) -> bytes:
         return pickle.dumps(in_memory_dataset, protocol=-1)
-
-
-class PickleFormatterX(FileFormatter):
-    """Interface for reading and writing Python objects to and from pickle
-    files.
-    """
-
-    extension = ".pickle"
-
-    unsupportedParameters = None
-    """This formatter does not support any parameters"""
-
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        """Read a file from the path in pickle format.
-
-        Parameters
-        ----------
-        path : `str`
-            Path to use to open the file.
-        pytype : `class`, optional
-            Not used by this implementation.
-
-        Returns
-        -------
-        data : `object`
-            Either data as Python object read from the pickle file, or None
-            if the file could not be opened.
-        """
-        try:
-            with open(path, "rb") as fd:
-                data = self._fromBytes(fd.read(), pytype)
-        except FileNotFoundError:
-            data = None
-
-        return data
-
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        """Write the in memory dataset to file on disk.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to serialize.
-
-        Raises
-        ------
-        Exception
-            The file could not be written.
-        """
-        with open(self.fileDescriptor.location.path, "wb") as fd:
-            pickle.dump(inMemoryDataset, fd, protocol=-1)
-
-    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
-        """Read the bytes object as a python object.
-
-        Parameters
-        ----------
-        serializedDataset : `bytes`
-            Bytes object to unserialize.
-        pytype : `class`, optional
-            Not used by this implementation.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            The requested data as a object, or None if the string could
-            not be read.
-        """
-        try:
-            data = pickle.loads(serializedDataset)
-        except pickle.PicklingError:
-            data = None
-
-        return data
-
-    def _toBytes(self, inMemoryDataset: Any) -> bytes:
-        """Write the in memory dataset to a bytestring.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to serialize
-
-        Returns
-        -------
-        serializedDataset : `bytes`
-            Bytes object representing the pickled object.
-
-        Raises
-        ------
-        Exception
-            The object could not be pickled.
-        """
-        return pickle.dumps(inMemoryDataset, protocol=-1)
