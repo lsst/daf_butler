@@ -239,6 +239,30 @@ class FormatterV2:
         extension = default_extension if default_extension is not None else ""
         return extension
 
+    def can_accept(self, in_memory_dataset: Any) -> bool:
+        """Indicate whether this formatter can accept the specified
+        storage class directly.
+
+        Parameters
+        ----------
+        in_memory_dataset : `typing.Any`
+            The dataset that is to be written.
+
+        Returns
+        -------
+        accepts : `bool`
+            If `True` the formatter can write data of this type without
+            requiring datastore to convert it. If `False` the datastore
+            will attempt to convert before writing.
+
+        Notes
+        -----
+        The base class checks that the given python type matches
+        the python type specified for this formatter when
+        constructed.
+        """
+        return isinstance(in_memory_dataset, self.file_descriptor.storageClass.pytype)
+
     @classmethod
     def validate_write_recipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
         """Validate supplied recipes for this formatter.
@@ -1218,6 +1242,30 @@ class Formatter(metaclass=ABCMeta):
         if self._writeRecipes is not None:
             return self._writeRecipes
         return {}
+
+    def can_accept(self, in_memory_dataset: Any) -> bool:
+        """Indicate whether this formatter can accept the specified
+        storage class directly.
+
+        Parameters
+        ----------
+        in_memory_dataset : `typing.Any`
+            The dataset that is to be written.
+
+        Returns
+        -------
+        accepts : `bool`
+            If `True` the formatter can write data of this type without
+            requiring datastore to convert it. If `False` the datastore
+            will attempt to convert before writing.
+
+        Notes
+        -----
+        The base class checks that the given python type matches
+        the python type specified for this formatter when
+        constructed.
+        """
+        return isinstance(in_memory_dataset, self.file_descriptor.storageClass.pytype)
 
     @classmethod
     def validateWriteRecipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:

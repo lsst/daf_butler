@@ -800,36 +800,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             parameters=parameters,
         )
 
-    def _prepare_for_put(
-        self, inMemoryDataset: Any, ref: DatasetRef
-    ) -> tuple[Location, Formatter | FormatterV2]:
-        """Check the arguments for ``put`` and obtain formatter and
-        location.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            The dataset to store.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-
-        Returns
-        -------
-        location : `Location`
-            The location to write the dataset.
-        formatter : `Formatter`
-            The `Formatter` to use to write the dataset.
-
-        Raises
-        ------
-        TypeError
-            Supplied object and storage class are inconsistent.
-        DatasetTypeNotSupportedError
-            The associated `DatasetType` is not handled by this datastore.
-        """
-        self._validate_put_parameters(inMemoryDataset, ref)
-        return self._determine_put_formatter_location(ref)
-
     def _determine_put_formatter_location(self, ref: DatasetRef) -> tuple[Location, Formatter | FormatterV2]:
         """Calculate the formatter and output location to use for put.
 
@@ -1294,9 +1264,34 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         # python type, but first we need to make sure the storage class
         # reflects the one defined in the data repository.
         ref = self._cast_storage_class(ref)
-        inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
 
-        location, formatter = self._prepare_for_put(inMemoryDataset, ref)
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(
+                f"Dataset {ref} has been rejected by this datastore via configuration."
+            )
+
+        location, formatter = self._determine_put_formatter_location(ref)
+
+        # The external storage class can differ from the registry storage
+        # class AND the given in-memory dataset might not match any of the
+        # storage class definitions.
+        if formatter.can_accept(inMemoryDataset):
+            # Do not need to coerce. Must assume that the formatter can handle
+            # it without further checking of types.
+            pass
+        else:
+            # Coerce to a type that it can accept.
+            inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
+            required_pytype = ref.datasetType.storageClass.pytype
+
+            if not isinstance(inMemoryDataset, required_pytype):
+                raise TypeError(
+                    f"Inconsistency between supplied object ({type(inMemoryDataset)}) "
+                    f"and storage class type ({required_pytype})"
+                )
+
         uri = location.uri
 
         if not uri.dirname().exists():
