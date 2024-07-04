@@ -85,6 +85,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertEqual(f.writeRecipes, {})
         self.assertEqual(f.writeParameters, {})
         self.assertIn("DoNothingFormatter", repr(f))
+        self.assertIn("DoNothingFormatter", str(f))
 
         with self.assertRaises(TypeError):
             DoNothingFormatter()
