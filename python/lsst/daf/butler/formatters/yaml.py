@@ -47,7 +47,7 @@ class YamlFormatter(TypelessFormatter):
     supported_write_parameters = frozenset({"unsafe_dump"})
     can_read_from_uri = True
 
-    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         # Can not use ResourcePath.open()
         data = yaml.safe_load(uri.read())
         return data

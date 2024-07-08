@@ -77,9 +77,11 @@ class ParquetFormatter(FormatterV2):
     default_extension = ".parq"
     can_read_from_local_file = True
 
-    def read_from_local_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_local_file(
+        self, local_uri: ResourcePath, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         # Docstring inherited from Formatter.read.
-        schema = pq.read_schema(uri.ospath)
+        schema = pq.read_schema(local_uri.ospath)
 
         schema_names = ["ArrowSchema", "DataFrameSchema", "ArrowAstropySchema", "ArrowNumpySchema"]
 
@@ -93,7 +95,7 @@ class ParquetFormatter(FormatterV2):
                 return int(schema.metadata[b"lsst::arrow::rowcount"])
 
             temp_table = pq.read_table(
-                uri.ospath,
+                local_uri.ospath,
                 columns=[schema.names[0]],
                 use_threads=False,
                 use_pandas_metadata=False,
@@ -134,7 +136,7 @@ class ParquetFormatter(FormatterV2):
 
         metadata = schema.metadata if schema.metadata is not None else {}
         arrow_table = pq.read_table(
-            uri.ospath,
+            local_uri.ospath,
             columns=par_columns,
             use_threads=False,
             use_pandas_metadata=(b"pandas" in metadata),

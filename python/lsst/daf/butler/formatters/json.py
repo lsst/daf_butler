@@ -46,7 +46,7 @@ class JsonFormatter(TypelessFormatter):
     unsupported_parameters = None
     can_read_from_uri = True
 
-    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         # json.load() reads the entire file content into memory
         # and is no different from json.loads(uri.read()). It does not attempt
         # to support incremental reading to minimize memory usage.

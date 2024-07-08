@@ -194,7 +194,7 @@ class BadWriteFormatter(YamlFormatter):
     can_read_from_local_file = False
     can_read_from_stream = False
 
-    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         raise FormatterNotImplementedError("This formatter can not read anything")
 
     def write_direct(
@@ -224,7 +224,7 @@ class MultiDetectorFormatter(YamlFormatter):
 
     can_read_from_uri = True
 
-    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         if self.data_id is None:
             raise RuntimeError("This formatter requires a dataId")
         if "detector" not in self.data_id:

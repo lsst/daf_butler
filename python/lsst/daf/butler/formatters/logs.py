@@ -61,11 +61,13 @@ class ButlerLogRecordsFormatter(FormatterV2):
             raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
         return pytype
 
-    def read_from_local_file(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_local_file(
+        self, local_uri: ResourcePath, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         # ResourcePath open() cannot do a per-line read so can not use
         # `read_from_stream` and `read_from_uri` does not give any advantage
         # over pre-downloading the whole file (which can be very large).
-        return self._get_read_pytype().from_file(uri.ospath)
+        return self._get_read_pytype().from_file(local_uri.ospath)
 
     def to_bytes(self, in_memory_dataset: Any) -> bytes:
         return in_memory_dataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()

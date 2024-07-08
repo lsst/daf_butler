@@ -32,11 +32,9 @@ from __future__ import annotations
 __all__ = "TypelessFormatter"
 
 import dataclasses
-import logging
 from typing import TYPE_CHECKING, Any
 
 from lsst.daf.butler import FormatterV2
-from lsst.utils.introspection import get_full_type_name
 
 if TYPE_CHECKING:
     from lsst.daf.butler import StorageClass
@@ -62,24 +60,16 @@ class TypelessFormatter(FormatterV2):
         cache_manager: AbstractDatastoreCacheManager | None = None,
     ) -> Any:
         # Do the standard read of the base class.
-        log = logging.getLogger("lsst.tests")
-        log.warning("About to call super read")
         data = super().read(component, expected_size, cache_manager)
-
-        log.warning("Read data as type *****************************************: %s", type(data))
 
         # Assemble the requested dataset and potentially return only its
         # component coercing it to its appropriate pytype.
         data = self._assemble_dataset(data, component)
 
-        log.warning("Got after assembly: %s", type(data))
-
         # Special case components by allowing a formatter to return None
         # to indicate that the component was understood but is missing.
         if data is None and component is None:
             raise ValueError(f"Unable to read data with URI {self.file_descriptor.location.uri}")
-
-        log.warning("&************************** Got something of type %s", get_full_type_name(data))
 
         return data
 

@@ -44,7 +44,7 @@ import os
 import zipfile
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Iterator, Mapping, Set
-from typing import TYPE_CHECKING, Any, BinaryIO, ClassVar, TypeAlias
+from typing import TYPE_CHECKING, Any, BinaryIO, ClassVar, TypeAlias, final
 
 from lsst.resources import ResourceHandleProtocol, ResourcePath
 from lsst.utils.introspection import get_full_type_name
@@ -96,10 +96,9 @@ class FormatterV2:
         The dataset associated with this formatter. Should not be a component
         dataset ref.
     write_parameters : `dict`, optional
-        Any parameters to be hard-coded into this instance to control how
-        the dataset is serialized.
+         Parameters to control how the dataset is serialized.
     write_recipes : `dict`, optional
-        Detailed write Recipes indexed by recipe name.
+        Detailed write recipes indexed by recipe name.
     **kwargs
         Additional arguments that will be ignored but allow for
         `Formatter` V1 parameters to be given.
@@ -135,11 +134,11 @@ class FormatterV2:
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
 
-    default_extension: str | None = None
+    default_extension: ClassVar[str | None] = None
     """Default extension to use when writing a file.
 
     Can be `None` if the extension is determined dynamically. Use the
-    `get_write_extension` property to get the actual extension to use.
+    `get_write_extension` method to get the actual extension to use.
     """
 
     supported_extensions: ClassVar[Set[str]] = frozenset()
@@ -149,13 +148,13 @@ class FormatterV2:
     automatically included in the list of supported extensions.
     """
 
-    can_read_from_uri: bool = False
+    can_read_from_uri: ClassVar[bool] = False
     """Declare whether `read_from_uri` is available to this formatter."""
 
-    can_read_from_stream: bool = False
+    can_read_from_stream: ClassVar[bool] = False
     """Declare whether `read_from_stream` is available to this formatter."""
 
-    can_read_from_local_file: bool = False
+    can_read_from_local_file: ClassVar[bool] = False
     """Declare whether `read_from_file` is available to this formatter."""
 
     def __init__(
@@ -203,9 +202,8 @@ class FormatterV2:
 
     @property
     def file_descriptor(self) -> FileDescriptor:
-        """File descriptor associated with this formatter (`FileDescriptor`).
-
-        Read-only property.
+        """File descriptor associated with this formatter
+        (`FileDescriptor`).
         """
         return self._file_descriptor
 
@@ -245,7 +243,7 @@ class FormatterV2:
 
         Parameters
         ----------
-        in_memory_dataset : `typing.Any`
+        in_memory_dataset : `object`
             The dataset that is to be written.
 
         Returns
@@ -327,7 +325,7 @@ class FormatterV2:
             The dataset ref to use when looking in the cache.
             For single-file dataset this will be the dataset ref directly.
             If this is disassembled we need the component and the component
-             will be in the `FileDescriptor`.
+            will be in the `FileDescriptor`.
         """
         if self.file_descriptor.component is None:
             cache_ref = self.dataset_ref
@@ -385,10 +383,13 @@ class FormatterV2:
         * `read_from_uri`
         * `read_from_stream`
         * `read_from_local_file`
+        * `read_from_uri` (but with a local file)
 
         It is possible for `read_from_uri` to be skipped if the implementation
         raises `FormatterNotImplementedError`. If `read_from_stream` is
-        called `read_from_local_file` will never be called.
+        called `read_from_local_file` will never be called. If `read_from_uri`
+        was skipped and `read_from_local_file` is not implemented, it will
+        be called with a local file as a last resort.
 
         A Formatter can also read a file from within a Zip file if the
         URI associated with the `FileDescriptor` corresponds to a file with
@@ -430,22 +431,15 @@ class FormatterV2:
         # a file within the ZIP file, it is no longer possible to use the
         # direct read from URI option.
         uri = self.file_descriptor.location.uri
-        if uri.getExtension() == ".zip" and uri.fragment and uri.fragment.startswith("zip-path="):
-            # Preference to use URIs with "file.zip#zip-path=thing.json"
-            # rather than "file.zip#thing.json"
+        if uri.fragment and uri.fragment.startswith("zip-path="):
             _, path_in_zip = uri.fragment.split("=")
 
             # Open the Zip file using ResourcePath.
             with uri.open("rb") as fd:
                 with zipfile.ZipFile(fd) as zf:  # type: ignore
                     if self.can_read_from_stream:
-                        zip_fd = zf.open(path_in_zip)
-                        try:
-                            in_memory_dataset = self.read_from_stream(zip_fd, component)
-                        except Exception:
-                            zip_fd.close()
-                            raise
-                        return in_memory_dataset
+                        with contextlib.closing(zf.open(path_in_zip)) as zip_fd:
+                            return self.read_from_stream(zip_fd, component, expected_size=expected_size)
 
                     # For now for both URI and local file options we retrieve
                     # the bytes to a temporary local and use that.
@@ -454,9 +448,9 @@ class FormatterV2:
                         tmp_uri.write(zf.read(path_in_zip))
 
                         if self.can_read_from_local_file:
-                            return self.read_from_local_file(tmp_uri, component)
+                            return self.read_from_local_file(tmp_uri, component, expected_size=expected_size)
                         if self.can_read_from_uri:
-                            return self.read_from_uri(tmp_uri, component)
+                            return self.read_from_uri(tmp_uri, component, expected_size=expected_size)
 
             raise FormatterNotImplementedError(
                 f"Formatter {self.name()} could not read the file using any method."
@@ -492,7 +486,7 @@ class FormatterV2:
 
     def _read_from_possibly_cached_location_no_cache_write(
         self,
-        callback: Callable[[ResourcePath, str | None], Any],
+        callback: Callable[[ResourcePath, str | None, int], Any],
         component: str | None = None,
         expected_size: int = -1,
         *,
@@ -531,7 +525,7 @@ class FormatterV2:
                     self.name(),
                 ),
             ):
-                return callback(desired_uri, component)
+                return callback(desired_uri, component, expected_size)
 
     def read_from_possibly_cached_stream(
         self,
@@ -568,9 +562,9 @@ class FormatterV2:
         a file to the local cache.
         """
 
-        def _open_stream(uri: ResourcePath, comp: str | None) -> Any:
+        def _open_stream(uri: ResourcePath, comp: str | None, size: int = -1) -> Any:
             with uri.open("rb") as fd:
-                return self.read_from_stream(fd, comp)
+                return self.read_from_stream(fd, comp, expected_size=size)
 
         return self._read_from_possibly_cached_location_no_cache_write(
             _open_stream, component, expected_size=expected_size, cache_manager=cache_manager
@@ -614,8 +608,8 @@ class FormatterV2:
         The URI will be read by calling `read_from_uri`.
         """
 
-        def _open_uri(uri: ResourcePath, comp: str | None) -> Any:
-            return self.read_from_uri(uri, comp)
+        def _open_uri(uri: ResourcePath, comp: str | None, size: int = -1) -> Any:
+            return self.read_from_uri(uri, comp, expected_size=size)
 
         return self._read_from_possibly_cached_location_no_cache_write(
             _open_uri, component, expected_size=expected_size, cache_manager=cache_manager
@@ -653,7 +647,8 @@ class FormatterV2:
         Notes
         -----
         The file will be downloaded and cached if it is a remote resource.
-        The file contents will be read using `read_from_local_file`.
+        The file contents will be read using `read_from_local_file` or
+        `read_from_uri`, with preference given to the former.
         """
         cache_manager = self._ensure_cache(cache_manager)
         uri = self.file_descriptor.location.uri
@@ -712,7 +707,22 @@ class FormatterV2:
                         self.name(),
                     ),
                 ):
-                    result = self.read_from_local_file(local_uri, component=component)
+                    if self.can_read_from_local_file:
+                        result = self.read_from_local_file(
+                            local_uri, component=component, expected_size=expected_size
+                        )
+                    elif self.can_read_from_uri:
+                        # If the direct URI reader was skipped earlier and
+                        # there is no explicit local file implementation, pass
+                        # in the guaranteed local URI to the generic reader.
+                        result = self.read_from_uri(
+                            local_uri, component=component, expected_size=expected_size
+                        )
+                    else:
+                        raise FormatterNotImplementedError(
+                            "Unexpectedly found no formatter implementation to read from a local file "
+                            "or URI to local file."
+                        )
 
                 # File was read successfully so can move to cache
                 if can_be_cached:
@@ -720,7 +730,7 @@ class FormatterV2:
 
         return result
 
-    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         """Read a dataset from a URI that can be local or remote.
 
         Parameters
@@ -730,10 +740,13 @@ class FormatterV2:
             and can refer to the actual resource or to a locally cached file.
         component : `str` or `None`, optional
             The component to be read from the dataset.
+        expected_size : `int`, optional
+            If known the expected size of the resource to read. This can be
+            ``-1`` indicates the file size is not known.
 
         Returns
         -------
-        in_memory_dataset : `typing.Any`
+        in_memory_dataset : `object`
             The Python object read from the resource.
 
         Raises
@@ -748,8 +761,8 @@ class FormatterV2:
         ``can_read_from_uri`` is set to `True`.
 
         It is possible that a cached local file will be given to this method
-        even if it was originally a remote URI. This can happen if the write
-        resulted in the file being added to the local cache.
+        even if it was originally a remote URI. This can happen if the original
+        write resulted in the file being added to the local cache.
 
         If the full file is being read this file will not be added to the
         local cache. Consider raising `FormatterNotImplementedError` in
@@ -761,21 +774,24 @@ class FormatterV2:
         raise FormatterNotImplementedError("This formatter does not know how to read a file.")
 
     def read_from_stream(
-        self, stream: BinaryIO | ResourceHandleProtocol, component: str | None = None
+        self, stream: BinaryIO | ResourceHandleProtocol, component: str | None = None, expected_size: int = -1
     ) -> Any:
         """Read from an open file descriptor.
 
         Parameters
         ----------
         stream : `lsst.resources.ResourceHandleProtocol` or \
-                `typing.BinariyIO`
+                `typing.BinaryIO`
             File stream to use to read the dataset.
         component : `str` or `None`, optional
             The component to be read from the dataset.
+        expected_size : `int`, optional
+            If known the expected size of the resource to read. This can be
+            ``-1`` indicates the file size is not known.
 
         Returns
         -------
-        in_memory_dataset : `typing.Any`
+        in_memory_dataset : `object`
             The Python object read from the stream.
 
         Notes
@@ -784,21 +800,25 @@ class FormatterV2:
         """
         raise FormatterNotImplementedError("This formatter does not know how to read from a stream.")
 
-    def read_from_local_file(self, local_uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_local_file(
+        self, local_uri: ResourcePath, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         """Read a dataset from a URI guaranteed to refer to the local file
         system.
 
         Parameters
         ----------
         local_uri : `lsst.resources.ResourcePath`
-            URI to use to read the dataset. This URI is guaranteed to be
-            a local file.
+            Path to a local file that should be read.
         component : `str` or `None`, optional
             The component to be read from the dataset.
+        expected_size : `int`, optional
+            If known the expected size of the resource to read. This can be
+            ``-1`` indicates the file size is not known.
 
         Returns
         -------
-        in_memory_dataset : `typing.Any`
+        in_memory_dataset : `object`
             The Python object read from the resource.
 
         Raises
@@ -815,6 +835,7 @@ class FormatterV2:
         """
         raise FormatterNotImplementedError("This formatter does not know how to read a local file.")
 
+    @final
     def write(
         self,
         in_memory_dataset: Any,
@@ -1129,8 +1150,7 @@ class Formatter(metaclass=ABCMeta):
     dataId : `DataCoordinate`
         Data ID associated with this formatter.
     writeParameters : `dict`, optional
-        Any parameters to be hard-coded into this instance to control how
-        the dataset is serialized.
+        Parameters to control how the dataset is serialized.
     writeRecipes : `dict`, optional
         Detailed write Recipes indexed by recipe name.
     **kwargs
@@ -1218,9 +1238,8 @@ class Formatter(metaclass=ABCMeta):
 
     @property
     def fileDescriptor(self) -> FileDescriptor:
-        """File descriptor associated with this formatter (`FileDescriptor`).
-
-        Read-only property.
+        """File descriptor associated with this formatter
+        (`FileDescriptor`).
         """
         return self._fileDescriptor
 
@@ -1249,7 +1268,7 @@ class Formatter(metaclass=ABCMeta):
 
         Parameters
         ----------
-        in_memory_dataset : `typing.Any`
+        in_memory_dataset : `object`
             The dataset that is to be written.
 
         Returns
@@ -1999,7 +2018,9 @@ class FormatterV1inV2(FormatterV2):
         # for a dynamic shim. Luckily the shim is only used as an instance.
         return self._formatter.validate_write_recipes(recipes)
 
-    def read_from_local_file(self, local_uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_local_file(
+        self, local_uri: ResourcePath, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         # Need to temporarily override the location since the V1 formatter
         # will not know anything about this local file.
 

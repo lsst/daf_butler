@@ -52,7 +52,9 @@ class AstropyTableFormatter(FormatterV2):
         # Other supported formats can be added here
         raise RuntimeError(f"Requested file format '{format}' is not supported for Table")
 
-    def read_from_local_file(self, local_uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_local_file(
+        self, local_uri: ResourcePath, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         pytype = self.file_descriptor.storageClass.pytype
         if not issubclass(pytype, astropy.table.Table):
             raise TypeError(f"Python type {pytype} does not seem to be a astropy Table type")

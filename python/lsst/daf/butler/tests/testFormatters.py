@@ -115,7 +115,7 @@ class MetricsExampleFormatter(FormatterV2):
     can_read_from_stream = True
 
     def read_from_stream(
-        self, stream: BinaryIO | ResourceHandleProtocol, component: str | None = None
+        self, stream: BinaryIO | ResourceHandleProtocol, component: str | None = None, expected_size: int = -1
     ) -> Any:
         """Read data from a file.
 
@@ -127,6 +127,8 @@ class MetricsExampleFormatter(FormatterV2):
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
             file.
+        expected_size : `int`, optional
+            The expected size of the resource.
 
         Returns
         -------

@@ -55,7 +55,7 @@ class PackagesFormatter(FormatterV2):
             raise RuntimeError(f"Requested file format '{format}' is not supported for Packages")
         return ext
 
-    def read_from_uri(self, uri: ResourcePath, component: str | None = None) -> Any:
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
         # Read the full file using the class associated with the
         # storage class it was originally written with.
         # Read the bytes directly from resource. These are not going to be

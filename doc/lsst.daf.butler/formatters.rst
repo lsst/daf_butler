@@ -237,7 +237,7 @@ A datastore knows which formatter was used to write or ingest a dataset.
 There are three methods a formatter author can implement in order to read a Python type from a file:
 
 ``read_from_local_file``
-    The ``read_from_local_file`` method guarantees to pass in a local file resource.
+    The ``read_from_local_file`` method is guaranteed to be passed a local file resource.
     If the resource was initially remote it will be downloaded before calling the method and the file can be cached if the butler has been configured to do that.
 
 ``read_from_uri``
