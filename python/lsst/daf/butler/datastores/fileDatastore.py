@@ -327,8 +327,19 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             config, bridgeManager, root, formatterFactory, templates, composites, trustGetRequest
         )
 
-        # Check existence and create directory structure if necessary
-        if not self.root.exists():
+        # Check existence and create directory structure if necessary.
+        #
+        # The concept of a 'root directory' is problematic for some resource
+        # path types that don't necessarily support the concept of a directory
+        # (http, s3, gs... basically anything that isn't a local filesystem or
+        # WebDAV.)
+        # On these resource paths an object representing the
+        # "root" directory may not exist even though files under the root do,
+        # and in a read-only repository we will be unable to create it.
+        # So we only immediately verify the root for local filesystems,
+        # the only case where this check will definitely not give a false
+        # negative.
+        if self.root.isLocal and not self.root.exists():
             if "create" not in self.config or not self.config["create"]:
                 raise ValueError(f"No valid root and not allowed to create one at: {self.root}")
             try:
