@@ -126,7 +126,8 @@ class FormatterV2:
     unsupported_parameters: ClassVar[Set[str] | None] = frozenset()
     """Set of read parameters not understood by this `Formatter`. An empty set
     means all parameters are supported.  `None` indicates that no parameters
-    are supported. These param (`frozenset`).
+    are supported. These parameters should match those defined in the storage
+    class definition. (`frozenset`).
     """
 
     supported_write_parameters: ClassVar[Set[str] | None] = None
@@ -1172,7 +1173,8 @@ class Formatter(metaclass=ABCMeta):
     unsupportedParameters: ClassVar[Set[str] | None] = frozenset()
     """Set of read parameters not understood by this `Formatter`. An empty set
     means all parameters are supported.  `None` indicates that no parameters
-    are supported. These param (`frozenset`).
+    are supported. These parameters should match those defined in the storage
+    class definition. (`frozenset`).
     """
 
     supportedWriteParameters: ClassVar[Set[str] | None] = None
