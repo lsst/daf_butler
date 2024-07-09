@@ -38,6 +38,8 @@ __all__ = [
 ]
 
 import enum
+import os
+import sys
 import uuid
 import warnings
 from abc import ABC, abstractmethod
@@ -53,6 +55,7 @@ from ..._named import NamedValueAbstractSet
 from ...name_shrinker import NameShrinker
 from ...timespan_database_representation import TimespanDatabaseRepresentation
 from .._exceptions import ConflictingDefinitionError
+from ._database_explain import get_query_plan
 
 
 class DatabaseInsertMode(enum.Enum):
@@ -1864,6 +1867,7 @@ class Database(ABC):
         else:
             connection = self._session_connection
         try:
+            self._log_query_and_plan(connection, sql)
             # TODO: SelectBase is not good for execute(), but it used
             # everywhere, e.g. in daf_relation. We should switch to Executable
             # at some point.
@@ -1874,6 +1878,25 @@ class Database(ABC):
         finally:
             if connection is not self._session_connection:
                 connection.close()
+
+    def _log_query_and_plan(
+        self,
+        connection: sqlalchemy.Connection,
+        sql: sqlalchemy.sql.expression.Executable | sqlalchemy.sql.expression.SelectBase,
+    ) -> None:
+        """Log the given SQL statement and the DB's plan for executing it if
+        the environment variable DAF_BUTLER_DEBUG_QUERIES is set to a truthy
+        value.
+        """
+        if os.environ.get("DAF_BUTLER_DEBUG_QUERIES", False):
+            assert isinstance(sql, sqlalchemy.SelectBase)
+            compiled = sql.compile(connection)
+            print(
+                f"Executing SQL statement:\n{compiled}\nBind parameters: {compiled.params}", file=sys.stderr
+            )
+
+            query_plan = get_query_plan(connection, sql)
+            print(f"Query plan:\n{query_plan}", file=sys.stderr)
 
     @abstractmethod
     def constant_rows(
