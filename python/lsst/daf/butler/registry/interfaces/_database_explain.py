@@ -73,7 +73,7 @@ class _Explain(Executable, ClauseElement):
 
 @compiles(_Explain, "postgresql")
 def _compile_explain(element: _Explain, compiler: SQLCompiler, **kw: Any) -> str:
-    text = "EXPLAIN "
+    text = "EXPLAIN (VERBOSE TRUE, SETTINGS TRUE)"
     text += compiler.process(element.statement, **kw)
 
     return text
