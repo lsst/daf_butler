@@ -596,7 +596,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # using very important indexes.  At present, we don't include those
         # redundant columns in the JOIN ON expression, however, because the
         # FOREIGN KEY (and its index) are defined only on dataset_id.
-        columns = qt.ColumnSet(self.datasetType.dimensions.as_group())
+        columns = qt.ColumnSet(self.datasetType.dimensions)
         columns.drop_implied_dimension_keys()
         columns.dataset_fields[self.datasetType.name].update(fields)
         tags_builder: QueryBuilder | None = None
@@ -793,7 +793,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             row = sql_result.mappings().fetchone()
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
         return DataCoordinate.from_required_values(
-            self.datasetType.dimensions.as_group(),
+            self.datasetType.dimensions,
             tuple(row[dimension] for dimension in self.datasetType.dimensions.required.names),
         )
 

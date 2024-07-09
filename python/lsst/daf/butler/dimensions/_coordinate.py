@@ -42,23 +42,17 @@ __all__ = (
 )
 
 import numbers
-import warnings
 from abc import abstractmethod
-from collections.abc import Iterable, Iterator, Mapping, Set
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from collections.abc import Iterable, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 import pydantic
-from deprecated.sphinx import deprecated
 from lsst.sphgeom import IntersectionRegion, Region
-from lsst.utils.introspection import find_outside_stacklevel
 
 from .._exceptions import DimensionNameError
-from .._named import NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping
 from .._timespan import Timespan
 from ..json import from_json_pydantic, to_json_pydantic
 from ..persistence_context import PersistenceContextVars
-from ._elements import Dimension, DimensionElement
-from ._graph import DimensionGraph
 from ._group import DimensionGroup
 from ._records import DimensionRecord, SerializedDimensionRecord
 
@@ -66,7 +60,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
     from ._universe import DimensionUniverse
 
-DataIdKey = str | Dimension
+DataIdKey = str
 """Type annotation alias for the keys that can be used to index a
 DataCoordinate.
 """
@@ -141,7 +135,7 @@ def _intersectRegions(*args: Region) -> Region | None:
         return result
 
 
-class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
+class DataCoordinate:
     """A validated data ID.
 
     DataCoordinate guarantees that its key-value pairs identify at least all
@@ -171,10 +165,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
     @staticmethod
     def standardize(
-        mapping: NameLookupMapping[Dimension, DataIdValue] | None = None,
+        mapping: Mapping[str, DataIdValue] | DataCoordinate | None = None,
         *,
-        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
-        graph: DimensionGraph | None = None,
+        dimensions: Iterable[str] | DimensionGroup | None = None,
         universe: DimensionUniverse | None = None,
         defaults: DataCoordinate | None = None,
         **kwargs: Any,
@@ -186,25 +179,21 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         Parameters
         ----------
-        mapping : `~collections.abc.Mapping`, optional
+        mapping : `~collections.abc.Mapping` or `DataCoordinate`, optional
             An informal data ID that maps dimensions or dimension names to
             their primary key values (may also be a true `DataCoordinate`).
-        dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup` \
-                or `DimensionGraph`, optional
+        dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`, \
+                optional
             The dimensions to be identified by the new `DataCoordinate`. If not
             provided, will be inferred from the keys of ``mapping`` and
             ``**kwargs``, and ``universe`` must be provided unless ``mapping``
             is already a `DataCoordinate`.
-        graph : `DimensionGraph`, optional
-            Like ``dimensions``, but requires a ``DimensionGraph`` instance.
-            Ignored if ``dimensions`` is provided.  Deprecated and will be
-            removed after v27.
         universe : `DimensionUniverse`
             All known dimensions and their relationships; used to expand and
-            validate dependencies when ``graph`` is not provided.
+            validate dependencies when ``dimensions`` is not provided.
         defaults : `DataCoordinate`, optional
             Default dimension key-value pairs to use when needed.  These are
-            never used to infer ``graph``, and are ignored if a different value
+            never used to infer ``group``, and are ignored if a different value
             is provided for the same key in ``mapping`` or `**kwargs``.
         **kwargs
             Additional keyword arguments are treated like additional key-value
@@ -222,28 +211,11 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         DimensionNameError
             Raised if a key-value pair for a required dimension is missing.
         """
-        universe = (
-            universe
-            or getattr(dimensions, "universe", None)
-            or getattr(graph, "universe", None)
-            or getattr(mapping, "universe", None)
-        )
+        universe = universe or getattr(dimensions, "universe", None) or getattr(mapping, "universe", None)
         if universe is None:
-            raise TypeError(
-                "universe must be provided, either directly or via dimensions, mapping, or graph."
-            )
-        if graph is not None:
-            # TODO: remove argument on DM-41326.
-            warnings.warn(
-                "The 'graph' argument to DataCoordinate.standardize is deprecated in favor of the "
-                "'dimensions' argument, and will be removed after v27.",
-                category=FutureWarning,
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-            )
-            dimensions = graph.names
+            raise TypeError("universe must be provided, either directly or via dimensions or mapping.")
         if dimensions is not None:
             dimensions = universe.conform(dimensions)
-        del graph  # make sure we don't actualy use this below
         new_mapping: dict[str, DataIdValue] = {}
         if isinstance(mapping, DataCoordinate):
             if dimensions is None:
@@ -260,14 +232,6 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             new_mapping.update((name, mapping[name]) for name in mapping.dimensions.required)
             if mapping.hasFull():
                 new_mapping.update((name, mapping[name]) for name in mapping.dimensions.implied)
-        elif isinstance(mapping, NamedKeyMapping):
-            warnings.warn(
-                "Passing a NamedKeyMapping to DataCoordinate.standardize is deprecated, and will be "
-                "removed after v27.",
-                category=FutureWarning,
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-            )
-            new_mapping.update(mapping.byName())
         elif mapping is not None:
             new_mapping.update(mapping)
         new_mapping.update(kwargs)
@@ -275,7 +239,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             if defaults is not None:
                 universe = defaults.universe
             elif universe is None:
-                raise TypeError("universe must be provided if graph is not.")
+                raise TypeError("universe must be provided if dimensions is not.")
             dimensions = DimensionGroup(universe, new_mapping.keys())
         if not dimensions:
             return DataCoordinate.make_empty(universe)
@@ -376,42 +340,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             `hasRecords` are guaranteed to return `True`, because both `full`
             and `records` are just empty mappings.
         """
-        return _ExpandedTupleDataCoordinate(universe.empty.as_group(), (), {})
-
-    # TODO: remove on DM-41326.
-    @staticmethod
-    @deprecated(
-        "fromRequiredValues is deprecated in favor of from_required_values, "
-        "which takes a DimensionGroup instead of a DimensionGraph.  It will be "
-        "removed after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def fromRequiredValues(graph: DimensionGraph, values: tuple[DataIdValue, ...]) -> DataCoordinate:
-        """Construct a `DataCoordinate` from required dimension values.
-
-        This method is deprecated in favor of `from_required_values`.
-
-        This is a low-level interface with at most assertion-level checking of
-        inputs.  Most callers should use `standardize` instead.
-
-        Parameters
-        ----------
-        graph : `DimensionGraph`
-            Dimensions this data ID will identify.
-        values : `tuple` [ `int` or `str` ]
-            Tuple of primary key values corresponding to ``graph.required``,
-            in that order.
-
-        Returns
-        -------
-        dataId : `DataCoordinate`
-            A data ID object that identifies the given dimensions.
-            ``dataId.hasFull()`` will return `True` only if ``graph.implied``
-            is empty. ``dataId.hasRecords()`` will return `True`
-            if and only if ``graph`` is empty.
-        """
-        return DataCoordinate.from_required_values(graph._group, values)
+        return _ExpandedTupleDataCoordinate(universe.empty, (), {})
 
     @staticmethod
     def from_required_values(dimensions: DimensionGroup, values: tuple[DataIdValue, ...]) -> DataCoordinate:
@@ -425,8 +354,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         dimensions : `DimensionGroup`
             Dimensions this data ID will identify.
         values : `tuple` [ `int` or `str` ]
-            Tuple of primary key values corresponding to ``graph.required``, in
-            that order.
+            Tuple of primary key values corresponding to
+            ``dimensions.required``, in that order.
 
         Returns
         -------
@@ -434,7 +363,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             A data ID object that identifies the given dimensions.
             ``dataId.hasFull()`` will return `True` only if
             ``dimensions.implied`` is empty. ``dataId.hasRecords()`` will
-            return `True` if and only if ``graph`` is empty.
+            return `True` if and only if ``dimensions`` is empty.
         """
         assert len(dimensions.required) == len(
             values
@@ -444,43 +373,6 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         if not dimensions.implied:
             return _FullTupleDataCoordinate(dimensions, values)
         return _RequiredTupleDataCoordinate(dimensions, values)
-
-    # TODO: remove on DM-41326.
-    @staticmethod
-    @deprecated(
-        "fromFullValues is deprecated in favor of from_full_values, "
-        "which takes a DimensionGroup instead of a DimensionGraph.  It will be "
-        "removed after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def fromFullValues(graph: DimensionGraph, values: tuple[DataIdValue, ...]) -> DataCoordinate:
-        """Construct a `DataCoordinate` from all dimension values.
-
-        This method is deprecated in favor of `from_full_values`.
-
-        This is a low-level interface with at most assertion-level checking of
-        inputs.  Most callers should use `standardize` instead.
-
-        Parameters
-        ----------
-        graph : `DimensionGraph`
-            Dimensions this data ID will identify.
-        values : `tuple` [ `int` or `str` ]
-            Tuple of primary key values corresponding to
-            ``itertools.chain(graph.required, graph.implied)``, in that order.
-            Note that this is _not_ the same order as ``graph.dimensions``,
-            though these contain the same elements.
-
-        Returns
-        -------
-        dataId : `DataCoordinate`
-            A data ID object that identifies the given dimensions.
-            ``dataId.hasFull()`` will always return `True`.
-            ``dataId.hasRecords()`` will only return `True` if ``graph`` is
-            empty.
-        """
-        return DataCoordinate.from_full_values(graph._group, values)
 
     @staticmethod
     def from_full_values(dimensions: DimensionGroup, values: tuple[DataIdValue, ...]) -> DataCoordinate:
@@ -495,9 +387,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             Dimensions this data ID will identify.
         values : `tuple` [ `int` or `str` ]
             Tuple of primary key values corresponding to
-            ``itertools.chain(graph.required, graph.implied)``, in that order.
-            Note that this is _not_ the same order as ``graph.dimensions``,
-            though these contain the same elements.
+            ``itertools.chain(dimensions.required, dimensions.implied)``, in
+            that order.  Note that this is _not_ the same order as
+            ``dimensions.names``, though these contain the same elements.
 
         Returns
         -------
@@ -525,6 +417,32 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             other = DataCoordinate.standardize(other, universe=self.universe)
         return self.dimensions == other.dimensions and self.required_values == other.required_values
 
+    @abstractmethod
+    def __getitem__(self, key: str) -> DataIdValue:
+        raise NotImplementedError()
+
+    def __contains__(self, key: str) -> bool:
+        try:
+            self.__getitem__(key)
+            return True
+        except KeyError:
+            return False
+
+    @overload
+    def get(self, key: str) -> DataIdValue | None: ...
+
+    @overload
+    def get(self, key: str, default: int) -> int: ...
+
+    @overload
+    def get(self, key: str, default: str) -> str: ...
+
+    def get(self, key: str, default: DataIdValue | None = None) -> DataIdValue | None:
+        try:
+            return self.__getitem__(key)
+        except KeyError:
+            return default
+
     def __repr__(self) -> str:
         # We can't make repr yield something that could be exec'd here without
         # printing out the whole DimensionUniverse.
@@ -537,69 +455,21 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         # can not be true simultaneously with __lt__ being true.
         return self.required_values < other.required_values
 
-    # TODO: remove on DM-41326.
-    @deprecated(
-        "Using DataCoordinate as a Mapping is deprecated in favor of the "
-        ".mapping and .required attributes, and will be dropped after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def __iter__(self) -> Iterator[Dimension]:
-        return iter(self.keys())
-
-    # TODO: remove on DM-41326.
-    @deprecated(
-        "Using DataCoordinate as a Mapping is deprecated in favor of the "
-        ".mapping and .required attributes, and will be dropped after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def __len__(self) -> int:
-        return len(self.keys())
-
-    # TODO: remove on DM-41326.
-    @deprecated(
-        "Using DataCoordinate as a Mapping is deprecated in favor of the "
-        ".mapping and .required attributes, and will be dropped after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def keys(self) -> NamedValueAbstractSet[Dimension]:  # type: ignore
-        return self.graph.required
-
-    # TODO: remove on DM-41326.
-    @property
-    @deprecated(
-        "DataCoordinate.names is deprecated in favor of the .dimensions "
-        "attribute, and will be dropped after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def names(self) -> Set[str]:
-        """Names of the required dimensions identified by this data ID.
-
-        They are returned in the same order as `keys`
-        (`collections.abc.Set` [ `str` ]).
-        """
-        return self.keys().names
-
     @abstractmethod
-    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinate:
-        """Return a `DataCoordinate` whose graph is a subset of ``self.graph``.
+    def subset(self, dimensions: DimensionGroup | Iterable[str]) -> DataCoordinate:
+        """Return a `DataCoordinate` whose diensions are a subset of
+        ``self.dimensions``.
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`, `DimensionGroup`, or \
-                `~collections.abc.Iterable` [ `str` ]
+        dimensions : `DimensionGroup` or `~collections.abc.Iterable` [ `str` ]
             The dimensions identified by the returned `DataCoordinate`.
-            Passing a `DimensionGraph` is deprecated and support will be
-            dropped after v27.
 
         Returns
         -------
         coordinate : `DataCoordinate`
             A `DataCoordinate` instance that identifies only the given
-            dimensions.  May be ``self`` if ``graph == self.graph``.
+            dimensions.  May be ``self`` if ``dimensions == self.dimensions``.
 
         Raises
         ------
@@ -619,7 +489,6 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return `True` (respectively) on the returned `DataCoordinate` as well.
         The converse does not hold.
         """
-        # TODO: update docs r.e. deprecation on DM-41326.
         raise NotImplementedError()
 
     @abstractmethod
@@ -650,9 +519,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         raise NotImplementedError()
 
     @abstractmethod
-    def expanded(
-        self, records: NameLookupMapping[DimensionElement, DimensionRecord | None]
-    ) -> DataCoordinate:
+    def expanded(self, records: Mapping[str, DimensionRecord | None]) -> DataCoordinate:
         """Return a `DataCoordinate` that holds the given records.
 
         Guarantees that `hasRecords` returns `True`.
@@ -664,15 +531,12 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         ----------
         records : `~collections.abc.Mapping` [ `str`, `DimensionRecord` or \
                 `None` ]
-            A `NamedKeyMapping` with `DimensionElement` keys or a regular
-            `~collections.abc.Mapping` with `str` (`DimensionElement` name)
+            A`~collections.abc.Mapping` with `str` (dimension element name)
             keys and `DimensionRecord` values.  Keys must cover all elements in
-            ``self.graph.elements``.  Values may be `None`, but only to reflect
-            actual NULL values in the database, not just records that have not
-            been fetched.  Passing a `NamedKeyMapping` is deprecated and will
-            not be supported after v27.
+            ``self.dimensions.elements``.  Values may be `None`, but only to
+            reflect actual NULL values in the database, not just records that
+            have not been fetched.
         """
-        # TODO: update docs r.e. deprecation on DM-41326.
         raise NotImplementedError()
 
     @property
@@ -695,22 +559,6 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         """
         raise NotImplementedError()
 
-    # TODO: remove on DM-41326.
-    @property
-    @deprecated(
-        "DataCoordinate.graph is deprecated in favor of .dimensions, and will be dropped after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def graph(self) -> DimensionGraph:
-        """Dimensions identified by this data ID (`DimensionGraph`).
-
-        Note that values are only required to be present for dimensions in
-        ``self.graph.required``; all others may be retrieved (from a
-        `Registry`) given these.
-        """
-        return self.dimensions._as_graph()
-
     @abstractmethod
     def hasFull(self) -> bool:
         """Whether this data ID contains implied and required values.
@@ -726,43 +574,6 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             there are no implied dimensions.
         """
         raise NotImplementedError()
-
-    # TODO: remove on DM-41326.
-    @property
-    @deprecated(
-        "DataCoordinate.full is deprecated in favor of .mapping, and will be dropped after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    @abstractmethod
-    def full(self) -> NamedKeyMapping[Dimension, DataIdValue]:
-        """Return mapping for all dimensions in ``self.dimensions``.
-
-        The mapping includes key-value pairs for all dimensions in
-        ``self.dimensions``, including implied.
-
-        Accessing this attribute if `hasFull` returns `False` is a logic error
-        that may raise an exception of unspecified type either immediately or
-        when implied keys are accessed via the returned mapping, depending on
-        the implementation and whether assertions are enabled.
-        """
-        raise NotImplementedError()
-
-    # TODO: remove on DM-41326.
-    @deprecated(
-        "DataCoordinate.values_tuple() is deprecated in favor of .required_values, and will be dropped "
-        "after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def values_tuple(self) -> tuple[DataIdValue, ...]:
-        """Return the required values (only) of this data ID as a tuple.
-
-        In contexts where all data IDs have the same dimensions, comparing and
-        hashing these tuples can be *much* faster than comparing the original
-        `DataCoordinate` instances.
-        """
-        return self.required_values
 
     @abstractmethod
     def hasRecords(self) -> bool:
@@ -785,12 +596,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         raise NotImplementedError()
 
     @property
-    def records(self) -> NamedKeyMapping[DimensionElement, DimensionRecord | None]:
+    def records(self) -> Mapping[str, DimensionRecord | None]:
         """A  mapping that contains `DimensionRecord` objects for all
         elements identified by this data ID.
-
-        This mapping will become a regular `~collections.abc.Mapping` with
-        `str` keys after v27.
 
         Notes
         -----
@@ -961,48 +769,7 @@ dictionaries and validated `DataCoordinate` instances.
 """
 
 
-# Deprecated by having its only public access (DataCoordinate.full) deprecated.
-# TODO: remove on DM-41326.
-class _DataCoordinateFullView(NamedKeyMapping[Dimension, DataIdValue]):
-    """View class for `DataCoordinate.full`.
-
-    Provides the default implementation for
-    `DataCoordinate.full`.
-
-    Parameters
-    ----------
-    target : `DataCoordinate`
-        The `DataCoordinate` instance this object provides a view of.
-    """
-
-    def __init__(self, target: _BasicTupleDataCoordinate):
-        self._target = target
-
-    __slots__ = ("_target",)
-
-    def __repr__(self) -> str:
-        return repr(self._target)
-
-    def __getitem__(self, key: DataIdKey) -> DataIdValue:
-        return self._target[key]
-
-    def __iter__(self) -> Iterator[Dimension]:
-        return iter(self.keys())
-
-    def __len__(self) -> int:
-        return len(self.keys())
-
-    def keys(self) -> NamedValueAbstractSet[Dimension]:  # type: ignore
-        return self._target.graph.dimensions
-
-    @property
-    def names(self) -> Set[str]:
-        # Docstring inherited from `NamedKeyMapping`.
-        return self.keys().names
-
-
-# TODO: Make a Mapping[str, DimensionRecord | None] on DM-41326.
-class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, DimensionRecord | None]):
+class _DataCoordinateRecordsView(Mapping[str, DimensionRecord | None]):
     """View class for `DataCoordinate.records`.
 
     Provides the default implementation for
@@ -1020,50 +787,20 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, DimensionReco
     __slots__ = ("_target",)
 
     def __repr__(self) -> str:
-        terms = [f"{d}: {self[d]!r}" for d in self._target.graph.elements.names]
+        terms = [f"{d}: {self[d]!r}" for d in self._target.dimensions.elements.names]
         return "{{{}}}".format(", ".join(terms))
 
     def __str__(self) -> str:
         return "\n".join(str(v) for v in self.values())
 
-    def __getitem__(self, key: DimensionElement | str) -> DimensionRecord | None:
-        if isinstance(key, DimensionElement):
-            warnings.warn(
-                "Using Dimension keys in DataCoordinate is deprecated and will not be supported after v27.",
-                category=FutureWarning,
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-            )
-            key = key.name
+    def __getitem__(self, key: str) -> DimensionRecord | None:
         return self._target._record(key)
 
-    # TODO: fix on DM-41326.
-    @deprecated(
-        "Iteration over DataCoordinate.records is deprecated as the key type will change to 'str' after "
-        "v27. Use DataCoordinate.dimensions.elements to get the names of all dimension elements instead.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def __iter__(self) -> Iterator[DimensionElement]:
-        return iter(self.keys())
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._target.dimensions.elements)
 
     def __len__(self) -> int:
-        return len(self.keys())
-
-    # TODO: remove on DM-41326.
-    # Deprecation warning will come from using .graph.
-    def keys(self) -> NamedValueAbstractSet[DimensionElement]:  # type: ignore
-        return self._target.graph.elements
-
-    @property
-    @deprecated(
-        "DataCoordinate.records.names is deprecated in favor of DataCoordinate.dimensions.elements and "
-        "will be removed after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def names(self) -> Set[str]:
-        # Docstring inherited from `NamedKeyMapping`.
-        return self.keys().names
+        return len(self._target.dimensions.elements)
 
 
 class _BasicTupleDataCoordinate(DataCoordinate):
@@ -1101,16 +838,9 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         # Docstring inherited from DataCoordinate.
         return _DataCoordinateRequiredMappingView(self)
 
-    def __getitem__(self, key: DataIdKey) -> DataIdValue:
+    def __getitem__(self, key: str) -> DataIdValue:
         # Docstring inherited from DataCoordinate.
-        # TODO: remove on DM-41326.
-        if isinstance(key, Dimension):
-            warnings.warn(
-                "Using Dimension keys in DataCoordinate is deprecated and will not be supported after v27.",
-                category=FutureWarning,
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-            )
-            key = key.name
+
         index = self._dimensions._data_coordinate_indices[key]
         try:
             return self._values[index]
@@ -1118,21 +848,6 @@ class _BasicTupleDataCoordinate(DataCoordinate):
             # Caller asked for an implied dimension, but this object only has
             # values for the required ones.
             raise KeyError(key) from None
-
-    # TODO: remove on DM-41326.
-    @deprecated(
-        "Using DataCoordinate as a NamedKeyMapping is deprecated in favor of the "
-        ".mapping and .required attributes, and will be dropped after v27. "
-        "Use `dict(data_id.required)` as an exact replacement for `data_id.byName()`.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def byName(self) -> dict[str, DataIdValue]:
-        # Docstring inheritance.
-        # Reimplementation is for optimization; `required_values` is much
-        # faster to iterate over than values() because it doesn't go through
-        # `__getitem__`.
-        return dict(zip(self.names, self.required_values, strict=True))
 
     def hasRecords(self) -> bool:
         # Docstring inherited from DataCoordinate.
@@ -1220,7 +935,7 @@ class _RequiredTupleDataCoordinate(_BasicTupleDataCoordinate):
         # Docstring inherited from DataCoordinate.
         return self._values
 
-    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinate:
+    def subset(self, dimensions: DimensionGroup | Iterable[str]) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
         dimensions = self.universe.conform(dimensions)
         if self._dimensions == dimensions:
@@ -1248,30 +963,15 @@ class _RequiredTupleDataCoordinate(_BasicTupleDataCoordinate):
         values.update(other.mapping)
         return DataCoordinate.standardize(values, dimensions=dimensions)
 
-    # TODO: remove on DM-41326.
-    @property
-    def full(self) -> NamedKeyMapping[Dimension, DataIdValue]:
-        # Docstring inherited.
-        raise AssertionError("full may only be accessed if hasFull() returns True.")
-
-    def expanded(
-        self, records: NameLookupMapping[DimensionElement, DimensionRecord | None]
-    ) -> DataCoordinate:
+    def expanded(self, records: Mapping[str, DimensionRecord | None]) -> DataCoordinate:
         # Docstring inherited from DataCoordinate
         # Extract a complete values tuple from the attributes of the given
         # records.  It's possible for these to be inconsistent with
         # self._values (which is a serious problem, of course), but we've
         # documented this as a no-checking API.
         values = self._values + tuple(
-            getattr(records[d], cast(Dimension, self.universe[d]).primaryKey.name)
-            for d in self._dimensions.implied
+            getattr(records[d], self.universe.dimensions[d].primaryKey.name) for d in self._dimensions.implied
         )
-        if isinstance(records, NamedKeyMapping):
-            warnings.warn(
-                "NamedKeyMappings will not be accepted after v27; pass a Mapping with str keys instead.",
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                category=FutureWarning,
-            )
         return _ExpandedTupleDataCoordinate(self._dimensions, values, records)
 
     def hasFull(self) -> bool:
@@ -1307,7 +1007,7 @@ class _FullTupleDataCoordinate(_BasicTupleDataCoordinate):
         # Docstring inherited from DataCoordinate.
         return self._values
 
-    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinate:
+    def subset(self, dimensions: DimensionGroup | Iterable[str]) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
         dimensions = self.universe.conform(dimensions)
         if self._dimensions == dimensions:
@@ -1331,27 +1031,8 @@ class _FullTupleDataCoordinate(_BasicTupleDataCoordinate):
         values.update(other.mapping)
         return DataCoordinate.standardize(values, dimensions=dimensions)
 
-    # TODO: remove on DM-41326.
-    @property
-    @deprecated(
-        "DataCoordinate.full is deprecated in favor of .mapping, and will be dropped after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def full(self) -> NamedKeyMapping[Dimension, DataIdValue]:
-        # Docstring inherited.
-        return _DataCoordinateFullView(self)
-
-    def expanded(
-        self, records: NameLookupMapping[DimensionElement, DimensionRecord | None]
-    ) -> DataCoordinate:
+    def expanded(self, records: Mapping[str, DimensionRecord | None]) -> DataCoordinate:
         # Docstring inherited from DataCoordinate
-        if isinstance(records, NamedKeyMapping):
-            warnings.warn(
-                "NamedKeyMappings will not be accepted after v27; pass a Mapping with str keys instead.",
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                category=FutureWarning,
-            )
         return _ExpandedTupleDataCoordinate(self._dimensions, self._values, records)
 
     def hasFull(self) -> bool:
@@ -1379,8 +1060,7 @@ class _ExpandedTupleDataCoordinate(_FullTupleDataCoordinate):
         ``dimensions._data_coordinate_indices``. Just include values for all
         dimensions.
     records : `~collections.abc.Mapping` [ `str`, `DimensionRecord` or `None` ]
-        A `NamedKeyMapping` with `DimensionElement` keys or a regular
-        `~collections.abc.Mapping` with `str` (`DimensionElement` name) keys
+        A `~collections.abc.Mapping` with `str` (dimension element name) keys
         and `DimensionRecord` values.  Keys must cover all elements in
         ``self.dimensions.elements``.  Values may be `None`, but only to
         reflect actual NULL values in the database, not just records that have
@@ -1391,7 +1071,7 @@ class _ExpandedTupleDataCoordinate(_FullTupleDataCoordinate):
         self,
         dimensions: DimensionGroup,
         values: tuple[DataIdValue, ...],
-        records: NameLookupMapping[DimensionElement, DimensionRecord | None],
+        records: Mapping[str, DimensionRecord | None],
     ):
         super().__init__(dimensions, values)
         assert super().hasFull(), "This implementation requires full dimension records."
@@ -1399,20 +1079,12 @@ class _ExpandedTupleDataCoordinate(_FullTupleDataCoordinate):
 
     __slots__ = ("_records",)
 
-    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinate:
+    def subset(self, dimensions: DimensionGroup | Iterable[str]) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
         return super().subset(dimensions).expanded(self._records)
 
-    def expanded(
-        self, records: NameLookupMapping[DimensionElement, DimensionRecord | None]
-    ) -> DataCoordinate:
+    def expanded(self, records: Mapping[str, DimensionRecord | None]) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
-        if isinstance(records, NamedKeyMapping):
-            warnings.warn(
-                "NamedKeyMappings will not be accepted after v27; pass a Mapping with str keys instead.",
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                category=FutureWarning,
-            )
         return self
 
     def union(self, other: DataCoordinate) -> DataCoordinate:

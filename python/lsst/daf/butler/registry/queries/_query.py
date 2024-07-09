@@ -706,7 +706,7 @@ class Query:
         # If the dataset type has dimensions not in the current query, or we
         # need a temporal join for a calibration collection, either restore
         # those columns or join them in.
-        full_dimensions = dataset_type.dimensions.as_group().union(self._dimensions)
+        full_dimensions = dataset_type.dimensions.union(self._dimensions)
         relation = self._relation
         record_caches = self._record_caches
         base_columns_required: set[ColumnTag] = {

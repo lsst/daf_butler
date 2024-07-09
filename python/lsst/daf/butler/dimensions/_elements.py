@@ -48,7 +48,6 @@ from ..json import from_json_generic, to_json_generic
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ..registry import Registry
     from ._governor import GovernorDimension
-    from ._graph import DimensionGraph
     from ._group import DimensionGroup
     from ._records import DimensionRecord
     from ._schema import DimensionRecordSchema
@@ -303,20 +302,6 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         ``self.RecordClass.fields``.
         """
         return NamedValueSet(list(self.required) + list(self.implied)).freeze()
-
-    # Deprecated via a warning from its implementation.
-    # TODO: remove on DM-41326.
-    @property
-    def graph(self) -> DimensionGraph:
-        """Return minimal graph that includes this element (`DimensionGraph`).
-
-        ``self.graph.required`` includes all dimensions whose primary key
-        values are sufficient (often necessary) to uniquely identify ``self``
-        (including ``self`` if ``isinstance(self, Dimension)``.
-        ``self.graph.implied`` includes all dimensions also identified
-        (possibly recursively) by this set.
-        """
-        return self.minimal_group._as_graph()
 
     @property
     @cached_getter

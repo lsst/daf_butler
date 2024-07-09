@@ -66,7 +66,7 @@ class ColumnSetTestCase(unittest.TestCase):
             + [("detector", "purpose"), ("bias", "dataset_id")],
         )
         self.assertEqual(str(columns), "{instrument, detector, detector:purpose, bias:dataset_id}")
-        empty = qt.ColumnSet(self.universe.empty.as_group())
+        empty = qt.ColumnSet(self.universe.empty)
         self.assertFalse(empty)
         self.assertFalse(columns.issubset(empty))
         self.assertTrue(columns.issuperset(empty))

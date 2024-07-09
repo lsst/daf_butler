@@ -435,7 +435,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
             if missing <= self.defaults.dimensions.required:
                 summary.defaultsNeeded.update(missing)
             elif not self._allow_orphans:
-                still_missing = missing - self.defaults.names
+                still_missing = missing - self.defaults.dimensions.names
                 raise UserExpressionError(
                     f"No value(s) for governor dimensions {still_missing} in expression "
                     "that references dependent dimensions. 'Governor' dimensions must always be specified "

@@ -430,7 +430,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "int")
         self.assertEqual(str(expr), "5")
         self.assertTrue(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertFalse(columns)
         self.assertEqual(expr.visit(_TestVisitor()), 5)
@@ -443,7 +443,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "string")
         self.assertEqual(str(expr), "'five'")
         self.assertTrue(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertFalse(columns)
         self.assertEqual(expr.visit(_TestVisitor()), "five")
@@ -456,7 +456,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "float")
         self.assertEqual(str(expr), "0.5")
         self.assertTrue(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertFalse(columns)
         self.assertEqual(expr.visit(_TestVisitor()), 0.5)
@@ -469,7 +469,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "hash")
         self.assertEqual(str(expr), "(bytes)")
         self.assertTrue(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertFalse(columns)
         self.assertEqual(expr.visit(_TestVisitor()), b"eleven")
@@ -483,7 +483,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "uuid")
         self.assertEqual(str(expr), str(value))
         self.assertTrue(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertFalse(columns)
         self.assertEqual(expr.visit(_TestVisitor()), value)
@@ -497,7 +497,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "datetime")
         self.assertEqual(str(expr), "2020-01-01T00:00:00")
         self.assertTrue(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertFalse(columns)
         self.assertEqual(expr.visit(_TestVisitor()), value)
@@ -513,7 +513,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "timespan")
         self.assertEqual(str(expr), "[2020-01-01T00:00:00, 2020-01-01T00:01:00)")
         self.assertTrue(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertFalse(columns)
         self.assertEqual(expr.visit(_TestVisitor()), value)
@@ -528,7 +528,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "region")
         self.assertEqual(str(expr), "(region)")
         self.assertTrue(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertFalse(columns)
         self.assertEqual(expr.visit(_TestVisitor()), value)
@@ -544,7 +544,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "int")
         self.assertEqual(str(expr), "detector")
         self.assertFalse(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["detector"]))
         self.assertEqual(expr.visit(_TestVisitor(dimension_keys={"detector": 3})), 3)
@@ -556,7 +556,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "string")
         self.assertEqual(str(expr), "detector.purpose")
         self.assertFalse(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["detector"]))
         self.assertEqual(columns.dimension_fields["detector"], {"purpose"})
@@ -572,9 +572,9 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.expression_type, "dataset_field")
         self.assertEqual(str(expr), "raw.ingest_date")
         self.assertFalse(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
-        self.assertEqual(columns.dimensions, self.universe.empty.as_group())
+        self.assertEqual(columns.dimensions, self.universe.empty)
         self.assertEqual(columns.dataset_fields["raw"], {"ingest_date"})
         self.assertEqual(qt.DatasetFieldReference(dataset_type="raw", field="dataset_id").column_type, "uuid")
         self.assertEqual(
@@ -597,7 +597,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "float")
         self.assertEqual(str(expr), "-visit.exposure_time")
         self.assertFalse(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertEqual(columns.dimension_fields["visit"], {"exposure_time"})
@@ -617,7 +617,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "datetime")
         self.assertEqual(str(expr), "visit.timespan.begin")
         self.assertFalse(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertEqual(columns.dimension_fields["visit"], {"timespan"})
@@ -642,7 +642,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "datetime")
         self.assertEqual(str(expr), "visit.timespan.end")
         self.assertFalse(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertEqual(columns.dimension_fields["visit"], {"timespan"})
@@ -686,7 +686,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
                 self.assertEqual(expr.column_type, "float")
                 self.assertEqual(str(expr), string)
                 self.assertFalse(expr.is_literal)
-                columns = qt.ColumnSet(self.universe.empty.as_group())
+                columns = qt.ColumnSet(self.universe.empty)
                 expr.gather_required_columns(columns)
                 self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
                 self.assertEqual(columns.dimension_fields["visit"], {"exposure_time"})
@@ -706,7 +706,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
                 self.assertEqual(expr.column_type, "int")
                 self.assertEqual(str(expr), string)
                 self.assertFalse(expr.is_literal)
-                columns = qt.ColumnSet(self.universe.empty.as_group())
+                columns = qt.ColumnSet(self.universe.empty)
                 expr.gather_required_columns(columns)
                 self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
                 self.assertFalse(columns.dimension_fields["visit"])
@@ -732,7 +732,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(expr.column_type, "int")
         self.assertEqual(str(expr), "detector DESC")
         self.assertFalse(expr.is_literal)
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         expr.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["detector"]))
         self.assertFalse(columns.dimension_fields["detector"])
@@ -805,7 +805,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
                 with self.subTest(string=string, detector=detector):
                     self.assertEqual(predicate.column_type, "bool")
                     self.assertEqual(str(predicate), string)
-                    columns = qt.ColumnSet(self.universe.empty.as_group())
+                    columns = qt.ColumnSet(self.universe.empty)
                     predicate.gather_required_columns(columns)
                     self.assertEqual(columns.dimensions, self.universe.conform(["detector"]))
                     self.assertFalse(columns.dimension_fields["detector"])
@@ -818,7 +818,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
                     self.assertEqual(
                         inverted.visit(_TestVisitor(dimension_keys={"detector": detector})), not value
                     )
-                    columns = qt.ColumnSet(self.universe.empty.as_group())
+                    columns = qt.ColumnSet(self.universe.empty)
                     inverted.gather_required_columns(columns)
                     self.assertEqual(columns.dimensions, self.universe.conform(["detector"]))
                     self.assertFalse(columns.dimension_fields["detector"])
@@ -829,7 +829,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         predicate = self.x.visit.region.overlaps(region1)
         self.assertEqual(predicate.column_type, "bool")
         self.assertEqual(str(predicate), "visit.region OVERLAPS (region)")
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         predicate.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertEqual(columns.dimension_fields["visit"], {"region"})
@@ -839,7 +839,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(inverted.column_type, "bool")
         self.assertEqual(str(inverted), "NOT visit.region OVERLAPS (region)")
         self.assertTrue(inverted.visit(_TestVisitor(dimension_fields={("visit", "region"): region2})))
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         inverted.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertEqual(columns.dimension_fields["visit"], {"region"})
@@ -858,7 +858,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         predicate = self.x.visit.region.is_null
         self.assertEqual(predicate.column_type, "bool")
         self.assertEqual(str(predicate), "visit.region IS NULL")
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         predicate.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertEqual(columns.dimension_fields["visit"], {"region"})
@@ -875,7 +875,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         predicate: qt.Predicate = self.x.visit.in_iterable([3, 4, self.x.exposure.id])
         self.assertEqual(predicate.column_type, "bool")
         self.assertEqual(str(predicate), "visit IN [3, 4, exposure]")
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         predicate.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit", "exposure"]))
         self.assertFalse(columns.dimension_fields["visit"])
@@ -887,7 +887,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(str(inverted), "NOT visit IN [3, 4, exposure]")
         self.assertFalse(inverted.visit(_TestVisitor(dimension_keys={"visit": 2, "exposure": 2})))
         self.assertTrue(inverted.visit(_TestVisitor(dimension_keys={"visit": 2, "exposure": 5})))
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         inverted.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit", "exposure"]))
         self.assertFalse(columns.dimension_fields["visit"])
@@ -907,7 +907,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         predicate: qt.Predicate = self.x.visit.in_range(2, 8, 2)
         self.assertEqual(predicate.column_type, "bool")
         self.assertEqual(str(predicate), "visit IN 2:8:2")
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         predicate.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertFalse(columns.dimension_fields["visit"])
@@ -918,7 +918,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertEqual(str(inverted), "NOT visit IN 2:8:2")
         self.assertFalse(inverted.visit(_TestVisitor(dimension_keys={"visit": 2})))
         self.assertTrue(inverted.visit(_TestVisitor(dimension_keys={"visit": 8})))
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         inverted.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["visit"]))
         self.assertFalse(columns.dimension_fields["visit"])
@@ -937,7 +937,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         predicate: qt.Predicate = self.x.exposure.in_query(self.x.visit, query)
         self.assertEqual(predicate.column_type, "bool")
         self.assertEqual(str(predicate), "exposure IN (query).visit")
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         predicate.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["exposure"]))
         self.assertFalse(columns.dimension_fields["exposure"])
@@ -956,7 +956,7 @@ class ColumnExpressionsTestCase(unittest.TestCase):
         self.assertTrue(
             inverted.visit(_TestVisitor(dimension_keys={"exposure": 8}, query_tree_items={1, 2, 3}))
         )
-        columns = qt.ColumnSet(self.universe.empty.as_group())
+        columns = qt.ColumnSet(self.universe.empty)
         inverted.gather_required_columns(columns)
         self.assertEqual(columns.dimensions, self.universe.conform(["exposure"]))
         self.assertFalse(columns.dimension_fields["exposure"])
@@ -1118,7 +1118,7 @@ class QueryTestCase(unittest.TestCase):
 
         def check(
             query: Query,
-            dimensions: DimensionGroup = self.raw.dimensions.as_group(),
+            dimensions: DimensionGroup = self.raw.dimensions,
         ) -> None:
             """Run a battery of tests on one of a set of very similar queries
             constructed in different ways (see below).
@@ -1139,16 +1139,14 @@ class QueryTestCase(unittest.TestCase):
                     Dimensions to expect in the `QueryTree`, not necessarily
                     including those in the test 'raw' dataset type.
                 """
-                self.assertEqual(tree.dimensions, dimensions | self.raw.dimensions.as_group())
+                self.assertEqual(tree.dimensions, dimensions | self.raw.dimensions)
                 self.assertEqual(str(tree.predicate), "raw.run == 'DummyCam/raw/all'")
                 self.assertFalse(tree.materializations)
                 self.assertFalse(tree.data_coordinate_uploads)
                 self.assertEqual(tree.datasets.keys(), {"raw"})
-                self.assertEqual(tree.datasets["raw"].dimensions, self.raw.dimensions.as_group())
+                self.assertEqual(tree.datasets["raw"].dimensions, self.raw.dimensions)
                 self.assertEqual(tree.datasets["raw"].collections, ("DummyCam/defaults",))
-                self.assertEqual(
-                    tree.get_joined_dimension_groups(), frozenset({self.raw.dimensions.as_group()})
-                )
+                self.assertEqual(tree.get_joined_dimension_groups(), frozenset({self.raw.dimensions}))
 
             def check_data_id_results(*args, query: Query, dimensions: DimensionGroup = dimensions) -> None:
                 """Construct a DataCoordinateQueryResults object from the query
@@ -1197,7 +1195,7 @@ class QueryTestCase(unittest.TestCase):
                     cm.exception.result_spec,
                     qrs.DatasetRefResultSpec(
                         dataset_type_name="raw",
-                        dimensions=self.raw.dimensions.as_group(),
+                        dimensions=self.raw.dimensions,
                         storage_class_name=storage_class_name,
                         find_first=find_first,
                     ),
@@ -1242,7 +1240,7 @@ class QueryTestCase(unittest.TestCase):
                     # might need to re-join for some result columns in a
                     # derived query.
                     self.assertTrue(derived_tree.datasets.keys(), {"raw"})
-                    self.assertEqual(derived_tree.datasets["raw"].dimensions, self.raw.dimensions.as_group())
+                    self.assertEqual(derived_tree.datasets["raw"].dimensions, self.raw.dimensions)
                     self.assertEqual(derived_tree.datasets["raw"].collections, ("DummyCam/defaults",))
                 else:
                     self.assertFalse(derived_tree.datasets)
@@ -1263,7 +1261,7 @@ class QueryTestCase(unittest.TestCase):
             # Actual logic for the check() function begins here.
 
             self.assertEqual(query.constraint_dataset_types, {"raw"})
-            self.assertEqual(query.constraint_dimensions, self.raw.dimensions.as_group())
+            self.assertEqual(query.constraint_dimensions, self.raw.dimensions)
 
             # Adding a constraint on a field for this dataset type should work
             # (this constraint will be present in all downstream tests).
@@ -1624,14 +1622,14 @@ class QueryTestCase(unittest.TestCase):
             self.assertEqual(str(tree.predicate), "instrument == 'DummyCam' AND visit == 4")
             self.assertEqual(
                 tree.dimensions,
-                self.universe.conform(["visit"]).union(results.dataset_type.dimensions.as_group()),
+                self.universe.conform(["visit"]).union(results.dataset_type.dimensions),
             )
             self.assertFalse(tree.materializations)
             self.assertEqual(tree.datasets.keys(), {results.dataset_type.name})
             self.assertEqual(tree.datasets[results.dataset_type.name].collections, ("DummyCam/defaults",))
             self.assertEqual(
                 tree.datasets[results.dataset_type.name].dimensions,
-                results.dataset_type.dimensions.as_group(),
+                results.dataset_type.dimensions,
             )
             self.assertFalse(tree.data_coordinate_uploads)
             result_spec = cm.exception.result_spec
@@ -1650,7 +1648,7 @@ class QueryTestCase(unittest.TestCase):
             self.assertEqual(
                 cm.exception.result_spec,
                 qrs.DataCoordinateResultSpec(
-                    dimensions=results.dataset_type.dimensions.as_group(),
+                    dimensions=results.dataset_type.dimensions,
                     include_dimension_records=include_dimension_records,
                 ),
             )
@@ -1755,7 +1753,7 @@ class QueryTestCase(unittest.TestCase):
                 datasets={
                     "raw": qt.DatasetSearch(
                         collections=("DummyCam/raw/all",),
-                        dimensions=self.raw.dimensions.as_group(),
+                        dimensions=self.raw.dimensions,
                     )
                 },
             )
@@ -1782,10 +1780,10 @@ class QueryTestCase(unittest.TestCase):
             # ResultSpec's datasets are not a subset of the query tree's.
             DatasetRefQueryResults(
                 _TestQueryDriver(),
-                qt.QueryTree(dimensions=self.raw.dimensions.as_group()),
+                qt.QueryTree(dimensions=self.raw.dimensions),
                 qrs.DatasetRefResultSpec(
                     dataset_type_name="raw",
-                    dimensions=self.raw.dimensions.as_group(),
+                    dimensions=self.raw.dimensions,
                     storage_class_name=self.raw.storageClass_name,
                     find_first=True,
                 ),

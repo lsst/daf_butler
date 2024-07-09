@@ -50,7 +50,7 @@ from ._config_support import LookupKey
 from ._dataset_type import DatasetType, SerializedDatasetType
 from ._named import NamedKeyDict
 from .datastore.stored_file_info import StoredDatastoreItemInfo
-from .dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
+from .dimensions import DataCoordinate, DimensionGroup, DimensionUniverse, SerializedDataCoordinate
 from .json import from_json_pydantic, to_json_pydantic
 from .persistence_context import PersistenceContextVars
 
@@ -363,7 +363,7 @@ class DatasetRef:
         return hash((self.datasetType, self.dataId, self.id))
 
     @property
-    def dimensions(self) -> DimensionGraph:
+    def dimensions(self) -> DimensionGroup:
         """Dimensions associated with the underlying `DatasetType`."""
         return self.datasetType.dimensions
 

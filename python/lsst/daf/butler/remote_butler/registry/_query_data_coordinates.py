@@ -33,7 +33,7 @@ from typing import Any
 
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
-from ...dimensions import DataCoordinate, DimensionGraph, DimensionGroup
+from ...dimensions import DataCoordinate, DimensionGroup
 from ...queries import DataCoordinateQueryResults, Query
 from ...registry.queries import DataCoordinateQueryResults as LegacyDataCoordinateQueryResults
 from ...registry.queries import ParentDatasetQueryResults
@@ -106,7 +106,7 @@ class QueryDriverDataCoordinateQueryResults(
 
     def subset(
         self,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
         *,
         unique: bool = False,
     ) -> LegacyDataCoordinateQueryResults:
@@ -139,6 +139,6 @@ class QueryDriverDataCoordinateQueryResults(
         collections: Any,
         *,
         findFirst: bool = True,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
     ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
         raise NotImplementedError()

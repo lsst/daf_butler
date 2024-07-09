@@ -39,12 +39,12 @@ from pydantic import BaseModel, StrictBool, StrictStr
 
 from ._config_support import LookupKey
 from ._storage_class import StorageClass, StorageClassFactory
-from .dimensions import DimensionGraph, DimensionGroup, SerializedDimensionGraph
+from .dimensions import DimensionGroup
 from .json import from_json_pydantic, to_json_pydantic
 from .persistence_context import PersistenceContextVars
 
 if TYPE_CHECKING:
-    from .dimensions import Dimension, DimensionUniverse
+    from .dimensions import DimensionUniverse
     from .registry import Registry
 
 
@@ -59,7 +59,7 @@ class SerializedDatasetType(BaseModel):
 
     name: StrictStr
     storageClass: StrictStr | None = None
-    dimensions: SerializedDimensionGraph | list[StrictStr] | None = None
+    dimensions: list[StrictStr] | None = None
     parentStorageClass: StrictStr | None = None
     isCalibration: StrictBool = False
 
@@ -109,8 +109,6 @@ class SerializedDatasetType(BaseModel):
         match dimensions:
             case list():
                 serialized_dimensions = dimensions
-            case dict():
-                serialized_dimensions = SerializedDimensionGraph.direct(**dimensions).names
             case None:
                 serialized_dimensions = None
 
@@ -148,11 +146,9 @@ class DatasetType:
         and underscores.  Component dataset types should contain a single
         period separating the base dataset type name from the component name
         (and may be recursive).
-    dimensions : `DimensionGroup`, `DimensionGraph`, or \
-            `~collections.abc.Iterable` [ `Dimension` or `str` ]
+    dimensions : `DimensionGroup` or `~collections.abc.Iterable` [ `str` ]
         Dimensions used to label and relate instances of this `DatasetType`.
-        If not a `DimensionGraph` or `DimensionGroup`, ``universe`` must be
-        provided as well.
+        If not a `DimensionGroup`, ``universe`` must be provided as well.
     storageClass : `StorageClass` or `str`
         Instance of a `StorageClass` or name of `StorageClass` that defines
         how this `DatasetType` is persisted.
@@ -162,7 +158,7 @@ class DatasetType:
         is not a component.
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to normalize ``dimensions`` if it
-        is not already a `DimensionGraph`.
+        is not already a `DimensionGroup`.
     isCalibration : `bool`, optional
         If `True`, this dataset type may be included in
         `~CollectionType.CALIBRATION` collections.
@@ -209,7 +205,7 @@ class DatasetType:
     def __init__(
         self,
         name: str,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[Dimension | str],
+        dimensions: DimensionGroup | Iterable[str],
         storageClass: StorageClass | str,
         parentStorageClass: StorageClass | str | None = None,
         *,
@@ -221,9 +217,7 @@ class DatasetType:
         self._name = name
         universe = universe or getattr(dimensions, "universe", None)
         if universe is None:
-            raise ValueError(
-                "If dimensions is not a DimensionGroup or DimensionGraph, a universe must be provided."
-            )
+            raise ValueError("If dimensions is not a DimensionGroup, a universe must be provided.")
         self._dimensions = universe.conform(dimensions)
         if name in self._dimensions.universe.governor_dimensions:
             raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
@@ -373,12 +367,12 @@ class DatasetType:
         return self._name
 
     @property
-    def dimensions(self) -> DimensionGraph:
-        """Return the dimensions of this dataset type (`DimensionGraph`).
+    def dimensions(self) -> DimensionGroup:
+        """Return the dimensions of this dataset type (`DimensionGroup`).
 
         The dimensions of a define the keys of its datasets' data IDs..
         """
-        return self._dimensions._as_graph()
+        return self._dimensions
 
     @property
     def storageClass(self) -> StorageClass:
@@ -748,8 +742,6 @@ class DatasetType:
         match simple.dimensions:
             case list():
                 dimensions = universe.conform(simple.dimensions)
-            case SerializedDimensionGraph():
-                dimensions = universe.conform(simple.dimensions.names)
             case None:
                 raise ValueError(f"Dimensions must be specified in {simple}")
 

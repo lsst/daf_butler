@@ -25,8 +25,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Butler top level classes.
-"""
+"""Butler top level classes."""
+
 from __future__ import annotations
 
 __all__ = (
@@ -460,28 +460,27 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         **kwargs : `dict`
             Any unused keyword arguments (would normally be empty dict).
         """
-        # Do nothing if we have a standalone DataCoordinate.
-        if isinstance(dataId, DataCoordinate) and not kwargs:
-            return dataId, kwargs
-
         # Process dimension records that are using record information
         # rather than ids
         newDataId: dict[str, DataIdValue] = {}
         byRecord: dict[str, dict[str, Any]] = defaultdict(dict)
 
-        # if all the dataId comes from keyword parameters we do not need
-        # to do anything here because they can't be of the form
-        # exposure.obs_id because a "." is not allowed in a keyword parameter.
-        if dataId:
+        if isinstance(dataId, DataCoordinate):
+            # Do nothing if we have a DataCoordinate and no kwargs.
+            if not kwargs:
+                return dataId, kwargs
+            # If we have a DataCoordinate with kwargs, we know the
+            # DataCoordinate only has values for real dimensions.
+            newDataId.update(dataId.mapping)
+        elif dataId:
+            # The data is mapping, which means it might have keys like
+            # "exposure.obs_id" (unlike kwargs, because a "." is not allowed in
+            # a keyword parameter).
             for k, v in dataId.items():
-                # If we have a Dimension we do not need to do anything
-                # because it cannot be a compound key.
                 if isinstance(k, str) and "." in k:
                     # Someone is using a more human-readable dataId
                     dimensionName, record = k.split(".", 1)
                     byRecord[dimensionName][record] = v
-                elif isinstance(k, Dimension):
-                    newDataId[k.name] = v
                 else:
                     newDataId[k] = v
 

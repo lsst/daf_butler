@@ -369,7 +369,7 @@ class DirectQueryDriver(QueryDriver):
         # count deduplicated rows.
         builder = builder.nested()
         # Replace the columns of the query with just COUNT(*).
-        builder.columns = qt.ColumnSet(self._universe.empty.as_group())
+        builder.columns = qt.ColumnSet(self._universe.empty)
         count_func: sqlalchemy.ColumnElement[int] = sqlalchemy.func.count()
         builder.joiner.special["_ROWCOUNT"] = count_func
         # Render and run the query.
@@ -892,7 +892,7 @@ class DirectQueryDriver(QueryDriver):
         # without constraining their governor dimensions, since that's a
         # particularly easy mistake to make and it's almost never intentional.
         # We also allow the registry data ID values to provide governor values.
-        where_columns = qt.ColumnSet(self.universe.empty.as_group())
+        where_columns = qt.ColumnSet(self.universe.empty)
         result.predicate.gather_required_columns(where_columns)
         for governor in where_columns.dimensions.governors:
             if governor not in result.constraint_data_id:
@@ -979,13 +979,13 @@ class DirectQueryDriver(QueryDriver):
                 if collection_record.type is CollectionType.CALIBRATION:
                     result.is_calibration_search = True
                 result.collection_records.append(collection_record)
-        if result.dimensions != self.get_dataset_type(dataset_type_name).dimensions.as_group():
+        if result.dimensions != self.get_dataset_type(dataset_type_name).dimensions:
             # This is really for server-side defensiveness; it's hard to
             # imagine the query getting different dimensions for a dataset
             # type in two calls to the same query driver.
             raise InvalidQueryError(
                 f"Incorrect dimensions {result.dimensions} for dataset {dataset_type_name} "
-                f"in query (vs. {self.get_dataset_type(dataset_type_name).dimensions.as_group()})."
+                f"in query (vs. {self.get_dataset_type(dataset_type_name).dimensions})."
             )
         return result
 
