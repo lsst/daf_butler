@@ -30,13 +30,11 @@ from __future__ import annotations
 __all__ = ["DimensionUniverse"]
 
 import logging
-import math
 import pickle
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
 
-from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
 
 from .._config import Config
@@ -47,7 +45,6 @@ from ._config import _DEFAULT_NAMESPACE, DimensionConfig
 from ._database import DatabaseDimensionElement
 from ._elements import Dimension, DimensionElement
 from ._governor import GovernorDimension
-from ._graph import DimensionGraph
 from ._group import DimensionGroup
 from ._skypix import SkyPixDimension, SkyPixSystem
 
@@ -424,91 +421,19 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         """
         return self._dimensionIndices[name]
 
-    # TODO: remove on DM-41326.
-    @deprecated(
-        "Deprecated in favor of DimensionUniverse.conform, and will be removed after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def expandDimensionNameSet(self, names: set[str]) -> None:
-        """Expand a set of dimension names in-place.
-
-        Includes recursive dependencies.
-
-        This is an advanced interface for cases where constructing a
-        `DimensionGraph` (which also expands required dependencies) is
-        impossible or undesirable.
-
-        Parameters
-        ----------
-        names : `set` [ `str` ]
-            A true `set` of dimension names, to be expanded in-place.
-        """
-        # Keep iterating until the set of names stops growing.  This is not as
-        # efficient as it could be, but we work pretty hard cache
-        # DimensionGraph instances to keep actual construction rare, so that
-        # shouldn't matter.
-        oldSize = len(names)
-        while True:
-            # iterate over a temporary copy so we can modify the original
-            for name in tuple(names):
-                names.update(self._dimensions[name].required.names)
-                names.update(self._dimensions[name].implied.names)
-            if oldSize == len(names):
-                break
-            else:
-                oldSize = len(names)
-
-    # TODO: remove on DM-41326.
-    @deprecated(
-        "DimensionUniverse.extract and DimensionGraph are deprecated in favor of DimensionUniverse.conform "
-        "and DimensionGroup, and will be removed after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def extract(self, iterable: Iterable[Dimension | str]) -> DimensionGraph:
-        """Construct graph from iterable.
-
-        Constructs a `DimensionGraph` from a possibly-heterogenous iterable
-        of `Dimension` instances and string names thereof.
-
-        Constructing `DimensionGraph` directly from names or dimension
-        instances is slightly more efficient when it is known in advance that
-        the iterable is not heterogenous.
-
-        Parameters
-        ----------
-        iterable : iterable of `Dimension` or `str`
-            Dimensions that must be included in the returned graph (their
-            dependencies will be as well).
-
-        Returns
-        -------
-        graph : `DimensionGraph`
-            A `DimensionGraph` instance containing all given dimensions.
-        """
-        return self.conform(iterable)._as_graph()
-
     def conform(
         self,
-        dimensions: Iterable[str | Dimension] | str | DimensionElement | DimensionGroup | DimensionGraph,
+        dimensions: Iterable[str] | str | DimensionGroup,
         /,
     ) -> DimensionGroup:
         """Construct a dimension group from an iterable of dimension names.
 
         Parameters
         ----------
-        dimensions : `~collections.abc.Iterable` [ `str` or `Dimension` ], \
-                `str`, `DimensionElement`, `DimensionGroup`, or \
-                `DimensionGraph`
+        dimensions : `~collections.abc.Iterable` [ `str` ], `str`, or \
+                `DimensionGroup`
             Dimensions that must be included in the returned group; their
-            dependencies will be as well.  Support for `Dimension`,
-            `DimensionElement` and `DimensionGraph` objects is deprecated and
-            will be removed after v27.  Passing `DimensionGraph` objects will
-            not yield a deprecation warning to allow non-deprecated methods and
-            properties that return `DimensionGraph` objects to be passed
-            though, since these will be changed to return `DimensionGroup` in
-            the future.
+            dependencies will be as well.
 
         Returns
         -------
@@ -518,15 +443,10 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         match dimensions:
             case DimensionGroup():
                 return dimensions
-            case DimensionGraph():
-                return dimensions.as_group()
-            case DimensionElement() as d:
-                return d.minimal_group
             case str() as name:
                 return self[name].minimal_group
             case iterable:
-                names: set[str] = {getattr(d, "name", cast(str, d)) for d in iterable}
-                return DimensionGroup(self, names)
+                return DimensionGroup(self, set(iterable))
 
     @overload
     def sorted(self, elements: Iterable[Dimension], *, reverse: bool = False) -> Sequence[Dimension]: ...
@@ -562,17 +482,6 @@ class DimensionUniverse:  # numpydoc ignore=PR02
             result.reverse()
         return result
 
-    def getEncodeLength(self) -> int:
-        """Return encoded size of graph.
-
-        Returns the size (in bytes) of the encoded size of `DimensionGraph`
-        instances in this universe.
-
-        See `DimensionGraph.encode` and `DimensionGraph.decode` for more
-        information.
-        """
-        return math.ceil(len(self._dimensions) / 8)
-
     def get_elements_populated_by(self, dimension: Dimension) -> NamedValueAbstractSet[DimensionElement]:
         """Return the set of `DimensionElement` objects whose
         `~DimensionElement.populated_by` attribute is the given dimension.
@@ -591,12 +500,9 @@ class DimensionUniverse:  # numpydoc ignore=PR02
         return self._populates[dimension.name]
 
     @property
-    def empty(self) -> DimensionGraph:
-        """The `DimensionGraph` that contains no dimensions.
-
-        After v27 this will be a `DimensionGroup`.
-        """
-        return self._empty._as_graph()
+    def empty(self) -> DimensionGroup:
+        """The `DimensionGroup` that contains no dimensions."""
+        return self._empty
 
     @classmethod
     def _unpickle(cls, version: int, namespace: str | None = None) -> DimensionUniverse:

@@ -520,7 +520,7 @@ class Query(QueryBase):
         # Handle DatasetType vs. str arg.
         if isinstance(dataset_type, DatasetType):
             dataset_type_name = dataset_type.name
-            dimensions = dataset_type.dimensions.as_group()
+            dimensions = dataset_type.dimensions
             storage_class_name = dataset_type.storageClass_name
         elif isinstance(dataset_type, str):
             dataset_type_name = dataset_type
@@ -548,7 +548,7 @@ class Query(QueryBase):
         # for consistency, or get dimensions and storage class if we don't have
         # them.
         resolved_dataset_type = self._driver.get_dataset_type(dataset_type_name)
-        resolved_dimensions = resolved_dataset_type.dimensions.as_group()
+        resolved_dimensions = resolved_dataset_type.dimensions
         if dimensions is not None and dimensions != resolved_dimensions:
             raise DatasetTypeError(
                 f"Given dimensions {dimensions} for dataset type {dataset_type_name!r} do not match the "

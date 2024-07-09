@@ -428,7 +428,7 @@ class DimensionRecord:
             Newly-constructed object.
         """
         if universe is None and registry is None:
-            raise ValueError("One of universe or registry is required to convert names to a DimensionGraph")
+            raise ValueError("One of universe or registry is required to convert names to a DimensionGroup")
         if universe is None and registry is not None:
             universe = registry.dimensions
         if universe is None:

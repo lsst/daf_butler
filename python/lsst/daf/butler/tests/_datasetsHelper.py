@@ -44,7 +44,7 @@ from lsst.daf.butler.datastore import Datastore
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import Config, DatasetId, Dimension, DimensionGraph
+    from lsst.daf.butler import Config, DatasetId
 
 
 class DatasetTestHelper:
@@ -53,7 +53,7 @@ class DatasetTestHelper:
     def makeDatasetRef(
         self,
         datasetTypeName: str,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str | Dimension],
+        dimensions: DimensionGroup | Iterable[str],
         storageClass: StorageClass | str,
         dataId: DataCoordinate | Mapping[str, Any],
         *,
@@ -67,8 +67,7 @@ class DatasetTestHelper:
         ----------
         datasetTypeName : `str`
             The name of the dataset type.
-        dimensions : `DimensionGroup` or `~collections.abc.Iterable` of `str` \
-                or `Dimension`
+        dimensions : `DimensionGroup` or `~collections.abc.Iterable` of `str`
             The dimensions to use for this dataset type.
         storageClass : `StorageClass` or `str`
             The relevant storage class.
@@ -100,7 +99,7 @@ class DatasetTestHelper:
     def _makeDatasetRef(
         self,
         datasetTypeName: str,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str | Dimension],
+        dimensions: DimensionGroup | Iterable[str],
         storageClass: StorageClass | str,
         dataId: DataCoordinate | Mapping,
         *,

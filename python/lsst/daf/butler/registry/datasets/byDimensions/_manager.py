@@ -322,7 +322,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             )
         record = self._fetch_dataset_type_record(datasetType.name)
         if record is None:
-            dimensionsKey = self._dimensions.save_dimension_group(datasetType.dimensions.as_group())
+            dimensionsKey = self._dimensions.save_dimension_group(datasetType.dimensions)
             tagTableName = makeTagTableName(datasetType, dimensionsKey)
             self._db.ensureTableExists(
                 tagTableName,

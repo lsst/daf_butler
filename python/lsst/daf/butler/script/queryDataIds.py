@@ -142,13 +142,11 @@ def queryDataIds(
         for dataset_type in dataset_types:
             if dataset_type_dimensions is None:
                 # Seed with dimensions of first dataset type.
-                dataset_type_dimensions = dataset_type.dimensions.as_group()
+                dataset_type_dimensions = dataset_type.dimensions
             else:
                 # Only retain dimensions that are in the current
                 # set AND the set from this dataset type.
-                dataset_type_dimensions = dataset_type_dimensions.intersection(
-                    dataset_type.dimensions.as_group()
-                )
+                dataset_type_dimensions = dataset_type_dimensions.intersection(dataset_type.dimensions)
             _LOG.debug("Dimensions now %s from %s", set(dataset_type_dimensions.names), dataset_type.name)
 
             # Break out of the loop early. No additional dimensions

@@ -257,7 +257,7 @@ class DimensionTestCase(unittest.TestCase):
         )
 
     def testGraphs(self):
-        self.checkGroupInvariants(self.universe.empty.as_group())
+        self.checkGroupInvariants(self.universe.empty)
         for element in self.universe.getStaticElements():
             self.checkGroupInvariants(element.minimal_group)
 

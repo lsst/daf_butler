@@ -73,7 +73,7 @@ def make_identity_query_tree(universe: DimensionUniverse) -> QueryTree:
     tree : `QueryTree`
         A tree with empty dimensions.
     """
-    return QueryTree(dimensions=universe.empty.as_group())
+    return QueryTree(dimensions=universe.empty)
 
 
 @final

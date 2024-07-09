@@ -39,12 +39,12 @@ from pydantic import BaseModel, StrictBool, StrictStr
 
 from ._config_support import LookupKey
 from ._storage_class import StorageClass, StorageClassFactory
-from .dimensions import DimensionGraph, DimensionGroup, SerializedDimensionGraph
+from .dimensions import DimensionGroup
 from .json import from_json_pydantic, to_json_pydantic
 from .persistence_context import PersistenceContextVars
 
 if TYPE_CHECKING:
-    from .dimensions import Dimension, DimensionUniverse
+    from .dimensions import DimensionUniverse
     from .registry import Registry
 
 
@@ -59,7 +59,7 @@ class SerializedDatasetType(BaseModel):
 
     name: StrictStr
     storageClass: StrictStr | None = None
-    dimensions: SerializedDimensionGraph | list[StrictStr] | None = None
+    dimensions: list[StrictStr] | None = None
     parentStorageClass: StrictStr | None = None
     isCalibration: StrictBool = False
 
@@ -69,7 +69,7 @@ class SerializedDatasetType(BaseModel):
         *,
         name: str,
         storageClass: str | None = None,
-        dimensions: list | dict | None = None,
+        dimensions: list | None = None,
         parentStorageClass: str | None = None,
         isCalibration: bool = False,
     ) -> SerializedDatasetType:
@@ -88,7 +88,7 @@ class SerializedDatasetType(BaseModel):
             The name of the dataset type.
         storageClass : `str` or `None`
             The name of the storage class.
-        dimensions : `list` or `dict` or `None`
+        dimensions : `list` or `None`
             The dimensions associated with this dataset type.
         parentStorageClass : `str` or `None`
             The parent storage class name if this is a component.
@@ -104,16 +104,7 @@ class SerializedDatasetType(BaseModel):
         key = (name, storageClass or "")
         if cache is not None and (type_ := cache.get(key, None)) is not None:
             return type_
-
-        serialized_dimensions: list[str] | None
-        match dimensions:
-            case list():
-                serialized_dimensions = dimensions
-            case dict():
-                serialized_dimensions = SerializedDimensionGraph.direct(**dimensions).names
-            case None:
-                serialized_dimensions = None
-
+        serialized_dimensions = dimensions if dimensions is not None else None
         node = cls.model_construct(
             name=name,
             storageClass=storageClass,
@@ -148,11 +139,9 @@ class DatasetType:
         and underscores.  Component dataset types should contain a single
         period separating the base dataset type name from the component name
         (and may be recursive).
-    dimensions : `DimensionGroup`, `DimensionGraph`, or \
-            `~collections.abc.Iterable` [ `Dimension` or `str` ]
+    dimensions : `DimensionGroup` or `~collections.abc.Iterable` [ `str` ]
         Dimensions used to label and relate instances of this `DatasetType`.
-        If not a `DimensionGraph` or `DimensionGroup`, ``universe`` must be
-        provided as well.
+        If not a `DimensionGroup`, ``universe`` must be provided as well.
     storageClass : `StorageClass` or `str`
         Instance of a `StorageClass` or name of `StorageClass` that defines
         how this `DatasetType` is persisted.
@@ -162,7 +151,7 @@ class DatasetType:
         is not a component.
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to normalize ``dimensions`` if it
-        is not already a `DimensionGraph`.
+        is not already a `DimensionGroup`.
     isCalibration : `bool`, optional
         If `True`, this dataset type may be included in
         `~CollectionType.CALIBRATION` collections.
@@ -209,7 +198,7 @@ class DatasetType:
     def __init__(
         self,
         name: str,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[Dimension | str],
+        dimensions: DimensionGroup | Iterable[str],
         storageClass: StorageClass | str,
         parentStorageClass: StorageClass | str | None = None,
         *,
@@ -221,9 +210,7 @@ class DatasetType:
         self._name = name
         universe = universe or getattr(dimensions, "universe", None)
         if universe is None:
-            raise ValueError(
-                "If dimensions is not a DimensionGroup or DimensionGraph, a universe must be provided."
-            )
+            raise ValueError("If dimensions is not a DimensionGroup, a universe must be provided.")
         self._dimensions = universe.conform(dimensions)
         if name in self._dimensions.universe.governor_dimensions:
             raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
@@ -373,12 +360,12 @@ class DatasetType:
         return self._name
 
     @property
-    def dimensions(self) -> DimensionGraph:
-        """Return the dimensions of this dataset type (`DimensionGraph`).
+    def dimensions(self) -> DimensionGroup:
+        """Return the dimensions of this dataset type (`DimensionGroup`).
 
         The dimensions of a define the keys of its datasets' data IDs..
         """
-        return self._dimensions._as_graph()
+        return self._dimensions
 
     @property
     def storageClass(self) -> StorageClass:
@@ -744,14 +731,9 @@ class DatasetType:
         if universe is None:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
-
-        match simple.dimensions:
-            case list():
-                dimensions = universe.conform(simple.dimensions)
-            case SerializedDimensionGraph():
-                dimensions = universe.conform(simple.dimensions.names)
-            case None:
-                raise ValueError(f"Dimensions must be specified in {simple}")
+        if simple.dimensions is None:
+            raise ValueError(f"Dimensions must be specified in {simple}")
+        dimensions = universe.conform(simple.dimensions)
 
         newType = cls(
             name=simple.name,
