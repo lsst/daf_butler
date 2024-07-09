@@ -583,9 +583,7 @@ class QueryBackend(Generic[_C]):
         relation : `lsst.daf.relation.Relation`
             Relation with the requested columns and no rows.
         """
-        column_tags: set[ColumnTag] = set(
-            DimensionKeyColumnTag.generate(dataset_type.dimensions.required.names)
-        )
+        column_tags: set[ColumnTag] = set(DimensionKeyColumnTag.generate(dataset_type.dimensions.required))
         column_tags.update(DatasetColumnTag.generate(dataset_type.name, columns))
         return context.preferred_engine.make_doomed_relation(columns=column_tags, messages=list(messages))
 

@@ -787,7 +787,7 @@ class _DataCoordinateRecordsView(Mapping[str, DimensionRecord | None]):
     __slots__ = ("_target",)
 
     def __repr__(self) -> str:
-        terms = [f"{d}: {self[d]!r}" for d in self._target.dimensions.elements.names]
+        terms = [f"{d}: {self[d]!r}" for d in self._target.dimensions.elements]
         return "{{{}}}".format(", ".join(terms))
 
     def __str__(self) -> str:
