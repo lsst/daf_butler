@@ -529,7 +529,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         payload.columns_available[DimensionKeyColumnTag(self.universe.commonSkyPix.name)] = (
             payload.from_clause.columns.skypix_index
         )
-        for dimension_name in element.minimal_group.required.names:
+        for dimension_name in element.minimal_group.required:
             payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
                 dimension_name
             ]
@@ -596,7 +596,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                     "skypix_system",
                     "skypix_level",
                     "skypix_index",
-                    *element.minimal_group.required.names,
+                    *element.minimal_group.required,
                 ),
             },
             foreignKeys=[

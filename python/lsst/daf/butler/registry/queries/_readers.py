@@ -142,7 +142,7 @@ class _BasicDataCoordinateReader(DataCoordinateReader):
 
     def __init__(self, dimensions: DimensionGroup):
         self._dimensions = dimensions
-        self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions.required.names)
+        self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions.required)
 
     __slots__ = ("_dimensions", "_tags")
 

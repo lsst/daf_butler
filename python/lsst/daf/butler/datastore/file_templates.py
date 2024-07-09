@@ -819,7 +819,7 @@ class FileTemplate:
         # Fall back to dataId keys if we have them but no links.
         # dataId keys must still be present in the template
         try:
-            minimal = set(entity.dimensions.required.names)
+            minimal = set(entity.dimensions.required)
             maximal = set(entity.dimensions.names)
         except AttributeError:
             try:
@@ -888,5 +888,5 @@ class FileTemplate:
         # update to be more like the real world while still providing our
         # only tests of important behavior.
         if len(entity.dimensions.skypix) == 1:
-            (alias,) = entity.dimensions.skypix.names
+            (alias,) = entity.dimensions.skypix
         return alias

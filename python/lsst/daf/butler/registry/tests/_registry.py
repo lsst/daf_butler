@@ -1211,9 +1211,7 @@ class RegistryTests(ABC):
                 (ref,) = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
                 registry.associate(tagged2, [ref])
 
-        dimensions = registry.dimensions.conform(
-            rawType.dimensions.required.names | calexpType.dimensions.required.names
-        )
+        dimensions = registry.dimensions.conform(rawType.dimensions.required | calexpType.dimensions.required)
         # Test that single dim string works as well as list of str
         rows = registry.queryDataIds("visit", datasets=rawType, collections=run1).expanded().toSet()
         rowsI = registry.queryDataIds(["visit"], datasets=rawType, collections=run1).expanded().toSet()
@@ -1337,9 +1335,7 @@ class RegistryTests(ABC):
         registry.registerDatasetType(measType)
 
         dimensions = registry.dimensions.conform(
-            calexpType.dimensions.required.names
-            | mergeType.dimensions.required.names
-            | measType.dimensions.required.names
+            calexpType.dimensions.required | mergeType.dimensions.required | measType.dimensions.required
         )
 
         # add pre-existing datasets

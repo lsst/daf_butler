@@ -271,7 +271,7 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                 "out if they have already been added or will be added later."
             )
         for element_name in missing_columns.dimension_records:
-            if element_name not in dimensions.elements.names:
+            if element_name not in dimensions.elements:
                 raise ColumnError(
                     f"Cannot join dimension element {element_name} whose dimensions are not a "
                     f"subset of {dimensions}."

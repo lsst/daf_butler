@@ -197,9 +197,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         )
         if data_ids is not None:
             relation = relation.join(
-                context.make_data_id_relation(
-                    data_ids, self.datasetType.dimensions.required.names
-                ).transferred_to(context.sql_engine),
+                context.make_data_id_relation(data_ids, self.datasetType.dimensions.required).transferred_to(
+                    context.sql_engine
+                ),
             )
         return relation
 
@@ -314,9 +314,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         calib_pkey_tag = DatasetColumnTag(self.datasetType.name, "calib_pkey")
         dataset_id_tag = DatasetColumnTag(self.datasetType.name, "dataset_id")
         timespan_tag = DatasetColumnTag(self.datasetType.name, "timespan")
-        data_id_tags = [
-            (name, DimensionKeyColumnTag(name)) for name in self.datasetType.dimensions.required.names
-        ]
+        data_id_tags = [(name, DimensionKeyColumnTag(name)) for name in self.datasetType.dimensions.required]
         # Set up collections to populate with the rows we'll want to modify.
         # The insert rows will have the same values for collection and
         # dataset type.
@@ -509,7 +507,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 value=collection_col,
             )
         # Add more column definitions, starting with the data ID.
-        for dimension_name in self.datasetType.dimensions.required.names:
+        for dimension_name in self.datasetType.dimensions.required:
             payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
                 dimension_name
             ]
@@ -692,7 +690,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                     collections, collection_col
                 )
         # Add more column definitions, starting with the data ID.
-        sql_projection.joiner.extract_dimensions(self.datasetType.dimensions.required.names)
+        sql_projection.joiner.extract_dimensions(self.datasetType.dimensions.required)
         # We can always get the dataset_id from the tags/calibs table, even if
         # could also get it from the 'static' dataset table.
         if "dataset_id" in fields:
@@ -794,7 +792,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
         return DataCoordinate.from_required_values(
             self.datasetType.dimensions,
-            tuple(row[dimension] for dimension in self.datasetType.dimensions.required.names),
+            tuple(row[dimension] for dimension in self.datasetType.dimensions.required),
         )
 
     def refresh_collection_summaries(self) -> None:
@@ -1062,11 +1060,8 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 tags.columns.dataset_id,
                 tags.columns.dataset_type_id.label("type_id"),
                 tmp_tags.columns.dataset_type_id.label("new_type_id"),
-                *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
-                *[
-                    tmp_tags.columns[dim].label(f"new_{dim}")
-                    for dim in self.datasetType.dimensions.required.names
-                ],
+                *[tags.columns[dim] for dim in self.datasetType.dimensions.required],
+                *[tmp_tags.columns[dim].label(f"new_{dim}") for dim in self.datasetType.dimensions.required],
             )
             .select_from(tags.join(tmp_tags, tags.columns.dataset_id == tmp_tags.columns.dataset_id))
             .where(
@@ -1074,7 +1069,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     tags.columns.dataset_type_id != tmp_tags.columns.dataset_type_id,
                     *[
                         tags.columns[dim] != tmp_tags.columns[dim]
-                        for dim in self.datasetType.dimensions.required.names
+                        for dim in self.datasetType.dimensions.required
                     ],
                 )
             )
@@ -1091,7 +1086,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         # Check that matching run+dataId have the same dataset ID.
         query = (
             sqlalchemy.sql.select(
-                *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
+                *[tags.columns[dim] for dim in self.datasetType.dimensions.required],
                 tags.columns.dataset_id,
                 tmp_tags.columns.dataset_id.label("new_dataset_id"),
                 tags.columns[collFkName],
@@ -1105,7 +1100,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                         tags.columns[collFkName] == tmp_tags.columns[collFkName],
                         *[
                             tags.columns[dim] == tmp_tags.columns[dim]
-                            for dim in self.datasetType.dimensions.required.names
+                            for dim in self.datasetType.dimensions.required
                         ],
                     ),
                 )
@@ -1116,7 +1111,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         with self._db.query(query) as result:
             # only include the first one in the exception message
             if (row := result.first()) is not None:
-                data_id = {dim: getattr(row, dim) for dim in self.datasetType.dimensions.required.names}
+                data_id = {dim: getattr(row, dim) for dim in self.datasetType.dimensions.required}
                 existing_collection = self._collections[getattr(row, collFkName)].name
                 new_collection = self._collections[getattr(row, f"new_{collFkName}")].name
                 raise ConflictingDefinitionError(
