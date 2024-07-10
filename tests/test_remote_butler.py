@@ -199,11 +199,6 @@ class RemoteButlerRegistryTests(RegistryTests):
         # RemoteButler.
         pass
 
-    @unittest.expectedFailure
-    def test_skypix_constraint_queries(self) -> None:
-        # TODO DM-44362
-        return super().test_skypix_constraint_queries()
-
 
 @unittest.skipIf(create_test_server is None, "Server dependencies not installed.")
 class RemoteButlerSqliteRegistryTests(RemoteButlerRegistryTests, unittest.TestCase):

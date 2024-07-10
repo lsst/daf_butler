@@ -40,6 +40,7 @@ from lsst.sphgeom import Region
 from ... import ddl
 from ..._column_tags import DimensionKeyColumnTag, DimensionRecordColumnTag
 from ..._column_type_info import LogicalColumn
+from ..._exceptions import UnimplementedQueryError
 from ..._named import NamedKeyDict
 from ...dimensions import (
     DatabaseDimensionElement,
@@ -1100,7 +1101,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
         # Reject spatial joins that are nested inside OR or NOT, because the
         # postprocessing needed for those would be a lot harder.
         if flags & PredicateVisitFlags.INVERTED or flags & PredicateVisitFlags.HAS_OR_SIBLINGS:
-            raise NotImplementedError("Spatial overlap joins nested inside OR or NOT are not supported.")
+            raise UnimplementedQueryError("Spatial overlap joins nested inside OR or NOT are not supported.")
         # Delegate to super to check for invalid joins and record this
         # "connection" for use when seeing whether to add an automatic join
         # later.
@@ -1137,7 +1138,7 @@ class _CommonSkyPixMediatedOverlapsVisitor(OverlapsVisitor):
                 # tile is necessary but not sufficient for that.
                 self.builder.postprocessing.spatial_join_filtering.append((a, b))
             case _:
-                raise NotImplementedError(f"Unsupported combination for spatial join: {a, b}.")
+                raise UnimplementedQueryError(f"Unsupported combination for spatial join: {a, b}.")
         return qt.Predicate.from_bool(True)
 
     def _join_common_skypix_overlap(self, element: DatabaseDimensionElement) -> None:

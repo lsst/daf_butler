@@ -484,7 +484,7 @@ class DirectQueryDriver(QueryDriver):
             Column expressions to sort by.
         find_first_dataset : `str` or `None`, optional
             Name of a dataset type for which only one result row for each data
-            ID should be returned, with the colletions searched in order.
+            ID should be returned, with the collections searched in order.
 
         Returns
         -------
