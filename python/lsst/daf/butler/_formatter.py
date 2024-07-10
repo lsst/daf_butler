@@ -870,6 +870,14 @@ class FormatterV2:
             A cache manager to use to allow a formatter to cache the written
             file.
 
+        Raises
+        ------
+        FormatterNotImplementedError
+            Raised if the formatter subclass has not implemented
+            `write_local_file` and `to_bytes` was not called.
+        Exception
+            Raised if there is an error serializing the dataset to disk.
+
         Notes
         -----
         The intent is for subclasses to implement either `to_bytes` or
@@ -904,6 +912,12 @@ class FormatterV2:
         -------
         written : `bool`
             Flag to indicate whether the direct write did happen.
+
+        Raises
+        ------
+        Exception
+            Raised if there was a failure from serializing to bytes that
+            was not `FormatterNotImplementedError`.
 
         Notes
         -----
@@ -963,6 +977,14 @@ class FormatterV2:
         cache_manager : `AbstractDatastoreCacheManager`
             A cache manager to use to allow a formatter to cache the written
             file.
+
+        Raises
+        ------
+        FormatterNotImplementedError
+            Raised if the formatter subclass has not implemented
+            `write_local_file`.
+        Exception
+            Raised if there is an error serializing the dataset to disk.
         """
         cache_manager = self._ensure_cache(cache_manager)
 
@@ -1016,6 +1038,12 @@ class FormatterV2:
         -----
         By default this method will attempt to call `to_bytes` and then
         write these bytes to the file.
+
+        Raises
+        ------
+        FormatterNotImplementedError
+            Raised if the formatter subclass has not implemented this method
+            or has failed to implement the `to_bytes` method.
         """
         log.debug("Writing bytes directly to %s", uri)
         uri.write(self.to_bytes(in_memory_dataset))
@@ -1033,6 +1061,12 @@ class FormatterV2:
         -------
         serialized_dataset : `bytes`
             Bytes representing the serialized dataset.
+
+        Raises
+        ------
+        FormatterNotImplementedError
+            Raised if the formatter has not implemented the method. This will
+            not cause a problem if `write_local_file` has been implemented.
         """
         raise FormatterNotImplementedError(
             f"This formatter can not convert {get_full_type_name(in_memory_dataset)} directly to bytes."
