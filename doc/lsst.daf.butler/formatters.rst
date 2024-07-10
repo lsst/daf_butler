@@ -244,16 +244,17 @@ There are three methods a formatter author can implement in order to read a Pyth
     The ``read_from_uri`` method is given a URI which might be local or remote and the method can access the resource directly.
     This can be especially helpful if the formatter can support partial reads of a remote resource if a component is requested or some parameters that subset the data.
     This file might be read from the local cache, if it is available, but will not trigger a download of the remote resource to the local cache.
-    If the whole file is being accessed and it is desirable to cache the file locally, it might be preferable to also implement to return `NotImplemented`, which will trigger the download to a local file which might be cached.
-    This method will be called with that local file if ``read_from_local_file`` is not implemented.
+    If the formatter is being called without a component or parameters such that the whole file would be read and if the dataset should be cached, this method will be called with a local file.
 
 ``read_from_stream``
     The ``read_from_stream`` method is given a file handle (usually a `lsst.resources.ResourceHandleProtocol`) which might be a local or remote resource.
     The resource might be read from local cache but the file will not be downloaded to the local cache prior to calling this method.
+    If the file is being read without components or parameters and if it would be cached, this method will be bypassed if a file reader is available.
 
 By default these methods are disabled by setting corresponding class properties named ``can_read_from_*`` to `False`.
 To activate specific implementations a formatter author must set the corresponding properties to `True`.
 Only one of these methods needs to be implemented by a formatter author, but if multiple options are available the priority order is specified in the `FormatterV2.read` documentation.
+Any of these methods can be skipped by the formatter if it returns `NotImplemented`.
 
 Writing a Dataset
 ^^^^^^^^^^^^^^^^^

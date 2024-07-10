@@ -90,8 +90,7 @@ class FormatterV2:
     ----------
     file_descriptor : `FileDescriptor`, optional
         Identifies the file to read or write, and the associated storage
-        classes and parameter information.  Its value can be `None` if the
-        caller will never call `Formatter.read` or `Formatter.write`.
+        classes and parameter information.
     ref : `DatasetRef`
         The dataset associated with this formatter. Should not be a component
         dataset ref.
@@ -110,19 +109,22 @@ class FormatterV2:
     of `read_from_stream`, `read_from_uri`, or `read_from_local_file`. The
     method `read_from_uri` will always be attempted first and could be more
     efficient (since it allows the possibility for a subset of the data file to
-    be accessed when parameters or components are specified) but it will not
-    update the local cache. If the entire contents of the remote file are
-    being accessed consider returning `NotImplemented` and falling back to
-    using a local file either by calling `read_from_uri` again or else
-    calling `read_from_local_file`, since this will store the file in the
-    cache to allow a more efficient subsequent read.
+    be accessed remotely when parameters or components are specified) but it
+    will not update the local cache. If the entire contents of the remote file
+    are being accessed (no component or parameters defined) and the dataset
+    would be cached, `read_from_uri` will be called with a local file. If the
+    file is remote and the parameters that have been included are known to be
+    more efficiently handled with a local file, the `read_from_uri` method can
+    return `NotImplemented` to indicate that a local file should be given
+    instead.
 
     Similarly for writes, the `write` method can not be subclassed. Instead
     the formatter author should implement `to_bytes` or `write_local_file`.
-    For local URIs the system will always call `write_local_file`
-    to ensure atomic writes are implemented. For remote URIs with local caching
-    disabled, `to_bytes` will be called first. The default implementation
-    of `write_local_file` will call `to_bytes`.
+    For local URIs the system will always call `write_local_file` first (which
+    by default will call `to_bytes`) to ensure atomic writes are implemented.
+    For remote URIs with local caching disabled, `to_bytes` will be called
+    first and the remote updated directly. If the dataset should be cached
+    it will always be written locally first.
     """
 
     unsupported_parameters: ClassVar[Set[str] | None] = frozenset()
@@ -176,7 +178,7 @@ class FormatterV2:
         self._file_descriptor = file_descriptor
 
         if ref.isComponent():
-            # Raise or convert to composite ref?
+            # It is a component ref for disassembled composites.
             ref = ref.makeCompositeRef()
         self._dataset_ref = ref
 
@@ -388,11 +390,12 @@ class FormatterV2:
         * `read_from_local_file`
         * `read_from_uri` (but with a local file)
 
-        It is possible for `read_from_uri` to be skipped if the implementation
-        raises `FormatterNotImplementedError`. If `read_from_stream` is
-        called `read_from_local_file` will never be called. If `read_from_uri`
-        was skipped and `read_from_local_file` is not implemented, it will
-        be called with a local file as a last resort.
+        Any of these methods can return `NotImplemented` if there is a desire
+        to skip to the next one in the list. If a dataset is being requested
+        with no component, no parameters, and it should also be added to the
+        local cache, the first two calls will be skipped (unless
+        `read_from_stream` is the only implemented read method) such that a
+        local file will be used.
 
         A Formatter can also read a file from within a Zip file if the
         URI associated with the `FileDescriptor` corresponds to a file with
@@ -575,7 +578,7 @@ class FormatterV2:
             for reading differed from the `StorageClass` used to write the
             file.
         expected_size : `int`, optional
-            If known the expected size of the resource to read. This can be
+            If known, the expected size of the resource to read. This can be
             used for verification or to decide whether to do a direct read or a
             file download. ``-1`` indicates the file size is not known.
         cache_manager : `AbstractDatastoreCacheManager`
@@ -620,7 +623,7 @@ class FormatterV2:
             for reading differed from the `StorageClass` used to write the
             file.
         expected_size : `int`, optional
-            If known the expected size of the resource to read. This can be
+            If known, the expected size of the resource to read. This can be
             ``-1`` indicates the file size is not known.
         cache_manager : `AbstractDatastoreCacheManager`
             A cache manager to use to allow a formatter to check if there is
@@ -666,7 +669,7 @@ class FormatterV2:
             for reading differed from the `StorageClass` used to write the
             file.
         expected_size : `int`, optional
-            If known the expected size of the resource to read. This can be
+            If known, the expected size of the resource to read. This can be
             used for verification or to decide whether to do a direct read or a
             file download. ``-1`` indicates the file size is not known.
         cache_manager : `AbstractDatastoreCacheManager`
@@ -775,7 +778,7 @@ class FormatterV2:
         component : `str` or `None`, optional
             The component to be read from the dataset.
         expected_size : `int`, optional
-            If known the expected size of the resource to read. This can be
+            If known, the expected size of the resource to read. This can be
             ``-1`` indicates the file size is not known.
 
         Returns
@@ -820,7 +823,7 @@ class FormatterV2:
         component : `str` or `None`, optional
             The component to be read from the dataset.
         expected_size : `int`, optional
-            If known the expected size of the resource to read. This can be
+            If known, the expected size of the resource to read. This can be
             ``-1`` indicates the file size is not known.
 
         Returns
@@ -847,7 +850,7 @@ class FormatterV2:
         component : `str` or `None`, optional
             The component to be read from the dataset.
         expected_size : `int`, optional
-            If known the expected size of the resource to read. This can be
+            If known, the expected size of the resource to read. This can be
             ``-1`` indicates the file size is not known.
 
         Returns
@@ -1213,14 +1216,13 @@ class Formatter(metaclass=ABCMeta):
     ----------
     fileDescriptor : `FileDescriptor`, optional
         Identifies the file to read or write, and the associated storage
-        classes and parameter information.  Its value can be `None` if the
-        caller will never call `Formatter.read` or `Formatter.write`.
+        classes and parameter information.
     dataId : `DataCoordinate`
         Data ID associated with this formatter.
     writeParameters : `dict`, optional
         Parameters to control how the dataset is serialized.
     writeRecipes : `dict`, optional
-        Detailed write Recipes indexed by recipe name.
+        Detailed write recipes indexed by recipe name.
     **kwargs
         Additional parameters that can allow parameters
         from `FormatterV2` to be provided.
