@@ -35,6 +35,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 import pydantic
+from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
 from pydantic_core import core_schema
 
@@ -101,7 +102,13 @@ class SortedSequenceSet(Set[str]):
         """
         return self._seq
 
+    # TODO: remove on DM-45185
     @property
+    @deprecated(
+        "Deprecated in favor of direct iteration over the parent set.  Will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def names(self) -> Set[str]:
         """An alias to ``self``.
 
@@ -265,6 +272,12 @@ class DimensionGroup:  # numpydoc ignore=PR02
     def __repr__(self) -> str:
         return f"DimensionGroup({self.names})"
 
+    # TODO: remove on DM-45185
+    @deprecated(
+        "Deprecated as no longer necessary (this method always returns 'self').  Will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def as_group(self) -> DimensionGroup:
         """Return ``self``.
 
