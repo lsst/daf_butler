@@ -432,7 +432,8 @@ class FormatterV2:
         """
         # If the file to read is a ZIP file with a fragment requesting
         # a file within the ZIP file, it is no longer possible to use the
-        # direct read from URI option.
+        # direct read from URI option and the contents of the Zip file must
+        # be extracted.
         uri = self.file_descriptor.location.uri
         if uri.fragment and uri.fragment.startswith("zip-path="):
             _, path_in_zip = uri.fragment.split("=")
@@ -468,11 +469,22 @@ class FormatterV2:
                 f"Formatter {self.name()} could not read the file at {uri} using any method."
             )
 
+        # If the there are no parameters, no component request, and
+        # the file should be cached, it is better to defer the read_from_uri
+        # to use the local file and populate the cache.
+        prefer_local = False
+        if (
+            component is None
+            and not self.file_descriptor.parameters
+            and self._ensure_cache(cache_manager).should_be_cached(self._get_cache_ref())
+        ):
+            prefer_local = True
+
         # First see if the formatter can support direct remote read from
-        # a URI. We allow NotImplemented to be returned by the formatter
-        # in case the formatter wishes to defer to the
-        # local file implementation which will trigger a cache write.
-        if self.can_read_from_uri:
+        # a URI. This can be called later from the local path. If it returns
+        # NotImplemented the formatter decided on its own that local
+        # reads are preferred.
+        if not prefer_local and self.can_read_from_uri:
             result = self.read_directly_from_possibly_cached_uri(
                 component, expected_size, cache_manager=cache_manager
             )
@@ -481,8 +493,11 @@ class FormatterV2:
 
         # Some formatters might want to be able to read directly from
         # an open file stream. This is preferred over forcing a download
-        # to local file system.
-        if self.can_read_from_stream:
+        # to local file system unless a file read option is available and we
+        # want to store it in the cache because the whole file is being read.
+        if self.can_read_from_stream and not (
+            prefer_local and (self.can_read_from_uri or self.can_read_from_local_file)
+        ):
             result = self.read_from_possibly_cached_stream(
                 component, expected_size, cache_manager=cache_manager
             )
@@ -490,7 +505,7 @@ class FormatterV2:
                 return result
 
         # Finally, try to read the local file.
-        if self.can_read_from_local_file:
+        if self.can_read_from_local_file or self.can_read_from_uri:
             result = self.read_from_possibly_cached_local_file(
                 component, expected_size, cache_manager=cache_manager
             )
