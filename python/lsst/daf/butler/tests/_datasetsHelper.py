@@ -39,14 +39,7 @@ import os
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from lsst.daf.butler import (
-    DataCoordinate,
-    DatasetRef,
-    DatasetType,
-    DimensionGroup,
-    FormatterNotImplementedError,
-    StorageClass,
-)
+from lsst.daf.butler import DataCoordinate, DatasetRef, DatasetType, DimensionGroup, StorageClass
 from lsst.daf.butler.datastore import Datastore
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.resources import ResourcePath
@@ -195,7 +188,7 @@ class BadWriteFormatter(YamlFormatter):
     can_read_from_stream = False
 
     def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
-        raise FormatterNotImplementedError("This formatter can not read anything")
+        return NotImplemented
 
     def write_direct(
         self,

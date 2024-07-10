@@ -106,21 +106,23 @@ class FormatterV2:
     Notes
     -----
     A `FormatterV2` author should not override the default `read` or `write`
-    method. Instead for read the should implement one or all of
-    `read_from_stream`, `read_from_uri`, or `read_from_local_file`. The method
-    `read_from_uri` will always be attempted first and could be more efficient
-    (since it allows the possibility for a subset of the data file to be
-    accessed when parameters or components are specified) but it will not
+    method. Instead for read the formatter author should implement one or all
+    of `read_from_stream`, `read_from_uri`, or `read_from_local_file`. The
+    method `read_from_uri` will always be attempted first and could be more
+    efficient (since it allows the possibility for a subset of the data file to
+    be accessed when parameters or components are specified) but it will not
     update the local cache. If the entire contents of the remote file are
-    being accessed consider raising `FormatterNotImplementedError` and falling
-    back to `read_from_local_file` since this will store the file in the
+    being accessed consider returning `NotImplemented` and falling back to
+    using a local file either by calling `read_from_uri` again or else
+    calling `read_from_local_file`, since this will store the file in the
     cache to allow a more efficient subsequent read.
 
-    Similarly for writes, the recommendation is not to override the `write`
-    method but instead to implement `write_local_file` and, optionally,
-    `to_bytes`. For local URIs the system will always call `write_local_file`
+    Similarly for writes, the `write` method can not be subclassed. Instead
+    the formatter author should implement `to_bytes` or `write_local_file`.
+    For local URIs the system will always call `write_local_file`
     to ensure atomic writes are implemented. For remote URIs with local caching
-    disabled, `to_bytes` will be called first.
+    disabled, `to_bytes` will be called first. The default implementation
+    of `write_local_file` will call `to_bytes`.
     """
 
     unsupported_parameters: ClassVar[Set[str] | None] = frozenset()
@@ -360,7 +362,7 @@ class FormatterV2:
             for reading differed from the `StorageClass` used to write the
             file.
         expected_size : `int`, optional
-            If known the expected size of the resource to read. This can be
+            If known, the expected size of the resource to read. This can be
             used for verification or to decide whether to do a direct read or a
             file download. ``-1`` indicates the file size is not known.
         cache_manager : `AbstractDatastoreCacheManager`
@@ -440,7 +442,10 @@ class FormatterV2:
                 with zipfile.ZipFile(fd) as zf:  # type: ignore
                     if self.can_read_from_stream:
                         with contextlib.closing(zf.open(path_in_zip)) as zip_fd:
-                            return self.read_from_stream(zip_fd, component, expected_size=expected_size)
+                            result = self.read_from_stream(zip_fd, component, expected_size=expected_size)
+
+                        if result is not NotImplemented:
+                            return result
 
                     # For now for both URI and local file options we retrieve
                     # the bytes to a temporary local and use that.
@@ -449,40 +454,51 @@ class FormatterV2:
                         tmp_uri.write(zf.read(path_in_zip))
 
                         if self.can_read_from_local_file:
-                            return self.read_from_local_file(tmp_uri, component, expected_size=expected_size)
+                            result = self.read_from_local_file(
+                                tmp_uri, component, expected_size=expected_size
+                            )
+                            if result is not NotImplemented:
+                                return result
                         if self.can_read_from_uri:
-                            return self.read_from_uri(tmp_uri, component, expected_size=expected_size)
+                            result = self.read_from_uri(tmp_uri, component, expected_size=expected_size)
+                            if result is not NotImplemented:
+                                return result
 
             raise FormatterNotImplementedError(
-                f"Formatter {self.name()} could not read the file using any method."
+                f"Formatter {self.name()} could not read the file at {uri} using any method."
             )
 
         # First see if the formatter can support direct remote read from
-        # a URI. We allow FormatterNotImplementedError to be raised by
-        # the formatter in case the formatter wishes to defer to the
+        # a URI. We allow NotImplemented to be returned by the formatter
+        # in case the formatter wishes to defer to the
         # local file implementation which will trigger a cache write.
         if self.can_read_from_uri:
-            with contextlib.suppress(FormatterNotImplementedError):
-                return self.read_directly_from_possibly_cached_uri(
-                    component, expected_size, cache_manager=cache_manager
-                )
+            result = self.read_directly_from_possibly_cached_uri(
+                component, expected_size, cache_manager=cache_manager
+            )
+            if result is not NotImplemented:
+                return result
 
         # Some formatters might want to be able to read directly from
         # an open file stream. This is preferred over forcing a download
         # to local file system.
         if self.can_read_from_stream:
-            return self.read_from_possibly_cached_stream(
+            result = self.read_from_possibly_cached_stream(
                 component, expected_size, cache_manager=cache_manager
             )
+            if result is not NotImplemented:
+                return result
 
         # Finally, try to read the local file.
         if self.can_read_from_local_file:
-            return self.read_from_possibly_cached_local_file(
+            result = self.read_from_possibly_cached_local_file(
                 component, expected_size, cache_manager=cache_manager
             )
+            if result is not NotImplemented:
+                return result
 
         raise FormatterNotImplementedError(
-            f"Formatter {self.name()} could not read the file using any method."
+            f"Formatter {self.name()} could not read the file at {uri} using any method."
         )
 
     def _read_from_possibly_cached_location_no_cache_write(
@@ -553,8 +569,9 @@ class FormatterV2:
 
         Returns
         -------
-        in_memory_dataset : `object`
-            The requested Dataset.
+        in_memory_dataset : `object` or `NotImplemented`
+            The requested Dataset or an indication that the read mode was
+            not implemented.
 
         Notes
         -----
@@ -596,8 +613,9 @@ class FormatterV2:
 
         Returns
         -------
-        in_memory_dataset : `object`
-            The requested Dataset.
+        in_memory_dataset : `object` or `NotImplemented`
+            The requested Dataset or an indication that the read mode was
+            not implemented.
 
         Notes
         -----
@@ -642,8 +660,9 @@ class FormatterV2:
 
         Returns
         -------
-        in_memory_dataset : `object`
-            The requested Dataset.
+        in_memory_dataset : `object` or `NotImplemented`
+            The requested Dataset or an indication that the read mode was
+            not implemented.
 
         Notes
         -----
@@ -660,6 +679,8 @@ class FormatterV2:
         # The component for log messages is either the component requested
         # explicitly or the component from the file descriptor.
         log_component = component if component is not None else self.file_descriptor.component
+
+        result = NotImplemented
 
         # Ensure we have a local file.
         with cache_manager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
@@ -708,24 +729,21 @@ class FormatterV2:
                         self.name(),
                     ),
                 ):
+
                     if self.can_read_from_local_file:
                         result = self.read_from_local_file(
                             local_uri, component=component, expected_size=expected_size
                         )
-                    elif self.can_read_from_uri:
+                    if result is NotImplemented and self.can_read_from_uri:
                         # If the direct URI reader was skipped earlier and
                         # there is no explicit local file implementation, pass
                         # in the guaranteed local URI to the generic reader.
                         result = self.read_from_uri(
                             local_uri, component=component, expected_size=expected_size
                         )
-                    else:
-                        raise FormatterNotImplementedError(
-                            "Unexpectedly found no formatter implementation to read from a local file "
-                            "or URI to local file."
-                        )
 
-                # File was read successfully so can move to cache
+                # File was read successfully so can move to cache.
+                # Also move to cache even if NotImplemented was returned.
                 if can_be_cached:
                     cache_manager.move_to_cache(local_uri, cache_ref)
 
@@ -747,8 +765,8 @@ class FormatterV2:
 
         Returns
         -------
-        in_memory_dataset : `object`
-            The Python object read from the resource.
+        in_memory_dataset : `object` or `NotImplemented`
+            The Python object read from the resource or `NotImplemented`.
 
         Raises
         ------
@@ -766,13 +784,13 @@ class FormatterV2:
         write resulted in the file being added to the local cache.
 
         If the full file is being read this file will not be added to the
-        local cache. Consider raising `FormatterNotImplementedError` in
+        local cache. Consider returning `NotImplemented` in
         this situation, for example if there are no parameters or component
         specified, and allowing the system to fall back to calling
         `read_from_local_file` (which will populate the cache if configured
         to do so).
         """
-        raise FormatterNotImplementedError("This formatter does not know how to read a file.")
+        return NotImplemented
 
     def read_from_stream(
         self, stream: BinaryIO | ResourceHandleProtocol, component: str | None = None, expected_size: int = -1
@@ -792,14 +810,14 @@ class FormatterV2:
 
         Returns
         -------
-        in_memory_dataset : `object`
-            The Python object read from the stream.
+        in_memory_dataset : `object` or `NotImplemented`
+            The Python object read from the stream or `NotImplemented`.
 
         Notes
         -----
         Only called if the class property ``can_read_from_stream`` is `True`.
         """
-        raise FormatterNotImplementedError("This formatter does not know how to read from a stream.")
+        return NotImplemented
 
     def read_from_local_file(
         self, local_uri: ResourcePath, component: str | None = None, expected_size: int = -1
@@ -819,8 +837,8 @@ class FormatterV2:
 
         Returns
         -------
-        in_memory_dataset : `object`
-            The Python object read from the resource.
+        in_memory_dataset : `object` or `NotImplemented`
+            The Python object read from the resource or `NotImplemented`.
 
         Raises
         ------
@@ -834,7 +852,7 @@ class FormatterV2:
         ``can_read_from_local_file`` is `True` and other options were not
         used.
         """
-        raise FormatterNotImplementedError("This formatter does not know how to read a local file.")
+        return NotImplemented
 
     @final
     def write(
@@ -2035,10 +2053,10 @@ class FormatterV1inV2(FormatterV2):
         with self._formatter._updateLocation(location):
             try:
                 result = self._formatter.read(component=component)
-            except NotImplementedError as e:
+            except NotImplementedError:
                 # V1 raises NotImplementedError but V2 is expecting something
                 # slightly different.
-                raise FormatterNotImplementedError(str(e)) from e
+                return NotImplemented
         return result
 
     def to_bytes(self, in_memory_dataset: Any) -> bytes:

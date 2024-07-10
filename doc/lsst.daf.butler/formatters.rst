@@ -244,7 +244,8 @@ There are three methods a formatter author can implement in order to read a Pyth
     The ``read_from_uri`` method is given a URI which might be local or remote and the method can access the resource directly.
     This can be especially helpful if the formatter can support partial reads of a remote resource if a component is requested or some parameters that subset the data.
     This file might be read from the local cache, if it is available, but will not trigger a download of the remote resource to the local cache.
-    If the whole file is being accessed and it is desirable to cache the file locally, it might be preferable to also implement ``read_from_local_file`` and raise `FormatterNotImplementedError`.
+    If the whole file is being accessed and it is desirable to cache the file locally, it might be preferable to also implement to return `NotImplemented`, which will trigger the download to a local file which might be cached.
+    This method will be called with that local file if ``read_from_local_file`` is not implemented.
 
 ``read_from_stream``
     The ``read_from_stream`` method is given a file handle (usually a `lsst.resources.ResourceHandleProtocol`) which might be a local or remote resource.
