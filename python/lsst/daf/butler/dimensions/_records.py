@@ -324,7 +324,7 @@ class DimensionRecord:
             raise TypeError(f"Invalid fields for {self.definition} dimension record: {set(kwargs.keys())}.")
 
     def __eq__(self, other: Any) -> bool:
-        if type(other) != type(self):
+        if type(other) is not type(self):
             return False
         return self.dataId == other.dataId
 
