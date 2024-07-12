@@ -27,6 +27,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -35,9 +36,12 @@ from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
 from ...dimensions import DataCoordinate, DimensionGraph, DimensionGroup
 from ...queries import DataCoordinateQueryResults, Query
+from ...registry import Registry
 from ...registry.queries import DataCoordinateQueryResults as LegacyDataCoordinateQueryResults
 from ...registry.queries import ParentDatasetQueryResults
 from ._query_common import CommonQueryArguments, LegacyQueryResultsMixin, QueryFactory
+from ._query_datasets import QueryDriverDatasetRefQueryResults
+from ._utilities import resolve_collections
 
 
 class QueryDriverDataCoordinateQueryResults(
@@ -59,6 +63,9 @@ class QueryDriverDataCoordinateQueryResults(
     args : `CommonQueryArguments`
         User-facing arguments forwarded from
         ``registry.queryDimensionRecords``.
+    registry : `Registry`
+        Registry object that will be used to query collections and dataset
+        types.
     """
 
     def __init__(
@@ -67,11 +74,13 @@ class QueryDriverDataCoordinateQueryResults(
         dimensions: DimensionGroup,
         expanded: bool,
         args: CommonQueryArguments,
+        registry: Registry,
     ) -> None:
         LegacyQueryResultsMixin.__init__(self, query_factory, args)
         LegacyDataCoordinateQueryResults.__init__(self)
         self._dimensions = dimensions
         self._expanded = expanded
+        self._registry = registry
 
     def _build_result(self, query: Query) -> DataCoordinateQueryResults:
         results = query.data_ids(self._dimensions)
@@ -102,7 +111,9 @@ class QueryDriverDataCoordinateQueryResults(
         raise NotImplementedError()
 
     def expanded(self) -> LegacyDataCoordinateQueryResults:
-        return QueryDriverDataCoordinateQueryResults(self._query_factory, self._dimensions, True, self._args)
+        return QueryDriverDataCoordinateQueryResults(
+            self._query_factory, self._dimensions, True, self._args, self._registry
+        )
 
     def subset(
         self,
@@ -120,7 +131,7 @@ class QueryDriverDataCoordinateQueryResults(
         if not dimensions.issubset(self.dimensions):
             raise ValueError(f"{dimensions} is not a subset of {self.dimensions}")
         return QueryDriverDataCoordinateQueryResults(
-            self._query_factory, dimensions, self._expanded, self._args
+            self._query_factory, dimensions, self._expanded, self._args, self._registry
         )
 
     def findDatasets(
@@ -131,7 +142,23 @@ class QueryDriverDataCoordinateQueryResults(
         findFirst: bool = True,
         components: bool = False,
     ) -> ParentDatasetQueryResults:
-        raise NotImplementedError()
+
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self._registry.getDatasetType(datasetType)
+
+        doomed_by: list[str] = []
+        resolved_collections = resolve_collections(self._registry, collections, doomed_by=doomed_by)
+        args = dataclasses.replace(self._args, collections=resolved_collections)
+
+        return QueryDriverDatasetRefQueryResults(
+            self._query_factory,
+            args,
+            dataset_type=datasetType,
+            find_first=findFirst,
+            expanded=self._expanded,
+            extra_dimensions=self._dimensions,
+            doomed_by=doomed_by,
+        )
 
     def findRelatedDatasets(
         self,
