@@ -77,6 +77,7 @@ from .registry._query_common import CommonQueryArguments
 from .registry._query_data_coordinates import QueryDriverDataCoordinateQueryResults
 from .registry._query_datasets import QueryDriverDatasetRefQueryResults
 from .registry._query_dimension_records import QueryDriverDimensionRecordQueryResults
+from .registry._utilities import resolve_collections
 from .server_models import (
     ExpandDataIdRequestModel,
     ExpandDataIdResponseModel,
@@ -504,7 +505,7 @@ class RemoteButlerRegistry(Registry):
             bind=dict(bind) if bind else None,
             kwargs=dict(kwargs),
             dataset_types=dataset_types,
-            collections=self._resolve_collections(collections, doomed_by),
+            collections=resolve_collections(self, collections, doomed_by),
         )
 
     def queryDatasetAssociations(
@@ -524,21 +525,6 @@ class RemoteButlerRegistry(Registry):
     @storageClasses.setter
     def storageClasses(self, value: StorageClassFactory) -> None:
         raise NotImplementedError()
-
-    def _resolve_collections(
-        self, collections: CollectionArgType | None, doomed_by: list[str] | None = None
-    ) -> list[str] | None:
-        if collections is None:
-            return list(self.defaults.collections)
-
-        wildcard = CollectionWildcard.from_expression(collections)
-        if wildcard.patterns:
-            result = list(self.queryCollections(collections))
-            if not result and doomed_by is not None:
-                doomed_by.append(f"No collections found matching expression {wildcard}")
-            return result
-        else:
-            return list(wildcard.strings)
 
     def _resolve_dataset_types(self, dataset_types: object | None) -> list[str]:
         if dataset_types is None:
