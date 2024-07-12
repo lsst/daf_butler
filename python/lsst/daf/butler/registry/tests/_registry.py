@@ -55,7 +55,7 @@ except ImportError:
     np = None
 
 import lsst.sphgeom
-from lsst.daf.relation import Relation, RelationalAlgebraError, Transfer, iteration, sql
+from lsst.daf.relation import Relation, Transfer, iteration, sql
 
 from ..._dataset_association import DatasetAssociation
 from ..._dataset_ref import DatasetIdFactory, DatasetIdGenEnum, DatasetRef
@@ -3224,14 +3224,6 @@ class RegistryTests(ABC):
                     query = query.limit(*test.limit)
                 dataIds = self._maybeDeduplicate(tuple(dataId[k] for k in keys) for dataId in query)
                 self.assertEqual(dataIds, test.result)
-
-                # and materialize
-                query = do_query(keys).order_by(*order_by)
-                if test.limit is not None:
-                    query = query.limit(*test.limit)
-                with self.assertRaises(RelationalAlgebraError):
-                    with query.materialize():
-                        pass
 
         # errors in a name
         for order_by in ("", "-"):

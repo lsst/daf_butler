@@ -108,7 +108,9 @@ class QueryDriverDataCoordinateQueryResults(
 
     @contextmanager
     def materialize(self) -> Iterator[LegacyDataCoordinateQueryResults]:
-        raise NotImplementedError()
+        # This stub will give correct results but may be much slower than the
+        # original version.
+        yield self
 
     def expanded(self) -> LegacyDataCoordinateQueryResults:
         return QueryDriverDataCoordinateQueryResults(

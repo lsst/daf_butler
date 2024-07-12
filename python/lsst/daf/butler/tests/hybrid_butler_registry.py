@@ -409,9 +409,6 @@ class _HybridDataCoordinateQueryResults:
             direct=self._direct.limit(limit, offset), remote=self._remote.limit(limit, offset)
         )
 
-    def materialize(self) -> contextlib.AbstractContextManager[DataCoordinateQueryResults]:
-        return self._direct.materialize()
-
     def expanded(self) -> _HybridDataCoordinateQueryResults:
         return _HybridDataCoordinateQueryResults(
             remote=self._remote.expanded(), direct=self._direct.expanded()
