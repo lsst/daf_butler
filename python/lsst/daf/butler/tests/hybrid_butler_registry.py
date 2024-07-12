@@ -45,12 +45,7 @@ from ..dimensions import (
     DimensionUniverse,
 )
 from ..registry import CollectionArgType, CollectionSummary, CollectionType, Registry, RegistryDefaults
-from ..registry.queries import (
-    DataCoordinateQueryResults,
-    DatasetQueryResults,
-    DimensionRecordQueryResults,
-    ParentDatasetQueryResults,
-)
+from ..registry.queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from ..registry.sql_registry import SqlRegistry
 
 
@@ -434,18 +429,6 @@ class _HybridDataCoordinateQueryResults:
         return _HybridDataCoordinateQueryResults(
             direct=lambda: self._direct().subset(dimensions, unique=unique),
             remote=self._remote.subset(dimensions, unique=unique),
-        )
-
-    def findDatasets(
-        self,
-        datasetType: DatasetType | str,
-        collections: Any,
-        *,
-        findFirst: bool = True,
-        components: bool = False,
-    ) -> ParentDatasetQueryResults:
-        return self._direct().findDatasets(
-            datasetType, collections, findFirst=findFirst, components=components
         )
 
     def findRelatedDatasets(
