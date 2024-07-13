@@ -1260,6 +1260,7 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
         format: str | None = None,
         transfer: str | None = None,
         skip_dimensions: set | None = None,
+        record_validation_info: bool = True,
     ) -> None:
         """Import datasets into this repository that were exported from a
         different butler repository via `~lsst.daf.butler.Butler.export`.
@@ -1285,6 +1286,13 @@ class Butler(LimitedButler):  # numpydoc ignore=PR02
             Transfer mode passed to `~lsst.daf.butler.Datastore.ingest`.
         skip_dimensions : `set`, optional
             Names of dimensions that should be skipped and not imported.
+        record_validation_info : `bool`, optional
+            If `True`, the default, the datastore can record validation
+            information associated with the file. If `False` the datastore
+            will not attempt to track any information such as checksums
+            or file sizes. This can be useful if such information is tracked
+            in an external system or if the file is to be compressed in place.
+            It is up to the datastore whether this parameter is relevant.
 
         Raises
         ------

@@ -1626,6 +1626,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
         format: str | None = None,
         transfer: str | None = None,
         skip_dimensions: set | None = None,
+        record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited.
         if not self.isWriteable():
@@ -1679,6 +1680,7 @@ class DirectButler(Butler):  # numpydoc ignore=PR02
                         directory=directory,
                         transfer=transfer,
                         skip_dimensions=skip_dimensions,
+                        record_validation_info=record_validation_info,
                     )
 
         if isinstance(filename, ResourcePath):

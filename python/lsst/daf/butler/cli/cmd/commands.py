@@ -114,6 +114,7 @@ def associate(**kwargs: Any) -> None:
     metavar=typeStrAcceptsMultiple,
     help="Dimensions that should be skipped during import",
 )
+@track_file_attrs_option()
 @options_file_option()
 def butler_import(*args: Any, **kwargs: Any) -> None:
     """Import data into a butler repository."""

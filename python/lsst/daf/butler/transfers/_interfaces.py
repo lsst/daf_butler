@@ -160,6 +160,7 @@ class RepoImportBackend(ABC):
         directory: ResourcePathExpression | None = None,
         transfer: str | None = None,
         skip_dimensions: set | None = None,
+        record_validation_info: bool = True,
     ) -> None:
         """Import information associated with the backend into the given
         registry and datastore.
@@ -180,5 +181,13 @@ class RepoImportBackend(ABC):
             Dimensions that should be skipped and not imported. This can
             be useful when importing into a registry that already knows
             about a specific instrument.
+        record_validation_info : `bool`, optional
+            If `True`, the default, the datastore can record validation
+            information associated with the file. If `False` the datastore
+            will not attempt to track any information such as checksums
+            or file sizes. This can be useful if such information is tracked
+            in an external system or if the file is to be compressed in place.
+            It is up to the underlying datastore whether this parameter is
+            relevant.
         """
         raise NotImplementedError()

@@ -477,6 +477,7 @@ class RemoteButler(Butler):  # numpydoc ignore=PR02
         format: str | None = None,
         transfer: str | None = None,
         skip_dimensions: set | None = None,
+        record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited.
         raise NotImplementedError()

@@ -38,6 +38,7 @@ def butlerImport(
     export_file: str | TextIO | None,
     transfer: str | None,
     skip_dimensions: Iterable[str] | None,
+    track_file_attrs: bool = True,
 ) -> None:
     """Import data into a butler repository.
 
@@ -58,6 +59,10 @@ def butlerImport(
         The external data transfer type.
     skip_dimensions : `list`, or `None`
         Dimensions that should be skipped.
+    track_file_attrs : `bool`, optional
+        Control whether file attributes such as the size or checksum should
+        be tracked by the datastore. Whether this parameter is honored
+        depends on the specific datastore implementation.
     """
     butler = Butler.from_config(repo, writeable=True)
 
@@ -70,4 +75,5 @@ def butlerImport(
         transfer=transfer,
         format="yaml",
         skip_dimensions=skip_dimensions,
+        record_validation_info=track_file_attrs,
     )
