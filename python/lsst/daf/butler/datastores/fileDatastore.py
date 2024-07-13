@@ -952,8 +952,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         NotImplementedError
             Raised if the datastore does not support the given transfer mode
             (including the case where ingest is not supported at all).
-        FileNotFoundError
-            Raised if one of the given files does not exist.
         """
         if transfer not in (None, "direct", "split") + self.root.transferModes:
             raise NotImplementedError(f"Transfer mode {transfer} not supported.")
@@ -962,12 +960,6 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         srcUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
         if not srcUri.isabs():
             srcUri = self.root.join(path)
-
-        if not srcUri.exists():
-            raise FileNotFoundError(
-                f"Resource at {srcUri} does not exist; note that paths to ingest "
-                f"are assumed to be relative to {self.root} unless they are absolute."
-            )
 
         if transfer is None:
             relpath = srcUri.relative_to(self.root)
