@@ -54,6 +54,7 @@ from ..opt import (
     query_datasets_options,
     register_dataset_types_option,
     repo_argument,
+    track_file_attrs_option,
     transfer_dimensions_option,
     transfer_option,
     verbose_option,
@@ -725,6 +726,7 @@ def collection_chain(**kwargs: Any) -> None:
     help="For relative paths in the table file, specify a prefix to use. The default is to"
     " use the current working directory.",
 )
+@track_file_attrs_option()
 @transfer_option()
 def ingest_files(**kwargs: Any) -> None:
     """Ingest files from table file.
