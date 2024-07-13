@@ -57,6 +57,7 @@ from ..registry import (
     Registry,
     RegistryDefaults,
 )
+from ..registry._exceptions import ArgumentError
 from ..registry.queries import (
     ChainedDatasetQueryResults,
     DataCoordinateQueryResults,
@@ -448,6 +449,9 @@ class RemoteButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateQueryResults:
+        if collections is not None and datasets is None:
+            raise ArgumentError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
+
         dimensions = self.dimensions.conform(dimensions)
         args = self._convert_common_query_arguments(
             dataId=dataId, where=where, bind=bind, kwargs=kwargs, datasets=datasets, collections=collections
