@@ -1,0 +1,2 @@
+Added ``--no-track-file-attrs`` to ``butler import`` (and associated import API) and ``butler ingest-files`` commands to allow an import/ingest to disable the calculation of file sizes on ingest.
+This can be useful if you are importing thousands of files from an object store where the file size determination can take a significant amount of time.
