@@ -35,6 +35,7 @@ import json
 from typing import Any
 
 from lsst.resources import ResourcePath
+from pydantic_core import from_json
 
 from .typeless import TypelessFormatter
 
@@ -54,10 +55,15 @@ class JsonFormatter(TypelessFormatter):
         # memory regardless of being remote or local.
         json_bytes = uri.read()
 
-        try:
-            data = json.loads(json_bytes)
-        except json.JSONDecodeError:
-            data = None
+        # Pydantic models can do model_validate_json() which is going to
+        # be faster than json.loads().
+        pytype = self.file_descriptor.storageClass.pytype
+        if hasattr(pytype, "model_validate_json"):
+            # This can raise ValidationError.
+            data = pytype.model_validate_json(json_bytes)
+        else:
+            # This can raise ValueError.
+            data = from_json(json_bytes)
 
         return data
 
