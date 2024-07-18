@@ -918,7 +918,11 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(
-        self, path: str | ResourcePath, *, transfer: str | None = None
+        self,
+        path: str | ResourcePath,
+        *,
+        transfer: str | None = None,
+        check_existence: bool = False,
     ) -> str | ResourcePath:
         """Standardize the path of a to-be-ingested file.
 
@@ -934,6 +938,9 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
             This implementation is provided only so
             `NotImplementedError` can be raised if the mode is not supported;
             actual transfers are deferred to `_extractIngestInfo`.
+        check_existence : `bool`, optional
+            If `True` the existence of the file will be checked, otherwise
+            no check will be made.
 
         Returns
         -------
@@ -960,6 +967,12 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
         srcUri = ResourcePath(path, forceAbsolute=False, forceDirectory=False)
         if not srcUri.isabs():
             srcUri = self.root.join(path)
+
+        if check_existence and not srcUri.exists():
+            raise FileNotFoundError(
+                f"Resource at {srcUri} does not exist; note that paths to ingest "
+                f"are assumed to be relative to {self.root} unless they are absolute."
+            )
 
         if transfer is None:
             relpath = srcUri.relative_to(self.root)
@@ -1114,7 +1127,24 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
     def _prepIngest(self, *datasets: FileDataset, transfer: str | None = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
         filtered = []
-        for dataset in datasets:
+
+        # Ingest could be given tens of thousands of files. It is not efficient
+        # to check for the existence of every single file (especially if they
+        # are remote URIs) but in some transfer modes the files will be checked
+        # anyhow when they are relocated. For direct or None transfer modes
+        # it is possible to not know if the file is accessible at all.
+        # Therefore limit number of files that will be checked (but always
+        # include the first one).
+        max_checks = 200
+        n_datasets = len(datasets)
+        if n_datasets <= max_checks:
+            check_every_n = 1
+        elif transfer in ("direct", None):
+            check_every_n = int(n_datasets / max_checks + 1)  # +1 so that if n < max_checks the answer is 1.
+        else:
+            check_every_n = 0
+
+        for count, dataset in enumerate(datasets):
             acceptable = [ref for ref in dataset.refs if self.constraints.isAcceptable(ref)]
             if not acceptable:
                 continue
@@ -1128,7 +1158,26 @@ class FileDatastore(GenericBaseDatastore[StoredFileInfo]):
                 if not issubclass(formatter_class, Formatter):
                     raise TypeError(f"Requested formatter {dataset.formatter} is not a Formatter class.")
                 dataset.formatter = formatter_class
-            dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
+
+            # Decide whether the file should be checked.
+            check_existence = False
+            if check_every_n != 0:
+                # First time through count is 0 so we guarantee to check
+                # the first file but not necessarily the final one.
+                check_existence = count % check_every_n == 0
+
+            if check_existence:
+                log.debug(
+                    "Checking file existence: %s (%d/%d) [%s]",
+                    check_existence,
+                    count + 1,
+                    n_datasets,
+                    transfer,
+                )
+
+            dataset.path = self._standardizeIngestPath(
+                dataset.path, transfer=transfer, check_existence=check_existence
+            )
             filtered.append(dataset)
         return _IngestPrepData(filtered)
 
