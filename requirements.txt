@@ -2,6 +2,6 @@
 -r requirements/test.in
 
 lsst-sphgeom @ git+https://github.com/lsst/sphgeom@main
-lsst-utils @ git+https://github.com/lsst/utils@main
+lsst-utils @ git+https://github.com/lsst/utils@tickets/Dm-45317
 lsst-resources[https,s3] @ git+https://github.com/lsst/resources@main
 lsst-daf-relation @ git+https://github.com/lsst/daf_relation@main
