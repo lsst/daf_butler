@@ -211,14 +211,16 @@ class DefaultCollectionManager(CollectionManager[K]):
         if self._caching_context.collection_records is not None:
             self._caching_context.collection_records.clear()
 
-    def _fetch_all(self) -> list[CollectionRecord[K]]:
+    def _fetch_all(self, collection_cache: CollectionRecordCache | None = None) -> list[CollectionRecord[K]]:
         """Retrieve all records into cache if not done so yet."""
-        if self._caching_context.collection_records is not None:
-            if self._caching_context.collection_records.full:
-                return list(self._caching_context.collection_records.records())
+        if collection_cache is None:
+            collection_cache = self._caching_context.collection_records
+        if collection_cache is not None:
+            if collection_cache.full:
+                return list(collection_cache.records())
         records = self._fetch_by_key(None)
-        if self._caching_context.collection_records is not None:
-            self._caching_context.collection_records.set(records, full=True)
+        if collection_cache is not None:
+            collection_cache.set(records, full=True)
         return records
 
     def register(
@@ -304,31 +306,90 @@ class DefaultCollectionManager(CollectionManager[K]):
         Returns
         -------
         records : `list` [`CollectionRecord`]
-            Collection records. Only the records that match the input list are
-            returned in the same order.
+            Collection records. Records are ordered according to the input list
+            and expanded depth-first if ``flatten_chains`` is True.
         """
+
+        def check_cache(
+            name: str, cache: CollectionRecordCache, flatten_chains: bool
+        ) -> Iterator[CollectionRecord[K]]:
+            """Check that cache contains a record for a given name and all its
+            child records if ``flatten_chain`` is True.
+
+            Parameters
+            ----------
+            name : `str`
+                Collection name.
+            cache : `CollectionRecordCache`
+                Record cache.
+            flatten_chains : `bool`
+                If `True` then return all children records recursively.
+
+            Yields
+            ------
+            records : `CollectionRecord`
+                Records from cache, including all child records if
+                ``flatten_chains`` is True.
+
+            Raises
+            ------
+            LookupError
+                Raised if any record is missing from cache. If LookupError is
+                raised then no records are generated.
+            """
+            record = cache.get_by_name(name)
+            if record is not None:
+                if flatten_chains and record.type is CollectionType.CHAINED:
+                    # Check all children recursively.
+                    for child_name in cast(ChainedCollectionRecord, record).children:
+                        # Make a list so that LookupError can happen before we
+                        # return anything in iterator.
+                        yield from list(check_cache(child_name, cache, flatten_chains))
+                # Return record only after children, again for LookupError.
+                yield record
+            else:
+                raise LookupError(name)
+
         names = list(names)
         if collection_cache is None:
             collection_cache = self._caching_context.collection_records
+
         # To protect against potential races in cache updates.
-        records: dict[str, CollectionRecord | None] = {}
+        records: dict[str, CollectionRecord[K]] = {}
+        fetch_names = []
         if collection_cache is not None:
             for name in names:
-                records[name] = collection_cache.get_by_name(name)
-            fetch_names = [name for name, record in records.items() if record is None]
+                try:
+                    # Make a list first so that we can avoid updating records
+                    # dict if any record is missing.
+                    for record in check_cache(name, collection_cache, flatten_chains):
+                        records[record.name] = record
+                except LookupError:
+                    fetch_names.append(name)
         else:
-            fetch_names = list(names)
-            records = {name: None for name in fetch_names}
+            fetch_names = names
+
         if fetch_names:
+            # Fetch all missing collections and optionally their children.
             for record in self._fetch_by_name(fetch_names, flatten_chains):
                 records[record.name] = record
                 self._addCachedRecord(record, collection_cache)
-        missing_names = [name for name, record in records.items() if record is None]
+
+        missing_names = [name for name in names if name not in records]
         if len(missing_names) == 1:
             raise MissingCollectionError(f"No collection with name '{missing_names[0]}' found.")
         elif len(missing_names) > 1:
             raise MissingCollectionError(f"No collections with names '{' '.join(missing_names)}' found.")
-        return [cast(CollectionRecord[K], records[name]) for name in names]
+
+        def order(names: Iterable[str]) -> Iterator[CollectionRecord[K]]:
+            for name in names:
+                record = records[name]
+                yield record
+                if flatten_chains and record.type is CollectionType.CHAINED:
+                    # Also return all children recursively.
+                    yield from order(cast(ChainedCollectionRecord, record).children)
+
+        return list(order(names))
 
     def __getitem__(self, key: Any) -> CollectionRecord[K]:
         # Docstring inherited from CollectionManager.
@@ -352,51 +413,45 @@ class DefaultCollectionManager(CollectionManager[K]):
         include_chains: bool | None = None,
     ) -> list[CollectionRecord[K]]:
         # Docstring inherited
-        done: set[K] = set()
         include_chains = include_chains if include_chains is not None else not flatten_chains
 
-        def resolve_nested(
-            record: CollectionRecord, done: set[K], collection_cache: CollectionRecordCache | None
-        ) -> Iterator[CollectionRecord[K]]:
-            if record.key in done:
-                return
-            if record.type in collection_types:
-                done.add(record.key)
-                if record.type is not CollectionType.CHAINED or include_chains:
-                    yield record
-            if flatten_chains and record.type is CollectionType.CHAINED:
-                done.add(record.key)
-                children = cast(ChainedCollectionRecord[K], record).children
-                for child in self._find_many(children, flatten_chains, collection_cache):
-                    # flake8 can't tell that we only delete this closure when
-                    # we're totally done with it.
-                    yield from resolve_nested(child, done, collection_cache)  # noqa: F821
-
-        result: list[CollectionRecord[K]] = []
+        def filter_types(records: Iterable[CollectionRecord[K]]) -> Iterator[CollectionRecord[K]]:
+            for record in records:
+                if record.type in collection_types:
+                    if record.type is not CollectionType.CHAINED or include_chains:
+                        yield record
 
         if wildcard.patterns is ...:
-            # As _fetch_all() returns all records we do not want to query
-            # for chain children just in case caching is disabled.
-            flatten_chains = False
-            for record in self._fetch_all():
-                result.extend(resolve_nested(record, done, self._caching_context.collection_records))
-            del resolve_nested
-            return result
+            # As _fetch_all() returns all records without duplicates, we just
+            # have to filter types.
+            return list(filter_types(self._fetch_all()))
 
-        if wildcard.strings:
-            # To be efficient we have to have caching enabled for at least the
-            # duration of this call.
+        # To be efficient in case both patterns and strings are specified we
+        # want to have caching enabled for at least the duration of this call.
+        cache: CollectionRecordCache | None = None
+        all_records: list[CollectionRecord[K]] | None = None
+        if wildcard.patterns and wildcard.strings:
             cache = self._caching_context.collection_records or CollectionRecordCache()
-            for record in self._find_many(wildcard.strings, flatten_chains, cache):
-                result.extend(resolve_nested(record, done, cache))
+            # Pre-populate cache.
+            all_records = self._fetch_all(cache)
+
+        result: list[CollectionRecord[K]] = []
+        done: set[K] = set()
+        if wildcard.strings:
+            # _find_many() returns correctly ordered records, but there may be
+            # duplicates.
+            for record in filter_types(self._find_many(wildcard.strings, flatten_chains, cache)):
+                if record.key not in done:
+                    result.append(record)
+                    done.add(record.key)
         if wildcard.patterns:
-            # As _fetch_all() returns all records we do not want to query
-            # for chain children just in case caching is disabled.
-            flatten_chains = False
-            for record in self._fetch_all():
-                if any(p.fullmatch(record.name) for p in wildcard.patterns):
-                    result.extend(resolve_nested(record, done, self._caching_context.collection_records))
-        del resolve_nested
+            if all_records is None:
+                all_records = self._fetch_all(cache)
+            for record in filter_types(all_records):
+                if record.key not in done:
+                    if any(p.fullmatch(record.name) for p in wildcard.patterns):
+                        result.append(record)
+
         return result
 
     def getDocumentation(self, key: K) -> str | None:
