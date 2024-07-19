@@ -527,7 +527,6 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         wildcard: CollectionWildcard,
         *,
         collection_types: Set[CollectionType] = CollectionType.all(),
-        done: set[str] | None = None,
         flatten_chains: bool = True,
         include_chains: bool | None = None,
     ) -> list[CollectionRecord[_Key]]:
@@ -539,11 +538,6 @@ class CollectionManager(Generic[_Key], VersionedExtension):
             Names and/or patterns for collections.
         collection_types : `collections.abc.Set` [ `CollectionType` ], optional
             If provided, only yield collections of these types.
-        done : `set` [ `str` ], optional
-            A `set` of collection names that will not be returned (presumably
-            because they have already been returned in some higher-level logic)
-            that will also be updated with the names of the collections
-            returned.
         flatten_chains : `bool`, optional
             If `True` (default) recursively yield the child collections of
             `~CollectionType.CHAINED` collections.

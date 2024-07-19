@@ -94,7 +94,6 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         expression: Any,
         *,
         collection_types: Set[CollectionType] = CollectionType.all(),
-        done: set[str] | None = None,
         flatten_chains: bool = True,
         include_chains: bool | None = None,
     ) -> list[CollectionRecord]:
@@ -102,7 +101,6 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         return self._managers.collections.resolve_wildcard(
             expression,
             collection_types=collection_types,
-            done=done,
             flatten_chains=flatten_chains,
             include_chains=include_chains,
         )

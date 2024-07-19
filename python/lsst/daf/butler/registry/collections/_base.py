@@ -348,26 +348,24 @@ class DefaultCollectionManager(CollectionManager[K]):
         wildcard: CollectionWildcard,
         *,
         collection_types: Set[CollectionType] = CollectionType.all(),
-        done: set[str] | None = None,
         flatten_chains: bool = True,
         include_chains: bool | None = None,
     ) -> list[CollectionRecord[K]]:
         # Docstring inherited
-        if done is None:
-            done = set()
+        done: set[K] = set()
         include_chains = include_chains if include_chains is not None else not flatten_chains
 
         def resolve_nested(
-            record: CollectionRecord, done: set[str], collection_cache: CollectionRecordCache | None
+            record: CollectionRecord, done: set[K], collection_cache: CollectionRecordCache | None
         ) -> Iterator[CollectionRecord[K]]:
-            if record.name in done:
+            if record.key in done:
                 return
             if record.type in collection_types:
-                done.add(record.name)
+                done.add(record.key)
                 if record.type is not CollectionType.CHAINED or include_chains:
                     yield record
             if flatten_chains and record.type is CollectionType.CHAINED:
-                done.add(record.name)
+                done.add(record.key)
                 children = cast(ChainedCollectionRecord[K], record).children
                 for child in self._find_many(children, flatten_chains, collection_cache):
                     # flake8 can't tell that we only delete this closure when
