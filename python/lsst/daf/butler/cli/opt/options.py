@@ -122,7 +122,7 @@ components_option = MWOptionDecorator(
 )
 
 
-def _config_split(*args: Any) -> dict[str, str]:
+def _config_split(*args: Any) -> dict[str | None, str]:
     # Config values might include commas so disable comma-splitting.
     result = split_kv(*args, multiple=False)
     assert isinstance(result, dict), "For mypy check that we get the expected result"
