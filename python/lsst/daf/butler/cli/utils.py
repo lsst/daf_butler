@@ -790,7 +790,7 @@ class MWOptionDecorator:
     """
 
     def __init__(self, *param_decls: Any, **kwargs: Any) -> None:
-        self.partialOpt = partial(click.option, *param_decls, cls=partial(MWOption), **kwargs)
+        self.partialOpt = partial(click.option, *param_decls, cls=partial(MWOption), **kwargs)  # type: ignore
         opt = click.Option(param_decls, **kwargs)
         self._name = opt.name
         self._opts = opt.opts
