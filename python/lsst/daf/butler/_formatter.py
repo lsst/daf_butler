@@ -729,14 +729,6 @@ class FormatterV2:
 
                     msg = f"(via download to local file{cache_msg})"
 
-                log.debug(
-                    "Reading%s from location %s %s with formatter %s",
-                    f" component {log_component}" if log_component else "",
-                    uri,
-                    msg,
-                    self.name(),
-                )
-
                 with time_this(
                     log,
                     msg="Reading%s from location %s %s with formatter %s",
