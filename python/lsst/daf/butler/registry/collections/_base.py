@@ -312,7 +312,7 @@ class DefaultCollectionManager(CollectionManager[K]):
 
         def check_cache(
             name: str, cache: CollectionRecordCache, flatten_chains: bool
-        ) -> Iterator[CollectionRecord[K]]:
+        ) -> list[CollectionRecord[K]]:
             """Check that cache contains a record for a given name and all its
             child records if ``flatten_chain`` is True.
 
@@ -325,9 +325,9 @@ class DefaultCollectionManager(CollectionManager[K]):
             flatten_chains : `bool`
                 If `True` then return all children records recursively.
 
-            Yields
-            ------
-            records : `CollectionRecord`
+            Returns
+            -------
+            records : `list` [`CollectionRecord`]
                 Records from cache, including all child records if
                 ``flatten_chains`` is True.
 
@@ -339,14 +339,12 @@ class DefaultCollectionManager(CollectionManager[K]):
             """
             record = cache.get_by_name(name)
             if record is not None:
+                records = [record]
                 if flatten_chains and record.type is CollectionType.CHAINED:
                     # Check all children recursively.
                     for child_name in cast(ChainedCollectionRecord, record).children:
-                        # Make a list so that LookupError can happen before we
-                        # return anything in iterator.
-                        yield from list(check_cache(child_name, cache, flatten_chains))
-                # Return record only after children, again for LookupError.
-                yield record
+                        records += check_cache(child_name, cache, flatten_chains)
+                return records
             else:
                 raise LookupError(name)
 
@@ -360,8 +358,6 @@ class DefaultCollectionManager(CollectionManager[K]):
         if collection_cache is not None:
             for name in names:
                 try:
-                    # Make a list first so that we can avoid updating records
-                    # dict if any record is missing.
                     for record in check_cache(name, collection_cache, flatten_chains):
                         records[record.name] = record
                 except LookupError:
@@ -426,31 +422,29 @@ class DefaultCollectionManager(CollectionManager[K]):
             # have to filter types.
             return list(filter_types(self._fetch_all()))
 
-        # To be efficient in case both patterns and strings are specified we
-        # want to have caching enabled for at least the duration of this call.
         cache: CollectionRecordCache | None = None
-        all_records: list[CollectionRecord[K]] | None = None
-        if wildcard.patterns and wildcard.strings:
-            cache = self._caching_context.collection_records or CollectionRecordCache()
-            # Pre-populate cache.
-            all_records = self._fetch_all(cache)
-
         result: list[CollectionRecord[K]] = []
-        done: set[K] = set()
+        done_keys: set[K] = set()
+        if wildcard.patterns:
+            if wildcard.strings:
+                # To be efficient in case both patterns and strings are
+                # specified we want to have caching enabled for at least the
+                # duration of this call.
+                cache = self._caching_context.collection_records or CollectionRecordCache()
+            all_records = self._fetch_all(cache)
+            for record in filter_types(all_records):
+                if record.key not in done_keys:
+                    if any(p.fullmatch(record.name) for p in wildcard.patterns):
+                        result.append(record)
+                        done_keys.add(record.key)
+
         if wildcard.strings:
             # _find_many() returns correctly ordered records, but there may be
             # duplicates.
             for record in filter_types(self._find_many(wildcard.strings, flatten_chains, cache)):
-                if record.key not in done:
+                if record.key not in done_keys:
                     result.append(record)
-                    done.add(record.key)
-        if wildcard.patterns:
-            if all_records is None:
-                all_records = self._fetch_all(cache)
-            for record in filter_types(all_records):
-                if record.key not in done:
-                    if any(p.fullmatch(record.name) for p in wildcard.patterns):
-                        result.append(record)
+                    done_keys.add(record.key)
 
         return result
 
