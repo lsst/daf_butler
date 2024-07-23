@@ -190,9 +190,20 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
         # Docstring inherited.
         return sql_key, sql_from_clause
 
-    def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[str]]:
+    def _fetch_by_name(self, names: Iterable[str], flatten_chains: bool) -> list[CollectionRecord[str]]:
         # Docstring inherited from base class.
-        return self._fetch_by_key(names)
+        if flatten_chains:
+            sql_rows = self._query_recursive(names, _KEY_FIELD_SPEC.dtype)
+
+            # There may be duplicates in the result, select unique names.
+            unique_rows = {row[self._collectionIdName]: row for row in sql_rows}
+
+            records, chained_ids = self._rows_to_records(unique_rows.values())
+            records += self._rows_to_chains(sql_rows, chained_ids)
+
+            return records
+        else:
+            return self._fetch_by_key(names)
 
     def _fetch_by_key(self, collection_ids: Iterable[str] | None) -> list[CollectionRecord[str]]:
         # Docstring inherited from base class.
@@ -201,10 +212,11 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
             self._tables.collection.join(self._tables.run, isouter=True)
         )
 
+        # "Rename" child column to "name" as expected by _rows_to_chains()
         chain_sql = sqlalchemy.sql.select(
             self._tables.collection_chain.columns["parent"],
             self._tables.collection_chain.columns["position"],
-            self._tables.collection_chain.columns["child"],
+            self._tables.collection_chain.columns["child"].label("name"),
         )
 
         records: list[CollectionRecord[str]] = []
@@ -250,7 +262,7 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
         TimespanReprClass = self._db.getTimespanRepresentation()
         chained_ids: list[str] = []
         for row in rows:
-            name = row[self._tables.collection.columns.name]
+            name = row["name"]
             type = CollectionType(row["type"])
             record: CollectionRecord[str]
             if type is CollectionType.RUN:
@@ -277,7 +289,8 @@ class NameKeyCollectionManager(DefaultCollectionManager[str]):
         """
         chains_defs: dict[str, list[tuple[int, str]]] = {chain_id: [] for chain_id in chained_ids}
         for row in rows:
-            chains_defs[row["parent"]].append((row["position"], row["child"]))
+            if row["parent"] is not None:
+                chains_defs[row["parent"]].append((row["position"], row["name"]))
 
         records: list[CollectionRecord[str]] = []
         for name, children in chains_defs.items():

@@ -196,10 +196,21 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
             ),
         )
 
-    def _fetch_by_name(self, names: Iterable[str]) -> list[CollectionRecord[int]]:
+    def _fetch_by_name(self, names: Iterable[str], flatten_chains: bool) -> list[CollectionRecord[int]]:
         # Docstring inherited from base class.
         _LOG.debug("Fetching collection records using names %s.", names)
-        return self._fetch("name", names)
+        if flatten_chains:
+            sql_rows = self._query_recursive(names, _KEY_FIELD_SPEC.dtype)
+
+            # There may be duplicates in the result, select unique IDs.
+            unique_rows = {row[self._collectionIdName]: row for row in sql_rows}
+
+            records, chained_ids = self._rows_to_records(unique_rows.values())
+            records += self._rows_to_chains(sql_rows, chained_ids)
+
+            return records
+        else:
+            return self._fetch("name", names)
 
     def _fetch_by_key(self, collection_ids: Iterable[int] | None) -> list[CollectionRecord[int]]:
         # Docstring inherited from base class.
@@ -219,7 +230,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
             sqlalchemy.sql.select(
                 collection_chain.columns["parent"],
                 collection_chain.columns["position"],
-                collection.columns["name"].label("child_name"),
+                collection.columns["name"],
             )
             .select_from(collection_chain)
             .join(
@@ -270,7 +281,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
         TimespanReprClass = self._db.getTimespanRepresentation()
         for row in rows:
             key: int = row[self._collectionIdName]
-            name: str = row[self._tables.collection.columns.name]
+            name: str = row["name"]
             type = CollectionType(row["type"])
             record: CollectionRecord[int]
             if type is CollectionType.RUN:
@@ -298,7 +309,8 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[int]):
         """
         chains_defs: dict[int, list[tuple[int, str]]] = {chain_id: [] for chain_id in chained_ids}
         for row in rows:
-            chains_defs[row["parent"]].append((row["position"], row["child_name"]))
+            if row["parent"] is not None:
+                chains_defs[row["parent"]].append((row["position"], row["name"]))
 
         records: list[CollectionRecord[int]] = []
         for key, children in chains_defs.items():
