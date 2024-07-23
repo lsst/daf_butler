@@ -649,6 +649,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         directory: ResourcePathExpression | None = None,
         transfer: str | None = None,
         skip_dimensions: set | None = None,
+        record_validation_info: bool = True,
     ) -> None:
         # Docstring inherited from RepoImportBackend.load.
         # Must ensure we insert in order supported by the universe.
@@ -696,7 +697,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                 fileDatasets.append(fileDataset)
         # Ingest everything into the datastore at once.
         if datastore is not None and fileDatasets:
-            datastore.ingest(*fileDatasets, transfer=transfer)
+            datastore.ingest(*fileDatasets, transfer=transfer, record_validation_info=record_validation_info)
         # Associate datasets with tagged collections.
         for collection, dataset_ids in self.tagAssociations.items():
             self.registry.associate(collection, [self.refsByFileId[i] for i in dataset_ids])

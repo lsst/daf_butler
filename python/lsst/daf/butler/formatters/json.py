@@ -132,8 +132,10 @@ class JsonFormatter(FileFormatter):
         with contextlib.suppress(AttributeError):
             return inMemoryDataset.json().encode()
 
-        if dataclasses.is_dataclass(inMemoryDataset):
-            inMemoryDataset = dataclasses.asdict(inMemoryDataset)
+        # mypy needs the 'not a type' check because "is_dataclass" works
+        # for both types and instances.
+        if dataclasses.is_dataclass(inMemoryDataset) and not isinstance(inMemoryDataset, type):
+            inMemoryDataset = dataclasses.asdict(inMemoryDataset)  # type: ignore[unreachable]
         elif hasattr(inMemoryDataset, "_asdict"):
             inMemoryDataset = inMemoryDataset._asdict()
         return json.dumps(inMemoryDataset, ensure_ascii=False).encode()

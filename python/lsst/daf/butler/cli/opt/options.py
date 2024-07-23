@@ -54,6 +54,7 @@ __all__ = (
     "order_by_option",
     "limit_option",
     "offset_option",
+    "track_file_attrs_option",
 )
 
 from functools import partial
@@ -121,7 +122,7 @@ components_option = MWOptionDecorator(
 )
 
 
-def _config_split(*args: Any) -> dict[str, str]:
+def _config_split(*args: Any) -> dict[str | None, str]:
     # Config values might include commas so disable comma-splitting.
     result = split_kv(*args, multiple=False)
     assert isinstance(result, dict), "For mypy check that we get the expected result"
@@ -312,4 +313,12 @@ offset_option = MWOptionDecorator(
     help=unwrap("Skip initial number of records, only used when --limit is specified."),
     type=int,
     default=0,
+)
+
+track_file_attrs_option = MWOptionDecorator(
+    "--track-file-attrs/--no-track-file-attrs",
+    default=True,
+    help="Indicate to the datastore whether file attributes such as file size"
+    " or checksum should be tracked or not. Whether this parameter is honored"
+    " depends on the specific datastore implementation.",
 )

@@ -72,7 +72,7 @@ jobs:
         shell: bash -l {0}
         run: |
           mamba install -y -q \
-            pytest pytest-xdist pytest-openfiles pytest-cov
+            pytest pytest-xdist pytest-cov
 
       - name: List installed packages
         shell: bash -l {0}
@@ -90,7 +90,7 @@ jobs:
         env:
           SQLALCHEMY_WARN_20: 1
         run: |
-          pytest -r a -v -n 3 --open-files --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch
+          pytest -r a -v -n 3 --cov=lsst.daf.butler --cov=tests --cov-report=xml --cov-report=term --cov-branch
       - name: Upload coverage to codecov
         uses: codecov/codecov-action@v4
         with:

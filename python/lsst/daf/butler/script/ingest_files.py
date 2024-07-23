@@ -57,6 +57,7 @@ def ingest_files(
     id_generation_mode: str = "UNIQUE",
     prefix: str | None = None,
     transfer: str = "auto",
+    track_file_attrs: bool = True,
 ) -> None:
     """Ingest files from a table.
 
@@ -89,6 +90,10 @@ def ingest_files(
         is to use the current working directory.
     transfer : `str`, optional
         Transfer mode to use for ingest.
+    track_file_attrs : `bool`, optional
+        Control whether file attributes such as the size or checksum should
+        be tracked by the datastore. Whether this parameter is honored
+        depends on the specific datastore implementation.
     """
     # Check that the formatter can be imported -- validate this as soon
     # as possible before we read a potentially large table file.
@@ -122,7 +127,7 @@ def ingest_files(
         table, common_data_id, datasetType, run, formatter, prefix, id_gen_mode
     )
 
-    butler.ingest(*datasets, transfer=transfer)
+    butler.ingest(*datasets, transfer=transfer, record_validation_info=track_file_attrs)
 
 
 def extract_datasets_from_table(

@@ -96,7 +96,7 @@ class SqlQueryContext(QueryContext):
         self._exit_stack.enter_context(self._db.session())
         return self
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool | None:
         assert self._exit_stack is not None, "Context manager not yet entered."
         result = self._exit_stack.__exit__(exc_type, exc_value, traceback)
         self._exit_stack = None

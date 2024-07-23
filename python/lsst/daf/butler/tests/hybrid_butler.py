@@ -277,6 +277,7 @@ class HybridButler(Butler):
         format: str | None = None,
         transfer: str | None = None,
         skip_dimensions: set | None = None,
+        record_validation_info: bool = True,
     ) -> None:
         self._direct_butler.import_(
             directory=directory,
@@ -284,6 +285,7 @@ class HybridButler(Butler):
             format=format,
             transfer=transfer,
             skip_dimensions=skip_dimensions,
+            record_validation_info=record_validation_info,
         )
 
     def transfer_dimension_records_from(

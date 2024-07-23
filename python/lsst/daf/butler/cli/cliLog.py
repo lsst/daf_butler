@@ -317,7 +317,7 @@ class CliLog:
         Parameters
         ----------
         component : `str` or None
-            The name of the log component or None for the default logger.
+            The name of the log component or `None` for the default logger.
             The root logger can be specified either by an empty string or
             with the special name ``.``.
         level : `str`

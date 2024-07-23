@@ -352,10 +352,10 @@ def split_kv(
     separator: str = "=",
     unseparated_okay: bool = False,
     return_type: type[dict] | type[tuple] = dict,
-    default_key: str = "",
+    default_key: str | None = "",
     reverse_kv: bool = False,
     add_to_default: bool = False,
-) -> dict[str, str] | tuple[tuple[str, str], ...]:
+) -> dict[str | None, str] | tuple[tuple[str | None, str], ...]:
     """Process a tuple of values that are key-value pairs separated by a given
     separator. Multiple pairs may be comma separated. Return a dictionary of
     all the passed-in values.
@@ -401,8 +401,9 @@ def split_kv(
         tuple will be 2-item tuple, the first item will be the value to the
         left of the separator and the second item will be the value to the
         right. By default `dict`.
-    default_key : `Any`
+    default_key : `str` or `None`
         The key to use if a value is passed that is not a key-value pair.
+        `None` can imply no separator depending on how the results are handled.
         (Passing values that are not key-value pairs requires
         ``unseparated_okay`` to be `True`).
     reverse_kv : bool
@@ -453,26 +454,26 @@ def split_kv(
 
     class RetDict:
         def __init__(self) -> None:
-            self.ret: dict[str, str] = {}
+            self.ret: dict[str | None, str] = {}
 
-        def add(self, key: str, val: str) -> None:
+        def add(self, key: str | None, val: str) -> None:
             if reverse_kv:
                 key, val = val, key
             self.ret[key] = val
 
-        def get(self) -> dict[str, str]:
+        def get(self) -> dict[str | None, str]:
             return self.ret
 
     class RetTuple:
         def __init__(self) -> None:
-            self.ret: list[tuple[str, str]] = []
+            self.ret: list[tuple[str | None, str]] = []
 
-        def add(self, key: str, val: str) -> None:
+        def add(self, key: str | None, val: str) -> None:
             if reverse_kv:
                 key, val = val, key
             self.ret.append((key, val))
 
-        def get(self) -> tuple[tuple[str, str], ...]:
+        def get(self) -> tuple[tuple[str | None, str], ...]:
             return tuple(self.ret)
 
     if separator in (",", " "):
@@ -789,7 +790,7 @@ class MWOptionDecorator:
     """
 
     def __init__(self, *param_decls: Any, **kwargs: Any) -> None:
-        self.partialOpt = partial(click.option, *param_decls, cls=partial(MWOption), **kwargs)
+        self.partialOpt = partial(click.option, *param_decls, cls=partial(MWOption), **kwargs)  # type: ignore
         opt = click.Option(param_decls, **kwargs)
         self._name = opt.name
         self._opts = opt.opts
