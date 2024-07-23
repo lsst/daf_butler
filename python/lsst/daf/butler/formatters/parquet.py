@@ -1248,6 +1248,11 @@ def _numpy_dtype_to_arrow_types(dtype: np.dtype) -> list[Any]:
                 pa.from_numpy_dtype(cast(tuple[np.dtype, tuple[int, ...]], dt.subdtype)[0].type),
                 prod(dt.shape),
             )
+        elif dt.type == np.datetime64:
+            time_unit = "ns" if "ns" in dt.str else "us"
+            # The pa.timestamp() is the correct datatype to round-trip
+            # a numpy datetime64[ns] or datetime[us] array.
+            arrow_type = pa.timestamp(time_unit)
         else:
             try:
                 arrow_type = pa.from_numpy_dtype(dt.type)
