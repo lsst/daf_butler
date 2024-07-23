@@ -29,7 +29,7 @@
 
 from __future__ import annotations
 
-__all__ = "TypelessFormatter"
+__all__ = ["TypelessFormatter"]
 
 import dataclasses
 from typing import TYPE_CHECKING, Any
