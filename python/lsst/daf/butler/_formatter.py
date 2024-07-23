@@ -459,7 +459,7 @@ class FormatterV2:
 
                         if self.can_read_from_local_file:
                             result = self.read_from_local_file(
-                                tmp_uri, component, expected_size=expected_size
+                                tmp_uri.ospath, component, expected_size=expected_size
                             )
                             if result is not NotImplemented:
                                 return result
@@ -750,7 +750,7 @@ class FormatterV2:
 
                     if self.can_read_from_local_file:
                         result = self.read_from_local_file(
-                            local_uri, component=component, expected_size=expected_size
+                            local_uri.ospath, component=component, expected_size=expected_size
                         )
                     if result is NotImplemented and self.can_read_from_uri:
                         # If the direct URI reader was skipped earlier and
@@ -837,15 +837,13 @@ class FormatterV2:
         """
         return NotImplemented
 
-    def read_from_local_file(
-        self, local_uri: ResourcePath, component: str | None = None, expected_size: int = -1
-    ) -> Any:
+    def read_from_local_file(self, path: str, component: str | None = None, expected_size: int = -1) -> Any:
         """Read a dataset from a URI guaranteed to refer to the local file
         system.
 
         Parameters
         ----------
-        local_uri : `lsst.resources.ResourcePath`
+        path : `str`
             Path to a local file that should be read.
         component : `str` or `None`, optional
             The component to be read from the dataset.
@@ -2089,18 +2087,17 @@ class FormatterV1inV2(FormatterV2):
         # for a dynamic shim. Luckily the shim is only used as an instance.
         return self._formatter.validate_write_recipes(recipes)
 
-    def read_from_local_file(
-        self, local_uri: ResourcePath, component: str | None = None, expected_size: int = -1
-    ) -> Any:
+    def read_from_local_file(self, path: str, component: str | None = None, expected_size: int = -1) -> Any:
         # Need to temporarily override the location since the V1 formatter
         # will not know anything about this local file.
 
         # V2 does not have a fromBytes equivalent.
         if self._formatter.can_read_bytes():
-            serialized_dataset = local_uri.read()
+            with open(path, "rb") as fd:
+                serialized_dataset = fd.read()
             return self._formatter.fromBytes(serialized_dataset, component=component)
 
-        location = Location(*local_uri.split())
+        location = Location(None, path)
         with self._formatter._updateLocation(location):
             try:
                 result = self._formatter.read(component=component)
