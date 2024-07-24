@@ -173,7 +173,6 @@ def _read_artifact_into_memory(
     ref: DatasetRef,
     cache_manager: AbstractDatastoreCacheManager,
     isComponent: bool = False,
-    cache_ref: DatasetRef | None = None,
 ) -> Any:
     """Read the artifact from datastore into in memory object.
 
@@ -187,14 +186,6 @@ def _read_artifact_into_memory(
         Flag to indicate if a component is being read from this artifact.
     cache_manager : `AbstractDatastoreCacheManager`
         The cache manager to use for caching retrieved files
-    cache_ref : `DatasetRef`, optional
-        The DatasetRef to use when looking up the file in the cache.
-        This ref must have the same ID as the supplied ref but can
-        be a parent ref or component ref to indicate to the cache whether
-        a composite file is being requested from the cache or a component
-        file. Without this the cache will default to the supplied ref but
-        it can get confused with read-only derived components for
-        disassembled composites.
 
     Returns
     -------
@@ -381,10 +372,6 @@ def get_dataset_as_python_object_from_get_info(
         forwardedStorageClass = rwInfo.formatter.file_descriptor.readStorageClass
         forwardedStorageClass.validateParameters(parameters)
 
-        # The reference to use for the caching must refer to the forwarded
-        # component and not the derived component.
-        cache_ref = ref.makeCompositeRef().makeComponentRef(forwardedComponent)
-
         # Unfortunately the FileDescriptor inside the formatter will have
         # the wrong write storage class so we need to create a new one
         # given the immutability constraint.
@@ -423,7 +410,7 @@ def get_dataset_as_python_object_from_get_info(
             refStorageClass,
         )
 
-        return _read_artifact_into_memory(readInfo, ref, cache_manager, isComponent=True, cache_ref=cache_ref)
+        return _read_artifact_into_memory(readInfo, ref, cache_manager, isComponent=True)
 
     else:
         # Single file request or component from that composite file
@@ -440,10 +427,6 @@ def get_dataset_as_python_object_from_get_info(
         else:
             isComponent = getInfo.component is not None
 
-        # For a component read of a composite we want the cache to
-        # be looking at the composite ref itself.
-        cache_ref = ref.makeCompositeRef() if isComponent else ref
-
         # For a disassembled component we can validate parameters against
         # the component storage class directly
         if isDisassembled:
@@ -455,6 +438,4 @@ def get_dataset_as_python_object_from_get_info(
             # the composite storage class
             getInfo.formatter.file_descriptor.storageClass.validateParameters(parameters)
 
-        return _read_artifact_into_memory(
-            getInfo, ref, cache_manager, isComponent=isComponent, cache_ref=cache_ref
-        )
+        return _read_artifact_into_memory(getInfo, ref, cache_manager, isComponent=isComponent)
