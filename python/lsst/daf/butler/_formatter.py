@@ -260,11 +260,12 @@ class FormatterV2:
 
         Notes
         -----
-        The base class checks that the given python type matches
-        the python type specified for this formatter when
-        constructed.
+        The base class always returns `False` even if the given type is an
+        instance of the storage class type. This will result in a storage
+        class conversion no-op but also allows mocks with mocked storage
+        classes to work properly.
         """
-        return isinstance(in_memory_dataset, self.file_descriptor.storageClass.pytype)
+        return False
 
     @classmethod
     def validate_write_recipes(cls, recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
