@@ -237,14 +237,14 @@ A datastore knows which formatter was used to write or ingest a dataset.
 There are three methods a formatter author can implement in order to read a Python type from a file:
 
 ``read_from_local_file``
-    The ``read_from_local_file`` method is guaranteed to be passed a local file resource.
+    The ``read_from_local_file`` method is guaranteed to be passed a local file path.
     If the resource was initially remote it will be downloaded before calling the method and the file can be cached if the butler has been configured to do that.
 
 ``read_from_uri``
     The ``read_from_uri`` method is given a URI which might be local or remote and the method can access the resource directly.
     This can be especially helpful if the formatter can support partial reads of a remote resource if a component is requested or some parameters that subset the data.
     This file might be read from the local cache, if it is available, but will not trigger a download of the remote resource to the local cache.
-    If the formatter is being called without a component or parameters such that the whole file would be read and if the dataset should be cached, this method will be called with a local file.
+    If the formatter is being called without a component or parameters such that the whole file would be read and if the dataset should be cached, this method will be called with a local file URI.
 
 ``read_from_stream``
     The ``read_from_stream`` method is given a file handle (usually a `lsst.resources.ResourceHandleProtocol`) which might be a local or remote resource.
