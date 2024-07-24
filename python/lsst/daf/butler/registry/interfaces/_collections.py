@@ -613,7 +613,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         ----------
         parent_collection_name : `str`
             The name of a CHAINED collection to be modified.
-        child_collection_names : `list` [ `str ` ]
+        child_collection_names : `list` [ `str` ]
             A child collection name or list of child collection names to be
             assigned to the parent.
         allow_use_in_caching_context : `bool`, optional
@@ -652,7 +652,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         ----------
         parent_collection_name : `str`
             The name of a CHAINED collection to which we will add new children.
-        child_collection_names : `list` [ `str ` ]
+        child_collection_names : `list` [ `str` ]
             A child collection name or list of child collection names to be
             added to the parent.
 
@@ -685,7 +685,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         ----------
         parent_collection_name : `str`
             The name of a CHAINED collection to which we will add new children.
-        child_collection_names : `list` [ `str ` ]
+        child_collection_names : `list` [ `str` ]
             A child collection name or list of child collection names to be
             added to the parent.
 
@@ -718,7 +718,7 @@ class CollectionManager(Generic[_Key], VersionedExtension):
         parent_collection_name : `str`
             The name of a CHAINED collection from which we will remove
             children.
-        child_collection_names : `list` [ `str ` ]
+        child_collection_names : `list` [ `str` ]
             A child collection name or list of child collection names to be
             removed from the parent.
 

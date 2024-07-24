@@ -50,7 +50,7 @@ class VersionTuple(NamedTuple):
 
     Attributes
     ----------
-    major : `int
+    major : `int`
         Major version number.
     minor : `int`
         Minor version number.

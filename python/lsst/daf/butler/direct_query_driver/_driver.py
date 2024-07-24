@@ -105,9 +105,9 @@ class DirectQueryDriver(QueryDriver):
     dimension_record_cache : `DimensionRecordCache`
         Cache of dimension records for infrequently-changing, commonly-used
         dimensions.
-    default_collections : `Sequence` [ `str `]
+    default_collections : `~collections.abc.Sequence` [ `str` ]
         Default collection search path.
-    default_data_id : DataCoordinate,
+    default_data_id : `DataCoordinate`
         Default governor dimension values.
     raw_page_size : `int`, optional
         Number of database rows to fetch for each result page.  The actual

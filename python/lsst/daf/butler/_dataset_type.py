@@ -119,11 +119,11 @@ class SerializedDatasetType(BaseModel):
 
 
 class DatasetType:
-    r"""A named category of Datasets.
+    """A named category of Datasets.
 
     Defines how they are organized, related, and stored.
 
-    A concrete, final class whose instances represent `DatasetType`\ s.
+    A concrete, final class whose instances represent a `DatasetType`.
     `DatasetType` instances may be constructed without a `Registry`,
     but they must be registered
     via `Registry.registerDatasetType()` before corresponding Datasets

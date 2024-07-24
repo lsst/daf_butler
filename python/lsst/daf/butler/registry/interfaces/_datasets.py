@@ -326,7 +326,7 @@ class DatasetRecordStorage(ABC):
             Names of fields to make available in the joiner.  Options include:
 
             - ``dataset_id`` (UUID)
-            - ``run` (collection name, `str`)
+            - ``run`` (collection name, `str`)
             - ``collection`` (collection name, `str`)
             - ``collection_key`` (collection primary key, manager-dependent)
             - ``timespan`` (validity range, or unbounded for non-calibrations)
