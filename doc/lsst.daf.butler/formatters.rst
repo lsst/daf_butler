@@ -256,6 +256,32 @@ To activate specific implementations a formatter author must set the correspondi
 Only one of these methods needs to be implemented by a formatter author, but if multiple options are available the priority order is specified in the `FormatterV2.read` documentation.
 Any of these methods can be skipped by the formatter if it returns `NotImplemented`.
 
+The read method has access to the storage class that was used to write the original dataset and the storage class that has been requested by the caller.
+These are available in ``self.file_descriptor.storageClass`` (the one used for the write) and ``self.file_descriptor.readStorageClass``.
+If a component is requested the read storage class will be that of the component.
+
+Composite:
+
+If "X" is the storage class of the dataset type associated with the registry, "Y" is the storage class of a component and "X'" and "Y'" are user overrides of those storage classes then:
+
+========= ======   =======  ======
+Component UserSC   WriteSC  ReadSC
+========= ======   =======  ======
+No            -        X        X
+No            X'       X        X'
+Yes           -        X        Y
+Yes           Y'       X        Y'
+========= ======   =======  ======
+
+For a disassembled composite the file being opened by the formatter is a component and not directly the composite dataset.
+In this situation the ``self.file_descriptor.component`` property will be set to indicate which component this file corresponds to and the ``self.dataset_ref`` property will refer to the composite dataset type.
+As for the previous case, the write storage class will match the storage class used to write the file and the read storage class will be the storage class that has been requested and can either match the write storage class or be a user-provided override.
+A component will be provided as a parameter solely in the cases where a derived component has been requested and in this scenario the read storage class will be the storage class of the derived component.
+Any storage class override request for the composite will be applied by the storage class delegate if the composite has been disassembled and then reassembled.
+
+Derived components will always set the read storage class to be that of the derived component, including any requested override.
+If the original storage class for the derived component is required it can be obtained from the write storage class.
+
 Writing a Dataset
 ^^^^^^^^^^^^^^^^^
 
@@ -272,6 +298,9 @@ A formatter author can define one of the following methods to support writing:
 When ingesting files from external sources formatters are associated with each incoming file but these formatters are only required to support reads.
 They must though declare all the file extensions that they can support.
 This allows the datastore to ensure that the image being ingested has not obviously been associated with a formatter that does not recognize it.
+
+Some formatters can handle multiple Python types without requiring the datastore to force a conversion to a specific type before using the formatter.
+A formatter that can support this should override the default `FormatterV2.can_accept` method such that it returns `True` for all supported Python types.
 
 File Extensions
 ^^^^^^^^^^^^^^^
