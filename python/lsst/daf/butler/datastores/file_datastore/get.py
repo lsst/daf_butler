@@ -124,16 +124,18 @@ def generate_datastore_get_information(
     for location, storedFileInfo in fileLocations:
         # The storage class used to write the file
         writeStorageClass = storedFileInfo.storageClass
+        thisReadStorageClass = readStorageClass
 
         # If this has been disassembled we need read to match the write
-        if disassembled:
-            readStorageClass = writeStorageClass
+        # except for if a component has specified an override.
+        if disassembled and storedFileInfo.component != refComponent:
+            thisReadStorageClass = writeStorageClass
 
         formatter = get_instance_of(
             storedFileInfo.formatter,
             FileDescriptor(
                 location,
-                readStorageClass=readStorageClass,
+                readStorageClass=thisReadStorageClass,
                 storageClass=writeStorageClass,
                 parameters=parameters,
                 component=storedFileInfo.component,
@@ -146,7 +148,7 @@ def generate_datastore_get_information(
 
         # Of the remaining parameters, extract the ones supported by
         # this StorageClass (for components not all will be handled)
-        assemblerParams = readStorageClass.filterParameters(notFormatterParams)
+        assemblerParams = thisReadStorageClass.filterParameters(notFormatterParams)
 
         # The ref itself could be a component if the dataset was
         # disassembled by butler, or we disassembled in datastore and
@@ -161,7 +163,7 @@ def generate_datastore_get_information(
                 assemblerParams,
                 formatterParams,
                 component,
-                readStorageClass,
+                thisReadStorageClass,
             )
         )
 
