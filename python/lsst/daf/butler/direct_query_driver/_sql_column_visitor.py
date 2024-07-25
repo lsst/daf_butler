@@ -226,7 +226,7 @@ class SqlColumnVisitor(
         flags: PredicateVisitFlags,
     ) -> sqlalchemy.ColumnElement[bool]:
         # Docstring inherited.
-        columns = qt.ColumnSet(self._driver.universe.empty.as_group())
+        columns = qt.ColumnSet(self._driver.universe.empty)
         column.gather_required_columns(columns)
         _, builder = self._driver.build_query(query_tree, columns)
         if builder.postprocessing:
@@ -235,7 +235,7 @@ class SqlColumnVisitor(
             )
         subquery_visitor = SqlColumnVisitor(builder.joiner, self._driver)
         builder.joiner.special["_MEMBER"] = subquery_visitor.expect_scalar(column)
-        builder.columns = qt.ColumnSet(self._driver.universe.empty.as_group())
+        builder.columns = qt.ColumnSet(self._driver.universe.empty)
         subquery_select = builder.select()
         sql_member = self.expect_scalar(member)
         return sql_member.in_(subquery_select)

@@ -54,16 +54,13 @@ from .._exceptions import (
     DimensionNameError,
     InconsistentDataIdError,
 )
-from .._named import NamedKeyMapping, NameLookupMapping
 from .._storage_class import StorageClassFactory
 from .._timespan import Timespan
 from ..dimensions import (
     DataCoordinate,
     DataId,
-    Dimension,
     DimensionConfig,
     DimensionElement,
-    DimensionGraph,
     DimensionGroup,
     DimensionRecord,
     DimensionUniverse,
@@ -1488,9 +1485,8 @@ class SqlRegistry:
         self,
         dataId: DataId | None = None,
         *,
-        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
-        graph: DimensionGraph | None = None,
-        records: NameLookupMapping[DimensionElement, DimensionRecord | None] | None = None,
+        dimensions: Iterable[str] | DimensionGroup | None = None,
+        records: Mapping[str, DimensionRecord | None] | None = None,
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
@@ -1501,15 +1497,11 @@ class SqlRegistry:
         dataId : `DataCoordinate` or `dict`, optional
             Data ID to be expanded; augmented and overridden by ``kwargs``.
         dimensions : `~collections.abc.Iterable` [ `str` ], \
-                `DimensionGroup`, or `DimensionGraph`, optional
+                `DimensionGroup`, optional
             The dimensions to be identified by the new `DataCoordinate`.
-            If not provided, will be inferred from the keys of ``mapping`` and
-            ``**kwargs``, and ``universe`` must be provided unless ``mapping``
+            If not provided, will be inferred from the keys of ``dataId`` and
+            ``**kwargs``, and ``universe`` must be provided unless ``dataId``
             is already a `DataCoordinate`.
-        graph : `DimensionGraph`, optional
-            Like ``dimensions``, but as a ``DimensionGraph`` instance.  Ignored
-            if ``dimensions`` is provided.  Deprecated and will be removed
-            after v27.
         records : `~collections.abc.Mapping` [`str`, `DimensionRecord`], \
                 optional
             Dimension record data to use before querying the database for that
@@ -1551,7 +1543,6 @@ class SqlRegistry:
             defaults = self.defaults.dataId
         standardized = DataCoordinate.standardize(
             dataId,
-            graph=graph,
             dimensions=dimensions,
             universe=self.dimensions,
             defaults=defaults,
@@ -1561,8 +1552,6 @@ class SqlRegistry:
             return standardized
         if records is None:
             records = {}
-        elif isinstance(records, NamedKeyMapping):
-            records = records.byName()
         else:
             records = dict(records)
         if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
@@ -1982,7 +1971,7 @@ class SqlRegistry:
         datasetType: Any,
         *,
         collections: CollectionArgType | None = None,
-        dimensions: Iterable[Dimension | str] | None = None,
+        dimensions: Iterable[str] | None = None,
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
@@ -2010,7 +1999,7 @@ class SqlRegistry:
             collections, because this will still find all datasets).
             If not provided, ``self.default.collections`` is used.  See
             :ref:`daf_butler_collection_expressions` for more information.
-        dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
+        dimensions : `~collections.abc.Iterable` of `str`
             Dimensions to include in the query (in addition to those used
             to identify the queried dataset type(s)), either to constrain
             the resulting datasets to those for which a matching dimension
@@ -2156,8 +2145,7 @@ class SqlRegistry:
 
     def queryDataIds(
         self,
-        # TODO: Drop Dimension support on DM-41326.
-        dimensions: DimensionGroup | Iterable[Dimension | str] | Dimension | str,
+        dimensions: DimensionGroup | Iterable[str] | str,
         *,
         dataId: DataId | None = None,
         datasets: Any = None,
@@ -2172,12 +2160,11 @@ class SqlRegistry:
 
         Parameters
         ----------
-        dimensions : `DimensionGroup`, `Dimension`, or `str`, or \
-                `~collections.abc.Iterable` [ `Dimension` or `str` ]
+        dimensions : `DimensionGroup`, `str`, or \
+                `~collections.abc.Iterable` [ `str` ]
             The dimensions of the data IDs to yield, as either `Dimension`
             instances or `str`.  Will be automatically expanded to a complete
-            `DimensionGroup`.  Support for `Dimension` instances is deprecated
-            and will not be supported after v27.
+            `DimensionGroup`.
         dataId : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints
             in the query.

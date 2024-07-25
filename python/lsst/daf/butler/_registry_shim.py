@@ -36,14 +36,11 @@ from typing import TYPE_CHECKING, Any
 from ._dataset_association import DatasetAssociation
 from ._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from ._dataset_type import DatasetType
-from ._named import NameLookupMapping
 from ._timespan import Timespan
 from .dimensions import (
     DataCoordinate,
     DataId,
-    Dimension,
     DimensionElement,
-    DimensionGraph,
     DimensionGroup,
     DimensionRecord,
     DimensionUniverse,
@@ -248,15 +245,14 @@ class RegistryShim(Registry):
         self,
         dataId: DataId | None = None,
         *,
-        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
-        graph: DimensionGraph | None = None,
-        records: NameLookupMapping[DimensionElement, DimensionRecord | None] | None = None,
+        dimensions: Iterable[str] | DimensionGroup | None = None,
+        records: Mapping[str, DimensionRecord | None] | None = None,
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
         # Docstring inherited from a base class.
         return self._registry.expandDataId(
-            dataId, dimensions=dimensions, graph=graph, records=records, withDefaults=withDefaults, **kwargs
+            dataId, dimensions=dimensions, records=records, withDefaults=withDefaults, **kwargs
         )
 
     def insertDimensionData(
@@ -310,7 +306,7 @@ class RegistryShim(Registry):
         datasetType: Any,
         *,
         collections: CollectionArgType | None = None,
-        dimensions: Iterable[Dimension | str] | None = None,
+        dimensions: Iterable[str] | None = None,
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
@@ -335,8 +331,7 @@ class RegistryShim(Registry):
 
     def queryDataIds(
         self,
-        # TODO: Drop Dimension support on DM-41326.
-        dimensions: DimensionGroup | Iterable[Dimension | str] | Dimension | str,
+        dimensions: DimensionGroup | Iterable[str] | str,
         *,
         dataId: DataId | None = None,
         datasets: Any = None,

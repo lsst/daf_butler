@@ -94,7 +94,7 @@ class DatasetRefQueryResults(QueryResultsBase):
             self._driver,
             tree=self._tree,
             spec=DataCoordinateResultSpec.model_construct(
-                dimensions=self.dataset_type.dimensions.as_group(),
+                dimensions=self.dataset_type.dimensions,
                 include_dimension_records=self._spec.include_dimension_records,
             ),
         )

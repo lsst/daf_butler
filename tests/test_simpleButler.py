@@ -580,7 +580,7 @@ class SimpleButlerTests(TestCaseMixin):
         butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
         camera = DatasetType(
             "camera",
-            dimensions=butler.dimensions["instrument"].graph,
+            dimensions=butler.dimensions["instrument"].minimal_group,
             storageClass="Camera",
         )
         butler.registry.registerDatasetType(camera)

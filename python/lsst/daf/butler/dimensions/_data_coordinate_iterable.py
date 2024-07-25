@@ -33,16 +33,11 @@ __all__ = (
     "DataCoordinateSequence",
 )
 
-import warnings
 from abc import abstractmethod
 from collections.abc import Collection, Iterable, Iterator, Sequence, Set
 from typing import Any, overload
 
-from deprecated.sphinx import deprecated
-from lsst.utils.introspection import find_outside_stacklevel
-
 from ._coordinate import DataCoordinate
-from ._graph import DimensionGraph
 from ._group import DimensionGroup
 from ._universe import DimensionUniverse
 
@@ -51,7 +46,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
     """An abstract base class for homogeneous iterables of data IDs.
 
     All elements of a `DataCoordinateIterable` identify the same set of
-    dimensions (given by the `graph` property) and generally have the same
+    dimensions (given by the `dimensions` property) and generally have the same
     `DataCoordinate.hasFull` and `DataCoordinate.hasRecords` flag values.
     """
 
@@ -77,17 +72,6 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             well as that of `DataCoordinateIterable`.
         """
         return _ScalarDataCoordinateIterable(dataId)
-
-    # TODO: remove on DM-41326.
-    @property
-    @deprecated(
-        "Deprecated in favor of .dimensions; will be removed after v26.",
-        category=FutureWarning,
-        version="v27",
-    )
-    def graph(self) -> DimensionGraph:
-        """Dimensions identified by these data IDs (`DimensionGraph`)."""
-        return self.dimensions._as_graph()
 
     @property
     @abstractmethod
@@ -166,7 +150,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
         )
 
     @abstractmethod
-    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinateIterable:
+    def subset(self, dimensions: DimensionGroup | Iterable[str]) -> DataCoordinateIterable:
         """Return a subset iterable.
 
         This subset iterable returns data IDs that identify a subset of the
@@ -174,8 +158,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`, `DimensionGroup`, or \
-                `~collections.abc.Iterable` [ `str` ]
+        dimensions : `DimensionGroup` or `~collections.abc.Iterable` [ `str` ]
             Dimensions to be identified by the data IDs in the returned
             iterable.  Must be a subset of ``self.dimensions``.
 
@@ -239,9 +222,7 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
         # Docstring inherited from DataCoordinateIterable.
         return self._dataId.hasRecords()
 
-    def subset(
-        self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]
-    ) -> _ScalarDataCoordinateIterable:
+    def subset(self, dimensions: DimensionGroup | Iterable[str]) -> _ScalarDataCoordinateIterable:
         # Docstring inherited from DataCoordinateIterable.
         dimensions = self.universe.conform(dimensions)
         return _ScalarDataCoordinateIterable(self._dataId.subset(dimensions))
@@ -262,13 +243,8 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
     dataIds : `collections.abc.Collection` [ `DataCoordinate` ]
          A collection of `DataCoordinate` instances, with dimensions equal to
         ``dimensions``.
-    graph : `DimensionGraph`, optional
-        Dimensions identified by all data IDs in the collection.  Ignored if
-        ``dimensions`` is provided, and deprecated with removal after v27.
-    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`, \
-            or `DimensionGraph`, optional
-        Dimensions identified by all data IDs in the collection.  Must be
-        provided unless ``graph`` is.
+    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`
+        Dimensions identified by all data IDs in the collection.
     hasFull : `bool`, optional
         If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
         `True` for all given data IDs.  If `False`, no such guarantee is made,
@@ -284,7 +260,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         `False`.
     check: `bool`, optional
         If `True` (default) check that all data IDs are consistent with the
-        given ``graph`` and state flags at construction.  If `False`, no
+        given ``dimensions`` and state flags at construction.  If `False`, no
         checking will occur.
     universe : `DimensionUniverse`
         Object that manages all dimension definitions.
@@ -293,39 +269,20 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
     def __init__(
         self,
         dataIds: Collection[DataCoordinate],
-        graph: DimensionGraph | None = None,
         *,
-        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
+        dimensions: Iterable[str] | DimensionGroup | None = None,
         hasFull: bool | None = None,
         hasRecords: bool | None = None,
         check: bool = True,
         universe: DimensionUniverse | None = None,
     ):
-        universe = (
-            universe
-            or getattr(dimensions, "universe", None)
-            or getattr(graph, "universe", None)
-            or getattr(dataIds, "universe", None)
-        )
+        universe = universe or getattr(dimensions, "universe", None) or getattr(dataIds, "universe", None)
         if universe is None:
-            raise TypeError(
-                "universe must be provided, either directly or via dimensions, dataIds, or graph."
-            )
-        if graph is not None:
-            warnings.warn(
-                "The 'graph' argument to DataCoordinateIterable constructors is deprecated in favor of "
-                " passing an iterable of dimension names as the 'dimensions' argument, and wil be removed "
-                "after v27.",
-                stacklevel=find_outside_stacklevel("lsst.daf.butler"),
-                category=FutureWarning,
-            )
+            raise TypeError("universe must be provided, either directly or via dimensions or dataIds.")
         if dimensions is not None:
             dimensions = universe.conform(dimensions)
-        elif graph is not None:
-            dimensions = graph.as_group()
-        del graph  # Avoid accidental use later.
-        if dimensions is None:
-            raise TypeError("Exactly one of 'graph' or (preferably) 'dimensions' must be provided.")
+        else:
+            raise TypeError("'dimensions' must be provided.")
         self._dataIds = dataIds
         self._dimensions = dimensions
         if check:
@@ -431,15 +388,10 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
     ----------
     dataIds : `collections.abc.Set` [ `DataCoordinate` ]
         A set of `DataCoordinate` instances, with dimensions equal to
-        ``graph``.  If this is a mutable object, the caller must be able to
-        guarantee that it will not be modified by any other holders.
-    graph : `DimensionGraph`, optional
-        Dimensions identified by all data IDs in the collection.  Ignored if
-        ``dimensions`` is provided, and deprecated with removal after v27.
-    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`, \
-            or `DimensionGraph`, optional
-        Dimensions identified by all data IDs in the collection.  Must be
-        provided unless ``graph`` is.
+        ``dimensions``.  If this is a mutable object, the caller must be able
+        to guarantee that it will not be modified by any other holders.
+    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`
+        Dimensions identified by all data IDs in the collection.
     hasFull : `bool`, optional
         If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
         `True` for all given data IDs.  If `False`, no such guarantee is made,
@@ -456,7 +408,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         first use if ``check`` is `False`.
     check : `bool`, optional
         If `True` (default) check that all data IDs are consistent with the
-        given ``graph`` and state flags at construction.  If `False`, no
+        given ``dimensions`` and state flags at construction.  If `False`, no
         checking will occur.
     universe : `DimensionUniverse`
         Object that manages all dimension definitions.
@@ -501,9 +453,8 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
     def __init__(
         self,
         dataIds: Set[DataCoordinate],
-        graph: DimensionGraph | None = None,
         *,
-        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
+        dimensions: Iterable[str] | DimensionGroup | None = None,
         hasFull: bool | None = None,
         hasRecords: bool | None = None,
         check: bool = True,
@@ -511,7 +462,6 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
     ):
         super().__init__(
             dataIds,
-            graph,
             dimensions=dimensions,
             hasFull=hasFull,
             hasRecords=hasRecords,
@@ -571,7 +521,8 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         Parameters
         ----------
         other : `DataCoordinateIterable`
-            An iterable of data IDs with ``other.graph == self.graph``.
+            An iterable of data IDs with
+            ``other.dimensions == self.dimensions``.
 
         Returns
         -------
@@ -747,13 +698,12 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         # Docstring inherited from DataCoordinateIterable.
         return self
 
-    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinateSet:
+    def subset(self, dimensions: DimensionGroup | Iterable[str]) -> DataCoordinateSet:
         """Return a set whose data IDs identify a subset.
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`, `DimensionGroup`, or \
-                `~collections.abc.Iterable` [ `str` ]
+        dimensions : `DimensionGroup` or `~collections.abc.Iterable` [ `str` ]
             Dimensions to be identified by the data IDs in the returned
             iterable.  Must be a subset of ``self.dimensions``.
 
@@ -786,14 +736,9 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     ----------
     dataIds : `collections.abc.Sequence` [ `DataCoordinate` ]
         A sequence of `DataCoordinate` instances, with dimensions equal to
-        ``graph``.
-    graph : `DimensionGraph`, optional
-        Dimensions identified by all data IDs in the collection.  Ignored if
-        ``dimensions`` is provided, and deprecated with removal after v27.
-    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`, \
-            `DimensionGraph`, optional
-        Dimensions identified by all data IDs in the collection.  Must be
-        provided unless ``graph`` is.
+        ``dimensions``.
+    dimensions : `~collections.abc.Iterable` [ `str` ], `DimensionGroup`
+        Dimensions identified by all data IDs in the collection.
     hasFull : `bool`, optional
         If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
         `True` for all given data IDs.  If `False`, no such guarantee is made,
@@ -810,7 +755,7 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         first use if ``check`` is `False`.
     check : `bool`, optional
         If `True` (default) check that all data IDs are consistent with the
-        given ``graph`` and state flags at construction.  If `False`, no
+        given ``dimensions`` and state flags at construction.  If `False`, no
         checking will occur.
     universe : `DimensionUniverse`
         Object that manages all dimension definitions.
@@ -819,9 +764,8 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     def __init__(
         self,
         dataIds: Sequence[DataCoordinate],
-        graph: DimensionGraph | None = None,
         *,
-        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
+        dimensions: Iterable[str] | DimensionGroup | None = None,
         hasFull: bool | None = None,
         hasRecords: bool | None = None,
         check: bool = True,
@@ -829,7 +773,6 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     ):
         super().__init__(
             tuple(dataIds),
-            graph,
             dimensions=dimensions,
             hasFull=hasFull,
             hasRecords=hasRecords,
@@ -879,22 +822,21 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         # Docstring inherited from DataCoordinateIterable.
         return self
 
-    def subset(self, dimensions: DimensionGraph | DimensionGroup | Iterable[str]) -> DataCoordinateSequence:
+    def subset(self, dimensions: DimensionGroup | Iterable[str]) -> DataCoordinateSequence:
         """Return a sequence whose data IDs identify a subset.
 
         Parameters
         ----------
-        dimensions : `DimensionGraph`, `DimensionGroup`, \
-                or `~collections.abc.Iterable` [ `str` ]
+        dimensions : `DimensionGroup` or `~collections.abc.Iterable` [ `str` ]
             Dimensions to be identified by the data IDs in the returned
             iterable.  Must be a subset of ``self.dimensions``.
 
         Returns
         -------
         set : `DataCoordinateSequence`
-            A `DataCoordinateSequence` with ``set.graph == graph``.
-            Will be ``self`` if ``graph == self.graph``.  Elements are
-            equivalent to those that would be created by calling
+            A `DataCoordinateSequence` with ``set.dimensions == dimensions``.
+            Will be ``self`` if ``dimensions == self.dimensions``.  Elements
+            are equivalent to those that would be created by calling
             `DataCoordinate.subset` on all elements in ``self``, in the same
             order and with no deduplication.
         """

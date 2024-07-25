@@ -34,15 +34,12 @@ from typing import Any, cast
 from .._dataset_association import DatasetAssociation
 from .._dataset_ref import DatasetId, DatasetIdGenEnum, DatasetRef
 from .._dataset_type import DatasetType
-from .._named import NameLookupMapping
 from .._storage_class import StorageClassFactory
 from .._timespan import Timespan
 from ..dimensions import (
     DataCoordinate,
     DataId,
-    Dimension,
     DimensionElement,
-    DimensionGraph,
     DimensionGroup,
     DimensionRecord,
     DimensionUniverse,
@@ -225,14 +222,13 @@ class HybridButlerRegistry(Registry):
         self,
         dataId: DataId | None = None,
         *,
-        dimensions: Iterable[str] | DimensionGroup | DimensionGraph | None = None,
-        graph: DimensionGraph | None = None,
-        records: NameLookupMapping[DimensionElement, DimensionRecord | None] | None = None,
+        dimensions: Iterable[str] | DimensionGroup | None = None,
+        records: Mapping[str, DimensionRecord | None] | None = None,
         withDefaults: bool = True,
         **kwargs: Any,
     ) -> DataCoordinate:
         return self._remote.expandDataId(
-            dataId, dimensions=dimensions, graph=graph, records=records, withDefaults=withDefaults, **kwargs
+            dataId, dimensions=dimensions, records=records, withDefaults=withDefaults, **kwargs
         )
 
     def insertDimensionData(
@@ -282,7 +278,7 @@ class HybridButlerRegistry(Registry):
         datasetType: Any,
         *,
         collections: CollectionArgType | None = None,
-        dimensions: Iterable[Dimension | str] | None = None,
+        dimensions: Iterable[str] | None = None,
         dataId: DataId | None = None,
         where: str = "",
         findFirst: bool = False,
@@ -305,8 +301,7 @@ class HybridButlerRegistry(Registry):
 
     def queryDataIds(
         self,
-        # TODO: Drop `Dimension` objects on DM-41326.
-        dimensions: DimensionGroup | Iterable[Dimension | str] | Dimension | str,
+        dimensions: DimensionGroup | Iterable[str] | str,
         *,
         dataId: DataId | None = None,
         datasets: Any = None,
@@ -424,7 +419,7 @@ class _HybridDataCoordinateQueryResults:
 
     def subset(
         self,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
         *,
         unique: bool = False,
     ) -> _HybridDataCoordinateQueryResults:
@@ -449,7 +444,7 @@ class _HybridDataCoordinateQueryResults:
         collections: Any,
         *,
         findFirst: bool = True,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
     ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
         return self._direct.findRelatedDatasets(
             datasetType, collections, findFirst=findFirst, dimensions=dimensions

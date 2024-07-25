@@ -176,7 +176,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # dimensions.  We've never used these and no longer plan to, but we
         # have to keep creating them to keep schema versioning consistent.
         cls._make_legacy_overlap_tables(context, spatial)
-        # Create tables that store DimensionGraph definitions.
+        # Create tables that store DimensionGroup definitions.
         dimension_group_storage = _DimensionGroupStorage.initialize(db, context, universe=universe)
         return cls(
             db=db,
@@ -529,7 +529,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         payload.columns_available[DimensionKeyColumnTag(self.universe.commonSkyPix.name)] = (
             payload.from_clause.columns.skypix_index
         )
-        for dimension_name in element.graph.required.names:
+        for dimension_name in element.minimal_group.required:
             payload.columns_available[DimensionKeyColumnTag(dimension_name)] = payload.from_clause.columns[
                 dimension_name
             ]
@@ -596,7 +596,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                     "skypix_system",
                     "skypix_level",
                     "skypix_index",
-                    *element.graph.required.names,
+                    *element.minimal_group.required,
                 ),
             },
             foreignKeys=[
@@ -843,8 +843,8 @@ class _DimensionGroupStorage:
         self._idTable = idTable
         self._definitionTable = definitionTable
         self._universe = universe
-        self._keysByGroup: dict[DimensionGroup, int] = {universe.empty.as_group(): 0}
-        self._groupsByKey: dict[int, DimensionGroup] = {0: universe.empty.as_group()}
+        self._keysByGroup: dict[DimensionGroup, int] = {universe.empty: 0}
+        self._groupsByKey: dict[int, DimensionGroup] = {0: universe.empty}
 
     def clone(self, db: Database) -> _DimensionGroupStorage:
         """Make an independent copy of this manager instance bound to a new
@@ -926,7 +926,7 @@ class _DimensionGroupStorage:
         return cls(db, idTable, definitionTable, universe=universe)
 
     def refresh(self) -> None:
-        """Refresh the in-memory cache of saved DimensionGraph definitions.
+        """Refresh the in-memory cache of saved DimensionGroup definitions.
 
         This should be done automatically whenever needed, but it can also
         be called explicitly.
@@ -937,8 +937,8 @@ class _DimensionGroupStorage:
         for row in sql_rows:
             key = row[self._definitionTable.columns.dimension_graph_id]
             dimensionNamesByKey[key].add(row[self._definitionTable.columns.dimension_name])
-        keysByGraph: dict[DimensionGroup, int] = {self._universe.empty.as_group(): 0}
-        graphsByKey: dict[int, DimensionGroup] = {0: self._universe.empty.as_group()}
+        keysByGraph: dict[DimensionGroup, int] = {self._universe.empty: 0}
+        graphsByKey: dict[int, DimensionGroup] = {0: self._universe.empty}
         for key, dimensionNames in dimensionNamesByKey.items():
             graph = DimensionGroup(self._universe, names=dimensionNames)
             keysByGraph[graph] = key
@@ -947,7 +947,7 @@ class _DimensionGroupStorage:
         self._keysByGroup = keysByGraph
 
     def save(self, group: DimensionGroup) -> int:
-        """Save a `DimensionGraph` definition to the database, allowing it to
+        """Save a `DimensionGroup` definition to the database, allowing it to
         be retrieved later via the returned key.
 
         Parameters
@@ -958,7 +958,7 @@ class _DimensionGroupStorage:
         Returns
         -------
         key : `int`
-            Integer used as the unique key for this `DimensionGraph` in the
+            Integer used as the unique key for this `DimensionGroup` in the
             database.
         """
         key = self._keysByGroup.get(group)
@@ -983,18 +983,18 @@ class _DimensionGroupStorage:
         return key
 
     def load(self, key: int) -> DimensionGroup:
-        """Retrieve a `DimensionGraph` that was previously saved in the
+        """Retrieve a `DimensionGroup` that was previously saved in the
         database.
 
         Parameters
         ----------
         key : `int`
-            Integer used as the unique key for this `DimensionGraph` in the
+            Integer used as the unique key for this `DimensionGroup` in the
             database.
 
         Returns
         -------
-        graph : `DimensionGraph`
+        graph : `DimensionGroup`
             Retrieved graph.
         """
         graph = self._groupsByKey.get(key)

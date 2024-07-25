@@ -706,7 +706,7 @@ class Query:
         # If the dataset type has dimensions not in the current query, or we
         # need a temporal join for a calibration collection, either restore
         # those columns or join them in.
-        full_dimensions = dataset_type.dimensions.as_group().union(self._dimensions)
+        full_dimensions = dataset_type.dimensions.union(self._dimensions)
         relation = self._relation
         record_caches = self._record_caches
         base_columns_required: set[ColumnTag] = {
@@ -746,12 +746,8 @@ class Query:
                 # present in each family (e.g. patch beats tract).
                 spatial_joins.append(
                     (
-                        lhs_spatial_family.choose(
-                            full_dimensions.elements.names, self.dimensions.universe
-                        ).name,
-                        rhs_spatial_family.choose(
-                            full_dimensions.elements.names, self.dimensions.universe
-                        ).name,
+                        lhs_spatial_family.choose(full_dimensions.elements, self.dimensions.universe).name,
+                        rhs_spatial_family.choose(full_dimensions.elements, self.dimensions.universe).name,
                     )
                 )
         # Set up any temporal join between the query dimensions and CALIBRATION
@@ -759,7 +755,7 @@ class Query:
         temporal_join_on: set[ColumnTag] = set()
         if any(r.type is CollectionType.CALIBRATION for r in collection_records):
             for family in self._dimensions.temporal:
-                endpoint = family.choose(self._dimensions.elements.names, self.dimensions.universe)
+                endpoint = family.choose(self._dimensions.elements, self.dimensions.universe)
                 temporal_join_on.add(DimensionRecordColumnTag(endpoint.name, "timespan"))
             base_columns_required.update(temporal_join_on)
         # Note which of the many kinds of potentially-missing columns we have

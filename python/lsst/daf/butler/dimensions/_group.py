@@ -35,6 +35,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 import pydantic
+from deprecated.sphinx import deprecated
 from lsst.utils.classes import cached_getter, immutable
 from pydantic_core import core_schema
 
@@ -44,7 +45,6 @@ from .._topology import TopologicalFamily, TopologicalSpace
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._elements import DimensionElement
-    from ._graph import DimensionGraph
     from ._universe import DimensionUniverse
 
 
@@ -102,14 +102,20 @@ class SortedSequenceSet(Set[str]):
         """
         return self._seq
 
+    # TODO: remove on DM-45185
     @property
+    @deprecated(
+        "Deprecated in favor of direct iteration over the parent set.  Will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def names(self) -> Set[str]:
         """An alias to ``self``.
 
-        This is a backwards-compatibility API that allows `DimensionGroup`
-        to mimic the `DimensionGraph` object it is intended to replace, by
-        permitting expressions like ``x.required.names`` when ``x`` can be
-        an object of either type.
+        This is a backwards-compatibility API that allows `DimensionGroup` to
+        mimic the old ``DimensionGraph`` object it replaced, by permitting
+        expressions like ``x.required.names`` when ``x`` can be an object of
+        either type.
         """
         return self
 
@@ -266,6 +272,12 @@ class DimensionGroup:  # numpydoc ignore=PR02
     def __repr__(self) -> str:
         return f"DimensionGroup({self.names})"
 
+    # TODO: remove on DM-45185
+    @deprecated(
+        "Deprecated as no longer necessary (this method always returns 'self').  Will be removed after v28.",
+        version="v28",
+        category=FutureWarning,
+    )
     def as_group(self) -> DimensionGroup:
         """Return ``self``.
 
@@ -276,32 +288,11 @@ class DimensionGroup:  # numpydoc ignore=PR02
 
         Notes
         -----
-        This is a backwards-compatibility API that allows both `DimensionGraph`
-        and `DimensionGroup` to be coerced to the latter.
+        This is a backwards-compatibility API that allowed both the old
+        ``DimensionGraph`` class and `DimensionGroup` to be coerced to the
+        latter.
         """
         return self
-
-    @cached_getter
-    def _as_graph(self) -> DimensionGraph:
-        """Return a view of ``self`` as a `DimensionGraph`.
-
-        Returns
-        -------
-        graph : `DimensionGraph`
-            The deprecated form of `DimensionGroup`.
-
-        Notes
-        -----
-        This is provided as a convenience for methods and properties that must
-        return a `DimensionGraph` for backwards compatibility (until v27).  It
-        is the only way of making a `DimensionGraph` that does not produce
-        a warning.
-        """
-        from ._graph import DimensionGraph
-
-        result = object.__new__(DimensionGraph)
-        result._group = self
-        return result
 
     def isdisjoint(self, other: DimensionGroup) -> bool:
         """Test whether the intersection of two groups is empty.
@@ -349,10 +340,7 @@ class DimensionGroup:  # numpydoc ignore=PR02
         return self.names >= other.names
 
     def __eq__(self, other: Any) -> bool:
-        from ._graph import DimensionGraph
-
-        # TODO: Drop DimensionGraph support here on DM-41326.
-        if isinstance(other, DimensionGroup | DimensionGraph):
+        if isinstance(other, DimensionGroup):
             return self.names == other.names
         else:
             return False

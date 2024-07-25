@@ -33,7 +33,7 @@ from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from ._coordinate import DataCoordinate, DataId
-from ._graph import DimensionGraph, DimensionGroup
+from ._group import DimensionGroup
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
@@ -52,12 +52,11 @@ class DimensionPacker(metaclass=ABCMeta):
         (to these values) in all calls to `pack`, and are used in the results
         of calls to `unpack`.  Subclasses may ignore particular dimensions, and
         are permitted to require that ``fixed.hasRecords()`` return `True`.
-    dimensions : `DimensionGroup` or `DimensionGraph`
-        The dimensions of data IDs packed by this instance.  Only
-        `DimensionGroup` will be supported after v27.
+    dimensions : `DimensionGroup`
+        The dimensions of data IDs packed by this instance.
     """
 
-    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGroup | DimensionGraph):
+    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGroup):
         self.fixed = fixed
         self._dimensions = self.fixed.universe.conform(dimensions)
 
@@ -67,13 +66,11 @@ class DimensionPacker(metaclass=ABCMeta):
         return self.fixed.universe
 
     @property
-    def dimensions(self) -> DimensionGraph:
+    def dimensions(self) -> DimensionGroup:
         """The dimensions of data IDs packed by this instance
-        (`DimensionGraph`).
-
-        After v27 this will be a `DimensionGroup`.
+        (`DimensionGroup`).
         """
-        return self._dimensions._as_graph()
+        return self._dimensions
 
     @property
     @abstractmethod

@@ -40,7 +40,6 @@ from ._data_coordinate_iterable import *
 from ._database import *
 from ._elements import *
 from ._governor import *
-from ._graph import *
 from ._group import *
 from ._packer import *
 from ._record_set import *

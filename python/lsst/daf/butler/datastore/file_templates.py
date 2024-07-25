@@ -43,7 +43,7 @@ from .._config_support import LookupKey, processLookupConfigs
 from .._dataset_ref import DatasetId, DatasetRef
 from .._exceptions import ValidationError
 from .._storage_class import StorageClass
-from ..dimensions import DataCoordinate, DimensionGraph, DimensionGroup
+from ..dimensions import DataCoordinate, DimensionGroup
 
 if TYPE_CHECKING:
     from .._dataset_type import DatasetType
@@ -394,9 +394,7 @@ class FileTemplate:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{self.template}")'
 
-    def grouped_fields(
-        self, dimensions: DimensionGroup | DimensionGraph | None = None
-    ) -> tuple[FieldDict, FieldDict]:
+    def grouped_fields(self, dimensions: DimensionGroup | None = None) -> tuple[FieldDict, FieldDict]:
         """Return all the fields, grouped by their type.
 
         Parameters
@@ -723,7 +721,7 @@ class FileTemplate:
         -----
         Validation will always include a check that mandatory fields
         are present and that at least one field refers to a dimension.
-        If the supplied entity includes a `DimensionGraph` then it will be
+        If the supplied entity includes a `DimensionGroup` then it will be
         used to compare the available dimensions with those specified in the
         template.
         """
@@ -821,7 +819,7 @@ class FileTemplate:
         # Fall back to dataId keys if we have them but no links.
         # dataId keys must still be present in the template
         try:
-            minimal = set(entity.dimensions.required.names)
+            minimal = set(entity.dimensions.required)
             maximal = set(entity.dimensions.names)
         except AttributeError:
             try:
@@ -890,5 +888,5 @@ class FileTemplate:
         # update to be more like the real world while still providing our
         # only tests of important behavior.
         if len(entity.dimensions.skypix) == 1:
-            (alias,) = entity.dimensions.skypix.names
+            (alias,) = entity.dimensions.skypix
         return alias

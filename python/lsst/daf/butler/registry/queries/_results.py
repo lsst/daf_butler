@@ -44,8 +44,6 @@ from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from typing import Any, Self
 
-from deprecated.sphinx import deprecated
-
 from ..._dataset_ref import DatasetRef
 from ..._dataset_type import DatasetType
 from ..._exceptions_legacy import DatasetTypeError
@@ -53,7 +51,6 @@ from ...dimensions import (
     DataCoordinate,
     DataCoordinateIterable,
     DimensionElement,
-    DimensionGraph,
     DimensionGroup,
     DimensionRecord,
 )
@@ -262,7 +259,7 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
     @abstractmethod
     def subset(
         self,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
         *,
         unique: bool = False,
     ) -> DataCoordinateQueryResults:
@@ -274,7 +271,7 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
 
         Parameters
         ----------
-        dimensions : `DimensionGroup`, `DimensionGraph`, or \
+        dimensions : `DimensionGroup` or \
                 `~collections.abc.Iterable` [ `str`], optional
             Dimensions to include in the new results object.  If `None`,
             ``self.dimensions`` is used.
@@ -370,7 +367,7 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
         collections: Any,
         *,
         findFirst: bool = True,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
     ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
         """Find datasets using the data IDs identified by this query, and
         return them along with the original data IDs.
@@ -398,7 +395,7 @@ class DataCoordinateQueryResults(QueryResultsBase, DataCoordinateIterable):
             expressions and may not be ``...``.  Note that this is not the
             same as yielding one `DatasetRef` for each yielded data ID if
             ``dimensions`` is not `None`.
-        dimensions : `DimensionGroup`, `DimensionGraph`, or \
+        dimensions : `DimensionGroup` or \
                 `~collections.abc.Iterable` [ `str` ], optional
             The dimensions of the data IDs returned.  Must be a subset of
             ``self.dimensions``.
@@ -443,17 +440,7 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         return self._query.iter_data_ids()
 
     def __repr__(self) -> str:
-        return f"<DataCoordinate iterator with dimensions={self.graph}>"
-
-    @property
-    @deprecated(
-        "Deprecated in favor of .dimensions.  Will be removed after v27.",
-        version="v27",
-        category=FutureWarning,
-    )
-    def graph(self) -> DimensionGraph:
-        # Docstring inherited from DataCoordinateIterable.
-        return self._query.dimensions._as_graph()
+        return f"<DataCoordinate iterator with dimensions={self.dimensions}>"
 
     @property
     def dimensions(self) -> DimensionGroup:
@@ -478,7 +465,7 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
 
     def subset(
         self,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
         *,
         unique: bool = False,
     ) -> DataCoordinateQueryResults:
@@ -518,7 +505,7 @@ class DatabaseDataCoordinateQueryResults(DataCoordinateQueryResults):
         collections: Any,
         *,
         findFirst: bool = True,
-        dimensions: DimensionGroup | DimensionGraph | Iterable[str] | None = None,
+        dimensions: DimensionGroup | Iterable[str] | None = None,
     ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
         if dimensions is None:
             dimensions = self.dimensions

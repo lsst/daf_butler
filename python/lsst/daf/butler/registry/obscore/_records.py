@@ -221,7 +221,7 @@ class RecordFactory:
             if em_range:
                 record["em_min"], record["em_max"] = em_range
             else:
-                _LOG.warning("could not find spectral range for dataId=%s", dataId.full)
+                _LOG.warning("could not find spectral range for dataId=%s", dataId)
             record["em_filter_name"] = dataId["band"]
 
         # Dictionary to use for substitutions when formatting various

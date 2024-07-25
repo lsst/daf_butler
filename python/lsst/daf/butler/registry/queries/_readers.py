@@ -142,7 +142,7 @@ class _BasicDataCoordinateReader(DataCoordinateReader):
 
     def __init__(self, dimensions: DimensionGroup):
         self._dimensions = dimensions
-        self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions.required.names)
+        self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions.required)
 
     __slots__ = ("_dimensions", "_tags")
 
@@ -169,9 +169,7 @@ class _FullDataCoordinateReader(DataCoordinateReader):
 
     def __init__(self, dimensions: DimensionGroup):
         self._dimensions = dimensions
-        self._tags = tuple(
-            DimensionKeyColumnTag(name) for name in self._dimensions.as_group().data_coordinate_keys
-        )
+        self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions.data_coordinate_keys)
 
     __slots__ = ("_dimensions", "_tags")
 
@@ -265,7 +263,7 @@ class DatasetRefReader:
         record_caches: Mapping[str, DimensionRecordSet] | None = None,
     ):
         self._data_coordinate_reader = DataCoordinateReader.make(
-            dataset_type.dimensions.as_group(), full=full, records=records, record_caches=record_caches
+            dataset_type.dimensions, full=full, records=records, record_caches=record_caches
         )
         self._dataset_type = dataset_type
         self._translate_collection = translate_collection
