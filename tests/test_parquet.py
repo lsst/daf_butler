@@ -30,6 +30,7 @@
 Tests in this module are disabled unless pandas and pyarrow are importable.
 """
 
+import datetime
 import os
 import unittest
 
@@ -138,6 +139,8 @@ def _makeSimpleNumpyTable(include_multidim=False, include_bigendian=False):
         ("f", "i8"),
         ("strcol", "U10"),
         ("bytecol", "a10"),
+        ("dtn", "datetime64[ns]"),
+        ("dtu", "datetime64[us]"),
     ]
 
     if include_multidim:
@@ -161,6 +164,8 @@ def _makeSimpleNumpyTable(include_multidim=False, include_bigendian=False):
     data["f"] = np.arange(nrow) * 10
     data["strcol"][:] = "teststring"
     data["bytecol"][:] = "teststring"
+    data["dtn"] = datetime.datetime.fromisoformat("2024-07-23")
+    data["dtu"] = datetime.datetime.fromisoformat("2024-07-23")
 
     if include_multidim:
         data["d1"] = np.random.randn(data["d1"].size).reshape(data["d1"].shape)
@@ -900,6 +905,10 @@ class ParquetFormatterArrowAstropyTestCase(unittest.TestCase):
 
     def testAstropyParquet(self):
         tab1 = _makeSimpleAstropyTable()
+
+        # Remove datetime column which doesn't work with astropy currently.
+        del tab1["dtn"]
+        del tab1["dtu"]
 
         fname = os.path.join(self.root, "test_astropy.parq")
         tab1.write(fname)
