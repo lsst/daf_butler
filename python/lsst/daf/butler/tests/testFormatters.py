@@ -38,11 +38,12 @@ __all__ = (
 
 import json
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 import yaml
+from lsst.resources import ResourceHandleProtocol
 
-from .._formatter import Formatter
+from .._formatter import Formatter, FormatterV2
 from ..formatters.yaml import YamlFormatter
 
 if TYPE_CHECKING:
@@ -73,7 +74,7 @@ class FormatterTest(Formatter):
         raise NotImplementedError("Type does not support writing")
 
     @staticmethod
-    def validateWriteRecipes(recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    def validate_write_recipes(recipes: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
         if not recipes:
             return recipes
         for recipeName in recipes:
@@ -99,34 +100,35 @@ class LenientYamlFormatter(YamlFormatter):
     writes YAML.
     """
 
-    extension = ".yaml"
-
     @classmethod
-    def validateExtension(cls, location: Location) -> None:
+    def validate_extension(cls, location: Location) -> None:
         return
 
 
-class MetricsExampleFormatter(Formatter):
+class MetricsExampleFormatter(FormatterV2):
     """A specialist test formatter for metrics that supports components
     directly without assembler delegate.
     """
 
-    supportedExtensions = frozenset({".yaml", ".json"})
+    supported_extensions = frozenset({".yaml", ".json"})
+    default_extension = ".yaml"
+    can_read_from_stream = True
 
-    @property
-    def extension(self) -> str:
-        """Always write yaml by default."""
-        return ".yaml"
-
-    def read(self, component: str | None = None) -> Any:
+    def read_from_stream(
+        self, stream: BinaryIO | ResourceHandleProtocol, component: str | None = None, expected_size: int = -1
+    ) -> Any:
         """Read data from a file.
 
         Parameters
         ----------
+        stream : `typing.BinaryIO` or `lsst.resources.ResourceHandleProtocol`
+            Open file handle to read from.
         component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
             file.
+        expected_size : `int`, optional
+            The expected size of the resource.
 
         Returns
         -------
@@ -145,57 +147,49 @@ class MetricsExampleFormatter(Formatter):
         """
         # This formatter can not read a subset from disk because it
         # uses yaml or json.
-        path = self.fileDescriptor.location.path
-
-        with open(path) as fd:
-            if path.endswith(".yaml"):
-                data = yaml.load(fd, Loader=yaml.SafeLoader)
-            elif path.endswith(".json"):
-                data = json.load(fd)
-            else:
-                raise RuntimeError(f"Unsupported file extension found in path '{path}'")
+        if ".yaml" in stream.name:
+            data = yaml.load(stream, Loader=yaml.SafeLoader)
+        elif ".json" in stream.name:
+            data = json.load(stream)
+        else:
+            raise RuntimeError(f"Unsupported file extension found in path '{stream.name}'")
 
         # We can slice up front if required
-        parameters = self.fileDescriptor.parameters
+        parameters = self.file_descriptor.parameters
         if "data" in data and parameters and "slice" in parameters:
             data["data"] = data["data"][parameters["slice"]]
 
-        pytype = self.fileDescriptor.storageClass.pytype
-        inMemoryDataset = pytype(**data)
+        pytype = self.file_descriptor.storageClass.pytype
+        in_memory_dataset = pytype(**data)
 
         if not component:
-            return inMemoryDataset
+            return in_memory_dataset
 
         if component == "summary":
-            return inMemoryDataset.summary
+            return in_memory_dataset.summary
         elif component == "output":
-            return inMemoryDataset.output
+            return in_memory_dataset.output
         elif component == "data":
-            return inMemoryDataset.data
+            return in_memory_dataset.data
         elif component == "counter":
-            return len(inMemoryDataset.data)
+            return len(in_memory_dataset.data)
         raise ValueError(f"Unsupported component: {component}")
 
-    def write(self, inMemoryDataset: Any) -> None:
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
         """Write a Dataset.
 
         Parameters
         ----------
-        inMemoryDataset : `object`
+        in_memory_dataset : `object`
             The Dataset to store.
 
         Returns
         -------
-        path : `str`
-            The path to where the Dataset was stored within the datastore.
+        serialized_dataset : `bytes`
+            The in-memory dataset as bytes.
         """
-        fileDescriptor = self.fileDescriptor
-
-        # Update the location with the formatter-preferred file extension
-        fileDescriptor.location.updateExtension(self.extension)
-
-        with open(fileDescriptor.location.path, "w") as fd:
-            yaml.dump(inMemoryDataset._asdict(), fd)
+        serialized = yaml.dump(in_memory_dataset._asdict())
+        return serialized.encode()
 
 
 class MetricsExampleDataFormatter(Formatter):

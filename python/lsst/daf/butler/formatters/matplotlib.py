@@ -33,19 +33,22 @@ __all__ = ("MatplotlibFormatter",)
 
 from typing import Any
 
-from .file import FileFormatter
+from lsst.daf.butler import FormatterV2
+from lsst.resources import ResourcePath
 
 
-class MatplotlibFormatter(FileFormatter):
-    """Interface for writing matplotlib figures."""
+class MatplotlibFormatter(FormatterV2):
+    """Format matplotlib figures.
 
-    extension = ".png"
-    """Matplotlib figures are always written in PNG format."""
+    Does not support writes.
+    """
 
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        # docstring inherited from FileFormatter._readFile
-        raise NotImplementedError(f"matplotlib figures cannot be read by the butler; path is {path}")
+    default_extension = ".png"
 
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        # docstring inherited from FileFormatter._writeFile
-        inMemoryDataset.savefig(self.fileDescriptor.location.path)
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        # Format is not forced so if there is no extension in uri one will
+        # be added and the datastore will not know what happened.
+        # The fname for savefig can take a file descriptor. If it works
+        # with ResourcePath handles then it may be possible to do direct
+        # writes. Alternatively, implement with BytesIO and do direct put.
+        in_memory_dataset.savefig(uri.ospath)

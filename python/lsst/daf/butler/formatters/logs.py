@@ -29,90 +29,42 @@ __all__ = ("ButlerLogRecordsFormatter",)
 
 from typing import Any
 
+from lsst.daf.butler import FormatterV2
 from lsst.daf.butler.logging import ButlerLogRecords
 
-from .json import JsonFormatter
 
-
-class ButlerLogRecordsFormatter(JsonFormatter):
+class ButlerLogRecordsFormatter(FormatterV2):
     """Read and write log records in JSON format.
 
     This is a naive implementation that treats everything as a pydantic.
     model.  In the future this may be changed to be able to read
     `ButlerLogRecord` one at time from the file and return a subset
     of records given some filtering parameters.
+
+    Notes
+    -----
+    Log files can be large and ResourcePath.open() does not support
+    ``readline()`` or ``__iter__`` in all cases and
+    ``ButlerLogRecords.from_stream`` does not use `.read()` for chunking.
+    Therefore must use local file.
     """
 
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        """Read a file from the path in JSON format.
+    default_extension = ".json"
+    supported_extensions = frozenset({".log"})
+    can_read_from_local_file = True
 
-        Parameters
-        ----------
-        path : `str`
-            Path to use to open JSON format file.
-        pytype : `class`, optional
-            Python type being read. Should be a `ButlerLogRecords` or
-            subclass.
-
-        Returns
-        -------
-        data : `object`
-            Data as Python object read from JSON file.
-
-        Notes
-        -----
-        Can read two forms of JSON log file. It can read a full JSON
-        document created from `ButlerLogRecords`, or a stream of standalone
-        JSON documents with a log record per line.
-        """
-        if pytype is None:
-            pytype = ButlerLogRecords
-        elif not issubclass(pytype, ButlerLogRecords):
+    def _get_read_pytype(self) -> type[ButlerLogRecords]:
+        """Get the Python type to allow for subclasses."""
+        pytype = self.file_descriptor.storageClass.pytype
+        if not issubclass(pytype, ButlerLogRecords):
             raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
+        return pytype
 
-        return pytype.from_file(path)
+    def read_from_local_file(self, path: str, component: str | None = None, expected_size: int = -1) -> Any:
+        # ResourcePath open() cannot do a per-line read so can not use
+        # `read_from_stream` and `read_from_uri` does not give any advantage
+        # over pre-downloading the whole file (which can be very large).
+        return self._get_read_pytype().from_file(path)
 
-    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
-        """Read the bytes object as a python object.
-
-        Parameters
-        ----------
-        serializedDataset : `bytes`
-            Bytes object to unserialize.
-        pytype : `class`, optional
-            Python type being read. Should be a `ButlerLogRecords` or
-            subclass.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            The requested data as a Python object or None if the string could
-            not be read.
-        """
-        # Duplicates some of the logic from ButlerLogRecords.from_file
-        if pytype is None:
-            pytype = ButlerLogRecords
-        elif not issubclass(pytype, ButlerLogRecords):
-            raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
-
-        return pytype.from_raw(serializedDataset)
-
-    def _toBytes(self, inMemoryDataset: Any) -> bytes:
-        """Write the in memory dataset to a bytestring.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to serialize
-
-        Returns
-        -------
-        serializedDataset : `bytes`
-            bytes representing the serialized dataset.
-
-        Raises
-        ------
-        Exception
-            The object could not be serialized.
-        """
-        return inMemoryDataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
+        return in_memory_dataset.model_dump_json(exclude_unset=True, exclude_defaults=True).encode()

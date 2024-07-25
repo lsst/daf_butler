@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-__all__ = "DeferredFormatter"
+__all__ = ["DeferredFormatter"]
 
 from typing import Any
 

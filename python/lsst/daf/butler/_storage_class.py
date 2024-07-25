@@ -204,19 +204,22 @@ class StorageClass:
                         del self._converters[candidate_type_str]
                         continue
 
-                try:
-                    converter = doImportType(converter_str)
-                except ImportError as e:
-                    log.warning(
-                        "Unable to import conversion function %s associated with storage class %s "
-                        "required to convert type %s (%s)",
-                        converter_str,
-                        self.name,
-                        candidate_type_str,
-                        e,
-                    )
-                    del self._converters[candidate_type_str]
-                    continue
+                if hasattr(builtins, converter_str):
+                    converter = getattr(builtins, converter_str)
+                else:
+                    try:
+                        converter = doImportType(converter_str)
+                    except ImportError as e:
+                        log.warning(
+                            "Unable to import conversion function %s associated with storage class %s "
+                            "required to convert type %s (%s)",
+                            converter_str,
+                            self.name,
+                            candidate_type_str,
+                            e,
+                        )
+                        del self._converters[candidate_type_str]
+                        continue
                 if not callable(converter):
                     # doImportType is annotated to return a Type but in actual
                     # fact it can return Any except ModuleType because package

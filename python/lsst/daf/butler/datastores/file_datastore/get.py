@@ -36,13 +36,21 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, TypeAlias
 
-from lsst.daf.butler import DatasetRef, FileDescriptor, Formatter, Location, StorageClass
+from lsst.daf.butler import (
+    DatasetRef,
+    FileDescriptor,
+    FileIntegrityError,
+    Formatter,
+    FormatterV1inV2,
+    FormatterV2,
+    Location,
+    StorageClass,
+)
 from lsst.daf.butler.datastore.cache_manager import AbstractDatastoreCacheManager
 from lsst.daf.butler.datastore.generic_base import post_process_get
 from lsst.daf.butler.datastore.stored_file_info import StoredFileInfo
 from lsst.utils.introspection import get_instance_of
 from lsst.utils.logging import getLogger
-from lsst.utils.timer import time_this
 
 log = getLogger(__name__)
 
@@ -58,7 +66,7 @@ class DatastoreFileGetInformation:
     location: Location
     """The location from which to read the dataset."""
 
-    formatter: Formatter
+    formatter: Formatter | FormatterV2
     """The `Formatter` to use to deserialize the dataset."""
 
     info: StoredFileInfo
@@ -116,27 +124,31 @@ def generate_datastore_get_information(
     for location, storedFileInfo in fileLocations:
         # The storage class used to write the file
         writeStorageClass = storedFileInfo.storageClass
+        thisReadStorageClass = readStorageClass
 
         # If this has been disassembled we need read to match the write
-        if disassembled:
-            readStorageClass = writeStorageClass
+        # except for if a component has specified an override.
+        if disassembled and storedFileInfo.component != refComponent:
+            thisReadStorageClass = writeStorageClass
 
         formatter = get_instance_of(
             storedFileInfo.formatter,
             FileDescriptor(
                 location,
-                readStorageClass=readStorageClass,
+                readStorageClass=thisReadStorageClass,
                 storageClass=writeStorageClass,
                 parameters=parameters,
+                component=storedFileInfo.component,
             ),
-            ref.dataId,
+            dataId=ref.dataId,
+            ref=ref,
         )
 
-        formatterParams, notFormatterParams = formatter.segregateParameters()
+        formatterParams, notFormatterParams = formatter.segregate_parameters()
 
         # Of the remaining parameters, extract the ones supported by
         # this StorageClass (for components not all will be handled)
-        assemblerParams = readStorageClass.filterParameters(notFormatterParams)
+        assemblerParams = thisReadStorageClass.filterParameters(notFormatterParams)
 
         # The ref itself could be a component if the dataset was
         # disassembled by butler, or we disassembled in datastore and
@@ -151,7 +163,7 @@ def generate_datastore_get_information(
                 assemblerParams,
                 formatterParams,
                 component,
-                readStorageClass,
+                thisReadStorageClass,
             )
         )
 
@@ -163,7 +175,6 @@ def _read_artifact_into_memory(
     ref: DatasetRef,
     cache_manager: AbstractDatastoreCacheManager,
     isComponent: bool = False,
-    cache_ref: DatasetRef | None = None,
 ) -> Any:
     """Read the artifact from datastore into in memory object.
 
@@ -177,14 +188,6 @@ def _read_artifact_into_memory(
         Flag to indicate if a component is being read from this artifact.
     cache_manager : `AbstractDatastoreCacheManager`
         The cache manager to use for caching retrieved files
-    cache_ref : `DatasetRef`, optional
-        The DatasetRef to use when looking up the file in the cache.
-        This ref must have the same ID as the supplied ref but can
-        be a parent ref or component ref to indicate to the cache whether
-        a composite file is being requested from the cache or a component
-        file. Without this the cache will default to the supplied ref but
-        it can get confused with read-only derived components for
-        disassembled composites.
 
     Returns
     -------
@@ -195,140 +198,46 @@ def _read_artifact_into_memory(
     uri = location.uri
     log.debug("Accessing data from %s", uri)
 
-    if cache_ref is None:
-        cache_ref = ref
-    if cache_ref.id != ref.id:
-        raise ValueError(
-            "The supplied cache dataset ref refers to a different dataset than expected:"
-            f" {ref.id} != {cache_ref.id}"
-        )
-
     # Cannot recalculate checksum but can compare size as a quick check
     # Do not do this if the size is negative since that indicates
     # we do not know.
     recorded_size = getInfo.info.file_size
 
-    def check_resource_size(resource_size: int) -> None:
-        if recorded_size >= 0 and resource_size != recorded_size:
-            raise RuntimeError(
-                "Integrity failure in Datastore. "
-                f"Size of file {uri} ({resource_size}) "
-                f"does not match size recorded in registry of {recorded_size}"
-            )
-
-    # For the general case we have choices for how to proceed.
-    # 1. Always use a local file (downloading the remote resource to a
-    #    temporary file if needed).
-    # 2. Use a threshold size and read into memory and use bytes.
-    # Use both for now with an arbitrary hand off size.
-    # This allows small datasets to be downloaded from remote object
-    # stores without requiring a temporary file.
-
     formatter = getInfo.formatter
-    nbytes_max = 10_000_000  # Arbitrary number that we can tune
-    if recorded_size >= 0 and recorded_size <= nbytes_max and formatter.can_read_bytes():
-        with cache_manager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
-            if cached_file is not None:
-                desired_uri = cached_file
-                msg = f" (cached version of {uri})"
-            else:
-                desired_uri = uri
-                msg = ""
-            with time_this(log, msg="Reading bytes from %s%s", args=(desired_uri, msg)):
-                serializedDataset = desired_uri.read()
-                check_resource_size(len(serializedDataset))
-        log.debug(
-            "Deserializing %s from %d bytes from location %s with formatter %s",
-            f"component {getInfo.component}" if isComponent else "",
-            len(serializedDataset),
-            uri,
-            formatter.name(),
+
+    if isinstance(formatter, Formatter):
+        formatter = FormatterV1inV2(
+            formatter.file_descriptor,
+            ref=ref,
+            formatter=formatter,
+            write_parameters=formatter.write_parameters,
+            write_recipes=formatter.write_recipes,
         )
-        try:
-            result = formatter.fromBytes(
-                serializedDataset, component=getInfo.component if isComponent else None
-            )
-        except Exception as e:
-            raise ValueError(
-                f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                f" ({ref.datasetType.name} from {uri}): {e}"
-            ) from e
-    else:
-        # Read from file.
 
-        # Have to update the Location associated with the formatter
-        # because formatter.read does not allow an override.
-        # This could be improved.
-        location_updated = False
-        msg = ""
+    assert isinstance(formatter, FormatterV2)
 
-        # First check in cache for local version.
-        # The cache will only be relevant for remote resources but
-        # no harm in always asking. Context manager ensures that cache
-        # file is not deleted during cache expiration.
-        with cache_manager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
-            if cached_file is not None:
-                msg = f"(via cache read of remote file {uri})"
-                uri = cached_file
-                location_updated = True
-
-            with uri.as_local() as local_uri:
-                check_resource_size(local_uri.size())
-                can_be_cached = False
-                if uri != local_uri:
-                    # URI was remote and file was downloaded
-                    cache_msg = ""
-                    location_updated = True
-
-                    if cache_manager.should_be_cached(cache_ref):
-                        # In this scenario we want to ask if the downloaded
-                        # file should be cached but we should not cache
-                        # it until after we've used it (to ensure it can't
-                        # be expired whilst we are using it).
-                        can_be_cached = True
-
-                        # Say that it is "likely" to be cached because
-                        # if the formatter read fails we will not be
-                        # caching this file.
-                        cache_msg = " and likely cached"
-
-                    msg = f"(via download to local file{cache_msg})"
-
-                # Calculate the (possibly) new location for the formatter
-                # to use.
-                newLocation = Location(*local_uri.split()) if location_updated else None
-
-                log.debug(
-                    "Reading%s from location %s %s with formatter %s",
-                    f" component {getInfo.component}" if isComponent else "",
-                    uri,
-                    msg,
-                    formatter.name(),
-                )
-                try:
-                    with (
-                        formatter._updateLocation(newLocation),
-                        time_this(
-                            log,
-                            msg="Reading%s from location %s %s with formatter %s",
-                            args=(
-                                f" component {getInfo.component}" if isComponent else "",
-                                uri,
-                                msg,
-                                formatter.name(),
-                            ),
-                        ),
-                    ):
-                        result = formatter.read(component=getInfo.component if isComponent else None)
-                except Exception as e:
-                    raise ValueError(
-                        f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                        f" ({ref.datasetType.name} from {uri}): {e}"
-                    ) from e
-
-                # File was read successfully so can move to cache
-                if can_be_cached:
-                    cache_manager.move_to_cache(local_uri, cache_ref)
+    try:
+        result = formatter.read(
+            component=getInfo.component if isComponent else None,
+            expected_size=recorded_size,
+            cache_manager=cache_manager,
+        )
+    except (FileNotFoundError, FileIntegrityError):
+        # This is expected for the case where the resource is missing
+        # or the information we passed to the formatter about the file size
+        # is incorrect.
+        # Allow them to propagate up.
+        raise
+    except Exception as e:
+        # For clarity, include any notes that may have been added by the
+        # formatter to this new exception.
+        notes = "\n".join(getattr(e, "__notes__", []))
+        if notes:
+            notes = "\n" + notes
+        raise ValueError(
+            f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+            f" ({ref.datasetType.name} from {uri}): {e}{notes}"
+        ) from e
 
     return post_process_get(
         result, ref.datasetType.storageClass, getInfo.assemblerParams, isComponent=isComponent
@@ -462,12 +371,8 @@ def get_dataset_as_python_object_from_get_info(
 
         # For now assume that read parameters are validated against
         # the real component and not the requested component
-        forwardedStorageClass = rwInfo.formatter.fileDescriptor.readStorageClass
+        forwardedStorageClass = rwInfo.formatter.file_descriptor.readStorageClass
         forwardedStorageClass.validateParameters(parameters)
-
-        # The reference to use for the caching must refer to the forwarded
-        # component and not the derived component.
-        cache_ref = ref.makeCompositeRef().makeComponentRef(forwardedComponent)
 
         # Unfortunately the FileDescriptor inside the formatter will have
         # the wrong write storage class so we need to create a new one
@@ -482,8 +387,10 @@ def get_dataset_as_python_object_from_get_info(
                 readStorageClass=refStorageClass,
                 storageClass=writeStorageClass,
                 parameters=parameters,
+                component=forwardedComponent,
             ),
-            ref.dataId,
+            dataId=ref.dataId,
+            ref=ref,
         )
 
         # The assembler can not receive any parameter requests for a
@@ -505,7 +412,7 @@ def get_dataset_as_python_object_from_get_info(
             refStorageClass,
         )
 
-        return _read_artifact_into_memory(readInfo, ref, cache_manager, isComponent=True, cache_ref=cache_ref)
+        return _read_artifact_into_memory(readInfo, ref, cache_manager, isComponent=True)
 
     else:
         # Single file request or component from that composite file
@@ -522,10 +429,6 @@ def get_dataset_as_python_object_from_get_info(
         else:
             isComponent = getInfo.component is not None
 
-        # For a component read of a composite we want the cache to
-        # be looking at the composite ref itself.
-        cache_ref = ref.makeCompositeRef() if isComponent else ref
-
         # For a disassembled component we can validate parameters against
         # the component storage class directly
         if isDisassembled:
@@ -535,8 +438,6 @@ def get_dataset_as_python_object_from_get_info(
             # component derived from a real component. The validity
             # of the parameters is not clear. For now validate against
             # the composite storage class
-            getInfo.formatter.fileDescriptor.storageClass.validateParameters(parameters)
+            getInfo.formatter.file_descriptor.storageClass.validateParameters(parameters)
 
-        return _read_artifact_into_memory(
-            getInfo, ref, cache_manager, isComponent=isComponent, cache_ref=cache_ref
-        )
+        return _read_artifact_into_memory(getInfo, ref, cache_manager, isComponent=isComponent)

@@ -34,117 +34,42 @@ import dataclasses
 from typing import Any
 
 import yaml
+from lsst.resources import ResourcePath
 
-from .file import FileFormatter
+from .typeless import TypelessFormatter
 
 
-class YamlFormatter(FileFormatter):
-    """Formatter implementation for YAML files."""
+class YamlFormatter(TypelessFormatter):
+    """Read and write YAML files."""
 
-    extension = ".yaml"
+    default_extension = ".yaml"
+    unsupported_parameters = None
+    supported_write_parameters = frozenset({"unsafe_dump"})
+    can_read_from_uri = True
 
-    unsupportedParameters = None
-    """This formatter does not support any parameters"""
-
-    supportedWriteParameters = frozenset({"unsafe_dump"})
-    """Allow the normal yaml.dump to be used to write the YAML. Use this
-    if you know that your class has registered representers."""
-
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        """Read a file from the path in YAML format.
-
-        Parameters
-        ----------
-        path : `str`
-            Path to use to open YAML format file.
-        pytype : `class`, optional
-            Not used by this implementation.
-
-        Returns
-        -------
-        data : `object`
-            Either data as Python object read from YAML file, or None
-            if the file could not be opened.
-
-        Notes
-        -----
-        The `~yaml.SafeLoader` is used when parsing the YAML file.
-        """
-        try:
-            with open(path, "rb") as fd:
-                data = self._fromBytes(fd.read(), pytype)
-        except FileNotFoundError:
-            data = None
-
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
+        # Can not use ResourcePath.open()
+        data = yaml.safe_load(uri.read())
         return data
 
-    def _fromBytes(self, serializedDataset: bytes, pytype: type[Any] | None = None) -> Any:
-        """Read the bytes object as a python object.
-
-        Parameters
-        ----------
-        serializedDataset : `bytes`
-            Bytes object to unserialize.
-        pytype : `class`, optional
-            Not used by this implementation.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            The requested data as an object, or None if the string could
-            not be read.
-
-        Notes
-        -----
-        The `~yaml.SafeLoader` is used when parsing the YAML.
-        """
-        data = yaml.safe_load(serializedDataset)
-
-        with contextlib.suppress(AttributeError):
-            data = data.exportAsDict()
-
-        return data
-
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        """Write the in memory dataset to file on disk.
-
-        Will look for `_asdict()` method to aid YAML serialization, following
-        the approach of the simplejson module.  The `dict` will be passed
-        to the relevant constructor on read.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to serialize.
-
-        Raises
-        ------
-        Exception
-            The file could not be written.
-
-        Notes
-        -----
-        The `~yaml.SafeDumper` is used when generating the YAML serialization.
-        This will fail for data structures that have complex python classes
-        without a registered YAML representer.
-        """
-        self.fileDescriptor.location.uri.write(self._toBytes(inMemoryDataset))
-
-    def _toBytes(self, inMemoryDataset: Any) -> bytes:
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
 
         Will look for `_asdict()` method to aid YAML serialization, following
-        the approach of the simplejson module.  The `dict` will be passed
-        to the relevant constructor on read.
+        the approach of the ``simplejson`` module.  Additionally, can attempt
+        to detect `pydantic.BaseModel`.
+
+        The `dict` will be passed to the relevant constructor on read if
+        not explicitly handled by Pyyaml.
 
         Parameters
         ----------
-        inMemoryDataset : `object`
-            Object to serialize
+        in_memory_dataset : `object`
+            Object to serialize.
 
         Returns
         -------
-        serializedDataset : `bytes`
+        serialized_dataset : `bytes`
             YAML string encoded to bytes.
 
         Raises
@@ -154,35 +79,36 @@ class YamlFormatter(FileFormatter):
 
         Notes
         -----
-        The `~yaml.SafeDumper` is used when generating the YAML serialization.
+        `~yaml.SafeDumper` is used when generating the YAML serialization.
         This will fail for data structures that have complex python classes
         without a registered YAML representer.
         """
         converted = False
-        if hasattr(inMemoryDataset, "model_dump") and hasattr(inMemoryDataset, "model_dump_json"):
-            # Pydantic v2-like model if both model_dump() and model_json()
+        if hasattr(in_memory_dataset, "model_dump") and hasattr(in_memory_dataset, "model_dump_json"):
+            # Pydantic v2-like model if both model_dump() and model_dump_json()
             # exist.
             with contextlib.suppress(Exception):
-                inMemoryDataset = inMemoryDataset.model_dump()
+                in_memory_dataset = in_memory_dataset.model_dump()
                 converted = True
 
-        if not converted and hasattr(inMemoryDataset, "dict") and hasattr(inMemoryDataset, "json"):
+        if not converted and hasattr(in_memory_dataset, "dict") and hasattr(in_memory_dataset, "json"):
             # Pydantic v1-like model if both dict() and json() exist.
             with contextlib.suppress(Exception):
-                inMemoryDataset = inMemoryDataset.dict()
+                in_memory_dataset = in_memory_dataset.dict()
                 converted = True
 
         if not converted:
-            # mypy needs the 'not a type' check because "is_dataclass" works
-            # for both types and instances.
-            if dataclasses.is_dataclass(inMemoryDataset) and not isinstance(inMemoryDataset, type):
-                inMemoryDataset = dataclasses.asdict(inMemoryDataset)  # type: ignore[unreachable]
-            elif hasattr(inMemoryDataset, "_asdict"):
-                inMemoryDataset = inMemoryDataset._asdict()
+            # The initial check this is not a type is to help mypy.
+            if not isinstance(in_memory_dataset, type) and dataclasses.is_dataclass(in_memory_dataset):
+                in_memory_dataset = dataclasses.asdict(in_memory_dataset)
+            elif hasattr(in_memory_dataset, "_asdict"):
+                in_memory_dataset = in_memory_dataset._asdict()
 
-        unsafe_dump = self.writeParameters.get("unsafe_dump", False)
+        unsafe_dump = self.write_parameters.get("unsafe_dump", False)
+        # Now that Python always uses an order dict, do not sort keys
+        # on write so that order can be preserved on read.
         if unsafe_dump:
-            serialized = yaml.dump(inMemoryDataset, sort_keys=False)
+            serialized = yaml.dump(in_memory_dataset, sort_keys=False)
         else:
-            serialized = yaml.safe_dump(inMemoryDataset, sort_keys=False)
+            serialized = yaml.safe_dump(in_memory_dataset, sort_keys=False)
         return serialized.encode()

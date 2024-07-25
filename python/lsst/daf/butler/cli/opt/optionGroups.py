@@ -45,7 +45,7 @@ class query_datasets_options(OptionGroup):  # noqa: N801
         The Butler repository URI.
     showUri : `bool`
         Whether to include the dataset URI.
-    useArguments : `bool
+    useArguments : `bool`
         Whether this is an argument or an option.
     """
 

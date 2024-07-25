@@ -592,7 +592,7 @@ class option_section:  # noqa: N801
 
 
 class MWPath(click.Path):
-    """Overrides click.Path to implement file-does-not-exist checking.
+    """Overrides `click.Path` to implement file-does-not-exist checking.
 
     Changes the definition of ``exists`` so that `True` indicates the location
     (file or directory) must exist, `False` indicates the location must *not*
@@ -613,7 +613,7 @@ class MWPath(click.Path):
         Allow a directory as a value.
     writable : `bool`, optional
         If `True`, a writable check is performed.
-    readable : `bool, optional
+    readable : `bool`, optional
         If `True`, a readable check is performed.
     resolve_path : `bool`, optional
         Resolve the path.

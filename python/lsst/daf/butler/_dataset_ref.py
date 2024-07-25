@@ -671,7 +671,7 @@ class DatasetRef:
         Returns
         -------
         grouped : `~collections.abc.Iterable` [ `tuple` [ `DatasetType`, \
-                `Iterable` [ `DatasetRef` ] ]]
+                `~collections.abc.Iterable` [ `DatasetRef` ] ]]
             Grouped `DatasetRef` instances.
         """
         if isinstance(refs, _DatasetRefGroupedIterable):

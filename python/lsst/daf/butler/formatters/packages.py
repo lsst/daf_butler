@@ -27,14 +27,14 @@
 
 __all__ = ("PackagesFormatter",)
 
-import os.path
 from typing import Any
 
-from lsst.daf.butler.formatters.file import FileFormatter
+from lsst.daf.butler import FormatterV2
+from lsst.resources import ResourcePath
 from lsst.utils.packages import Packages
 
 
-class PackagesFormatter(FileFormatter):
+class PackagesFormatter(FormatterV2):
     """Interface for reading and writing `~lsst.utils.packages.Packages`.
 
     This formatter supports write parameters:
@@ -43,95 +43,35 @@ class PackagesFormatter(FileFormatter):
       options are ``yaml``, ``json``, and ``pickle``.
     """
 
-    supportedWriteParameters = frozenset({"format"})
-    supportedExtensions = frozenset({".yaml", ".pickle", ".pkl", ".json"})
+    supported_write_parameters = frozenset({"format"})
+    supported_extensions = frozenset({".yaml", ".pickle", ".pkl", ".json"})
+    can_read_from_uri = True
 
-    # MyPy does't like the fact that the base declares this an instance
-    # attribute while this derived class uses a property.
-    @property
-    def extension(self) -> str:  # type: ignore
+    def get_write_extension(self) -> str:
         # Default to YAML but allow configuration via write parameter
-        format = self.writeParameters.get("format", "yaml")
+        format = self.write_parameters.get("format", "yaml")
         ext = "." + format
-        if ext not in self.supportedExtensions:
+        if ext not in self.supported_extensions:
             raise RuntimeError(f"Requested file format '{format}' is not supported for Packages")
         return ext
 
-    def _readFile(self, path: str, pytype: type | None = None) -> Any:
-        """Read a file from the path.
+    def read_from_uri(self, uri: ResourcePath, component: str | None = None, expected_size: int = -1) -> Any:
+        # Read the full file using the class associated with the
+        # storage class it was originally written with.
+        # Read the bytes directly from resource. These are not going to be
+        # large.
+        pytype = self.file_descriptor.storageClass.pytype
+        assert issubclass(pytype, Packages)  # for mypy
+        format = uri.getExtension().lstrip(".")  # .yaml -> yaml
+        return pytype.fromBytes(uri.read(), format)
 
-        Parameters
-        ----------
-        path : `str`
-            Path to use to open the file.
-        pytype : `type`
-            Class to use to read the serialized file.
-
-        Returns
-        -------
-        data : `object`
-            Instance of class ``pytype`` read from serialized file. None
-            if the file could not be opened.
-        """
-        if not os.path.exists(path):
-            return None
-
-        assert pytype is not None
-        assert issubclass(pytype, Packages)
-        return pytype.read(path)
-
-    def _fromBytes(self, serializedDataset: Any, pytype: type | None = None) -> Any:
-        """Read the bytes object as a python object.
-
-        Parameters
-        ----------
-        serializedDataset : `bytes`
-            Bytes object to unserialize.
-        pytype : `type`
-            The Python type to be instantiated. Required.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            The requested data as an object, or None if the string could
-            not be read.
-        """
-        # The format can not come from the formatter configuration
-        # because the current configuration has no connection to how
-        # the data were stored.
-        if serializedDataset.startswith(b"!<lsst."):
-            format = "yaml"
-        elif serializedDataset.startswith(b'{"'):
-            format = "json"
-        else:
-            format = "pickle"
-
-        assert pytype is not None
-        assert issubclass(pytype, Packages)
-        return pytype.fromBytes(serializedDataset, format)
-
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        """Write the in memory dataset to file on disk.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to serialize.
-
-        Raises
-        ------
-        Exception
-            The file could not be written.
-        """
-        inMemoryDataset.write(self.fileDescriptor.location.path)
-
-    def _toBytes(self, inMemoryDataset: Any) -> bytes:
+    def to_bytes(self, in_memory_dataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
 
         Parameters
         ----------
-        inMemoryDataset : `object`
-            Object to serialize
+        in_memory_dataset : `object`
+            Object to serialize.
 
         Returns
         -------
@@ -143,5 +83,5 @@ class PackagesFormatter(FileFormatter):
         Exception
             The object could not be serialized.
         """
-        format = self.extension.lstrip(".")
-        return inMemoryDataset.toBytes(format)
+        format = self.get_write_extension().lstrip(".")
+        return in_memory_dataset.toBytes(format)

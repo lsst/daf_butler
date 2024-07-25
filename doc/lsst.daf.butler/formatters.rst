@@ -217,7 +217,7 @@ Read parameters are used to adjust what is returned by the `Butler.get()` call b
 For example this means that a read parameter that subsets an image is valid because the type returned would still be an image.
 
 If read parameters are defined then a `StorageClassDelegate.handleParameters()` method must be defined that understands how to apply these parameters to the Python object and should return a modified copy.
-This method must be written even if a `Formatter` is to be used.
+This method must be written even if a `FormatterV2` is to be used.
 There are two reasons for this; firstly, there is no guarantee that a particular formatter implementation will understand the parameter (and no requirement for that to be the case), and secondly there is no guarantee that a formatter will be involved in retrieval of the dataset.
 In-memory datastores never involve a file artifact so whilst composite disassembly is never an issue, a delegate must at least provide the parameter handler to allow the user to configure such a datastore.
 
@@ -228,58 +228,89 @@ Formatters
 ==========
 
 Formatters are responsible for serializing a Python type to a storage system and for reconstructing the Python type from the serialized form.
-A formatter has to implement at minimum a `Formatter.read()` method and a `Formatter.write()` method.
-The ``write()`` method takes a Python object and serializes it somewhere and the ``read()`` method is optionally given a component name and returns the matching Python object.
-Details of where the artifact may be located within the datastore are passed to the constructor by the datastore as a `FileDescriptor` instance.
+A formatter author should define their formatter as a subclass of `FormatterV2`.
 
-.. warning::
+Reading a Dataset
+^^^^^^^^^^^^^^^^^
 
-  The formatter system has only been used to write datasets to files or to bytes that would be written to a file.
-  The interface may evolve as other types of datastore become available and make use of the formatter system.
-  The interface is being reassessed on :jira:`DM-26658`.
+A datastore knows which formatter was used to write or ingest a dataset.
+There are three methods a formatter author can implement in order to read a Python type from a file:
 
-When ingesting files from external sources formatters are associated with each incoming file but these formatters are only required to support a `Formatter.read()` method.
+``read_from_local_file``
+    The ``read_from_local_file`` method is guaranteed to be passed a local file path.
+    If the resource was initially remote it will be downloaded before calling the method and the file can be cached if the butler has been configured to do that.
+
+``read_from_uri``
+    The ``read_from_uri`` method is given a URI which might be local or remote and the method can access the resource directly.
+    This can be especially helpful if the formatter can support partial reads of a remote resource if a component is requested or some parameters that subset the data.
+    This file might be read from the local cache, if it is available, but will not trigger a download of the remote resource to the local cache.
+    If the formatter is being called without a component or parameters such that the whole file would be read and if the dataset should be cached, this method will be called with a local file URI.
+
+``read_from_stream``
+    The ``read_from_stream`` method is given a file handle (usually a `lsst.resources.ResourceHandleProtocol`) which might be a local or remote resource.
+    The resource might be read from local cache but the file will not be downloaded to the local cache prior to calling this method.
+    If the file is being read without components or parameters and if it would be cached, this method will be bypassed if a file reader is available.
+
+By default these methods are disabled by setting corresponding class properties named ``can_read_from_*`` to `False`.
+To activate specific implementations a formatter author must set the corresponding properties to `True`.
+Only one of these methods needs to be implemented by a formatter author, but if multiple options are available the priority order is specified in the `FormatterV2.read` documentation.
+Any of these methods can be skipped by the formatter if it returns `NotImplemented`.
+
+The read method has access to the storage class that was used to write the original dataset and the storage class that has been requested by the caller.
+These are available in ``self.file_descriptor.storageClass`` (the one used for the write) and ``self.file_descriptor.readStorageClass``.
+If a component is requested the read storage class will be that of the component.
+
+Composite:
+
+If "X" is the storage class of the dataset type associated with the registry, "Y" is the storage class of a component and "X'" and "Y'" are user overrides of those storage classes then:
+
+========= ======   =======  ======
+Component UserSC   WriteSC  ReadSC
+========= ======   =======  ======
+No            -        X        X
+No            X'       X        X'
+Yes           -        X        Y
+Yes           Y'       X        Y'
+========= ======   =======  ======
+
+For a disassembled composite the file being opened by the formatter is a component and not directly the composite dataset.
+In this situation the ``self.file_descriptor.component`` property will be set to indicate which component this file corresponds to and the ``self.dataset_ref`` property will refer to the composite dataset type.
+As for the previous case, the write storage class will match the storage class used to write the file and the read storage class will be the storage class that has been requested and can either match the write storage class or be a user-provided override.
+A component will be provided as a parameter solely in the cases where a derived component has been requested and in this scenario the read storage class will be the storage class of the derived component.
+Any storage class override request for the composite will be applied by the storage class delegate if the composite has been disassembled and then reassembled.
+
+Derived components will always set the read storage class to be that of the derived component, including any requested override.
+If the original storage class for the derived component is required it can be obtained from the write storage class.
+
+Writing a Dataset
+^^^^^^^^^^^^^^^^^
+
+When storing a dataset in a file datastore the datastore looks up the relevant formatter in the configuration based on the storage class or dataset name.
+A formatter author can define one of the following methods to support writing:
+
+``to_bytes``
+    This method is given an in-memory dataset and returns the serialized bytes.
+
+``write_local_file``
+    This method is given an in-memory dataset and a local file name to write to.
+
+
+When ingesting files from external sources formatters are associated with each incoming file but these formatters are only required to support reads.
 They must though declare all the file extensions that they can support.
 This allows the datastore to ensure that the image being ingested has not obviously been associated with a formatter that does not recognize it.
 
-In the current implementation that is focussed entirely on external files in datastores, the location of the serialized data is available to the formatter using the `Formatter.fileDescriptor` property.
-This `FileDescriptor` property makes the file location available as a `Location` and also gives access to read parameters supplied by the caller and also defines the `StorageClass` of the dataset being written.
-On read the the storage class used to read the file can be different from the storage class expected to be returned by `Datastore`.
-This happens if a composite was written but a component from that composite is being read.
+Some formatters can handle multiple Python types without requiring the datastore to force a conversion to a specific type before using the formatter.
+A formatter that can support this should override the default `FormatterV2.can_accept` method such that it returns `True` for all supported Python types.
 
 File Extensions
 ^^^^^^^^^^^^^^^
 
 Each formatter that reads or writes a file must declare the file extensions that it supports.
-For a formatter that supports a single extension this is most easily achieved by setting the class property `Formatter.extension` to that extension.
+For a formatter that supports a single extension this is most easily achieved by setting the class property `FormatterV2.default_extension` to that extension.
 In some scenarios a formatter might support multiple formats that are controlled by write parameters.
-In this case the formatter should assign a frozen set to the `Formatter.supportedExtensions` class property.
-It is then required that the class implements an instance property for ``extension`` that returns the extension that will be used by this formatter for writing the current dataset.
+In this case the formatter should assign a frozen set to the `FormatterV2.supported_extensions` class property.
 
-File vs Bytes
-^^^^^^^^^^^^^
-
-Some datastores can stream bytes from remote storage systems and do not require that a local file is created before the Python object can be created.
-To support this use case an implementer can implement `Formatter.fromBytes()` for reading in from a datastore and `Formatter.toBytes()` for serializing to a datastore.
-If a formatter raises `NotImplementedError` when these byte-like methods are called the datastore will default to using the `Formatter.read()` and `Formatter.write()` methods making use of local temporary files.
-
-.. warning::
-
-  This interface has some rough edges since it is not yet possible for the formatter to optionally support bytes directly based on the amount of data involved.
-  Even though bytes may be more efficient for small or medium-sized datasets, in some cases with significant datasets the memory overhead of multiple copies may be excessive and a temporary file would be more prudent.
-  Neither datastore nor the formatter can opt out of using bytes on a per-dataset basis.
-
-FileFormatter Subclass
-^^^^^^^^^^^^^^^^^^^^^^
-
-For many file-based formatter implementations a subclass of `Formatter` can be used that has a much simplified interface.
-`~formatters.file.FileFormatter` allows a formatter implementation to be written using two methods: `~formatters.file.FileFormatter._readFile()` takes a local path to the file system and the expected Python type, and `~formatters.file.FileFormatter._writeFile()` takes the in-memory object to be serialized.
-
-Composites are not handled by `~formatters.file.FileFormatter`.
-
-.. note::
-
-   The design of this class hierarchy will be reassessed in :jira:`DM-26658`.
+It is then required that the subclass overrides the ``get_write_extension`` so  that it returns the extension that will be used by this formatter for writing the current dataset (for example by looking in the write parameters configuration).
 
 Write Parameters
 ^^^^^^^^^^^^^^^^
@@ -287,10 +318,10 @@ Write Parameters
 Datastores can be configured to specify parameters that can control how a formatter serializes a Python object.
 These configuration parameters are not available to `Butler` users as part of `Butler.put` since the user does not know how a datastore is configured or which formatter will be used for a particular `DatasetType`.
 
-When datastore instantiates the `Formatter` the relevant write parameters are supplied.
+When datastore instantiates the `FormatterV2` the relevant write parameters are supplied.
 These write parameters can be accessed when the data are written and they can control any aspect of the write.
-The only caveat is that the `Formatter.read` method must be able to read the resulting file without having to know which write parameters were used to create it.
-The `Formatter.read` method can look at the file extension and file metadata but it will not have the write parameters supplied to it by datastore.
+The only caveat is that the `FormatterV2` read methods must be able to read the resulting file without having to know which write parameters were used to create it.
+The read implementation methods can look at the file extension and file metadata but will not have the write parameters supplied to it by datastore.
 
 Write Recipes
 ^^^^^^^^^^^^^
@@ -301,7 +332,7 @@ Rather than require that every formatter is explicitly configured with this deta
 Write recipes have their own configuration section and are associated with a specific formatter class and contain named collections of parameters.
 The write parameters can then specify one of the named recipes by name.
 
-If write recipes are used the formatter should implement a `Formatter.validateWriteRecipes` method.
+If write recipes are used the formatter should implement a `FormatterV2.validate_write_recipes` method.
 This method not only checks that the parameters are reasonable, it can also update the parameters with default values to make them self-consistent.
 
 Configuring Formatters

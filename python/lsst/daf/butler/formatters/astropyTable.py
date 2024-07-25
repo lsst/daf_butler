@@ -27,71 +27,36 @@
 
 __all__ = ("AstropyTableFormatter",)
 
-import os.path
 from typing import Any
 
-from .file import FileFormatter
+import astropy.table
+from lsst.daf.butler import FormatterV2
+from lsst.resources import ResourcePath
 
 
-class AstropyTableFormatter(FileFormatter):
-    """Interface for reading and writing astropy.Table objects
-    in either ECSV or FITS format.
+class AstropyTableFormatter(FormatterV2):
+    """Read and write `astropy.table.Table` objects.
+
+    Currently assumes only local file reads are possible.
     """
 
-    supportedWriteParameters = frozenset({"format"})
-    # Ideally we'd also support fits, but that doesn't
-    # round trip string columns correctly, so things
-    # need to be fixed up on read.
-    supportedExtensions = frozenset(
-        {
-            ".ecsv",
-        }
-    )
+    supported_write_parameters = frozenset({"format"})
+    supported_extensions = frozenset({".ecsv"})
+    can_read_from_local_file = True
 
-    @property
-    def extension(self) -> str:  # type: ignore
-        # Typing is ignored above since this is a property and the
-        # parent class has a class attribute
-
+    def get_write_extension(self) -> str:
         # Default to ECSV but allow configuration via write parameter
-        format = self.writeParameters.get("format", "ecsv")
+        format = self.write_parameters.get("format", "ecsv")
         if format == "ecsv":
             return ".ecsv"
         # Other supported formats can be added here
         raise RuntimeError(f"Requested file format '{format}' is not supported for Table")
 
-    def _readFile(self, path: str, pytype: type[Any] | None = None) -> Any:
-        """Read a file from the path in a supported format format.
+    def read_from_local_file(self, path: str, component: str | None = None, expected_size: int = -1) -> Any:
+        pytype = self.file_descriptor.storageClass.pytype
+        if not issubclass(pytype, astropy.table.Table):
+            raise TypeError(f"Python type {pytype} does not seem to be a astropy Table type")
+        return pytype.read(path)  # type: ignore
 
-        Parameters
-        ----------
-        path : `str`
-            Path to use to open the file.
-        pytype : `type`
-            Class to use to read the serialized file.
-
-        Returns
-        -------
-        data : `object`
-            Instance of class ``pytype`` read from serialized file. None
-            if the file could not be opened.
-        """
-        if not os.path.exists(path) or pytype is None:
-            return None
-
-        return pytype.read(path)
-
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        """Write the in memory dataset to file on disk.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to serialize.
-
-        Raises
-        ------
-        Exception
-            The file could not be written.
-        """
-        inMemoryDataset.write(self.fileDescriptor.location.path)
+    def write_local_file(self, in_memory_dataset: Any, uri: ResourcePath) -> None:
+        in_memory_dataset.write(uri.ospath)
