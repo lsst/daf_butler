@@ -3008,7 +3008,7 @@ class RegistryTests(ABC):
         ]
         with self.assertRaises(MissingDatasetTypeError):
             # Dataset type name doesn't match any existing dataset types.
-            registry.queryDataIds(["detector"], datasets=["nonexistent"], collections=...)
+            list(registry.queryDataIds(["detector"], datasets=["nonexistent"], collections=...))
         with self.assertRaises(MissingDatasetTypeError):
             # Dataset type name doesn't match any existing dataset types.
             registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...).any()
