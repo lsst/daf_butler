@@ -1378,11 +1378,19 @@ class RegistryTests(ABC):
         self.assertCountEqual({dataId["patch"] for dataId in rows}, (2, 4, 6, 7))
         self.assertCountEqual({dataId["band"] for dataId in rows}, ("i",))
 
-        # Specifying non-existing skymap is an exception
-        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
-            rows = registry.queryDataIds(
+        def do_query():
+            return registry.queryDataIds(
                 dimensions, datasets=[calexpType, mergeType], collections=run, where="skymap = 'Mars'"
             ).toSet()
+
+        if self.supportsQueryGovernorValidation:
+            # Specifying non-existing skymap is an exception
+            with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
+                do_query()
+        else:
+            # New query system returns zero rows instead of raising an
+            # exception.
+            self.assertEqual(len(do_query()), 0)
 
     def testSpatialJoin(self):
         """Test queries that involve spatial overlap joins."""
@@ -2663,11 +2671,12 @@ class RegistryTests(ABC):
         )
         with self.assertRaises(exception_type):
             list(registry.queryDatasets("bias", collections=coll_list, findFirst=True))
-        # explicit list will raise if there are temporal dimensions
-        with self.assertRaises(NotImplementedError):
-            registry.queryDataIds(
-                ["instrument", "detector", "exposure"], datasets="bias", collections=coll_list
-            ).count()
+        if not self.supportsCalibrationCollectionInFindFirst:
+            # explicit list will raise if there are temporal dimensions
+            with self.assertRaises(NotImplementedError):
+                registry.queryDataIds(
+                    ["instrument", "detector", "exposure"], datasets="bias", collections=coll_list
+                ).count()
 
         # chain will skip
         datasets = list(registry.queryDatasets("bias", collections=chain))
