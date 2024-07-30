@@ -2126,17 +2126,24 @@ class SqlRegistry:
             # only if we need to findFirst.  Note that if any of the
             # collections are actually wildcard expressions, and
             # findFirst=True, this will raise TypeError for us.
-            builder.joinDataset(
+            any_records = builder.joinDataset(
                 resolved_dataset_type, collection_wildcard, isResult=True, findFirst=findFirst
             )
-            query = builder.finish()
-            parent_results.append(queries.DatabaseParentDatasetQueryResults(query, resolved_dataset_type))
+            if any_records:
+                query = builder.finish()
+                parent_results.append(queries.DatabaseParentDatasetQueryResults(query, resolved_dataset_type))
+            else:
+                doomed_by.append(
+                    f"No datasets of type {resolved_dataset_type.name} "
+                    f"in collections {collection_wildcard!r}."
+                )
         if not parent_results:
-            doomed_by.extend(
-                f"No registered dataset type matching {t!r} found, so no matching datasets can "
-                "exist in any collection."
-                for t in ensure_iterable(datasetType)
-            )
+            if not doomed_by:
+                doomed_by.extend(
+                    f"No registered dataset type matching {t!r} found, so no matching datasets can "
+                    "exist in any collection."
+                    for t in ensure_iterable(datasetType)
+                )
             return queries.ChainedDatasetQueryResults([], doomed_by=doomed_by)
         elif len(parent_results) == 1:
             return parent_results[0]
