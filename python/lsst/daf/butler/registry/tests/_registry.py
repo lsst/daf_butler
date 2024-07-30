@@ -3138,12 +3138,20 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         bind = {"time": astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")}
-        with self.assertRaisesRegex(LookupError, r"No dimension element with name 'foo' in 'foo\.bar'\."):
-            registry.queryDataIds(["detector"], where="foo.bar = 12")
+        # The diagnostics raised are slightly different between the old query
+        # system (ValueError, first error string) and the new query system
+        # (InvalidQueryError, second error string).
         with self.assertRaisesRegex(
-            LookupError, "Dimension element name cannot be inferred in this context."
+            (LookupError, InvalidQueryError),
+            r"(No dimension element with name 'foo' in 'foo\.bar'\.)|(Unrecognized identifier 'foo.bar')",
         ):
-            registry.queryDataIds(["detector"], where="timespan.end < time", bind=bind)
+            list(registry.queryDataIds(["detector"], where="foo.bar = 12"))
+        with self.assertRaisesRegex(
+            (LookupError, InvalidQueryError),
+            "(Dimension element name cannot be inferred in this context.)"
+            "|(Unrecognized identifier 'timespan')",
+        ):
+            list(registry.queryDataIds(["detector"], where="timespan.end < time", bind=bind))
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""
@@ -3229,42 +3237,67 @@ class RegistryTests(ABC):
                     with query.materialize():
                         pass
 
-        # errors in a name
+        # Test exceptions for errors in a name.
+        # Many of these raise slightly different diagnostics in the old query
+        # system (ValueError, first error string) than the new query system
+        # (InvalidQueryError, second error string).
         for order_by in ("", "-"):
             with self.assertRaisesRegex((ValueError, InvalidQueryError), "Empty dimension name in ORDER BY"):
                 list(do_query().order_by(order_by))
 
         for order_by in ("undimension.name", "-undimension.name"):
-            with self.assertRaisesRegex(ValueError, "Unknown dimension element 'undimension'"):
+            with self.assertRaisesRegex(
+                (ValueError, InvalidQueryError),
+                "(Unknown dimension element 'undimension')|(Unrecognized identifier 'undimension.name')",
+            ):
                 list(do_query().order_by(order_by))
 
         for order_by in ("attract", "-attract"):
-            with self.assertRaisesRegex(ValueError, "Metadata 'attract' cannot be found in any dimension"):
+            with self.assertRaisesRegex(
+                (ValueError, InvalidQueryError),
+                "(Metadata 'attract' cannot be found in any dimension)|(Unrecognized identifier 'attract')",
+            ):
                 list(do_query().order_by(order_by))
 
-        with self.assertRaisesRegex(ValueError, "Metadata 'exposure_time' exists in more than one dimension"):
+        with self.assertRaisesRegex(
+            (ValueError, InvalidQueryError),
+            "(Metadata 'exposure_time' exists in more than one dimension)"
+            "|(Ambiguous identifier 'exposure_time' matches multiple fields)",
+        ):
             list(do_query(("exposure", "visit")).order_by("exposure_time"))
 
         with self.assertRaisesRegex(
-            ValueError,
-            r"Timespan exists in more than one dimension element \(day_obs, exposure, visit\); "
-            r"qualify timespan with specific dimension name\.",
+            (ValueError, InvalidQueryError),
+            r"(Timespan exists in more than one dimension element \(day_obs, exposure, visit\); "
+            r"qualify timespan with specific dimension name\.)|"
+            r"(Ambiguous identifier 'timespan' matches multiple fields)",
         ):
             list(do_query(("exposure", "visit")).order_by("timespan.begin"))
 
         with self.assertRaisesRegex(
-            ValueError, "Cannot find any temporal dimension element for 'timespan.begin'"
+            (ValueError, InvalidQueryError),
+            "(Cannot find any temporal dimension element for 'timespan.begin')"
+            "|(Unrecognized identifier 'timespan')",
         ):
             list(do_query("tract").order_by("timespan.begin"))
 
-        with self.assertRaisesRegex(ValueError, "Cannot use 'timespan.begin' with non-temporal element"):
+        with self.assertRaisesRegex(
+            (ValueError, InvalidQueryError),
+            "(Cannot use 'timespan.begin' with non-temporal element)"
+            "|(Unrecognized field 'timespan' for tract)",
+        ):
             list(do_query("tract").order_by("tract.timespan.begin"))
 
-        with self.assertRaisesRegex(ValueError, "Field 'name' does not exist in 'tract'."):
+        with self.assertRaisesRegex(
+            (ValueError, InvalidQueryError),
+            "(Field 'name' does not exist in 'tract')" "|(Unrecognized field 'name' for tract.)",
+        ):
             list(do_query("tract").order_by("tract.name"))
 
         with self.assertRaisesRegex(
-            ValueError, r"Unknown dimension element 'timestamp'; perhaps you meant 'timespan.begin'\?"
+            (ValueError, InvalidQueryError),
+            r"(Unknown dimension element 'timestamp'; perhaps you meant 'timespan.begin'\?)"
+            r"|(Unrecognized identifier 'timestamp.begin')",
         ):
             list(do_query("visit").order_by("timestamp.begin"))
 
