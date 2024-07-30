@@ -3231,7 +3231,7 @@ class RegistryTests(ABC):
 
         # errors in a name
         for order_by in ("", "-"):
-            with self.assertRaisesRegex(ValueError, "Empty dimension name in ORDER BY"):
+            with self.assertRaisesRegex((ValueError, InvalidQueryError), "Empty dimension name in ORDER BY"):
                 list(do_query().order_by(order_by))
 
         for order_by in ("undimension.name", "-undimension.name"):
