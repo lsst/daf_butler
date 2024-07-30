@@ -385,9 +385,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     ) -> tuple[Relation, bool]:
         # Docstring inherited.
         overlap_relationship = frozenset(
-            self.universe[element1].dimensions.names | self.universe[element2].dimensions.names
+            self.universe[element1].required.names | self.universe[element2].required.names
         )
-        if overlap_relationship in existing_relationships:
+        if any(overlap_relationship.issubset(rel) for rel in existing_relationships):
             return context.preferred_engine.make_join_identity_relation(), False
         overlaps: Relation | None = None
         needs_refinement: bool = False
