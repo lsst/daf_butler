@@ -35,6 +35,7 @@ __all__ = (
 from collections.abc import Mapping, Set
 from typing import Any
 
+from .._exceptions import InvalidQueryError
 from ..dimensions import DataCoordinate, DataId, DimensionGroup
 from ._expression_strings import convert_expression_string_to_predicate
 from ._identifiers import IdentifierContext, interpret_identifier
@@ -147,6 +148,8 @@ def convert_order_by_args(
                 if arg.startswith("-"):
                     reverse = True
                     arg = arg[1:]
+                if len(arg) == 0:
+                    raise InvalidQueryError("Empty dimension name in ORDER BY")
                 arg = interpret_identifier(context, arg)
                 if reverse:
                     arg = Reversed(operand=arg)

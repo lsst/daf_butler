@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any, cast
 
 from .._dataset_association import DatasetAssociation
@@ -312,17 +312,6 @@ class HybridButlerRegistry(Registry):
         check: bool = True,
         **kwargs: Any,
     ) -> DataCoordinateQueryResults:
-        direct = self._direct.queryDataIds(
-            dimensions,
-            dataId=dataId,
-            datasets=datasets,
-            collections=collections,
-            where=where,
-            bind=bind,
-            check=check,
-            **kwargs,
-        )
-
         remote = self._remote.queryDataIds(
             dimensions,
             dataId=dataId,
@@ -334,8 +323,25 @@ class HybridButlerRegistry(Registry):
             **kwargs,
         )
 
+        # Defer creation of the DirectButler version until we really need the
+        # object for handling an unimplemented method.  This avoids masking of
+        # missing exception handling in the RemoteButler side -- otherwise
+        # exceptions from DirectButler would cause tests to pass.
+        def create_direct_result() -> DataCoordinateQueryResults:
+            return self._direct.queryDataIds(
+                dimensions,
+                dataId=dataId,
+                datasets=datasets,
+                collections=collections,
+                where=where,
+                bind=bind,
+                check=check,
+                **kwargs,
+            )
+
         return cast(
-            DataCoordinateQueryResults, _HybridDataCoordinateQueryResults(direct=direct, remote=remote)
+            DataCoordinateQueryResults,
+            _HybridDataCoordinateQueryResults(direct=create_direct_result, remote=remote),
         )
 
     def queryDimensionRecords(
@@ -388,7 +394,9 @@ class _HybridDataCoordinateQueryResults:
     provide a few methods that aren't implemented yet.
     """
 
-    def __init__(self, *, direct: DataCoordinateQueryResults, remote: DataCoordinateQueryResults) -> None:
+    def __init__(
+        self, *, direct: Callable[[], DataCoordinateQueryResults], remote: DataCoordinateQueryResults
+    ) -> None:
         self._direct = direct
         self._remote = remote
 
@@ -401,20 +409,20 @@ class _HybridDataCoordinateQueryResults:
 
     def order_by(self, *args: str) -> _HybridDataCoordinateQueryResults:
         return _HybridDataCoordinateQueryResults(
-            direct=self._direct.order_by(*args), remote=self._remote.order_by(*args)
+            direct=lambda: self._direct().order_by(*args), remote=self._remote.order_by(*args)
         )
 
     def limit(self, limit: int, offset: int | None = 0) -> _HybridDataCoordinateQueryResults:
         return _HybridDataCoordinateQueryResults(
-            direct=self._direct.limit(limit, offset), remote=self._remote.limit(limit, offset)
+            direct=lambda: self._direct().limit(limit, offset), remote=self._remote.limit(limit, offset)
         )
 
     def materialize(self) -> contextlib.AbstractContextManager[DataCoordinateQueryResults]:
-        return self._direct.materialize()
+        return self._direct().materialize()
 
     def expanded(self) -> _HybridDataCoordinateQueryResults:
         return _HybridDataCoordinateQueryResults(
-            remote=self._remote.expanded(), direct=self._direct.expanded()
+            remote=self._remote.expanded(), direct=lambda: self._direct().expanded()
         )
 
     def subset(
@@ -424,7 +432,7 @@ class _HybridDataCoordinateQueryResults:
         unique: bool = False,
     ) -> _HybridDataCoordinateQueryResults:
         return _HybridDataCoordinateQueryResults(
-            direct=self._direct.subset(dimensions, unique=unique),
+            direct=lambda: self._direct().subset(dimensions, unique=unique),
             remote=self._remote.subset(dimensions, unique=unique),
         )
 
@@ -436,7 +444,9 @@ class _HybridDataCoordinateQueryResults:
         findFirst: bool = True,
         components: bool = False,
     ) -> ParentDatasetQueryResults:
-        return self._direct.findDatasets(datasetType, collections, findFirst=findFirst, components=components)
+        return self._direct().findDatasets(
+            datasetType, collections, findFirst=findFirst, components=components
+        )
 
     def findRelatedDatasets(
         self,
@@ -446,6 +456,6 @@ class _HybridDataCoordinateQueryResults:
         findFirst: bool = True,
         dimensions: DimensionGroup | Iterable[str] | None = None,
     ) -> Iterable[tuple[DataCoordinate, DatasetRef]]:
-        return self._direct.findRelatedDatasets(
+        return self._direct().findRelatedDatasets(
             datasetType, collections, findFirst=findFirst, dimensions=dimensions
         )
