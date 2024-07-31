@@ -323,6 +323,11 @@ class DatasetType:
             or the storage class associated with the other can be converted to
             this.
         """
+        # Support conversion when the components have the same name and
+        # convertible parents, e.g. Parquet storage classes.
+        if self.component() is not None and self.component() == other.component():
+            return self.makeCompositeDatasetType().is_compatible_with(other.makeCompositeDatasetType())
+
         mostly_equal = self._equal_ignoring_storage_class(other)
         if not mostly_equal:
             return False
