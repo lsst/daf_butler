@@ -384,11 +384,18 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         existing_relationships: Set[frozenset[str]] = frozenset(),
     ) -> tuple[Relation, bool]:
         # Docstring inherited.
-        overlap_relationship = frozenset(
-            self.universe[element1].dimensions.names | self.universe[element2].dimensions.names
-        )
-        if overlap_relationship in existing_relationships:
+        group1 = self.universe[element1].minimal_group
+        group2 = self.universe[element2].minimal_group
+        overlap_relationships = {
+            frozenset(a | b)
+            for a, b in itertools.product(
+                [group1.names, group1.required],
+                [group2.names, group2.required],
+            )
+        }
+        if not overlap_relationships.isdisjoint(existing_relationships):
             return context.preferred_engine.make_join_identity_relation(), False
+
         overlaps: Relation | None = None
         needs_refinement: bool = False
         if element1 == self.universe.commonSkyPix.name:
