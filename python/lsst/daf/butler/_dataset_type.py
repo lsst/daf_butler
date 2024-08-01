@@ -284,10 +284,7 @@ class DatasetType:
             return False
         if self._isCalibration != other._isCalibration:
             return False
-        if self._parentStorageClass is not None and other._parentStorageClass is not None:
-            return self._parentStorageClass == other._parentStorageClass
-        else:
-            return self._parentStorageClassName == other._parentStorageClassName
+        return True
 
     def __eq__(self, other: Any) -> bool:
         mostly_equal = self._equal_ignoring_storage_class(other)
@@ -296,6 +293,13 @@ class DatasetType:
 
         # Be careful not to force a storage class to import the corresponding
         # python code.
+        if self._parentStorageClass is not None and other._parentStorageClass is not None:
+            if self._parentStorageClass != other._parentStorageClass:
+                return False
+        else:
+            if self._parentStorageClassName != other._parentStorageClassName:
+                return False
+
         if self._storageClass is not None and other._storageClass is not None:
             if self._storageClass != other._storageClass:
                 return False
@@ -309,7 +313,8 @@ class DatasetType:
 
         Compatibility requires a matching name and dimensions and a storage
         class for this dataset type that can convert the python type associated
-        with the other storage class to this python type.
+        with the other storage class to this python type. Parent storage class
+        compatibility is not checked at all for components.
 
         Parameters
         ----------
@@ -323,11 +328,6 @@ class DatasetType:
             or the storage class associated with the other can be converted to
             this.
         """
-        # Support conversion when the components have the same name and
-        # convertible parents, e.g. Parquet storage classes.
-        if self.component() is not None and self.component() == other.component():
-            return self.makeCompositeDatasetType().is_compatible_with(other.makeCompositeDatasetType())
-
         mostly_equal = self._equal_ignoring_storage_class(other)
         if not mostly_equal:
             return False
