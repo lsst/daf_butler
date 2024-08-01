@@ -419,3 +419,5 @@ storageClasses:
     pytype: lsst.daf.butler.Timespan
   RegionTimeInfo:
     pytype: lsst.pipe.base.utils.RegionTimeInfo
+  QPEnsemble:
+    pytype: qp.Ensemble
