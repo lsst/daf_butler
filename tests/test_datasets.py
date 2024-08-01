@@ -280,7 +280,7 @@ class DatasetTypeTestCase(unittest.TestCase):
 
     def testOverrideStorageClass(self) -> None:
         storageA = StorageClass("test_a", pytype=list, converters={"dict": "builtins.list"})
-        storageB = StorageClass("test_b", pytype=dict)
+        storageB = StorageClass("test_b", pytype=dict, converters={"list": "dict"})
         dimensions = self.universe.conform(["instrument"])
 
         dA = DatasetType("a", dimensions, storageA)
@@ -291,14 +291,26 @@ class DatasetTypeTestCase(unittest.TestCase):
         round_trip = dB.overrideStorageClass(storageA)
         self.assertEqual(round_trip, dA)
 
-        # Check that parents move over.
-        parent = StorageClass("composite", components={"a": storageA, "c": storageA})
+        # Check that parents move over. Assign a pytype to avoid using
+        # object in later tests.
+        parent = StorageClass("composite", pytype=tuple, components={"a": storageA, "c": storageA})
         dP = DatasetType("comp", dimensions, parent)
         dP_A = dP.makeComponentDatasetType("a")
-        print(dP_A)
         dp_B = dP_A.overrideStorageClass(storageB)
         self.assertEqual(dp_B.storageClass, storageB)
         self.assertEqual(dp_B.parentStorageClass, parent)
+
+        # Check that components are checked for compatibility but parents
+        # can be different.
+        parent2 = StorageClass(
+            "composite2",
+            pytype=frozenset,
+            components={"a": storageB, "c": storageB},
+        )
+        dP2 = DatasetType("comp", dimensions, parent2)
+        # Components are compatible even though parents aren't.
+        self.assertFalse(dP.is_compatible_with(dP2))
+        self.assertTrue(dP2.makeComponentDatasetType("a").is_compatible_with(dP_A))
 
     def testJson(self) -> None:
         storageA = StorageClass("test_a")
