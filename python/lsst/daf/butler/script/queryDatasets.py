@@ -40,7 +40,6 @@ from ..cli.utils import sortAstropyTable
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
-    from lsst.daf.butler.registry.queries import DatasetQueryResults
     from lsst.resources import ResourcePath
 
 
@@ -187,9 +186,20 @@ class QueryDatasets:
         datasetTypes = glob or ...
         query_collections: Iterable[str] | EllipsisType = collections or ...
 
-        self.datasets = self.butler.registry.queryDatasets(
-            datasetType=datasetTypes, collections=query_collections, where=where, findFirst=find_first
-        ).expanded()
+        # Currently need to use old interface to get all the matching
+        # dataset types and loop over the dataset types executing a new
+        # query each time.
+        dataset_types = self.butler.registry.queryDatasetTypes(datasetTypes)
+        query_collections = self.butler.registry.queryCollections(query_collections)
+        datasets = []
+        with self.butler._query() as query:
+            # Accumulate into a list
+            for dt in dataset_types:
+                results = query.datasets(dt, collections=query_collections, find_first=find_first)
+                if where:
+                    results = results.where(where)
+                datasets.extend([ref for ref in results.with_dimension_records()])
+        self.datasets = datasets
 
     def getTables(self) -> list[AstropyTable]:
         """Get the datasets as a list of astropy tables.
@@ -204,7 +214,7 @@ class QueryDatasets:
             for dataset_ref in self.datasets:
                 tables[dataset_ref.datasetType.name].add(dataset_ref)
         else:
-            d = list(self.datasets)
+            d = self.datasets
             ref_uris = self.butler.get_many_uris(d, predict=True)
             for ref, uris in ref_uris.items():
                 if uris.primaryURI:
@@ -214,12 +224,12 @@ class QueryDatasets:
 
         return [table.getAstropyTable(datasetTypeName) for datasetTypeName, table in tables.items()]
 
-    def getDatasets(self) -> DatasetQueryResults:
-        """Get the datasets as a list of ``DatasetQueryResults``.
+    def getDatasets(self) -> list:
+        """Get the datasets as a list.
 
         Returns
         -------
-        refs : `lsst.daf.butler.registry.queries.DatasetQueryResults`
+        refs : `list`
             Dataset references matching the given query criteria.
         """
         return self.datasets
