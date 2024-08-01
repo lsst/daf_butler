@@ -629,6 +629,12 @@ class ParquetFormatterDataFrameTestCase(unittest.TestCase):
         # We check the set because pandas reorders the columns.
         self.assertEqual(set(columns), set(columns2))
 
+        # Override the component using a dataset type.
+        columnsType = self.datasetType.makeComponentDatasetType("columns").overrideStorageClass(
+            "ArrowColumnList"
+        )
+        self.assertEqual(columns2, self.butler.get(columnsType))
+
         # Check getting a component while overriding the storage class via
         # the dataset type. This overrides the parent storage class and then
         # selects the component.
