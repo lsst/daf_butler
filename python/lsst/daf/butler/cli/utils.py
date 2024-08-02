@@ -856,7 +856,7 @@ class MWCommand(click.Command):
     **kwargs : `typing.Any`
         Keyword arguments for `click.Command`.
     """
-
+    name = "butler"
     extra_epilog: str | None = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
