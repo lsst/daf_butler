@@ -231,6 +231,8 @@ class LogCliRunner(click.testing.CliRunner):
         with patch.object(ClickExitFailedNicely, "use_bad_status", False):
             result = super().invoke(*args, **kwargs)
         CliLog.resetLog()
+        if result.exception:
+            print("Failing command was: ", args)
         return result
 
 
